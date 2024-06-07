@@ -1,12 +1,14 @@
-import { DatasetItemFilterType, DatasetResultType, CompositeKey, DatasetStatusResultType, EntityRecordNameInput, EntityRecordNameResult, ILocalStorageProvider, IMetadataProvider, PotentialDuplicateRequest, PotentialDuplicateResponse, ProviderConfigDataBase, ProviderType } from "./interfaces";
-import { EntityDependency, EntityInfo, KeyValuePair, RecordDependency, RecordMergeRequest, RecordMergeResult } from "./entityInfo"
+import { DatasetItemFilterType, DatasetResultType, DatasetStatusResultType, EntityRecordNameInput, EntityRecordNameResult, ILocalStorageProvider, IMetadataProvider, PotentialDuplicateRequest, PotentialDuplicateResponse, ProviderConfigDataBase, ProviderType } from "./interfaces";
+import { EntityDependency, EntityInfo, RecordDependency, RecordMergeRequest, RecordMergeResult } from "./entityInfo"
 import { ApplicationInfo } from "./applicationInfo"
 import { BaseEntity } from "./baseEntity"
 import { AuditLogTypeInfo, AuthorizationInfo, RoleInfo, UserInfo } from "./securityInfo";
 import { TransactionGroupBase } from "./transactionGroup";
 import { MJGlobal } from "@memberjunction/global";
 import { QueryCategoryInfo, QueryFieldInfo, QueryInfo, QueryPermissionInfo } from "./queryInfo";
-import { LogStatus } from "./logging";
+import { LogError, LogStatus } from "./logging";
+import { LibraryInfo } from "./libraryInfo";
+import { CompositeKey } from "./compositeKey";
 
 /**
  * Class used to access a wide array of MemberJunction metadata, to instantiate derived classes of BaseEntity for record access and manipulation and more. This class uses a provider model where different providers transparently plug-in to implement the functionality needed based on where the code is running. The provider in use is generally not of any importance to users of the class and code can be written indepdenent of tier/provider.
@@ -52,6 +54,22 @@ export class Metadata {
         return Metadata.Provider.Entities;
     }
 
+    /**
+     * Helper method to find an entity by name in a case insensitive manner.  
+     * @param entityName 
+     */
+    public EntityByName(entityName: string): EntityInfo {
+        return this.Entities.find(e => e.Name.toLowerCase().trim() === entityName.toLowerCase().trim());
+    }
+    /**
+     * Helper method to find an entity by ID
+     * @param entityID 
+     * @returns 
+     */
+    public EntityByID(entityID: number): EntityInfo {
+        return this.Entities.find(e => e.ID === entityID);
+    }
+
     public get Queries(): QueryInfo[] {
         return Metadata.Provider.Queries;
     }
@@ -87,6 +105,10 @@ export class Metadata {
         return Metadata.Provider.Authorizations;
     }
 
+    public get Libraries(): LibraryInfo[] {
+        return Metadata.Provider.Libraries;
+    }
+
     /**
      * Helper function to return an Entity Name from a given Entity ID.
      * @param entityName 
@@ -107,33 +129,51 @@ export class Metadata {
      */
     public EntityNameFromID(entityID: number): string {
         let entity = this.Entities.find(e => e.ID == entityID);
-        if (entity != null)
+        if(entity){
             return entity.Name;
-        else
-            throw new Error(`Entity ID: ${entityID} not found`);
+        }
+        else{
+            LogError(`Entity ID: ${entityID} not found`);
+            return null;
+        }
+    }
+
+    /**
+     * Helper function to return an EntityInfo from an Entity ID
+     * @param entityID
+     */
+    public EntityFromEntityID(entityID: number): EntityInfo | null {
+        let entity = this.Entities.find(e => e.ID == entityID);
+        if(entity){
+            return entity;
+        }
+        else{
+            LogError(`Entity ID: ${entityID} not found`);
+            return null;
+        }
     }
 
     /**
      * Returns true if the combination of userId/entityName/KeyValuePairs has a favorite status on (meaning the user has marked the record as a "favorite" for easy access)
      * @param userId 
      * @param entityName 
-     * @param KeyValuePairs 
+     * @param primaryKey 
      * @returns 
      */
-    public async GetRecordFavoriteStatus(userId: number, entityName: string, CompositeKey: CompositeKey): Promise<boolean> {
-        return await Metadata.Provider.GetRecordFavoriteStatus(userId, entityName, CompositeKey);
+    public async GetRecordFavoriteStatus(userId: number, entityName: string, primaryKey: CompositeKey): Promise<boolean> {
+        return await Metadata.Provider.GetRecordFavoriteStatus(userId, entityName, primaryKey);
     }
 
     /**
      * Sets the favorite status for a given user for a specific entityName/KeyValuePairs
      * @param userId 
      * @param entityName 
-     * @param KeyValuePairs
+     * @param primaryKey
      * @param isFavorite 
      * @param contextUser 
      */
-    public async SetRecordFavoriteStatus(userId: number, entityName: string, CompositeKey: CompositeKey, isFavorite: boolean, contextUser: UserInfo = null) {
-        await Metadata.Provider.SetRecordFavoriteStatus(userId, entityName, CompositeKey, isFavorite, contextUser);
+    public async SetRecordFavoriteStatus(userId: number, entityName: string, primaryKey: CompositeKey, isFavorite: boolean, contextUser: UserInfo = null) {
+        await Metadata.Provider.SetRecordFavoriteStatus(userId, entityName, primaryKey, isFavorite, contextUser);
     }
 
     /**
@@ -142,10 +182,10 @@ export class Metadata {
      * is within the EntityField table and specifically the RelatedEntity and RelatedEntityField columns. In turn, this method uses that metadata and queries the database to determine the dependencies. To get the list of entity dependencies
      * you can use the utility method GetEntityDependencies(), which doesn't check for dependencies on a specific record, but rather gets the metadata in one shot that can be used for dependency checking.
      * @param entityName the name of the entity to check
-     * @param KeyValuePair the primary key value to check
+     * @param primaryKey the primary key value to check
      */
-    public async GetRecordDependencies(entityName: string, CompositeKey: CompositeKey): Promise<RecordDependency[]> { 
-        return await Metadata.Provider.GetRecordDependencies(entityName, CompositeKey);
+    public async GetRecordDependencies(entityName: string, primaryKey: CompositeKey): Promise<RecordDependency[]> { 
+        return await Metadata.Provider.GetRecordDependencies(entityName, primaryKey);
     }
 
     /**
@@ -201,16 +241,16 @@ export class Metadata {
      * looking for the IsNameField within the EntityFields collection for a given entity. 
      * If no IsNameField is found, but a field called "Name" exists, that value is returned. Otherwise null returned 
      * @param entityName 
-     * @param KeyValuePairs
+     * @param primaryKey
      * @returns the name of the record
      */
-    public async GetEntityRecordName(entityName: string, compositeKey: CompositeKey): Promise<string> {
-        let result = compositeKey.Validate();
+    public async GetEntityRecordName(entityName: string, primaryKey: CompositeKey): Promise<string> {
+        let result = primaryKey.Validate();
         if(!result.IsValid){
             throw new Error(result.ErrorMessage);
         }
         
-        return await Metadata.Provider.GetEntityRecordName(entityName, compositeKey);
+        return await Metadata.Provider.GetEntityRecordName(entityName, primaryKey);
     }
 
     /**

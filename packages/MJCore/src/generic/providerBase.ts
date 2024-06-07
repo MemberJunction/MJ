@@ -1,49 +1,78 @@
 import { BaseEntity } from "./baseEntity";
-import { EntityBehaviorTypeInfo, EntityDependency, EntityDocumentTypeInfo, EntityInfo, RecordDependency, RecordMergeRequest, RecordMergeResult } from "./entityInfo";
-import { IMetadataProvider, ProviderConfigDataBase, MetadataInfo, CompositeKey, ILocalStorageProvider, DatasetResultType, DatasetStatusResultType, DatasetItemFilterType, EntityRecordNameInput, EntityRecordNameResult, ProviderType, PotentialDuplicateRequest, PotentialDuplicateResponse } from "./interfaces";
+import { EntityDependency, EntityDocumentTypeInfo, EntityInfo, RecordDependency, RecordMergeRequest, RecordMergeResult } from "./entityInfo";
+import { IMetadataProvider, ProviderConfigDataBase, MetadataInfo, ILocalStorageProvider, DatasetResultType, DatasetStatusResultType, DatasetItemFilterType, EntityRecordNameInput, EntityRecordNameResult, ProviderType, PotentialDuplicateRequest, PotentialDuplicateResponse } from "./interfaces";
 import { ApplicationInfo } from "../generic/applicationInfo";
 import { AuditLogTypeInfo, AuthorizationInfo, RoleInfo, RowLevelSecurityFilterInfo, UserInfo } from "./securityInfo";
 import { TransactionGroupBase } from "./transactionGroup";
 import { MJGlobal } from "@memberjunction/global";
 import { LogError, LogStatus } from "./logging";
 import { QueryCategoryInfo, QueryFieldInfo, QueryInfo, QueryPermissionInfo } from "./queryInfo";
+import { LibraryInfo } from "./libraryInfo";
+import { CompositeKey } from "./compositeKey";
 
-//const _rootPath = '../'
+/**
+ * AllMetadata is used to pass all metadata around in a single object for convenience and type safety.
+ */
+export class AllMetadata {
+    CurrentUser: UserInfo = null;
 
-// implement some generic functionality that all/many providers will need
-export type AllMetadata = {
-    AllEntities: EntityInfo[];
-    AllApplications: ApplicationInfo[];
-    CurrentUser: UserInfo;
-    AllRoles: RoleInfo[];
-    AllRowLevelSecurityFilters: RowLevelSecurityFilterInfo[];
-    AllAuditLogTypes: AuditLogTypeInfo[];
-    AllAuthorizations: AuthorizationInfo[];
-    AllQueryCategories: QueryCategoryInfo[];
-    AllQueries: QueryInfo[];
-    AllQueryFields: QueryFieldInfo[];
-    AllQueryPermissions: QueryPermissionInfo[];
-    AllEntityDocumentTypes: EntityDocumentTypeInfo[];
-    AllEntityBehaviorTypes: EntityBehaviorTypeInfo[];
+    // Arrays of Metadata below
+    AllEntities: EntityInfo[] = [];
+    AllApplications: ApplicationInfo[] = [];
+    AllRoles: RoleInfo[] = [];
+    AllRowLevelSecurityFilters: RowLevelSecurityFilterInfo[] = [];
+    AllAuditLogTypes: AuditLogTypeInfo[] = [];
+    AllAuthorizations: AuthorizationInfo[] = [];
+    AllQueryCategories: QueryCategoryInfo[] = [];
+    AllQueries: QueryInfo[] = [];
+    AllQueryFields: QueryFieldInfo[] = [];
+    AllQueryPermissions: QueryPermissionInfo[] = [];
+    AllEntityDocumentTypes: EntityDocumentTypeInfo[] = [];
+    AllLibraries: LibraryInfo[] = [];
+
+    // Create a new instance of AllMetadata from a simple object
+    public static FromSimpleObject(data: any, md: IMetadataProvider): AllMetadata {
+        try {
+            const newObject = new AllMetadata();
+            newObject.CurrentUser = data.CurrentUser ? new UserInfo(md, data.CurrentUser) : null;
+            // we now have to loop through the AllMetadataArray and use that info to build the metadata object with proper strongly typed object instances
+            for (let m of AllMetadataArrays) {
+                if (data.hasOwnProperty(m.key)) {
+                    newObject[m.key] = data[m.key].map((d: any) => new m.class(d, md));
+                }
+            }
+            return newObject;
+        }
+        catch (e) {
+            LogError(e);
+        }
+    }
 }
+
+/**
+ * This is a list of all metadata classes that are used in the AllMetadata class. This is used to automatically determine the class type when deserializing the metadata and otherwise whenever we need to iterate through all of the elements.
+ */
+export const AllMetadataArrays = [
+    { key: 'AllEntities', class: EntityInfo  },
+    { key: 'AllApplications', class: ApplicationInfo  },
+    { key: 'AllRoles', class: RoleInfo },
+    { key: 'AllRowLevelSecurityFilters', class: RowLevelSecurityFilterInfo },
+    { key: 'AllAuditLogTypes', class: AuditLogTypeInfo},
+    { key: 'AllAuthorizations', class: AuthorizationInfo},
+    { key: 'AllQueryCategories', class: QueryCategoryInfo},
+    { key: 'AllQueries', class: QueryInfo },
+    { key: 'AllQueryFields', class: QueryFieldInfo },
+    { key: 'AllQueryPermissions', class: QueryPermissionInfo },
+    { key: 'AllEntityDocumentTypes', class: EntityDocumentTypeInfo },
+    { key: 'AllLibraries', class: LibraryInfo }
+];
+
 
 export abstract class ProviderBase implements IMetadataProvider {
     private _ConfigData: ProviderConfigDataBase;
     private _latestLocalMetadataTimestamps: MetadataInfo[];
     private _latestRemoteMetadataTimestamps: MetadataInfo[];
-    private _entities: EntityInfo[] = [];
-    private _applications: ApplicationInfo[] = [];
-    private _currentUser: UserInfo;
-    private _roles: RoleInfo[] = [];
-    private _rowLevelSecurityFilters: RowLevelSecurityFilterInfo[] = [];
-    private _auditLogTypes: AuditLogTypeInfo[] = [];
-    private _authorizations: AuthorizationInfo[] = [];
-    private _queries: QueryInfo[] = [];
-    private _queryCategories: QueryCategoryInfo[] = [];
-    private _queryFields: QueryFieldInfo[] = [];
-    private _queryPermissions: QueryPermissionInfo[] = [];
-    private _entityBehaviorTypes: EntityBehaviorTypeInfo[] = [];
-    private _entityDocumentTypes: EntityDocumentTypeInfo[] = [];
+    private _localMetadata: AllMetadata = new AllMetadata();
 
     private _refresh = false;
 
@@ -65,10 +94,7 @@ export abstract class ProviderBase implements IMetadataProvider {
 
     public async Config(data: ProviderConfigDataBase): Promise<boolean> {
         this._ConfigData = data;
-        this._entities = []; // make sure to clear the array first - we could get this from a hard refresh
-        this._applications = []; // make sure to clear the array first - we could get this from a hard refresh
-        this._queries = []; // make sure to clear the array first - we could get this from a hard refresh
-        this._queryCategories = []; // make sure to clear the array first - we could get this from a hard refresh
+        this._localMetadata = new AllMetadata(); // start with fresh metadata
 
         if (this._refresh || await this.IsRefreshNeeded()) {
             // either a hard refresh flag was set within Refresh(), or LocalMetadata is Obsolete
@@ -84,7 +110,7 @@ export abstract class ProviderBase implements IMetadataProvider {
             if (res) {
                 this.UpdateLocalMetadata(res)
                 this._latestLocalMetadataTimestamps = this._latestRemoteMetadataTimestamps // update this since we just used server to get all the stuff
-                this.SaveLocalMetadataToStorage();
+                await this.SaveLocalMetadataToStorage();
             }
         }
 
@@ -133,44 +159,47 @@ export abstract class ProviderBase implements IMetadataProvider {
             //const start1 = new Date().getTime();
             const f = this.BuildDatasetFilterFromConfig();
             const d = await this.GetDatasetByName(ProviderBase._mjMetadataDatasetName, f.length > 0 ? f : null)
-            //const end1 = new Date().getTime();
-            //LogStatus(`GetAllMetadata - GetDatasetByName took ${end1 - start1}ms`)
-
-            //const start2 = new Date().getTime();
-            const u = await this.GetCurrentUser()
-            //const end2 = new Date().getTime();
-            //LogStatus(`GetAllMetadata - GetCurrentUser took ${end2 - start2}ms`)
 
             if (d && d.Success) {
                 // got the results, let's build our response in the format we need
-                const allMetadata: any = {};
+                const simpleMetadata: any = {};
                 for (let r of d.Results) {
-                    allMetadata[r.Code] = r.Results
+                    simpleMetadata[r.Code] = r.Results
                 }
-                // update the entities to include the fields, permissions and relationships
-                allMetadata.AllEntities = this.PostProcessEntityMetadata(allMetadata.Entities, allMetadata.EntityFields, allMetadata.EntityFieldValues, allMetadata.EntityPermissions, allMetadata.EntityRelationships, allMetadata.EntityBehaviors, allMetadata.EntitySettings);
-                // update the applications to include applicationentities/ApplicationSettings
-                allMetadata.AllApplications = allMetadata.Applications.map((a: any) => {
-                    a.ApplicationEntities = allMetadata.ApplicationEntities.filter((ae: any) => ae.ApplicationName.trim().toLowerCase() === a.Name.trim().toLowerCase())
-                    a.ApplicationSettings = allMetadata.ApplicationSettings.filter((as: any) => as.ApplicationName.trim().toLowerCase() === a.Name.trim().toLowerCase())
-                    return new ApplicationInfo(this, a);
+
+                // Post Process Entities because there's some special handling of the sub-objects
+                simpleMetadata.AllEntities = this.PostProcessEntityMetadata(simpleMetadata.Entities, simpleMetadata.EntityFields, simpleMetadata.EntityFieldValues, simpleMetadata.EntityPermissions, simpleMetadata.EntityRelationships, simpleMetadata.EntitySettings);
+
+                // Post Process the Applications, because we want to handle the sub-objects properly.
+                simpleMetadata.AllApplications = simpleMetadata.Applications.map((a: any) => {
+                    a.ApplicationEntities = simpleMetadata.ApplicationEntities.filter((ae: any) => ae.ApplicationName.trim().toLowerCase() === a.Name.trim().toLowerCase())
+                    a.ApplicationSettings = simpleMetadata.ApplicationSettings.filter((as: any) => as.ApplicationName.trim().toLowerCase() === a.Name.trim().toLowerCase())
+                    return new ApplicationInfo(a, this);
                 });
 
-                return {
-                    AllEntities: allMetadata.AllEntities,
-                    AllApplications: allMetadata.AllApplications,
-                    AllRoles: allMetadata.Roles.map((r: any) => new RoleInfo(r)),
-                    CurrentUser: u,
-                    AllRowLevelSecurityFilters: allMetadata.RowLevelSecurityFilters.map((r: any) => new RowLevelSecurityFilterInfo(r)),
-                    AllAuditLogTypes: allMetadata.AuditLogTypes.map((a: any) => new AuditLogTypeInfo(a)),
-                    AllAuthorizations: allMetadata.Authorizations.map((a: any) => new AuthorizationInfo(a)),
-                    AllQueries: allMetadata.Queries ? allMetadata.Queries.map((q: any) => new QueryInfo(q)) : [],
-                    AllQueryFields: allMetadata.QueryFields ? allMetadata.QueryFields.map((qf: any) => new QueryFieldInfo(qf)) : [],
-                    AllQueryPermissions: allMetadata.QueryPermissions ? allMetadata.QueryPermissions.map((qp: any) => new QueryPermissionInfo(qp)) : [],
-                    AllQueryCategories: allMetadata.QueryCategories ? allMetadata.QueryCategories.map((qc: any) => new QueryCategoryInfo(qc)) : [],
-                    AllEntityBehaviorTypes: allMetadata.EntityBehaviorTypes ? allMetadata.EntityBehaviorTypes.map((eb: any) => new EntityBehaviorTypeInfo(eb)) : [],
-                    AllEntityDocumentTypes: allMetadata.EntityDocumentTypes ? allMetadata.EntityDocumentTypes.map((ed: any) => new EntityDocumentTypeInfo(ed)) : []
+                // now we need to construct our return type. The way the return type works, which is an instance of AllMetadata, we have to 
+                // construst each item so it contains an array of the correct type. This is because the AllMetadata class has an array of each type of metadata
+                // rather than just plain JavaScript objects that we have in the allMetadata object.
+
+                // build the base return type
+                const returnMetadata: AllMetadata = new AllMetadata();
+                returnMetadata.CurrentUser = await this.GetCurrentUser(); // set the current user
+                // now iterate through the AllMetadataMapping array and construct the return type
+                for (let m of AllMetadataArrays) {
+                    let simpleKey = m.key;
+                    if (!simpleMetadata.hasOwnProperty(simpleKey)) {
+                        simpleKey = simpleKey.substring(3); // remove the All prefix
+                    }
+                    if (simpleMetadata.hasOwnProperty(simpleKey)) {
+                        // at this point, only do this particular property if we have a match, it is either prefixed with All or not
+                        // for example in our strongly typed AllMetadata class we have AllQueryCategories, but in the simple allMetadata object we have QueryCategories
+                        // so we need to check for both which is what the above is doing.
+
+                        // Build the array of the correct type and initialize with the simple object
+                        returnMetadata[m.key] = simpleMetadata[simpleKey].map((d: any) => new m.class(d, this));
+                    }
                 }
+                return returnMetadata;
             }
             else {
                 LogError ('GetAllMetadata() - Error getting metadata from server' + (d ? ': ' + d.Status : ''));
@@ -184,7 +213,7 @@ export abstract class ProviderBase implements IMetadataProvider {
 
     protected abstract GetCurrentUser(): Promise<UserInfo> 
 
-    protected PostProcessEntityMetadata(entities: any[], fields: any[], fieldValues: any[], permissions: any[], relationships: any[], behaviors: any[], settings: any[]): any[] {
+    protected PostProcessEntityMetadata(entities: any[], fields: any[], fieldValues: any[], permissions: any[], relationships: any[], settings: any[]): any[] {
         const result: any[] = [];
         if (fieldValues && fieldValues.length > 0)
             for (let f of fields) {
@@ -196,7 +225,6 @@ export abstract class ProviderBase implements IMetadataProvider {
             e.EntityFields = fields.filter(f => f.EntityID === e.ID).sort((a, b) => a.Sequence - b.Sequence);
             e.EntityPermissions = permissions.filter(p => p.EntityID === e.ID);
             e.EntityRelationships = relationships.filter(r => r.EntityID === e.ID);
-            e.EntityBehaviors = behaviors.filter(b => b.EntityID === e.ID);
             e.EntitySettings = settings.filter(s => s.EntityID === e.ID);
             result.push(new EntityInfo(e));
         }
@@ -208,37 +236,40 @@ export abstract class ProviderBase implements IMetadataProvider {
     }
 
     public get Entities(): EntityInfo[] {
-        return this._entities;
+        return this._localMetadata.AllEntities;
     }
     public get Applications(): ApplicationInfo[] {
-        return this._applications;
+        return this._localMetadata.AllApplications;
     }
     public get CurrentUser(): UserInfo {
-        return this._currentUser;
+        return this._localMetadata.CurrentUser;
     }
     public get Roles(): RoleInfo[] {
-        return this._roles;
+        return this._localMetadata.AllRoles;
     }
     public get RowLevelSecurityFilters(): RowLevelSecurityFilterInfo[] {
-        return this._rowLevelSecurityFilters;
+        return this._localMetadata.AllRowLevelSecurityFilters;
     }
     public get AuditLogTypes(): AuditLogTypeInfo[] {
-        return this._auditLogTypes;
+        return this._localMetadata.AllAuditLogTypes;
     }
     public get Authorizations(): AuthorizationInfo[] {
-        return this._authorizations;
+        return this._localMetadata.AllAuthorizations;
     }
     public get Queries(): QueryInfo[] {
-        return this._queries;
+        return this._localMetadata.AllQueries;
     }
     public get QueryCategories(): QueryCategoryInfo[] {
-        return this._queryCategories;
+        return this._localMetadata.AllQueryCategories;
     }
     public get QueryFields(): QueryFieldInfo[] {
-        return this._queryFields;
+        return this._localMetadata.AllQueryFields;
     }
     public get QueryPermissions(): QueryPermissionInfo[] {
-        return this._queryPermissions;
+        return this._localMetadata.AllQueryPermissions;
+    }
+    public get Libraries(): LibraryInfo[] {
+        return this._localMetadata.AllLibraries;
     }
 
     public async Refresh(): Promise<boolean> {
@@ -277,8 +308,7 @@ export abstract class ProviderBase implements IMetadataProvider {
                 // type reference registration by any module via MJ Global is the way to go as it is reliable across all platforms.
                 try {
                     const newObject = MJGlobal.Instance.ClassFactory.CreateInstance<T>(BaseEntity, entityName, entity) 
-                    if (contextUser)
-                        newObject.ContextCurrentUser = contextUser;
+                    await newObject.Config(contextUser);
 
                     return newObject;
                 }
@@ -606,96 +636,7 @@ export abstract class ProviderBase implements IMetadataProvider {
     }
 
     protected UpdateLocalMetadata(res: AllMetadata) {
-        if (res.AllEntities) {
-            this._entities = [];
-            for (let i = 0; i < res.AllEntities.length; i++) {
-                this._entities.push(new EntityInfo(res.AllEntities[i]));
-            }
-        }
-
-        if (res.AllApplications) {
-            this._applications = [];
-            for (let i = 0; i < res.AllApplications.length; i++) {
-                const a = new ApplicationInfo(this, res.AllApplications[i])
-                this._applications.push(a);
-            }
-        }
-
-        if (res.AllRoles) {
-            this._roles = [];
-            for (let i = 0; i < res.AllRoles.length; i++) {
-                const r = new RoleInfo(res.AllRoles[i])
-                this._roles.push(r);
-            }
-        }
-
-        if (res.AllRowLevelSecurityFilters) {
-            this._rowLevelSecurityFilters = [];
-            for (let i = 0; i < res.AllRowLevelSecurityFilters.length; i++) {
-                const rls = new RowLevelSecurityFilterInfo(res.AllRowLevelSecurityFilters[i])
-                this._rowLevelSecurityFilters.push(rls);
-            }
-        }
-
-        if (res.AllAuditLogTypes) {
-            this._auditLogTypes = [];
-            for (let i = 0; i < res.AllAuditLogTypes.length; i++) {
-                const alt = new AuditLogTypeInfo(res.AllAuditLogTypes[i])
-                this._auditLogTypes.push(alt);
-            }
-        }
-
-        if (res.AllAuthorizations) {
-            this._authorizations = [];
-            for (let i = 0; i < res.AllAuthorizations.length; i++) {
-                const ai = new AuthorizationInfo(this, res.AllAuthorizations[i])
-                this._authorizations.push(ai);
-            }
-        }
-
-        if (res.AllQueries) {
-            this._queries = [];
-            for (let i = 0; i < res.AllQueries.length; i++) {
-                const q = new QueryInfo(res.AllQueries[i])
-                this._queries.push(q);
-            }
-        }
-
-        if (res.AllQueryCategories) {
-            this._queryCategories = [];
-            for (let i = 0; i < res.AllQueryCategories.length; i++) {
-                const qc = new QueryCategoryInfo(res.AllQueryCategories[i])
-                this._queryCategories.push(qc);
-            }
-        }
-
-        if (res.AllQueryFields) {
-            this._queryFields = [];
-            for (let i = 0; i < res.AllQueryFields.length; i++) {
-                const qf = new QueryFieldInfo(res.AllQueryFields[i])
-                this._queryFields.push(qf);
-            }
-        }
-
-        if (res.AllQueryPermissions) {
-            this._queryPermissions = [];
-            for (let i = 0; i < res.AllQueryPermissions.length; i++) {
-                const qp = new QueryPermissionInfo(res.AllQueryPermissions[i])
-                this._queryPermissions.push(qp);
-            }
-        }
-
-        if (res.AllEntityBehaviorTypes) {
-            this._entityBehaviorTypes = res.AllEntityBehaviorTypes.map(ebt => new EntityBehaviorTypeInfo(ebt)); 
-        }
-
-        if (res.AllEntityDocumentTypes) {
-            this._entityDocumentTypes = res.AllEntityDocumentTypes.map(edt => new EntityDocumentTypeInfo(edt)); 
-        }
-
-        if (res.CurrentUser)
-            this._currentUser = new UserInfo(this, res.CurrentUser);
-
+        this._localMetadata = res;
     }
 
     abstract get LocalStorageProvider(): ILocalStorageProvider; // sub-class implements this based on whatever the local storage model is, different for browser vs. node
@@ -706,34 +647,12 @@ export abstract class ProviderBase implements IMetadataProvider {
             if (ls) {
                 // execution environment supports local storage, use it
                 this._latestLocalMetadataTimestamps = JSON.parse(await ls.getItem(ProviderBase.localStorageTimestampsKey))
-                const e = JSON.parse(await ls.getItem(ProviderBase.localStorageEntitiesKey))
-                const a = JSON.parse(await ls.getItem(ProviderBase.localStorageApplicationsKey))
-                const cu = JSON.parse(await ls.getItem(ProviderBase.localStorageCurrentUserKey))
-                const r = JSON.parse(await ls.getItem(ProviderBase.localStorageRolesKey))
-                const rls = JSON.parse(await ls.getItem(ProviderBase.localStorageRowLevelSecurityFiltersKey))
-                const alt = JSON.parse(await ls.getItem(ProviderBase.localStorageAuditLogTypesKey))
-                const ai = JSON.parse(await ls.getItem(ProviderBase.localStorageAuthorizationsKey))
-                const queries = JSON.parse(await ls.getItem(ProviderBase.localStorageQueriesKey))
-                const qcs = JSON.parse(await ls.getItem(ProviderBase.localStorageQueryCategoriesKey))
-                const qf = JSON.parse(await ls.getItem(ProviderBase.localStorageQueryFieldsKey))
-                const qp = JSON.parse(await ls.getItem(ProviderBase.localStorageQueryPermissionsKey))
-                const ebt = JSON.parse(await ls.getItem(ProviderBase.localStorageEntityBehaviorTypesKey))
-                const edt = JSON.parse(await ls.getItem(ProviderBase.localStorageEntityDocumentTypesKey))
-                this.UpdateLocalMetadata({ 
-                                            AllEntities: e, 
-                                            AllApplications: a, 
-                                            CurrentUser: cu, 
-                                            AllRoles: r, 
-                                            AllRowLevelSecurityFilters: rls,
-                                            AllAuditLogTypes: alt,
-                                            AllAuthorizations: ai,
-                                            AllQueries: queries,
-                                            AllQueryCategories: qcs,
-                                            AllQueryFields: qf,
-                                            AllQueryPermissions: qp,
-                                            AllEntityBehaviorTypes: ebt,
-                                            AllEntityDocumentTypes: edt
-                                        })
+                const temp = JSON.parse(await ls.getItem(ProviderBase.localStorageAllMetadataKey)); // we now have a simple object for all the metadata
+                if (temp) {
+                    // we have local metadata
+                    const metadata = AllMetadata.FromSimpleObject(temp, this); // create a new object to start this up
+                    this.UpdateLocalMetadata(metadata);
+                }
             }
         }
         catch (e) {
@@ -743,35 +662,11 @@ export abstract class ProviderBase implements IMetadataProvider {
 
     private static localStorageRootKey ='___MJCore_Metadata'
     private static localStorageTimestampsKey = this.localStorageRootKey + '_Timestamps'
-    private static localStorageEntitiesKey = this.localStorageRootKey + '_Entities'
-    private static localStorageApplicationsKey = this.localStorageRootKey + '_Applications'
-    private static localStorageCurrentUserKey = this.localStorageRootKey + '_CurrentUser'
-    private static localStorageRolesKey = this.localStorageRootKey + '_Roles'
-    private static localStorageRowLevelSecurityFiltersKey = this.localStorageRootKey + '_RowLevelSecurityFilters'
-    private static localStorageAuditLogTypesKey = this.localStorageRootKey + '_AuditLogTypes'
-    private static localStorageAuthorizationsKey = this.localStorageRootKey + '_Authorizations'
-    private static localStorageQueriesKey = this.localStorageRootKey + '_Queries'
-    private static localStorageQueryCategoriesKey = this.localStorageRootKey + '_QueryCategories'
-    private static localStorageQueryFieldsKey = this.localStorageRootKey + '_QueryFields'
-    private static localStorageQueryPermissionsKey = this.localStorageRootKey + '_QueryPermissions'
-    private static localStorageEntityBehaviorTypesKey = this.localStorageRootKey + '_EntityBehaviorTypes'
-    private static localStorageEntityDocumentTypesKey = this.localStorageRootKey + '_EntityDocumentTypes'
+    private static localStorageAllMetadataKey = this.localStorageRootKey + '_AllMetadata'
 
     private static localStorageKeys = [
         ProviderBase.localStorageTimestampsKey,
-        ProviderBase.localStorageEntitiesKey,
-        ProviderBase.localStorageApplicationsKey,
-        ProviderBase.localStorageCurrentUserKey,
-        ProviderBase.localStorageRolesKey,
-        ProviderBase.localStorageRowLevelSecurityFiltersKey,
-        ProviderBase.localStorageAuditLogTypesKey,
-        ProviderBase.localStorageAuthorizationsKey,
-        ProviderBase.localStorageQueriesKey,
-        ProviderBase.localStorageQueryCategoriesKey,
-        ProviderBase.localStorageQueryFieldsKey,
-        ProviderBase.localStorageQueryPermissionsKey,
-        ProviderBase.localStorageEntityBehaviorTypesKey,
-        ProviderBase.localStorageEntityDocumentTypesKey
+        ProviderBase.localStorageAllMetadataKey,
     ];
     public async SaveLocalMetadataToStorage() {
         try {
@@ -779,19 +674,9 @@ export abstract class ProviderBase implements IMetadataProvider {
             if (ls) {
                 // execution environment supports local storage, use it
                 await ls.setItem(ProviderBase.localStorageTimestampsKey, JSON.stringify(this._latestLocalMetadataTimestamps))
-                await ls.setItem(ProviderBase.localStorageEntitiesKey, JSON.stringify(this._entities))
-                await ls.setItem(ProviderBase.localStorageApplicationsKey, JSON.stringify(this._applications))
-                await ls.setItem(ProviderBase.localStorageCurrentUserKey, JSON.stringify(this._currentUser))
-                await ls.setItem(ProviderBase.localStorageRolesKey, JSON.stringify(this._roles))
-                await ls.setItem(ProviderBase.localStorageRowLevelSecurityFiltersKey, JSON.stringify(this._rowLevelSecurityFilters))
-                await ls.setItem(ProviderBase.localStorageAuditLogTypesKey, JSON.stringify(this._auditLogTypes))
-                await ls.setItem(ProviderBase.localStorageAuthorizationsKey, JSON.stringify(this._authorizations))
-                await ls.setItem(ProviderBase.localStorageQueriesKey, JSON.stringify(this._queries))
-                await ls.setItem(ProviderBase.localStorageQueryCategoriesKey, JSON.stringify(this._queryCategories))
-                await ls.setItem(ProviderBase.localStorageQueryFieldsKey, JSON.stringify(this._queryFields))
-                await ls.setItem(ProviderBase.localStorageQueryPermissionsKey, JSON.stringify(this._queryPermissions))
-                await ls.setItem(ProviderBase.localStorageEntityBehaviorTypesKey, JSON.stringify(this._entityBehaviorTypes))
-                await ls.setItem(ProviderBase.localStorageEntityDocumentTypesKey, JSON.stringify(this._entityDocumentTypes))
+
+                // now persist the AllMetadata object
+                await ls.setItem(ProviderBase.localStorageAllMetadataKey, JSON.stringify(this._localMetadata))
             }
         }
         catch (e) {
@@ -812,7 +697,6 @@ export abstract class ProviderBase implements IMetadataProvider {
             LogError(e)
         }
     }
-
 
     protected abstract get Metadata(): IMetadataProvider;
 }

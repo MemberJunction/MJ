@@ -5,6 +5,7 @@ export * from './config'
 export * from './db'
 export * from './dbSchema'
 export * from './entity_subclasses_codegen'
+export * from './action_subclasses_codegen';
 export * from './graphql_server_codegen'
 export * from './logging'
 export * from './manageMetadata'

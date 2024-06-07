@@ -51,6 +51,9 @@ import { AppComponent } from './app.component';
 import { GeneratedFormsModule, LoadGeneratedForms } from './generated/generated-forms.module';
 import { environment } from 'src/environments/environment';
 import { ExplorerSettingsModule } from '@memberjunction/ng-explorer-settings';
+import { DemoFormsModule } from './demo/demo.module';
+
+
 LoadGeneratedForms(); // prevent tree shaking and component loss through this call
 LoadResourceWrappers(); // prevent tree shaking and component loss through this call
 
@@ -87,6 +90,7 @@ export function MSALGuardConfigFactory(): MsalGuardConfiguration {
     ExplorerCoreModule,
     CoreGeneratedFormsModule,
     GeneratedFormsModule,
+    DemoFormsModule,
     NotificationModule,
     HttpClientModule,
     ReactiveFormsModule,

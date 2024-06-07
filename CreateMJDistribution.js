@@ -15,6 +15,7 @@ async function handleCodeGenDirectory(dir, normalizedDir, archive) {
       (item) =>
         item.type &&
         item.type.trim().toLowerCase() !== 'coreentitysubclasses' &&
+        item.type.trim().toLowerCase() !== 'coreactionsubclasses' &&
         item.type.trim().toLowerCase() !== 'graphqlcoreentityresolvers' &&
         item.type.trim().toLowerCase() !== 'angularcoreentities'
     ); // remove these as we don't want people using MJ to ever generated this stuff.
@@ -39,9 +40,10 @@ async function handleCodeGenDirectory(dir, normalizedDir, archive) {
       (item) =>
         !item.workingDirectory ||
         (!item.workingDirectory.trim().toLowerCase().includes('../mjcoreentities') &&
+          !item.workingDirectory.trim().toLowerCase().includes('../coreactions') &&
           !item.workingDirectory.trim().toLowerCase().includes('../mjserver') &&
           !item.workingDirectory.trim().toLowerCase().includes('../angular/core-entity-forms'))
-    ); // remove this as we don't want people using MJ to ever generated this stuff.
+    ); // remove this as we don't want people using MJ to ever generate this stuff.
   }
   if (configJson.customSQLScripts) {
     // find the one that has ../../SQL Scripts/MJ_BASE_BEFORE_SQL.sql and remove one level of the directory
@@ -110,6 +112,7 @@ async function handleSingleEnvironmentFile(dir, normalizedDir, archive, subDir, 
 
   // Clear values for sensitive keys in the environment configuration
   fileContent = clearSensitiveAngularEnvironmentValues(fileContent, isDevelopment);
+  fileContent = `export const environment = ${fileContent}`
 
   // Append modified content to the archive
   archive.append(fileContent, { name: path.join(normalizedDir, subDir, fileName) });
@@ -181,8 +184,8 @@ async function createMJDistribution() {
   const dateTime = new Date().toISOString().replace(/\W/g, '_').substring(0, 16);
 
   // Define directories and output
-  const directories = ['SQL Scripts', 'packages/CodeGen', 'packages/MJAPI', 'packages/MJExplorer', 'packages/GeneratedEntities'];
-  const filename = `Distributions/MemberJunction_Code_Bootstrap_${dateTime}.zip`;
+  const directories = ['SQL Scripts', 'packages/CodeGen', 'packages/MJAPI', 'packages/MJExplorer', 'packages/GeneratedEntities', 'packages/GeneratedActions'];
+  const filename = process.env.MJ_DISTRIBUTION_FILENAME || `Distributions/MemberJunction_Code_Bootstrap_${dateTime}.zip`;
   const output = fs.createWriteStream(filename);
   const archive = archiver('zip');
 
@@ -230,6 +233,7 @@ async function createMJDistribution() {
             normalizedDir === 'MJExplorer' ? 'kendo-ui-license.txt' : '', // Don't want to include this!
             normalizedDir === 'MJExplorer' ? 'src/app/generated/**' : '', // Don't want to include any of the generated stuff
             normalizedDir === 'GeneratedEntities' ? 'src/generated/**' : '', // Don't want to include any of the generated stuff
+            normalizedDir === 'GeneratedActions' ? 'src/generated/**' : '', // Don't want to include any of the generated stuff
             normalizedDir === 'MJAPI' ? 'src/generated/**' : '', // Don't want to include any of the generated stuff
           ],
         },

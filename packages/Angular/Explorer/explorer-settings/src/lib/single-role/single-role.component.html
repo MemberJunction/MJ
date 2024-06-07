@@ -1,0 +1,58 @@
+<div mjFillContainer class="wrapper">
+    @if(isLoading) {
+        <kendo-loader></kendo-loader>        
+    }
+    @if(!isLoading && RoleRecord) {
+        <table class="role-info-table">
+            <tbody>
+                <tr>
+                    <th scope="row">Role</th>
+                    <td>
+                        {{RoleRecord.Name}}
+                        <span class="fa-solid fa-pen-to-square" (click)="EditRecord()"></span>
+                    </td>
+                </tr>
+                <tr>
+                    <th scope="row">Description</th>
+                    <td>{{RoleRecord.Description}}</td>
+                </tr>
+                <tr>
+                    <th scope="row">Directory ID</th>
+                    <td>{{RoleRecord.DirectoryID}}</td>
+                </tr>
+                <tr>
+                    <th scope="row">SQL Name</th>
+                    <td>{{RoleRecord.SQLName}}</td>
+                </tr>
+            </tbody>
+        </table>         
+
+        <mj-tabstrip mjFillContainer [bottomMargin]="150">
+            <mj-tab>
+                Users
+            </mj-tab>
+            <mj-tab-body>
+                <mj-user-roles-grid Mode="Roles" [RoleName]="RoleName" [RoleRecord]="RoleRecord"></mj-user-roles-grid>
+            </mj-tab-body>
+
+            <mj-tab>
+                Entity Permissions
+            </mj-tab>
+            <mj-tab-body>
+                <mj-entity-permissions-grid *ngIf="RoleRecord && RoleRecord.Name" Mode="Role" [RoleName]="RoleRecord.Name" mjFillContainer></mj-entity-permissions-grid>
+            </mj-tab-body>
+        </mj-tabstrip>
+    }
+</div>
+ 
+<mj-entity-form-dialog #entityForm 
+        [Record]="RoleRecord" 
+        SectionName="details" 
+        Mode="section" 
+        [Visible]="showEntityEditingForm" 
+        [AutoRevertOnCancel]="true"
+        [HandleSave]="true"
+        [Width]="550"
+        [Height]="450"
+        (DialogClosed)="onEntityFormClosed($event)">
+</mj-entity-form-dialog>

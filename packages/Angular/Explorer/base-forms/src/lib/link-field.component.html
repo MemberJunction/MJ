@@ -1,0 +1,20 @@
+<!-- <input type="text" class="input-box" [ngClass]="RecordLinked ? 'record-linked' : ''" [(ngModel)]="RecordName" kendoTextBox /><button kendoButton (click)="onClearClicked()">Clear</button>
+ -->
+
+<div>
+    <input 
+        #inputBox
+        type="text" 
+        class="input-box" 
+        [ngClass]="RecordLinked ? 'record-linked' : ''" 
+        [(ngModel)]="RecordName" 
+        kendoTextBox 
+    />
+    <button kendoButton (click)="onClearClicked()">Clear</button>
+
+    <ul *ngIf="showMatchingRecords" class="matching-records">
+        <li *ngFor="let record of matchingRecords" (click)="onRecordSelected(record)">
+            {{ RelatedEntityNameField ? record.Get(RelatedEntityNameField) : 'No Value' }}
+        </li>
+    </ul>
+</div>

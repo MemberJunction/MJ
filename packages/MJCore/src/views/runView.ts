@@ -115,7 +115,7 @@ export class RunView  {
      * @param contextUser if provided, this user is used for permissions and logging. For server based calls, this is generally required because there is no "Current User" since this object is shared across all requests.
      * @returns 
      */
-    public async RunView(params: RunViewParams, contextUser?: UserInfo): Promise<RunViewResult> {
+    public async RunView<T = any>(params: RunViewParams, contextUser?: UserInfo): Promise<RunViewResult<T>> {
         // FIRST, if the resultType is entity_object, we need to run the view with ALL fields in the entity
         // so that we can get the data to populate the entity object with.
         if (params.ResultType === 'entity_object') {
@@ -128,7 +128,7 @@ export class RunView  {
         }
 
         // NOW, run the view
-        const result = await RunView.Provider.RunView(params, contextUser);
+        const result = await RunView.Provider.RunView<T>(params, contextUser);
 
         // FINALLY, if needed, transform the result set into BaseEntity-derived objects
         if ( 
@@ -140,7 +140,7 @@ export class RunView  {
             const md = new Metadata();
             const newItems = [];
             for (const item of result.Results) {
-                const entity = await md.GetEntityObject(params.EntityName);
+                const entity = await md.GetEntityObject(params.EntityName, contextUser);
                 entity.LoadFromData(item);
                 newItems.push(entity);
             }
@@ -166,4 +166,35 @@ export class RunView  {
             throw new Error('No global object store, so we cant set the static provider');
     }
 
+
+    /**
+     * Utility method that calculates the entity name for a given RunViewParams object by looking at the EntityName property as well as the ViewID/ViewName/ViewEntity properties as needed.
+     * @param params 
+     * @returns 
+     */
+    public static async GetEntityNameFromRunViewParams(params: RunViewParams): Promise<string> {
+        if (params.EntityName)
+            return params.EntityName;
+        else if (params.ViewEntity) {
+            const entityID = params.ViewEntity.Get('EntityID'); // using weak typing because this is MJCore and we don't want to use the sub-classes from core-entities as that would create a circular dependency
+            const md = new Metadata();
+            const entity = md.Entities.find(e => e.ID === entityID);
+            if (entity)
+                return entity.Name
+        }
+        else if (params.ViewID || params.ViewName) {
+            // we don't have a view entity loaded, so load it up now
+            const rv = new RunView();
+            const result = await rv.RunView({
+                EntityName: "User Views",
+                ExtraFilter: params.ViewID ? `ID = ${params.ViewID}` : `Name = '${params.ViewName}'`,
+                ResultType: 'entity_object'
+            });
+            if (result && result.Success && result.Results.length > 0) {
+                return result.Results[0].Entity; // virtual field in the User Views entity called Entity
+            }
+        }
+        else
+            return null;
+    }
 }

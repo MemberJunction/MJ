@@ -28,17 +28,32 @@ export class ClassFactory {
      * @param baseClass A reference to the base class you are registering a sub-class for
      * @param subClass A reference to the sub-class you are registering
      * @param key A key can be used to differentiate registrations for the same base class/sub-class combination. For example, in the case of BaseEntity and Entity object subclasses we'll have a LOT of entries and we want to get the highest priority registered sub-class for a specific key. In that case, the key is the entity name, but the key can be any value you want to use to differentiate registrations.
-     * @param priority Higher priority registrations will be used over lower priority registrations. If there are multiple registrations for a given base class/sub-class/key combination, the one with the highest priority will be used. If there are multiple registrations with the same priority, the last one registered will be used.
+     * @param priority Higher priority registrations will be used over lower priority registrations. If there are multiple registrations for a given base class/sub-class/key combination, the one with the highest priority will be used. If there are multiple registrations with the same priority, the last one registered will be used. Finally, if you do NOT provide this setting, the order of registrations will increment the priority automatically so dependency injection will typically care care of this. That is, in order for Class B, a subclass of Class A, to be registered properly, Class A code has to already have been loaded and therefore Class A's RegisterClass decorator was run. In that scenario, if neither Class A or B has a priority setting, Class A would be 1 and Class B would be 2 automatically. For this reason, you only need to explicitly set priority if you want to do something atypical as this mechanism normally will solve for setting the priority correctly based on the furthest descendant class that is registered.
      */
     public Register(baseClass: any, subClass: any, key: string = null, priority: number = 0) {
         if (baseClass && subClass) {
             // get all of hte existing registrations for this baseClass and key
             const registrations = this.GetAllRegistrations(baseClass, key);
-            // validate to make sure that the comabintion of base class and key for the provided priority # is not already registered, if it is, then throw an exception
-            const existing = registrations.filter(r => r.Priority === priority);
-            if (existing && existing.length > 0) {
-                console.warn(`*** ClassFactory.Register: Registering class ${subClass.name} for base class ${baseClass.name} and key/priority ${key}/${priority}. ${existing.length} registrations already exist for that combination. While this is allowed it is not desired and when matching class requests occur, we will simply use the LAST registration we happen to have which can lead to unintended behavior. ***`);
+
+            if (priority > 0) {
+                // validate to make sure that the comabination of base class and key for the provided priority # is not already registered, if it is, then print a warning
+                const existing = registrations.filter(r => r.Priority === priority);
+                if (existing && existing.length > 0) {
+                    console.warn(`*** ClassFactory.Register: Registering class ${subClass.name} for base class ${baseClass.name} and key/priority ${key}/${priority}. ${existing.length} registrations already exist for that combination. While this is allowed it is not desired and when matching class requests occur, we will simply use the LAST registration we happen to have which can lead to unintended behavior. ***`);
+                }
             }
+            else if (priority === 0 || priority === null || priority === undefined) {
+                // when priority is not provided or is zero, which is logically the same, check to see what the highest earlier registration was and increment by 1
+                // this automatically makes the most recent registration higher, IF IT DIDN'T ALREADY have a priority explicitly set
+                let highestPriority = 0;
+                for (let i = 0; i < registrations.length; i++) {
+                    if (registrations[i].Priority > highestPriority)
+                        highestPriority = registrations[i].Priority;
+                }
+                // now set the priority to one higher than the highest priority we found
+                priority = highestPriority + 1;
+            }
+
             // this combination of baseclass/key/priority is NOT already registered.
             let reg = new ClassRegistration();
             reg.BaseClass = baseClass;

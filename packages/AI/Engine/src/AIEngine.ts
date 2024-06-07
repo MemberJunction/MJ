@@ -59,6 +59,22 @@ export class AIEngine {
         return this._metadataLoaded;
     }
 
+    /**
+     * Returns the highest power model for a given vendor and model type. Loads the metadata if not already loaded.
+     * @param vendorName 
+     * @param modelType 
+     * @param contextUser required on the server side
+     * @returns 
+     */
+    public async GetHighestPowerModel(vendorName: string, modelType: string, contextUser?: UserInfo): Promise<AIModelEntityExtended> {
+        await AIEngine.LoadAIMetadata(contextUser); // most of the time this is already loaded, but just in case it isn't we will load it here
+        const models = AIEngine.Models.filter(m => m.AIModelType.trim().toLowerCase() === modelType.trim().toLowerCase() && 
+                                                   m.Vendor.trim().toLowerCase() === vendorName.trim().toLowerCase())  
+        // next, sort the models by the PowerRank field so that the highest power rank model is the first array element
+        models.sort((a, b) => b.PowerRank - a.PowerRank); // highest power rank first
+        return models[0];
+    }
+
     public static async LoadAIMetadata(contextUser?: UserInfo) {
         return AIEngine.Instance.LoadAIMetadata(contextUser);
     }
@@ -182,7 +198,7 @@ export class AIEngine {
                     const newRecord = await md.GetEntityObject(entityAction.OutputEntity);
                     newRecord.NewRecord();
                     newRecord.Set('EntityID', params.entityRecord.EntityInfo.ID);
-                    newRecord.Set('RecordID', params.entityRecord.PrimaryKey.Value);
+                    newRecord.Set('RecordID', params.entityRecord.FirstPrimaryKey.Value);
                     newRecord.Set(entityAction.OutputField, sOutput);
                     await newRecord.Save();
                 }

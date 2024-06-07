@@ -85,4 +85,6 @@ packages/GraphQLDataProvider/dist-browser/
 packages/MJExplorer/kendo-ui-license.txt
 build.log.json
 
-Distributions/
+Distributions/*.zip
+!Distributions/MemberJunction_Code_Bootstrap.zip
+packages/Templates-Old/.angular/

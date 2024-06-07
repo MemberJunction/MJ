@@ -1,0 +1,7 @@
+{
+  "type": "patch",
+  "comment": "Applying package updates [skip ci]",
+  "packageName": "@memberjunction/ng-container-directives",
+  "email": "craig.adam@bluecypress.io",
+  "dependentChangeType": "patch"
+}

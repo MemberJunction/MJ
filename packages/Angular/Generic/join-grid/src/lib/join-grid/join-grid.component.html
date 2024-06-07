@@ -1,0 +1,54 @@
+<div mjFillContainer class="wrapper"> 
+    @if (_IsLoading) {
+        <div><kendo-loader></kendo-loader></div>
+    }
+    <button [disabled]="NumDirtyRecords === 0" kendoButton (click)="Save()">Save</button>
+    <button [disabled]="NumDirtyRecords === 0" kendoButton (click)="CancelEdit()">Cancel</button>
+    @if (!_IsLoading) {
+        <table class="grid">
+            <thead>
+                <tr>
+                    <!-- First column is the name of the Rows Entity -->
+                    <th>{{RowsEntityName}}</th>
+                    @if (ColumnsMode === 'Entity') {
+                        @for (colRecord of this._columnsEntityData; track colRecord) {
+                            <th>{{colRecord.Get(this.ColumnsEntityDisplayField)}}</th>
+                        }
+                    }
+                    @else {
+                        <!-- we need one column for each of the fields in the JoinEntityDisplayColumns array -->
+                        @for (colName of JoinEntityDisplayColumns; track colName) {
+                            <th>{{colName}}</th>
+                        }
+                    }
+                </tr>
+            </thead>
+            <tbody>
+                @for (row of _GridData; track row) {
+                    <tr [ngClass]="IsRecordReallyDirty(row) ? 'dirty-row' : ''">
+                        <td class="first-column">
+                            <span>{{row.FirstColValue}}</span>
+                        </td>
+                        @if (ColumnsMode === 'Fields') {
+                            <td *ngFor="let colName of JoinEntityDisplayColumns">
+                                <input type="checkbox" kendoCheckBox>
+                            </td>
+                        }
+                        @else {
+                            @for (cell of row.ColumnData; track cell) {
+                                <!-- loop through all the columns and display a checkbox and check it if we have a match in the current row -->
+                                <td (click)="_FlipRecord($event, row, cell)"
+                                    [ngClass]="IsCellReallyDirty(cell) ? 'dirty-cell' : ''">
+                                    <input   type="checkbox" 
+                                             kendoCheckBox 
+                                             [checked]="_IsColumnChecked(cell)"  
+                                             (click)="_FlipRecord($event, row, cell, true)">
+                                </td>
+                            }
+                        }
+                    </tr>                
+                } 
+            </tbody>
+        </table>
+    }
+</div>

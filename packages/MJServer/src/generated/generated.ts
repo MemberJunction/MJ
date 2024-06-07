@@ -2,7 +2,7 @@
 * ALL ENTITIES - TypeGraphQL Type Class Definition - AUTO GENERATED FILE
 * Generated Entities and Resolvers for Server
 * 
-* GENERATED: 5/24/2024, 2:19:58 PM
+* GENERATED: 6/6/2024, 4:59:51 PM
 * 
 *   >>> DO NOT MODIFY THIS FILE!!!!!!!!!!!!
 *   >>> YOUR CHANGES WILL BE OVERWRITTEN
@@ -10,9 +10,9 @@
 * 
 **********************************************************************************/
 import { Arg, Ctx, Int, Query, Resolver, Field, Float, ObjectType, FieldResolver, Root, InputType, Mutation, 
-            PubSub, PubSubEngine, ResolverBase, RunViewByIDInput, RunViewByNameInput, RunDynamicViewInput } from '@memberjunction/server';
-import { Metadata, EntityPermissionType } from '@memberjunction/core'
-import { AppContext } from '@memberjunction/server';
+            PubSub, PubSubEngine, ResolverBase, RunViewByIDInput, RunViewByNameInput, RunDynamicViewInput,
+            AppContext, KeyValuePairInput, DeleteOptionsInput } from '@memberjunction/server';
+import { Metadata, EntityPermissionType, CompositeKey } from '@memberjunction/core'
 
 import { MaxLength } from 'class-validator';
 import { DataSource } from 'typeorm';
@@ -20,7 +20,7 @@ import { mj_core_schema } from '../config';
 
 import * as mj_core_schema_server_object_types from '@memberjunction/server'
 
-import { CompanyEntity, EmployeeEntity, UserFavoriteEntity, EmployeeCompanyIntegrationEntity, EmployeeRoleEntity, EmployeeSkillEntity, RoleEntity, SkillEntity, IntegrationURLFormatEntity, IntegrationEntity, CompanyIntegrationEntity, EntityFieldEntity, EntityEntity, UserEntity, EntityRelationshipEntity, UserRecordLogEntity, UserViewEntity, CompanyIntegrationRunEntity, CompanyIntegrationRunDetailEntity, ErrorLogEntity, ApplicationEntity, ApplicationEntityEntity, EntityPermissionEntity, UserApplicationEntityEntity, UserApplicationEntity, CompanyIntegrationRunAPILogEntity, ListEntity, ListDetailEntity, UserViewRunEntity, UserViewRunDetailEntity, WorkflowRunEntity, WorkflowEntity, WorkflowEngineEntity, RecordChangeEntity, UserRoleEntity, RowLevelSecurityFilterEntity, AuditLogEntity, AuthorizationEntity, AuthorizationRoleEntity, AuditLogTypeEntity, EntityFieldValueEntity, AIModelEntity, AIActionEntity, AIModelActionEntity, EntityAIActionEntity, AIModelTypeEntity, QueueTypeEntity, QueueEntity, QueueTaskEntity, DashboardEntity, OutputTriggerTypeEntity, OutputFormatTypeEntity, OutputDeliveryTypeEntity, ReportEntity, ReportSnapshotEntity, ResourceTypeEntity, TagEntity, TaggedItemEntity, WorkspaceEntity, WorkspaceItemEntity, DatasetEntity, DatasetItemEntity, ConversationDetailEntity, ConversationEntity, UserNotificationEntity, SchemaInfoEntity, CompanyIntegrationRecordMapEntity, RecordMergeLogEntity, RecordMergeDeletionLogEntity, QueryFieldEntity, QueryCategoryEntity, QueryEntity, QueryPermissionEntity, VectorIndexEntity, EntityDocumentTypeEntity, EntityDocumentRunEntity, VectorDatabaseEntity, EntityRecordDocumentEntity, EntityDocumentEntity, DataContextItemEntity, DataContextEntity, UserViewCategoryEntity, DashboardCategoryEntity, ReportCategoryEntity, FileStorageProviderEntity, FileEntity, FileCategoryEntity, FileEntityRecordLinkEntity, VersionInstallationEntity, DuplicateRunDetailMatchEntity, EntityDocumentSettingEntity, EntitySettingEntity, DuplicateRunEntity, DuplicateRunDetailEntity, EntityBehaviorEntity, EntityBehaviorTypeEntity, ApplicationSettingEntity } from '@memberjunction/core-entities';
+import { CompanyEntity, EmployeeEntity, UserFavoriteEntity, EmployeeCompanyIntegrationEntity, EmployeeRoleEntity, EmployeeSkillEntity, RoleEntity, SkillEntity, IntegrationURLFormatEntity, IntegrationEntity, CompanyIntegrationEntity, EntityFieldEntity, EntityEntity, UserEntity, EntityRelationshipEntity, UserRecordLogEntity, UserViewEntity, CompanyIntegrationRunEntity, CompanyIntegrationRunDetailEntity, ErrorLogEntity, ApplicationEntity, ApplicationEntityEntity, EntityPermissionEntity, UserApplicationEntityEntity, UserApplicationEntity, CompanyIntegrationRunAPILogEntity, ListEntity, ListDetailEntity, UserViewRunEntity, UserViewRunDetailEntity, WorkflowRunEntity, WorkflowEntity, WorkflowEngineEntity, RecordChangeEntity, UserRoleEntity, RowLevelSecurityFilterEntity, AuditLogEntity, AuthorizationEntity, AuthorizationRoleEntity, AuditLogTypeEntity, EntityFieldValueEntity, AIModelEntity, AIActionEntity, AIModelActionEntity, EntityAIActionEntity, AIModelTypeEntity, QueueTypeEntity, QueueEntity, QueueTaskEntity, DashboardEntity, OutputTriggerTypeEntity, OutputFormatTypeEntity, OutputDeliveryTypeEntity, ReportEntity, ReportSnapshotEntity, ResourceTypeEntity, TagEntity, TaggedItemEntity, WorkspaceEntity, WorkspaceItemEntity, DatasetEntity, DatasetItemEntity, ConversationDetailEntity, ConversationEntity, UserNotificationEntity, SchemaInfoEntity, CompanyIntegrationRecordMapEntity, RecordMergeLogEntity, RecordMergeDeletionLogEntity, QueryFieldEntity, QueryCategoryEntity, QueryEntity, QueryPermissionEntity, VectorIndexEntity, EntityDocumentTypeEntity, EntityDocumentRunEntity, VectorDatabaseEntity, EntityRecordDocumentEntity, EntityDocumentEntity, DataContextItemEntity, DataContextEntity, UserViewCategoryEntity, DashboardCategoryEntity, ReportCategoryEntity, FileStorageProviderEntity, FileEntity, FileCategoryEntity, FileEntityRecordLinkEntity, VersionInstallationEntity, DuplicateRunDetailMatchEntity, EntityDocumentSettingEntity, EntitySettingEntity, DuplicateRunEntity, DuplicateRunDetailEntity, EntityBehaviorEntity, EntityBehaviorTypeEntity, ApplicationSettingEntity, ActionCategoryEntity, EntityActionEntity, EntityActionInvocationEntity, ActionAuthorizationEntity, EntityActionInvocationTypeEntity, ActionEntity, EntityActionFilterEntity, ActionFilterEntity, ActionContextTypeEntity, ActionResultCodeEntity, ActionContextEntity, ActionExecutionLogEntity, ActionParamEntity, ActionLibraryEntity, LibraryEntity, ListCategoryEntity, CommunicationTemplateEntity, CommunicationProviderEntity, CommunicationRunEntity, CommunicationProviderMessageTypeEntity, CommunicationLogEntity, CommunicationBaseMessageTypeEntity } from '@memberjunction/core-entities';
     
 
 //****************************************************************************
@@ -77,19 +77,19 @@ export class Company_ {
 export class CreateCompanyInput {
     @Field()
     Name: string;
-    
+
     @Field()
     Description: string;
-    
+
     @Field({ nullable: true })
-    Website: string;
-    
+    Website?: string;
+
     @Field({ nullable: true })
-    LogoURL: string;
-    
+    LogoURL?: string;
+
     @Field({ nullable: true })
-    Domain: string;
-    }
+    Domain?: string;
+}
     
         
 //****************************************************************************
@@ -99,22 +99,25 @@ export class CreateCompanyInput {
 export class UpdateCompanyInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field()
     Name: string;
-    
+
     @Field()
     Description: string;
-    
+
     @Field({ nullable: true })
-    Website: string;
-    
+    Website?: string;
+
     @Field({ nullable: true })
-    LogoURL: string;
-    
+    LogoURL?: string;
+
     @Field({ nullable: true })
-    Domain: string;
-    }
+    Domain?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for Companies
@@ -206,28 +209,7 @@ export class CompanyResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext, 
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <CompanyEntity>await new Metadata().GetEntityObject('Companies', this.GetUserFromPayload(userPayload));
-            await entityObject.NewRecord();
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire the AfterCreate event and then return all the data
-                await this.AfterCreate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else 
-                // save failed, return null
-                return null;
-        }
-        else    
-            return null;
-    }
-
-    // Before/After CREATE Event Hooks for Sub-Classes to Override
-    protected async BeforeCreate(dataSource: DataSource, input: CreateCompanyInput): Promise<boolean> {
-        return true;
-    }
-    protected async AfterCreate(dataSource: DataSource, input: CreateCompanyInput) {
+        return this.CreateRecord('Companies', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => Company_)
@@ -236,55 +218,13 @@ export class CompanyResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <CompanyEntity>await new Metadata().GetEntityObject('Companies', this.GetUserFromPayload(userPayload));
-            await entityObject.Load(input.ID) // Track Changes is turned on, so we need to get the latest data from DB first before we save
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateCompanyInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateCompanyInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('Companies', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => Company_)
-    async DeleteCompany(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <CompanyEntity>await new Metadata().GetEntityObject('Companies', this.GetUserFromPayload(userPayload));
-            await entityObject.Load(ID);
-            const returnValue = entityObject.GetAll(); // grab the values before we delete so we can return last state before delete if we are successful.
-            if (await entityObject.Delete()) {
-                await this.AfterDelete(dataSource, ID); // fire event
-                return returnValue;
-            }
-            else 
-                return null; // delete failed, this will cause an exception
-        }
-        else
-            return null; // BeforeDelete canceled the operation, this will cause an exception
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeDelete(dataSource: DataSource, ID: number): Promise<boolean> {
-        const i = ID, d = dataSource; // prevent error;
-        return true;
-    }
-    protected async AfterDelete(dataSource: DataSource, ID: number) {
-        const i = ID, d = dataSource; // prevent error
+    async DeleteCompany(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Companies', key, options, dataSource, userPayload, pubSub);
     }
     
 }
@@ -382,28 +322,28 @@ export class Employee_ {
 export class CreateEmployeeInput {
     @Field()
     FirstName: string;
-    
+
     @Field()
     LastName: string;
-    
+
     @Field({ nullable: true })
-    Title: string;
-    
+    Title?: string;
+
     @Field()
     Email: string;
-    
+
     @Field({ nullable: true })
-    Phone: string;
-    
+    Phone?: string;
+
     @Field(() => Boolean)
     Active: boolean;
-    
+
     @Field(() => Int)
     CompanyID: number;
-    
+
     @Field(() => Int, { nullable: true })
-    SupervisorID: number;
-    }
+    SupervisorID?: number;
+}
     
         
 //****************************************************************************
@@ -413,31 +353,34 @@ export class CreateEmployeeInput {
 export class UpdateEmployeeInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field()
     FirstName: string;
-    
+
     @Field()
     LastName: string;
-    
+
     @Field({ nullable: true })
-    Title: string;
-    
+    Title?: string;
+
     @Field()
     Email: string;
-    
+
     @Field({ nullable: true })
-    Phone: string;
-    
+    Phone?: string;
+
     @Field(() => Boolean)
     Active: boolean;
-    
+
     @Field(() => Int)
     CompanyID: number;
-    
+
     @Field(() => Int, { nullable: true })
-    SupervisorID: number;
-    }
+    SupervisorID?: number;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for Employees
@@ -545,28 +488,7 @@ export class EmployeeResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext, 
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <EmployeeEntity>await new Metadata().GetEntityObject('Employees', this.GetUserFromPayload(userPayload));
-            await entityObject.NewRecord();
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire the AfterCreate event and then return all the data
-                await this.AfterCreate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else 
-                // save failed, return null
-                return null;
-        }
-        else    
-            return null;
-    }
-
-    // Before/After CREATE Event Hooks for Sub-Classes to Override
-    protected async BeforeCreate(dataSource: DataSource, input: CreateEmployeeInput): Promise<boolean> {
-        return true;
-    }
-    protected async AfterCreate(dataSource: DataSource, input: CreateEmployeeInput) {
+        return this.CreateRecord('Employees', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => Employee_)
@@ -575,55 +497,13 @@ export class EmployeeResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <EmployeeEntity>await new Metadata().GetEntityObject('Employees', this.GetUserFromPayload(userPayload));
-            await entityObject.Load(input.ID) // Track Changes is turned on, so we need to get the latest data from DB first before we save
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateEmployeeInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateEmployeeInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('Employees', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => Employee_)
-    async DeleteEmployee(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <EmployeeEntity>await new Metadata().GetEntityObject('Employees', this.GetUserFromPayload(userPayload));
-            await entityObject.Load(ID);
-            const returnValue = entityObject.GetAll(); // grab the values before we delete so we can return last state before delete if we are successful.
-            if (await entityObject.Delete()) {
-                await this.AfterDelete(dataSource, ID); // fire event
-                return returnValue;
-            }
-            else 
-                return null; // delete failed, this will cause an exception
-        }
-        else
-            return null; // BeforeDelete canceled the operation, this will cause an exception
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeDelete(dataSource: DataSource, ID: number): Promise<boolean> {
-        const i = ID, d = dataSource; // prevent error;
-        return true;
-    }
-    protected async AfterDelete(dataSource: DataSource, ID: number) {
-        const i = ID, d = dataSource; // prevent error
+    async DeleteEmployee(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Employees', key, options, dataSource, userPayload, pubSub);
     }
     
 }
@@ -675,13 +555,13 @@ export class UserFavorite_ {
 export class CreateUserFavoriteInput {
     @Field(() => Int)
     UserID: number;
-    
+
     @Field(() => Int)
     EntityID: number;
-    
+
     @Field()
     RecordID: string;
-    }
+}
     
         
 //****************************************************************************
@@ -691,16 +571,19 @@ export class CreateUserFavoriteInput {
 export class UpdateUserFavoriteInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field(() => Int)
     UserID: number;
-    
+
     @Field(() => Int)
     EntityID: number;
-    
+
     @Field()
     RecordID: string;
-    }
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for User Favorites
@@ -760,28 +643,7 @@ export class UserFavoriteResolverBase extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext, 
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <UserFavoriteEntity>await new Metadata().GetEntityObject('User Favorites', this.GetUserFromPayload(userPayload));
-            await entityObject.NewRecord();
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire the AfterCreate event and then return all the data
-                await this.AfterCreate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else 
-                // save failed, return null
-                return null;
-        }
-        else    
-            return null;
-    }
-
-    // Before/After CREATE Event Hooks for Sub-Classes to Override
-    protected async BeforeCreate(dataSource: DataSource, input: CreateUserFavoriteInput): Promise<boolean> {
-        return true;
-    }
-    protected async AfterCreate(dataSource: DataSource, input: CreateUserFavoriteInput) {
+        return this.CreateRecord('User Favorites', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => UserFavorite_)
@@ -790,55 +652,13 @@ export class UserFavoriteResolverBase extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <UserFavoriteEntity>await new Metadata().GetEntityObject('User Favorites', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for User Favorites
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateUserFavoriteInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateUserFavoriteInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('User Favorites', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => UserFavorite_)
-    async DeleteUserFavorite(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <UserFavoriteEntity>await new Metadata().GetEntityObject('User Favorites', this.GetUserFromPayload(userPayload));
-            await entityObject.Load(ID);
-            const returnValue = entityObject.GetAll(); // grab the values before we delete so we can return last state before delete if we are successful.
-            if (await entityObject.Delete()) {
-                await this.AfterDelete(dataSource, ID); // fire event
-                return returnValue;
-            }
-            else 
-                return null; // delete failed, this will cause an exception
-        }
-        else
-            return null; // BeforeDelete canceled the operation, this will cause an exception
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeDelete(dataSource: DataSource, ID: number): Promise<boolean> {
-        const i = ID, d = dataSource; // prevent error;
-        return true;
-    }
-    protected async AfterDelete(dataSource: DataSource, ID: number) {
-        const i = ID, d = dataSource; // prevent error
+    async DeleteUserFavorite(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('User Favorites', key, options, dataSource, userPayload, pubSub);
     }
     
 }
@@ -881,19 +701,22 @@ export class EmployeeCompanyIntegration_ {
 export class UpdateEmployeeCompanyIntegrationInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field(() => Int)
     EmployeeID: number;
-    
+
     @Field(() => Int)
     CompanyIntegrationID: number;
-    
+
     @Field()
     ExternalSystemRecordID: string;
-    
+
     @Field(() => Boolean)
     IsActive: boolean;
-    }
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for Employee Company Integrations
@@ -953,29 +776,7 @@ export class EmployeeCompanyIntegrationResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <EmployeeCompanyIntegrationEntity>await new Metadata().GetEntityObject('Employee Company Integrations', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Employee Company Integrations
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateEmployeeCompanyIntegrationInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateEmployeeCompanyIntegrationInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('Employee Company Integrations', input, dataSource, userPayload, pubSub);
     }
     
 }
@@ -1015,13 +816,16 @@ export class EmployeeRole_ {
 export class UpdateEmployeeRoleInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field(() => Int)
     EmployeeID: number;
-    
+
     @Field(() => Int)
     RoleID: number;
-    }
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for Employee Roles
@@ -1081,29 +885,7 @@ export class EmployeeRoleResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <EmployeeRoleEntity>await new Metadata().GetEntityObject('Employee Roles', this.GetUserFromPayload(userPayload));
-            await entityObject.Load(input.ID) // Track Changes is turned on, so we need to get the latest data from DB first before we save
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateEmployeeRoleInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateEmployeeRoleInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('Employee Roles', input, dataSource, userPayload, pubSub);
     }
     
 }
@@ -1143,13 +925,16 @@ export class EmployeeSkill_ {
 export class UpdateEmployeeSkillInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field(() => Int)
     EmployeeID: number;
-    
+
     @Field(() => Int)
     SkillID: number;
-    }
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for Employee Skills
@@ -1209,29 +994,7 @@ export class EmployeeSkillResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <EmployeeSkillEntity>await new Metadata().GetEntityObject('Employee Skills', this.GetUserFromPayload(userPayload));
-            await entityObject.Load(input.ID) // Track Changes is turned on, so we need to get the latest data from DB first before we save
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateEmployeeSkillInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateEmployeeSkillInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('Employee Skills', input, dataSource, userPayload, pubSub);
     }
     
 }
@@ -1291,16 +1054,16 @@ export class Role_ {
 export class CreateRoleInput {
     @Field()
     Name: string;
-    
+
     @Field({ nullable: true })
-    Description: string;
-    
+    Description?: string;
+
     @Field({ nullable: true })
-    DirectoryID: string;
-    
+    DirectoryID?: string;
+
     @Field({ nullable: true })
-    SQLName: string;
-    }
+    SQLName?: string;
+}
     
         
 //****************************************************************************
@@ -1310,19 +1073,22 @@ export class CreateRoleInput {
 export class UpdateRoleInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field()
     Name: string;
-    
+
     @Field({ nullable: true })
-    Description: string;
-    
+    Description?: string;
+
     @Field({ nullable: true })
-    DirectoryID: string;
-    
+    DirectoryID?: string;
+
     @Field({ nullable: true })
-    SQLName: string;
-    }
+    SQLName?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for Roles
@@ -1430,28 +1196,7 @@ export class RoleResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext, 
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <RoleEntity>await new Metadata().GetEntityObject('Roles', this.GetUserFromPayload(userPayload));
-            await entityObject.NewRecord();
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire the AfterCreate event and then return all the data
-                await this.AfterCreate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else 
-                // save failed, return null
-                return null;
-        }
-        else    
-            return null;
-    }
-
-    // Before/After CREATE Event Hooks for Sub-Classes to Override
-    protected async BeforeCreate(dataSource: DataSource, input: CreateRoleInput): Promise<boolean> {
-        return true;
-    }
-    protected async AfterCreate(dataSource: DataSource, input: CreateRoleInput) {
+        return this.CreateRecord('Roles', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => Role_)
@@ -1460,55 +1205,13 @@ export class RoleResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <RoleEntity>await new Metadata().GetEntityObject('Roles', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Roles
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateRoleInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateRoleInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('Roles', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => Role_)
-    async DeleteRole(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <RoleEntity>await new Metadata().GetEntityObject('Roles', this.GetUserFromPayload(userPayload));
-            await entityObject.Load(ID);
-            const returnValue = entityObject.GetAll(); // grab the values before we delete so we can return last state before delete if we are successful.
-            if (await entityObject.Delete()) {
-                await this.AfterDelete(dataSource, ID); // fire event
-                return returnValue;
-            }
-            else 
-                return null; // delete failed, this will cause an exception
-        }
-        else
-            return null; // BeforeDelete canceled the operation, this will cause an exception
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeDelete(dataSource: DataSource, ID: number): Promise<boolean> {
-        const i = ID, d = dataSource; // prevent error;
-        return true;
-    }
-    protected async AfterDelete(dataSource: DataSource, ID: number) {
-        const i = ID, d = dataSource; // prevent error
+    async DeleteRole(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Roles', key, options, dataSource, userPayload, pubSub);
     }
     
 }
@@ -1668,16 +1371,19 @@ export class IntegrationURLFormat_ {
 export class UpdateIntegrationURLFormatInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field({ nullable: true })
-    IntegrationName: string;
-    
+    IntegrationName?: string;
+
     @Field(() => Int)
     EntityID: number;
-    
+
     @Field()
     URLFormat: string;
-    }
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for Integration URL Formats
@@ -1745,29 +1451,7 @@ export class IntegrationURLFormatResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <IntegrationURLFormatEntity>await new Metadata().GetEntityObject('Integration URL Formats', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Integration URL Formats
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateIntegrationURLFormatInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateIntegrationURLFormatInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('Integration URL Formats', input, dataSource, userPayload, pubSub);
     }
     
 }
@@ -1829,28 +1513,31 @@ export class Integration_ {
 export class UpdateIntegrationInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field()
     Name: string;
-    
+
     @Field({ nullable: true })
-    Description: string;
-    
+    Description?: string;
+
     @Field({ nullable: true })
-    NavigationBaseURL: string;
-    
+    NavigationBaseURL?: string;
+
     @Field({ nullable: true })
-    ClassName: string;
-    
+    ClassName?: string;
+
     @Field({ nullable: true })
-    ImportPath: string;
-    
+    ImportPath?: string;
+
     @Field(() => Int)
     BatchMaxRequestCount: number;
-    
+
     @Field(() => Int)
     BatchRequestWaitTime: number;
-    }
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for Integrations
@@ -1934,29 +1621,7 @@ export class IntegrationResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <IntegrationEntity>await new Metadata().GetEntityObject('Integrations', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Integrations
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateIntegrationInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateIntegrationInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('Integrations', input, dataSource, userPayload, pubSub);
     }
     
 }
@@ -2077,43 +1742,46 @@ export class CompanyIntegration_ {
 export class UpdateCompanyIntegrationInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field()
     CompanyName: string;
-    
+
     @Field()
     IntegrationName: string;
-    
+
     @Field(() => Boolean, { nullable: true })
-    IsActive: boolean;
-    
+    IsActive?: boolean;
+
     @Field({ nullable: true })
-    AccessToken: string;
-    
+    AccessToken?: string;
+
     @Field({ nullable: true })
-    RefreshToken: string;
-    
+    RefreshToken?: string;
+
     @Field({ nullable: true })
-    TokenExpirationDate: Date;
-    
+    TokenExpirationDate?: Date;
+
     @Field({ nullable: true })
-    APIKey: string;
-    
+    APIKey?: string;
+
     @Field({ nullable: true })
-    ExternalSystemID: string;
-    
+    ExternalSystemID?: string;
+
     @Field(() => Boolean)
     IsExternalSystemReadOnly: boolean;
-    
+
     @Field({ nullable: true })
-    ClientID: string;
-    
+    ClientID?: string;
+
     @Field({ nullable: true })
-    ClientSecret: string;
-    
+    ClientSecret?: string;
+
     @Field({ nullable: true })
-    CustomAttribute1: string;
-    }
+    CustomAttribute1?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for Company Integrations
@@ -2205,29 +1873,7 @@ export class CompanyIntegrationResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <CompanyIntegrationEntity>await new Metadata().GetEntityObject('Company Integrations', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Company Integrations
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateCompanyIntegrationInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateCompanyIntegrationInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('Company Integrations', input, dataSource, userPayload, pubSub);
     }
     
 }
@@ -2243,110 +1889,114 @@ export class EntityField_ {
     @Field(() => Int) 
     EntityID: number;
           
-    @Field(() => Int) 
+    @Field(() => Int, {description: 'Display order of the field within the entity'}) 
     Sequence: number;
           
-    @Field() 
+    @Field({description: 'Name of the field within the database table'}) 
     @MaxLength(510)
     Name: string;
           
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: 'A user friendly alternative to the field name'}) 
     @MaxLength(510)
     DisplayName?: string;
           
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: 'Descriptive text explaining the purpose of the field'}) 
     Description?: string;
           
     @Field(() => Boolean, {description: 'When set to 1 (default), whenever a description is modified in the column within the underlying view (first choice) or table (second choice), the Description column in the entity field definition will be automatically updated. If you never set metadata in the database directly, you can leave this alone. However, if you have metadata set in the database level for description, and you want to provide a DIFFERENT description in this entity field definition, turn this bit off and then set the Description field and future CodeGen runs will NOT override the Description field here.'}) 
     AutoUpdateDescription: boolean;
           
-    @Field(() => Boolean) 
+    @Field(() => Boolean, {description: 'Indicates if the field is part of the primary key for the entity (auto maintained by CodeGen)'}) 
     IsPrimaryKey: boolean;
           
-    @Field(() => Boolean) 
+    @Field(() => Boolean, {description: 'Indicates if the field must have unique values within the entity.'}) 
     IsUnique: boolean;
           
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: 'Used for generating custom tabs in the generated forms, only utilized if GeneratedFormSection=Category'}) 
     @MaxLength(510)
     Category?: string;
           
-    @Field() 
+    @Field({description: 'SQL Data type (auto maintained by CodeGen)'}) 
     @MaxLength(200)
     Type: string;
           
-    @Field(() => Int, {nullable: true}) 
+    @Field(() => Int, {nullable: true, description: 'SQL data length (auto maintained by CodeGen)'}) 
     Length?: number;
           
-    @Field(() => Int, {nullable: true}) 
+    @Field(() => Int, {nullable: true, description: 'SQL precision (auto maintained by CodeGen)'}) 
     Precision?: number;
           
-    @Field(() => Int, {nullable: true}) 
+    @Field(() => Int, {nullable: true, description: 'SQL scale (auto maintained by CodeGen)'}) 
     Scale?: number;
           
-    @Field(() => Boolean) 
+    @Field(() => Boolean, {description: 'Does the column allow null or not (auto maintained by CodeGen)'}) 
     AllowsNull: boolean;
           
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: 'If a default value is defined for the field it is stored here (auto maintained by CodeGen)'}) 
     @MaxLength(510)
     DefaultValue?: string;
           
-    @Field(() => Boolean) 
+    @Field(() => Boolean, {description: 'If this field automatically increments within the table, this field is set to 1 (auto maintained by CodeGen)'}) 
     AutoIncrement: boolean;
           
-    @Field() 
+    @Field({description: 'Possible Values of None, List, ListOrUserEntry - the last option meaning that the list of possible values are options, but a user can enter anything else desired too.'}) 
     @MaxLength(40)
     ValueListType: string;
           
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: 'Defines extended behaviors for a field such as for Email, Web URLs, Code, etc.'}) 
     @MaxLength(100)
     ExtendedType?: string;
           
-    @Field(() => Boolean) 
+    @Field({nullable: true, description: 'The type of code associated with this field. Only used when the ExtendedType field is set to "Code"'}) 
+    @MaxLength(100)
+    CodeType?: string;
+          
+    @Field(() => Boolean, {description: 'If set to 1, this field will be included by default in any new view created by a user.'}) 
     DefaultInView: boolean;
           
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: 'NULL'}) 
     ViewCellTemplate?: string;
           
-    @Field(() => Int, {nullable: true}) 
+    @Field(() => Int, {nullable: true, description: 'Determines the default width for this field when included in a view'}) 
     DefaultColumnWidth?: number;
           
-    @Field(() => Boolean) 
+    @Field(() => Boolean, {description: 'If set to 1, this field will be considered updateable by the API and object model. For this field to have effect, the column type must be updateable (e.g. not part of the primary key and not auto-increment)'}) 
     AllowUpdateAPI: boolean;
           
-    @Field(() => Boolean) 
+    @Field(() => Boolean, {description: 'If set to 1, and if AllowUpdateAPI=1, the field can be edited within a view when the view is in edit mode.'}) 
     AllowUpdateInView: boolean;
           
-    @Field(() => Boolean) 
+    @Field(() => Boolean, {description: 'If set to 1, this column will be included in user search queries for both traditional and full text search'}) 
     IncludeInUserSearchAPI: boolean;
           
-    @Field(() => Boolean) 
+    @Field(() => Boolean, {description: 'If set to 1, CodeGen will automatically generate a Full Text Catalog/Index in the database and include this field in the search index.'}) 
     FullTextSearchEnabled: boolean;
           
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: 'NULL'}) 
     @MaxLength(1000)
     UserSearchParamFormatAPI?: string;
           
-    @Field(() => Boolean) 
+    @Field(() => Boolean, {description: 'If set to 1, this field will be included in the generated form by CodeGen. If set to 0, this field will be excluded from the generated form. For custom forms, this field has no effect as the layout is controlled independently.'}) 
     IncludeInGeneratedForm: boolean;
           
-    @Field() 
+    @Field({description: 'When set to Top, the field will be placed in a "top area" on the top of a generated form and visible regardless of which tab is displayed. When set to "category" Options: Top, Category, Details'}) 
     @MaxLength(20)
     GeneratedFormSection: string;
           
-    @Field(() => Boolean) 
+    @Field(() => Boolean, {description: 'NULL'}) 
     IsVirtual: boolean;
           
-    @Field(() => Boolean) 
+    @Field(() => Boolean, {description: 'If set to 1, this column will be used as the "Name" field for the entity and will be used to display the name of the record in various places in the UI.'}) 
     IsNameField: boolean;
           
-    @Field(() => Int, {nullable: true}) 
+    @Field(() => Int, {nullable: true, description: 'Link to the entity this field points to if it is a foreign key (auto maintained by CodeGen)'}) 
     RelatedEntityID?: number;
           
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: 'Name of the field in the Related Entity that this field links to (auto maintained by CodeGen)'}) 
     @MaxLength(510)
     RelatedEntityFieldName?: string;
           
-    @Field(() => Boolean) 
+    @Field(() => Boolean, {description: 'If set to 1, the "Name" field of the Related Entity will be included in this entity as a virtual field'}) 
     IncludeRelatedEntityNameFieldInBaseView: boolean;
           
     @Field({nullable: true}) 
@@ -2416,74 +2066,77 @@ export class EntityField_ {
 @InputType()
 export class CreateEntityFieldInput {
     @Field({ nullable: true })
-    DisplayName: string;
-    
+    DisplayName?: string;
+
     @Field({ nullable: true })
-    Description: string;
-    
+    Description?: string;
+
     @Field(() => Boolean)
     AutoUpdateDescription: boolean;
-    
+
     @Field(() => Boolean)
     IsPrimaryKey: boolean;
-    
+
     @Field(() => Boolean)
     IsUnique: boolean;
-    
+
     @Field({ nullable: true })
-    Category: string;
-    
+    Category?: string;
+
     @Field()
     ValueListType: string;
-    
+
     @Field({ nullable: true })
-    ExtendedType: string;
-    
+    ExtendedType?: string;
+
+    @Field({ nullable: true })
+    CodeType?: string;
+
     @Field(() => Boolean)
     DefaultInView: boolean;
-    
+
     @Field({ nullable: true })
-    ViewCellTemplate: string;
-    
+    ViewCellTemplate?: string;
+
     @Field(() => Int, { nullable: true })
-    DefaultColumnWidth: number;
-    
+    DefaultColumnWidth?: number;
+
     @Field(() => Boolean)
     AllowUpdateAPI: boolean;
-    
+
     @Field(() => Boolean)
     AllowUpdateInView: boolean;
-    
+
     @Field(() => Boolean)
     IncludeInUserSearchAPI: boolean;
-    
+
     @Field(() => Boolean)
     FullTextSearchEnabled: boolean;
-    
+
     @Field({ nullable: true })
-    UserSearchParamFormatAPI: string;
-    
+    UserSearchParamFormatAPI?: string;
+
     @Field(() => Boolean)
     IncludeInGeneratedForm: boolean;
-    
+
     @Field()
     GeneratedFormSection: string;
-    
+
     @Field(() => Boolean)
     IsNameField: boolean;
-    
+
     @Field(() => Int, { nullable: true })
-    RelatedEntityID: number;
-    
+    RelatedEntityID?: number;
+
     @Field({ nullable: true })
-    RelatedEntityFieldName: string;
-    
+    RelatedEntityFieldName?: string;
+
     @Field(() => Boolean)
     IncludeRelatedEntityNameFieldInBaseView: boolean;
-    
+
     @Field({ nullable: true })
-    RelatedEntityNameFieldMap: string;
-    }
+    RelatedEntityNameFieldMap?: string;
+}
     
         
 //****************************************************************************
@@ -2493,76 +2146,82 @@ export class CreateEntityFieldInput {
 export class UpdateEntityFieldInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field({ nullable: true })
-    DisplayName: string;
-    
+    DisplayName?: string;
+
     @Field({ nullable: true })
-    Description: string;
-    
+    Description?: string;
+
     @Field(() => Boolean)
     AutoUpdateDescription: boolean;
-    
+
     @Field(() => Boolean)
     IsPrimaryKey: boolean;
-    
+
     @Field(() => Boolean)
     IsUnique: boolean;
-    
+
     @Field({ nullable: true })
-    Category: string;
-    
+    Category?: string;
+
     @Field()
     ValueListType: string;
-    
+
     @Field({ nullable: true })
-    ExtendedType: string;
-    
+    ExtendedType?: string;
+
+    @Field({ nullable: true })
+    CodeType?: string;
+
     @Field(() => Boolean)
     DefaultInView: boolean;
-    
+
     @Field({ nullable: true })
-    ViewCellTemplate: string;
-    
+    ViewCellTemplate?: string;
+
     @Field(() => Int, { nullable: true })
-    DefaultColumnWidth: number;
-    
+    DefaultColumnWidth?: number;
+
     @Field(() => Boolean)
     AllowUpdateAPI: boolean;
-    
+
     @Field(() => Boolean)
     AllowUpdateInView: boolean;
-    
+
     @Field(() => Boolean)
     IncludeInUserSearchAPI: boolean;
-    
+
     @Field(() => Boolean)
     FullTextSearchEnabled: boolean;
-    
+
     @Field({ nullable: true })
-    UserSearchParamFormatAPI: string;
-    
+    UserSearchParamFormatAPI?: string;
+
     @Field(() => Boolean)
     IncludeInGeneratedForm: boolean;
-    
+
     @Field()
     GeneratedFormSection: string;
-    
+
     @Field(() => Boolean)
     IsNameField: boolean;
-    
+
     @Field(() => Int, { nullable: true })
-    RelatedEntityID: number;
-    
+    RelatedEntityID?: number;
+
     @Field({ nullable: true })
-    RelatedEntityFieldName: string;
-    
+    RelatedEntityFieldName?: string;
+
     @Field(() => Boolean)
     IncludeRelatedEntityNameFieldInBaseView: boolean;
-    
+
     @Field({ nullable: true })
-    RelatedEntityNameFieldMap: string;
-    }
+    RelatedEntityNameFieldMap?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for Entity Fields
@@ -2638,28 +2297,7 @@ export class EntityFieldResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext, 
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <EntityFieldEntity>await new Metadata().GetEntityObject('Entity Fields', this.GetUserFromPayload(userPayload));
-            await entityObject.NewRecord();
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire the AfterCreate event and then return all the data
-                await this.AfterCreate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else 
-                // save failed, return null
-                return null;
-        }
-        else    
-            return null;
-    }
-
-    // Before/After CREATE Event Hooks for Sub-Classes to Override
-    protected async BeforeCreate(dataSource: DataSource, input: CreateEntityFieldInput): Promise<boolean> {
-        return true;
-    }
-    protected async AfterCreate(dataSource: DataSource, input: CreateEntityFieldInput) {
+        return this.CreateRecord('Entity Fields', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => EntityField_)
@@ -2668,55 +2306,13 @@ export class EntityFieldResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <EntityFieldEntity>await new Metadata().GetEntityObject('Entity Fields', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Entity Fields
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateEntityFieldInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateEntityFieldInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('Entity Fields', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => EntityField_)
-    async DeleteEntityField(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <EntityFieldEntity>await new Metadata().GetEntityObject('Entity Fields', this.GetUserFromPayload(userPayload));
-            await entityObject.Load(ID);
-            const returnValue = entityObject.GetAll(); // grab the values before we delete so we can return last state before delete if we are successful.
-            if (await entityObject.Delete()) {
-                await this.AfterDelete(dataSource, ID); // fire event
-                return returnValue;
-            }
-            else 
-                return null; // delete failed, this will cause an exception
-        }
-        else
-            return null; // BeforeDelete canceled the operation, this will cause an exception
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeDelete(dataSource: DataSource, ID: number): Promise<boolean> {
-        const i = ID, d = dataSource; // prevent error;
-        return true;
-    }
-    protected async AfterDelete(dataSource: DataSource, ID: number) {
-        const i = ID, d = dataSource; // prevent error
+    async DeleteEntityField(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Entity Fields', key, options, dataSource, userPayload, pubSub);
     }
     
 }
@@ -2982,6 +2578,9 @@ export class Entity_ {
     @Field(() => [mj_core_schema_server_object_types.EntityBehavior_])
     EntityBehaviorsArray: mj_core_schema_server_object_types.EntityBehavior_[]; // Link to EntityBehaviors
     
+    @Field(() => [mj_core_schema_server_object_types.EntityAction_])
+    EntityActionsArray: mj_core_schema_server_object_types.EntityAction_[]; // Link to EntityActions
+    
 }
         
 //****************************************************************************
@@ -2991,118 +2590,118 @@ export class Entity_ {
 export class CreateEntityInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field(() => Int, { nullable: true })
-    ParentID: number;
-    
+    ParentID?: number;
+
     @Field()
     Name: string;
-    
+
     @Field({ nullable: true })
-    NameSuffix: string;
-    
+    NameSuffix?: string;
+
     @Field({ nullable: true })
-    Description: string;
-    
+    Description?: string;
+
     @Field(() => Boolean)
     AutoUpdateDescription: boolean;
-    
+
     @Field()
     BaseView: string;
-    
+
     @Field(() => Boolean)
     BaseViewGenerated: boolean;
-    
+
     @Field(() => Boolean)
     VirtualEntity: boolean;
-    
+
     @Field(() => Boolean)
     TrackRecordChanges: boolean;
-    
+
     @Field(() => Boolean)
     AuditRecordAccess: boolean;
-    
+
     @Field(() => Boolean)
     AuditViewRuns: boolean;
-    
+
     @Field(() => Boolean)
     IncludeInAPI: boolean;
-    
+
     @Field(() => Boolean)
     AllowAllRowsAPI: boolean;
-    
+
     @Field(() => Boolean)
     AllowUpdateAPI: boolean;
-    
+
     @Field(() => Boolean)
     AllowCreateAPI: boolean;
-    
+
     @Field(() => Boolean)
     AllowDeleteAPI: boolean;
-    
+
     @Field(() => Boolean)
     CustomResolverAPI: boolean;
-    
+
     @Field(() => Boolean)
     AllowUserSearchAPI: boolean;
-    
+
     @Field(() => Boolean)
     FullTextSearchEnabled: boolean;
-    
+
     @Field({ nullable: true })
-    FullTextCatalog: string;
-    
+    FullTextCatalog?: string;
+
     @Field(() => Boolean)
     FullTextCatalogGenerated: boolean;
-    
+
     @Field({ nullable: true })
-    FullTextIndex: string;
-    
+    FullTextIndex?: string;
+
     @Field(() => Boolean)
     FullTextIndexGenerated: boolean;
-    
+
     @Field({ nullable: true })
-    FullTextSearchFunction: string;
-    
+    FullTextSearchFunction?: string;
+
     @Field(() => Boolean)
     FullTextSearchFunctionGenerated: boolean;
-    
+
     @Field(() => Int, { nullable: true })
-    UserViewMaxRows: number;
-    
+    UserViewMaxRows?: number;
+
     @Field({ nullable: true })
-    spCreate: string;
-    
+    spCreate?: string;
+
     @Field({ nullable: true })
-    spUpdate: string;
-    
+    spUpdate?: string;
+
     @Field({ nullable: true })
-    spDelete: string;
-    
+    spDelete?: string;
+
     @Field(() => Boolean)
     spCreateGenerated: boolean;
-    
+
     @Field(() => Boolean)
     spUpdateGenerated: boolean;
-    
+
     @Field(() => Boolean)
     spDeleteGenerated: boolean;
-    
+
     @Field(() => Boolean)
     CascadeDeletes: boolean;
-    
+
     @Field({ nullable: true })
-    spMatch: string;
-    
+    spMatch?: string;
+
     @Field(() => Boolean)
     UserFormGenerated: boolean;
-    
+
     @Field({ nullable: true })
-    EntityObjectSubclassName: string;
-    
+    EntityObjectSubclassName?: string;
+
     @Field({ nullable: true })
-    EntityObjectSubclassImport: string;
-    }
+    EntityObjectSubclassImport?: string;
+}
     
         
 //****************************************************************************
@@ -3112,118 +2711,121 @@ export class CreateEntityInput {
 export class UpdateEntityInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field(() => Int, { nullable: true })
-    ParentID: number;
-    
+    ParentID?: number;
+
     @Field()
     Name: string;
-    
+
     @Field({ nullable: true })
-    NameSuffix: string;
-    
+    NameSuffix?: string;
+
     @Field({ nullable: true })
-    Description: string;
-    
+    Description?: string;
+
     @Field(() => Boolean)
     AutoUpdateDescription: boolean;
-    
+
     @Field()
     BaseView: string;
-    
+
     @Field(() => Boolean)
     BaseViewGenerated: boolean;
-    
+
     @Field(() => Boolean)
     VirtualEntity: boolean;
-    
+
     @Field(() => Boolean)
     TrackRecordChanges: boolean;
-    
+
     @Field(() => Boolean)
     AuditRecordAccess: boolean;
-    
+
     @Field(() => Boolean)
     AuditViewRuns: boolean;
-    
+
     @Field(() => Boolean)
     IncludeInAPI: boolean;
-    
+
     @Field(() => Boolean)
     AllowAllRowsAPI: boolean;
-    
+
     @Field(() => Boolean)
     AllowUpdateAPI: boolean;
-    
+
     @Field(() => Boolean)
     AllowCreateAPI: boolean;
-    
+
     @Field(() => Boolean)
     AllowDeleteAPI: boolean;
-    
+
     @Field(() => Boolean)
     CustomResolverAPI: boolean;
-    
+
     @Field(() => Boolean)
     AllowUserSearchAPI: boolean;
-    
+
     @Field(() => Boolean)
     FullTextSearchEnabled: boolean;
-    
+
     @Field({ nullable: true })
-    FullTextCatalog: string;
-    
+    FullTextCatalog?: string;
+
     @Field(() => Boolean)
     FullTextCatalogGenerated: boolean;
-    
+
     @Field({ nullable: true })
-    FullTextIndex: string;
-    
+    FullTextIndex?: string;
+
     @Field(() => Boolean)
     FullTextIndexGenerated: boolean;
-    
+
     @Field({ nullable: true })
-    FullTextSearchFunction: string;
-    
+    FullTextSearchFunction?: string;
+
     @Field(() => Boolean)
     FullTextSearchFunctionGenerated: boolean;
-    
+
     @Field(() => Int, { nullable: true })
-    UserViewMaxRows: number;
-    
+    UserViewMaxRows?: number;
+
     @Field({ nullable: true })
-    spCreate: string;
-    
+    spCreate?: string;
+
     @Field({ nullable: true })
-    spUpdate: string;
-    
+    spUpdate?: string;
+
     @Field({ nullable: true })
-    spDelete: string;
-    
+    spDelete?: string;
+
     @Field(() => Boolean)
     spCreateGenerated: boolean;
-    
+
     @Field(() => Boolean)
     spUpdateGenerated: boolean;
-    
+
     @Field(() => Boolean)
     spDeleteGenerated: boolean;
-    
+
     @Field(() => Boolean)
     CascadeDeletes: boolean;
-    
+
     @Field({ nullable: true })
-    spMatch: string;
-    
+    spMatch?: string;
+
     @Field(() => Boolean)
     UserFormGenerated: boolean;
-    
+
     @Field({ nullable: true })
-    EntityObjectSubclassName: string;
-    
+    EntityObjectSubclassName?: string;
+
     @Field({ nullable: true })
-    EntityObjectSubclassImport: string;
-    }
+    EntityObjectSubclassImport?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for Entities
@@ -3532,6 +3134,14 @@ export class EntityResolverBase extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Entity Behaviors', await dataSource.query(sSQL));
         return result;
     }
+          
+    @FieldResolver(() => [mj_core_schema_server_object_types.EntityAction_])
+    async EntityActionsArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Entity Actions', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityActions] WHERE [EntityID]=${entity_.ID} ` + this.getRowLevelSecurityWhereClause('Entity Actions', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Entity Actions', await dataSource.query(sSQL));
+        return result;
+    }
         
     @Mutation(() => Entity_)
     async CreateEntity(
@@ -3539,28 +3149,7 @@ export class EntityResolverBase extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext, 
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <EntityEntity>await new Metadata().GetEntityObject('Entities', this.GetUserFromPayload(userPayload));
-            await entityObject.NewRecord();
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire the AfterCreate event and then return all the data
-                await this.AfterCreate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else 
-                // save failed, return null
-                return null;
-        }
-        else    
-            return null;
-    }
-
-    // Before/After CREATE Event Hooks for Sub-Classes to Override
-    protected async BeforeCreate(dataSource: DataSource, input: CreateEntityInput): Promise<boolean> {
-        return true;
-    }
-    protected async AfterCreate(dataSource: DataSource, input: CreateEntityInput) {
+        return this.CreateRecord('Entities', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => Entity_)
@@ -3569,55 +3158,13 @@ export class EntityResolverBase extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <EntityEntity>await new Metadata().GetEntityObject('Entities', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Entities
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateEntityInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateEntityInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('Entities', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => Entity_)
-    async DeleteEntity(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <EntityEntity>await new Metadata().GetEntityObject('Entities', this.GetUserFromPayload(userPayload));
-            await entityObject.Load(ID);
-            const returnValue = entityObject.GetAll(); // grab the values before we delete so we can return last state before delete if we are successful.
-            if (await entityObject.Delete()) {
-                await this.AfterDelete(dataSource, ID); // fire event
-                return returnValue;
-            }
-            else 
-                return null; // delete failed, this will cause an exception
-        }
-        else
-            return null; // BeforeDelete canceled the operation, this will cause an exception
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeDelete(dataSource: DataSource, ID: number): Promise<boolean> {
-        const i = ID, d = dataSource; // prevent error;
-        return true;
-    }
-    protected async AfterDelete(dataSource: DataSource, ID: number) {
-        const i = ID, d = dataSource; // prevent error
+    async DeleteEntity(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Entities', key, options, dataSource, userPayload, pubSub);
     }
     
 }
@@ -3771,6 +3318,15 @@ export class User_ {
     @Field(() => [mj_core_schema_server_object_types.DuplicateRun_])
     DuplicateRunsArray: mj_core_schema_server_object_types.DuplicateRun_[]; // Link to DuplicateRuns
     
+    @Field(() => [mj_core_schema_server_object_types.ActionExecutionLog_])
+    ActionExecutionLogsArray: mj_core_schema_server_object_types.ActionExecutionLog_[]; // Link to ActionExecutionLogs
+    
+    @Field(() => [mj_core_schema_server_object_types.Action_])
+    ActionsArray: mj_core_schema_server_object_types.Action_[]; // Link to Actions
+    
+    @Field(() => [mj_core_schema_server_object_types.CommunicationRun_])
+    CommunicationRunsArray: mj_core_schema_server_object_types.CommunicationRun_[]; // Link to CommunicationRuns
+    
 }
         
 //****************************************************************************
@@ -3780,37 +3336,37 @@ export class User_ {
 export class CreateUserInput {
     @Field()
     Name: string;
-    
+
     @Field({ nullable: true })
-    FirstName: string;
-    
+    FirstName?: string;
+
     @Field({ nullable: true })
-    LastName: string;
-    
+    LastName?: string;
+
     @Field({ nullable: true })
-    Title: string;
-    
+    Title?: string;
+
     @Field()
     Email: string;
-    
+
     @Field()
     Type: string;
-    
+
     @Field(() => Boolean)
     IsActive: boolean;
-    
+
     @Field()
     LinkedRecordType: string;
-    
+
     @Field(() => Int, { nullable: true })
-    EmployeeID: number;
-    
+    EmployeeID?: number;
+
     @Field(() => Int, { nullable: true })
-    LinkedEntityID: number;
-    
+    LinkedEntityID?: number;
+
     @Field(() => Int, { nullable: true })
-    LinkedEntityRecordID: number;
-    }
+    LinkedEntityRecordID?: number;
+}
     
         
 //****************************************************************************
@@ -3820,40 +3376,43 @@ export class CreateUserInput {
 export class UpdateUserInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field()
     Name: string;
-    
+
     @Field({ nullable: true })
-    FirstName: string;
-    
+    FirstName?: string;
+
     @Field({ nullable: true })
-    LastName: string;
-    
+    LastName?: string;
+
     @Field({ nullable: true })
-    Title: string;
-    
+    Title?: string;
+
     @Field()
     Email: string;
-    
+
     @Field()
     Type: string;
-    
+
     @Field(() => Boolean)
     IsActive: boolean;
-    
+
     @Field()
     LinkedRecordType: string;
-    
+
     @Field(() => Int, { nullable: true })
-    EmployeeID: number;
-    
+    EmployeeID?: number;
+
     @Field(() => Int, { nullable: true })
-    LinkedEntityID: number;
-    
+    LinkedEntityID?: number;
+
     @Field(() => Int, { nullable: true })
-    LinkedEntityRecordID: number;
-    }
+    LinkedEntityRecordID?: number;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for Users
@@ -4098,6 +3657,30 @@ export class UserResolverBase extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Duplicate Runs', await dataSource.query(sSQL));
         return result;
     }
+          
+    @FieldResolver(() => [mj_core_schema_server_object_types.ActionExecutionLog_])
+    async ActionExecutionLogsArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Action Execution Logs', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionExecutionLogs] WHERE [UserID]=${user_.ID} ` + this.getRowLevelSecurityWhereClause('Action Execution Logs', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Action Execution Logs', await dataSource.query(sSQL));
+        return result;
+    }
+          
+    @FieldResolver(() => [mj_core_schema_server_object_types.Action_])
+    async ActionsArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Actions', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActions] WHERE [CodeApprovedByUserID]=${user_.ID} ` + this.getRowLevelSecurityWhereClause('Actions', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Actions', await dataSource.query(sSQL));
+        return result;
+    }
+          
+    @FieldResolver(() => [mj_core_schema_server_object_types.CommunicationRun_])
+    async CommunicationRunsArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Communication Runs', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwCommunicationRuns] WHERE [UserID]=${user_.ID} ` + this.getRowLevelSecurityWhereClause('Communication Runs', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Communication Runs', await dataSource.query(sSQL));
+        return result;
+    }
         
     @Mutation(() => User_)
     async CreateUser(
@@ -4105,28 +3688,7 @@ export class UserResolverBase extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext, 
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <UserEntity>await new Metadata().GetEntityObject('Users', this.GetUserFromPayload(userPayload));
-            await entityObject.NewRecord();
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire the AfterCreate event and then return all the data
-                await this.AfterCreate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else 
-                // save failed, return null
-                return null;
-        }
-        else    
-            return null;
-    }
-
-    // Before/After CREATE Event Hooks for Sub-Classes to Override
-    protected async BeforeCreate(dataSource: DataSource, input: CreateUserInput): Promise<boolean> {
-        return true;
-    }
-    protected async AfterCreate(dataSource: DataSource, input: CreateUserInput) {
+        return this.CreateRecord('Users', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => User_)
@@ -4135,55 +3697,13 @@ export class UserResolverBase extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <UserEntity>await new Metadata().GetEntityObject('Users', this.GetUserFromPayload(userPayload));
-            await entityObject.Load(input.ID) // Track Changes is turned on, so we need to get the latest data from DB first before we save
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateUserInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateUserInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('Users', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => User_)
-    async DeleteUser(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <UserEntity>await new Metadata().GetEntityObject('Users', this.GetUserFromPayload(userPayload));
-            await entityObject.Load(ID);
-            const returnValue = entityObject.GetAll(); // grab the values before we delete so we can return last state before delete if we are successful.
-            if (await entityObject.Delete()) {
-                await this.AfterDelete(dataSource, ID); // fire event
-                return returnValue;
-            }
-            else 
-                return null; // delete failed, this will cause an exception
-        }
-        else
-            return null; // BeforeDelete canceled the operation, this will cause an exception
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeDelete(dataSource: DataSource, ID: number): Promise<boolean> {
-        const i = ID, d = dataSource; // prevent error;
-        return true;
-    }
-    protected async AfterDelete(dataSource: DataSource, ID: number) {
-        const i = ID, d = dataSource; // prevent error
+    async DeleteUser(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Users', key, options, dataSource, userPayload, pubSub);
     }
     
 }
@@ -4303,43 +3823,43 @@ export class EntityRelationship_ {
 export class CreateEntityRelationshipInput {
     @Field(() => Int)
     EntityID: number;
-    
+
     @Field(() => Int)
     Sequence: number;
-    
+
     @Field(() => Int)
     RelatedEntityID: number;
-    
+
     @Field(() => Boolean)
     BundleInAPI: boolean;
-    
+
     @Field(() => Boolean)
     IncludeInParentAllQuery: boolean;
-    
+
     @Field()
     Type: string;
-    
+
     @Field({ nullable: true })
-    EntityKeyField: string;
-    
+    EntityKeyField?: string;
+
     @Field()
     RelatedEntityJoinField: string;
-    
+
     @Field({ nullable: true })
-    JoinView: string;
-    
+    JoinView?: string;
+
     @Field({ nullable: true })
-    JoinEntityJoinField: string;
-    
+    JoinEntityJoinField?: string;
+
     @Field({ nullable: true })
-    JoinEntityInverseJoinField: string;
-    
+    JoinEntityInverseJoinField?: string;
+
     @Field(() => Boolean)
     DisplayInForm: boolean;
-    
+
     @Field({ nullable: true })
-    DisplayName: string;
-    }
+    DisplayName?: string;
+}
     
         
 //****************************************************************************
@@ -4349,46 +3869,49 @@ export class CreateEntityRelationshipInput {
 export class UpdateEntityRelationshipInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field(() => Int)
     EntityID: number;
-    
+
     @Field(() => Int)
     Sequence: number;
-    
+
     @Field(() => Int)
     RelatedEntityID: number;
-    
+
     @Field(() => Boolean)
     BundleInAPI: boolean;
-    
+
     @Field(() => Boolean)
     IncludeInParentAllQuery: boolean;
-    
+
     @Field()
     Type: string;
-    
+
     @Field({ nullable: true })
-    EntityKeyField: string;
-    
+    EntityKeyField?: string;
+
     @Field()
     RelatedEntityJoinField: string;
-    
+
     @Field({ nullable: true })
-    JoinView: string;
-    
+    JoinView?: string;
+
     @Field({ nullable: true })
-    JoinEntityJoinField: string;
-    
+    JoinEntityJoinField?: string;
+
     @Field({ nullable: true })
-    JoinEntityInverseJoinField: string;
-    
+    JoinEntityInverseJoinField?: string;
+
     @Field(() => Boolean)
     DisplayInForm: boolean;
-    
+
     @Field({ nullable: true })
-    DisplayName: string;
-    }
+    DisplayName?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for Entity Relationships
@@ -4456,28 +3979,7 @@ export class EntityRelationshipResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext, 
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <EntityRelationshipEntity>await new Metadata().GetEntityObject('Entity Relationships', this.GetUserFromPayload(userPayload));
-            await entityObject.NewRecord();
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire the AfterCreate event and then return all the data
-                await this.AfterCreate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else 
-                // save failed, return null
-                return null;
-        }
-        else    
-            return null;
-    }
-
-    // Before/After CREATE Event Hooks for Sub-Classes to Override
-    protected async BeforeCreate(dataSource: DataSource, input: CreateEntityRelationshipInput): Promise<boolean> {
-        return true;
-    }
-    protected async AfterCreate(dataSource: DataSource, input: CreateEntityRelationshipInput) {
+        return this.CreateRecord('Entity Relationships', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => EntityRelationship_)
@@ -4486,55 +3988,13 @@ export class EntityRelationshipResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <EntityRelationshipEntity>await new Metadata().GetEntityObject('Entity Relationships', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Entity Relationships
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateEntityRelationshipInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateEntityRelationshipInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('Entity Relationships', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => EntityRelationship_)
-    async DeleteEntityRelationship(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <EntityRelationshipEntity>await new Metadata().GetEntityObject('Entity Relationships', this.GetUserFromPayload(userPayload));
-            await entityObject.Load(ID);
-            const returnValue = entityObject.GetAll(); // grab the values before we delete so we can return last state before delete if we are successful.
-            if (await entityObject.Delete()) {
-                await this.AfterDelete(dataSource, ID); // fire event
-                return returnValue;
-            }
-            else 
-                return null; // delete failed, this will cause an exception
-        }
-        else
-            return null; // BeforeDelete canceled the operation, this will cause an exception
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeDelete(dataSource: DataSource, ID: number): Promise<boolean> {
-        const i = ID, d = dataSource; // prevent error;
-        return true;
-    }
-    protected async AfterDelete(dataSource: DataSource, ID: number) {
-        const i = ID, d = dataSource; // prevent error
+    async DeleteEntityRelationship(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Entity Relationships', key, options, dataSource, userPayload, pubSub);
     }
     
 }
@@ -4601,25 +4061,28 @@ export class UserRecordLog_ {
 export class UpdateUserRecordLogInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field(() => Int)
     UserID: number;
-    
+
     @Field(() => Int)
     EntityID: number;
-    
+
     @Field()
     RecordID: string;
-    
+
     @Field()
     EarliestAt: Date;
-    
+
     @Field()
     LatestAt: Date;
-    
+
     @Field(() => Int)
     TotalCount: number;
-    }
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for User Record Logs
@@ -4679,29 +4142,7 @@ export class UserRecordLogResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <UserRecordLogEntity>await new Metadata().GetEntityObject('User Record Logs', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for User Record Logs
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateUserRecordLogInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateUserRecordLogInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('User Record Logs', input, dataSource, userPayload, pubSub);
     }
     
 }
@@ -4820,55 +4261,55 @@ export class UserView_ {
 export class CreateUserViewInput {
     @Field(() => Int)
     UserID: number;
-    
+
     @Field(() => Int)
     EntityID: number;
-    
+
     @Field()
     Name: string;
-    
+
     @Field({ nullable: true })
-    Description: string;
-    
+    Description?: string;
+
     @Field(() => Int, { nullable: true })
-    CategoryID: number;
-    
+    CategoryID?: number;
+
     @Field(() => Boolean)
     IsShared: boolean;
-    
+
     @Field(() => Boolean)
     IsDefault: boolean;
-    
+
     @Field({ nullable: true })
-    GridState: string;
-    
+    GridState?: string;
+
     @Field({ nullable: true })
-    FilterState: string;
-    
+    FilterState?: string;
+
     @Field(() => Boolean)
     CustomFilterState: boolean;
-    
+
     @Field(() => Boolean)
     SmartFilterEnabled: boolean;
-    
+
     @Field({ nullable: true })
-    SmartFilterPrompt: string;
-    
+    SmartFilterPrompt?: string;
+
     @Field({ nullable: true })
-    SmartFilterWhereClause: string;
-    
+    SmartFilterWhereClause?: string;
+
     @Field({ nullable: true })
-    SmartFilterExplanation: string;
-    
+    SmartFilterExplanation?: string;
+
     @Field({ nullable: true })
-    WhereClause: string;
-    
+    WhereClause?: string;
+
     @Field(() => Boolean)
     CustomWhereClause: boolean;
-    
+
     @Field({ nullable: true })
-    SortState: string;
-    }
+    SortState?: string;
+}
     
         
 //****************************************************************************
@@ -4878,58 +4319,61 @@ export class CreateUserViewInput {
 export class UpdateUserViewInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field(() => Int)
     UserID: number;
-    
+
     @Field(() => Int)
     EntityID: number;
-    
+
     @Field()
     Name: string;
-    
+
     @Field({ nullable: true })
-    Description: string;
-    
+    Description?: string;
+
     @Field(() => Int, { nullable: true })
-    CategoryID: number;
-    
+    CategoryID?: number;
+
     @Field(() => Boolean)
     IsShared: boolean;
-    
+
     @Field(() => Boolean)
     IsDefault: boolean;
-    
+
     @Field({ nullable: true })
-    GridState: string;
-    
+    GridState?: string;
+
     @Field({ nullable: true })
-    FilterState: string;
-    
+    FilterState?: string;
+
     @Field(() => Boolean)
     CustomFilterState: boolean;
-    
+
     @Field(() => Boolean)
     SmartFilterEnabled: boolean;
-    
+
     @Field({ nullable: true })
-    SmartFilterPrompt: string;
-    
+    SmartFilterPrompt?: string;
+
     @Field({ nullable: true })
-    SmartFilterWhereClause: string;
-    
+    SmartFilterWhereClause?: string;
+
     @Field({ nullable: true })
-    SmartFilterExplanation: string;
-    
+    SmartFilterExplanation?: string;
+
     @Field({ nullable: true })
-    WhereClause: string;
-    
+    WhereClause?: string;
+
     @Field(() => Boolean)
     CustomWhereClause: boolean;
-    
+
     @Field({ nullable: true })
-    SortState: string;
-    }
+    SortState?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for User Views
@@ -5021,28 +4465,7 @@ export class UserViewResolverBase extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext, 
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <UserViewEntity>await new Metadata().GetEntityObject('User Views', this.GetUserFromPayload(userPayload));
-            await entityObject.NewRecord();
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire the AfterCreate event and then return all the data
-                await this.AfterCreate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else 
-                // save failed, return null
-                return null;
-        }
-        else    
-            return null;
-    }
-
-    // Before/After CREATE Event Hooks for Sub-Classes to Override
-    protected async BeforeCreate(dataSource: DataSource, input: CreateUserViewInput): Promise<boolean> {
-        return true;
-    }
-    protected async AfterCreate(dataSource: DataSource, input: CreateUserViewInput) {
+        return this.CreateRecord('User Views', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => UserView_)
@@ -5051,55 +4474,13 @@ export class UserViewResolverBase extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <UserViewEntity>await new Metadata().GetEntityObject('User Views', this.GetUserFromPayload(userPayload));
-            await entityObject.Load(input.ID) // Track Changes is turned on, so we need to get the latest data from DB first before we save
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateUserViewInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateUserViewInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('User Views', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => UserView_)
-    async DeleteUserView(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <UserViewEntity>await new Metadata().GetEntityObject('User Views', this.GetUserFromPayload(userPayload));
-            await entityObject.Load(ID);
-            const returnValue = entityObject.GetAll(); // grab the values before we delete so we can return last state before delete if we are successful.
-            if (await entityObject.Delete()) {
-                await this.AfterDelete(dataSource, ID); // fire event
-                return returnValue;
-            }
-            else 
-                return null; // delete failed, this will cause an exception
-        }
-        else
-            return null; // BeforeDelete canceled the operation, this will cause an exception
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeDelete(dataSource: DataSource, ID: number): Promise<boolean> {
-        const i = ID, d = dataSource; // prevent error;
-        return true;
-    }
-    protected async AfterDelete(dataSource: DataSource, ID: number) {
-        const i = ID, d = dataSource; // prevent error
+    async DeleteUserView(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('User Views', key, options, dataSource, userPayload, pubSub);
     }
     
 }
@@ -5154,25 +4535,28 @@ export class CompanyIntegrationRun_ {
 export class UpdateCompanyIntegrationRunInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field(() => Int)
     CompanyIntegrationID: number;
-    
+
     @Field(() => Int)
     RunByUserID: number;
-    
+
     @Field({ nullable: true })
-    StartedAt: Date;
-    
+    StartedAt?: Date;
+
     @Field({ nullable: true })
-    EndedAt: Date;
-    
+    EndedAt?: Date;
+
     @Field(() => Int)
     TotalRecords: number;
-    
+
     @Field({ nullable: true })
-    Comments: string;
-    }
+    Comments?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for Company Integration Runs
@@ -5256,29 +4640,7 @@ export class CompanyIntegrationRunResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <CompanyIntegrationRunEntity>await new Metadata().GetEntityObject('Company Integration Runs', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Company Integration Runs
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateCompanyIntegrationRunInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateCompanyIntegrationRunInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('Company Integration Runs', input, dataSource, userPayload, pubSub);
     }
     
 }
@@ -5336,25 +4698,28 @@ export class CompanyIntegrationRunDetail_ {
 export class UpdateCompanyIntegrationRunDetailInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field(() => Int)
     CompanyIntegrationRunID: number;
-    
+
     @Field(() => Int)
     EntityID: number;
-    
+
     @Field()
     RecordID: string;
-    
+
     @Field()
     Action: string;
-    
+
     @Field()
     ExecutedAt: Date;
-    
+
     @Field(() => Boolean)
     IsSuccess: boolean;
-    }
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for Company Integration Run Details
@@ -5422,29 +4787,7 @@ export class CompanyIntegrationRunDetailResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <CompanyIntegrationRunDetailEntity>await new Metadata().GetEntityObject('Company Integration Run Details', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Company Integration Run Details
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateCompanyIntegrationRunDetailInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateCompanyIntegrationRunDetailInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('Company Integration Run Details', input, dataSource, userPayload, pubSub);
     }
     
 }
@@ -5498,31 +4841,34 @@ export class ErrorLog_ {
 export class UpdateErrorLogInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field(() => Int, { nullable: true })
-    CompanyIntegrationRunID: number;
-    
+    CompanyIntegrationRunID?: number;
+
     @Field(() => Int, { nullable: true })
-    CompanyIntegrationRunDetailID: number;
-    
+    CompanyIntegrationRunDetailID?: number;
+
     @Field({ nullable: true })
-    Code: string;
-    
+    Code?: string;
+
     @Field({ nullable: true })
-    Message: string;
-    
+    Message?: string;
+
     @Field({ nullable: true })
-    CreatedBy: string;
-    
+    CreatedBy?: string;
+
     @Field({ nullable: true })
-    Status: string;
-    
+    Status?: string;
+
     @Field({ nullable: true })
-    Category: string;
-    
+    Category?: string;
+
     @Field({ nullable: true })
-    Details: string;
-    }
+    Details?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for Error Logs
@@ -5582,29 +4928,7 @@ export class ErrorLogResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <ErrorLogEntity>await new Metadata().GetEntityObject('Error Logs', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Error Logs
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateErrorLogInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateErrorLogInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('Error Logs', input, dataSource, userPayload, pubSub);
     }
     
 }
@@ -5650,10 +4974,10 @@ export class Application_ {
 export class CreateApplicationInput {
     @Field()
     Name: string;
-    
+
     @Field({ nullable: true })
-    Description: string;
-    }
+    Description?: string;
+}
     
         
 //****************************************************************************
@@ -5663,13 +4987,16 @@ export class CreateApplicationInput {
 export class UpdateApplicationInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field()
     Name: string;
-    
+
     @Field({ nullable: true })
-    Description: string;
-    }
+    Description?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for Applications
@@ -5761,28 +5088,7 @@ export class ApplicationResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext, 
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <ApplicationEntity>await new Metadata().GetEntityObject('Applications', this.GetUserFromPayload(userPayload));
-            await entityObject.NewRecord();
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire the AfterCreate event and then return all the data
-                await this.AfterCreate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else 
-                // save failed, return null
-                return null;
-        }
-        else    
-            return null;
-    }
-
-    // Before/After CREATE Event Hooks for Sub-Classes to Override
-    protected async BeforeCreate(dataSource: DataSource, input: CreateApplicationInput): Promise<boolean> {
-        return true;
-    }
-    protected async AfterCreate(dataSource: DataSource, input: CreateApplicationInput) {
+        return this.CreateRecord('Applications', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => Application_)
@@ -5791,55 +5097,13 @@ export class ApplicationResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <ApplicationEntity>await new Metadata().GetEntityObject('Applications', this.GetUserFromPayload(userPayload));
-            await entityObject.Load(input.ID) // Track Changes is turned on, so we need to get the latest data from DB first before we save
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateApplicationInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateApplicationInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('Applications', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => Application_)
-    async DeleteApplication(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <ApplicationEntity>await new Metadata().GetEntityObject('Applications', this.GetUserFromPayload(userPayload));
-            await entityObject.Load(ID);
-            const returnValue = entityObject.GetAll(); // grab the values before we delete so we can return last state before delete if we are successful.
-            if (await entityObject.Delete()) {
-                await this.AfterDelete(dataSource, ID); // fire event
-                return returnValue;
-            }
-            else 
-                return null; // delete failed, this will cause an exception
-        }
-        else
-            return null; // BeforeDelete canceled the operation, this will cause an exception
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeDelete(dataSource: DataSource, ID: number): Promise<boolean> {
-        const i = ID, d = dataSource; // prevent error;
-        return true;
-    }
-    protected async AfterDelete(dataSource: DataSource, ID: number) {
-        const i = ID, d = dataSource; // prevent error
+    async DeleteApplication(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Applications', key, options, dataSource, userPayload, pubSub);
     }
     
 }
@@ -5902,17 +5166,17 @@ export class ApplicationEntity_ {
 @InputType()
 export class CreateApplicationEntityInput {
     @Field({ nullable: true })
-    ApplicationName: string;
-    
+    ApplicationName?: string;
+
     @Field(() => Int)
     EntityID: number;
-    
+
     @Field(() => Int)
     Sequence: number;
-    
+
     @Field(() => Boolean)
     DefaultForNewUser: boolean;
-    }
+}
     
         
 //****************************************************************************
@@ -5922,19 +5186,22 @@ export class CreateApplicationEntityInput {
 export class UpdateApplicationEntityInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field({ nullable: true })
-    ApplicationName: string;
-    
+    ApplicationName?: string;
+
     @Field(() => Int)
     EntityID: number;
-    
+
     @Field(() => Int)
     Sequence: number;
-    
+
     @Field(() => Boolean)
     DefaultForNewUser: boolean;
-    }
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for Application Entities
@@ -5994,28 +5261,7 @@ export class ApplicationEntityResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext, 
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <ApplicationEntityEntity>await new Metadata().GetEntityObject('Application Entities', this.GetUserFromPayload(userPayload));
-            await entityObject.NewRecord();
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire the AfterCreate event and then return all the data
-                await this.AfterCreate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else 
-                // save failed, return null
-                return null;
-        }
-        else    
-            return null;
-    }
-
-    // Before/After CREATE Event Hooks for Sub-Classes to Override
-    protected async BeforeCreate(dataSource: DataSource, input: CreateApplicationEntityInput): Promise<boolean> {
-        return true;
-    }
-    protected async AfterCreate(dataSource: DataSource, input: CreateApplicationEntityInput) {
+        return this.CreateRecord('Application Entities', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => ApplicationEntity_)
@@ -6024,55 +5270,13 @@ export class ApplicationEntityResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <ApplicationEntityEntity>await new Metadata().GetEntityObject('Application Entities', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Application Entities
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateApplicationEntityInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateApplicationEntityInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('Application Entities', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => ApplicationEntity_)
-    async DeleteApplicationEntity(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <ApplicationEntityEntity>await new Metadata().GetEntityObject('Application Entities', this.GetUserFromPayload(userPayload));
-            await entityObject.Load(ID);
-            const returnValue = entityObject.GetAll(); // grab the values before we delete so we can return last state before delete if we are successful.
-            if (await entityObject.Delete()) {
-                await this.AfterDelete(dataSource, ID); // fire event
-                return returnValue;
-            }
-            else 
-                return null; // delete failed, this will cause an exception
-        }
-        else
-            return null; // BeforeDelete canceled the operation, this will cause an exception
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeDelete(dataSource: DataSource, ID: number): Promise<boolean> {
-        const i = ID, d = dataSource; // prevent error;
-        return true;
-    }
-    protected async AfterDelete(dataSource: DataSource, ID: number) {
-        const i = ID, d = dataSource; // prevent error
+    async DeleteApplicationEntity(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Application Entities', key, options, dataSource, userPayload, pubSub);
     }
     
 }
@@ -6157,34 +5361,34 @@ export class EntityPermission_ {
 export class CreateEntityPermissionInput {
     @Field(() => Int)
     EntityID: number;
-    
+
     @Field({ nullable: true })
-    RoleName: string;
-    
+    RoleName?: string;
+
     @Field(() => Boolean)
     CanCreate: boolean;
-    
+
     @Field(() => Boolean)
     CanRead: boolean;
-    
+
     @Field(() => Boolean)
     CanUpdate: boolean;
-    
+
     @Field(() => Boolean)
     CanDelete: boolean;
-    
+
     @Field(() => Int, { nullable: true })
-    ReadRLSFilterID: number;
-    
+    ReadRLSFilterID?: number;
+
     @Field(() => Int, { nullable: true })
-    CreateRLSFilterID: number;
-    
+    CreateRLSFilterID?: number;
+
     @Field(() => Int, { nullable: true })
-    UpdateRLSFilterID: number;
-    
+    UpdateRLSFilterID?: number;
+
     @Field(() => Int, { nullable: true })
-    DeleteRLSFilterID: number;
-    }
+    DeleteRLSFilterID?: number;
+}
     
         
 //****************************************************************************
@@ -6194,37 +5398,40 @@ export class CreateEntityPermissionInput {
 export class UpdateEntityPermissionInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field(() => Int)
     EntityID: number;
-    
+
     @Field({ nullable: true })
-    RoleName: string;
-    
+    RoleName?: string;
+
     @Field(() => Boolean)
     CanCreate: boolean;
-    
+
     @Field(() => Boolean)
     CanRead: boolean;
-    
+
     @Field(() => Boolean)
     CanUpdate: boolean;
-    
+
     @Field(() => Boolean)
     CanDelete: boolean;
-    
+
     @Field(() => Int, { nullable: true })
-    ReadRLSFilterID: number;
-    
+    ReadRLSFilterID?: number;
+
     @Field(() => Int, { nullable: true })
-    CreateRLSFilterID: number;
-    
+    CreateRLSFilterID?: number;
+
     @Field(() => Int, { nullable: true })
-    UpdateRLSFilterID: number;
-    
+    UpdateRLSFilterID?: number;
+
     @Field(() => Int, { nullable: true })
-    DeleteRLSFilterID: number;
-    }
+    DeleteRLSFilterID?: number;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for Entity Permissions
@@ -6292,28 +5499,7 @@ export class EntityPermissionResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext, 
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <EntityPermissionEntity>await new Metadata().GetEntityObject('Entity Permissions', this.GetUserFromPayload(userPayload));
-            await entityObject.NewRecord();
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire the AfterCreate event and then return all the data
-                await this.AfterCreate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else 
-                // save failed, return null
-                return null;
-        }
-        else    
-            return null;
-    }
-
-    // Before/After CREATE Event Hooks for Sub-Classes to Override
-    protected async BeforeCreate(dataSource: DataSource, input: CreateEntityPermissionInput): Promise<boolean> {
-        return true;
-    }
-    protected async AfterCreate(dataSource: DataSource, input: CreateEntityPermissionInput) {
+        return this.CreateRecord('Entity Permissions', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => EntityPermission_)
@@ -6322,55 +5508,13 @@ export class EntityPermissionResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <EntityPermissionEntity>await new Metadata().GetEntityObject('Entity Permissions', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Entity Permissions
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateEntityPermissionInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateEntityPermissionInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('Entity Permissions', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => EntityPermission_)
-    async DeleteEntityPermission(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <EntityPermissionEntity>await new Metadata().GetEntityObject('Entity Permissions', this.GetUserFromPayload(userPayload));
-            await entityObject.Load(ID);
-            const returnValue = entityObject.GetAll(); // grab the values before we delete so we can return last state before delete if we are successful.
-            if (await entityObject.Delete()) {
-                await this.AfterDelete(dataSource, ID); // fire event
-                return returnValue;
-            }
-            else 
-                return null; // delete failed, this will cause an exception
-        }
-        else
-            return null; // BeforeDelete canceled the operation, this will cause an exception
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeDelete(dataSource: DataSource, ID: number): Promise<boolean> {
-        const i = ID, d = dataSource; // prevent error;
-        return true;
-    }
-    protected async AfterDelete(dataSource: DataSource, ID: number) {
-        const i = ID, d = dataSource; // prevent error
+    async DeleteEntityPermission(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Entity Permissions', key, options, dataSource, userPayload, pubSub);
     }
     
 }
@@ -6413,13 +5557,13 @@ export class UserApplicationEntity_ {
 export class CreateUserApplicationEntityInput {
     @Field(() => Int)
     UserApplicationID: number;
-    
+
     @Field(() => Int)
     EntityID: number;
-    
+
     @Field(() => Int)
     Sequence: number;
-    }
+}
     
         
 //****************************************************************************
@@ -6429,16 +5573,19 @@ export class CreateUserApplicationEntityInput {
 export class UpdateUserApplicationEntityInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field(() => Int)
     UserApplicationID: number;
-    
+
     @Field(() => Int)
     EntityID: number;
-    
+
     @Field(() => Int)
     Sequence: number;
-    }
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for User Application Entities
@@ -6498,28 +5645,7 @@ export class UserApplicationEntityResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext, 
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <UserApplicationEntityEntity>await new Metadata().GetEntityObject('User Application Entities', this.GetUserFromPayload(userPayload));
-            await entityObject.NewRecord();
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire the AfterCreate event and then return all the data
-                await this.AfterCreate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else 
-                // save failed, return null
-                return null;
-        }
-        else    
-            return null;
-    }
-
-    // Before/After CREATE Event Hooks for Sub-Classes to Override
-    protected async BeforeCreate(dataSource: DataSource, input: CreateUserApplicationEntityInput): Promise<boolean> {
-        return true;
-    }
-    protected async AfterCreate(dataSource: DataSource, input: CreateUserApplicationEntityInput) {
+        return this.CreateRecord('User Application Entities', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => UserApplicationEntity_)
@@ -6528,55 +5654,13 @@ export class UserApplicationEntityResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <UserApplicationEntityEntity>await new Metadata().GetEntityObject('User Application Entities', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for User Application Entities
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateUserApplicationEntityInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateUserApplicationEntityInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('User Application Entities', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => UserApplicationEntity_)
-    async DeleteUserApplicationEntity(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <UserApplicationEntityEntity>await new Metadata().GetEntityObject('User Application Entities', this.GetUserFromPayload(userPayload));
-            await entityObject.Load(ID);
-            const returnValue = entityObject.GetAll(); // grab the values before we delete so we can return last state before delete if we are successful.
-            if (await entityObject.Delete()) {
-                await this.AfterDelete(dataSource, ID); // fire event
-                return returnValue;
-            }
-            else 
-                return null; // delete failed, this will cause an exception
-        }
-        else
-            return null; // BeforeDelete canceled the operation, this will cause an exception
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeDelete(dataSource: DataSource, ID: number): Promise<boolean> {
-        const i = ID, d = dataSource; // prevent error;
-        return true;
-    }
-    protected async AfterDelete(dataSource: DataSource, ID: number) {
-        const i = ID, d = dataSource; // prevent error
+    async DeleteUserApplicationEntity(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('User Application Entities', key, options, dataSource, userPayload, pubSub);
     }
     
 }
@@ -6621,19 +5705,22 @@ export class UserApplication_ {
 export class UpdateUserApplicationInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field(() => Int)
     UserID: number;
-    
+
     @Field(() => Int)
     ApplicationID: number;
-    
+
     @Field(() => Int)
     Sequence: number;
-    
+
     @Field(() => Boolean)
     IsActive: boolean;
-    }
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for User Applications
@@ -6701,55 +5788,13 @@ export class UserApplicationResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <UserApplicationEntity>await new Metadata().GetEntityObject('User Applications', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for User Applications
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateUserApplicationInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateUserApplicationInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('User Applications', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => UserApplication_)
-    async DeleteUserApplication(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <UserApplicationEntity>await new Metadata().GetEntityObject('User Applications', this.GetUserFromPayload(userPayload));
-            await entityObject.Load(ID);
-            const returnValue = entityObject.GetAll(); // grab the values before we delete so we can return last state before delete if we are successful.
-            if (await entityObject.Delete()) {
-                await this.AfterDelete(dataSource, ID); // fire event
-                return returnValue;
-            }
-            else 
-                return null; // delete failed, this will cause an exception
-        }
-        else
-            return null; // BeforeDelete canceled the operation, this will cause an exception
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeDelete(dataSource: DataSource, ID: number): Promise<boolean> {
-        const i = ID, d = dataSource; // prevent error;
-        return true;
-    }
-    protected async AfterDelete(dataSource: DataSource, ID: number) {
-        const i = ID, d = dataSource; // prevent error
+    async DeleteUserApplication(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('User Applications', key, options, dataSource, userPayload, pubSub);
     }
     
 }
@@ -6791,25 +5836,28 @@ export class CompanyIntegrationRunAPILog_ {
 export class UpdateCompanyIntegrationRunAPILogInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field(() => Int)
     CompanyIntegrationRunID: number;
-    
+
     @Field()
     ExecutedAt: Date;
-    
+
     @Field(() => Boolean)
     IsSuccess: boolean;
-    
+
     @Field({ nullable: true })
-    RequestMethod: string;
-    
+    RequestMethod?: string;
+
     @Field({ nullable: true })
-    URL: string;
-    
+    URL?: string;
+
     @Field({ nullable: true })
-    Parameters: string;
-    }
+    Parameters?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for Company Integration Run API Logs
@@ -6869,29 +5917,7 @@ export class CompanyIntegrationRunAPILogResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <CompanyIntegrationRunAPILogEntity>await new Metadata().GetEntityObject('Company Integration Run API Logs', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Company Integration Run API Logs
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateCompanyIntegrationRunAPILogInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateCompanyIntegrationRunAPILogInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('Company Integration Run API Logs', input, dataSource, userPayload, pubSub);
     }
     
 }
@@ -6911,8 +5937,8 @@ export class List_ {
     @Field({nullable: true}) 
     Description?: string;
           
-    @Field(() => Int, {nullable: true}) 
-    EntityID?: number;
+    @Field(() => Int) 
+    EntityID: number;
           
     @Field(() => Int) 
     UserID: number;
@@ -6932,9 +5958,12 @@ export class List_ {
     @MaxLength(8)
     UpdatedAt: Date;
           
-    @Field({nullable: true}) 
+    @Field(() => Int, {nullable: true}) 
+    CategoryID?: number;
+          
+    @Field() 
     @MaxLength(510)
-    Entity?: string;
+    Entity: string;
           
     @Field() 
     @MaxLength(200)
@@ -6955,22 +5984,25 @@ export class List_ {
 export class CreateListInput {
     @Field()
     Name: string;
-    
+
     @Field({ nullable: true })
-    Description: string;
-    
-    @Field(() => Int, { nullable: true })
+    Description?: string;
+
+    @Field(() => Int)
     EntityID: number;
-    
+
     @Field(() => Int)
     UserID: number;
-    
+
     @Field({ nullable: true })
-    ExternalSystemRecordID: string;
-    
+    ExternalSystemRecordID?: string;
+
     @Field(() => Int, { nullable: true })
-    CompanyIntegrationID: number;
-    }
+    CompanyIntegrationID?: number;
+
+    @Field(() => Int, { nullable: true })
+    CategoryID?: number;
+}
     
         
 //****************************************************************************
@@ -6980,25 +6012,31 @@ export class CreateListInput {
 export class UpdateListInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field()
     Name: string;
-    
+
     @Field({ nullable: true })
-    Description: string;
-    
-    @Field(() => Int, { nullable: true })
+    Description?: string;
+
+    @Field(() => Int)
     EntityID: number;
-    
+
     @Field(() => Int)
     UserID: number;
-    
+
     @Field({ nullable: true })
-    ExternalSystemRecordID: string;
-    
+    ExternalSystemRecordID?: string;
+
     @Field(() => Int, { nullable: true })
-    CompanyIntegrationID: number;
-    }
+    CompanyIntegrationID?: number;
+
+    @Field(() => Int, { nullable: true })
+    CategoryID?: number;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for Lists
@@ -7074,28 +6112,7 @@ export class ListResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext, 
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <ListEntity>await new Metadata().GetEntityObject('Lists', this.GetUserFromPayload(userPayload));
-            await entityObject.NewRecord();
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire the AfterCreate event and then return all the data
-                await this.AfterCreate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else 
-                // save failed, return null
-                return null;
-        }
-        else    
-            return null;
-    }
-
-    // Before/After CREATE Event Hooks for Sub-Classes to Override
-    protected async BeforeCreate(dataSource: DataSource, input: CreateListInput): Promise<boolean> {
-        return true;
-    }
-    protected async AfterCreate(dataSource: DataSource, input: CreateListInput) {
+        return this.CreateRecord('Lists', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => List_)
@@ -7104,55 +6121,13 @@ export class ListResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <ListEntity>await new Metadata().GetEntityObject('Lists', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Lists
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateListInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateListInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('Lists', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => List_)
-    async DeleteList(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <ListEntity>await new Metadata().GetEntityObject('Lists', this.GetUserFromPayload(userPayload));
-            await entityObject.Load(ID);
-            const returnValue = entityObject.GetAll(); // grab the values before we delete so we can return last state before delete if we are successful.
-            if (await entityObject.Delete()) {
-                await this.AfterDelete(dataSource, ID); // fire event
-                return returnValue;
-            }
-            else 
-                return null; // delete failed, this will cause an exception
-        }
-        else
-            return null; // BeforeDelete canceled the operation, this will cause an exception
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeDelete(dataSource: DataSource, ID: number): Promise<boolean> {
-        const i = ID, d = dataSource; // prevent error;
-        return true;
-    }
-    protected async AfterDelete(dataSource: DataSource, ID: number) {
-        const i = ID, d = dataSource; // prevent error
+    async DeleteList(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Lists', key, options, dataSource, userPayload, pubSub);
     }
     
 }
@@ -7188,13 +6163,13 @@ export class ListDetail_ {
 export class CreateListDetailInput {
     @Field(() => Int)
     ListID: number;
-    
+
     @Field()
     RecordID: string;
-    
+
     @Field(() => Int)
     Sequence: number;
-    }
+}
     
         
 //****************************************************************************
@@ -7204,16 +6179,19 @@ export class CreateListDetailInput {
 export class UpdateListDetailInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field(() => Int)
     ListID: number;
-    
+
     @Field()
     RecordID: string;
-    
+
     @Field(() => Int)
     Sequence: number;
-    }
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for List Details
@@ -7273,28 +6251,7 @@ export class ListDetailResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext, 
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <ListDetailEntity>await new Metadata().GetEntityObject('List Details', this.GetUserFromPayload(userPayload));
-            await entityObject.NewRecord();
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire the AfterCreate event and then return all the data
-                await this.AfterCreate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else 
-                // save failed, return null
-                return null;
-        }
-        else    
-            return null;
-    }
-
-    // Before/After CREATE Event Hooks for Sub-Classes to Override
-    protected async BeforeCreate(dataSource: DataSource, input: CreateListDetailInput): Promise<boolean> {
-        return true;
-    }
-    protected async AfterCreate(dataSource: DataSource, input: CreateListDetailInput) {
+        return this.CreateRecord('List Details', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => ListDetail_)
@@ -7303,55 +6260,13 @@ export class ListDetailResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <ListDetailEntity>await new Metadata().GetEntityObject('List Details', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for List Details
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateListDetailInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateListDetailInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('List Details', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => ListDetail_)
-    async DeleteListDetail(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <ListDetailEntity>await new Metadata().GetEntityObject('List Details', this.GetUserFromPayload(userPayload));
-            await entityObject.Load(ID);
-            const returnValue = entityObject.GetAll(); // grab the values before we delete so we can return last state before delete if we are successful.
-            if (await entityObject.Delete()) {
-                await this.AfterDelete(dataSource, ID); // fire event
-                return returnValue;
-            }
-            else 
-                return null; // delete failed, this will cause an exception
-        }
-        else
-            return null; // BeforeDelete canceled the operation, this will cause an exception
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeDelete(dataSource: DataSource, ID: number): Promise<boolean> {
-        const i = ID, d = dataSource; // prevent error;
-        return true;
-    }
-    protected async AfterDelete(dataSource: DataSource, ID: number) {
-        const i = ID, d = dataSource; // prevent error
+    async DeleteListDetail(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('List Details', key, options, dataSource, userPayload, pubSub);
     }
     
 }
@@ -7394,13 +6309,13 @@ export class UserViewRun_ {
 export class CreateUserViewRunInput {
     @Field(() => Int)
     UserViewID: number;
-    
+
     @Field()
     RunAt: Date;
-    
+
     @Field(() => Int)
     RunByUserID: number;
-    }
+}
     
         
 //****************************************************************************
@@ -7410,16 +6325,19 @@ export class CreateUserViewRunInput {
 export class UpdateUserViewRunInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field(() => Int)
     UserViewID: number;
-    
+
     @Field()
     RunAt: Date;
-    
+
     @Field(() => Int)
     RunByUserID: number;
-    }
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for User View Runs
@@ -7487,28 +6405,7 @@ export class UserViewRunResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext, 
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <UserViewRunEntity>await new Metadata().GetEntityObject('User View Runs', this.GetUserFromPayload(userPayload));
-            await entityObject.NewRecord();
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire the AfterCreate event and then return all the data
-                await this.AfterCreate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else 
-                // save failed, return null
-                return null;
-        }
-        else    
-            return null;
-    }
-
-    // Before/After CREATE Event Hooks for Sub-Classes to Override
-    protected async BeforeCreate(dataSource: DataSource, input: CreateUserViewRunInput): Promise<boolean> {
-        return true;
-    }
-    protected async AfterCreate(dataSource: DataSource, input: CreateUserViewRunInput) {
+        return this.CreateRecord('User View Runs', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => UserViewRun_)
@@ -7517,29 +6414,7 @@ export class UserViewRunResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <UserViewRunEntity>await new Metadata().GetEntityObject('User View Runs', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for User View Runs
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateUserViewRunInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateUserViewRunInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('User View Runs', input, dataSource, userPayload, pubSub);
     }
     
 }
@@ -7574,10 +6449,10 @@ export class UserViewRunDetail_ {
 export class CreateUserViewRunDetailInput {
     @Field(() => Int)
     UserViewRunID: number;
-    
+
     @Field()
     RecordID: string;
-    }
+}
     
         
 //****************************************************************************
@@ -7587,13 +6462,16 @@ export class CreateUserViewRunDetailInput {
 export class UpdateUserViewRunDetailInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field(() => Int)
     UserViewRunID: number;
-    
+
     @Field()
     RecordID: string;
-    }
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for User View Run Details
@@ -7653,28 +6531,7 @@ export class UserViewRunDetailResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext, 
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <UserViewRunDetailEntity>await new Metadata().GetEntityObject('User View Run Details', this.GetUserFromPayload(userPayload));
-            await entityObject.NewRecord();
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire the AfterCreate event and then return all the data
-                await this.AfterCreate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else 
-                // save failed, return null
-                return null;
-        }
-        else    
-            return null;
-    }
-
-    // Before/After CREATE Event Hooks for Sub-Classes to Override
-    protected async BeforeCreate(dataSource: DataSource, input: CreateUserViewRunDetailInput): Promise<boolean> {
-        return true;
-    }
-    protected async AfterCreate(dataSource: DataSource, input: CreateUserViewRunDetailInput) {
+        return this.CreateRecord('User View Run Details', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => UserViewRunDetail_)
@@ -7683,29 +6540,7 @@ export class UserViewRunDetailResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <UserViewRunDetailEntity>await new Metadata().GetEntityObject('User View Run Details', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for User View Run Details
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateUserViewRunDetailInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateUserViewRunDetailInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('User View Run Details', input, dataSource, userPayload, pubSub);
     }
     
 }
@@ -7758,25 +6593,28 @@ export class WorkflowRun_ {
 export class UpdateWorkflowRunInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field()
     WorkflowName: string;
-    
+
     @Field()
     ExternalSystemRecordID: string;
-    
+
     @Field()
     StartedAt: Date;
-    
+
     @Field({ nullable: true })
-    EndedAt: Date;
-    
+    EndedAt?: Date;
+
     @Field()
     Status: string;
-    
+
     @Field({ nullable: true })
-    Results: string;
-    }
+    Results?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for Workflow Runs
@@ -7836,29 +6674,7 @@ export class WorkflowRunResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <WorkflowRunEntity>await new Metadata().GetEntityObject('Workflow Runs', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Workflow Runs
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateWorkflowRunInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateWorkflowRunInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('Workflow Runs', input, dataSource, userPayload, pubSub);
     }
     
 }
@@ -7930,34 +6746,37 @@ export class Workflow_ {
 export class UpdateWorkflowInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field()
     Name: string;
-    
+
     @Field({ nullable: true })
-    Description: string;
-    
+    Description?: string;
+
     @Field()
     WorkflowEngineName: string;
-    
+
     @Field()
     CompanyName: string;
-    
+
     @Field()
     ExternalSystemRecordID: string;
-    
+
     @Field(() => Boolean)
     AutoRunEnabled: boolean;
-    
+
     @Field({ nullable: true })
-    AutoRunIntervalUnits: string;
-    
+    AutoRunIntervalUnits?: string;
+
     @Field(() => Int, { nullable: true })
-    AutoRunInterval: number;
-    
+    AutoRunInterval?: number;
+
     @Field({ nullable: true })
-    SubclassName: string;
-    }
+    SubclassName?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for Workflows
@@ -8033,29 +6852,7 @@ export class WorkflowResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <WorkflowEntity>await new Metadata().GetEntityObject('Workflows', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Workflows
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateWorkflowInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateWorkflowInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('Workflows', input, dataSource, userPayload, pubSub);
     }
     
 }
@@ -8103,19 +6900,22 @@ export class WorkflowEngine_ {
 export class UpdateWorkflowEngineInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field()
     Name: string;
-    
+
     @Field({ nullable: true })
-    Description: string;
-    
+    Description?: string;
+
     @Field()
     DriverPath: string;
-    
+
     @Field()
     DriverClass: string;
-    }
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for Workflow Engines
@@ -8183,29 +6983,7 @@ export class WorkflowEngineResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <WorkflowEngineEntity>await new Metadata().GetEntityObject('Workflow Engines', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Workflow Engines
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateWorkflowEngineInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateWorkflowEngineInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('Workflow Engines', input, dataSource, userPayload, pubSub);
     }
     
 }
@@ -8265,31 +7043,31 @@ export class RecordChange_ {
 export class CreateRecordChangeInput {
     @Field(() => Int)
     EntityID: number;
-    
+
     @Field()
     RecordID: string;
-    
+
     @Field(() => Int)
     UserID: number;
-    
+
     @Field()
     ChangedAt: Date;
-    
+
     @Field()
     ChangesJSON: string;
-    
+
     @Field()
     ChangesDescription: string;
-    
+
     @Field()
     FullRecordJSON: string;
-    
+
     @Field()
     Status: string;
-    
+
     @Field({ nullable: true })
-    Comments: string;
-    }
+    Comments?: string;
+}
     
 //****************************************************************************
 // RESOLVER for Record Changes
@@ -8349,28 +7127,7 @@ export class RecordChangeResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext, 
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <RecordChangeEntity>await new Metadata().GetEntityObject('Record Changes', this.GetUserFromPayload(userPayload));
-            await entityObject.NewRecord();
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire the AfterCreate event and then return all the data
-                await this.AfterCreate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else 
-                // save failed, return null
-                return null;
-        }
-        else    
-            return null;
-    }
-
-    // Before/After CREATE Event Hooks for Sub-Classes to Override
-    protected async BeforeCreate(dataSource: DataSource, input: CreateRecordChangeInput): Promise<boolean> {
-        return true;
-    }
-    protected async AfterCreate(dataSource: DataSource, input: CreateRecordChangeInput) {
+        return this.CreateRecord('Record Changes', input, dataSource, userPayload, pubSub)
     }
         
 }
@@ -8411,10 +7168,10 @@ export class UserRole_ {
 export class CreateUserRoleInput {
     @Field(() => Int)
     UserID: number;
-    
+
     @Field()
     RoleName: string;
-    }
+}
     
 //****************************************************************************
 // RESOLVER for User Roles
@@ -8482,54 +7239,13 @@ export class UserRoleResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext, 
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <UserRoleEntity>await new Metadata().GetEntityObject('User Roles', this.GetUserFromPayload(userPayload));
-            await entityObject.NewRecord();
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire the AfterCreate event and then return all the data
-                await this.AfterCreate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else 
-                // save failed, return null
-                return null;
-        }
-        else    
-            return null;
-    }
-
-    // Before/After CREATE Event Hooks for Sub-Classes to Override
-    protected async BeforeCreate(dataSource: DataSource, input: CreateUserRoleInput): Promise<boolean> {
-        return true;
-    }
-    protected async AfterCreate(dataSource: DataSource, input: CreateUserRoleInput) {
+        return this.CreateRecord('User Roles', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => UserRole_)
-    async DeleteUserRole(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <UserRoleEntity>await new Metadata().GetEntityObject('User Roles', this.GetUserFromPayload(userPayload));
-            await entityObject.Load(ID);
-            const returnValue = entityObject.GetAll(); // grab the values before we delete so we can return last state before delete if we are successful.
-            if (await entityObject.Delete()) {
-                await this.AfterDelete(dataSource, ID); // fire event
-                return returnValue;
-            }
-            else 
-                return null; // delete failed, this will cause an exception
-        }
-        else
-            return null; // BeforeDelete canceled the operation, this will cause an exception
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeDelete(dataSource: DataSource, ID: number): Promise<boolean> {
-        const i = ID, d = dataSource; // prevent error;
-        return true;
-    }
-    protected async AfterDelete(dataSource: DataSource, ID: number) {
-        const i = ID, d = dataSource; // prevent error
+    async DeleteUserRole(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('User Roles', key, options, dataSource, userPayload, pubSub);
     }
     
 }
@@ -8694,29 +7410,29 @@ export class AuditLog_ {
 @InputType()
 export class CreateAuditLogInput {
     @Field({ nullable: true })
-    AuditLogTypeName: string;
-    
+    AuditLogTypeName?: string;
+
     @Field(() => Int)
     UserID: number;
-    
+
     @Field({ nullable: true })
-    AuthorizationName: string;
-    
+    AuthorizationName?: string;
+
     @Field()
     Status: string;
-    
+
     @Field({ nullable: true })
-    Description: string;
-    
+    Description?: string;
+
     @Field({ nullable: true })
-    Details: string;
-    
+    Details?: string;
+
     @Field(() => Int, { nullable: true })
-    EntityID: number;
-    
+    EntityID?: number;
+
     @Field({ nullable: true })
-    RecordID: string;
-    }
+    RecordID?: string;
+}
     
         
 //****************************************************************************
@@ -8726,31 +7442,34 @@ export class CreateAuditLogInput {
 export class UpdateAuditLogInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field({ nullable: true })
-    AuditLogTypeName: string;
-    
+    AuditLogTypeName?: string;
+
     @Field(() => Int)
     UserID: number;
-    
+
     @Field({ nullable: true })
-    AuthorizationName: string;
-    
+    AuthorizationName?: string;
+
     @Field()
     Status: string;
-    
+
     @Field({ nullable: true })
-    Description: string;
-    
+    Description?: string;
+
     @Field({ nullable: true })
-    Details: string;
-    
+    Details?: string;
+
     @Field(() => Int, { nullable: true })
-    EntityID: number;
-    
+    EntityID?: number;
+
     @Field({ nullable: true })
-    RecordID: string;
-    }
+    RecordID?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for Audit Logs
@@ -8810,28 +7529,7 @@ export class AuditLogResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext, 
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <AuditLogEntity>await new Metadata().GetEntityObject('Audit Logs', this.GetUserFromPayload(userPayload));
-            await entityObject.NewRecord();
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire the AfterCreate event and then return all the data
-                await this.AfterCreate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else 
-                // save failed, return null
-                return null;
-        }
-        else    
-            return null;
-    }
-
-    // Before/After CREATE Event Hooks for Sub-Classes to Override
-    protected async BeforeCreate(dataSource: DataSource, input: CreateAuditLogInput): Promise<boolean> {
-        return true;
-    }
-    protected async AfterCreate(dataSource: DataSource, input: CreateAuditLogInput) {
+        return this.CreateRecord('Audit Logs', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => AuditLog_)
@@ -8840,29 +7538,7 @@ export class AuditLogResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <AuditLogEntity>await new Metadata().GetEntityObject('Audit Logs', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Audit Logs
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateAuditLogInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateAuditLogInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('Audit Logs', input, dataSource, userPayload, pubSub);
     }
     
 }
@@ -8914,6 +7590,9 @@ export class Authorization_ {
     
     @Field(() => [mj_core_schema_server_object_types.AuditLog_])
     AuditLogsArray: mj_core_schema_server_object_types.AuditLog_[]; // Link to AuditLogs
+    
+    @Field(() => [mj_core_schema_server_object_types.ActionAuthorization_])
+    ActionAuthorizationsArray: mj_core_schema_server_object_types.ActionAuthorization_[]; // Link to ActionAuthorizations
     
 }
 //****************************************************************************
@@ -9005,6 +7684,14 @@ export class AuthorizationResolver extends ResolverBase {
         this.CheckUserReadPermissions('Audit Logs', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAuditLogs] WHERE [AuthorizationName]=${authorization_.ID} ` + this.getRowLevelSecurityWhereClause('Audit Logs', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Audit Logs', await dataSource.query(sSQL));
+        return result;
+    }
+          
+    @FieldResolver(() => [mj_core_schema_server_object_types.ActionAuthorization_])
+    async ActionAuthorizationsArray(@Root() authorization_: Authorization_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Action Authorizations', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionAuthorizations] WHERE [AuthorizationID]=${authorization_.ID} ` + this.getRowLevelSecurityWhereClause('Action Authorizations', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Action Authorizations', await dataSource.query(sSQL));
         return result;
     }
         
@@ -9404,34 +8091,37 @@ export class AIModel_ {
 export class UpdateAIModelInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field()
     Name: string;
-    
+
     @Field({ nullable: true })
-    Vendor: string;
-    
+    Vendor?: string;
+
     @Field(() => Int)
     AIModelTypeID: number;
-    
+
     @Field(() => Boolean)
     IsActive: boolean;
-    
+
     @Field({ nullable: true })
-    Description: string;
-    
+    Description?: string;
+
     @Field({ nullable: true })
-    DriverClass: string;
-    
+    DriverClass?: string;
+
     @Field({ nullable: true })
-    DriverImportPath: string;
-    
+    DriverImportPath?: string;
+
     @Field({ nullable: true })
-    APIName: string;
-    
+    APIName?: string;
+
     @Field(() => Int, { nullable: true })
-    PowerRank: number;
-    }
+    PowerRank?: number;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for AI Models
@@ -9539,29 +8229,7 @@ export class AIModelResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <AIModelEntity>await new Metadata().GetEntityObject('AI Models', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for AI Models
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateAIModelInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateAIModelInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('AI Models', input, dataSource, userPayload, pubSub);
     }
     
 }
@@ -9617,22 +8285,25 @@ export class AIAction_ {
 export class UpdateAIActionInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field()
     Name: string;
-    
+
     @Field({ nullable: true })
-    Description: string;
-    
+    Description?: string;
+
     @Field(() => Int, { nullable: true })
-    DefaultModelID: number;
-    
+    DefaultModelID?: number;
+
     @Field({ nullable: true })
-    DefaultPrompt: string;
-    
+    DefaultPrompt?: string;
+
     @Field(() => Boolean)
     IsActive: boolean;
-    }
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for AI Actions
@@ -9716,29 +8387,13 @@ export class AIActionResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <AIActionEntity>await new Metadata().GetEntityObject('AI Actions', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for AI Actions
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
+        return this.UpdateRecord('AI Actions', input, dataSource, userPayload, pubSub);
     }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateAIActionInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateAIActionInput) {
-        const i = input, d = dataSource; // prevent error
+    
+    @Mutation(() => AIAction_)
+    async DeleteAIAction(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('AI Actions', key, options, dataSource, userPayload, pubSub);
     }
     
 }
@@ -9785,16 +8440,19 @@ export class AIModelAction_ {
 export class UpdateAIModelActionInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field(() => Int)
     AIModelID: number;
-    
+
     @Field(() => Int)
     AIActionID: number;
-    
+
     @Field(() => Boolean)
     IsActive: boolean;
-    }
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for AI Model Actions
@@ -9862,29 +8520,13 @@ export class AIModelActionResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <AIModelActionEntity>await new Metadata().GetEntityObject('AI Model Actions', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for AI Model Actions
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
+        return this.UpdateRecord('AI Model Actions', input, dataSource, userPayload, pubSub);
     }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateAIModelActionInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateAIModelActionInput) {
-        const i = input, d = dataSource; // prevent error
+    
+    @Mutation(() => AIModelAction_)
+    async DeleteAIModelAction(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('AI Model Actions', key, options, dataSource, userPayload, pubSub);
     }
     
 }
@@ -9962,43 +8604,46 @@ export class EntityAIAction_ {
 export class UpdateEntityAIActionInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field(() => Int)
     EntityID: number;
-    
+
     @Field(() => Int)
     AIActionID: number;
-    
+
     @Field(() => Int, { nullable: true })
-    AIModelID: number;
-    
+    AIModelID?: number;
+
     @Field()
     Name: string;
-    
+
     @Field({ nullable: true })
-    Prompt: string;
-    
+    Prompt?: string;
+
     @Field()
     TriggerEvent: string;
-    
+
     @Field()
     UserMessage: string;
-    
+
     @Field()
     OutputType: string;
-    
+
     @Field({ nullable: true })
-    OutputField: string;
-    
+    OutputField?: string;
+
     @Field(() => Boolean)
     SkipIfOutputFieldNotEmpty: boolean;
-    
+
     @Field(() => Int, { nullable: true })
-    OutputEntityID: number;
-    
+    OutputEntityID?: number;
+
     @Field({ nullable: true })
-    Comments: string;
-    }
+    Comments?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for Entity AI Actions
@@ -10066,29 +8711,13 @@ export class EntityAIActionResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <EntityAIActionEntity>await new Metadata().GetEntityObject('Entity AI Actions', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Entity AI Actions
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
+        return this.UpdateRecord('Entity AI Actions', input, dataSource, userPayload, pubSub);
     }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateEntityAIActionInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateEntityAIActionInput) {
-        const i = input, d = dataSource; // prevent error
+    
+    @Mutation(() => EntityAIAction_)
+    async DeleteEntityAIAction(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Entity AI Actions', key, options, dataSource, userPayload, pubSub);
     }
     
 }
@@ -10120,13 +8749,16 @@ export class AIModelType_ {
 export class UpdateAIModelTypeInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field()
     Name: string;
-    
+
     @Field({ nullable: true })
-    Description: string;
-    }
+    Description?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for AI Model Types
@@ -10202,29 +8834,7 @@ export class AIModelTypeResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <AIModelTypeEntity>await new Metadata().GetEntityObject('AI Model Types', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for AI Model Types
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateAIModelTypeInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateAIModelTypeInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('AI Model Types', input, dataSource, userPayload, pubSub);
     }
     
 }
@@ -10413,52 +9023,52 @@ export class Queue_ {
 export class CreateQueueInput {
     @Field()
     Name: string;
-    
+
     @Field({ nullable: true })
-    Description: string;
-    
+    Description?: string;
+
     @Field(() => Int)
     QueueTypeID: number;
-    
+
     @Field(() => Boolean)
     IsActive: boolean;
-    
+
     @Field(() => Int, { nullable: true })
-    ProcessPID: number;
-    
+    ProcessPID?: number;
+
     @Field({ nullable: true })
-    ProcessPlatform: string;
-    
+    ProcessPlatform?: string;
+
     @Field({ nullable: true })
-    ProcessVersion: string;
-    
+    ProcessVersion?: string;
+
     @Field({ nullable: true })
-    ProcessCwd: string;
-    
+    ProcessCwd?: string;
+
     @Field({ nullable: true })
-    ProcessIPAddress: string;
-    
+    ProcessIPAddress?: string;
+
     @Field({ nullable: true })
-    ProcessMacAddress: string;
-    
+    ProcessMacAddress?: string;
+
     @Field({ nullable: true })
-    ProcessOSName: string;
-    
+    ProcessOSName?: string;
+
     @Field({ nullable: true })
-    ProcessOSVersion: string;
-    
+    ProcessOSVersion?: string;
+
     @Field({ nullable: true })
-    ProcessHostName: string;
-    
+    ProcessHostName?: string;
+
     @Field({ nullable: true })
-    ProcessUserID: string;
-    
+    ProcessUserID?: string;
+
     @Field({ nullable: true })
-    ProcessUserName: string;
-    
+    ProcessUserName?: string;
+
     @Field()
     LastHeartbeat: Date;
-    }
+}
     
         
 //****************************************************************************
@@ -10468,55 +9078,58 @@ export class CreateQueueInput {
 export class UpdateQueueInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field()
     Name: string;
-    
+
     @Field({ nullable: true })
-    Description: string;
-    
+    Description?: string;
+
     @Field(() => Int)
     QueueTypeID: number;
-    
+
     @Field(() => Boolean)
     IsActive: boolean;
-    
+
     @Field(() => Int, { nullable: true })
-    ProcessPID: number;
-    
+    ProcessPID?: number;
+
     @Field({ nullable: true })
-    ProcessPlatform: string;
-    
+    ProcessPlatform?: string;
+
     @Field({ nullable: true })
-    ProcessVersion: string;
-    
+    ProcessVersion?: string;
+
     @Field({ nullable: true })
-    ProcessCwd: string;
-    
+    ProcessCwd?: string;
+
     @Field({ nullable: true })
-    ProcessIPAddress: string;
-    
+    ProcessIPAddress?: string;
+
     @Field({ nullable: true })
-    ProcessMacAddress: string;
-    
+    ProcessMacAddress?: string;
+
     @Field({ nullable: true })
-    ProcessOSName: string;
-    
+    ProcessOSName?: string;
+
     @Field({ nullable: true })
-    ProcessOSVersion: string;
-    
+    ProcessOSVersion?: string;
+
     @Field({ nullable: true })
-    ProcessHostName: string;
-    
+    ProcessHostName?: string;
+
     @Field({ nullable: true })
-    ProcessUserID: string;
-    
+    ProcessUserID?: string;
+
     @Field({ nullable: true })
-    ProcessUserName: string;
-    
+    ProcessUserName?: string;
+
     @Field()
     LastHeartbeat: Date;
-    }
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for Queues
@@ -10584,28 +9197,7 @@ export class QueueResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext, 
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <QueueEntity>await new Metadata().GetEntityObject('Queues', this.GetUserFromPayload(userPayload));
-            await entityObject.NewRecord();
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire the AfterCreate event and then return all the data
-                await this.AfterCreate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else 
-                // save failed, return null
-                return null;
-        }
-        else    
-            return null;
-    }
-
-    // Before/After CREATE Event Hooks for Sub-Classes to Override
-    protected async BeforeCreate(dataSource: DataSource, input: CreateQueueInput): Promise<boolean> {
-        return true;
-    }
-    protected async AfterCreate(dataSource: DataSource, input: CreateQueueInput) {
+        return this.CreateRecord('Queues', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => Queue_)
@@ -10614,29 +9206,7 @@ export class QueueResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <QueueEntity>await new Metadata().GetEntityObject('Queues', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Queues
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateQueueInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateQueueInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('Queues', input, dataSource, userPayload, pubSub);
     }
     
 }
@@ -10692,31 +9262,31 @@ export class QueueTask_ {
 export class CreateQueueTaskInput {
     @Field(() => Int)
     QueueID: number;
-    
+
     @Field()
     Status: string;
-    
+
     @Field({ nullable: true })
-    StartedAt: Date;
-    
+    StartedAt?: Date;
+
     @Field({ nullable: true })
-    EndedAt: Date;
-    
+    EndedAt?: Date;
+
     @Field({ nullable: true })
-    Data: string;
-    
+    Data?: string;
+
     @Field({ nullable: true })
-    Options: string;
-    
+    Options?: string;
+
     @Field({ nullable: true })
-    Output: string;
-    
+    Output?: string;
+
     @Field({ nullable: true })
-    ErrorMessage: string;
-    
+    ErrorMessage?: string;
+
     @Field({ nullable: true })
-    Comments: string;
-    }
+    Comments?: string;
+}
     
         
 //****************************************************************************
@@ -10726,34 +9296,37 @@ export class CreateQueueTaskInput {
 export class UpdateQueueTaskInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field(() => Int)
     QueueID: number;
-    
+
     @Field()
     Status: string;
-    
+
     @Field({ nullable: true })
-    StartedAt: Date;
-    
+    StartedAt?: Date;
+
     @Field({ nullable: true })
-    EndedAt: Date;
-    
+    EndedAt?: Date;
+
     @Field({ nullable: true })
-    Data: string;
-    
+    Data?: string;
+
     @Field({ nullable: true })
-    Options: string;
-    
+    Options?: string;
+
     @Field({ nullable: true })
-    Output: string;
-    
+    Output?: string;
+
     @Field({ nullable: true })
-    ErrorMessage: string;
-    
+    ErrorMessage?: string;
+
     @Field({ nullable: true })
-    Comments: string;
-    }
+    Comments?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for Queue Tasks
@@ -10813,28 +9386,7 @@ export class QueueTaskResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext, 
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <QueueTaskEntity>await new Metadata().GetEntityObject('Queue Tasks', this.GetUserFromPayload(userPayload));
-            await entityObject.NewRecord();
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire the AfterCreate event and then return all the data
-                await this.AfterCreate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else 
-                // save failed, return null
-                return null;
-        }
-        else    
-            return null;
-    }
-
-    // Before/After CREATE Event Hooks for Sub-Classes to Override
-    protected async BeforeCreate(dataSource: DataSource, input: CreateQueueTaskInput): Promise<boolean> {
-        return true;
-    }
-    protected async AfterCreate(dataSource: DataSource, input: CreateQueueTaskInput) {
+        return this.CreateRecord('Queue Tasks', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => QueueTask_)
@@ -10843,29 +9395,7 @@ export class QueueTaskResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <QueueTaskEntity>await new Metadata().GetEntityObject('Queue Tasks', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Queue Tasks
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateQueueTaskInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateQueueTaskInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('Queue Tasks', input, dataSource, userPayload, pubSub);
     }
     
 }
@@ -10911,19 +9441,19 @@ export class Dashboard_ {
 export class CreateDashboardInput {
     @Field()
     Name: string;
-    
+
     @Field({ nullable: true })
-    Description: string;
-    
+    Description?: string;
+
     @Field(() => Int, { nullable: true })
-    CategoryID: number;
-    
+    CategoryID?: number;
+
     @Field()
     UIConfigDetails: string;
-    
+
     @Field(() => Int, { nullable: true })
-    UserID: number;
-    }
+    UserID?: number;
+}
     
         
 //****************************************************************************
@@ -10933,22 +9463,25 @@ export class CreateDashboardInput {
 export class UpdateDashboardInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field()
     Name: string;
-    
+
     @Field({ nullable: true })
-    Description: string;
-    
+    Description?: string;
+
     @Field(() => Int, { nullable: true })
-    CategoryID: number;
-    
+    CategoryID?: number;
+
     @Field()
     UIConfigDetails: string;
-    
+
     @Field(() => Int, { nullable: true })
-    UserID: number;
-    }
+    UserID?: number;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for Dashboards
@@ -10998,7 +9531,6 @@ export class DashboardResolver extends ResolverBase {
     async Dashboard(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<Dashboard_ | null> {
         this.CheckUserReadPermissions('Dashboards', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwDashboards] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Dashboards', userPayload, EntityPermissionType.Read, 'AND');
-        this.createRecordAccessAuditLogRecord(userPayload, 'Dashboards', ID)
         const result = this.MapFieldNamesToCodeNames('Dashboards', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
@@ -11009,28 +9541,7 @@ export class DashboardResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext, 
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <DashboardEntity>await new Metadata().GetEntityObject('Dashboards', this.GetUserFromPayload(userPayload));
-            await entityObject.NewRecord();
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire the AfterCreate event and then return all the data
-                await this.AfterCreate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else 
-                // save failed, return null
-                return null;
-        }
-        else    
-            return null;
-    }
-
-    // Before/After CREATE Event Hooks for Sub-Classes to Override
-    protected async BeforeCreate(dataSource: DataSource, input: CreateDashboardInput): Promise<boolean> {
-        return true;
-    }
-    protected async AfterCreate(dataSource: DataSource, input: CreateDashboardInput) {
+        return this.CreateRecord('Dashboards', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => Dashboard_)
@@ -11039,55 +9550,13 @@ export class DashboardResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <DashboardEntity>await new Metadata().GetEntityObject('Dashboards', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Dashboards
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateDashboardInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateDashboardInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('Dashboards', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => Dashboard_)
-    async DeleteDashboard(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <DashboardEntity>await new Metadata().GetEntityObject('Dashboards', this.GetUserFromPayload(userPayload));
-            await entityObject.Load(ID);
-            const returnValue = entityObject.GetAll(); // grab the values before we delete so we can return last state before delete if we are successful.
-            if (await entityObject.Delete()) {
-                await this.AfterDelete(dataSource, ID); // fire event
-                return returnValue;
-            }
-            else 
-                return null; // delete failed, this will cause an exception
-        }
-        else
-            return null; // BeforeDelete canceled the operation, this will cause an exception
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeDelete(dataSource: DataSource, ID: number): Promise<boolean> {
-        const i = ID, d = dataSource; // prevent error;
-        return true;
-    }
-    protected async AfterDelete(dataSource: DataSource, ID: number) {
-        const i = ID, d = dataSource; // prevent error
+    async DeleteDashboard(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Dashboards', key, options, dataSource, userPayload, pubSub);
     }
     
 }
@@ -11159,7 +9628,6 @@ export class OutputTriggerTypeResolver extends ResolverBase {
     async OutputTriggerType(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<OutputTriggerType_ | null> {
         this.CheckUserReadPermissions('Output Trigger Types', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwOutputTriggerTypes] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Output Trigger Types', userPayload, EntityPermissionType.Read, 'AND');
-        this.createRecordAccessAuditLogRecord(userPayload, 'Output Trigger Types', ID)
         const result = this.MapFieldNamesToCodeNames('Output Trigger Types', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
@@ -11244,7 +9712,6 @@ export class OutputFormatTypeResolver extends ResolverBase {
     async OutputFormatType(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<OutputFormatType_ | null> {
         this.CheckUserReadPermissions('Output Format Types', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwOutputFormatTypes] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Output Format Types', userPayload, EntityPermissionType.Read, 'AND');
-        this.createRecordAccessAuditLogRecord(userPayload, 'Output Format Types', ID)
         const result = this.MapFieldNamesToCodeNames('Output Format Types', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
@@ -11326,7 +9793,6 @@ export class OutputDeliveryTypeResolver extends ResolverBase {
     async OutputDeliveryType(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<OutputDeliveryType_ | null> {
         this.CheckUserReadPermissions('Output Delivery Types', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwOutputDeliveryTypes] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Output Delivery Types', userPayload, EntityPermissionType.Read, 'AND');
-        this.createRecordAccessAuditLogRecord(userPayload, 'Output Delivery Types', ID)
         const result = this.MapFieldNamesToCodeNames('Output Delivery Types', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
@@ -11457,52 +9923,52 @@ export class Report_ {
 export class CreateReportInput {
     @Field()
     Name: string;
-    
+
     @Field({ nullable: true })
-    Description: string;
-    
+    Description?: string;
+
     @Field(() => Int, { nullable: true })
-    CategoryID: number;
-    
+    CategoryID?: number;
+
     @Field(() => Int)
     UserID: number;
-    
+
     @Field()
     SharingScope: string;
-    
+
     @Field(() => Int, { nullable: true })
-    ConversationID: number;
-    
+    ConversationID?: number;
+
     @Field(() => Int, { nullable: true })
-    ConversationDetailID: number;
-    
+    ConversationDetailID?: number;
+
     @Field(() => Int, { nullable: true })
-    DataContextID: number;
-    
+    DataContextID?: number;
+
     @Field({ nullable: true })
-    Configuration: string;
-    
+    Configuration?: string;
+
     @Field(() => Int, { nullable: true })
-    OutputTriggerTypeID: number;
-    
+    OutputTriggerTypeID?: number;
+
     @Field(() => Int, { nullable: true })
-    OutputFormatTypeID: number;
-    
+    OutputFormatTypeID?: number;
+
     @Field(() => Int, { nullable: true })
-    OutputDeliveryTypeID: number;
-    
+    OutputDeliveryTypeID?: number;
+
     @Field(() => Int, { nullable: true })
-    OutputEventID: number;
-    
+    OutputEventID?: number;
+
     @Field({ nullable: true })
-    OutputFrequency: string;
-    
+    OutputFrequency?: string;
+
     @Field({ nullable: true })
-    OutputTargetEmail: string;
-    
+    OutputTargetEmail?: string;
+
     @Field(() => Int, { nullable: true })
-    OutputWorkflowID: number;
-    }
+    OutputWorkflowID?: number;
+}
     
         
 //****************************************************************************
@@ -11512,55 +9978,58 @@ export class CreateReportInput {
 export class UpdateReportInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field()
     Name: string;
-    
+
     @Field({ nullable: true })
-    Description: string;
-    
+    Description?: string;
+
     @Field(() => Int, { nullable: true })
-    CategoryID: number;
-    
+    CategoryID?: number;
+
     @Field(() => Int)
     UserID: number;
-    
+
     @Field()
     SharingScope: string;
-    
+
     @Field(() => Int, { nullable: true })
-    ConversationID: number;
-    
+    ConversationID?: number;
+
     @Field(() => Int, { nullable: true })
-    ConversationDetailID: number;
-    
+    ConversationDetailID?: number;
+
     @Field(() => Int, { nullable: true })
-    DataContextID: number;
-    
+    DataContextID?: number;
+
     @Field({ nullable: true })
-    Configuration: string;
-    
+    Configuration?: string;
+
     @Field(() => Int, { nullable: true })
-    OutputTriggerTypeID: number;
-    
+    OutputTriggerTypeID?: number;
+
     @Field(() => Int, { nullable: true })
-    OutputFormatTypeID: number;
-    
+    OutputFormatTypeID?: number;
+
     @Field(() => Int, { nullable: true })
-    OutputDeliveryTypeID: number;
-    
+    OutputDeliveryTypeID?: number;
+
     @Field(() => Int, { nullable: true })
-    OutputEventID: number;
-    
+    OutputEventID?: number;
+
     @Field({ nullable: true })
-    OutputFrequency: string;
-    
+    OutputFrequency?: string;
+
     @Field({ nullable: true })
-    OutputTargetEmail: string;
-    
+    OutputTargetEmail?: string;
+
     @Field(() => Int, { nullable: true })
-    OutputWorkflowID: number;
-    }
+    OutputWorkflowID?: number;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for Reports
@@ -11628,28 +10097,7 @@ export class ReportResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext, 
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <ReportEntity>await new Metadata().GetEntityObject('Reports', this.GetUserFromPayload(userPayload));
-            await entityObject.NewRecord();
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire the AfterCreate event and then return all the data
-                await this.AfterCreate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else 
-                // save failed, return null
-                return null;
-        }
-        else    
-            return null;
-    }
-
-    // Before/After CREATE Event Hooks for Sub-Classes to Override
-    protected async BeforeCreate(dataSource: DataSource, input: CreateReportInput): Promise<boolean> {
-        return true;
-    }
-    protected async AfterCreate(dataSource: DataSource, input: CreateReportInput) {
+        return this.CreateRecord('Reports', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => Report_)
@@ -11658,55 +10106,13 @@ export class ReportResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <ReportEntity>await new Metadata().GetEntityObject('Reports', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Reports
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateReportInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateReportInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('Reports', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => Report_)
-    async DeleteReport(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <ReportEntity>await new Metadata().GetEntityObject('Reports', this.GetUserFromPayload(userPayload));
-            await entityObject.Load(ID);
-            const returnValue = entityObject.GetAll(); // grab the values before we delete so we can return last state before delete if we are successful.
-            if (await entityObject.Delete()) {
-                await this.AfterDelete(dataSource, ID); // fire event
-                return returnValue;
-            }
-            else 
-                return null; // delete failed, this will cause an exception
-        }
-        else
-            return null; // BeforeDelete canceled the operation, this will cause an exception
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeDelete(dataSource: DataSource, ID: number): Promise<boolean> {
-        const i = ID, d = dataSource; // prevent error;
-        return true;
-    }
-    protected async AfterDelete(dataSource: DataSource, ID: number) {
-        const i = ID, d = dataSource; // prevent error
+    async DeleteReport(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Reports', key, options, dataSource, userPayload, pubSub);
     }
     
 }
@@ -11749,13 +10155,13 @@ export class ReportSnapshot_ {
 export class CreateReportSnapshotInput {
     @Field(() => Int)
     ReportID: number;
-    
+
     @Field()
     ResultSet: string;
-    
+
     @Field(() => Int, { nullable: true })
-    UserID: number;
-    }
+    UserID?: number;
+}
     
         
 //****************************************************************************
@@ -11765,16 +10171,19 @@ export class CreateReportSnapshotInput {
 export class UpdateReportSnapshotInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field(() => Int)
     ReportID: number;
-    
+
     @Field()
     ResultSet: string;
-    
+
     @Field(() => Int, { nullable: true })
-    UserID: number;
-    }
+    UserID?: number;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for Report Snapshots
@@ -11834,28 +10243,7 @@ export class ReportSnapshotResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext, 
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <ReportSnapshotEntity>await new Metadata().GetEntityObject('Report Snapshots', this.GetUserFromPayload(userPayload));
-            await entityObject.NewRecord();
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire the AfterCreate event and then return all the data
-                await this.AfterCreate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else 
-                // save failed, return null
-                return null;
-        }
-        else    
-            return null;
-    }
-
-    // Before/After CREATE Event Hooks for Sub-Classes to Override
-    protected async BeforeCreate(dataSource: DataSource, input: CreateReportSnapshotInput): Promise<boolean> {
-        return true;
-    }
-    protected async AfterCreate(dataSource: DataSource, input: CreateReportSnapshotInput) {
+        return this.CreateRecord('Report Snapshots', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => ReportSnapshot_)
@@ -11864,55 +10252,13 @@ export class ReportSnapshotResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <ReportSnapshotEntity>await new Metadata().GetEntityObject('Report Snapshots', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Report Snapshots
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateReportSnapshotInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateReportSnapshotInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('Report Snapshots', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => ReportSnapshot_)
-    async DeleteReportSnapshot(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <ReportSnapshotEntity>await new Metadata().GetEntityObject('Report Snapshots', this.GetUserFromPayload(userPayload));
-            await entityObject.Load(ID);
-            const returnValue = entityObject.GetAll(); // grab the values before we delete so we can return last state before delete if we are successful.
-            if (await entityObject.Delete()) {
-                await this.AfterDelete(dataSource, ID); // fire event
-                return returnValue;
-            }
-            else 
-                return null; // delete failed, this will cause an exception
-        }
-        else
-            return null; // BeforeDelete canceled the operation, this will cause an exception
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeDelete(dataSource: DataSource, ID: number): Promise<boolean> {
-        const i = ID, d = dataSource; // prevent error;
-        return true;
-    }
-    protected async AfterDelete(dataSource: DataSource, ID: number) {
-        const i = ID, d = dataSource; // prevent error
+    async DeleteReportSnapshot(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Report Snapshots', key, options, dataSource, userPayload, pubSub);
     }
     
 }
@@ -12007,7 +10353,6 @@ export class ResourceTypeResolver extends ResolverBase {
     async ResourceType(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ResourceType_ | null> {
         this.CheckUserReadPermissions('Resource Types', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwResourceTypes] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Resource Types', userPayload, EntityPermissionType.Read, 'AND');
-        this.createRecordAccessAuditLogRecord(userPayload, 'Resource Types', ID)
         const result = this.MapFieldNamesToCodeNames('Resource Types', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
@@ -12103,7 +10448,6 @@ export class TagResolver extends ResolverBase {
     async Tag(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<Tag_ | null> {
         this.CheckUserReadPermissions('Tags', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwTags] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Tags', userPayload, EntityPermissionType.Read, 'AND');
-        this.createRecordAccessAuditLogRecord(userPayload, 'Tags', ID)
         const result = this.MapFieldNamesToCodeNames('Tags', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
@@ -12201,7 +10545,6 @@ export class TaggedItemResolver extends ResolverBase {
     async TaggedItem(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<TaggedItem_ | null> {
         this.CheckUserReadPermissions('Tagged Items', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwTaggedItems] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Tagged Items', userPayload, EntityPermissionType.Read, 'AND');
-        this.createRecordAccessAuditLogRecord(userPayload, 'Tagged Items', ID)
         const result = this.MapFieldNamesToCodeNames('Tagged Items', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
@@ -12227,6 +10570,14 @@ export class Workspace_ {
     UserID: number;
           
     @Field() 
+    @MaxLength(8)
+    CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(8)
+    UpdatedAt: Date;
+          
+    @Field() 
     @MaxLength(200)
     User: string;
         
@@ -12242,13 +10593,13 @@ export class Workspace_ {
 export class CreateWorkspaceInput {
     @Field()
     Name: string;
-    
+
     @Field({ nullable: true })
-    Description: string;
-    
+    Description?: string;
+
     @Field(() => Int)
     UserID: number;
-    }
+}
     
         
 //****************************************************************************
@@ -12258,16 +10609,19 @@ export class CreateWorkspaceInput {
 export class UpdateWorkspaceInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field()
     Name: string;
-    
+
     @Field({ nullable: true })
-    Description: string;
-    
+    Description?: string;
+
     @Field(() => Int)
     UserID: number;
-    }
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for Workspaces
@@ -12317,7 +10671,6 @@ export class WorkspaceResolver extends ResolverBase {
     async Workspace(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<Workspace_ | null> {
         this.CheckUserReadPermissions('Workspaces', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwWorkspaces] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Workspaces', userPayload, EntityPermissionType.Read, 'AND');
-        this.createRecordAccessAuditLogRecord(userPayload, 'Workspaces', ID)
         const result = this.MapFieldNamesToCodeNames('Workspaces', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
@@ -12336,28 +10689,7 @@ export class WorkspaceResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext, 
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <WorkspaceEntity>await new Metadata().GetEntityObject('Workspaces', this.GetUserFromPayload(userPayload));
-            await entityObject.NewRecord();
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire the AfterCreate event and then return all the data
-                await this.AfterCreate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else 
-                // save failed, return null
-                return null;
-        }
-        else    
-            return null;
-    }
-
-    // Before/After CREATE Event Hooks for Sub-Classes to Override
-    protected async BeforeCreate(dataSource: DataSource, input: CreateWorkspaceInput): Promise<boolean> {
-        return true;
-    }
-    protected async AfterCreate(dataSource: DataSource, input: CreateWorkspaceInput) {
+        return this.CreateRecord('Workspaces', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => Workspace_)
@@ -12366,55 +10698,13 @@ export class WorkspaceResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <WorkspaceEntity>await new Metadata().GetEntityObject('Workspaces', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Workspaces
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateWorkspaceInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateWorkspaceInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('Workspaces', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => Workspace_)
-    async DeleteWorkspace(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <WorkspaceEntity>await new Metadata().GetEntityObject('Workspaces', this.GetUserFromPayload(userPayload));
-            await entityObject.Load(ID);
-            const returnValue = entityObject.GetAll(); // grab the values before we delete so we can return last state before delete if we are successful.
-            if (await entityObject.Delete()) {
-                await this.AfterDelete(dataSource, ID); // fire event
-                return returnValue;
-            }
-            else 
-                return null; // delete failed, this will cause an exception
-        }
-        else
-            return null; // BeforeDelete canceled the operation, this will cause an exception
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeDelete(dataSource: DataSource, ID: number): Promise<boolean> {
-        const i = ID, d = dataSource; // prevent error;
-        return true;
-    }
-    protected async AfterDelete(dataSource: DataSource, ID: number) {
-        const i = ID, d = dataSource; // prevent error
+    async DeleteWorkspace(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Workspaces', key, options, dataSource, userPayload, pubSub);
     }
     
 }
@@ -12441,7 +10731,7 @@ export class WorkspaceItem_ {
     ResourceTypeID: number;
           
     @Field({nullable: true}) 
-    @MaxLength(510)
+    @MaxLength(4000)
     ResourceRecordID?: string;
           
     @Field(() => Int) 
@@ -12449,6 +10739,14 @@ export class WorkspaceItem_ {
           
     @Field({nullable: true}) 
     Configuration?: string;
+          
+    @Field() 
+    @MaxLength(8)
+    CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(8)
+    UpdatedAt: Date;
           
     @Field() 
     @MaxLength(510)
@@ -12467,25 +10765,25 @@ export class WorkspaceItem_ {
 export class CreateWorkspaceItemInput {
     @Field()
     Name: string;
-    
+
     @Field({ nullable: true })
-    Description: string;
-    
+    Description?: string;
+
     @Field(() => Int)
     WorkSpaceID: number;
-    
+
     @Field(() => Int)
     ResourceTypeID: number;
-    
+
     @Field({ nullable: true })
-    ResourceRecordID: string;
-    
+    ResourceRecordID?: string;
+
     @Field(() => Int)
     Sequence: number;
-    
+
     @Field({ nullable: true })
-    Configuration: string;
-    }
+    Configuration?: string;
+}
     
         
 //****************************************************************************
@@ -12495,28 +10793,31 @@ export class CreateWorkspaceItemInput {
 export class UpdateWorkspaceItemInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field()
     Name: string;
-    
+
     @Field({ nullable: true })
-    Description: string;
-    
+    Description?: string;
+
     @Field(() => Int)
     WorkSpaceID: number;
-    
+
     @Field(() => Int)
     ResourceTypeID: number;
-    
+
     @Field({ nullable: true })
-    ResourceRecordID: string;
-    
+    ResourceRecordID?: string;
+
     @Field(() => Int)
     Sequence: number;
-    
+
     @Field({ nullable: true })
-    Configuration: string;
-    }
+    Configuration?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for Workspace Items
@@ -12566,7 +10867,6 @@ export class WorkspaceItemResolver extends ResolverBase {
     async WorkspaceItem(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<WorkspaceItem_ | null> {
         this.CheckUserReadPermissions('Workspace Items', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwWorkspaceItems] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Workspace Items', userPayload, EntityPermissionType.Read, 'AND');
-        this.createRecordAccessAuditLogRecord(userPayload, 'Workspace Items', ID)
         const result = this.MapFieldNamesToCodeNames('Workspace Items', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
@@ -12577,28 +10877,7 @@ export class WorkspaceItemResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext, 
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <WorkspaceItemEntity>await new Metadata().GetEntityObject('Workspace Items', this.GetUserFromPayload(userPayload));
-            await entityObject.NewRecord();
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire the AfterCreate event and then return all the data
-                await this.AfterCreate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else 
-                // save failed, return null
-                return null;
-        }
-        else    
-            return null;
-    }
-
-    // Before/After CREATE Event Hooks for Sub-Classes to Override
-    protected async BeforeCreate(dataSource: DataSource, input: CreateWorkspaceItemInput): Promise<boolean> {
-        return true;
-    }
-    protected async AfterCreate(dataSource: DataSource, input: CreateWorkspaceItemInput) {
+        return this.CreateRecord('Workspace Items', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => WorkspaceItem_)
@@ -12607,55 +10886,13 @@ export class WorkspaceItemResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <WorkspaceItemEntity>await new Metadata().GetEntityObject('Workspace Items', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Workspace Items
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateWorkspaceItemInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateWorkspaceItemInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('Workspace Items', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => WorkspaceItem_)
-    async DeleteWorkspaceItem(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <WorkspaceItemEntity>await new Metadata().GetEntityObject('Workspace Items', this.GetUserFromPayload(userPayload));
-            await entityObject.Load(ID);
-            const returnValue = entityObject.GetAll(); // grab the values before we delete so we can return last state before delete if we are successful.
-            if (await entityObject.Delete()) {
-                await this.AfterDelete(dataSource, ID); // fire event
-                return returnValue;
-            }
-            else 
-                return null; // delete failed, this will cause an exception
-        }
-        else
-            return null; // BeforeDelete canceled the operation, this will cause an exception
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeDelete(dataSource: DataSource, ID: number): Promise<boolean> {
-        const i = ID, d = dataSource; // prevent error;
-        return true;
-    }
-    protected async AfterDelete(dataSource: DataSource, ID: number) {
-        const i = ID, d = dataSource; // prevent error
+    async DeleteWorkspaceItem(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Workspace Items', key, options, dataSource, userPayload, pubSub);
     }
     
 }
@@ -12900,22 +11137,22 @@ export class ConversationDetail_ {
 export class CreateConversationDetailInput {
     @Field(() => Int)
     ConversationID: number;
-    
+
     @Field({ nullable: true })
-    ExternalID: string;
-    
+    ExternalID?: string;
+
     @Field()
     Role: string;
-    
+
     @Field()
     Message: string;
-    
+
     @Field({ nullable: true })
-    Error: string;
-    
+    Error?: string;
+
     @Field(() => Boolean)
     HiddenToUser: boolean;
-    }
+}
     
         
 //****************************************************************************
@@ -12925,25 +11162,28 @@ export class CreateConversationDetailInput {
 export class UpdateConversationDetailInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field(() => Int)
     ConversationID: number;
-    
+
     @Field({ nullable: true })
-    ExternalID: string;
-    
+    ExternalID?: string;
+
     @Field()
     Role: string;
-    
+
     @Field()
     Message: string;
-    
+
     @Field({ nullable: true })
-    Error: string;
-    
+    Error?: string;
+
     @Field(() => Boolean)
     HiddenToUser: boolean;
-    }
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for Conversation Details
@@ -13011,28 +11251,7 @@ export class ConversationDetailResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext, 
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <ConversationDetailEntity>await new Metadata().GetEntityObject('Conversation Details', this.GetUserFromPayload(userPayload));
-            await entityObject.NewRecord();
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire the AfterCreate event and then return all the data
-                await this.AfterCreate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else 
-                // save failed, return null
-                return null;
-        }
-        else    
-            return null;
-    }
-
-    // Before/After CREATE Event Hooks for Sub-Classes to Override
-    protected async BeforeCreate(dataSource: DataSource, input: CreateConversationDetailInput): Promise<boolean> {
-        return true;
-    }
-    protected async AfterCreate(dataSource: DataSource, input: CreateConversationDetailInput) {
+        return this.CreateRecord('Conversation Details', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => ConversationDetail_)
@@ -13041,55 +11260,13 @@ export class ConversationDetailResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <ConversationDetailEntity>await new Metadata().GetEntityObject('Conversation Details', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Conversation Details
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateConversationDetailInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateConversationDetailInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('Conversation Details', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => ConversationDetail_)
-    async DeleteConversationDetail(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <ConversationDetailEntity>await new Metadata().GetEntityObject('Conversation Details', this.GetUserFromPayload(userPayload));
-            await entityObject.Load(ID);
-            const returnValue = entityObject.GetAll(); // grab the values before we delete so we can return last state before delete if we are successful.
-            if (await entityObject.Delete()) {
-                await this.AfterDelete(dataSource, ID); // fire event
-                return returnValue;
-            }
-            else 
-                return null; // delete failed, this will cause an exception
-        }
-        else
-            return null; // BeforeDelete canceled the operation, this will cause an exception
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeDelete(dataSource: DataSource, ID: number): Promise<boolean> {
-        const i = ID, d = dataSource; // prevent error;
-        return true;
-    }
-    protected async AfterDelete(dataSource: DataSource, ID: number) {
-        const i = ID, d = dataSource; // prevent error
+    async DeleteConversationDetail(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Conversation Details', key, options, dataSource, userPayload, pubSub);
     }
     
 }
@@ -13164,31 +11341,31 @@ export class Conversation_ {
 export class CreateConversationInput {
     @Field(() => Int)
     UserID: number;
-    
+
     @Field({ nullable: true })
-    ExternalID: string;
-    
+    ExternalID?: string;
+
     @Field({ nullable: true })
-    Name: string;
-    
+    Name?: string;
+
     @Field({ nullable: true })
-    Description: string;
-    
+    Description?: string;
+
     @Field()
     Type: string;
-    
+
     @Field(() => Boolean)
     IsArchived: boolean;
-    
+
     @Field(() => Int, { nullable: true })
-    LinkedEntityID: number;
-    
+    LinkedEntityID?: number;
+
     @Field({ nullable: true })
-    LinkedRecordID: string;
-    
+    LinkedRecordID?: string;
+
     @Field(() => Int, { nullable: true })
-    DataContextID: number;
-    }
+    DataContextID?: number;
+}
     
         
 //****************************************************************************
@@ -13198,34 +11375,37 @@ export class CreateConversationInput {
 export class UpdateConversationInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field(() => Int)
     UserID: number;
-    
+
     @Field({ nullable: true })
-    ExternalID: string;
-    
+    ExternalID?: string;
+
     @Field({ nullable: true })
-    Name: string;
-    
+    Name?: string;
+
     @Field({ nullable: true })
-    Description: string;
-    
+    Description?: string;
+
     @Field()
     Type: string;
-    
+
     @Field(() => Boolean)
     IsArchived: boolean;
-    
+
     @Field(() => Int, { nullable: true })
-    LinkedEntityID: number;
-    
+    LinkedEntityID?: number;
+
     @Field({ nullable: true })
-    LinkedRecordID: string;
-    
+    LinkedRecordID?: string;
+
     @Field(() => Int, { nullable: true })
-    DataContextID: number;
-    }
+    DataContextID?: number;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for Conversations
@@ -13301,28 +11481,7 @@ export class ConversationResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext, 
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <ConversationEntity>await new Metadata().GetEntityObject('Conversations', this.GetUserFromPayload(userPayload));
-            await entityObject.NewRecord();
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire the AfterCreate event and then return all the data
-                await this.AfterCreate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else 
-                // save failed, return null
-                return null;
-        }
-        else    
-            return null;
-    }
-
-    // Before/After CREATE Event Hooks for Sub-Classes to Override
-    protected async BeforeCreate(dataSource: DataSource, input: CreateConversationInput): Promise<boolean> {
-        return true;
-    }
-    protected async AfterCreate(dataSource: DataSource, input: CreateConversationInput) {
+        return this.CreateRecord('Conversations', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => Conversation_)
@@ -13331,55 +11490,13 @@ export class ConversationResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <ConversationEntity>await new Metadata().GetEntityObject('Conversations', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Conversations
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateConversationInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateConversationInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('Conversations', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => Conversation_)
-    async DeleteConversation(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <ConversationEntity>await new Metadata().GetEntityObject('Conversations', this.GetUserFromPayload(userPayload));
-            await entityObject.Load(ID);
-            const returnValue = entityObject.GetAll(); // grab the values before we delete so we can return last state before delete if we are successful.
-            if (await entityObject.Delete()) {
-                await this.AfterDelete(dataSource, ID); // fire event
-                return returnValue;
-            }
-            else 
-                return null; // delete failed, this will cause an exception
-        }
-        else
-            return null; // BeforeDelete canceled the operation, this will cause an exception
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeDelete(dataSource: DataSource, ID: number): Promise<boolean> {
-        const i = ID, d = dataSource; // prevent error;
-        return true;
-    }
-    protected async AfterDelete(dataSource: DataSource, ID: number) {
-        const i = ID, d = dataSource; // prevent error
+    async DeleteConversation(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Conversations', key, options, dataSource, userPayload, pubSub);
     }
     
 }
@@ -13439,28 +11556,28 @@ export class UserNotification_ {
 export class CreateUserNotificationInput {
     @Field(() => Int)
     UserID: number;
-    
+
     @Field({ nullable: true })
-    Title: string;
-    
+    Title?: string;
+
     @Field({ nullable: true })
-    Message: string;
-    
+    Message?: string;
+
     @Field(() => Int, { nullable: true })
-    ResourceTypeID: number;
-    
+    ResourceTypeID?: number;
+
     @Field(() => Int, { nullable: true })
-    ResourceRecordID: number;
-    
+    ResourceRecordID?: number;
+
     @Field({ nullable: true })
-    ResourceConfiguration: string;
-    
+    ResourceConfiguration?: string;
+
     @Field(() => Boolean)
     Unread: boolean;
-    
+
     @Field({ nullable: true })
-    ReadAt: Date;
-    }
+    ReadAt?: Date;
+}
     
         
 //****************************************************************************
@@ -13470,31 +11587,34 @@ export class CreateUserNotificationInput {
 export class UpdateUserNotificationInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field(() => Int)
     UserID: number;
-    
+
     @Field({ nullable: true })
-    Title: string;
-    
+    Title?: string;
+
     @Field({ nullable: true })
-    Message: string;
-    
+    Message?: string;
+
     @Field(() => Int, { nullable: true })
-    ResourceTypeID: number;
-    
+    ResourceTypeID?: number;
+
     @Field(() => Int, { nullable: true })
-    ResourceRecordID: number;
-    
+    ResourceRecordID?: number;
+
     @Field({ nullable: true })
-    ResourceConfiguration: string;
-    
+    ResourceConfiguration?: string;
+
     @Field(() => Boolean)
     Unread: boolean;
-    
+
     @Field({ nullable: true })
-    ReadAt: Date;
-    }
+    ReadAt?: Date;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for User Notifications
@@ -13554,28 +11674,7 @@ export class UserNotificationResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext, 
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <UserNotificationEntity>await new Metadata().GetEntityObject('User Notifications', this.GetUserFromPayload(userPayload));
-            await entityObject.NewRecord();
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire the AfterCreate event and then return all the data
-                await this.AfterCreate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else 
-                // save failed, return null
-                return null;
-        }
-        else    
-            return null;
-    }
-
-    // Before/After CREATE Event Hooks for Sub-Classes to Override
-    protected async BeforeCreate(dataSource: DataSource, input: CreateUserNotificationInput): Promise<boolean> {
-        return true;
-    }
-    protected async AfterCreate(dataSource: DataSource, input: CreateUserNotificationInput) {
+        return this.CreateRecord('User Notifications', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => UserNotification_)
@@ -13584,55 +11683,13 @@ export class UserNotificationResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <UserNotificationEntity>await new Metadata().GetEntityObject('User Notifications', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for User Notifications
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateUserNotificationInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateUserNotificationInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('User Notifications', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => UserNotification_)
-    async DeleteUserNotification(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <UserNotificationEntity>await new Metadata().GetEntityObject('User Notifications', this.GetUserFromPayload(userPayload));
-            await entityObject.Load(ID);
-            const returnValue = entityObject.GetAll(); // grab the values before we delete so we can return last state before delete if we are successful.
-            if (await entityObject.Delete()) {
-                await this.AfterDelete(dataSource, ID); // fire event
-                return returnValue;
-            }
-            else 
-                return null; // delete failed, this will cause an exception
-        }
-        else
-            return null; // BeforeDelete canceled the operation, this will cause an exception
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeDelete(dataSource: DataSource, ID: number): Promise<boolean> {
-        const i = ID, d = dataSource; // prevent error;
-        return true;
-    }
-    protected async AfterDelete(dataSource: DataSource, ID: number) {
-        const i = ID, d = dataSource; // prevent error
+    async DeleteUserNotification(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('User Notifications', key, options, dataSource, userPayload, pubSub);
     }
     
 }
@@ -13675,16 +11732,16 @@ export class SchemaInfo_ {
 export class CreateSchemaInfoInput {
     @Field()
     SchemaName: string;
-    
+
     @Field(() => Int)
     EntityIDMin: number;
-    
+
     @Field(() => Int)
     EntityIDMax: number;
-    
+
     @Field({ nullable: true })
-    Comments: string;
-    }
+    Comments?: string;
+}
     
         
 //****************************************************************************
@@ -13694,19 +11751,22 @@ export class CreateSchemaInfoInput {
 export class UpdateSchemaInfoInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field()
     SchemaName: string;
-    
+
     @Field(() => Int)
     EntityIDMin: number;
-    
+
     @Field(() => Int)
     EntityIDMax: number;
-    
+
     @Field({ nullable: true })
-    Comments: string;
-    }
+    Comments?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for Schema Info
@@ -13766,28 +11826,7 @@ export class SchemaInfoResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext, 
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <SchemaInfoEntity>await new Metadata().GetEntityObject('Schema Info', this.GetUserFromPayload(userPayload));
-            await entityObject.NewRecord();
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire the AfterCreate event and then return all the data
-                await this.AfterCreate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else 
-                // save failed, return null
-                return null;
-        }
-        else    
-            return null;
-    }
-
-    // Before/After CREATE Event Hooks for Sub-Classes to Override
-    protected async BeforeCreate(dataSource: DataSource, input: CreateSchemaInfoInput): Promise<boolean> {
-        return true;
-    }
-    protected async AfterCreate(dataSource: DataSource, input: CreateSchemaInfoInput) {
+        return this.CreateRecord('Schema Info', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => SchemaInfo_)
@@ -13796,29 +11835,7 @@ export class SchemaInfoResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <SchemaInfoEntity>await new Metadata().GetEntityObject('Schema Info', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Schema Info
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateSchemaInfoInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateSchemaInfoInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('Schema Info', input, dataSource, userPayload, pubSub);
     }
     
 }
@@ -13866,16 +11883,16 @@ export class CompanyIntegrationRecordMap_ {
 export class CreateCompanyIntegrationRecordMapInput {
     @Field(() => Int)
     CompanyIntegrationID: number;
-    
+
     @Field()
     ExternalSystemRecordID: string;
-    
+
     @Field(() => Int)
     EntityID: number;
-    
+
     @Field()
     EntityRecordID: string;
-    }
+}
     
         
 //****************************************************************************
@@ -13885,19 +11902,22 @@ export class CreateCompanyIntegrationRecordMapInput {
 export class UpdateCompanyIntegrationRecordMapInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field(() => Int)
     CompanyIntegrationID: number;
-    
+
     @Field()
     ExternalSystemRecordID: string;
-    
+
     @Field(() => Int)
     EntityID: number;
-    
+
     @Field()
     EntityRecordID: string;
-    }
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for Company Integration Record Maps
@@ -13957,28 +11977,7 @@ export class CompanyIntegrationRecordMapResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext, 
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <CompanyIntegrationRecordMapEntity>await new Metadata().GetEntityObject('Company Integration Record Maps', this.GetUserFromPayload(userPayload));
-            await entityObject.NewRecord();
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire the AfterCreate event and then return all the data
-                await this.AfterCreate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else 
-                // save failed, return null
-                return null;
-        }
-        else    
-            return null;
-    }
-
-    // Before/After CREATE Event Hooks for Sub-Classes to Override
-    protected async BeforeCreate(dataSource: DataSource, input: CreateCompanyIntegrationRecordMapInput): Promise<boolean> {
-        return true;
-    }
-    protected async AfterCreate(dataSource: DataSource, input: CreateCompanyIntegrationRecordMapInput) {
+        return this.CreateRecord('Company Integration Record Maps', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => CompanyIntegrationRecordMap_)
@@ -13987,29 +11986,7 @@ export class CompanyIntegrationRecordMapResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <CompanyIntegrationRecordMapEntity>await new Metadata().GetEntityObject('Company Integration Record Maps', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Company Integration Record Maps
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateCompanyIntegrationRecordMapInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateCompanyIntegrationRecordMapInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('Company Integration Record Maps', input, dataSource, userPayload, pubSub);
     }
     
 }
@@ -14088,34 +12065,34 @@ export class RecordMergeLog_ {
 export class CreateRecordMergeLogInput {
     @Field(() => Int)
     EntityID: number;
-    
+
     @Field()
     SurvivingRecordID: string;
-    
+
     @Field(() => Int)
     InitiatedByUserID: number;
-    
+
     @Field()
     ApprovalStatus: string;
-    
+
     @Field(() => Int, { nullable: true })
-    ApprovedByUserID: number;
-    
+    ApprovedByUserID?: number;
+
     @Field()
     ProcessingStatus: string;
-    
+
     @Field()
     ProcessingStartedAt: Date;
-    
+
     @Field({ nullable: true })
-    ProcessingEndedAt: Date;
-    
+    ProcessingEndedAt?: Date;
+
     @Field({ nullable: true })
-    ProcessingLog: string;
-    
+    ProcessingLog?: string;
+
     @Field({ nullable: true })
-    Comments: string;
-    }
+    Comments?: string;
+}
     
         
 //****************************************************************************
@@ -14125,37 +12102,40 @@ export class CreateRecordMergeLogInput {
 export class UpdateRecordMergeLogInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field(() => Int)
     EntityID: number;
-    
+
     @Field()
     SurvivingRecordID: string;
-    
+
     @Field(() => Int)
     InitiatedByUserID: number;
-    
+
     @Field()
     ApprovalStatus: string;
-    
+
     @Field(() => Int, { nullable: true })
-    ApprovedByUserID: number;
-    
+    ApprovedByUserID?: number;
+
     @Field()
     ProcessingStatus: string;
-    
+
     @Field()
     ProcessingStartedAt: Date;
-    
+
     @Field({ nullable: true })
-    ProcessingEndedAt: Date;
-    
+    ProcessingEndedAt?: Date;
+
     @Field({ nullable: true })
-    ProcessingLog: string;
-    
+    ProcessingLog?: string;
+
     @Field({ nullable: true })
-    Comments: string;
-    }
+    Comments?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for Record Merge Logs
@@ -14231,28 +12211,7 @@ export class RecordMergeLogResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext, 
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <RecordMergeLogEntity>await new Metadata().GetEntityObject('Record Merge Logs', this.GetUserFromPayload(userPayload));
-            await entityObject.NewRecord();
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire the AfterCreate event and then return all the data
-                await this.AfterCreate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else 
-                // save failed, return null
-                return null;
-        }
-        else    
-            return null;
-    }
-
-    // Before/After CREATE Event Hooks for Sub-Classes to Override
-    protected async BeforeCreate(dataSource: DataSource, input: CreateRecordMergeLogInput): Promise<boolean> {
-        return true;
-    }
-    protected async AfterCreate(dataSource: DataSource, input: CreateRecordMergeLogInput) {
+        return this.CreateRecord('Record Merge Logs', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => RecordMergeLog_)
@@ -14261,29 +12220,7 @@ export class RecordMergeLogResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <RecordMergeLogEntity>await new Metadata().GetEntityObject('Record Merge Logs', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Record Merge Logs
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateRecordMergeLogInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateRecordMergeLogInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('Record Merge Logs', input, dataSource, userPayload, pubSub);
     }
     
 }
@@ -14327,16 +12264,16 @@ export class RecordMergeDeletionLog_ {
 export class CreateRecordMergeDeletionLogInput {
     @Field(() => Int)
     RecordMergeLogID: number;
-    
+
     @Field()
     DeletedRecordID: string;
-    
+
     @Field()
     Status: string;
-    
+
     @Field({ nullable: true })
-    ProcessingLog: string;
-    }
+    ProcessingLog?: string;
+}
     
         
 //****************************************************************************
@@ -14346,19 +12283,22 @@ export class CreateRecordMergeDeletionLogInput {
 export class UpdateRecordMergeDeletionLogInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field(() => Int)
     RecordMergeLogID: number;
-    
+
     @Field()
     DeletedRecordID: string;
-    
+
     @Field()
     Status: string;
-    
+
     @Field({ nullable: true })
-    ProcessingLog: string;
-    }
+    ProcessingLog?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for Record Merge Deletion Logs
@@ -14418,28 +12358,7 @@ export class RecordMergeDeletionLogResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext, 
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <RecordMergeDeletionLogEntity>await new Metadata().GetEntityObject('Record Merge Deletion Logs', this.GetUserFromPayload(userPayload));
-            await entityObject.NewRecord();
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire the AfterCreate event and then return all the data
-                await this.AfterCreate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else 
-                // save failed, return null
-                return null;
-        }
-        else    
-            return null;
-    }
-
-    // Before/After CREATE Event Hooks for Sub-Classes to Override
-    protected async BeforeCreate(dataSource: DataSource, input: CreateRecordMergeDeletionLogInput): Promise<boolean> {
-        return true;
-    }
-    protected async AfterCreate(dataSource: DataSource, input: CreateRecordMergeDeletionLogInput) {
+        return this.CreateRecord('Record Merge Deletion Logs', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => RecordMergeDeletionLog_)
@@ -14448,29 +12367,7 @@ export class RecordMergeDeletionLogResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <RecordMergeDeletionLogEntity>await new Metadata().GetEntityObject('Record Merge Deletion Logs', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Record Merge Deletion Logs
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateRecordMergeDeletionLogInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateRecordMergeDeletionLogInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('Record Merge Deletion Logs', input, dataSource, userPayload, pubSub);
     }
     
 }
@@ -14548,40 +12445,40 @@ export class QueryField_ {
 export class CreateQueryFieldInput {
     @Field(() => Int)
     QueryID: number;
-    
+
     @Field()
     Name: string;
-    
+
     @Field({ nullable: true })
-    Description: string;
-    
+    Description?: string;
+
     @Field(() => Int)
     Sequence: number;
-    
+
     @Field()
     SQLBaseType: string;
-    
+
     @Field()
     SQLFullType: string;
-    
+
     @Field(() => Int, { nullable: true })
-    SourceEntityID: number;
-    
+    SourceEntityID?: number;
+
     @Field({ nullable: true })
-    SourceFieldName: string;
-    
+    SourceFieldName?: string;
+
     @Field(() => Boolean)
     IsComputed: boolean;
-    
+
     @Field({ nullable: true })
-    ComputationDescription: string;
-    
+    ComputationDescription?: string;
+
     @Field(() => Boolean)
     IsSummary: boolean;
-    
+
     @Field({ nullable: true })
-    SummaryDescription: string;
-    }
+    SummaryDescription?: string;
+}
     
         
 //****************************************************************************
@@ -14591,43 +12488,46 @@ export class CreateQueryFieldInput {
 export class UpdateQueryFieldInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field(() => Int)
     QueryID: number;
-    
+
     @Field()
     Name: string;
-    
+
     @Field({ nullable: true })
-    Description: string;
-    
+    Description?: string;
+
     @Field(() => Int)
     Sequence: number;
-    
+
     @Field()
     SQLBaseType: string;
-    
+
     @Field()
     SQLFullType: string;
-    
+
     @Field(() => Int, { nullable: true })
-    SourceEntityID: number;
-    
+    SourceEntityID?: number;
+
     @Field({ nullable: true })
-    SourceFieldName: string;
-    
+    SourceFieldName?: string;
+
     @Field(() => Boolean)
     IsComputed: boolean;
-    
+
     @Field({ nullable: true })
-    ComputationDescription: string;
-    
+    ComputationDescription?: string;
+
     @Field(() => Boolean)
     IsSummary: boolean;
-    
+
     @Field({ nullable: true })
-    SummaryDescription: string;
-    }
+    SummaryDescription?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for Query Fields
@@ -14687,28 +12587,7 @@ export class QueryFieldResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext, 
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <QueryFieldEntity>await new Metadata().GetEntityObject('Query Fields', this.GetUserFromPayload(userPayload));
-            await entityObject.NewRecord();
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire the AfterCreate event and then return all the data
-                await this.AfterCreate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else 
-                // save failed, return null
-                return null;
-        }
-        else    
-            return null;
-    }
-
-    // Before/After CREATE Event Hooks for Sub-Classes to Override
-    protected async BeforeCreate(dataSource: DataSource, input: CreateQueryFieldInput): Promise<boolean> {
-        return true;
-    }
-    protected async AfterCreate(dataSource: DataSource, input: CreateQueryFieldInput) {
+        return this.CreateRecord('Query Fields', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => QueryField_)
@@ -14717,29 +12596,7 @@ export class QueryFieldResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <QueryFieldEntity>await new Metadata().GetEntityObject('Query Fields', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Query Fields
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateQueryFieldInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateQueryFieldInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('Query Fields', input, dataSource, userPayload, pubSub);
     }
     
 }
@@ -14796,16 +12653,16 @@ export class QueryCategory_ {
 export class CreateQueryCategoryInput {
     @Field()
     Name: string;
-    
+
     @Field(() => Int, { nullable: true })
-    ParentID: number;
-    
+    ParentID?: number;
+
     @Field({ nullable: true })
-    Description: string;
-    
+    Description?: string;
+
     @Field(() => Int)
     UserID: number;
-    }
+}
     
         
 //****************************************************************************
@@ -14815,19 +12672,22 @@ export class CreateQueryCategoryInput {
 export class UpdateQueryCategoryInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field()
     Name: string;
-    
+
     @Field(() => Int, { nullable: true })
-    ParentID: number;
-    
+    ParentID?: number;
+
     @Field({ nullable: true })
-    Description: string;
-    
+    Description?: string;
+
     @Field(() => Int)
     UserID: number;
-    }
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for Query Categories
@@ -14903,28 +12763,7 @@ export class QueryCategoryResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext, 
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <QueryCategoryEntity>await new Metadata().GetEntityObject('Query Categories', this.GetUserFromPayload(userPayload));
-            await entityObject.NewRecord();
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire the AfterCreate event and then return all the data
-                await this.AfterCreate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else 
-                // save failed, return null
-                return null;
-        }
-        else    
-            return null;
-    }
-
-    // Before/After CREATE Event Hooks for Sub-Classes to Override
-    protected async BeforeCreate(dataSource: DataSource, input: CreateQueryCategoryInput): Promise<boolean> {
-        return true;
-    }
-    protected async AfterCreate(dataSource: DataSource, input: CreateQueryCategoryInput) {
+        return this.CreateRecord('Query Categories', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => QueryCategory_)
@@ -14933,55 +12772,13 @@ export class QueryCategoryResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <QueryCategoryEntity>await new Metadata().GetEntityObject('Query Categories', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Query Categories
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateQueryCategoryInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateQueryCategoryInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('Query Categories', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => QueryCategory_)
-    async DeleteQueryCategory(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <QueryCategoryEntity>await new Metadata().GetEntityObject('Query Categories', this.GetUserFromPayload(userPayload));
-            await entityObject.Load(ID);
-            const returnValue = entityObject.GetAll(); // grab the values before we delete so we can return last state before delete if we are successful.
-            if (await entityObject.Delete()) {
-                await this.AfterDelete(dataSource, ID); // fire event
-                return returnValue;
-            }
-            else 
-                return null; // delete failed, this will cause an exception
-        }
-        else
-            return null; // BeforeDelete canceled the operation, this will cause an exception
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeDelete(dataSource: DataSource, ID: number): Promise<boolean> {
-        const i = ID, d = dataSource; // prevent error;
-        return true;
-    }
-    protected async AfterDelete(dataSource: DataSource, ID: number) {
-        const i = ID, d = dataSource; // prevent error
+    async DeleteQueryCategory(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Query Categories', key, options, dataSource, userPayload, pubSub);
     }
     
 }
@@ -15050,28 +12847,28 @@ export class Query_ {
 export class CreateQueryInput {
     @Field()
     Name: string;
-    
+
     @Field({ nullable: true })
-    Description: string;
-    
+    Description?: string;
+
     @Field(() => Int, { nullable: true })
-    CategoryID: number;
-    
+    CategoryID?: number;
+
     @Field({ nullable: true })
-    SQL: string;
-    
+    SQL?: string;
+
     @Field({ nullable: true })
-    OriginalSQL: string;
-    
+    OriginalSQL?: string;
+
     @Field({ nullable: true })
-    Feedback: string;
-    
+    Feedback?: string;
+
     @Field()
     Status: string;
-    
+
     @Field(() => Int, { nullable: true })
-    QualityRank: number;
-    }
+    QualityRank?: number;
+}
     
         
 //****************************************************************************
@@ -15081,31 +12878,34 @@ export class CreateQueryInput {
 export class UpdateQueryInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field()
     Name: string;
-    
+
     @Field({ nullable: true })
-    Description: string;
-    
+    Description?: string;
+
     @Field(() => Int, { nullable: true })
-    CategoryID: number;
-    
+    CategoryID?: number;
+
     @Field({ nullable: true })
-    SQL: string;
-    
+    SQL?: string;
+
     @Field({ nullable: true })
-    OriginalSQL: string;
-    
+    OriginalSQL?: string;
+
     @Field({ nullable: true })
-    Feedback: string;
-    
+    Feedback?: string;
+
     @Field()
     Status: string;
-    
+
     @Field(() => Int, { nullable: true })
-    QualityRank: number;
-    }
+    QualityRank?: number;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for Queries
@@ -15189,28 +12989,7 @@ export class QueryResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext, 
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <QueryEntity>await new Metadata().GetEntityObject('Queries', this.GetUserFromPayload(userPayload));
-            await entityObject.NewRecord();
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire the AfterCreate event and then return all the data
-                await this.AfterCreate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else 
-                // save failed, return null
-                return null;
-        }
-        else    
-            return null;
-    }
-
-    // Before/After CREATE Event Hooks for Sub-Classes to Override
-    protected async BeforeCreate(dataSource: DataSource, input: CreateQueryInput): Promise<boolean> {
-        return true;
-    }
-    protected async AfterCreate(dataSource: DataSource, input: CreateQueryInput) {
+        return this.CreateRecord('Queries', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => Query_)
@@ -15219,29 +12998,7 @@ export class QueryResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <QueryEntity>await new Metadata().GetEntityObject('Queries', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Queries
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateQueryInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateQueryInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('Queries', input, dataSource, userPayload, pubSub);
     }
     
 }
@@ -15278,10 +13035,10 @@ export class QueryPermission_ {
 export class CreateQueryPermissionInput {
     @Field(() => Int)
     QueryID: number;
-    
+
     @Field()
     RoleName: string;
-    }
+}
     
         
 //****************************************************************************
@@ -15291,13 +13048,16 @@ export class CreateQueryPermissionInput {
 export class UpdateQueryPermissionInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field(() => Int)
     QueryID: number;
-    
+
     @Field()
     RoleName: string;
-    }
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for Query Permissions
@@ -15357,28 +13117,7 @@ export class QueryPermissionResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext, 
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <QueryPermissionEntity>await new Metadata().GetEntityObject('Query Permissions', this.GetUserFromPayload(userPayload));
-            await entityObject.NewRecord();
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire the AfterCreate event and then return all the data
-                await this.AfterCreate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else 
-                // save failed, return null
-                return null;
-        }
-        else    
-            return null;
-    }
-
-    // Before/After CREATE Event Hooks for Sub-Classes to Override
-    protected async BeforeCreate(dataSource: DataSource, input: CreateQueryPermissionInput): Promise<boolean> {
-        return true;
-    }
-    protected async AfterCreate(dataSource: DataSource, input: CreateQueryPermissionInput) {
+        return this.CreateRecord('Query Permissions', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => QueryPermission_)
@@ -15387,29 +13126,7 @@ export class QueryPermissionResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <QueryPermissionEntity>await new Metadata().GetEntityObject('Query Permissions', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Query Permissions
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateQueryPermissionInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateQueryPermissionInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('Query Permissions', input, dataSource, userPayload, pubSub);
     }
     
 }
@@ -15460,16 +13177,16 @@ export class VectorIndex_ {
 export class CreateVectorIndexInput {
     @Field()
     Name: string;
-    
+
     @Field({ nullable: true })
-    Description: string;
-    
+    Description?: string;
+
     @Field(() => Int)
     VectorDatabaseID: number;
-    
+
     @Field(() => Int)
     EmbeddingModelID: number;
-    }
+}
     
         
 //****************************************************************************
@@ -15479,19 +13196,22 @@ export class CreateVectorIndexInput {
 export class UpdateVectorIndexInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field()
     Name: string;
-    
+
     @Field({ nullable: true })
-    Description: string;
-    
+    Description?: string;
+
     @Field(() => Int)
     VectorDatabaseID: number;
-    
+
     @Field(() => Int)
     EmbeddingModelID: number;
-    }
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for Vector Indexes
@@ -15551,28 +13271,7 @@ export class VectorIndexResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext, 
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <VectorIndexEntity>await new Metadata().GetEntityObject('Vector Indexes', this.GetUserFromPayload(userPayload));
-            await entityObject.NewRecord();
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire the AfterCreate event and then return all the data
-                await this.AfterCreate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else 
-                // save failed, return null
-                return null;
-        }
-        else    
-            return null;
-    }
-
-    // Before/After CREATE Event Hooks for Sub-Classes to Override
-    protected async BeforeCreate(dataSource: DataSource, input: CreateVectorIndexInput): Promise<boolean> {
-        return true;
-    }
-    protected async AfterCreate(dataSource: DataSource, input: CreateVectorIndexInput) {
+        return this.CreateRecord('Vector Indexes', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => VectorIndex_)
@@ -15581,29 +13280,7 @@ export class VectorIndexResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <VectorIndexEntity>await new Metadata().GetEntityObject('Vector Indexes', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Vector Indexes
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateVectorIndexInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateVectorIndexInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('Vector Indexes', input, dataSource, userPayload, pubSub);
     }
     
 }
@@ -15643,10 +13320,10 @@ export class EntityDocumentType_ {
 export class CreateEntityDocumentTypeInput {
     @Field()
     Name: string;
-    
+
     @Field({ nullable: true })
-    Description: string;
-    }
+    Description?: string;
+}
     
         
 //****************************************************************************
@@ -15656,13 +13333,16 @@ export class CreateEntityDocumentTypeInput {
 export class UpdateEntityDocumentTypeInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field()
     Name: string;
-    
+
     @Field({ nullable: true })
-    Description: string;
-    }
+    Description?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for Entity Document Types
@@ -15730,28 +13410,7 @@ export class EntityDocumentTypeResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext, 
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <EntityDocumentTypeEntity>await new Metadata().GetEntityObject('Entity Document Types', this.GetUserFromPayload(userPayload));
-            await entityObject.NewRecord();
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire the AfterCreate event and then return all the data
-                await this.AfterCreate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else 
-                // save failed, return null
-                return null;
-        }
-        else    
-            return null;
-    }
-
-    // Before/After CREATE Event Hooks for Sub-Classes to Override
-    protected async BeforeCreate(dataSource: DataSource, input: CreateEntityDocumentTypeInput): Promise<boolean> {
-        return true;
-    }
-    protected async AfterCreate(dataSource: DataSource, input: CreateEntityDocumentTypeInput) {
+        return this.CreateRecord('Entity Document Types', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => EntityDocumentType_)
@@ -15760,29 +13419,7 @@ export class EntityDocumentTypeResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <EntityDocumentTypeEntity>await new Metadata().GetEntityObject('Entity Document Types', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Entity Document Types
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateEntityDocumentTypeInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateEntityDocumentTypeInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('Entity Document Types', input, dataSource, userPayload, pubSub);
     }
     
 }
@@ -15831,16 +13468,16 @@ export class EntityDocumentRun_ {
 export class CreateEntityDocumentRunInput {
     @Field(() => Int)
     EntityDocumentID: number;
-    
+
     @Field({ nullable: true })
-    StartedAt: Date;
-    
+    StartedAt?: Date;
+
     @Field({ nullable: true })
-    EndedAt: Date;
-    
+    EndedAt?: Date;
+
     @Field()
     Status: string;
-    }
+}
     
         
 //****************************************************************************
@@ -15850,19 +13487,22 @@ export class CreateEntityDocumentRunInput {
 export class UpdateEntityDocumentRunInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field(() => Int)
     EntityDocumentID: number;
-    
+
     @Field({ nullable: true })
-    StartedAt: Date;
-    
+    StartedAt?: Date;
+
     @Field({ nullable: true })
-    EndedAt: Date;
-    
+    EndedAt?: Date;
+
     @Field()
     Status: string;
-    }
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for Entity Document Runs
@@ -15922,28 +13562,7 @@ export class EntityDocumentRunResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext, 
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <EntityDocumentRunEntity>await new Metadata().GetEntityObject('Entity Document Runs', this.GetUserFromPayload(userPayload));
-            await entityObject.NewRecord();
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire the AfterCreate event and then return all the data
-                await this.AfterCreate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else 
-                // save failed, return null
-                return null;
-        }
-        else    
-            return null;
-    }
-
-    // Before/After CREATE Event Hooks for Sub-Classes to Override
-    protected async BeforeCreate(dataSource: DataSource, input: CreateEntityDocumentRunInput): Promise<boolean> {
-        return true;
-    }
-    protected async AfterCreate(dataSource: DataSource, input: CreateEntityDocumentRunInput) {
+        return this.CreateRecord('Entity Document Runs', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => EntityDocumentRun_)
@@ -15952,29 +13571,7 @@ export class EntityDocumentRunResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <EntityDocumentRunEntity>await new Metadata().GetEntityObject('Entity Document Runs', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Entity Document Runs
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateEntityDocumentRunInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateEntityDocumentRunInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('Entity Document Runs', input, dataSource, userPayload, pubSub);
     }
     
 }
@@ -16025,16 +13622,16 @@ export class VectorDatabase_ {
 export class CreateVectorDatabaseInput {
     @Field()
     Name: string;
-    
+
     @Field({ nullable: true })
-    Description: string;
-    
+    Description?: string;
+
     @Field({ nullable: true })
-    DefaultURL: string;
-    
+    DefaultURL?: string;
+
     @Field({ nullable: true })
-    ClassKey: string;
-    }
+    ClassKey?: string;
+}
     
         
 //****************************************************************************
@@ -16044,19 +13641,22 @@ export class CreateVectorDatabaseInput {
 export class UpdateVectorDatabaseInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field()
     Name: string;
-    
+
     @Field({ nullable: true })
-    Description: string;
-    
+    Description?: string;
+
     @Field({ nullable: true })
-    DefaultURL: string;
-    
+    DefaultURL?: string;
+
     @Field({ nullable: true })
-    ClassKey: string;
-    }
+    ClassKey?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for Vector Databases
@@ -16132,28 +13732,7 @@ export class VectorDatabaseResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext, 
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <VectorDatabaseEntity>await new Metadata().GetEntityObject('Vector Databases', this.GetUserFromPayload(userPayload));
-            await entityObject.NewRecord();
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire the AfterCreate event and then return all the data
-                await this.AfterCreate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else 
-                // save failed, return null
-                return null;
-        }
-        else    
-            return null;
-    }
-
-    // Before/After CREATE Event Hooks for Sub-Classes to Override
-    protected async BeforeCreate(dataSource: DataSource, input: CreateVectorDatabaseInput): Promise<boolean> {
-        return true;
-    }
-    protected async AfterCreate(dataSource: DataSource, input: CreateVectorDatabaseInput) {
+        return this.CreateRecord('Vector Databases', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => VectorDatabase_)
@@ -16162,29 +13741,7 @@ export class VectorDatabaseResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <VectorDatabaseEntity>await new Metadata().GetEntityObject('Vector Databases', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Vector Databases
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateVectorDatabaseInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateVectorDatabaseInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('Vector Databases', input, dataSource, userPayload, pubSub);
     }
     
 }
@@ -16241,28 +13798,28 @@ export class EntityRecordDocument_ {
 export class CreateEntityRecordDocumentInput {
     @Field(() => Int)
     EntityID: number;
-    
+
     @Field()
     RecordID: string;
-    
+
     @Field({ nullable: true })
-    DocumentText: string;
-    
+    DocumentText?: string;
+
     @Field(() => Int)
     VectorIndexID: number;
-    
+
     @Field({ nullable: true })
-    VectorID: string;
-    
+    VectorID?: string;
+
     @Field({ nullable: true })
-    VectorJSON: string;
-    
+    VectorJSON?: string;
+
     @Field()
     EntityRecordUpdatedAt: Date;
-    
+
     @Field(() => Int)
     EntityDocumentID: number;
-    }
+}
     
         
 //****************************************************************************
@@ -16272,31 +13829,34 @@ export class CreateEntityRecordDocumentInput {
 export class UpdateEntityRecordDocumentInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field(() => Int)
     EntityID: number;
-    
+
     @Field()
     RecordID: string;
-    
+
     @Field({ nullable: true })
-    DocumentText: string;
-    
+    DocumentText?: string;
+
     @Field(() => Int)
     VectorIndexID: number;
-    
+
     @Field({ nullable: true })
-    VectorID: string;
-    
+    VectorID?: string;
+
     @Field({ nullable: true })
-    VectorJSON: string;
-    
+    VectorJSON?: string;
+
     @Field()
     EntityRecordUpdatedAt: Date;
-    
+
     @Field(() => Int)
     EntityDocumentID: number;
-    }
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for Entity Record Documents
@@ -16356,28 +13916,7 @@ export class EntityRecordDocumentResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext, 
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <EntityRecordDocumentEntity>await new Metadata().GetEntityObject('Entity Record Documents', this.GetUserFromPayload(userPayload));
-            await entityObject.NewRecord();
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire the AfterCreate event and then return all the data
-                await this.AfterCreate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else 
-                // save failed, return null
-                return null;
-        }
-        else    
-            return null;
-    }
-
-    // Before/After CREATE Event Hooks for Sub-Classes to Override
-    protected async BeforeCreate(dataSource: DataSource, input: CreateEntityRecordDocumentInput): Promise<boolean> {
-        return true;
-    }
-    protected async AfterCreate(dataSource: DataSource, input: CreateEntityRecordDocumentInput) {
+        return this.CreateRecord('Entity Record Documents', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => EntityRecordDocument_)
@@ -16386,29 +13925,7 @@ export class EntityRecordDocumentResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <EntityRecordDocumentEntity>await new Metadata().GetEntityObject('Entity Record Documents', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Entity Record Documents
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateEntityRecordDocumentInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateEntityRecordDocumentInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('Entity Record Documents', input, dataSource, userPayload, pubSub);
     }
     
 }
@@ -16481,31 +13998,31 @@ export class EntityDocument_ {
 export class CreateEntityDocumentInput {
     @Field()
     Name: string;
-    
+
     @Field(() => Int)
     EntityID: number;
-    
+
     @Field(() => Int)
     TypeID: number;
-    
+
     @Field()
     Status: string;
-    
+
     @Field({ nullable: true })
-    Template: string;
-    
+    Template?: string;
+
     @Field(() => Int)
     VectorDatabaseID: number;
-    
+
     @Field(() => Int)
     AIModelID: number;
-    
+
     @Field(() => Float)
     PotentialMatchThreshold: number;
-    
+
     @Field(() => Float)
     AbsoluteMatchThreshold: number;
-    }
+}
     
         
 //****************************************************************************
@@ -16515,34 +14032,37 @@ export class CreateEntityDocumentInput {
 export class UpdateEntityDocumentInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field()
     Name: string;
-    
+
     @Field(() => Int)
     EntityID: number;
-    
+
     @Field(() => Int)
     TypeID: number;
-    
+
     @Field()
     Status: string;
-    
+
     @Field({ nullable: true })
-    Template: string;
-    
+    Template?: string;
+
     @Field(() => Int)
     VectorDatabaseID: number;
-    
+
     @Field(() => Int)
     AIModelID: number;
-    
+
     @Field(() => Float)
     PotentialMatchThreshold: number;
-    
+
     @Field(() => Float)
     AbsoluteMatchThreshold: number;
-    }
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for Entity Documents
@@ -16618,28 +14138,7 @@ export class EntityDocumentResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext, 
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <EntityDocumentEntity>await new Metadata().GetEntityObject('Entity Documents', this.GetUserFromPayload(userPayload));
-            await entityObject.NewRecord();
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire the AfterCreate event and then return all the data
-                await this.AfterCreate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else 
-                // save failed, return null
-                return null;
-        }
-        else    
-            return null;
-    }
-
-    // Before/After CREATE Event Hooks for Sub-Classes to Override
-    protected async BeforeCreate(dataSource: DataSource, input: CreateEntityDocumentInput): Promise<boolean> {
-        return true;
-    }
-    protected async AfterCreate(dataSource: DataSource, input: CreateEntityDocumentInput) {
+        return this.CreateRecord('Entity Documents', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => EntityDocument_)
@@ -16648,29 +14147,7 @@ export class EntityDocumentResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <EntityDocumentEntity>await new Metadata().GetEntityObject('Entity Documents', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Entity Documents
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateEntityDocumentInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateEntityDocumentInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('Entity Documents', input, dataSource, userPayload, pubSub);
     }
     
 }
@@ -16746,31 +14223,31 @@ export class DataContextItem_ {
 export class CreateDataContextItemInput {
     @Field(() => Int)
     DataContextID: number;
-    
+
     @Field()
     Type: string;
-    
+
     @Field(() => Int, { nullable: true })
-    ViewID: number;
-    
+    ViewID?: number;
+
     @Field(() => Int, { nullable: true })
-    QueryID: number;
-    
+    QueryID?: number;
+
     @Field(() => Int, { nullable: true })
-    EntityID: number;
-    
+    EntityID?: number;
+
     @Field({ nullable: true })
-    RecordID: string;
-    
+    RecordID?: string;
+
     @Field({ nullable: true })
-    SQL: string;
-    
+    SQL?: string;
+
     @Field({ nullable: true })
-    DataJSON: string;
-    
+    DataJSON?: string;
+
     @Field({ nullable: true })
-    LastRefreshedAt: Date;
-    }
+    LastRefreshedAt?: Date;
+}
     
         
 //****************************************************************************
@@ -16780,34 +14257,37 @@ export class CreateDataContextItemInput {
 export class UpdateDataContextItemInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field(() => Int)
     DataContextID: number;
-    
+
     @Field()
     Type: string;
-    
+
     @Field(() => Int, { nullable: true })
-    ViewID: number;
-    
+    ViewID?: number;
+
     @Field(() => Int, { nullable: true })
-    QueryID: number;
-    
+    QueryID?: number;
+
     @Field(() => Int, { nullable: true })
-    EntityID: number;
-    
+    EntityID?: number;
+
     @Field({ nullable: true })
-    RecordID: string;
-    
+    RecordID?: string;
+
     @Field({ nullable: true })
-    SQL: string;
-    
+    SQL?: string;
+
     @Field({ nullable: true })
-    DataJSON: string;
-    
+    DataJSON?: string;
+
     @Field({ nullable: true })
-    LastRefreshedAt: Date;
-    }
+    LastRefreshedAt?: Date;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for Data Context Items
@@ -16867,28 +14347,7 @@ export class DataContextItemResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext, 
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <DataContextItemEntity>await new Metadata().GetEntityObject('Data Context Items', this.GetUserFromPayload(userPayload));
-            await entityObject.NewRecord();
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire the AfterCreate event and then return all the data
-                await this.AfterCreate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else 
-                // save failed, return null
-                return null;
-        }
-        else    
-            return null;
-    }
-
-    // Before/After CREATE Event Hooks for Sub-Classes to Override
-    protected async BeforeCreate(dataSource: DataSource, input: CreateDataContextItemInput): Promise<boolean> {
-        return true;
-    }
-    protected async AfterCreate(dataSource: DataSource, input: CreateDataContextItemInput) {
+        return this.CreateRecord('Data Context Items', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => DataContextItem_)
@@ -16897,55 +14356,13 @@ export class DataContextItemResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <DataContextItemEntity>await new Metadata().GetEntityObject('Data Context Items', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Data Context Items
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateDataContextItemInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateDataContextItemInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('Data Context Items', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => DataContextItem_)
-    async DeleteDataContextItem(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <DataContextItemEntity>await new Metadata().GetEntityObject('Data Context Items', this.GetUserFromPayload(userPayload));
-            await entityObject.Load(ID);
-            const returnValue = entityObject.GetAll(); // grab the values before we delete so we can return last state before delete if we are successful.
-            if (await entityObject.Delete()) {
-                await this.AfterDelete(dataSource, ID); // fire event
-                return returnValue;
-            }
-            else 
-                return null; // delete failed, this will cause an exception
-        }
-        else
-            return null; // BeforeDelete canceled the operation, this will cause an exception
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeDelete(dataSource: DataSource, ID: number): Promise<boolean> {
-        const i = ID, d = dataSource; // prevent error;
-        return true;
-    }
-    protected async AfterDelete(dataSource: DataSource, ID: number) {
-        const i = ID, d = dataSource; // prevent error
+    async DeleteDataContextItem(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Data Context Items', key, options, dataSource, userPayload, pubSub);
     }
     
 }
@@ -16999,16 +14416,16 @@ export class DataContext_ {
 export class CreateDataContextInput {
     @Field()
     Name: string;
-    
+
     @Field(() => Int)
     UserID: number;
-    
+
     @Field({ nullable: true })
-    Description: string;
-    
+    Description?: string;
+
     @Field({ nullable: true })
-    LastRefreshedAt: Date;
-    }
+    LastRefreshedAt?: Date;
+}
     
         
 //****************************************************************************
@@ -17018,19 +14435,22 @@ export class CreateDataContextInput {
 export class UpdateDataContextInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field()
     Name: string;
-    
+
     @Field(() => Int)
     UserID: number;
-    
+
     @Field({ nullable: true })
-    Description: string;
-    
+    Description?: string;
+
     @Field({ nullable: true })
-    LastRefreshedAt: Date;
-    }
+    LastRefreshedAt?: Date;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for Data Contexts
@@ -17106,28 +14526,7 @@ export class DataContextResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext, 
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <DataContextEntity>await new Metadata().GetEntityObject('Data Contexts', this.GetUserFromPayload(userPayload));
-            await entityObject.NewRecord();
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire the AfterCreate event and then return all the data
-                await this.AfterCreate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else 
-                // save failed, return null
-                return null;
-        }
-        else    
-            return null;
-    }
-
-    // Before/After CREATE Event Hooks for Sub-Classes to Override
-    protected async BeforeCreate(dataSource: DataSource, input: CreateDataContextInput): Promise<boolean> {
-        return true;
-    }
-    protected async AfterCreate(dataSource: DataSource, input: CreateDataContextInput) {
+        return this.CreateRecord('Data Contexts', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => DataContext_)
@@ -17136,55 +14535,13 @@ export class DataContextResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <DataContextEntity>await new Metadata().GetEntityObject('Data Contexts', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Data Contexts
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateDataContextInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateDataContextInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('Data Contexts', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => DataContext_)
-    async DeleteDataContext(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <DataContextEntity>await new Metadata().GetEntityObject('Data Contexts', this.GetUserFromPayload(userPayload));
-            await entityObject.Load(ID);
-            const returnValue = entityObject.GetAll(); // grab the values before we delete so we can return last state before delete if we are successful.
-            if (await entityObject.Delete()) {
-                await this.AfterDelete(dataSource, ID); // fire event
-                return returnValue;
-            }
-            else 
-                return null; // delete failed, this will cause an exception
-        }
-        else
-            return null; // BeforeDelete canceled the operation, this will cause an exception
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeDelete(dataSource: DataSource, ID: number): Promise<boolean> {
-        const i = ID, d = dataSource; // prevent error;
-        return true;
-    }
-    protected async AfterDelete(dataSource: DataSource, ID: number) {
-        const i = ID, d = dataSource; // prevent error
+    async DeleteDataContext(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Data Contexts', key, options, dataSource, userPayload, pubSub);
     }
     
 }
@@ -17244,19 +14601,19 @@ export class UserViewCategory_ {
 export class CreateUserViewCategoryInput {
     @Field()
     Name: string;
-    
+
     @Field({ nullable: true })
-    Description: string;
-    
+    Description?: string;
+
     @Field(() => Int, { nullable: true })
-    ParentID: number;
-    
+    ParentID?: number;
+
     @Field(() => Int)
     EntityID: number;
-    
+
     @Field(() => Int)
     UserID: number;
-    }
+}
     
         
 //****************************************************************************
@@ -17266,22 +14623,25 @@ export class CreateUserViewCategoryInput {
 export class UpdateUserViewCategoryInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field()
     Name: string;
-    
+
     @Field({ nullable: true })
-    Description: string;
-    
+    Description?: string;
+
     @Field(() => Int, { nullable: true })
-    ParentID: number;
-    
+    ParentID?: number;
+
     @Field(() => Int)
     EntityID: number;
-    
+
     @Field(() => Int)
     UserID: number;
-    }
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for User View Categories
@@ -17357,28 +14717,7 @@ export class UserViewCategoryResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext, 
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <UserViewCategoryEntity>await new Metadata().GetEntityObject('User View Categories', this.GetUserFromPayload(userPayload));
-            await entityObject.NewRecord();
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire the AfterCreate event and then return all the data
-                await this.AfterCreate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else 
-                // save failed, return null
-                return null;
-        }
-        else    
-            return null;
-    }
-
-    // Before/After CREATE Event Hooks for Sub-Classes to Override
-    protected async BeforeCreate(dataSource: DataSource, input: CreateUserViewCategoryInput): Promise<boolean> {
-        return true;
-    }
-    protected async AfterCreate(dataSource: DataSource, input: CreateUserViewCategoryInput) {
+        return this.CreateRecord('User View Categories', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => UserViewCategory_)
@@ -17387,55 +14726,13 @@ export class UserViewCategoryResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <UserViewCategoryEntity>await new Metadata().GetEntityObject('User View Categories', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for User View Categories
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateUserViewCategoryInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateUserViewCategoryInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('User View Categories', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => UserViewCategory_)
-    async DeleteUserViewCategory(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <UserViewCategoryEntity>await new Metadata().GetEntityObject('User View Categories', this.GetUserFromPayload(userPayload));
-            await entityObject.Load(ID);
-            const returnValue = entityObject.GetAll(); // grab the values before we delete so we can return last state before delete if we are successful.
-            if (await entityObject.Delete()) {
-                await this.AfterDelete(dataSource, ID); // fire event
-                return returnValue;
-            }
-            else 
-                return null; // delete failed, this will cause an exception
-        }
-        else
-            return null; // BeforeDelete canceled the operation, this will cause an exception
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeDelete(dataSource: DataSource, ID: number): Promise<boolean> {
-        const i = ID, d = dataSource; // prevent error;
-        return true;
-    }
-    protected async AfterDelete(dataSource: DataSource, ID: number) {
-        const i = ID, d = dataSource; // prevent error
+    async DeleteUserViewCategory(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('User View Categories', key, options, dataSource, userPayload, pubSub);
     }
     
 }
@@ -17492,16 +14789,16 @@ export class DashboardCategory_ {
 export class CreateDashboardCategoryInput {
     @Field()
     Name: string;
-    
+
     @Field({ nullable: true })
-    Description: string;
-    
+    Description?: string;
+
     @Field(() => Int, { nullable: true })
-    ParentID: number;
-    
+    ParentID?: number;
+
     @Field(() => Int)
     UserID: number;
-    }
+}
     
         
 //****************************************************************************
@@ -17511,19 +14808,22 @@ export class CreateDashboardCategoryInput {
 export class UpdateDashboardCategoryInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field()
     Name: string;
-    
+
     @Field({ nullable: true })
-    Description: string;
-    
+    Description?: string;
+
     @Field(() => Int, { nullable: true })
-    ParentID: number;
-    
+    ParentID?: number;
+
     @Field(() => Int)
     UserID: number;
-    }
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for Dashboard Categories
@@ -17599,28 +14899,7 @@ export class DashboardCategoryResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext, 
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <DashboardCategoryEntity>await new Metadata().GetEntityObject('Dashboard Categories', this.GetUserFromPayload(userPayload));
-            await entityObject.NewRecord();
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire the AfterCreate event and then return all the data
-                await this.AfterCreate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else 
-                // save failed, return null
-                return null;
-        }
-        else    
-            return null;
-    }
-
-    // Before/After CREATE Event Hooks for Sub-Classes to Override
-    protected async BeforeCreate(dataSource: DataSource, input: CreateDashboardCategoryInput): Promise<boolean> {
-        return true;
-    }
-    protected async AfterCreate(dataSource: DataSource, input: CreateDashboardCategoryInput) {
+        return this.CreateRecord('Dashboard Categories', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => DashboardCategory_)
@@ -17629,55 +14908,13 @@ export class DashboardCategoryResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <DashboardCategoryEntity>await new Metadata().GetEntityObject('Dashboard Categories', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Dashboard Categories
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateDashboardCategoryInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateDashboardCategoryInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('Dashboard Categories', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => DashboardCategory_)
-    async DeleteDashboardCategory(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <DashboardCategoryEntity>await new Metadata().GetEntityObject('Dashboard Categories', this.GetUserFromPayload(userPayload));
-            await entityObject.Load(ID);
-            const returnValue = entityObject.GetAll(); // grab the values before we delete so we can return last state before delete if we are successful.
-            if (await entityObject.Delete()) {
-                await this.AfterDelete(dataSource, ID); // fire event
-                return returnValue;
-            }
-            else 
-                return null; // delete failed, this will cause an exception
-        }
-        else
-            return null; // BeforeDelete canceled the operation, this will cause an exception
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeDelete(dataSource: DataSource, ID: number): Promise<boolean> {
-        const i = ID, d = dataSource; // prevent error;
-        return true;
-    }
-    protected async AfterDelete(dataSource: DataSource, ID: number) {
-        const i = ID, d = dataSource; // prevent error
+    async DeleteDashboardCategory(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Dashboard Categories', key, options, dataSource, userPayload, pubSub);
     }
     
 }
@@ -17734,16 +14971,16 @@ export class ReportCategory_ {
 export class CreateReportCategoryInput {
     @Field()
     Name: string;
-    
+
     @Field({ nullable: true })
-    Description: string;
-    
+    Description?: string;
+
     @Field(() => Int, { nullable: true })
-    ParentID: number;
-    
+    ParentID?: number;
+
     @Field(() => Int)
     UserID: number;
-    }
+}
     
         
 //****************************************************************************
@@ -17753,19 +14990,22 @@ export class CreateReportCategoryInput {
 export class UpdateReportCategoryInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field()
     Name: string;
-    
+
     @Field({ nullable: true })
-    Description: string;
-    
+    Description?: string;
+
     @Field(() => Int, { nullable: true })
-    ParentID: number;
-    
+    ParentID?: number;
+
     @Field(() => Int)
     UserID: number;
-    }
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for Report Categories
@@ -17841,28 +15081,7 @@ export class ReportCategoryResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext, 
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <ReportCategoryEntity>await new Metadata().GetEntityObject('Report Categories', this.GetUserFromPayload(userPayload));
-            await entityObject.NewRecord();
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire the AfterCreate event and then return all the data
-                await this.AfterCreate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else 
-                // save failed, return null
-                return null;
-        }
-        else    
-            return null;
-    }
-
-    // Before/After CREATE Event Hooks for Sub-Classes to Override
-    protected async BeforeCreate(dataSource: DataSource, input: CreateReportCategoryInput): Promise<boolean> {
-        return true;
-    }
-    protected async AfterCreate(dataSource: DataSource, input: CreateReportCategoryInput) {
+        return this.CreateRecord('Report Categories', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => ReportCategory_)
@@ -17871,55 +15090,13 @@ export class ReportCategoryResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <ReportCategoryEntity>await new Metadata().GetEntityObject('Report Categories', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Report Categories
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateReportCategoryInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateReportCategoryInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('Report Categories', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => ReportCategory_)
-    async DeleteReportCategory(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <ReportCategoryEntity>await new Metadata().GetEntityObject('Report Categories', this.GetUserFromPayload(userPayload));
-            await entityObject.Load(ID);
-            const returnValue = entityObject.GetAll(); // grab the values before we delete so we can return last state before delete if we are successful.
-            if (await entityObject.Delete()) {
-                await this.AfterDelete(dataSource, ID); // fire event
-                return returnValue;
-            }
-            else 
-                return null; // delete failed, this will cause an exception
-        }
-        else
-            return null; // BeforeDelete canceled the operation, this will cause an exception
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeDelete(dataSource: DataSource, ID: number): Promise<boolean> {
-        const i = ID, d = dataSource; // prevent error;
-        return true;
-    }
-    protected async AfterDelete(dataSource: DataSource, ID: number) {
-        const i = ID, d = dataSource; // prevent error
+    async DeleteReportCategory(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Report Categories', key, options, dataSource, userPayload, pubSub);
     }
     
 }
@@ -17973,22 +15150,22 @@ export class FileStorageProvider_ {
 export class CreateFileStorageProviderInput {
     @Field()
     Name: string;
-    
+
     @Field({ nullable: true })
-    Description: string;
-    
+    Description?: string;
+
     @Field()
     ServerDriverKey: string;
-    
+
     @Field()
     ClientDriverKey: string;
-    
+
     @Field(() => Int)
     Priority: number;
-    
+
     @Field(() => Boolean)
     IsActive: boolean;
-    }
+}
     
         
 //****************************************************************************
@@ -17998,25 +15175,28 @@ export class CreateFileStorageProviderInput {
 export class UpdateFileStorageProviderInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field()
     Name: string;
-    
+
     @Field({ nullable: true })
-    Description: string;
-    
+    Description?: string;
+
     @Field()
     ServerDriverKey: string;
-    
+
     @Field()
     ClientDriverKey: string;
-    
+
     @Field(() => Int)
     Priority: number;
-    
+
     @Field(() => Boolean)
     IsActive: boolean;
-    }
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for File Storage Providers
@@ -18084,28 +15264,7 @@ export class FileStorageProviderResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext, 
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <FileStorageProviderEntity>await new Metadata().GetEntityObject('File Storage Providers', this.GetUserFromPayload(userPayload));
-            await entityObject.NewRecord();
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire the AfterCreate event and then return all the data
-                await this.AfterCreate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else 
-                // save failed, return null
-                return null;
-        }
-        else    
-            return null;
-    }
-
-    // Before/After CREATE Event Hooks for Sub-Classes to Override
-    protected async BeforeCreate(dataSource: DataSource, input: CreateFileStorageProviderInput): Promise<boolean> {
-        return true;
-    }
-    protected async AfterCreate(dataSource: DataSource, input: CreateFileStorageProviderInput) {
+        return this.CreateRecord('File Storage Providers', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => FileStorageProvider_)
@@ -18114,29 +15273,7 @@ export class FileStorageProviderResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <FileStorageProviderEntity>await new Metadata().GetEntityObject('File Storage Providers', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for File Storage Providers
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateFileStorageProviderInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateFileStorageProviderInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('File Storage Providers', input, dataSource, userPayload, pubSub);
     }
     
 }
@@ -18202,25 +15339,25 @@ export class File_ {
 export class CreateFileInput {
     @Field()
     Name: string;
-    
+
     @Field({ nullable: true })
-    Description: string;
-    
+    Description?: string;
+
     @Field(() => Int)
     ProviderID: number;
-    
+
     @Field({ nullable: true })
-    ContentType: string;
-    
+    ContentType?: string;
+
     @Field({ nullable: true })
-    ProviderKey: string;
-    
+    ProviderKey?: string;
+
     @Field(() => Int, { nullable: true })
-    CategoryID: number;
-    
+    CategoryID?: number;
+
     @Field()
     Status: string;
-    }
+}
     
         
 //****************************************************************************
@@ -18230,28 +15367,31 @@ export class CreateFileInput {
 export class UpdateFileInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field()
     Name: string;
-    
+
     @Field({ nullable: true })
-    Description: string;
-    
+    Description?: string;
+
     @Field(() => Int)
     ProviderID: number;
-    
+
     @Field({ nullable: true })
-    ContentType: string;
-    
+    ContentType?: string;
+
     @Field({ nullable: true })
-    ProviderKey: string;
-    
+    ProviderKey?: string;
+
     @Field(() => Int, { nullable: true })
-    CategoryID: number;
-    
+    CategoryID?: number;
+
     @Field()
     Status: string;
-    }
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for Files
@@ -18319,28 +15459,7 @@ export class FileResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext, 
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <FileEntity>await new Metadata().GetEntityObject('Files', this.GetUserFromPayload(userPayload));
-            await entityObject.NewRecord();
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire the AfterCreate event and then return all the data
-                await this.AfterCreate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else 
-                // save failed, return null
-                return null;
-        }
-        else    
-            return null;
-    }
-
-    // Before/After CREATE Event Hooks for Sub-Classes to Override
-    protected async BeforeCreate(dataSource: DataSource, input: CreateFileInput): Promise<boolean> {
-        return true;
-    }
-    protected async AfterCreate(dataSource: DataSource, input: CreateFileInput) {
+        return this.CreateRecord('Files', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => File_)
@@ -18349,55 +15468,13 @@ export class FileResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <FileEntity>await new Metadata().GetEntityObject('Files', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Files
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateFileInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateFileInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('Files', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => File_)
-    async DeleteFile(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <FileEntity>await new Metadata().GetEntityObject('Files', this.GetUserFromPayload(userPayload));
-            await entityObject.Load(ID);
-            const returnValue = entityObject.GetAll(); // grab the values before we delete so we can return last state before delete if we are successful.
-            if (await entityObject.Delete()) {
-                await this.AfterDelete(dataSource, ID); // fire event
-                return returnValue;
-            }
-            else 
-                return null; // delete failed, this will cause an exception
-        }
-        else
-            return null; // BeforeDelete canceled the operation, this will cause an exception
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeDelete(dataSource: DataSource, ID: number): Promise<boolean> {
-        const i = ID, d = dataSource; // prevent error;
-        return true;
-    }
-    protected async AfterDelete(dataSource: DataSource, ID: number) {
-        const i = ID, d = dataSource; // prevent error
+    async DeleteFile(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Files', key, options, dataSource, userPayload, pubSub);
     }
     
 }
@@ -18447,13 +15524,13 @@ export class FileCategory_ {
 export class CreateFileCategoryInput {
     @Field()
     Name: string;
-    
+
     @Field({ nullable: true })
-    Description: string;
-    
+    Description?: string;
+
     @Field(() => Int, { nullable: true })
-    ParentID: number;
-    }
+    ParentID?: number;
+}
     
         
 //****************************************************************************
@@ -18463,16 +15540,19 @@ export class CreateFileCategoryInput {
 export class UpdateFileCategoryInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field()
     Name: string;
-    
+
     @Field({ nullable: true })
-    Description: string;
-    
+    Description?: string;
+
     @Field(() => Int, { nullable: true })
-    ParentID: number;
-    }
+    ParentID?: number;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for File Categories
@@ -18548,28 +15628,7 @@ export class FileCategoryResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext, 
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <FileCategoryEntity>await new Metadata().GetEntityObject('File Categories', this.GetUserFromPayload(userPayload));
-            await entityObject.NewRecord();
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire the AfterCreate event and then return all the data
-                await this.AfterCreate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else 
-                // save failed, return null
-                return null;
-        }
-        else    
-            return null;
-    }
-
-    // Before/After CREATE Event Hooks for Sub-Classes to Override
-    protected async BeforeCreate(dataSource: DataSource, input: CreateFileCategoryInput): Promise<boolean> {
-        return true;
-    }
-    protected async AfterCreate(dataSource: DataSource, input: CreateFileCategoryInput) {
+        return this.CreateRecord('File Categories', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => FileCategory_)
@@ -18578,55 +15637,13 @@ export class FileCategoryResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <FileCategoryEntity>await new Metadata().GetEntityObject('File Categories', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for File Categories
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateFileCategoryInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateFileCategoryInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('File Categories', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => FileCategory_)
-    async DeleteFileCategory(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <FileCategoryEntity>await new Metadata().GetEntityObject('File Categories', this.GetUserFromPayload(userPayload));
-            await entityObject.Load(ID);
-            const returnValue = entityObject.GetAll(); // grab the values before we delete so we can return last state before delete if we are successful.
-            if (await entityObject.Delete()) {
-                await this.AfterDelete(dataSource, ID); // fire event
-                return returnValue;
-            }
-            else 
-                return null; // delete failed, this will cause an exception
-        }
-        else
-            return null; // BeforeDelete canceled the operation, this will cause an exception
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeDelete(dataSource: DataSource, ID: number): Promise<boolean> {
-        const i = ID, d = dataSource; // prevent error;
-        return true;
-    }
-    protected async AfterDelete(dataSource: DataSource, ID: number) {
-        const i = ID, d = dataSource; // prevent error
+    async DeleteFileCategory(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('File Categories', key, options, dataSource, userPayload, pubSub);
     }
     
 }
@@ -18674,13 +15691,13 @@ export class FileEntityRecordLink_ {
 export class CreateFileEntityRecordLinkInput {
     @Field(() => Int)
     FileID: number;
-    
+
     @Field(() => Int)
     EntityID: number;
-    
+
     @Field()
     RecordID: string;
-    }
+}
     
         
 //****************************************************************************
@@ -18690,16 +15707,19 @@ export class CreateFileEntityRecordLinkInput {
 export class UpdateFileEntityRecordLinkInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field(() => Int)
     FileID: number;
-    
+
     @Field(() => Int)
     EntityID: number;
-    
+
     @Field()
     RecordID: string;
-    }
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for File Entity Record Links
@@ -18759,28 +15779,7 @@ export class FileEntityRecordLinkResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext, 
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <FileEntityRecordLinkEntity>await new Metadata().GetEntityObject('File Entity Record Links', this.GetUserFromPayload(userPayload));
-            await entityObject.NewRecord();
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire the AfterCreate event and then return all the data
-                await this.AfterCreate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else 
-                // save failed, return null
-                return null;
-        }
-        else    
-            return null;
-    }
-
-    // Before/After CREATE Event Hooks for Sub-Classes to Override
-    protected async BeforeCreate(dataSource: DataSource, input: CreateFileEntityRecordLinkInput): Promise<boolean> {
-        return true;
-    }
-    protected async AfterCreate(dataSource: DataSource, input: CreateFileEntityRecordLinkInput) {
+        return this.CreateRecord('File Entity Record Links', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => FileEntityRecordLink_)
@@ -18789,29 +15788,7 @@ export class FileEntityRecordLinkResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <FileEntityRecordLinkEntity>await new Metadata().GetEntityObject('File Entity Record Links', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for File Entity Record Links
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateFileEntityRecordLinkInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateFileEntityRecordLinkInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('File Entity Record Links', input, dataSource, userPayload, pubSub);
     }
     
 }
@@ -18872,28 +15849,28 @@ export class VersionInstallation_ {
 export class CreateVersionInstallationInput {
     @Field(() => Int)
     MajorVersion: number;
-    
+
     @Field(() => Int)
     MinorVersion: number;
-    
+
     @Field(() => Int)
     PatchVersion: number;
-    
+
     @Field({ nullable: true })
-    Type: string;
-    
+    Type?: string;
+
     @Field()
     InstalledAt: Date;
-    
+
     @Field()
     Status: string;
-    
+
     @Field({ nullable: true })
-    InstallLog: string;
-    
+    InstallLog?: string;
+
     @Field({ nullable: true })
-    Comments: string;
-    }
+    Comments?: string;
+}
     
         
 //****************************************************************************
@@ -18903,31 +15880,34 @@ export class CreateVersionInstallationInput {
 export class UpdateVersionInstallationInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field(() => Int)
     MajorVersion: number;
-    
+
     @Field(() => Int)
     MinorVersion: number;
-    
+
     @Field(() => Int)
     PatchVersion: number;
-    
+
     @Field({ nullable: true })
-    Type: string;
-    
+    Type?: string;
+
     @Field()
     InstalledAt: Date;
-    
+
     @Field()
     Status: string;
-    
+
     @Field({ nullable: true })
-    InstallLog: string;
-    
+    InstallLog?: string;
+
     @Field({ nullable: true })
-    Comments: string;
-    }
+    Comments?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for Version Installations
@@ -18987,28 +15967,7 @@ export class VersionInstallationResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext, 
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <VersionInstallationEntity>await new Metadata().GetEntityObject('Version Installations', this.GetUserFromPayload(userPayload));
-            await entityObject.NewRecord();
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire the AfterCreate event and then return all the data
-                await this.AfterCreate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else 
-                // save failed, return null
-                return null;
-        }
-        else    
-            return null;
-    }
-
-    // Before/After CREATE Event Hooks for Sub-Classes to Override
-    protected async BeforeCreate(dataSource: DataSource, input: CreateVersionInstallationInput): Promise<boolean> {
-        return true;
-    }
-    protected async AfterCreate(dataSource: DataSource, input: CreateVersionInstallationInput) {
+        return this.CreateRecord('Version Installations', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => VersionInstallation_)
@@ -19017,29 +15976,7 @@ export class VersionInstallationResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <VersionInstallationEntity>await new Metadata().GetEntityObject('Version Installations', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Version Installations
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateVersionInstallationInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateVersionInstallationInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('Version Installations', input, dataSource, userPayload, pubSub);
     }
     
 }
@@ -19106,34 +16043,34 @@ export class DuplicateRunDetailMatch_ {
 export class CreateDuplicateRunDetailMatchInput {
     @Field(() => Int)
     DuplicateRunDetailID: number;
-    
+
     @Field()
     MatchSource: string;
-    
+
     @Field()
     MatchRecordID: string;
-    
+
     @Field(() => Float)
     MatchProbability: number;
-    
+
     @Field()
     MatchedAt: Date;
-    
+
     @Field()
     Action: string;
-    
+
     @Field()
     ApprovalStatus: string;
-    
+
     @Field()
     MergeStatus: string;
-    
+
     @Field()
     MergedAt: Date;
-    
+
     @Field(() => Int, { nullable: true })
-    RecordMergeLogID: number;
-    }
+    RecordMergeLogID?: number;
+}
     
         
 //****************************************************************************
@@ -19143,37 +16080,40 @@ export class CreateDuplicateRunDetailMatchInput {
 export class UpdateDuplicateRunDetailMatchInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field(() => Int)
     DuplicateRunDetailID: number;
-    
+
     @Field()
     MatchSource: string;
-    
+
     @Field()
     MatchRecordID: string;
-    
+
     @Field(() => Float)
     MatchProbability: number;
-    
+
     @Field()
     MatchedAt: Date;
-    
+
     @Field()
     Action: string;
-    
+
     @Field()
     ApprovalStatus: string;
-    
+
     @Field()
     MergeStatus: string;
-    
+
     @Field()
     MergedAt: Date;
-    
+
     @Field(() => Int, { nullable: true })
-    RecordMergeLogID: number;
-    }
+    RecordMergeLogID?: number;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for Duplicate Run Detail Matches
@@ -19233,28 +16173,7 @@ export class DuplicateRunDetailMatchResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext, 
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <DuplicateRunDetailMatchEntity>await new Metadata().GetEntityObject('Duplicate Run Detail Matches', this.GetUserFromPayload(userPayload));
-            await entityObject.NewRecord();
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire the AfterCreate event and then return all the data
-                await this.AfterCreate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else 
-                // save failed, return null
-                return null;
-        }
-        else    
-            return null;
-    }
-
-    // Before/After CREATE Event Hooks for Sub-Classes to Override
-    protected async BeforeCreate(dataSource: DataSource, input: CreateDuplicateRunDetailMatchInput): Promise<boolean> {
-        return true;
-    }
-    protected async AfterCreate(dataSource: DataSource, input: CreateDuplicateRunDetailMatchInput) {
+        return this.CreateRecord('Duplicate Run Detail Matches', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => DuplicateRunDetailMatch_)
@@ -19263,29 +16182,7 @@ export class DuplicateRunDetailMatchResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <DuplicateRunDetailMatchEntity>await new Metadata().GetEntityObject('Duplicate Run Detail Matches', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Duplicate Run Detail Matches
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateDuplicateRunDetailMatchInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateDuplicateRunDetailMatchInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('Duplicate Run Detail Matches', input, dataSource, userPayload, pubSub);
     }
     
 }
@@ -19332,16 +16229,16 @@ export class EntityDocumentSetting_ {
 export class CreateEntityDocumentSettingInput {
     @Field(() => Int)
     EntityDocumentID: number;
-    
+
     @Field()
     Name: string;
-    
+
     @Field()
     Value: string;
-    
+
     @Field({ nullable: true })
-    Comments: string;
-    }
+    Comments?: string;
+}
     
         
 //****************************************************************************
@@ -19351,19 +16248,22 @@ export class CreateEntityDocumentSettingInput {
 export class UpdateEntityDocumentSettingInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field(() => Int)
     EntityDocumentID: number;
-    
+
     @Field()
     Name: string;
-    
+
     @Field()
     Value: string;
-    
+
     @Field({ nullable: true })
-    Comments: string;
-    }
+    Comments?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for Entity Document Settings
@@ -19423,28 +16323,7 @@ export class EntityDocumentSettingResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext, 
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <EntityDocumentSettingEntity>await new Metadata().GetEntityObject('Entity Document Settings', this.GetUserFromPayload(userPayload));
-            await entityObject.NewRecord();
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire the AfterCreate event and then return all the data
-                await this.AfterCreate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else 
-                // save failed, return null
-                return null;
-        }
-        else    
-            return null;
-    }
-
-    // Before/After CREATE Event Hooks for Sub-Classes to Override
-    protected async BeforeCreate(dataSource: DataSource, input: CreateEntityDocumentSettingInput): Promise<boolean> {
-        return true;
-    }
-    protected async AfterCreate(dataSource: DataSource, input: CreateEntityDocumentSettingInput) {
+        return this.CreateRecord('Entity Document Settings', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => EntityDocumentSetting_)
@@ -19453,29 +16332,7 @@ export class EntityDocumentSettingResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <EntityDocumentSettingEntity>await new Metadata().GetEntityObject('Entity Document Settings', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Entity Document Settings
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateEntityDocumentSettingInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateEntityDocumentSettingInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('Entity Document Settings', input, dataSource, userPayload, pubSub);
     }
     
 }
@@ -19522,16 +16379,16 @@ export class EntitySetting_ {
 export class CreateEntitySettingInput {
     @Field(() => Int)
     EntityID: number;
-    
+
     @Field()
     Name: string;
-    
+
     @Field()
     Value: string;
-    
+
     @Field({ nullable: true })
-    Comments: string;
-    }
+    Comments?: string;
+}
     
         
 //****************************************************************************
@@ -19541,19 +16398,22 @@ export class CreateEntitySettingInput {
 export class UpdateEntitySettingInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field(() => Int)
     EntityID: number;
-    
+
     @Field()
     Name: string;
-    
+
     @Field()
     Value: string;
-    
+
     @Field({ nullable: true })
-    Comments: string;
-    }
+    Comments?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for Entity Settings
@@ -19613,28 +16473,7 @@ export class EntitySettingResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext, 
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <EntitySettingEntity>await new Metadata().GetEntityObject('Entity Settings', this.GetUserFromPayload(userPayload));
-            await entityObject.NewRecord();
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire the AfterCreate event and then return all the data
-                await this.AfterCreate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else 
-                // save failed, return null
-                return null;
-        }
-        else    
-            return null;
-    }
-
-    // Before/After CREATE Event Hooks for Sub-Classes to Override
-    protected async BeforeCreate(dataSource: DataSource, input: CreateEntitySettingInput): Promise<boolean> {
-        return true;
-    }
-    protected async AfterCreate(dataSource: DataSource, input: CreateEntitySettingInput) {
+        return this.CreateRecord('Entity Settings', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => EntitySetting_)
@@ -19643,29 +16482,7 @@ export class EntitySettingResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <EntitySettingEntity>await new Metadata().GetEntityObject('Entity Settings', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Entity Settings
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateEntitySettingInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateEntitySettingInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('Entity Settings', input, dataSource, userPayload, pubSub);
     }
     
 }
@@ -19748,34 +16565,34 @@ export class DuplicateRun_ {
 export class CreateDuplicateRunInput {
     @Field(() => Int)
     EntityID: number;
-    
+
     @Field(() => Int)
     StartedByUserID: number;
-    
+
     @Field()
     StartedAt: Date;
-    
+
     @Field({ nullable: true })
-    EndedAt: Date;
-    
+    EndedAt?: Date;
+
     @Field()
     ApprovalStatus: string;
-    
+
     @Field({ nullable: true })
-    ApprovalComments: string;
-    
+    ApprovalComments?: string;
+
     @Field(() => Int, { nullable: true })
-    ApprovedByUserID: number;
-    
+    ApprovedByUserID?: number;
+
     @Field()
     ProcessingStatus: string;
-    
+
     @Field({ nullable: true })
-    ProcessingErrorMessage: string;
-    
+    ProcessingErrorMessage?: string;
+
     @Field(() => Int)
     SourceListID: number;
-    }
+}
     
         
 //****************************************************************************
@@ -19785,37 +16602,40 @@ export class CreateDuplicateRunInput {
 export class UpdateDuplicateRunInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field(() => Int)
     EntityID: number;
-    
+
     @Field(() => Int)
     StartedByUserID: number;
-    
+
     @Field()
     StartedAt: Date;
-    
+
     @Field({ nullable: true })
-    EndedAt: Date;
-    
+    EndedAt?: Date;
+
     @Field()
     ApprovalStatus: string;
-    
+
     @Field({ nullable: true })
-    ApprovalComments: string;
-    
+    ApprovalComments?: string;
+
     @Field(() => Int, { nullable: true })
-    ApprovedByUserID: number;
-    
+    ApprovedByUserID?: number;
+
     @Field()
     ProcessingStatus: string;
-    
+
     @Field({ nullable: true })
-    ProcessingErrorMessage: string;
-    
+    ProcessingErrorMessage?: string;
+
     @Field(() => Int)
     SourceListID: number;
-    }
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for Duplicate Runs
@@ -19883,28 +16703,7 @@ export class DuplicateRunResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext, 
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <DuplicateRunEntity>await new Metadata().GetEntityObject('Duplicate Runs', this.GetUserFromPayload(userPayload));
-            await entityObject.NewRecord();
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire the AfterCreate event and then return all the data
-                await this.AfterCreate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else 
-                // save failed, return null
-                return null;
-        }
-        else    
-            return null;
-    }
-
-    // Before/After CREATE Event Hooks for Sub-Classes to Override
-    protected async BeforeCreate(dataSource: DataSource, input: CreateDuplicateRunInput): Promise<boolean> {
-        return true;
-    }
-    protected async AfterCreate(dataSource: DataSource, input: CreateDuplicateRunInput) {
+        return this.CreateRecord('Duplicate Runs', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => DuplicateRun_)
@@ -19913,29 +16712,7 @@ export class DuplicateRunResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <DuplicateRunEntity>await new Metadata().GetEntityObject('Duplicate Runs', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Duplicate Runs
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateDuplicateRunInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateDuplicateRunInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('Duplicate Runs', input, dataSource, userPayload, pubSub);
     }
     
 }
@@ -19992,25 +16769,25 @@ export class DuplicateRunDetail_ {
 export class CreateDuplicateRunDetailInput {
     @Field(() => Int)
     DuplicateRunID: number;
-    
+
     @Field()
     RecordID: string;
-    
+
     @Field()
     MatchStatus: string;
-    
+
     @Field({ nullable: true })
-    SkippedReason: string;
-    
+    SkippedReason?: string;
+
     @Field({ nullable: true })
-    MatchErrorMessage: string;
-    
+    MatchErrorMessage?: string;
+
     @Field()
     MergeStatus: string;
-    
+
     @Field({ nullable: true })
-    MergeErrorMessage: string;
-    }
+    MergeErrorMessage?: string;
+}
     
         
 //****************************************************************************
@@ -20020,28 +16797,31 @@ export class CreateDuplicateRunDetailInput {
 export class UpdateDuplicateRunDetailInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field(() => Int)
     DuplicateRunID: number;
-    
+
     @Field()
     RecordID: string;
-    
+
     @Field()
     MatchStatus: string;
-    
+
     @Field({ nullable: true })
-    SkippedReason: string;
-    
+    SkippedReason?: string;
+
     @Field({ nullable: true })
-    MatchErrorMessage: string;
-    
+    MatchErrorMessage?: string;
+
     @Field()
     MergeStatus: string;
-    
+
     @Field({ nullable: true })
-    MergeErrorMessage: string;
-    }
+    MergeErrorMessage?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for Duplicate Run Details
@@ -20109,28 +16889,7 @@ export class DuplicateRunDetailResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext, 
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <DuplicateRunDetailEntity>await new Metadata().GetEntityObject('Duplicate Run Details', this.GetUserFromPayload(userPayload));
-            await entityObject.NewRecord();
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire the AfterCreate event and then return all the data
-                await this.AfterCreate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else 
-                // save failed, return null
-                return null;
-        }
-        else    
-            return null;
-    }
-
-    // Before/After CREATE Event Hooks for Sub-Classes to Override
-    protected async BeforeCreate(dataSource: DataSource, input: CreateDuplicateRunDetailInput): Promise<boolean> {
-        return true;
-    }
-    protected async AfterCreate(dataSource: DataSource, input: CreateDuplicateRunDetailInput) {
+        return this.CreateRecord('Duplicate Run Details', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => DuplicateRunDetail_)
@@ -20139,29 +16898,7 @@ export class DuplicateRunDetailResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <DuplicateRunDetailEntity>await new Metadata().GetEntityObject('Duplicate Run Details', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Duplicate Run Details
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateDuplicateRunDetailInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateDuplicateRunDetailInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('Duplicate Run Details', input, dataSource, userPayload, pubSub);
     }
     
 }
@@ -20216,25 +16953,25 @@ export class EntityBehavior_ {
 export class CreateEntityBehaviorInput {
     @Field(() => Int)
     EntityID: number;
-    
+
     @Field(() => Int)
     BehaviorTypeID: number;
-    
+
     @Field()
     Description: string;
-    
+
     @Field(() => Boolean)
     RegenerateCode: boolean;
-    
+
     @Field({ nullable: true })
-    Code: string;
-    
+    Code?: string;
+
     @Field({ nullable: true })
-    CodeExplanation: string;
-    
+    CodeExplanation?: string;
+
     @Field(() => Boolean)
     CodeGenerated: boolean;
-    }
+}
     
         
 //****************************************************************************
@@ -20244,28 +16981,31 @@ export class CreateEntityBehaviorInput {
 export class UpdateEntityBehaviorInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field(() => Int)
     EntityID: number;
-    
+
     @Field(() => Int)
     BehaviorTypeID: number;
-    
+
     @Field()
     Description: string;
-    
+
     @Field(() => Boolean)
     RegenerateCode: boolean;
-    
+
     @Field({ nullable: true })
-    Code: string;
-    
+    Code?: string;
+
     @Field({ nullable: true })
-    CodeExplanation: string;
-    
+    CodeExplanation?: string;
+
     @Field(() => Boolean)
     CodeGenerated: boolean;
-    }
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for Entity Behaviors
@@ -20325,28 +17065,7 @@ export class EntityBehaviorResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext, 
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <EntityBehaviorEntity>await new Metadata().GetEntityObject('Entity Behaviors', this.GetUserFromPayload(userPayload));
-            await entityObject.NewRecord();
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire the AfterCreate event and then return all the data
-                await this.AfterCreate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else 
-                // save failed, return null
-                return null;
-        }
-        else    
-            return null;
-    }
-
-    // Before/After CREATE Event Hooks for Sub-Classes to Override
-    protected async BeforeCreate(dataSource: DataSource, input: CreateEntityBehaviorInput): Promise<boolean> {
-        return true;
-    }
-    protected async AfterCreate(dataSource: DataSource, input: CreateEntityBehaviorInput) {
+        return this.CreateRecord('Entity Behaviors', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => EntityBehavior_)
@@ -20355,55 +17074,13 @@ export class EntityBehaviorResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <EntityBehaviorEntity>await new Metadata().GetEntityObject('Entity Behaviors', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Entity Behaviors
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateEntityBehaviorInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateEntityBehaviorInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('Entity Behaviors', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => EntityBehavior_)
-    async DeleteEntityBehavior(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <EntityBehaviorEntity>await new Metadata().GetEntityObject('Entity Behaviors', this.GetUserFromPayload(userPayload));
-            await entityObject.Load(ID);
-            const returnValue = entityObject.GetAll(); // grab the values before we delete so we can return last state before delete if we are successful.
-            if (await entityObject.Delete()) {
-                await this.AfterDelete(dataSource, ID); // fire event
-                return returnValue;
-            }
-            else 
-                return null; // delete failed, this will cause an exception
-        }
-        else
-            return null; // BeforeDelete canceled the operation, this will cause an exception
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeDelete(dataSource: DataSource, ID: number): Promise<boolean> {
-        const i = ID, d = dataSource; // prevent error;
-        return true;
-    }
-    protected async AfterDelete(dataSource: DataSource, ID: number) {
-        const i = ID, d = dataSource; // prevent error
+    async DeleteEntityBehavior(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Entity Behaviors', key, options, dataSource, userPayload, pubSub);
     }
     
 }
@@ -20443,10 +17120,10 @@ export class EntityBehaviorType_ {
 export class CreateEntityBehaviorTypeInput {
     @Field()
     Name: string;
-    
+
     @Field({ nullable: true })
-    Description: string;
-    }
+    Description?: string;
+}
     
         
 //****************************************************************************
@@ -20456,13 +17133,16 @@ export class CreateEntityBehaviorTypeInput {
 export class UpdateEntityBehaviorTypeInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field()
     Name: string;
-    
+
     @Field({ nullable: true })
-    Description: string;
-    }
+    Description?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for Entity Behavior Types
@@ -20530,28 +17210,7 @@ export class EntityBehaviorTypeResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext, 
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <EntityBehaviorTypeEntity>await new Metadata().GetEntityObject('Entity Behavior Types', this.GetUserFromPayload(userPayload));
-            await entityObject.NewRecord();
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire the AfterCreate event and then return all the data
-                await this.AfterCreate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else 
-                // save failed, return null
-                return null;
-        }
-        else    
-            return null;
-    }
-
-    // Before/After CREATE Event Hooks for Sub-Classes to Override
-    protected async BeforeCreate(dataSource: DataSource, input: CreateEntityBehaviorTypeInput): Promise<boolean> {
-        return true;
-    }
-    protected async AfterCreate(dataSource: DataSource, input: CreateEntityBehaviorTypeInput) {
+        return this.CreateRecord('Entity Behavior Types', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => EntityBehaviorType_)
@@ -20560,55 +17219,13 @@ export class EntityBehaviorTypeResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <EntityBehaviorTypeEntity>await new Metadata().GetEntityObject('Entity Behavior Types', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Entity Behavior Types
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateEntityBehaviorTypeInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateEntityBehaviorTypeInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('Entity Behavior Types', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => EntityBehaviorType_)
-    async DeleteEntityBehaviorType(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <EntityBehaviorTypeEntity>await new Metadata().GetEntityObject('Entity Behavior Types', this.GetUserFromPayload(userPayload));
-            await entityObject.Load(ID);
-            const returnValue = entityObject.GetAll(); // grab the values before we delete so we can return last state before delete if we are successful.
-            if (await entityObject.Delete()) {
-                await this.AfterDelete(dataSource, ID); // fire event
-                return returnValue;
-            }
-            else 
-                return null; // delete failed, this will cause an exception
-        }
-        else
-            return null; // BeforeDelete canceled the operation, this will cause an exception
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeDelete(dataSource: DataSource, ID: number): Promise<boolean> {
-        const i = ID, d = dataSource; // prevent error;
-        return true;
-    }
-    protected async AfterDelete(dataSource: DataSource, ID: number) {
-        const i = ID, d = dataSource; // prevent error
+    async DeleteEntityBehaviorType(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Entity Behavior Types', key, options, dataSource, userPayload, pubSub);
     }
     
 }
@@ -20652,16 +17269,16 @@ export class ApplicationSetting_ {
 export class CreateApplicationSettingInput {
     @Field()
     ApplicationName: string;
-    
+
     @Field()
     Name: string;
-    
+
     @Field()
     Value: string;
-    
+
     @Field({ nullable: true })
-    Comments: string;
-    }
+    Comments?: string;
+}
     
         
 //****************************************************************************
@@ -20671,19 +17288,22 @@ export class CreateApplicationSettingInput {
 export class UpdateApplicationSettingInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field()
     ApplicationName: string;
-    
+
     @Field()
     Name: string;
-    
+
     @Field()
     Value: string;
-    
+
     @Field({ nullable: true })
-    Comments: string;
-    }
+    Comments?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for Application Settings
@@ -20743,28 +17363,7 @@ export class ApplicationSettingResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext, 
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <ApplicationSettingEntity>await new Metadata().GetEntityObject('Application Settings', this.GetUserFromPayload(userPayload));
-            await entityObject.NewRecord();
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire the AfterCreate event and then return all the data
-                await this.AfterCreate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else 
-                // save failed, return null
-                return null;
-        }
-        else    
-            return null;
-    }
-
-    // Before/After CREATE Event Hooks for Sub-Classes to Override
-    protected async BeforeCreate(dataSource: DataSource, input: CreateApplicationSettingInput): Promise<boolean> {
-        return true;
-    }
-    protected async AfterCreate(dataSource: DataSource, input: CreateApplicationSettingInput) {
+        return this.CreateRecord('Application Settings', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => ApplicationSetting_)
@@ -20773,55 +17372,3789 @@ export class ApplicationSettingResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <ApplicationSettingEntity>await new Metadata().GetEntityObject('Application Settings', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Application Settings
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateApplicationSettingInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateApplicationSettingInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('Application Settings', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => ApplicationSetting_)
-    async DeleteApplicationSetting(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <ApplicationSettingEntity>await new Metadata().GetEntityObject('Application Settings', this.GetUserFromPayload(userPayload));
-            await entityObject.Load(ID);
-            const returnValue = entityObject.GetAll(); // grab the values before we delete so we can return last state before delete if we are successful.
-            if (await entityObject.Delete()) {
-                await this.AfterDelete(dataSource, ID); // fire event
-                return returnValue;
-            }
-            else 
-                return null; // delete failed, this will cause an exception
-        }
-        else
-            return null; // BeforeDelete canceled the operation, this will cause an exception
+    async DeleteApplicationSetting(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Application Settings', key, options, dataSource, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for Action Categories
+//****************************************************************************
+@ObjectType({ description: 'Organizes actions into categories, including name, description, and optional parent category for hierarchy.' })
+export class ActionCategory_ {  
+    @Field(() => Int) 
+    ID: number;
+          
+    @Field({description: 'Name of the action category.'}) 
+    @MaxLength(510)
+    Name: string;
+          
+    @Field({nullable: true, description: 'Description of the action category.'}) 
+    Description?: string;
+          
+    @Field(() => Int, {nullable: true, description: 'Parent category ID for hierarchical organization.'}) 
+    ParentID?: number;
+          
+    @Field({description: 'Status of the action category (Pending, Active, Disabled).'}) 
+    @MaxLength(40)
+    Status: string;
+          
+    @Field() 
+    @MaxLength(8)
+    CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(8)
+    UpdatedAt: Date;
+          
+    @Field({nullable: true}) 
+    @MaxLength(510)
+    Parent?: string;
+        
+    @Field(() => [mj_core_schema_server_object_types.ActionCategory_])
+    ActionCategoriesArray: mj_core_schema_server_object_types.ActionCategory_[]; // Link to ActionCategories
+    
+    @Field(() => [mj_core_schema_server_object_types.Action_])
+    ActionsArray: mj_core_schema_server_object_types.Action_[]; // Link to Actions
+    
+}
+        
+//****************************************************************************
+// INPUT TYPE for Action Categories   
+//****************************************************************************
+@InputType()
+export class CreateActionCategoryInput {
+    @Field()
+    Name: string;
+
+    @Field({ nullable: true })
+    Description?: string;
+
+    @Field(() => Int, { nullable: true })
+    ParentID?: number;
+
+    @Field()
+    Status: string;
+}
+    
+        
+//****************************************************************************
+// INPUT TYPE for Action Categories   
+//****************************************************************************
+@InputType()
+export class UpdateActionCategoryInput {
+    @Field(() => Int)
+    ID: number;
+
+    @Field()
+    Name: string;
+
+    @Field({ nullable: true })
+    Description?: string;
+
+    @Field(() => Int, { nullable: true })
+    ParentID?: number;
+
+    @Field()
+    Status: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
+//****************************************************************************
+// RESOLVER for Action Categories
+//****************************************************************************
+@ObjectType()
+export class RunActionCategoryViewResult {
+    @Field(() => [ActionCategory_])
+    Results: ActionCategory_[];
+
+    @Field(() => Int, {nullable: true})
+    UserViewRunID?: number;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(ActionCategory_)
+export class ActionCategoryResolver extends ResolverBase {
+    @Query(() => RunActionCategoryViewResult)
+    async RunActionCategoryViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeDelete(dataSource: DataSource, ID: number): Promise<boolean> {
-        const i = ID, d = dataSource; // prevent error;
-        return true;
+    @Query(() => RunActionCategoryViewResult)
+    async RunActionCategoryViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
-    protected async AfterDelete(dataSource: DataSource, ID: number) {
-        const i = ID, d = dataSource; // prevent error
+
+    @Query(() => RunActionCategoryViewResult)
+    async RunActionCategoryDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        input.EntityName = 'Action Categories';
+        return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
+    }
+    @Query(() => ActionCategory_, { nullable: true })
+    async ActionCategory(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ActionCategory_ | null> {
+        this.CheckUserReadPermissions('Action Categories', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionCategories] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Action Categories', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Action Categories', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
+    }
+      
+    @FieldResolver(() => [mj_core_schema_server_object_types.ActionCategory_])
+    async ActionCategoriesArray(@Root() actioncategory_: ActionCategory_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Action Categories', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionCategories] WHERE [ParentID]=${actioncategory_.ID} ` + this.getRowLevelSecurityWhereClause('Action Categories', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Action Categories', await dataSource.query(sSQL));
+        return result;
+    }
+          
+    @FieldResolver(() => [mj_core_schema_server_object_types.Action_])
+    async ActionsArray(@Root() actioncategory_: ActionCategory_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Actions', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActions] WHERE [CategoryID]=${actioncategory_.ID} ` + this.getRowLevelSecurityWhereClause('Actions', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Actions', await dataSource.query(sSQL));
+        return result;
+    }
+        
+    @Mutation(() => ActionCategory_)
+    async CreateActionCategory(
+        @Arg('input', () => CreateActionCategoryInput) input: CreateActionCategoryInput,
+        @Ctx() { dataSource, userPayload }: AppContext, 
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.CreateRecord('Action Categories', input, dataSource, userPayload, pubSub)
+    }
+        
+    @Mutation(() => ActionCategory_)
+    async UpdateActionCategory(
+        @Arg('input', () => UpdateActionCategoryInput) input: UpdateActionCategoryInput,
+        @Ctx() { dataSource, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.UpdateRecord('Action Categories', input, dataSource, userPayload, pubSub);
+    }
+    
+    @Mutation(() => ActionCategory_)
+    async DeleteActionCategory(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Action Categories', key, options, dataSource, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for Entity Actions
+//****************************************************************************
+@ObjectType({ description: 'Links entities to actions - this is the main place where you define the actions that part of, or available, for a given entity.' })
+export class EntityAction_ {  
+    @Field(() => Int) 
+    ID: number;
+          
+    @Field(() => Int) 
+    EntityID: number;
+          
+    @Field(() => Int) 
+    ActionID: number;
+          
+    @Field({description: 'Status of the entity action (Pending, Active, Disabled).'}) 
+    @MaxLength(40)
+    Status: string;
+          
+    @Field() 
+    @MaxLength(8)
+    CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(8)
+    UpdatedAt: Date;
+          
+    @Field() 
+    @MaxLength(510)
+    Entity: string;
+          
+    @Field() 
+    @MaxLength(850)
+    Action: string;
+        
+    @Field(() => [mj_core_schema_server_object_types.EntityActionInvocation_])
+    EntityActionInvocationsArray: mj_core_schema_server_object_types.EntityActionInvocation_[]; // Link to EntityActionInvocations
+    
+    @Field(() => [mj_core_schema_server_object_types.EntityActionFilter_])
+    EntityActionFiltersArray: mj_core_schema_server_object_types.EntityActionFilter_[]; // Link to EntityActionFilters
+    
+}
+        
+//****************************************************************************
+// INPUT TYPE for Entity Actions   
+//****************************************************************************
+@InputType()
+export class CreateEntityActionInput {
+    @Field(() => Int)
+    EntityID: number;
+
+    @Field(() => Int)
+    ActionID: number;
+
+    @Field()
+    Status: string;
+}
+    
+        
+//****************************************************************************
+// INPUT TYPE for Entity Actions   
+//****************************************************************************
+@InputType()
+export class UpdateEntityActionInput {
+    @Field(() => Int)
+    ID: number;
+
+    @Field(() => Int)
+    EntityID: number;
+
+    @Field(() => Int)
+    ActionID: number;
+
+    @Field()
+    Status: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
+//****************************************************************************
+// RESOLVER for Entity Actions
+//****************************************************************************
+@ObjectType()
+export class RunEntityActionViewResult {
+    @Field(() => [EntityAction_])
+    Results: EntityAction_[];
+
+    @Field(() => Int, {nullable: true})
+    UserViewRunID?: number;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(EntityAction_)
+export class EntityActionResolver extends ResolverBase {
+    @Query(() => RunEntityActionViewResult)
+    async RunEntityActionViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunEntityActionViewResult)
+    async RunEntityActionViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunEntityActionViewResult)
+    async RunEntityActionDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        input.EntityName = 'Entity Actions';
+        return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
+    }
+    @Query(() => EntityAction_, { nullable: true })
+    async EntityAction(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<EntityAction_ | null> {
+        this.CheckUserReadPermissions('Entity Actions', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityActions] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Entity Actions', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Entity Actions', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
+    }
+      
+    @FieldResolver(() => [mj_core_schema_server_object_types.EntityActionInvocation_])
+    async EntityActionInvocationsArray(@Root() entityaction_: EntityAction_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Entity Action Invocations', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityActionInvocations] WHERE [EntityActionID]=${entityaction_.ID} ` + this.getRowLevelSecurityWhereClause('Entity Action Invocations', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Entity Action Invocations', await dataSource.query(sSQL));
+        return result;
+    }
+          
+    @FieldResolver(() => [mj_core_schema_server_object_types.EntityActionFilter_])
+    async EntityActionFiltersArray(@Root() entityaction_: EntityAction_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Entity Action Filters', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityActionFilters] WHERE [EntityActionID]=${entityaction_.ID} ` + this.getRowLevelSecurityWhereClause('Entity Action Filters', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Entity Action Filters', await dataSource.query(sSQL));
+        return result;
+    }
+        
+    @Mutation(() => EntityAction_)
+    async CreateEntityAction(
+        @Arg('input', () => CreateEntityActionInput) input: CreateEntityActionInput,
+        @Ctx() { dataSource, userPayload }: AppContext, 
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.CreateRecord('Entity Actions', input, dataSource, userPayload, pubSub)
+    }
+        
+    @Mutation(() => EntityAction_)
+    async UpdateEntityAction(
+        @Arg('input', () => UpdateEntityActionInput) input: UpdateEntityActionInput,
+        @Ctx() { dataSource, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.UpdateRecord('Entity Actions', input, dataSource, userPayload, pubSub);
+    }
+    
+    @Mutation(() => EntityAction_)
+    async DeleteEntityAction(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Entity Actions', key, options, dataSource, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for Entity Action Invocations
+//****************************************************************************
+@ObjectType({ description: 'Links invocation types to entity actions – for example you might link a particular EntityAction to just “Create Record” and you might also have a second item in this table allowing the same Entity Action to be invoked from a User View or List, on demand.' })
+export class EntityActionInvocation_ {  
+    @Field(() => Int) 
+    ID: number;
+          
+    @Field(() => Int) 
+    EntityActionID: number;
+          
+    @Field(() => Int) 
+    InvocationTypeID: number;
+          
+    @Field({description: 'Status of the entity action invocation (Pending, Active, Disabled).'}) 
+    @MaxLength(40)
+    Status: string;
+          
+    @Field() 
+    @MaxLength(8)
+    CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(8)
+    UpdatedAt: Date;
+          
+    @Field() 
+    @MaxLength(510)
+    InvocationType: string;
+        
+}
+        
+//****************************************************************************
+// INPUT TYPE for Entity Action Invocations   
+//****************************************************************************
+@InputType()
+export class CreateEntityActionInvocationInput {
+    @Field(() => Int)
+    EntityActionID: number;
+
+    @Field(() => Int)
+    InvocationTypeID: number;
+
+    @Field()
+    Status: string;
+}
+    
+        
+//****************************************************************************
+// INPUT TYPE for Entity Action Invocations   
+//****************************************************************************
+@InputType()
+export class UpdateEntityActionInvocationInput {
+    @Field(() => Int)
+    ID: number;
+
+    @Field(() => Int)
+    EntityActionID: number;
+
+    @Field(() => Int)
+    InvocationTypeID: number;
+
+    @Field()
+    Status: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
+//****************************************************************************
+// RESOLVER for Entity Action Invocations
+//****************************************************************************
+@ObjectType()
+export class RunEntityActionInvocationViewResult {
+    @Field(() => [EntityActionInvocation_])
+    Results: EntityActionInvocation_[];
+
+    @Field(() => Int, {nullable: true})
+    UserViewRunID?: number;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(EntityActionInvocation_)
+export class EntityActionInvocationResolver extends ResolverBase {
+    @Query(() => RunEntityActionInvocationViewResult)
+    async RunEntityActionInvocationViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunEntityActionInvocationViewResult)
+    async RunEntityActionInvocationViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunEntityActionInvocationViewResult)
+    async RunEntityActionInvocationDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        input.EntityName = 'Entity Action Invocations';
+        return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
+    }
+    @Query(() => EntityActionInvocation_, { nullable: true })
+    async EntityActionInvocation(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<EntityActionInvocation_ | null> {
+        this.CheckUserReadPermissions('Entity Action Invocations', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityActionInvocations] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Entity Action Invocations', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Entity Action Invocations', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
+    }
+    
+    @Mutation(() => EntityActionInvocation_)
+    async CreateEntityActionInvocation(
+        @Arg('input', () => CreateEntityActionInvocationInput) input: CreateEntityActionInvocationInput,
+        @Ctx() { dataSource, userPayload }: AppContext, 
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.CreateRecord('Entity Action Invocations', input, dataSource, userPayload, pubSub)
+    }
+        
+    @Mutation(() => EntityActionInvocation_)
+    async UpdateEntityActionInvocation(
+        @Arg('input', () => UpdateEntityActionInvocationInput) input: UpdateEntityActionInvocationInput,
+        @Ctx() { dataSource, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.UpdateRecord('Entity Action Invocations', input, dataSource, userPayload, pubSub);
+    }
+    
+    @Mutation(() => EntityActionInvocation_)
+    async DeleteEntityActionInvocation(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Entity Action Invocations', key, options, dataSource, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for Action Authorizations
+//****************************************************************************
+@ObjectType({ description: 'Links actions to authorizations, one or more of these must be possessed by a user in order to execute the action.' })
+export class ActionAuthorization_ {  
+    @Field(() => Int) 
+    ID: number;
+          
+    @Field(() => Int) 
+    ActionID: number;
+          
+    @Field() 
+    @MaxLength(200)
+    AuthorizationName: string;
+          
+    @Field({nullable: true}) 
+    Comments?: string;
+          
+    @Field() 
+    @MaxLength(8)
+    CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(8)
+    UpdatedAt: Date;
+          
+    @Field() 
+    @MaxLength(850)
+    Action: string;
+        
+}
+        
+//****************************************************************************
+// INPUT TYPE for Action Authorizations   
+//****************************************************************************
+@InputType()
+export class CreateActionAuthorizationInput {
+    @Field(() => Int)
+    ActionID: number;
+
+    @Field()
+    AuthorizationName: string;
+
+    @Field({ nullable: true })
+    Comments?: string;
+}
+    
+        
+//****************************************************************************
+// INPUT TYPE for Action Authorizations   
+//****************************************************************************
+@InputType()
+export class UpdateActionAuthorizationInput {
+    @Field(() => Int)
+    ID: number;
+
+    @Field(() => Int)
+    ActionID: number;
+
+    @Field()
+    AuthorizationName: string;
+
+    @Field({ nullable: true })
+    Comments?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
+//****************************************************************************
+// RESOLVER for Action Authorizations
+//****************************************************************************
+@ObjectType()
+export class RunActionAuthorizationViewResult {
+    @Field(() => [ActionAuthorization_])
+    Results: ActionAuthorization_[];
+
+    @Field(() => Int, {nullable: true})
+    UserViewRunID?: number;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(ActionAuthorization_)
+export class ActionAuthorizationResolver extends ResolverBase {
+    @Query(() => RunActionAuthorizationViewResult)
+    async RunActionAuthorizationViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunActionAuthorizationViewResult)
+    async RunActionAuthorizationViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunActionAuthorizationViewResult)
+    async RunActionAuthorizationDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        input.EntityName = 'Action Authorizations';
+        return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
+    }
+    @Query(() => ActionAuthorization_, { nullable: true })
+    async ActionAuthorization(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ActionAuthorization_ | null> {
+        this.CheckUserReadPermissions('Action Authorizations', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionAuthorizations] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Action Authorizations', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Action Authorizations', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
+    }
+    
+    @Mutation(() => ActionAuthorization_)
+    async CreateActionAuthorization(
+        @Arg('input', () => CreateActionAuthorizationInput) input: CreateActionAuthorizationInput,
+        @Ctx() { dataSource, userPayload }: AppContext, 
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.CreateRecord('Action Authorizations', input, dataSource, userPayload, pubSub)
+    }
+        
+    @Mutation(() => ActionAuthorization_)
+    async UpdateActionAuthorization(
+        @Arg('input', () => UpdateActionAuthorizationInput) input: UpdateActionAuthorizationInput,
+        @Ctx() { dataSource, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.UpdateRecord('Action Authorizations', input, dataSource, userPayload, pubSub);
+    }
+    
+    @Mutation(() => ActionAuthorization_)
+    async DeleteActionAuthorization(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Action Authorizations', key, options, dataSource, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for Entity Action Invocation Types
+//****************************************************************************
+@ObjectType({ description: 'Stores the possible invocation types of an action within the context of an entity. Examples would be: Record Created/Updated/Deleted/Accessed as well as things like “View” or “List” where you could run an EntityAction against an entire set of records in a view or list – either by user click or programmatically.' })
+export class EntityActionInvocationType_ {  
+    @Field(() => Int) 
+    ID: number;
+          
+    @Field({description: 'Name of the invocation type such as Record Created/Updated/etc.'}) 
+    @MaxLength(510)
+    Name: string;
+          
+    @Field({nullable: true, description: 'Description of the invocation type.'}) 
+    Description?: string;
+          
+    @Field(() => Int) 
+    DisplaySequence: number;
+          
+    @Field() 
+    @MaxLength(8)
+    CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(8)
+    UpdatedAt: Date;
+        
+    @Field(() => [mj_core_schema_server_object_types.EntityActionInvocation_])
+    EntityActionInvocationsArray: mj_core_schema_server_object_types.EntityActionInvocation_[]; // Link to EntityActionInvocations
+    
+}
+        
+//****************************************************************************
+// INPUT TYPE for Entity Action Invocation Types   
+//****************************************************************************
+@InputType()
+export class CreateEntityActionInvocationTypeInput {
+    @Field()
+    Name: string;
+
+    @Field({ nullable: true })
+    Description?: string;
+
+    @Field(() => Int)
+    DisplaySequence: number;
+}
+    
+        
+//****************************************************************************
+// INPUT TYPE for Entity Action Invocation Types   
+//****************************************************************************
+@InputType()
+export class UpdateEntityActionInvocationTypeInput {
+    @Field(() => Int)
+    ID: number;
+
+    @Field()
+    Name: string;
+
+    @Field({ nullable: true })
+    Description?: string;
+
+    @Field(() => Int)
+    DisplaySequence: number;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
+//****************************************************************************
+// RESOLVER for Entity Action Invocation Types
+//****************************************************************************
+@ObjectType()
+export class RunEntityActionInvocationTypeViewResult {
+    @Field(() => [EntityActionInvocationType_])
+    Results: EntityActionInvocationType_[];
+
+    @Field(() => Int, {nullable: true})
+    UserViewRunID?: number;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(EntityActionInvocationType_)
+export class EntityActionInvocationTypeResolver extends ResolverBase {
+    @Query(() => RunEntityActionInvocationTypeViewResult)
+    async RunEntityActionInvocationTypeViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunEntityActionInvocationTypeViewResult)
+    async RunEntityActionInvocationTypeViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunEntityActionInvocationTypeViewResult)
+    async RunEntityActionInvocationTypeDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        input.EntityName = 'Entity Action Invocation Types';
+        return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
+    }
+    @Query(() => EntityActionInvocationType_, { nullable: true })
+    async EntityActionInvocationType(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<EntityActionInvocationType_ | null> {
+        this.CheckUserReadPermissions('Entity Action Invocation Types', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityActionInvocationTypes] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Entity Action Invocation Types', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Entity Action Invocation Types', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
+    }
+      
+    @FieldResolver(() => [mj_core_schema_server_object_types.EntityActionInvocation_])
+    async EntityActionInvocationsArray(@Root() entityactioninvocationtype_: EntityActionInvocationType_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Entity Action Invocations', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityActionInvocations] WHERE [InvocationTypeID]=${entityactioninvocationtype_.ID} ` + this.getRowLevelSecurityWhereClause('Entity Action Invocations', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Entity Action Invocations', await dataSource.query(sSQL));
+        return result;
+    }
+        
+    @Mutation(() => EntityActionInvocationType_)
+    async CreateEntityActionInvocationType(
+        @Arg('input', () => CreateEntityActionInvocationTypeInput) input: CreateEntityActionInvocationTypeInput,
+        @Ctx() { dataSource, userPayload }: AppContext, 
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.CreateRecord('Entity Action Invocation Types', input, dataSource, userPayload, pubSub)
+    }
+        
+    @Mutation(() => EntityActionInvocationType_)
+    async UpdateEntityActionInvocationType(
+        @Arg('input', () => UpdateEntityActionInvocationTypeInput) input: UpdateEntityActionInvocationTypeInput,
+        @Ctx() { dataSource, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.UpdateRecord('Entity Action Invocation Types', input, dataSource, userPayload, pubSub);
+    }
+    
+    @Mutation(() => EntityActionInvocationType_)
+    async DeleteEntityActionInvocationType(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Entity Action Invocation Types', key, options, dataSource, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for Actions
+//****************************************************************************
+@ObjectType({ description: 'Stores action definitions, including prompts, generated code, user comments, and status.' })
+export class Action_ {  
+    @Field(() => Int) 
+    ID: number;
+          
+    @Field(() => Int, {nullable: true}) 
+    CategoryID?: number;
+          
+    @Field() 
+    @MaxLength(850)
+    Name: string;
+          
+    @Field() 
+    UserPrompt: string;
+          
+    @Field({nullable: true, description: 'User\'s comments not shared with the LLM.'}) 
+    UserComments?: string;
+          
+    @Field({nullable: true}) 
+    Code?: string;
+          
+    @Field({nullable: true, description: 'AI\'s explanation of the code.'}) 
+    CodeComments?: string;
+          
+    @Field({description: 'An action won\'t be usable until the code is approved.'}) 
+    @MaxLength(40)
+    CodeApprovalStatus: string;
+          
+    @Field({nullable: true, description: 'Optional comments when an individual (or an AI) reviews and approves the code.'}) 
+    CodeApprovalComments?: string;
+          
+    @Field(() => Int, {nullable: true, description: 'UserID who approved the code.'}) 
+    CodeApprovedByUserID?: number;
+          
+    @Field({nullable: true, description: 'When the code was approved.'}) 
+    @MaxLength(8)
+    CodeApprovedAt?: Date;
+          
+    @Field(() => Boolean, {description: 'If set to 1, the Action will generate code for the provided UserPrompt on the next Save even if the UserPrompt hasn\'t changed. This is useful to force regeneration when other candidates (such as a change in Action Inputs/Outputs) occurs or on demand by a user.'}) 
+    ForceCodeGeneration: boolean;
+          
+    @Field(() => Int, {nullable: true, description: 'Number of days to retain execution logs; NULL for indefinite.'}) 
+    RetentionPeriod?: number;
+          
+    @Field({description: 'Status of the action (Pending, Active, Disabled).'}) 
+    @MaxLength(40)
+    Status: string;
+          
+    @Field() 
+    @MaxLength(8)
+    CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(8)
+    UpdatedAt: Date;
+          
+    @Field({nullable: true}) 
+    @MaxLength(510)
+    Category?: string;
+          
+    @Field({nullable: true}) 
+    @MaxLength(200)
+    CodeApprovedByUser?: string;
+        
+    @Field(() => [mj_core_schema_server_object_types.ActionAuthorization_])
+    ActionAuthorizationsArray: mj_core_schema_server_object_types.ActionAuthorization_[]; // Link to ActionAuthorizations
+    
+    @Field(() => [mj_core_schema_server_object_types.ActionResultCode_])
+    ActionResultCodesArray: mj_core_schema_server_object_types.ActionResultCode_[]; // Link to ActionResultCodes
+    
+    @Field(() => [mj_core_schema_server_object_types.ActionContext_])
+    ActionContextsArray: mj_core_schema_server_object_types.ActionContext_[]; // Link to ActionContexts
+    
+    @Field(() => [mj_core_schema_server_object_types.EntityAction_])
+    EntityActionsArray: mj_core_schema_server_object_types.EntityAction_[]; // Link to EntityActions
+    
+    @Field(() => [mj_core_schema_server_object_types.ActionExecutionLog_])
+    ActionExecutionLogsArray: mj_core_schema_server_object_types.ActionExecutionLog_[]; // Link to ActionExecutionLogs
+    
+    @Field(() => [mj_core_schema_server_object_types.ActionParam_])
+    ActionParamsArray: mj_core_schema_server_object_types.ActionParam_[]; // Link to ActionParams
+    
+    @Field(() => [mj_core_schema_server_object_types.ActionLibrary_])
+    ActionLibrariesArray: mj_core_schema_server_object_types.ActionLibrary_[]; // Link to ActionLibraries
+    
+}
+        
+//****************************************************************************
+// INPUT TYPE for Actions   
+//****************************************************************************
+@InputType()
+export class CreateActionInput {
+    @Field(() => Int, { nullable: true })
+    CategoryID?: number;
+
+    @Field()
+    Name: string;
+
+    @Field()
+    UserPrompt: string;
+
+    @Field({ nullable: true })
+    UserComments?: string;
+
+    @Field({ nullable: true })
+    Code?: string;
+
+    @Field({ nullable: true })
+    CodeComments?: string;
+
+    @Field()
+    CodeApprovalStatus: string;
+
+    @Field({ nullable: true })
+    CodeApprovalComments?: string;
+
+    @Field(() => Int, { nullable: true })
+    CodeApprovedByUserID?: number;
+
+    @Field({ nullable: true })
+    CodeApprovedAt?: Date;
+
+    @Field(() => Boolean)
+    ForceCodeGeneration: boolean;
+
+    @Field(() => Int, { nullable: true })
+    RetentionPeriod?: number;
+
+    @Field()
+    Status: string;
+}
+    
+        
+//****************************************************************************
+// INPUT TYPE for Actions   
+//****************************************************************************
+@InputType()
+export class UpdateActionInput {
+    @Field(() => Int)
+    ID: number;
+
+    @Field(() => Int, { nullable: true })
+    CategoryID?: number;
+
+    @Field()
+    Name: string;
+
+    @Field()
+    UserPrompt: string;
+
+    @Field({ nullable: true })
+    UserComments?: string;
+
+    @Field({ nullable: true })
+    Code?: string;
+
+    @Field({ nullable: true })
+    CodeComments?: string;
+
+    @Field()
+    CodeApprovalStatus: string;
+
+    @Field({ nullable: true })
+    CodeApprovalComments?: string;
+
+    @Field(() => Int, { nullable: true })
+    CodeApprovedByUserID?: number;
+
+    @Field({ nullable: true })
+    CodeApprovedAt?: Date;
+
+    @Field(() => Boolean)
+    ForceCodeGeneration: boolean;
+
+    @Field(() => Int, { nullable: true })
+    RetentionPeriod?: number;
+
+    @Field()
+    Status: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
+//****************************************************************************
+// RESOLVER for Actions
+//****************************************************************************
+@ObjectType()
+export class RunActionViewResult {
+    @Field(() => [Action_])
+    Results: Action_[];
+
+    @Field(() => Int, {nullable: true})
+    UserViewRunID?: number;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(Action_)
+export class ActionResolver extends ResolverBase {
+    @Query(() => RunActionViewResult)
+    async RunActionViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunActionViewResult)
+    async RunActionViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunActionViewResult)
+    async RunActionDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        input.EntityName = 'Actions';
+        return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
+    }
+    @Query(() => Action_, { nullable: true })
+    async Action(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<Action_ | null> {
+        this.CheckUserReadPermissions('Actions', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActions] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Actions', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Actions', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
+    }
+      
+    @FieldResolver(() => [mj_core_schema_server_object_types.ActionAuthorization_])
+    async ActionAuthorizationsArray(@Root() action_: Action_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Action Authorizations', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionAuthorizations] WHERE [ActionID]=${action_.ID} ` + this.getRowLevelSecurityWhereClause('Action Authorizations', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Action Authorizations', await dataSource.query(sSQL));
+        return result;
+    }
+          
+    @FieldResolver(() => [mj_core_schema_server_object_types.ActionResultCode_])
+    async ActionResultCodesArray(@Root() action_: Action_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Action Result Codes', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionResultCodes] WHERE [ActionID]=${action_.ID} ` + this.getRowLevelSecurityWhereClause('Action Result Codes', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Action Result Codes', await dataSource.query(sSQL));
+        return result;
+    }
+          
+    @FieldResolver(() => [mj_core_schema_server_object_types.ActionContext_])
+    async ActionContextsArray(@Root() action_: Action_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Action Contexts', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionContexts] WHERE [ActionID]=${action_.ID} ` + this.getRowLevelSecurityWhereClause('Action Contexts', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Action Contexts', await dataSource.query(sSQL));
+        return result;
+    }
+          
+    @FieldResolver(() => [mj_core_schema_server_object_types.EntityAction_])
+    async EntityActionsArray(@Root() action_: Action_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Entity Actions', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityActions] WHERE [ActionID]=${action_.ID} ` + this.getRowLevelSecurityWhereClause('Entity Actions', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Entity Actions', await dataSource.query(sSQL));
+        return result;
+    }
+          
+    @FieldResolver(() => [mj_core_schema_server_object_types.ActionExecutionLog_])
+    async ActionExecutionLogsArray(@Root() action_: Action_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Action Execution Logs', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionExecutionLogs] WHERE [ActionID]=${action_.ID} ` + this.getRowLevelSecurityWhereClause('Action Execution Logs', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Action Execution Logs', await dataSource.query(sSQL));
+        return result;
+    }
+          
+    @FieldResolver(() => [mj_core_schema_server_object_types.ActionParam_])
+    async ActionParamsArray(@Root() action_: Action_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Action Params', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionParams] WHERE [ActionID]=${action_.ID} ` + this.getRowLevelSecurityWhereClause('Action Params', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Action Params', await dataSource.query(sSQL));
+        return result;
+    }
+          
+    @FieldResolver(() => [mj_core_schema_server_object_types.ActionLibrary_])
+    async ActionLibrariesArray(@Root() action_: Action_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Action Libraries', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionLibraries] WHERE [ActionID]=${action_.ID} ` + this.getRowLevelSecurityWhereClause('Action Libraries', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Action Libraries', await dataSource.query(sSQL));
+        return result;
+    }
+        
+    @Mutation(() => Action_)
+    async CreateAction(
+        @Arg('input', () => CreateActionInput) input: CreateActionInput,
+        @Ctx() { dataSource, userPayload }: AppContext, 
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.CreateRecord('Actions', input, dataSource, userPayload, pubSub)
+    }
+        
+    @Mutation(() => Action_)
+    async UpdateAction(
+        @Arg('input', () => UpdateActionInput) input: UpdateActionInput,
+        @Ctx() { dataSource, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.UpdateRecord('Actions', input, dataSource, userPayload, pubSub);
+    }
+    
+    @Mutation(() => Action_)
+    async DeleteAction(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Actions', key, options, dataSource, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for Entity Action Filters
+//****************************************************************************
+@ObjectType({ description: 'Optional use. Maps Action Filters to specific EntityAction instances, specifying execution order and status. This allows for “pre-processing” before an Action actually is fired off, to check for various state/dirty/value conditions.' })
+export class EntityActionFilter_ {  
+    @Field(() => Int) 
+    ID: number;
+          
+    @Field(() => Int) 
+    EntityActionID: number;
+          
+    @Field(() => Int) 
+    ActionFilterID: number;
+          
+    @Field(() => Int, {description: 'Order of filter execution.'}) 
+    Sequence: number;
+          
+    @Field({description: 'Status of the entity action filter (Pending, Active, Disabled).'}) 
+    @MaxLength(40)
+    Status: string;
+          
+    @Field() 
+    @MaxLength(8)
+    CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(8)
+    UpdatedAt: Date;
+        
+}
+        
+//****************************************************************************
+// INPUT TYPE for Entity Action Filters   
+//****************************************************************************
+@InputType()
+export class CreateEntityActionFilterInput {
+    @Field(() => Int)
+    EntityActionID: number;
+
+    @Field(() => Int)
+    ActionFilterID: number;
+
+    @Field(() => Int)
+    Sequence: number;
+
+    @Field()
+    Status: string;
+}
+    
+        
+//****************************************************************************
+// INPUT TYPE for Entity Action Filters   
+//****************************************************************************
+@InputType()
+export class UpdateEntityActionFilterInput {
+    @Field(() => Int)
+    ID: number;
+
+    @Field(() => Int)
+    EntityActionID: number;
+
+    @Field(() => Int)
+    ActionFilterID: number;
+
+    @Field(() => Int)
+    Sequence: number;
+
+    @Field()
+    Status: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
+//****************************************************************************
+// RESOLVER for Entity Action Filters
+//****************************************************************************
+@ObjectType()
+export class RunEntityActionFilterViewResult {
+    @Field(() => [EntityActionFilter_])
+    Results: EntityActionFilter_[];
+
+    @Field(() => Int, {nullable: true})
+    UserViewRunID?: number;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(EntityActionFilter_)
+export class EntityActionFilterResolver extends ResolverBase {
+    @Query(() => RunEntityActionFilterViewResult)
+    async RunEntityActionFilterViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunEntityActionFilterViewResult)
+    async RunEntityActionFilterViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunEntityActionFilterViewResult)
+    async RunEntityActionFilterDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        input.EntityName = 'Entity Action Filters';
+        return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
+    }
+    @Query(() => EntityActionFilter_, { nullable: true })
+    async EntityActionFilter(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<EntityActionFilter_ | null> {
+        this.CheckUserReadPermissions('Entity Action Filters', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityActionFilters] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Entity Action Filters', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Entity Action Filters', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
+    }
+    
+    @Mutation(() => EntityActionFilter_)
+    async CreateEntityActionFilter(
+        @Arg('input', () => CreateEntityActionFilterInput) input: CreateEntityActionFilterInput,
+        @Ctx() { dataSource, userPayload }: AppContext, 
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.CreateRecord('Entity Action Filters', input, dataSource, userPayload, pubSub)
+    }
+        
+    @Mutation(() => EntityActionFilter_)
+    async UpdateEntityActionFilter(
+        @Arg('input', () => UpdateEntityActionFilterInput) input: UpdateEntityActionFilterInput,
+        @Ctx() { dataSource, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.UpdateRecord('Entity Action Filters', input, dataSource, userPayload, pubSub);
+    }
+    
+    @Mutation(() => EntityActionFilter_)
+    async DeleteEntityActionFilter(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Entity Action Filters', key, options, dataSource, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for Action Filters
+//****************************************************************************
+@ObjectType({ description: 'Defines filters that can be evaluated ahead of executing an action. Action Filters are usable in any code pipeline you can execute them with the same context as the action itself and use the outcome to determine if the action should execute or not.' })
+export class ActionFilter_ {  
+    @Field(() => Int) 
+    ID: number;
+          
+    @Field() 
+    UserDescription: string;
+          
+    @Field({nullable: true}) 
+    UserComments?: string;
+          
+    @Field() 
+    Code: string;
+          
+    @Field({nullable: true}) 
+    CodeExplanation?: string;
+          
+    @Field() 
+    @MaxLength(8)
+    CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(8)
+    UpdatedAt: Date;
+        
+    @Field(() => [mj_core_schema_server_object_types.EntityActionFilter_])
+    EntityActionFiltersArray: mj_core_schema_server_object_types.EntityActionFilter_[]; // Link to EntityActionFilters
+    
+}
+        
+//****************************************************************************
+// INPUT TYPE for Action Filters   
+//****************************************************************************
+@InputType()
+export class CreateActionFilterInput {
+    @Field()
+    UserDescription: string;
+
+    @Field({ nullable: true })
+    UserComments?: string;
+
+    @Field()
+    Code: string;
+
+    @Field({ nullable: true })
+    CodeExplanation?: string;
+}
+    
+        
+//****************************************************************************
+// INPUT TYPE for Action Filters   
+//****************************************************************************
+@InputType()
+export class UpdateActionFilterInput {
+    @Field(() => Int)
+    ID: number;
+
+    @Field()
+    UserDescription: string;
+
+    @Field({ nullable: true })
+    UserComments?: string;
+
+    @Field()
+    Code: string;
+
+    @Field({ nullable: true })
+    CodeExplanation?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
+//****************************************************************************
+// RESOLVER for Action Filters
+//****************************************************************************
+@ObjectType()
+export class RunActionFilterViewResult {
+    @Field(() => [ActionFilter_])
+    Results: ActionFilter_[];
+
+    @Field(() => Int, {nullable: true})
+    UserViewRunID?: number;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(ActionFilter_)
+export class ActionFilterResolver extends ResolverBase {
+    @Query(() => RunActionFilterViewResult)
+    async RunActionFilterViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunActionFilterViewResult)
+    async RunActionFilterViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunActionFilterViewResult)
+    async RunActionFilterDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        input.EntityName = 'Action Filters';
+        return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
+    }
+    @Query(() => ActionFilter_, { nullable: true })
+    async ActionFilter(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ActionFilter_ | null> {
+        this.CheckUserReadPermissions('Action Filters', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionFilters] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Action Filters', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Action Filters', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
+    }
+      
+    @FieldResolver(() => [mj_core_schema_server_object_types.EntityActionFilter_])
+    async EntityActionFiltersArray(@Root() actionfilter_: ActionFilter_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Entity Action Filters', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityActionFilters] WHERE [ActionFilterID]=${actionfilter_.ID} ` + this.getRowLevelSecurityWhereClause('Entity Action Filters', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Entity Action Filters', await dataSource.query(sSQL));
+        return result;
+    }
+        
+    @Mutation(() => ActionFilter_)
+    async CreateActionFilter(
+        @Arg('input', () => CreateActionFilterInput) input: CreateActionFilterInput,
+        @Ctx() { dataSource, userPayload }: AppContext, 
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.CreateRecord('Action Filters', input, dataSource, userPayload, pubSub)
+    }
+        
+    @Mutation(() => ActionFilter_)
+    async UpdateActionFilter(
+        @Arg('input', () => UpdateActionFilterInput) input: UpdateActionFilterInput,
+        @Ctx() { dataSource, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.UpdateRecord('Action Filters', input, dataSource, userPayload, pubSub);
+    }
+    
+    @Mutation(() => ActionFilter_)
+    async DeleteActionFilter(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Action Filters', key, options, dataSource, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for Action Context Types
+//****************************************************************************
+@ObjectType({ description: 'Lists possible contexts for action execution with optional descriptions.' })
+export class ActionContextType_ {  
+    @Field(() => Int) 
+    ID: number;
+          
+    @Field({description: 'Name of the context type.'}) 
+    @MaxLength(510)
+    Name: string;
+          
+    @Field({nullable: true, description: 'Description of the context type.'}) 
+    Description?: string;
+          
+    @Field() 
+    @MaxLength(8)
+    CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(8)
+    UpdatedAt: Date;
+        
+    @Field(() => [mj_core_schema_server_object_types.ActionContext_])
+    ActionContextsArray: mj_core_schema_server_object_types.ActionContext_[]; // Link to ActionContexts
+    
+}
+        
+//****************************************************************************
+// INPUT TYPE for Action Context Types   
+//****************************************************************************
+@InputType()
+export class CreateActionContextTypeInput {
+    @Field()
+    Name: string;
+
+    @Field({ nullable: true })
+    Description?: string;
+}
+    
+        
+//****************************************************************************
+// INPUT TYPE for Action Context Types   
+//****************************************************************************
+@InputType()
+export class UpdateActionContextTypeInput {
+    @Field(() => Int)
+    ID: number;
+
+    @Field()
+    Name: string;
+
+    @Field({ nullable: true })
+    Description?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
+//****************************************************************************
+// RESOLVER for Action Context Types
+//****************************************************************************
+@ObjectType()
+export class RunActionContextTypeViewResult {
+    @Field(() => [ActionContextType_])
+    Results: ActionContextType_[];
+
+    @Field(() => Int, {nullable: true})
+    UserViewRunID?: number;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(ActionContextType_)
+export class ActionContextTypeResolver extends ResolverBase {
+    @Query(() => RunActionContextTypeViewResult)
+    async RunActionContextTypeViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunActionContextTypeViewResult)
+    async RunActionContextTypeViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunActionContextTypeViewResult)
+    async RunActionContextTypeDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        input.EntityName = 'Action Context Types';
+        return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
+    }
+    @Query(() => ActionContextType_, { nullable: true })
+    async ActionContextType(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ActionContextType_ | null> {
+        this.CheckUserReadPermissions('Action Context Types', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionContextTypes] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Action Context Types', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Action Context Types', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
+    }
+      
+    @FieldResolver(() => [mj_core_schema_server_object_types.ActionContext_])
+    async ActionContextsArray(@Root() actioncontexttype_: ActionContextType_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Action Contexts', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionContexts] WHERE [ContextTypeID]=${actioncontexttype_.ID} ` + this.getRowLevelSecurityWhereClause('Action Contexts', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Action Contexts', await dataSource.query(sSQL));
+        return result;
+    }
+        
+    @Mutation(() => ActionContextType_)
+    async CreateActionContextType(
+        @Arg('input', () => CreateActionContextTypeInput) input: CreateActionContextTypeInput,
+        @Ctx() { dataSource, userPayload }: AppContext, 
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.CreateRecord('Action Context Types', input, dataSource, userPayload, pubSub)
+    }
+        
+    @Mutation(() => ActionContextType_)
+    async UpdateActionContextType(
+        @Arg('input', () => UpdateActionContextTypeInput) input: UpdateActionContextTypeInput,
+        @Ctx() { dataSource, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.UpdateRecord('Action Context Types', input, dataSource, userPayload, pubSub);
+    }
+    
+    @Mutation(() => ActionContextType_)
+    async DeleteActionContextType(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Action Context Types', key, options, dataSource, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for Action Result Codes
+//****************************************************************************
+@ObjectType({ description: 'Defines the possible result codes for each action.' })
+export class ActionResultCode_ {  
+    @Field(() => Int) 
+    ID: number;
+          
+    @Field(() => Int) 
+    ActionID: number;
+          
+    @Field() 
+    @MaxLength(510)
+    ResultCode: string;
+          
+    @Field({nullable: true, description: 'Description of the result code.'}) 
+    Description?: string;
+          
+    @Field() 
+    @MaxLength(8)
+    CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(8)
+    UpdatedAt: Date;
+          
+    @Field() 
+    @MaxLength(850)
+    Action: string;
+        
+}
+        
+//****************************************************************************
+// INPUT TYPE for Action Result Codes   
+//****************************************************************************
+@InputType()
+export class CreateActionResultCodeInput {
+    @Field(() => Int)
+    ActionID: number;
+
+    @Field()
+    ResultCode: string;
+
+    @Field({ nullable: true })
+    Description?: string;
+}
+    
+        
+//****************************************************************************
+// INPUT TYPE for Action Result Codes   
+//****************************************************************************
+@InputType()
+export class UpdateActionResultCodeInput {
+    @Field(() => Int)
+    ID: number;
+
+    @Field(() => Int)
+    ActionID: number;
+
+    @Field()
+    ResultCode: string;
+
+    @Field({ nullable: true })
+    Description?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
+//****************************************************************************
+// RESOLVER for Action Result Codes
+//****************************************************************************
+@ObjectType()
+export class RunActionResultCodeViewResult {
+    @Field(() => [ActionResultCode_])
+    Results: ActionResultCode_[];
+
+    @Field(() => Int, {nullable: true})
+    UserViewRunID?: number;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(ActionResultCode_)
+export class ActionResultCodeResolver extends ResolverBase {
+    @Query(() => RunActionResultCodeViewResult)
+    async RunActionResultCodeViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunActionResultCodeViewResult)
+    async RunActionResultCodeViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunActionResultCodeViewResult)
+    async RunActionResultCodeDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        input.EntityName = 'Action Result Codes';
+        return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
+    }
+    @Query(() => ActionResultCode_, { nullable: true })
+    async ActionResultCode(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ActionResultCode_ | null> {
+        this.CheckUserReadPermissions('Action Result Codes', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionResultCodes] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Action Result Codes', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Action Result Codes', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
+    }
+    
+    @Mutation(() => ActionResultCode_)
+    async CreateActionResultCode(
+        @Arg('input', () => CreateActionResultCodeInput) input: CreateActionResultCodeInput,
+        @Ctx() { dataSource, userPayload }: AppContext, 
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.CreateRecord('Action Result Codes', input, dataSource, userPayload, pubSub)
+    }
+        
+    @Mutation(() => ActionResultCode_)
+    async UpdateActionResultCode(
+        @Arg('input', () => UpdateActionResultCodeInput) input: UpdateActionResultCodeInput,
+        @Ctx() { dataSource, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.UpdateRecord('Action Result Codes', input, dataSource, userPayload, pubSub);
+    }
+    
+    @Mutation(() => ActionResultCode_)
+    async DeleteActionResultCode(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Action Result Codes', key, options, dataSource, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for Action Contexts
+//****************************************************************************
+@ObjectType({ description: 'Links actions to their supported context types enabling a given action to be executable in more than one context.' })
+export class ActionContext_ {  
+    @Field(() => Int) 
+    ID: number;
+          
+    @Field(() => Int) 
+    ActionID: number;
+          
+    @Field(() => Int) 
+    ContextTypeID: number;
+          
+    @Field({description: 'Status of the action context (Pending, Active, Disabled).'}) 
+    @MaxLength(40)
+    Status: string;
+          
+    @Field() 
+    @MaxLength(8)
+    CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(8)
+    UpdatedAt: Date;
+          
+    @Field() 
+    @MaxLength(850)
+    Action: string;
+          
+    @Field() 
+    @MaxLength(510)
+    ContextType: string;
+        
+}
+        
+//****************************************************************************
+// INPUT TYPE for Action Contexts   
+//****************************************************************************
+@InputType()
+export class CreateActionContextInput {
+    @Field(() => Int)
+    ActionID: number;
+
+    @Field(() => Int)
+    ContextTypeID: number;
+
+    @Field()
+    Status: string;
+}
+    
+        
+//****************************************************************************
+// INPUT TYPE for Action Contexts   
+//****************************************************************************
+@InputType()
+export class UpdateActionContextInput {
+    @Field(() => Int)
+    ID: number;
+
+    @Field(() => Int)
+    ActionID: number;
+
+    @Field(() => Int)
+    ContextTypeID: number;
+
+    @Field()
+    Status: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
+//****************************************************************************
+// RESOLVER for Action Contexts
+//****************************************************************************
+@ObjectType()
+export class RunActionContextViewResult {
+    @Field(() => [ActionContext_])
+    Results: ActionContext_[];
+
+    @Field(() => Int, {nullable: true})
+    UserViewRunID?: number;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(ActionContext_)
+export class ActionContextResolver extends ResolverBase {
+    @Query(() => RunActionContextViewResult)
+    async RunActionContextViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunActionContextViewResult)
+    async RunActionContextViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunActionContextViewResult)
+    async RunActionContextDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        input.EntityName = 'Action Contexts';
+        return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
+    }
+    @Query(() => ActionContext_, { nullable: true })
+    async ActionContext(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ActionContext_ | null> {
+        this.CheckUserReadPermissions('Action Contexts', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionContexts] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Action Contexts', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Action Contexts', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
+    }
+    
+    @Mutation(() => ActionContext_)
+    async CreateActionContext(
+        @Arg('input', () => CreateActionContextInput) input: CreateActionContextInput,
+        @Ctx() { dataSource, userPayload }: AppContext, 
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.CreateRecord('Action Contexts', input, dataSource, userPayload, pubSub)
+    }
+        
+    @Mutation(() => ActionContext_)
+    async UpdateActionContext(
+        @Arg('input', () => UpdateActionContextInput) input: UpdateActionContextInput,
+        @Ctx() { dataSource, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.UpdateRecord('Action Contexts', input, dataSource, userPayload, pubSub);
+    }
+    
+    @Mutation(() => ActionContext_)
+    async DeleteActionContext(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Action Contexts', key, options, dataSource, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for Action Execution Logs
+//****************************************************************************
+@ObjectType({ description: 'Tracks every execution of an action, including start and end times, inputs, outputs, and result codes.' })
+export class ActionExecutionLog_ {  
+    @Field(() => Int) 
+    ID: number;
+          
+    @Field(() => Int) 
+    ActionID: number;
+          
+    @Field({description: 'Timestamp of when the action started execution.'}) 
+    @MaxLength(8)
+    StartedAt: Date;
+          
+    @Field({nullable: true, description: 'Timestamp of when the action ended execution.'}) 
+    @MaxLength(8)
+    EndedAt?: Date;
+          
+    @Field({nullable: true}) 
+    Params?: string;
+          
+    @Field({nullable: true}) 
+    @MaxLength(510)
+    ResultCode?: string;
+          
+    @Field(() => Int) 
+    UserID: number;
+          
+    @Field(() => Int, {nullable: true, description: 'Number of days to retain the log; NULL for indefinite retention.'}) 
+    RetentionPeriod?: number;
+          
+    @Field() 
+    @MaxLength(8)
+    CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(8)
+    UpdatedAt: Date;
+          
+    @Field() 
+    @MaxLength(850)
+    Action: string;
+          
+    @Field() 
+    @MaxLength(200)
+    User: string;
+        
+}
+        
+//****************************************************************************
+// INPUT TYPE for Action Execution Logs   
+//****************************************************************************
+@InputType()
+export class CreateActionExecutionLogInput {
+    @Field(() => Int)
+    ActionID: number;
+
+    @Field()
+    StartedAt: Date;
+
+    @Field({ nullable: true })
+    EndedAt?: Date;
+
+    @Field({ nullable: true })
+    Params?: string;
+
+    @Field({ nullable: true })
+    ResultCode?: string;
+
+    @Field(() => Int)
+    UserID: number;
+
+    @Field(() => Int, { nullable: true })
+    RetentionPeriod?: number;
+}
+    
+        
+//****************************************************************************
+// INPUT TYPE for Action Execution Logs   
+//****************************************************************************
+@InputType()
+export class UpdateActionExecutionLogInput {
+    @Field(() => Int)
+    ID: number;
+
+    @Field(() => Int)
+    ActionID: number;
+
+    @Field()
+    StartedAt: Date;
+
+    @Field({ nullable: true })
+    EndedAt?: Date;
+
+    @Field({ nullable: true })
+    Params?: string;
+
+    @Field({ nullable: true })
+    ResultCode?: string;
+
+    @Field(() => Int)
+    UserID: number;
+
+    @Field(() => Int, { nullable: true })
+    RetentionPeriod?: number;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
+//****************************************************************************
+// RESOLVER for Action Execution Logs
+//****************************************************************************
+@ObjectType()
+export class RunActionExecutionLogViewResult {
+    @Field(() => [ActionExecutionLog_])
+    Results: ActionExecutionLog_[];
+
+    @Field(() => Int, {nullable: true})
+    UserViewRunID?: number;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(ActionExecutionLog_)
+export class ActionExecutionLogResolver extends ResolverBase {
+    @Query(() => RunActionExecutionLogViewResult)
+    async RunActionExecutionLogViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunActionExecutionLogViewResult)
+    async RunActionExecutionLogViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunActionExecutionLogViewResult)
+    async RunActionExecutionLogDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        input.EntityName = 'Action Execution Logs';
+        return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
+    }
+    @Query(() => ActionExecutionLog_, { nullable: true })
+    async ActionExecutionLog(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ActionExecutionLog_ | null> {
+        this.CheckUserReadPermissions('Action Execution Logs', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionExecutionLogs] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Action Execution Logs', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Action Execution Logs', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
+    }
+    
+    @Mutation(() => ActionExecutionLog_)
+    async CreateActionExecutionLog(
+        @Arg('input', () => CreateActionExecutionLogInput) input: CreateActionExecutionLogInput,
+        @Ctx() { dataSource, userPayload }: AppContext, 
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.CreateRecord('Action Execution Logs', input, dataSource, userPayload, pubSub)
+    }
+        
+    @Mutation(() => ActionExecutionLog_)
+    async UpdateActionExecutionLog(
+        @Arg('input', () => UpdateActionExecutionLogInput) input: UpdateActionExecutionLogInput,
+        @Ctx() { dataSource, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.UpdateRecord('Action Execution Logs', input, dataSource, userPayload, pubSub);
+    }
+    
+    @Mutation(() => ActionExecutionLog_)
+    async DeleteActionExecutionLog(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Action Execution Logs', key, options, dataSource, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for Action Params
+//****************************************************************************
+@ObjectType({ description: 'Tracks the input and output parameters for Actions.' })
+export class ActionParam_ {  
+    @Field(() => Int) 
+    ID: number;
+          
+    @Field(() => Int) 
+    ActionID: number;
+          
+    @Field() 
+    @MaxLength(510)
+    Name: string;
+          
+    @Field({nullable: true}) 
+    DefaultValue?: string;
+          
+    @Field() 
+    @MaxLength(20)
+    Type: string;
+          
+    @Field({description: 'Tracks the basic value type of the parameter, additional information can be provided in the Description field'}) 
+    @MaxLength(60)
+    ValueType: string;
+          
+    @Field(() => Boolean) 
+    IsArray: boolean;
+          
+    @Field({nullable: true}) 
+    Description?: string;
+          
+    @Field(() => Boolean) 
+    IsRequired: boolean;
+          
+    @Field() 
+    @MaxLength(8)
+    CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(8)
+    UpdatedAt: Date;
+          
+    @Field() 
+    @MaxLength(850)
+    Action: string;
+        
+}
+        
+//****************************************************************************
+// INPUT TYPE for Action Params   
+//****************************************************************************
+@InputType()
+export class CreateActionParamInput {
+    @Field(() => Int)
+    ActionID: number;
+
+    @Field()
+    Name: string;
+
+    @Field({ nullable: true })
+    DefaultValue?: string;
+
+    @Field()
+    Type: string;
+
+    @Field()
+    ValueType: string;
+
+    @Field(() => Boolean)
+    IsArray: boolean;
+
+    @Field({ nullable: true })
+    Description?: string;
+
+    @Field(() => Boolean)
+    IsRequired: boolean;
+}
+    
+        
+//****************************************************************************
+// INPUT TYPE for Action Params   
+//****************************************************************************
+@InputType()
+export class UpdateActionParamInput {
+    @Field(() => Int)
+    ID: number;
+
+    @Field(() => Int)
+    ActionID: number;
+
+    @Field()
+    Name: string;
+
+    @Field({ nullable: true })
+    DefaultValue?: string;
+
+    @Field()
+    Type: string;
+
+    @Field()
+    ValueType: string;
+
+    @Field(() => Boolean)
+    IsArray: boolean;
+
+    @Field({ nullable: true })
+    Description?: string;
+
+    @Field(() => Boolean)
+    IsRequired: boolean;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
+//****************************************************************************
+// RESOLVER for Action Params
+//****************************************************************************
+@ObjectType()
+export class RunActionParamViewResult {
+    @Field(() => [ActionParam_])
+    Results: ActionParam_[];
+
+    @Field(() => Int, {nullable: true})
+    UserViewRunID?: number;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(ActionParam_)
+export class ActionParamResolver extends ResolverBase {
+    @Query(() => RunActionParamViewResult)
+    async RunActionParamViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunActionParamViewResult)
+    async RunActionParamViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunActionParamViewResult)
+    async RunActionParamDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        input.EntityName = 'Action Params';
+        return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
+    }
+    @Query(() => ActionParam_, { nullable: true })
+    async ActionParam(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ActionParam_ | null> {
+        this.CheckUserReadPermissions('Action Params', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionParams] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Action Params', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Action Params', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
+    }
+    
+    @Mutation(() => ActionParam_)
+    async CreateActionParam(
+        @Arg('input', () => CreateActionParamInput) input: CreateActionParamInput,
+        @Ctx() { dataSource, userPayload }: AppContext, 
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.CreateRecord('Action Params', input, dataSource, userPayload, pubSub)
+    }
+        
+    @Mutation(() => ActionParam_)
+    async UpdateActionParam(
+        @Arg('input', () => UpdateActionParamInput) input: UpdateActionParamInput,
+        @Ctx() { dataSource, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.UpdateRecord('Action Params', input, dataSource, userPayload, pubSub);
+    }
+    
+    @Mutation(() => ActionParam_)
+    async DeleteActionParam(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Action Params', key, options, dataSource, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for Action Libraries
+//****************************************************************************
+@ObjectType({ description: 'Tracks the list of libraries that a given Action uses, including a list of classes/functions for each library.' })
+export class ActionLibrary_ {  
+    @Field(() => Int) 
+    ID: number;
+          
+    @Field(() => Int) 
+    ActionID: number;
+          
+    @Field(() => Int) 
+    LibraryID: number;
+          
+    @Field({nullable: true, description: 'List of classes and functions used by the action from the library.'}) 
+    ItemsUsed?: string;
+          
+    @Field() 
+    @MaxLength(8)
+    CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(8)
+    UpdatedAt: Date;
+          
+    @Field() 
+    @MaxLength(850)
+    Action: string;
+          
+    @Field() 
+    @MaxLength(510)
+    Library: string;
+        
+}
+        
+//****************************************************************************
+// INPUT TYPE for Action Libraries   
+//****************************************************************************
+@InputType()
+export class CreateActionLibraryInput {
+    @Field(() => Int)
+    ActionID: number;
+
+    @Field(() => Int)
+    LibraryID: number;
+
+    @Field({ nullable: true })
+    ItemsUsed?: string;
+}
+    
+        
+//****************************************************************************
+// INPUT TYPE for Action Libraries   
+//****************************************************************************
+@InputType()
+export class UpdateActionLibraryInput {
+    @Field(() => Int)
+    ID: number;
+
+    @Field(() => Int)
+    ActionID: number;
+
+    @Field(() => Int)
+    LibraryID: number;
+
+    @Field({ nullable: true })
+    ItemsUsed?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
+//****************************************************************************
+// RESOLVER for Action Libraries
+//****************************************************************************
+@ObjectType()
+export class RunActionLibraryViewResult {
+    @Field(() => [ActionLibrary_])
+    Results: ActionLibrary_[];
+
+    @Field(() => Int, {nullable: true})
+    UserViewRunID?: number;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(ActionLibrary_)
+export class ActionLibraryResolver extends ResolverBase {
+    @Query(() => RunActionLibraryViewResult)
+    async RunActionLibraryViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunActionLibraryViewResult)
+    async RunActionLibraryViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunActionLibraryViewResult)
+    async RunActionLibraryDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        input.EntityName = 'Action Libraries';
+        return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
+    }
+    @Query(() => ActionLibrary_, { nullable: true })
+    async ActionLibrary(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ActionLibrary_ | null> {
+        this.CheckUserReadPermissions('Action Libraries', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionLibraries] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Action Libraries', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Action Libraries', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
+    }
+    
+    @Mutation(() => ActionLibrary_)
+    async CreateActionLibrary(
+        @Arg('input', () => CreateActionLibraryInput) input: CreateActionLibraryInput,
+        @Ctx() { dataSource, userPayload }: AppContext, 
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.CreateRecord('Action Libraries', input, dataSource, userPayload, pubSub)
+    }
+        
+    @Mutation(() => ActionLibrary_)
+    async UpdateActionLibrary(
+        @Arg('input', () => UpdateActionLibraryInput) input: UpdateActionLibraryInput,
+        @Ctx() { dataSource, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.UpdateRecord('Action Libraries', input, dataSource, userPayload, pubSub);
+    }
+    
+    @Mutation(() => ActionLibrary_)
+    async DeleteActionLibrary(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Action Libraries', key, options, dataSource, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for Libraries
+//****************************************************************************
+@ObjectType({ description: 'Stores information about the available libraries, including a list of classes/functions, type definitions, and sample code. You can add additional custom libraries here to make them avaialable to code generation features within the system.' })
+export class Library_ {  
+    @Field(() => Int) 
+    ID: number;
+          
+    @Field() 
+    @MaxLength(510)
+    Name: string;
+          
+    @Field({nullable: true}) 
+    Description?: string;
+          
+    @Field({description: 'Status of the library, only libraries marked as Active will be available for use by generated code. If a library was once active but no longer is, existing code that used the library will not be affected.'}) 
+    @MaxLength(40)
+    Status: string;
+          
+    @Field({nullable: true, description: 'List of classes and functions exported by the library.'}) 
+    ExportedItems?: string;
+          
+    @Field({nullable: true, description: 'Code showing the types and functions defined in the library to be used for reference by humans and AI'}) 
+    TypeDefinitions?: string;
+          
+    @Field({nullable: true, description: 'Examples of code use of the classes and/or functions from within the library'}) 
+    SampleCode?: string;
+          
+    @Field() 
+    @MaxLength(8)
+    CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(8)
+    UpdatedAt: Date;
+        
+    @Field(() => [mj_core_schema_server_object_types.ActionLibrary_])
+    ActionLibrariesArray: mj_core_schema_server_object_types.ActionLibrary_[]; // Link to ActionLibraries
+    
+}
+        
+//****************************************************************************
+// INPUT TYPE for Libraries   
+//****************************************************************************
+@InputType()
+export class CreateLibraryInput {
+    @Field()
+    Name: string;
+
+    @Field({ nullable: true })
+    Description?: string;
+
+    @Field()
+    Status: string;
+
+    @Field({ nullable: true })
+    ExportedItems?: string;
+
+    @Field({ nullable: true })
+    TypeDefinitions?: string;
+
+    @Field({ nullable: true })
+    SampleCode?: string;
+}
+    
+        
+//****************************************************************************
+// INPUT TYPE for Libraries   
+//****************************************************************************
+@InputType()
+export class UpdateLibraryInput {
+    @Field(() => Int)
+    ID: number;
+
+    @Field()
+    Name: string;
+
+    @Field({ nullable: true })
+    Description?: string;
+
+    @Field()
+    Status: string;
+
+    @Field({ nullable: true })
+    ExportedItems?: string;
+
+    @Field({ nullable: true })
+    TypeDefinitions?: string;
+
+    @Field({ nullable: true })
+    SampleCode?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
+//****************************************************************************
+// RESOLVER for Libraries
+//****************************************************************************
+@ObjectType()
+export class RunLibraryViewResult {
+    @Field(() => [Library_])
+    Results: Library_[];
+
+    @Field(() => Int, {nullable: true})
+    UserViewRunID?: number;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(Library_)
+export class LibraryResolver extends ResolverBase {
+    @Query(() => RunLibraryViewResult)
+    async RunLibraryViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunLibraryViewResult)
+    async RunLibraryViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunLibraryViewResult)
+    async RunLibraryDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        input.EntityName = 'Libraries';
+        return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
+    }
+    @Query(() => Library_, { nullable: true })
+    async Library(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<Library_ | null> {
+        this.CheckUserReadPermissions('Libraries', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwLibraries] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Libraries', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Libraries', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
+    }
+      
+    @FieldResolver(() => [mj_core_schema_server_object_types.ActionLibrary_])
+    async ActionLibrariesArray(@Root() library_: Library_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Action Libraries', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionLibraries] WHERE [LibraryID]=${library_.ID} ` + this.getRowLevelSecurityWhereClause('Action Libraries', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Action Libraries', await dataSource.query(sSQL));
+        return result;
+    }
+        
+    @Mutation(() => Library_)
+    async CreateLibrary(
+        @Arg('input', () => CreateLibraryInput) input: CreateLibraryInput,
+        @Ctx() { dataSource, userPayload }: AppContext, 
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.CreateRecord('Libraries', input, dataSource, userPayload, pubSub)
+    }
+        
+    @Mutation(() => Library_)
+    async UpdateLibrary(
+        @Arg('input', () => UpdateLibraryInput) input: UpdateLibraryInput,
+        @Ctx() { dataSource, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.UpdateRecord('Libraries', input, dataSource, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for List Categories
+//****************************************************************************
+@ObjectType()
+export class ListCategory_ {  
+    @Field(() => Int) 
+    ID: number;
+          
+    @Field() 
+    @MaxLength(200)
+    Name: string;
+          
+    @Field({nullable: true}) 
+    Description?: string;
+          
+    @Field(() => Int, {nullable: true}) 
+    ParentID?: number;
+          
+    @Field() 
+    @MaxLength(8)
+    CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(8)
+    UpdatedAt: Date;
+          
+    @Field(() => Int) 
+    UserID: number;
+        
+}
+        
+//****************************************************************************
+// INPUT TYPE for List Categories   
+//****************************************************************************
+@InputType()
+export class CreateListCategoryInput {
+    @Field()
+    Name: string;
+
+    @Field({ nullable: true })
+    Description?: string;
+
+    @Field(() => Int, { nullable: true })
+    ParentID?: number;
+
+    @Field(() => Int)
+    UserID: number;
+}
+    
+        
+//****************************************************************************
+// INPUT TYPE for List Categories   
+//****************************************************************************
+@InputType()
+export class UpdateListCategoryInput {
+    @Field(() => Int)
+    ID: number;
+
+    @Field()
+    Name: string;
+
+    @Field({ nullable: true })
+    Description?: string;
+
+    @Field(() => Int, { nullable: true })
+    ParentID?: number;
+
+    @Field(() => Int)
+    UserID: number;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
+//****************************************************************************
+// RESOLVER for List Categories
+//****************************************************************************
+@ObjectType()
+export class RunListCategoryViewResult {
+    @Field(() => [ListCategory_])
+    Results: ListCategory_[];
+
+    @Field(() => Int, {nullable: true})
+    UserViewRunID?: number;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(ListCategory_)
+export class ListCategoryResolver extends ResolverBase {
+    @Query(() => RunListCategoryViewResult)
+    async RunListCategoryViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunListCategoryViewResult)
+    async RunListCategoryViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunListCategoryViewResult)
+    async RunListCategoryDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        input.EntityName = 'List Categories';
+        return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
+    }
+    @Query(() => ListCategory_, { nullable: true })
+    async ListCategory(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ListCategory_ | null> {
+        this.CheckUserReadPermissions('List Categories', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwListCategories] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('List Categories', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('List Categories', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
+    }
+    
+    @Mutation(() => ListCategory_)
+    async CreateListCategory(
+        @Arg('input', () => CreateListCategoryInput) input: CreateListCategoryInput,
+        @Ctx() { dataSource, userPayload }: AppContext, 
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.CreateRecord('List Categories', input, dataSource, userPayload, pubSub)
+    }
+        
+    @Mutation(() => ListCategory_)
+    async UpdateListCategory(
+        @Arg('input', () => UpdateListCategoryInput) input: UpdateListCategoryInput,
+        @Ctx() { dataSource, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.UpdateRecord('List Categories', input, dataSource, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for Communication Templates
+//****************************************************************************
+@ObjectType({ description: 'Reusable templates for communication.' })
+export class CommunicationTemplate_ {  
+    @Field(() => Int) 
+    ID: number;
+          
+    @Field() 
+    @MaxLength(510)
+    Name: string;
+          
+    @Field() 
+    Content: string;
+          
+    @Field(() => Int, {nullable: true}) 
+    ParentID?: number;
+          
+    @Field({nullable: true}) 
+    Comments?: string;
+          
+    @Field() 
+    @MaxLength(8)
+    CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(8)
+    UpdatedAt: Date;
+          
+    @Field({nullable: true}) 
+    @MaxLength(510)
+    Parent?: string;
+        
+    @Field(() => [mj_core_schema_server_object_types.CommunicationTemplate_])
+    CommunicationTemplatesArray: mj_core_schema_server_object_types.CommunicationTemplate_[]; // Link to CommunicationTemplates
+    
+}
+        
+//****************************************************************************
+// INPUT TYPE for Communication Templates   
+//****************************************************************************
+@InputType()
+export class CreateCommunicationTemplateInput {
+    @Field()
+    Name: string;
+
+    @Field()
+    Content: string;
+
+    @Field(() => Int, { nullable: true })
+    ParentID?: number;
+
+    @Field({ nullable: true })
+    Comments?: string;
+}
+    
+        
+//****************************************************************************
+// INPUT TYPE for Communication Templates   
+//****************************************************************************
+@InputType()
+export class UpdateCommunicationTemplateInput {
+    @Field(() => Int)
+    ID: number;
+
+    @Field()
+    Name: string;
+
+    @Field()
+    Content: string;
+
+    @Field(() => Int, { nullable: true })
+    ParentID?: number;
+
+    @Field({ nullable: true })
+    Comments?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
+//****************************************************************************
+// RESOLVER for Communication Templates
+//****************************************************************************
+@ObjectType()
+export class RunCommunicationTemplateViewResult {
+    @Field(() => [CommunicationTemplate_])
+    Results: CommunicationTemplate_[];
+
+    @Field(() => Int, {nullable: true})
+    UserViewRunID?: number;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(CommunicationTemplate_)
+export class CommunicationTemplateResolver extends ResolverBase {
+    @Query(() => RunCommunicationTemplateViewResult)
+    async RunCommunicationTemplateViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunCommunicationTemplateViewResult)
+    async RunCommunicationTemplateViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunCommunicationTemplateViewResult)
+    async RunCommunicationTemplateDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        input.EntityName = 'Communication Templates';
+        return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
+    }
+    @Query(() => CommunicationTemplate_, { nullable: true })
+    async CommunicationTemplate(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<CommunicationTemplate_ | null> {
+        this.CheckUserReadPermissions('Communication Templates', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwCommunicationTemplates] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Communication Templates', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Communication Templates', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
+    }
+      
+    @FieldResolver(() => [mj_core_schema_server_object_types.CommunicationTemplate_])
+    async CommunicationTemplatesArray(@Root() communicationtemplate_: CommunicationTemplate_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Communication Templates', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwCommunicationTemplates] WHERE [ParentID]=${communicationtemplate_.ID} ` + this.getRowLevelSecurityWhereClause('Communication Templates', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Communication Templates', await dataSource.query(sSQL));
+        return result;
+    }
+        
+    @Mutation(() => CommunicationTemplate_)
+    async CreateCommunicationTemplate(
+        @Arg('input', () => CreateCommunicationTemplateInput) input: CreateCommunicationTemplateInput,
+        @Ctx() { dataSource, userPayload }: AppContext, 
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.CreateRecord('Communication Templates', input, dataSource, userPayload, pubSub)
+    }
+        
+    @Mutation(() => CommunicationTemplate_)
+    async UpdateCommunicationTemplate(
+        @Arg('input', () => UpdateCommunicationTemplateInput) input: UpdateCommunicationTemplateInput,
+        @Ctx() { dataSource, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.UpdateRecord('Communication Templates', input, dataSource, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for Communication Providers
+//****************************************************************************
+@ObjectType({ description: 'All supported communication providers.' })
+export class CommunicationProvider_ {  
+    @Field(() => Int) 
+    ID: number;
+          
+    @Field() 
+    @MaxLength(510)
+    Name: string;
+          
+    @Field({nullable: true}) 
+    Description?: string;
+          
+    @Field({description: 'The status of the communication provider (Disabled or Active).'}) 
+    @MaxLength(40)
+    Status: string;
+          
+    @Field(() => Boolean, {description: 'Indicates if the provider supports sending messages.'}) 
+    SupportsSending: boolean;
+          
+    @Field(() => Boolean, {description: 'Indicates if the provider supports receiving messages.'}) 
+    SupportsReceiving: boolean;
+          
+    @Field() 
+    @MaxLength(8)
+    CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(8)
+    UpdatedAt: Date;
+        
+    @Field(() => [mj_core_schema_server_object_types.CommunicationProviderMessageType_])
+    CommunicationProviderMessageTypesArray: mj_core_schema_server_object_types.CommunicationProviderMessageType_[]; // Link to CommunicationProviderMessageTypes
+    
+    @Field(() => [mj_core_schema_server_object_types.CommunicationLog_])
+    CommunicationLogsArray: mj_core_schema_server_object_types.CommunicationLog_[]; // Link to CommunicationLogs
+    
+}
+        
+//****************************************************************************
+// INPUT TYPE for Communication Providers   
+//****************************************************************************
+@InputType()
+export class CreateCommunicationProviderInput {
+    @Field()
+    Name: string;
+
+    @Field({ nullable: true })
+    Description?: string;
+
+    @Field()
+    Status: string;
+
+    @Field(() => Boolean)
+    SupportsSending: boolean;
+
+    @Field(() => Boolean)
+    SupportsReceiving: boolean;
+}
+    
+        
+//****************************************************************************
+// INPUT TYPE for Communication Providers   
+//****************************************************************************
+@InputType()
+export class UpdateCommunicationProviderInput {
+    @Field(() => Int)
+    ID: number;
+
+    @Field()
+    Name: string;
+
+    @Field({ nullable: true })
+    Description?: string;
+
+    @Field()
+    Status: string;
+
+    @Field(() => Boolean)
+    SupportsSending: boolean;
+
+    @Field(() => Boolean)
+    SupportsReceiving: boolean;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
+//****************************************************************************
+// RESOLVER for Communication Providers
+//****************************************************************************
+@ObjectType()
+export class RunCommunicationProviderViewResult {
+    @Field(() => [CommunicationProvider_])
+    Results: CommunicationProvider_[];
+
+    @Field(() => Int, {nullable: true})
+    UserViewRunID?: number;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(CommunicationProvider_)
+export class CommunicationProviderResolver extends ResolverBase {
+    @Query(() => RunCommunicationProviderViewResult)
+    async RunCommunicationProviderViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunCommunicationProviderViewResult)
+    async RunCommunicationProviderViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunCommunicationProviderViewResult)
+    async RunCommunicationProviderDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        input.EntityName = 'Communication Providers';
+        return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
+    }
+    @Query(() => CommunicationProvider_, { nullable: true })
+    async CommunicationProvider(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<CommunicationProvider_ | null> {
+        this.CheckUserReadPermissions('Communication Providers', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwCommunicationProviders] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Communication Providers', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Communication Providers', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
+    }
+      
+    @FieldResolver(() => [mj_core_schema_server_object_types.CommunicationProviderMessageType_])
+    async CommunicationProviderMessageTypesArray(@Root() communicationprovider_: CommunicationProvider_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Communication Provider Message Types', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwCommunicationProviderMessageTypes] WHERE [CommunicationProviderID]=${communicationprovider_.ID} ` + this.getRowLevelSecurityWhereClause('Communication Provider Message Types', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Communication Provider Message Types', await dataSource.query(sSQL));
+        return result;
+    }
+          
+    @FieldResolver(() => [mj_core_schema_server_object_types.CommunicationLog_])
+    async CommunicationLogsArray(@Root() communicationprovider_: CommunicationProvider_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Communication Logs', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwCommunicationLogs] WHERE [CommunicationProviderID]=${communicationprovider_.ID} ` + this.getRowLevelSecurityWhereClause('Communication Logs', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Communication Logs', await dataSource.query(sSQL));
+        return result;
+    }
+        
+    @Mutation(() => CommunicationProvider_)
+    async CreateCommunicationProvider(
+        @Arg('input', () => CreateCommunicationProviderInput) input: CreateCommunicationProviderInput,
+        @Ctx() { dataSource, userPayload }: AppContext, 
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.CreateRecord('Communication Providers', input, dataSource, userPayload, pubSub)
+    }
+        
+    @Mutation(() => CommunicationProvider_)
+    async UpdateCommunicationProvider(
+        @Arg('input', () => UpdateCommunicationProviderInput) input: UpdateCommunicationProviderInput,
+        @Ctx() { dataSource, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.UpdateRecord('Communication Providers', input, dataSource, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for Communication Runs
+//****************************************************************************
+@ObjectType({ description: 'Runs of bulk message sends and receives.' })
+export class CommunicationRun_ {  
+    @Field(() => Int) 
+    ID: number;
+          
+    @Field(() => Int) 
+    UserID: number;
+          
+    @Field({description: 'The direction of the communication run (Sending or Receiving).'}) 
+    @MaxLength(40)
+    Direction: string;
+          
+    @Field({description: 'The status of the communication run (Pending, In-Progress, Complete, Failed).'}) 
+    @MaxLength(40)
+    Status: string;
+          
+    @Field({nullable: true}) 
+    Comments?: string;
+          
+    @Field({nullable: true, description: 'The error message if the communication run failed.'}) 
+    ErrorMessage?: string;
+          
+    @Field() 
+    @MaxLength(8)
+    CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(8)
+    UpdatedAt: Date;
+          
+    @Field() 
+    @MaxLength(200)
+    User: string;
+        
+    @Field(() => [mj_core_schema_server_object_types.CommunicationLog_])
+    CommunicationLogsArray: mj_core_schema_server_object_types.CommunicationLog_[]; // Link to CommunicationLogs
+    
+}
+        
+//****************************************************************************
+// INPUT TYPE for Communication Runs   
+//****************************************************************************
+@InputType()
+export class CreateCommunicationRunInput {
+    @Field(() => Int)
+    UserID: number;
+
+    @Field()
+    Direction: string;
+
+    @Field()
+    Status: string;
+
+    @Field({ nullable: true })
+    Comments?: string;
+
+    @Field({ nullable: true })
+    ErrorMessage?: string;
+}
+    
+        
+//****************************************************************************
+// INPUT TYPE for Communication Runs   
+//****************************************************************************
+@InputType()
+export class UpdateCommunicationRunInput {
+    @Field(() => Int)
+    ID: number;
+
+    @Field(() => Int)
+    UserID: number;
+
+    @Field()
+    Direction: string;
+
+    @Field()
+    Status: string;
+
+    @Field({ nullable: true })
+    Comments?: string;
+
+    @Field({ nullable: true })
+    ErrorMessage?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
+//****************************************************************************
+// RESOLVER for Communication Runs
+//****************************************************************************
+@ObjectType()
+export class RunCommunicationRunViewResult {
+    @Field(() => [CommunicationRun_])
+    Results: CommunicationRun_[];
+
+    @Field(() => Int, {nullable: true})
+    UserViewRunID?: number;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(CommunicationRun_)
+export class CommunicationRunResolver extends ResolverBase {
+    @Query(() => RunCommunicationRunViewResult)
+    async RunCommunicationRunViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunCommunicationRunViewResult)
+    async RunCommunicationRunViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunCommunicationRunViewResult)
+    async RunCommunicationRunDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        input.EntityName = 'Communication Runs';
+        return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
+    }
+    @Query(() => CommunicationRun_, { nullable: true })
+    async CommunicationRun(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<CommunicationRun_ | null> {
+        this.CheckUserReadPermissions('Communication Runs', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwCommunicationRuns] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Communication Runs', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Communication Runs', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
+    }
+      
+    @FieldResolver(() => [mj_core_schema_server_object_types.CommunicationLog_])
+    async CommunicationLogsArray(@Root() communicationrun_: CommunicationRun_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Communication Logs', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwCommunicationLogs] WHERE [CommunicationRunID]=${communicationrun_.ID} ` + this.getRowLevelSecurityWhereClause('Communication Logs', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Communication Logs', await dataSource.query(sSQL));
+        return result;
+    }
+        
+    @Mutation(() => CommunicationRun_)
+    async CreateCommunicationRun(
+        @Arg('input', () => CreateCommunicationRunInput) input: CreateCommunicationRunInput,
+        @Ctx() { dataSource, userPayload }: AppContext, 
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.CreateRecord('Communication Runs', input, dataSource, userPayload, pubSub)
+    }
+        
+    @Mutation(() => CommunicationRun_)
+    async UpdateCommunicationRun(
+        @Arg('input', () => UpdateCommunicationRunInput) input: UpdateCommunicationRunInput,
+        @Ctx() { dataSource, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.UpdateRecord('Communication Runs', input, dataSource, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for Communication Provider Message Types
+//****************************************************************************
+@ObjectType({ description: 'Providers and their supported message types with additional attributes.' })
+export class CommunicationProviderMessageType_ {  
+    @Field(() => Int) 
+    ID: number;
+          
+    @Field(() => Int) 
+    CommunicationProviderID: number;
+          
+    @Field(() => Int) 
+    CommunicationBaseMessageTypeID: number;
+          
+    @Field() 
+    @MaxLength(510)
+    Name: string;
+          
+    @Field({description: 'The status of the provider message type (Disabled or Active).'}) 
+    @MaxLength(40)
+    Status: string;
+          
+    @Field({nullable: true, description: 'Additional attributes specific to the provider message type.'}) 
+    AdditionalAttributes?: string;
+          
+    @Field() 
+    @MaxLength(8)
+    CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(8)
+    UpdatedAt: Date;
+          
+    @Field() 
+    @MaxLength(510)
+    CommunicationProvider: string;
+          
+    @Field() 
+    @MaxLength(200)
+    CommunicationBaseMessageType: string;
+        
+    @Field(() => [mj_core_schema_server_object_types.CommunicationLog_])
+    CommunicationLogsArray: mj_core_schema_server_object_types.CommunicationLog_[]; // Link to CommunicationLogs
+    
+}
+        
+//****************************************************************************
+// INPUT TYPE for Communication Provider Message Types   
+//****************************************************************************
+@InputType()
+export class CreateCommunicationProviderMessageTypeInput {
+    @Field(() => Int)
+    CommunicationProviderID: number;
+
+    @Field(() => Int)
+    CommunicationBaseMessageTypeID: number;
+
+    @Field()
+    Name: string;
+
+    @Field()
+    Status: string;
+
+    @Field({ nullable: true })
+    AdditionalAttributes?: string;
+}
+    
+        
+//****************************************************************************
+// INPUT TYPE for Communication Provider Message Types   
+//****************************************************************************
+@InputType()
+export class UpdateCommunicationProviderMessageTypeInput {
+    @Field(() => Int)
+    ID: number;
+
+    @Field(() => Int)
+    CommunicationProviderID: number;
+
+    @Field(() => Int)
+    CommunicationBaseMessageTypeID: number;
+
+    @Field()
+    Name: string;
+
+    @Field()
+    Status: string;
+
+    @Field({ nullable: true })
+    AdditionalAttributes?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
+//****************************************************************************
+// RESOLVER for Communication Provider Message Types
+//****************************************************************************
+@ObjectType()
+export class RunCommunicationProviderMessageTypeViewResult {
+    @Field(() => [CommunicationProviderMessageType_])
+    Results: CommunicationProviderMessageType_[];
+
+    @Field(() => Int, {nullable: true})
+    UserViewRunID?: number;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(CommunicationProviderMessageType_)
+export class CommunicationProviderMessageTypeResolver extends ResolverBase {
+    @Query(() => RunCommunicationProviderMessageTypeViewResult)
+    async RunCommunicationProviderMessageTypeViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunCommunicationProviderMessageTypeViewResult)
+    async RunCommunicationProviderMessageTypeViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunCommunicationProviderMessageTypeViewResult)
+    async RunCommunicationProviderMessageTypeDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        input.EntityName = 'Communication Provider Message Types';
+        return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
+    }
+    @Query(() => CommunicationProviderMessageType_, { nullable: true })
+    async CommunicationProviderMessageType(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<CommunicationProviderMessageType_ | null> {
+        this.CheckUserReadPermissions('Communication Provider Message Types', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwCommunicationProviderMessageTypes] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Communication Provider Message Types', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Communication Provider Message Types', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
+    }
+      
+    @FieldResolver(() => [mj_core_schema_server_object_types.CommunicationLog_])
+    async CommunicationLogsArray(@Root() communicationprovidermessagetype_: CommunicationProviderMessageType_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Communication Logs', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwCommunicationLogs] WHERE [CommunicationProviderMessageTypeID]=${communicationprovidermessagetype_.ID} ` + this.getRowLevelSecurityWhereClause('Communication Logs', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Communication Logs', await dataSource.query(sSQL));
+        return result;
+    }
+        
+    @Mutation(() => CommunicationProviderMessageType_)
+    async CreateCommunicationProviderMessageType(
+        @Arg('input', () => CreateCommunicationProviderMessageTypeInput) input: CreateCommunicationProviderMessageTypeInput,
+        @Ctx() { dataSource, userPayload }: AppContext, 
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.CreateRecord('Communication Provider Message Types', input, dataSource, userPayload, pubSub)
+    }
+        
+    @Mutation(() => CommunicationProviderMessageType_)
+    async UpdateCommunicationProviderMessageType(
+        @Arg('input', () => UpdateCommunicationProviderMessageTypeInput) input: UpdateCommunicationProviderMessageTypeInput,
+        @Ctx() { dataSource, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.UpdateRecord('Communication Provider Message Types', input, dataSource, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for Communication Logs
+//****************************************************************************
+@ObjectType({ description: 'Logs of sent and received messages.' })
+export class CommunicationLog_ {  
+    @Field(() => Int) 
+    ID: number;
+          
+    @Field(() => Int) 
+    CommunicationProviderID: number;
+          
+    @Field(() => Int) 
+    CommunicationProviderMessageTypeID: number;
+          
+    @Field(() => Int, {nullable: true}) 
+    CommunicationRunID?: number;
+          
+    @Field({description: 'The direction of the communication log (Sending or Receiving).'}) 
+    @MaxLength(40)
+    Direction: string;
+          
+    @Field({description: 'The date and time when the message was logged.'}) 
+    @MaxLength(8)
+    MessageDate: Date;
+          
+    @Field({description: 'The status of the logged message (Pending, In-Progress, Complete, Failed).'}) 
+    @MaxLength(100)
+    Status: string;
+          
+    @Field({nullable: true, description: 'The content of the logged message.'}) 
+    MessageContent?: string;
+          
+    @Field({nullable: true, description: 'The error message if the message sending failed.'}) 
+    ErrorMessage?: string;
+          
+    @Field() 
+    @MaxLength(8)
+    CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(8)
+    UpdatedAt: Date;
+          
+    @Field() 
+    @MaxLength(510)
+    CommunicationProvider: string;
+          
+    @Field() 
+    @MaxLength(510)
+    CommunicationProviderMessageType: string;
+        
+}
+        
+//****************************************************************************
+// INPUT TYPE for Communication Logs   
+//****************************************************************************
+@InputType()
+export class CreateCommunicationLogInput {
+    @Field(() => Int)
+    CommunicationProviderID: number;
+
+    @Field(() => Int)
+    CommunicationProviderMessageTypeID: number;
+
+    @Field(() => Int, { nullable: true })
+    CommunicationRunID?: number;
+
+    @Field()
+    Direction: string;
+
+    @Field()
+    MessageDate: Date;
+
+    @Field()
+    Status: string;
+
+    @Field({ nullable: true })
+    MessageContent?: string;
+
+    @Field({ nullable: true })
+    ErrorMessage?: string;
+}
+    
+        
+//****************************************************************************
+// INPUT TYPE for Communication Logs   
+//****************************************************************************
+@InputType()
+export class UpdateCommunicationLogInput {
+    @Field(() => Int)
+    ID: number;
+
+    @Field(() => Int)
+    CommunicationProviderID: number;
+
+    @Field(() => Int)
+    CommunicationProviderMessageTypeID: number;
+
+    @Field(() => Int, { nullable: true })
+    CommunicationRunID?: number;
+
+    @Field()
+    Direction: string;
+
+    @Field()
+    MessageDate: Date;
+
+    @Field()
+    Status: string;
+
+    @Field({ nullable: true })
+    MessageContent?: string;
+
+    @Field({ nullable: true })
+    ErrorMessage?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
+//****************************************************************************
+// RESOLVER for Communication Logs
+//****************************************************************************
+@ObjectType()
+export class RunCommunicationLogViewResult {
+    @Field(() => [CommunicationLog_])
+    Results: CommunicationLog_[];
+
+    @Field(() => Int, {nullable: true})
+    UserViewRunID?: number;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(CommunicationLog_)
+export class CommunicationLogResolver extends ResolverBase {
+    @Query(() => RunCommunicationLogViewResult)
+    async RunCommunicationLogViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunCommunicationLogViewResult)
+    async RunCommunicationLogViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunCommunicationLogViewResult)
+    async RunCommunicationLogDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        input.EntityName = 'Communication Logs';
+        return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
+    }
+    @Query(() => CommunicationLog_, { nullable: true })
+    async CommunicationLog(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<CommunicationLog_ | null> {
+        this.CheckUserReadPermissions('Communication Logs', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwCommunicationLogs] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Communication Logs', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Communication Logs', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
+    }
+    
+    @Mutation(() => CommunicationLog_)
+    async CreateCommunicationLog(
+        @Arg('input', () => CreateCommunicationLogInput) input: CreateCommunicationLogInput,
+        @Ctx() { dataSource, userPayload }: AppContext, 
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.CreateRecord('Communication Logs', input, dataSource, userPayload, pubSub)
+    }
+        
+    @Mutation(() => CommunicationLog_)
+    async UpdateCommunicationLog(
+        @Arg('input', () => UpdateCommunicationLogInput) input: UpdateCommunicationLogInput,
+        @Ctx() { dataSource, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.UpdateRecord('Communication Logs', input, dataSource, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for Communication Base Message Types
+//****************************************************************************
+@ObjectType({ description: 'Base message types and their supported functionalities.' })
+export class CommunicationBaseMessageType_ {  
+    @Field(() => Int) 
+    ID: number;
+          
+    @Field() 
+    @MaxLength(200)
+    Type: string;
+          
+    @Field(() => Boolean, {description: 'Indicates if attachments are supported.'}) 
+    SupportsAttachments: boolean;
+          
+    @Field(() => Boolean, {description: 'Indicates if a subject line is supported.'}) 
+    SupportsSubjectLine: boolean;
+          
+    @Field(() => Boolean, {description: 'Indicates if HTML content is supported.'}) 
+    SupportsHtml: boolean;
+          
+    @Field(() => Int, {nullable: true, description: 'The maximum size in bytes for the message.'}) 
+    MaxBytes?: number;
+          
+    @Field() 
+    @MaxLength(8)
+    CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(8)
+    UpdatedAt: Date;
+        
+    @Field(() => [mj_core_schema_server_object_types.CommunicationProviderMessageType_])
+    CommunicationProviderMessageTypesArray: mj_core_schema_server_object_types.CommunicationProviderMessageType_[]; // Link to CommunicationProviderMessageTypes
+    
+}
+        
+//****************************************************************************
+// INPUT TYPE for Communication Base Message Types   
+//****************************************************************************
+@InputType()
+export class CreateCommunicationBaseMessageTypeInput {
+    @Field()
+    Type: string;
+
+    @Field(() => Boolean)
+    SupportsAttachments: boolean;
+
+    @Field(() => Boolean)
+    SupportsSubjectLine: boolean;
+
+    @Field(() => Boolean)
+    SupportsHtml: boolean;
+
+    @Field(() => Int, { nullable: true })
+    MaxBytes?: number;
+}
+    
+        
+//****************************************************************************
+// INPUT TYPE for Communication Base Message Types   
+//****************************************************************************
+@InputType()
+export class UpdateCommunicationBaseMessageTypeInput {
+    @Field(() => Int)
+    ID: number;
+
+    @Field()
+    Type: string;
+
+    @Field(() => Boolean)
+    SupportsAttachments: boolean;
+
+    @Field(() => Boolean)
+    SupportsSubjectLine: boolean;
+
+    @Field(() => Boolean)
+    SupportsHtml: boolean;
+
+    @Field(() => Int, { nullable: true })
+    MaxBytes?: number;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
+//****************************************************************************
+// RESOLVER for Communication Base Message Types
+//****************************************************************************
+@ObjectType()
+export class RunCommunicationBaseMessageTypeViewResult {
+    @Field(() => [CommunicationBaseMessageType_])
+    Results: CommunicationBaseMessageType_[];
+
+    @Field(() => Int, {nullable: true})
+    UserViewRunID?: number;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(CommunicationBaseMessageType_)
+export class CommunicationBaseMessageTypeResolver extends ResolverBase {
+    @Query(() => RunCommunicationBaseMessageTypeViewResult)
+    async RunCommunicationBaseMessageTypeViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunCommunicationBaseMessageTypeViewResult)
+    async RunCommunicationBaseMessageTypeViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunCommunicationBaseMessageTypeViewResult)
+    async RunCommunicationBaseMessageTypeDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        input.EntityName = 'Communication Base Message Types';
+        return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
+    }
+    @Query(() => CommunicationBaseMessageType_, { nullable: true })
+    async CommunicationBaseMessageType(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<CommunicationBaseMessageType_ | null> {
+        this.CheckUserReadPermissions('Communication Base Message Types', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwCommunicationBaseMessageTypes] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Communication Base Message Types', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Communication Base Message Types', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
+    }
+      
+    @FieldResolver(() => [mj_core_schema_server_object_types.CommunicationProviderMessageType_])
+    async CommunicationProviderMessageTypesArray(@Root() communicationbasemessagetype_: CommunicationBaseMessageType_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Communication Provider Message Types', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwCommunicationProviderMessageTypes] WHERE [CommunicationBaseMessageTypeID]=${communicationbasemessagetype_.ID} ` + this.getRowLevelSecurityWhereClause('Communication Provider Message Types', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Communication Provider Message Types', await dataSource.query(sSQL));
+        return result;
+    }
+        
+    @Mutation(() => CommunicationBaseMessageType_)
+    async CreateCommunicationBaseMessageType(
+        @Arg('input', () => CreateCommunicationBaseMessageTypeInput) input: CreateCommunicationBaseMessageTypeInput,
+        @Ctx() { dataSource, userPayload }: AppContext, 
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.CreateRecord('Communication Base Message Types', input, dataSource, userPayload, pubSub)
+    }
+        
+    @Mutation(() => CommunicationBaseMessageType_)
+    async UpdateCommunicationBaseMessageType(
+        @Arg('input', () => UpdateCommunicationBaseMessageTypeInput) input: UpdateCommunicationBaseMessageTypeInput,
+        @Ctx() { dataSource, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.UpdateRecord('Communication Base Message Types', input, dataSource, userPayload, pubSub);
     }
     
 }

@@ -5,21 +5,29 @@
                     
                 </div>
                 <mj-tabstrip (TabSelected)="onTabSelect($event.index)" mjFillContainer>
-                    
-                    <mj-tab [TabSelected]="this.RegisterAndCheckIfCurrentTab('Details')">
+                    <mj-tab Name="Details">
                         Details
                     </mj-tab>
                     <mj-tab-body>
-                        <mj-form-section Entity="Invoice Status Types" Section="details" [record]="record" [EditMode]="this.EditMode"></mj-form-section>
+                        <mj-form-section 
+                            Entity="Invoice Status Types" 
+                            Section="details" 
+                            [record]="record" 
+                            [EditMode]="this.EditMode">
+                        </mj-form-section>
                     </mj-tab-body>
-                     
-                    <mj-tab [TabSelected]="this.RegisterAndCheckIfCurrentTab('Invoices')">
+                    
+                    <mj-tab Name="Invoices" 
+                        [Visible]="record.IsSaved" 
+                        [Props]="{EntityRelationshipID: 155}">
                         Invoices
                     </mj-tab>
                     <mj-tab-body>
-                        <mj-user-view-grid [Params]="this.BuildRelationshipViewParamsByEntityName('Invoices')"  
-                            [AllowLoad]="this.IsCurrentTab('Invoices')"  
-                            [EditMode]="this.GridEditMode()"  
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Invoices')"  
+                            [NewRecordValues]="NewRecordValues('Invoices')"
+                            [AllowLoad]="IsCurrentTab('Invoices')"  
+                            [EditMode]="GridEditMode()"  
                             [BottomMargin]="GridBottomMargin">
                         </mj-user-view-grid>
                     </mj-tab-body>

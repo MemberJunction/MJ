@@ -3,9 +3,9 @@ import { Metadata } from "./metadata"
 import { RunViewParams } from "../views/runView"
 import { BaseEntity } from "./baseEntity"
 import { RowLevelSecurityFilterInfo, UserInfo, UserRoleInfo } from "./securityInfo"
-import { TypeScriptTypeFromSQLType, SQLFullType, SQLMaxLength, FormatValue } from "./util"
+import { TypeScriptTypeFromSQLType, SQLFullType, SQLMaxLength, FormatValue, CodeNameFromString } from "./util"
 import { LogError } from "./logging"
-import { CompositeKey } from "./interfaces"
+import { CompositeKey } from "./compositeKey"
 
 /**
  * The possible status values for a record change
@@ -482,26 +482,6 @@ export class EntityFieldInfo extends BaseInfo {
 }
 
 
-export function CodeNameFromString(input: string): string {
-    // the code below replaces characters invalid for SQL or TypeScript identifiers with _ and stashes the result in a private variable so we only do this once
-    // Replace all invalid characters with _
-    let codeName = input.replace(/[^a-zA-Z0-9_]/g, "_");
-
-    // Prepend an underscore if the first character is a number
-    if (/^[0-9]/.test(codeName)) {
-        codeName = "_" + codeName;
-    }
-    return codeName;
-}
-
-/**
- * Primary Key Value object is used to pass in a primary key field/value pairs to BaseEntity.Load() and other methods that need to load a record by primary key
- */
-export class KeyValuePair {
-    FieldName: string
-    Value: any
-}
-
 
 /**
  * Entity Document Type Info object has information about the document types that exist across all entities. When Entity Documents are created they are associated with a document type.
@@ -517,41 +497,7 @@ export class EntityDocumentTypeInfo extends BaseInfo {
         this.copyInitData(initData)
     }
 }
-
-/**
- * Entity Behavior Type Info object has information about the behavior types that can be applied to an entity
- */
-export class EntityBehaviorTypeInfo extends BaseInfo {
-    Name: string = null
-    Description: string = null  
-    CreatedAt: Date = null
-    UpdatedAt: Date = null
-
-    constructor (initData: any = null) {
-        super()
-        this.copyInitData(initData)
-    }
-}
-
-/**
- * Contains information about a specific behavior that has been applied to an entity
- */
-export class EntityBehaviorInfo extends BaseInfo {
-    EntityID: number = null
-    BehaviorTypeID: number = null
-    Description: string = null
-    RegenerateCode: boolean = null
-    Code: string = null
-    CodeExplanation: string = null
-    CodeGenerated: boolean = null
-    CreatedAt: Date = null
-    UpdatedAt: Date = null
-
-    constructor (initData: any = null) {
-        super()
-        this.copyInitData(initData)
-    }
-}
+ 
 
 /**
  * Settings allow you to store key/value pairs of information that can be used to configure the behavior of the entity.
@@ -636,7 +582,6 @@ export class EntityInfo extends BaseInfo {
     private _Fields: EntityFieldInfo[] 
     private _RelatedEntities: EntityRelationshipInfo[]
     private _Permissions: EntityPermissionInfo[]
-    private _Behaviors: EntityBehaviorInfo[]
     private _Settings: EntitySettingInfo[]
     _hasIdField: boolean = false
     _virtualCount: number = 0 
@@ -645,10 +590,10 @@ export class EntityInfo extends BaseInfo {
     _floatCount: number = 0
 
     /**
-     * Returns the primary key for the entity. For entities with a composite primary key, use the PrimaryKeys property which returns all. 
+     * Returns the primary key field for the entity. For entities with a composite primary key, use the PrimaryKeys property which returns all. 
      * In the case of a composite primary key, the PrimaryKey property will return the first field in the sequence of the primary key fields.
      */
-    get PrimaryKey(): EntityFieldInfo {
+    get FirstPrimaryKey(): EntityFieldInfo {
         return this.Fields.find((f) => f.IsPrimaryKey);
     }
 
@@ -676,11 +621,15 @@ export class EntityInfo extends BaseInfo {
     get Permissions(): EntityPermissionInfo[] {
         return this._Permissions;
     }
-    get Behaviors(): EntityBehaviorInfo[] {
-        return this._Behaviors;
-    }
     get Settings(): EntitySettingInfo[] {
         return this._Settings;
+    }
+
+    /**
+     * @returns The BaseTable but with spaces inbetween capital letters
+     * */
+    get DisplayName(): string {
+        return this.BaseTable.replace(/([A-Z])/g, ' $1').trim();
     }
 
     /**
@@ -849,8 +798,10 @@ export class EntityInfo extends BaseInfo {
             quotes = record.EntityInfo.Fields.find((f) => f.Name.trim().toLowerCase() === relationship.EntityKeyField.trim().toLowerCase()).NeedsQuotes ? "'" : '';
         }
         else {
-            keyValue = record.PrimaryKey.Value;
-            quotes = record.PrimaryKey.NeedsQuotes ? "'" : '';
+            // currently we only support a single value for FOREIGN KEYS, so we can just grab the first value in the primary key
+            const firstKey = record.FirstPrimaryKey;
+            keyValue = firstKey.Value;
+            quotes = firstKey.NeedsQuotes ? "'" : '';
         }
         if (relationship.Type.trim().toLowerCase() === 'one to many') {
             // one to many
@@ -879,6 +830,21 @@ export class EntityInfo extends BaseInfo {
         return params;
     }
     
+    /**
+     * Builds a simple javascript object that will pre-populate a new record in the related entity with values that link back to the specified record. 
+     * This is useful, for example, when creating a new contact from an account, we want to pre-populate the account ID in the new contact record
+     */
+    public static BuildRelationshipNewRecordValues(record: BaseEntity, relationship: EntityRelationshipInfo): any {
+        // we want to build a simple javascript object that will pre-populate a new record in the related entity with values that link
+        // abck to the current record. This is useful for example when creating a new contact from an account, we want to pre-populate the
+        // account ID in the new contact record
+        const obj: any = {};
+        if (record && relationship) {
+            const keyField = relationship.EntityKeyField && relationship.EntityKeyField.trim().length > 0 ? relationship.EntityKeyField : record.FirstPrimaryKey.Name;
+            obj[relationship.RelatedEntityJoinField] = record.Get(keyField);
+        }
+        return obj;
+    }
 
 
     constructor(initData: any = null) {
@@ -903,13 +869,6 @@ export class EntityInfo extends BaseInfo {
                 for (let j = 0; j < ep.length; j++) {
                     this._Permissions.push(new EntityPermissionInfo(ep[j]));
                 }
-            }
-
-            // copy the Entity Behaviors
-            this._Behaviors = [];
-            const eb = initData.EntityBehaviors || initData._Behaviors;
-            if (eb) {
-                eb.map((b) => this._Behaviors.push(new EntityBehaviorInfo(b)));
             }
 
             // copy the Entity settings

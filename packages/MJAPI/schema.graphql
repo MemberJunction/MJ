@@ -415,6 +415,215 @@ type Account__client_crm_ {
   new_c360sisiteurl: String
 }
 
+"""
+Links actions to authorizations, one or more of these must be possessed by a user in order to execute the action.
+"""
+type ActionAuthorization_ {
+  Action: String!
+  ActionID: Int!
+  AuthorizationName: String!
+  Comments: String
+  CreatedAt: Timestamp!
+  ID: Int!
+  UpdatedAt: Timestamp!
+}
+
+"""
+Organizes actions into categories, including name, description, and optional parent category for hierarchy.
+"""
+type ActionCategory_ {
+  ActionCategoriesArray: [ActionCategory_!]!
+  ActionsArray: [Action_!]!
+  CreatedAt: Timestamp!
+
+  """Description of the action category."""
+  Description: String
+  ID: Int!
+
+  """Name of the action category."""
+  Name: String!
+  Parent: String
+
+  """Parent category ID for hierarchical organization."""
+  ParentID: Int
+
+  """Status of the action category (Pending, Active, Disabled)."""
+  Status: String!
+  UpdatedAt: Timestamp!
+}
+
+"""
+Lists possible contexts for action execution with optional descriptions.
+"""
+type ActionContextType_ {
+  ActionContextsArray: [ActionContext_!]!
+  CreatedAt: Timestamp!
+
+  """Description of the context type."""
+  Description: String
+  ID: Int!
+
+  """Name of the context type."""
+  Name: String!
+  UpdatedAt: Timestamp!
+}
+
+"""
+Links actions to their supported context types enabling a given action to be executable in more than one context.
+"""
+type ActionContext_ {
+  Action: String!
+  ActionID: Int!
+  ContextType: String!
+  ContextTypeID: Int!
+  CreatedAt: Timestamp!
+  ID: Int!
+
+  """Status of the action context (Pending, Active, Disabled)."""
+  Status: String!
+  UpdatedAt: Timestamp!
+}
+
+"""
+Tracks every execution of an action, including start and end times, inputs, outputs, and result codes.
+"""
+type ActionExecutionLog_ {
+  Action: String!
+  ActionID: Int!
+  CreatedAt: Timestamp!
+
+  """Timestamp of when the action ended execution."""
+  EndedAt: Timestamp
+  ID: Int!
+  Params: String
+  ResultCode: String
+
+  """Number of days to retain the log; NULL for indefinite retention."""
+  RetentionPeriod: Int
+
+  """Timestamp of when the action started execution."""
+  StartedAt: Timestamp!
+  UpdatedAt: Timestamp!
+  User: String!
+  UserID: Int!
+}
+
+"""
+Defines filters that can be evaluated ahead of executing an action. Action Filters are usable in any code pipeline you can execute them with the same context as the action itself and use the outcome to determine if the action should execute or not.
+"""
+type ActionFilter_ {
+  Code: String!
+  CodeExplanation: String
+  CreatedAt: Timestamp!
+  EntityActionFiltersArray: [EntityActionFilter_!]!
+  ID: Int!
+  UpdatedAt: Timestamp!
+  UserComments: String
+  UserDescription: String!
+}
+
+"""
+Tracks the list of libraries that a given Action uses, including a list of classes/functions for each library.
+"""
+type ActionLibrary_ {
+  Action: String!
+  ActionID: Int!
+  CreatedAt: Timestamp!
+  ID: Int!
+
+  """List of classes and functions used by the action from the library."""
+  ItemsUsed: String
+  Library: String!
+  LibraryID: Int!
+  UpdatedAt: Timestamp!
+}
+
+"""Tracks the input and output parameters for Actions."""
+type ActionParam_ {
+  Action: String!
+  ActionID: Int!
+  CreatedAt: Timestamp!
+  DefaultValue: String
+  Description: String
+  ID: Int!
+  IsArray: Boolean!
+  IsRequired: Boolean!
+  Name: String!
+  Type: String!
+  UpdatedAt: Timestamp!
+
+  """
+  Tracks the basic value type of the parameter, additional information can be provided in the Description field
+  """
+  ValueType: String!
+}
+
+"""Defines the possible result codes for each action."""
+type ActionResultCode_ {
+  Action: String!
+  ActionID: Int!
+  CreatedAt: Timestamp!
+
+  """Description of the result code."""
+  Description: String
+  ID: Int!
+  ResultCode: String!
+  UpdatedAt: Timestamp!
+}
+
+"""
+Stores action definitions, including prompts, generated code, user comments, and status.
+"""
+type Action_ {
+  ActionAuthorizationsArray: [ActionAuthorization_!]!
+  ActionContextsArray: [ActionContext_!]!
+  ActionExecutionLogsArray: [ActionExecutionLog_!]!
+  ActionLibrariesArray: [ActionLibrary_!]!
+  ActionParamsArray: [ActionParam_!]!
+  ActionResultCodesArray: [ActionResultCode_!]!
+  Category: String
+  CategoryID: Int
+  Code: String
+
+  """
+  Optional comments when an individual (or an AI) reviews and approves the code.
+  """
+  CodeApprovalComments: String
+
+  """An action won't be usable until the code is approved."""
+  CodeApprovalStatus: String!
+
+  """When the code was approved."""
+  CodeApprovedAt: Timestamp
+  CodeApprovedByUser: String
+
+  """UserID who approved the code."""
+  CodeApprovedByUserID: Int
+
+  """AI's explanation of the code."""
+  CodeComments: String
+  CreatedAt: Timestamp!
+  EntityActionsArray: [EntityAction_!]!
+
+  """
+  If set to 1, the Action will generate code for the provided UserPrompt on the next Save even if the UserPrompt hasn't changed. This is useful to force regeneration when other candidates (such as a change in Action Inputs/Outputs) occurs or on demand by a user.
+  """
+  ForceCodeGeneration: Boolean!
+  ID: Int!
+  Name: String!
+
+  """Number of days to retain execution logs; NULL for indefinite."""
+  RetentionPeriod: Int
+
+  """Status of the action (Pending, Active, Disabled)."""
+  Status: String!
+  UpdatedAt: Timestamp!
+
+  """User's comments not shared with the LLM."""
+  UserComments: String
+  UserPrompt: String!
+}
+
 type ActivityAttachment_ {
   ActivitiesArray: [Activity_!]!
   Attachments: String
@@ -540,6 +749,7 @@ type AuthorizationRole_ {
 }
 
 type Authorization_ {
+  ActionAuthorizationsArray: [ActionAuthorization_!]!
   AuditLogTypesArray: [AuditLogType_!]!
   AuditLogsArray: [AuditLog_!]!
   AuthorizationRolesArray: [AuthorizationRole_!]!
@@ -564,6 +774,131 @@ type Color {
 type ColorNotification {
   date: Timestamp!
   message: String
+}
+
+"""Base message types and their supported functionalities."""
+type CommunicationBaseMessageType_ {
+  CommunicationProviderMessageTypesArray: [CommunicationProviderMessageType_!]!
+  CreatedAt: Timestamp!
+  ID: Int!
+
+  """The maximum size in bytes for the message."""
+  MaxBytes: Int
+
+  """Indicates if attachments are supported."""
+  SupportsAttachments: Boolean!
+
+  """Indicates if HTML content is supported."""
+  SupportsHtml: Boolean!
+
+  """Indicates if a subject line is supported."""
+  SupportsSubjectLine: Boolean!
+  Type: String!
+  UpdatedAt: Timestamp!
+}
+
+"""Logs of sent and received messages."""
+type CommunicationLog_ {
+  CommunicationProvider: String!
+  CommunicationProviderID: Int!
+  CommunicationProviderMessageType: String!
+  CommunicationProviderMessageTypeID: Int!
+  CommunicationRunID: Int
+  CreatedAt: Timestamp!
+
+  """The direction of the communication log (Sending or Receiving)."""
+  Direction: String!
+
+  """The error message if the message sending failed."""
+  ErrorMessage: String
+  ID: Int!
+
+  """The content of the logged message."""
+  MessageContent: String
+
+  """The date and time when the message was logged."""
+  MessageDate: Timestamp!
+
+  """
+  The status of the logged message (Pending, In-Progress, Complete, Failed).
+  """
+  Status: String!
+  UpdatedAt: Timestamp!
+}
+
+"""
+Providers and their supported message types with additional attributes.
+"""
+type CommunicationProviderMessageType_ {
+  """Additional attributes specific to the provider message type."""
+  AdditionalAttributes: String
+  CommunicationBaseMessageType: String!
+  CommunicationBaseMessageTypeID: Int!
+  CommunicationLogsArray: [CommunicationLog_!]!
+  CommunicationProvider: String!
+  CommunicationProviderID: Int!
+  CreatedAt: Timestamp!
+  ID: Int!
+  Name: String!
+
+  """The status of the provider message type (Disabled or Active)."""
+  Status: String!
+  UpdatedAt: Timestamp!
+}
+
+"""All supported communication providers."""
+type CommunicationProvider_ {
+  CommunicationLogsArray: [CommunicationLog_!]!
+  CommunicationProviderMessageTypesArray: [CommunicationProviderMessageType_!]!
+  CreatedAt: Timestamp!
+  Description: String
+  ID: Int!
+  Name: String!
+
+  """The status of the communication provider (Disabled or Active)."""
+  Status: String!
+
+  """Indicates if the provider supports receiving messages."""
+  SupportsReceiving: Boolean!
+
+  """Indicates if the provider supports sending messages."""
+  SupportsSending: Boolean!
+  UpdatedAt: Timestamp!
+}
+
+"""Runs of bulk message sends and receives."""
+type CommunicationRun_ {
+  Comments: String
+  CommunicationLogsArray: [CommunicationLog_!]!
+  CreatedAt: Timestamp!
+
+  """The direction of the communication run (Sending or Receiving)."""
+  Direction: String!
+
+  """The error message if the communication run failed."""
+  ErrorMessage: String
+  ID: Int!
+
+  """
+  The status of the communication run (Pending, In-Progress, Complete, Failed).
+  """
+  Status: String!
+  UpdatedAt: Timestamp!
+  User: String!
+  UserID: Int!
+}
+
+"""Reusable templates for communication."""
+type CommunicationTemplate_ {
+  Comments: String
+  CommunicationTemplatesArray: [CommunicationTemplate_!]!
+  Content: String!
+  CreatedAt: Timestamp!
+  ID: Int!
+  Name: String!
+  Parent: String
+  ParentID: Int
+  UpdatedAt: Timestamp!
 }
 
 type CompanyIntegrationRecordMap_ {
@@ -665,7 +1000,7 @@ type Company_ {
 }
 
 input CompositeKeyInputType {
-  KeyValuePairs: [KeyValuePairInputType!]! = []
+  KeyValuePairs: [KeyValuePairInputType!]!
 }
 
 type CompositeKeyOutputType {
@@ -1544,6 +1879,86 @@ input CreateAccount__client_crmInput {
   new_c360sisiteurl: String
 }
 
+input CreateActionAuthorizationInput {
+  ActionID: Int!
+  AuthorizationName: String!
+  Comments: String
+}
+
+input CreateActionCategoryInput {
+  Description: String
+  Name: String!
+  ParentID: Int
+  Status: String!
+}
+
+input CreateActionContextInput {
+  ActionID: Int!
+  ContextTypeID: Int!
+  Status: String!
+}
+
+input CreateActionContextTypeInput {
+  Description: String
+  Name: String!
+}
+
+input CreateActionExecutionLogInput {
+  ActionID: Int!
+  EndedAt: Timestamp
+  Params: String
+  ResultCode: String
+  RetentionPeriod: Int
+  StartedAt: Timestamp!
+  UserID: Int!
+}
+
+input CreateActionFilterInput {
+  Code: String!
+  CodeExplanation: String
+  UserComments: String
+  UserDescription: String!
+}
+
+input CreateActionInput {
+  CategoryID: Int
+  Code: String
+  CodeApprovalComments: String
+  CodeApprovalStatus: String!
+  CodeApprovedAt: Timestamp
+  CodeApprovedByUserID: Int
+  CodeComments: String
+  ForceCodeGeneration: Boolean!
+  Name: String!
+  RetentionPeriod: Int
+  Status: String!
+  UserComments: String
+  UserPrompt: String!
+}
+
+input CreateActionLibraryInput {
+  ActionID: Int!
+  ItemsUsed: String
+  LibraryID: Int!
+}
+
+input CreateActionParamInput {
+  ActionID: Int!
+  DefaultValue: String
+  Description: String
+  IsArray: Boolean!
+  IsRequired: Boolean!
+  Name: String!
+  Type: String!
+  ValueType: String!
+}
+
+input CreateActionResultCodeInput {
+  ActionID: Int!
+  Description: String
+  ResultCode: String!
+}
+
 input CreateActivityAttachmentInput {
   Attachments: String
 }
@@ -1596,6 +2011,56 @@ input CreateAuditLogInput {
   RecordID: String
   Status: String!
   UserID: Int!
+}
+
+input CreateCommunicationBaseMessageTypeInput {
+  MaxBytes: Int
+  SupportsAttachments: Boolean!
+  SupportsHtml: Boolean!
+  SupportsSubjectLine: Boolean!
+  Type: String!
+}
+
+input CreateCommunicationLogInput {
+  CommunicationProviderID: Int!
+  CommunicationProviderMessageTypeID: Int!
+  CommunicationRunID: Int
+  Direction: String!
+  ErrorMessage: String
+  MessageContent: String
+  MessageDate: Timestamp!
+  Status: String!
+}
+
+input CreateCommunicationProviderInput {
+  Description: String
+  Name: String!
+  Status: String!
+  SupportsReceiving: Boolean!
+  SupportsSending: Boolean!
+}
+
+input CreateCommunicationProviderMessageTypeInput {
+  AdditionalAttributes: String
+  CommunicationBaseMessageTypeID: Int!
+  CommunicationProviderID: Int!
+  Name: String!
+  Status: String!
+}
+
+input CreateCommunicationRunInput {
+  Comments: String
+  Direction: String!
+  ErrorMessage: String
+  Status: String!
+  UserID: Int!
+}
+
+input CreateCommunicationTemplateInput {
+  Comments: String
+  Content: String!
+  Name: String!
+  ParentID: Int
 }
 
 input CreateCompanyInput {
@@ -2854,6 +3319,31 @@ input CreateEmployeeInput {
   Title: String
 }
 
+input CreateEntityActionFilterInput {
+  ActionFilterID: Int!
+  EntityActionID: Int!
+  Sequence: Int!
+  Status: String!
+}
+
+input CreateEntityActionInput {
+  ActionID: Int!
+  EntityID: Int!
+  Status: String!
+}
+
+input CreateEntityActionInvocationInput {
+  EntityActionID: Int!
+  InvocationTypeID: Int!
+  Status: String!
+}
+
+input CreateEntityActionInvocationTypeInput {
+  Description: String
+  DisplaySequence: Int!
+  Name: String!
+}
+
 input CreateEntityBehaviorInput {
   BehaviorTypeID: Int!
   Code: String
@@ -2905,6 +3395,7 @@ input CreateEntityFieldInput {
   AllowUpdateInView: Boolean!
   AutoUpdateDescription: Boolean!
   Category: String
+  CodeType: String
   DefaultColumnWidth: Int
   DefaultInView: Boolean!
   Description: String
@@ -3288,6 +3779,22 @@ input CreateItem__client_financeInput {
   Warranty_Days: Int
 }
 
+input CreateLibraryInput {
+  Description: String
+  ExportedItems: String
+  Name: String!
+  SampleCode: String
+  Status: String!
+  TypeDefinitions: String
+}
+
+input CreateListCategoryInput {
+  Description: String
+  Name: String!
+  ParentID: Int
+  UserID: Int!
+}
+
 input CreateListDetailInput {
   ListID: Int!
   RecordID: String!
@@ -3295,9 +3802,10 @@ input CreateListDetailInput {
 }
 
 input CreateListInput {
+  CategoryID: Int
   CompanyIntegrationID: Int
   Description: String
-  EntityID: Int
+  EntityID: Int!
   ExternalSystemRecordID: String
   Name: String!
   UserID: Int!
@@ -3318,14 +3826,6 @@ input CreatePaymentTermsTypeInput {
   DueDateCalculation: String
   ExternalSystemRecordID: String
   Name: String!
-}
-
-input CreatePersonLinkInput {
-  Email: String
-  FirstName: String
-  LastName: String
-  MainGreatPlainsCustomerID: String
-  MembershipGreatPlainsCustomerID: String
 }
 
 input CreateProductInput {
@@ -6804,6 +7304,11 @@ type Deal_ {
   Value: Float
 }
 
+input DeleteOptionsInput {
+  SkipEntityAIActions: Boolean!
+  SkipEntityActions: Boolean!
+}
+
 type DuplicateRunDetailMatch_ {
   Action: String!
   ApprovalStatus: String!
@@ -6945,6 +7450,73 @@ type EntityAIAction_ {
 }
 
 """
+Optional use. Maps Action Filters to specific EntityAction instances, specifying execution order and status. This allows for “pre-processing” before an Action actually is fired off, to check for various state/dirty/value conditions.
+"""
+type EntityActionFilter_ {
+  ActionFilterID: Int!
+  CreatedAt: Timestamp!
+  EntityActionID: Int!
+  ID: Int!
+
+  """Order of filter execution."""
+  Sequence: Int!
+
+  """Status of the entity action filter (Pending, Active, Disabled)."""
+  Status: String!
+  UpdatedAt: Timestamp!
+}
+
+"""
+Stores the possible invocation types of an action within the context of an entity. Examples would be: Record Created/Updated/Deleted/Accessed as well as things like “View” or “List” where you could run an EntityAction against an entire set of records in a view or list – either by user click or programmatically.
+"""
+type EntityActionInvocationType_ {
+  CreatedAt: Timestamp!
+
+  """Description of the invocation type."""
+  Description: String
+  DisplaySequence: Int!
+  EntityActionInvocationsArray: [EntityActionInvocation_!]!
+  ID: Int!
+
+  """Name of the invocation type such as Record Created/Updated/etc."""
+  Name: String!
+  UpdatedAt: Timestamp!
+}
+
+"""
+Links invocation types to entity actions – for example you might link a particular EntityAction to just “Create Record” and you might also have a second item in this table allowing the same Entity Action to be invoked from a User View or List, on demand.
+"""
+type EntityActionInvocation_ {
+  CreatedAt: Timestamp!
+  EntityActionID: Int!
+  ID: Int!
+  InvocationType: String!
+  InvocationTypeID: Int!
+
+  """Status of the entity action invocation (Pending, Active, Disabled)."""
+  Status: String!
+  UpdatedAt: Timestamp!
+}
+
+"""
+Links entities to actions - this is the main place where you define the actions that part of, or available, for a given entity.
+"""
+type EntityAction_ {
+  Action: String!
+  ActionID: Int!
+  CreatedAt: Timestamp!
+  Entity: String!
+  EntityActionFiltersArray: [EntityActionFilter_!]!
+  EntityActionInvocationsArray: [EntityActionInvocation_!]!
+  EntityID: Int!
+  ID: Int!
+
+  """Status of the entity action (Pending, Active, Disabled)."""
+  Status: String!
+  UpdatedAt: Timestamp!
+}
+
+"""
 This table stores the list of possible behavior types to use in the Entity Behavior Types entity. 
 """
 type EntityBehaviorType_ {
@@ -7073,9 +7645,22 @@ type EntityFieldValue_ {
 
 """List of all fields within each entity with metadata about each field"""
 type EntityField_ {
+  """
+  If set to 1, this field will be considered updateable by the API and object model. For this field to have effect, the column type must be updateable (e.g. not part of the primary key and not auto-increment)
+  """
   AllowUpdateAPI: Boolean!
+
+  """
+  If set to 1, and if AllowUpdateAPI=1, the field can be edited within a view when the view is in edit mode.
+  """
   AllowUpdateInView: Boolean!
+
+  """Does the column allow null or not (auto maintained by CodeGen)"""
   AllowsNull: Boolean!
+
+  """
+  If this field automatically increments within the table, this field is set to 1 (auto maintained by CodeGen)
+  """
   AutoIncrement: Boolean!
 
   """
@@ -7084,48 +7669,135 @@ type EntityField_ {
   AutoUpdateDescription: Boolean!
   BaseTable: String!
   BaseView: String!
+
+  """
+  Used for generating custom tabs in the generated forms, only utilized if GeneratedFormSection=Category
+  """
   Category: String
+
+  """
+  The type of code associated with this field. Only used when the ExtendedType field is set to "Code"
+  """
+  CodeType: String
   CreatedAt: Timestamp!
+
+  """Determines the default width for this field when included in a view"""
   DefaultColumnWidth: Int
+
+  """
+  If set to 1, this field will be included by default in any new view created by a user.
+  """
   DefaultInView: Boolean!
+
+  """
+  If a default value is defined for the field it is stored here (auto maintained by CodeGen)
+  """
   DefaultValue: String
+
+  """Descriptive text explaining the purpose of the field"""
   Description: String
+
+  """A user friendly alternative to the field name"""
   DisplayName: String
   Entity: String!
   EntityClassName: String
   EntityCodeName: String
   EntityFieldValuesArray: [EntityFieldValue_!]!
   EntityID: Int!
+
+  """
+  Defines extended behaviors for a field such as for Email, Web URLs, Code, etc.
+  """
   ExtendedType: String
+
+  """
+  If set to 1, CodeGen will automatically generate a Full Text Catalog/Index in the database and include this field in the search index.
+  """
   FullTextSearchEnabled: Boolean!
+
+  """
+  When set to Top, the field will be placed in a "top area" on the top of a generated form and visible regardless of which tab is displayed. When set to "category" Options: Top, Category, Details
+  """
   GeneratedFormSection: String!
   ID: Int!
+
+  """
+  If set to 1, this field will be included in the generated form by CodeGen. If set to 0, this field will be excluded from the generated form. For custom forms, this field has no effect as the layout is controlled independently.
+  """
   IncludeInGeneratedForm: Boolean!
+
+  """
+  If set to 1, this column will be included in user search queries for both traditional and full text search
+  """
   IncludeInUserSearchAPI: Boolean!
+
+  """
+  If set to 1, the "Name" field of the Related Entity will be included in this entity as a virtual field
+  """
   IncludeRelatedEntityNameFieldInBaseView: Boolean!
+
+  """
+  If set to 1, this column will be used as the "Name" field for the entity and will be used to display the name of the record in various places in the UI.
+  """
   IsNameField: Boolean!
+
+  """
+  Indicates if the field is part of the primary key for the entity (auto maintained by CodeGen)
+  """
   IsPrimaryKey: Boolean!
+
+  """Indicates if the field must have unique values within the entity."""
   IsUnique: Boolean!
+
+  """NULL"""
   IsVirtual: Boolean!
+
+  """SQL data length (auto maintained by CodeGen)"""
   Length: Int
+
+  """Name of the field within the database table"""
   Name: String!
+
+  """SQL precision (auto maintained by CodeGen)"""
   Precision: Int
   RelatedEntity: String
   RelatedEntityBaseTable: String
   RelatedEntityBaseView: String
   RelatedEntityClassName: String
   RelatedEntityCodeName: String
+
+  """
+  Name of the field in the Related Entity that this field links to (auto maintained by CodeGen)
+  """
   RelatedEntityFieldName: String
+
+  """
+  Link to the entity this field points to if it is a foreign key (auto maintained by CodeGen)
+  """
   RelatedEntityID: Int
   RelatedEntityNameFieldMap: String
   RelatedEntitySchemaName: String
+
+  """SQL scale (auto maintained by CodeGen)"""
   Scale: Int
   SchemaName: String!
+
+  """Display order of the field within the entity"""
   Sequence: Int!
+
+  """SQL Data type (auto maintained by CodeGen)"""
   Type: String!
   UpdatedAt: Timestamp!
+
+  """NULL"""
   UserSearchParamFormatAPI: String
+
+  """
+  Possible Values of None, List, ListOrUserEntry - the last option meaning that the list of possible values are options, but a user can enter anything else desired too.
+  """
   ValueListType: String!
+
+  """NULL"""
   ViewCellTemplate: String
 }
 
@@ -7297,6 +7969,7 @@ type Entity_ {
   DuplicateRunsArray: [DuplicateRun_!]!
   EntitiesArray: [Entity_!]!
   EntityAIActionsArray: [EntityAIAction_!]!
+  EntityActionsArray: [EntityAction_!]!
   EntityBehaviorsArray: [EntityBehavior_!]!
   EntityDocumentsArray: [EntityDocument_!]!
   EntityFieldsArray: [EntityField_!]!
@@ -7723,6 +8396,11 @@ type Item__client_finance_ {
   Warranty_Days: Int
 }
 
+input KeyValuePairInput {
+  Key: String!
+  Value: String
+}
+
 input KeyValuePairInputType {
   FieldName: String!
   Value: String!
@@ -7731,6 +8409,46 @@ input KeyValuePairInputType {
 type KeyValuePairOutputType {
   FieldName: String!
   Value: String!
+}
+
+"""
+Stores information about the available libraries, including a list of classes/functions, type definitions, and sample code. You can add additional custom libraries here to make them avaialable to code generation features within the system.
+"""
+type Library_ {
+  ActionLibrariesArray: [ActionLibrary_!]!
+  CreatedAt: Timestamp!
+  Description: String
+
+  """List of classes and functions exported by the library."""
+  ExportedItems: String
+  ID: Int!
+  Name: String!
+
+  """
+  Examples of code use of the classes and/or functions from within the library
+  """
+  SampleCode: String
+
+  """
+  Status of the library, only libraries marked as Active will be available for use by generated code. If a library was once active but no longer is, existing code that used the library will not be affected.
+  """
+  Status: String!
+
+  """
+  Code showing the types and functions defined in the library to be used for reference by humans and AI
+  """
+  TypeDefinitions: String
+  UpdatedAt: Timestamp!
+}
+
+type ListCategory_ {
+  CreatedAt: Timestamp!
+  Description: String
+  ID: Int!
+  Name: String!
+  ParentID: Int
+  UpdatedAt: Timestamp!
+  UserID: Int!
 }
 
 """Tracks the records within each list."""
@@ -7746,12 +8464,13 @@ type ListDetail_ {
 Static lists are useful for controlling a set of data for a given entity. These can be used programatically for applications like logging and tracking long-running tasks and also by end users for tracking any particular list of records they want to directly control the set.
 """
 type List_ {
+  CategoryID: Int
   CompanyIntegrationID: Int
   CreatedAt: Timestamp!
   Description: String
   DuplicateRunsArray: [DuplicateRun_!]!
-  Entity: String
-  EntityID: Int
+  Entity: String!
+  EntityID: Int!
   ExternalSystemRecordID: String
   ID: Int!
   ListDetailsArray: [ListDetail_!]!
@@ -7764,12 +8483,28 @@ type List_ {
 type Mutation {
   CreateAccount(input: CreateAccountInput!): Account_!
   CreateAccount__client_crm(input: CreateAccount__client_crmInput!): Account__client_crm_!
+  CreateAction(input: CreateActionInput!): Action_!
+  CreateActionAuthorization(input: CreateActionAuthorizationInput!): ActionAuthorization_!
+  CreateActionCategory(input: CreateActionCategoryInput!): ActionCategory_!
+  CreateActionContext(input: CreateActionContextInput!): ActionContext_!
+  CreateActionContextType(input: CreateActionContextTypeInput!): ActionContextType_!
+  CreateActionExecutionLog(input: CreateActionExecutionLogInput!): ActionExecutionLog_!
+  CreateActionFilter(input: CreateActionFilterInput!): ActionFilter_!
+  CreateActionLibrary(input: CreateActionLibraryInput!): ActionLibrary_!
+  CreateActionParam(input: CreateActionParamInput!): ActionParam_!
+  CreateActionResultCode(input: CreateActionResultCodeInput!): ActionResultCode_!
   CreateActivity(input: CreateActivityInput!): Activity_!
   CreateActivityAttachment(input: CreateActivityAttachmentInput!): ActivityAttachment_!
   CreateApplication(input: CreateApplicationInput!): Application_!
   CreateApplicationEntity(input: CreateApplicationEntityInput!): ApplicationEntity_!
   CreateApplicationSetting(input: CreateApplicationSettingInput!): ApplicationSetting_!
   CreateAuditLog(input: CreateAuditLogInput!): AuditLog_!
+  CreateCommunicationBaseMessageType(input: CreateCommunicationBaseMessageTypeInput!): CommunicationBaseMessageType_!
+  CreateCommunicationLog(input: CreateCommunicationLogInput!): CommunicationLog_!
+  CreateCommunicationProvider(input: CreateCommunicationProviderInput!): CommunicationProvider_!
+  CreateCommunicationProviderMessageType(input: CreateCommunicationProviderMessageTypeInput!): CommunicationProviderMessageType_!
+  CreateCommunicationRun(input: CreateCommunicationRunInput!): CommunicationRun_!
+  CreateCommunicationTemplate(input: CreateCommunicationTemplateInput!): CommunicationTemplate_!
   CreateCompany(input: CreateCompanyInput!): Company_!
   CreateCompanyIntegrationRecordMap(input: CreateCompanyIntegrationRecordMapInput!): CompanyIntegrationRecordMap_!
   CreateContact(input: CreateContactInput!): Contact_!
@@ -7795,6 +8530,10 @@ type Mutation {
   CreateDuplicateRunDetailMatch(input: CreateDuplicateRunDetailMatchInput!): DuplicateRunDetailMatch_!
   CreateEmployee(input: CreateEmployeeInput!): Employee_!
   CreateEntity(input: CreateEntityInput!): Entity_!
+  CreateEntityAction(input: CreateEntityActionInput!): EntityAction_!
+  CreateEntityActionFilter(input: CreateEntityActionFilterInput!): EntityActionFilter_!
+  CreateEntityActionInvocation(input: CreateEntityActionInvocationInput!): EntityActionInvocation_!
+  CreateEntityActionInvocationType(input: CreateEntityActionInvocationTypeInput!): EntityActionInvocationType_!
   CreateEntityBehavior(input: CreateEntityBehaviorInput!): EntityBehavior_!
   CreateEntityBehaviorType(input: CreateEntityBehaviorTypeInput!): EntityBehaviorType_!
   CreateEntityDocument(input: CreateEntityDocumentInput!): EntityDocument_!
@@ -7815,11 +8554,12 @@ type Mutation {
   CreateInvoiceStatusType(input: CreateInvoiceStatusTypeInput!): InvoiceStatusType_!
   CreateItem(input: CreateItemInput!): Item_!
   CreateItem__client_finance(input: CreateItem__client_financeInput!): Item__client_finance_!
+  CreateLibrary(input: CreateLibraryInput!): Library_!
   CreateList(input: CreateListInput!): List_!
+  CreateListCategory(input: CreateListCategoryInput!): ListCategory_!
   CreateListDetail(input: CreateListDetailInput!): ListDetail_!
   CreateOrganizationLink(input: CreateOrganizationLinkInput!): OrganizationLink_!
   CreatePaymentTermsType(input: CreatePaymentTermsTypeInput!): PaymentTermsType_!
-  CreatePersonLink(input: CreatePersonLinkInput!): PersonLink_!
   CreateProduct(input: CreateProductInput!): Product_!
   CreateProductPriceLevel(input: CreateProductPriceLevelInput!): ProductPriceLevel_!
   CreateQuery(input: CreateQueryInput!): Query_!
@@ -7860,44 +8600,61 @@ type Mutation {
   CreateWorkspace(input: CreateWorkspaceInput!): Workspace_!
   CreateWorkspaceItem(input: CreateWorkspaceItemInput!): WorkspaceItem_!
   Createclient_membership(input: Createclient_membershipInput!): client_membership_!
-  DeleteAccount(ID: Int!): Account_!
-  DeleteApplication(ID: Int!): Application_!
-  DeleteApplicationEntity(ID: Int!): ApplicationEntity_!
-  DeleteApplicationSetting(ID: Int!): ApplicationSetting_!
-  DeleteCompany(ID: Int!): Company_!
-  DeleteConversation(ID: Int!): Conversation_!
-  DeleteConversationDetail(ID: Int!): ConversationDetail_!
-  DeleteDashboard(ID: Int!): Dashboard_!
-  DeleteDashboardCategory(ID: Int!): DashboardCategory_!
-  DeleteDataContext(ID: Int!): DataContext_!
-  DeleteDataContextItem(ID: Int!): DataContextItem_!
-  DeleteDealForecastCategory(ID: Int!): DealForecastCategory_!
-  DeleteEmployee(ID: Int!): Employee_!
-  DeleteEntity(ID: Int!): Entity_!
-  DeleteEntityBehavior(ID: Int!): EntityBehavior_!
-  DeleteEntityBehaviorType(ID: Int!): EntityBehaviorType_!
-  DeleteEntityField(ID: Int!): EntityField_!
-  DeleteEntityPermission(ID: Int!): EntityPermission_!
-  DeleteEntityRelationship(ID: Int!): EntityRelationship_!
-  DeleteFile(ID: Int!): File_!
-  DeleteFileCategory(ID: Int!): FileCategory_!
-  DeleteList(ID: Int!): List_!
-  DeleteListDetail(ID: Int!): ListDetail_!
-  DeleteQueryCategory(ID: Int!): QueryCategory_!
-  DeleteReport(ID: Int!): Report_!
-  DeleteReportCategory(ID: Int!): ReportCategory_!
-  DeleteReportSnapshot(ID: Int!): ReportSnapshot_!
-  DeleteRole(ID: Int!): Role_!
-  DeleteUser(ID: Int!): User_!
-  DeleteUserApplication(ID: Int!): UserApplication_!
-  DeleteUserApplicationEntity(ID: Int!): UserApplicationEntity_!
-  DeleteUserFavorite(ID: Int!): UserFavorite_!
-  DeleteUserNotification(ID: Int!): UserNotification_!
-  DeleteUserRole(ID: Int!): UserRole_!
-  DeleteUserView(ID: Int!): UserView_!
-  DeleteUserViewCategory(ID: Int!): UserViewCategory_!
-  DeleteWorkspace(ID: Int!): Workspace_!
-  DeleteWorkspaceItem(ID: Int!): WorkspaceItem_!
+  DeleteAIAction(ID: Int!, options___: DeleteOptionsInput!): AIAction_!
+  DeleteAIModelAction(ID: Int!, options___: DeleteOptionsInput!): AIModelAction_!
+  DeleteAccount(ID: Int!, options___: DeleteOptionsInput!): Account_!
+  DeleteAction(ID: Int!, options___: DeleteOptionsInput!): Action_!
+  DeleteActionAuthorization(ID: Int!, options___: DeleteOptionsInput!): ActionAuthorization_!
+  DeleteActionCategory(ID: Int!, options___: DeleteOptionsInput!): ActionCategory_!
+  DeleteActionContext(ID: Int!, options___: DeleteOptionsInput!): ActionContext_!
+  DeleteActionContextType(ID: Int!, options___: DeleteOptionsInput!): ActionContextType_!
+  DeleteActionExecutionLog(ID: Int!, options___: DeleteOptionsInput!): ActionExecutionLog_!
+  DeleteActionFilter(ID: Int!, options___: DeleteOptionsInput!): ActionFilter_!
+  DeleteActionLibrary(ID: Int!, options___: DeleteOptionsInput!): ActionLibrary_!
+  DeleteActionParam(ID: Int!, options___: DeleteOptionsInput!): ActionParam_!
+  DeleteActionResultCode(ID: Int!, options___: DeleteOptionsInput!): ActionResultCode_!
+  DeleteApplication(ID: Int!, options___: DeleteOptionsInput!): Application_!
+  DeleteApplicationEntity(ID: Int!, options___: DeleteOptionsInput!): ApplicationEntity_!
+  DeleteApplicationSetting(ID: Int!, options___: DeleteOptionsInput!): ApplicationSetting_!
+  DeleteCompany(ID: Int!, options___: DeleteOptionsInput!): Company_!
+  DeleteConversation(ID: Int!, options___: DeleteOptionsInput!): Conversation_!
+  DeleteConversationDetail(ID: Int!, options___: DeleteOptionsInput!): ConversationDetail_!
+  DeleteDashboard(ID: Int!, options___: DeleteOptionsInput!): Dashboard_!
+  DeleteDashboardCategory(ID: Int!, options___: DeleteOptionsInput!): DashboardCategory_!
+  DeleteDataContext(ID: Int!, options___: DeleteOptionsInput!): DataContext_!
+  DeleteDataContextItem(ID: Int!, options___: DeleteOptionsInput!): DataContextItem_!
+  DeleteDealForecastCategory(ID: Int!, options___: DeleteOptionsInput!): DealForecastCategory_!
+  DeleteEmployee(ID: Int!, options___: DeleteOptionsInput!): Employee_!
+  DeleteEntity(ID: Int!, options___: DeleteOptionsInput!): Entity_!
+  DeleteEntityAIAction(ID: Int!, options___: DeleteOptionsInput!): EntityAIAction_!
+  DeleteEntityAction(ID: Int!, options___: DeleteOptionsInput!): EntityAction_!
+  DeleteEntityActionFilter(ID: Int!, options___: DeleteOptionsInput!): EntityActionFilter_!
+  DeleteEntityActionInvocation(ID: Int!, options___: DeleteOptionsInput!): EntityActionInvocation_!
+  DeleteEntityActionInvocationType(ID: Int!, options___: DeleteOptionsInput!): EntityActionInvocationType_!
+  DeleteEntityBehavior(ID: Int!, options___: DeleteOptionsInput!): EntityBehavior_!
+  DeleteEntityBehaviorType(ID: Int!, options___: DeleteOptionsInput!): EntityBehaviorType_!
+  DeleteEntityField(ID: Int!, options___: DeleteOptionsInput!): EntityField_!
+  DeleteEntityPermission(ID: Int!, options___: DeleteOptionsInput!): EntityPermission_!
+  DeleteEntityRelationship(ID: Int!, options___: DeleteOptionsInput!): EntityRelationship_!
+  DeleteFile(ID: Int!, options___: DeleteOptionsInput!): File_!
+  DeleteFileCategory(ID: Int!, options___: DeleteOptionsInput!): FileCategory_!
+  DeleteList(ID: Int!, options___: DeleteOptionsInput!): List_!
+  DeleteListDetail(ID: Int!, options___: DeleteOptionsInput!): ListDetail_!
+  DeleteQueryCategory(ID: Int!, options___: DeleteOptionsInput!): QueryCategory_!
+  DeleteReport(ID: Int!, options___: DeleteOptionsInput!): Report_!
+  DeleteReportCategory(ID: Int!, options___: DeleteOptionsInput!): ReportCategory_!
+  DeleteReportSnapshot(ID: Int!, options___: DeleteOptionsInput!): ReportSnapshot_!
+  DeleteRole(ID: Int!, options___: DeleteOptionsInput!): Role_!
+  DeleteUser(ID: Int!, options___: DeleteOptionsInput!): User_!
+  DeleteUserApplication(ID: Int!, options___: DeleteOptionsInput!): UserApplication_!
+  DeleteUserApplicationEntity(ID: Int!, options___: DeleteOptionsInput!): UserApplicationEntity_!
+  DeleteUserFavorite(ID: Int!, options___: DeleteOptionsInput!): UserFavorite_!
+  DeleteUserNotification(ID: Int!, options___: DeleteOptionsInput!): UserNotification_!
+  DeleteUserRole(ID: Int!, options___: DeleteOptionsInput!): UserRole_!
+  DeleteUserView(ID: Int!, options___: DeleteOptionsInput!): UserView_!
+  DeleteUserViewCategory(ID: Int!, options___: DeleteOptionsInput!): UserViewCategory_!
+  DeleteWorkspace(ID: Int!, options___: DeleteOptionsInput!): Workspace_!
+  DeleteWorkspaceItem(ID: Int!, options___: DeleteOptionsInput!): WorkspaceItem_!
   MergeRecords(request: RecordMergeRequest!): RecordMergeResult!
   SetRecordFavoriteStatus(params: UserFavoriteSetParams!): UserFavoriteResult!
   UpdateAIAction(input: UpdateAIActionInput!): AIAction_!
@@ -7906,12 +8663,28 @@ type Mutation {
   UpdateAIModelType(input: UpdateAIModelTypeInput!): AIModelType_!
   UpdateAccount(input: UpdateAccountInput!): Account_!
   UpdateAccount__client_crm(input: UpdateAccount__client_crmInput!): Account__client_crm_!
+  UpdateAction(input: UpdateActionInput!): Action_!
+  UpdateActionAuthorization(input: UpdateActionAuthorizationInput!): ActionAuthorization_!
+  UpdateActionCategory(input: UpdateActionCategoryInput!): ActionCategory_!
+  UpdateActionContext(input: UpdateActionContextInput!): ActionContext_!
+  UpdateActionContextType(input: UpdateActionContextTypeInput!): ActionContextType_!
+  UpdateActionExecutionLog(input: UpdateActionExecutionLogInput!): ActionExecutionLog_!
+  UpdateActionFilter(input: UpdateActionFilterInput!): ActionFilter_!
+  UpdateActionLibrary(input: UpdateActionLibraryInput!): ActionLibrary_!
+  UpdateActionParam(input: UpdateActionParamInput!): ActionParam_!
+  UpdateActionResultCode(input: UpdateActionResultCodeInput!): ActionResultCode_!
   UpdateActivity(input: UpdateActivityInput!): Activity_!
   UpdateActivityAttachment(input: UpdateActivityAttachmentInput!): ActivityAttachment_!
   UpdateApplication(input: UpdateApplicationInput!): Application_!
   UpdateApplicationEntity(input: UpdateApplicationEntityInput!): ApplicationEntity_!
   UpdateApplicationSetting(input: UpdateApplicationSettingInput!): ApplicationSetting_!
   UpdateAuditLog(input: UpdateAuditLogInput!): AuditLog_!
+  UpdateCommunicationBaseMessageType(input: UpdateCommunicationBaseMessageTypeInput!): CommunicationBaseMessageType_!
+  UpdateCommunicationLog(input: UpdateCommunicationLogInput!): CommunicationLog_!
+  UpdateCommunicationProvider(input: UpdateCommunicationProviderInput!): CommunicationProvider_!
+  UpdateCommunicationProviderMessageType(input: UpdateCommunicationProviderMessageTypeInput!): CommunicationProviderMessageType_!
+  UpdateCommunicationRun(input: UpdateCommunicationRunInput!): CommunicationRun_!
+  UpdateCommunicationTemplate(input: UpdateCommunicationTemplateInput!): CommunicationTemplate_!
   UpdateCompany(input: UpdateCompanyInput!): Company_!
   UpdateCompanyIntegration(input: UpdateCompanyIntegrationInput!): CompanyIntegration_!
   UpdateCompanyIntegrationRecordMap(input: UpdateCompanyIntegrationRecordMapInput!): CompanyIntegrationRecordMap_!
@@ -7945,6 +8718,10 @@ type Mutation {
   UpdateEmployeeSkill(input: UpdateEmployeeSkillInput!): EmployeeSkill_!
   UpdateEntity(input: UpdateEntityInput!): Entity_!
   UpdateEntityAIAction(input: UpdateEntityAIActionInput!): EntityAIAction_!
+  UpdateEntityAction(input: UpdateEntityActionInput!): EntityAction_!
+  UpdateEntityActionFilter(input: UpdateEntityActionFilterInput!): EntityActionFilter_!
+  UpdateEntityActionInvocation(input: UpdateEntityActionInvocationInput!): EntityActionInvocation_!
+  UpdateEntityActionInvocationType(input: UpdateEntityActionInvocationTypeInput!): EntityActionInvocationType_!
   UpdateEntityBehavior(input: UpdateEntityBehaviorInput!): EntityBehavior_!
   UpdateEntityBehaviorType(input: UpdateEntityBehaviorTypeInput!): EntityBehaviorType_!
   UpdateEntityDocument(input: UpdateEntityDocumentInput!): EntityDocument_!
@@ -7968,11 +8745,12 @@ type Mutation {
   UpdateInvoiceStatusType(input: UpdateInvoiceStatusTypeInput!): InvoiceStatusType_!
   UpdateItem(input: UpdateItemInput!): Item_!
   UpdateItem__client_finance(input: UpdateItem__client_financeInput!): Item__client_finance_!
+  UpdateLibrary(input: UpdateLibraryInput!): Library_!
   UpdateList(input: UpdateListInput!): List_!
+  UpdateListCategory(input: UpdateListCategoryInput!): ListCategory_!
   UpdateListDetail(input: UpdateListDetailInput!): ListDetail_!
   UpdateOrganizationLink(input: UpdateOrganizationLinkInput!): OrganizationLink_!
   UpdatePaymentTermsType(input: UpdatePaymentTermsTypeInput!): PaymentTermsType_!
-  UpdatePersonLink(input: UpdatePersonLinkInput!): PersonLink_!
   UpdateProduct(input: UpdateProductInput!): Product_!
   UpdateProductPriceLevel(input: UpdateProductPriceLevelInput!): ProductPriceLevel_!
   UpdateQuery(input: UpdateQueryInput!): Query_!
@@ -8028,6 +8806,7 @@ type OrganizationLink_ {
   MembershipGreatPlainsCustomerID: String
   OrganizationLinkID: Int!
   OrganizationName: String
+  PersonLinksArray: [PersonLink_!]!
   UpdatedAt: Timestamp!
 }
 
@@ -8074,12 +8853,17 @@ type PersonLink_ {
   CRMAccountID: String
   CRMContactID: String
   CreatedAt: Timestamp!
+  CustomerAddressArray: [CustomerAddress_!]!
+  CustomerAddress__client_financeArray: [CustomerAddress__client_finance_!]!
   Email: String
   FirstName: String
   LastName: String
   MainGreatPlainsCustomerID: String
   MembershipGreatPlainsCustomerID: String
+  OrganizationLinksArray: [OrganizationLink_!]!
   PersonLinkID: Int!
+  SalesTransactionsArray: [SalesTransaction_!]!
+  SalesTransactions__client_membershipArray: [SalesTransaction__client_membership_!]!
   UpdatedAt: Timestamp!
 }
 
@@ -8346,6 +9130,16 @@ type Query {
   AIModelType(ID: Int!): AIModelType_
   Account(ID: Int!): Account_
   Account__client_crm(AccountId: String!): Account__client_crm_
+  Action(ID: Int!): Action_
+  ActionAuthorization(ID: Int!): ActionAuthorization_
+  ActionCategory(ID: Int!): ActionCategory_
+  ActionContext(ID: Int!): ActionContext_
+  ActionContextType(ID: Int!): ActionContextType_
+  ActionExecutionLog(ID: Int!): ActionExecutionLog_
+  ActionFilter(ID: Int!): ActionFilter_
+  ActionLibrary(ID: Int!): ActionLibrary_
+  ActionParam(ID: Int!): ActionParam_
+  ActionResultCode(ID: Int!): ActionResultCode_
   Activity(ID: Int!): Activity_
   ActivityAttachment(ID: Int!): ActivityAttachment_
   AllAIActions: [AIAction_!]!
@@ -8379,6 +9173,12 @@ type Query {
   AuditLogType(ID: Int!): AuditLogType_
   Authorization(ID: Int!): Authorization_
   AuthorizationRole(ID: Int!): AuthorizationRole_
+  CommunicationBaseMessageType(ID: Int!): CommunicationBaseMessageType_
+  CommunicationLog(ID: Int!): CommunicationLog_
+  CommunicationProvider(ID: Int!): CommunicationProvider_
+  CommunicationProviderMessageType(ID: Int!): CommunicationProviderMessageType_
+  CommunicationRun(ID: Int!): CommunicationRun_
+  CommunicationTemplate(ID: Int!): CommunicationTemplate_
   Company(ID: Int!): Company_
   CompanyIntegration(ID: Int!): CompanyIntegration_
   CompanyIntegrationRecordMap(ID: Int!): CompanyIntegrationRecordMap_
@@ -8419,6 +9219,10 @@ type Query {
   EntitiesBySchemas(ExcludeSchemas: [String!], IncludeSchemas: [String!]): [Entity_!]!
   Entity(ID: Int!): Entity_
   EntityAIAction(ID: Int!): EntityAIAction_
+  EntityAction(ID: Int!): EntityAction_
+  EntityActionFilter(ID: Int!): EntityActionFilter_
+  EntityActionInvocation(ID: Int!): EntityActionInvocation_
+  EntityActionInvocationType(ID: Int!): EntityActionInvocationType_
   EntityBehavior(ID: Int!): EntityBehavior_
   EntityBehaviorType(ID: Int!): EntityBehaviorType_
   EntityDocument(ID: Int!): EntityDocument_
@@ -8456,14 +9260,15 @@ type Query {
   InvoiceStatusType(ID: Int!): InvoiceStatusType_
   Item(Item_Number: String!): Item_
   Item__client_finance(Item_Number: String!): Item__client_finance_
+  Library(ID: Int!): Library_
   List(ID: Int!): List_
+  ListCategory(ID: Int!): ListCategory_
   ListDetail(ID: Int!): ListDetail_
   OrganizationLink(OrganizationLinkID: Int!): OrganizationLink_
   OutputDeliveryType(ID: Int!): OutputDeliveryType_
   OutputFormatType(ID: Int!): OutputFormatType_
   OutputTriggerType(ID: Int!): OutputTriggerType_
   PaymentTermsType(ID: Int!): PaymentTermsType_
-  PersonLink(PersonLinkID: Int!): PersonLink_
   Product(ProductId: String!): Product_
   ProductPriceLevel(ProductPriceLevelId: String!): ProductPriceLevel_
   Query(ID: Int!): Query_
@@ -8500,6 +9305,36 @@ type Query {
   RunAccount__client_crmDynamicView(input: RunDynamicViewInput!): RunAccount__client_crmViewResult!
   RunAccount__client_crmViewByID(input: RunViewByIDInput!): RunAccount__client_crmViewResult!
   RunAccount__client_crmViewByName(input: RunViewByNameInput!): RunAccount__client_crmViewResult!
+  RunActionAuthorizationDynamicView(input: RunDynamicViewInput!): RunActionAuthorizationViewResult!
+  RunActionAuthorizationViewByID(input: RunViewByIDInput!): RunActionAuthorizationViewResult!
+  RunActionAuthorizationViewByName(input: RunViewByNameInput!): RunActionAuthorizationViewResult!
+  RunActionCategoryDynamicView(input: RunDynamicViewInput!): RunActionCategoryViewResult!
+  RunActionCategoryViewByID(input: RunViewByIDInput!): RunActionCategoryViewResult!
+  RunActionCategoryViewByName(input: RunViewByNameInput!): RunActionCategoryViewResult!
+  RunActionContextDynamicView(input: RunDynamicViewInput!): RunActionContextViewResult!
+  RunActionContextTypeDynamicView(input: RunDynamicViewInput!): RunActionContextTypeViewResult!
+  RunActionContextTypeViewByID(input: RunViewByIDInput!): RunActionContextTypeViewResult!
+  RunActionContextTypeViewByName(input: RunViewByNameInput!): RunActionContextTypeViewResult!
+  RunActionContextViewByID(input: RunViewByIDInput!): RunActionContextViewResult!
+  RunActionContextViewByName(input: RunViewByNameInput!): RunActionContextViewResult!
+  RunActionDynamicView(input: RunDynamicViewInput!): RunActionViewResult!
+  RunActionExecutionLogDynamicView(input: RunDynamicViewInput!): RunActionExecutionLogViewResult!
+  RunActionExecutionLogViewByID(input: RunViewByIDInput!): RunActionExecutionLogViewResult!
+  RunActionExecutionLogViewByName(input: RunViewByNameInput!): RunActionExecutionLogViewResult!
+  RunActionFilterDynamicView(input: RunDynamicViewInput!): RunActionFilterViewResult!
+  RunActionFilterViewByID(input: RunViewByIDInput!): RunActionFilterViewResult!
+  RunActionFilterViewByName(input: RunViewByNameInput!): RunActionFilterViewResult!
+  RunActionLibraryDynamicView(input: RunDynamicViewInput!): RunActionLibraryViewResult!
+  RunActionLibraryViewByID(input: RunViewByIDInput!): RunActionLibraryViewResult!
+  RunActionLibraryViewByName(input: RunViewByNameInput!): RunActionLibraryViewResult!
+  RunActionParamDynamicView(input: RunDynamicViewInput!): RunActionParamViewResult!
+  RunActionParamViewByID(input: RunViewByIDInput!): RunActionParamViewResult!
+  RunActionParamViewByName(input: RunViewByNameInput!): RunActionParamViewResult!
+  RunActionResultCodeDynamicView(input: RunDynamicViewInput!): RunActionResultCodeViewResult!
+  RunActionResultCodeViewByID(input: RunViewByIDInput!): RunActionResultCodeViewResult!
+  RunActionResultCodeViewByName(input: RunViewByNameInput!): RunActionResultCodeViewResult!
+  RunActionViewByID(input: RunViewByIDInput!): RunActionViewResult!
+  RunActionViewByName(input: RunViewByNameInput!): RunActionViewResult!
   RunActivityAttachmentDynamicView(input: RunDynamicViewInput!): RunActivityAttachmentViewResult!
   RunActivityAttachmentViewByID(input: RunViewByIDInput!): RunActivityAttachmentViewResult!
   RunActivityAttachmentViewByName(input: RunViewByNameInput!): RunActivityAttachmentViewResult!
@@ -8527,6 +9362,24 @@ type Query {
   RunAuthorizationRoleViewByName(input: RunViewByNameInput!): RunAuthorizationRoleViewResult!
   RunAuthorizationViewByID(input: RunViewByIDInput!): RunAuthorizationViewResult!
   RunAuthorizationViewByName(input: RunViewByNameInput!): RunAuthorizationViewResult!
+  RunCommunicationBaseMessageTypeDynamicView(input: RunDynamicViewInput!): RunCommunicationBaseMessageTypeViewResult!
+  RunCommunicationBaseMessageTypeViewByID(input: RunViewByIDInput!): RunCommunicationBaseMessageTypeViewResult!
+  RunCommunicationBaseMessageTypeViewByName(input: RunViewByNameInput!): RunCommunicationBaseMessageTypeViewResult!
+  RunCommunicationLogDynamicView(input: RunDynamicViewInput!): RunCommunicationLogViewResult!
+  RunCommunicationLogViewByID(input: RunViewByIDInput!): RunCommunicationLogViewResult!
+  RunCommunicationLogViewByName(input: RunViewByNameInput!): RunCommunicationLogViewResult!
+  RunCommunicationProviderDynamicView(input: RunDynamicViewInput!): RunCommunicationProviderViewResult!
+  RunCommunicationProviderMessageTypeDynamicView(input: RunDynamicViewInput!): RunCommunicationProviderMessageTypeViewResult!
+  RunCommunicationProviderMessageTypeViewByID(input: RunViewByIDInput!): RunCommunicationProviderMessageTypeViewResult!
+  RunCommunicationProviderMessageTypeViewByName(input: RunViewByNameInput!): RunCommunicationProviderMessageTypeViewResult!
+  RunCommunicationProviderViewByID(input: RunViewByIDInput!): RunCommunicationProviderViewResult!
+  RunCommunicationProviderViewByName(input: RunViewByNameInput!): RunCommunicationProviderViewResult!
+  RunCommunicationRunDynamicView(input: RunDynamicViewInput!): RunCommunicationRunViewResult!
+  RunCommunicationRunViewByID(input: RunViewByIDInput!): RunCommunicationRunViewResult!
+  RunCommunicationRunViewByName(input: RunViewByNameInput!): RunCommunicationRunViewResult!
+  RunCommunicationTemplateDynamicView(input: RunDynamicViewInput!): RunCommunicationTemplateViewResult!
+  RunCommunicationTemplateViewByID(input: RunViewByIDInput!): RunCommunicationTemplateViewResult!
+  RunCommunicationTemplateViewByName(input: RunViewByNameInput!): RunCommunicationTemplateViewResult!
   RunCompanyDynamicView(input: RunDynamicViewInput!): RunCompanyViewResult!
   RunCompanyIntegrationDynamicView(input: RunDynamicViewInput!): RunCompanyIntegrationViewResult!
   RunCompanyIntegrationRecordMapDynamicView(input: RunDynamicViewInput!): RunCompanyIntegrationRecordMapViewResult!
@@ -8630,6 +9483,18 @@ type Query {
   RunEntityAIActionDynamicView(input: RunDynamicViewInput!): RunEntityAIActionViewResult!
   RunEntityAIActionViewByID(input: RunViewByIDInput!): RunEntityAIActionViewResult!
   RunEntityAIActionViewByName(input: RunViewByNameInput!): RunEntityAIActionViewResult!
+  RunEntityActionDynamicView(input: RunDynamicViewInput!): RunEntityActionViewResult!
+  RunEntityActionFilterDynamicView(input: RunDynamicViewInput!): RunEntityActionFilterViewResult!
+  RunEntityActionFilterViewByID(input: RunViewByIDInput!): RunEntityActionFilterViewResult!
+  RunEntityActionFilterViewByName(input: RunViewByNameInput!): RunEntityActionFilterViewResult!
+  RunEntityActionInvocationDynamicView(input: RunDynamicViewInput!): RunEntityActionInvocationViewResult!
+  RunEntityActionInvocationTypeDynamicView(input: RunDynamicViewInput!): RunEntityActionInvocationTypeViewResult!
+  RunEntityActionInvocationTypeViewByID(input: RunViewByIDInput!): RunEntityActionInvocationTypeViewResult!
+  RunEntityActionInvocationTypeViewByName(input: RunViewByNameInput!): RunEntityActionInvocationTypeViewResult!
+  RunEntityActionInvocationViewByID(input: RunViewByIDInput!): RunEntityActionInvocationViewResult!
+  RunEntityActionInvocationViewByName(input: RunViewByNameInput!): RunEntityActionInvocationViewResult!
+  RunEntityActionViewByID(input: RunViewByIDInput!): RunEntityActionViewResult!
+  RunEntityActionViewByName(input: RunViewByNameInput!): RunEntityActionViewResult!
   RunEntityBehaviorDynamicView(input: RunDynamicViewInput!): RunEntityBehaviorViewResult!
   RunEntityBehaviorTypeDynamicView(input: RunDynamicViewInput!): RunEntityBehaviorTypeViewResult!
   RunEntityBehaviorTypeViewByID(input: RunViewByIDInput!): RunEntityBehaviorTypeViewResult!
@@ -8705,6 +9570,12 @@ type Query {
   RunItem__client_financeDynamicView(input: RunDynamicViewInput!): RunItem__client_financeViewResult!
   RunItem__client_financeViewByID(input: RunViewByIDInput!): RunItem__client_financeViewResult!
   RunItem__client_financeViewByName(input: RunViewByNameInput!): RunItem__client_financeViewResult!
+  RunLibraryDynamicView(input: RunDynamicViewInput!): RunLibraryViewResult!
+  RunLibraryViewByID(input: RunViewByIDInput!): RunLibraryViewResult!
+  RunLibraryViewByName(input: RunViewByNameInput!): RunLibraryViewResult!
+  RunListCategoryDynamicView(input: RunDynamicViewInput!): RunListCategoryViewResult!
+  RunListCategoryViewByID(input: RunViewByIDInput!): RunListCategoryViewResult!
+  RunListCategoryViewByName(input: RunViewByNameInput!): RunListCategoryViewResult!
   RunListDetailDynamicView(input: RunDynamicViewInput!): RunListDetailViewResult!
   RunListDetailViewByID(input: RunViewByIDInput!): RunListDetailViewResult!
   RunListDetailViewByName(input: RunViewByNameInput!): RunListDetailViewResult!
@@ -8726,9 +9597,6 @@ type Query {
   RunPaymentTermsTypeDynamicView(input: RunDynamicViewInput!): RunPaymentTermsTypeViewResult!
   RunPaymentTermsTypeViewByID(input: RunViewByIDInput!): RunPaymentTermsTypeViewResult!
   RunPaymentTermsTypeViewByName(input: RunViewByNameInput!): RunPaymentTermsTypeViewResult!
-  RunPersonLinkDynamicView(input: RunDynamicViewInput!): RunPersonLinkViewResult!
-  RunPersonLinkViewByID(input: RunViewByIDInput!): RunPersonLinkViewResult!
-  RunPersonLinkViewByName(input: RunViewByNameInput!): RunPersonLinkViewResult!
   RunProductDynamicView(input: RunDynamicViewInput!): RunProductViewResult!
   RunProductPriceLevelDynamicView(input: RunDynamicViewInput!): RunProductPriceLevelViewResult!
   RunProductPriceLevelViewByID(input: RunViewByIDInput!): RunProductPriceLevelViewResult!
@@ -9294,6 +10162,106 @@ type RunAccount__client_crmViewResult {
   UserViewRunID: Int
 }
 
+type RunActionAuthorizationViewResult {
+  ErrorMessage: String
+  ExecutionTime: Int
+  Results: [ActionAuthorization_!]!
+  RowCount: Int
+  Success: Boolean!
+  TotalRowCount: Int
+  UserViewRunID: Int
+}
+
+type RunActionCategoryViewResult {
+  ErrorMessage: String
+  ExecutionTime: Int
+  Results: [ActionCategory_!]!
+  RowCount: Int
+  Success: Boolean!
+  TotalRowCount: Int
+  UserViewRunID: Int
+}
+
+type RunActionContextTypeViewResult {
+  ErrorMessage: String
+  ExecutionTime: Int
+  Results: [ActionContextType_!]!
+  RowCount: Int
+  Success: Boolean!
+  TotalRowCount: Int
+  UserViewRunID: Int
+}
+
+type RunActionContextViewResult {
+  ErrorMessage: String
+  ExecutionTime: Int
+  Results: [ActionContext_!]!
+  RowCount: Int
+  Success: Boolean!
+  TotalRowCount: Int
+  UserViewRunID: Int
+}
+
+type RunActionExecutionLogViewResult {
+  ErrorMessage: String
+  ExecutionTime: Int
+  Results: [ActionExecutionLog_!]!
+  RowCount: Int
+  Success: Boolean!
+  TotalRowCount: Int
+  UserViewRunID: Int
+}
+
+type RunActionFilterViewResult {
+  ErrorMessage: String
+  ExecutionTime: Int
+  Results: [ActionFilter_!]!
+  RowCount: Int
+  Success: Boolean!
+  TotalRowCount: Int
+  UserViewRunID: Int
+}
+
+type RunActionLibraryViewResult {
+  ErrorMessage: String
+  ExecutionTime: Int
+  Results: [ActionLibrary_!]!
+  RowCount: Int
+  Success: Boolean!
+  TotalRowCount: Int
+  UserViewRunID: Int
+}
+
+type RunActionParamViewResult {
+  ErrorMessage: String
+  ExecutionTime: Int
+  Results: [ActionParam_!]!
+  RowCount: Int
+  Success: Boolean!
+  TotalRowCount: Int
+  UserViewRunID: Int
+}
+
+type RunActionResultCodeViewResult {
+  ErrorMessage: String
+  ExecutionTime: Int
+  Results: [ActionResultCode_!]!
+  RowCount: Int
+  Success: Boolean!
+  TotalRowCount: Int
+  UserViewRunID: Int
+}
+
+type RunActionViewResult {
+  ErrorMessage: String
+  ExecutionTime: Int
+  Results: [Action_!]!
+  RowCount: Int
+  Success: Boolean!
+  TotalRowCount: Int
+  UserViewRunID: Int
+}
+
 type RunActivityAttachmentViewResult {
   ErrorMessage: String
   ExecutionTime: Int
@@ -9378,6 +10346,66 @@ type RunAuthorizationViewResult {
   ErrorMessage: String
   ExecutionTime: Int
   Results: [Authorization_!]!
+  RowCount: Int
+  Success: Boolean!
+  TotalRowCount: Int
+  UserViewRunID: Int
+}
+
+type RunCommunicationBaseMessageTypeViewResult {
+  ErrorMessage: String
+  ExecutionTime: Int
+  Results: [CommunicationBaseMessageType_!]!
+  RowCount: Int
+  Success: Boolean!
+  TotalRowCount: Int
+  UserViewRunID: Int
+}
+
+type RunCommunicationLogViewResult {
+  ErrorMessage: String
+  ExecutionTime: Int
+  Results: [CommunicationLog_!]!
+  RowCount: Int
+  Success: Boolean!
+  TotalRowCount: Int
+  UserViewRunID: Int
+}
+
+type RunCommunicationProviderMessageTypeViewResult {
+  ErrorMessage: String
+  ExecutionTime: Int
+  Results: [CommunicationProviderMessageType_!]!
+  RowCount: Int
+  Success: Boolean!
+  TotalRowCount: Int
+  UserViewRunID: Int
+}
+
+type RunCommunicationProviderViewResult {
+  ErrorMessage: String
+  ExecutionTime: Int
+  Results: [CommunicationProvider_!]!
+  RowCount: Int
+  Success: Boolean!
+  TotalRowCount: Int
+  UserViewRunID: Int
+}
+
+type RunCommunicationRunViewResult {
+  ErrorMessage: String
+  ExecutionTime: Int
+  Results: [CommunicationRun_!]!
+  RowCount: Int
+  Success: Boolean!
+  TotalRowCount: Int
+  UserViewRunID: Int
+}
+
+type RunCommunicationTemplateViewResult {
+  ErrorMessage: String
+  ExecutionTime: Int
+  Results: [CommunicationTemplate_!]!
   RowCount: Int
   Success: Boolean!
   TotalRowCount: Int
@@ -9778,6 +10806,46 @@ type RunEntityAIActionViewResult {
   UserViewRunID: Int
 }
 
+type RunEntityActionFilterViewResult {
+  ErrorMessage: String
+  ExecutionTime: Int
+  Results: [EntityActionFilter_!]!
+  RowCount: Int
+  Success: Boolean!
+  TotalRowCount: Int
+  UserViewRunID: Int
+}
+
+type RunEntityActionInvocationTypeViewResult {
+  ErrorMessage: String
+  ExecutionTime: Int
+  Results: [EntityActionInvocationType_!]!
+  RowCount: Int
+  Success: Boolean!
+  TotalRowCount: Int
+  UserViewRunID: Int
+}
+
+type RunEntityActionInvocationViewResult {
+  ErrorMessage: String
+  ExecutionTime: Int
+  Results: [EntityActionInvocation_!]!
+  RowCount: Int
+  Success: Boolean!
+  TotalRowCount: Int
+  UserViewRunID: Int
+}
+
+type RunEntityActionViewResult {
+  ErrorMessage: String
+  ExecutionTime: Int
+  Results: [EntityAction_!]!
+  RowCount: Int
+  Success: Boolean!
+  TotalRowCount: Int
+  UserViewRunID: Int
+}
+
 type RunEntityBehaviorTypeViewResult {
   ErrorMessage: String
   ExecutionTime: Int
@@ -10028,6 +11096,26 @@ type RunItem__client_financeViewResult {
   UserViewRunID: Int
 }
 
+type RunLibraryViewResult {
+  ErrorMessage: String
+  ExecutionTime: Int
+  Results: [Library_!]!
+  RowCount: Int
+  Success: Boolean!
+  TotalRowCount: Int
+  UserViewRunID: Int
+}
+
+type RunListCategoryViewResult {
+  ErrorMessage: String
+  ExecutionTime: Int
+  Results: [ListCategory_!]!
+  RowCount: Int
+  Success: Boolean!
+  TotalRowCount: Int
+  UserViewRunID: Int
+}
+
 type RunListDetailViewResult {
   ErrorMessage: String
   ExecutionTime: Int
@@ -10092,16 +11180,6 @@ type RunPaymentTermsTypeViewResult {
   ErrorMessage: String
   ExecutionTime: Int
   Results: [PaymentTermsType_!]!
-  RowCount: Int
-  Success: Boolean!
-  TotalRowCount: Int
-  UserViewRunID: Int
-}
-
-type RunPersonLinkViewResult {
-  ErrorMessage: String
-  ExecutionTime: Int
-  Results: [PersonLink_!]!
   RowCount: Int
   Success: Boolean!
   TotalRowCount: Int
@@ -13087,6 +14165,7 @@ input UpdateAIActionInput {
   ID: Int!
   IsActive: Boolean!
   Name: String!
+  OldValues___: [KeyValuePairInput!]
 }
 
 input UpdateAIModelActionInput {
@@ -13094,6 +14173,7 @@ input UpdateAIModelActionInput {
   AIModelID: Int!
   ID: Int!
   IsActive: Boolean!
+  OldValues___: [KeyValuePairInput!]
 }
 
 input UpdateAIModelInput {
@@ -13105,6 +14185,7 @@ input UpdateAIModelInput {
   ID: Int!
   IsActive: Boolean!
   Name: String!
+  OldValues___: [KeyValuePairInput!]
   PowerRank: Int
   Vendor: String
 }
@@ -13113,6 +14194,7 @@ input UpdateAIModelTypeInput {
   Description: String
   ID: Int!
   Name: String!
+  OldValues___: [KeyValuePairInput!]
 }
 
 input UpdateAccountInput {
@@ -13140,6 +14222,7 @@ input UpdateAccountInput {
   Logo: String
   LogoURL: String
   Name: String!
+  OldValues___: [KeyValuePairInput!]
   OperatingName: String
   PhoneNumber: String
   PostalCode: String
@@ -13301,6 +14384,7 @@ input UpdateAccount__client_crmInput {
   Name: String
   New_scribe_stripcompany: Boolean
   NumberOfEmployees: Int
+  OldValues___: [KeyValuePairInput!]
   OnHoldTime: Int
   OpenDeals: Int
   OpenDeals_Date: Timestamp
@@ -13400,9 +14484,110 @@ input UpdateAccount__client_crmInput {
   new_c360sisiteurl: String
 }
 
+input UpdateActionAuthorizationInput {
+  ActionID: Int!
+  AuthorizationName: String!
+  Comments: String
+  ID: Int!
+  OldValues___: [KeyValuePairInput!]
+}
+
+input UpdateActionCategoryInput {
+  Description: String
+  ID: Int!
+  Name: String!
+  OldValues___: [KeyValuePairInput!]
+  ParentID: Int
+  Status: String!
+}
+
+input UpdateActionContextInput {
+  ActionID: Int!
+  ContextTypeID: Int!
+  ID: Int!
+  OldValues___: [KeyValuePairInput!]
+  Status: String!
+}
+
+input UpdateActionContextTypeInput {
+  Description: String
+  ID: Int!
+  Name: String!
+  OldValues___: [KeyValuePairInput!]
+}
+
+input UpdateActionExecutionLogInput {
+  ActionID: Int!
+  EndedAt: Timestamp
+  ID: Int!
+  OldValues___: [KeyValuePairInput!]
+  Params: String
+  ResultCode: String
+  RetentionPeriod: Int
+  StartedAt: Timestamp!
+  UserID: Int!
+}
+
+input UpdateActionFilterInput {
+  Code: String!
+  CodeExplanation: String
+  ID: Int!
+  OldValues___: [KeyValuePairInput!]
+  UserComments: String
+  UserDescription: String!
+}
+
+input UpdateActionInput {
+  CategoryID: Int
+  Code: String
+  CodeApprovalComments: String
+  CodeApprovalStatus: String!
+  CodeApprovedAt: Timestamp
+  CodeApprovedByUserID: Int
+  CodeComments: String
+  ForceCodeGeneration: Boolean!
+  ID: Int!
+  Name: String!
+  OldValues___: [KeyValuePairInput!]
+  RetentionPeriod: Int
+  Status: String!
+  UserComments: String
+  UserPrompt: String!
+}
+
+input UpdateActionLibraryInput {
+  ActionID: Int!
+  ID: Int!
+  ItemsUsed: String
+  LibraryID: Int!
+  OldValues___: [KeyValuePairInput!]
+}
+
+input UpdateActionParamInput {
+  ActionID: Int!
+  DefaultValue: String
+  Description: String
+  ID: Int!
+  IsArray: Boolean!
+  IsRequired: Boolean!
+  Name: String!
+  OldValues___: [KeyValuePairInput!]
+  Type: String!
+  ValueType: String!
+}
+
+input UpdateActionResultCodeInput {
+  ActionID: Int!
+  Description: String
+  ID: Int!
+  OldValues___: [KeyValuePairInput!]
+  ResultCode: String!
+}
+
 input UpdateActivityAttachmentInput {
   Attachments: String
   ID: Int!
+  OldValues___: [KeyValuePairInput!]
 }
 
 input UpdateActivityInput {
@@ -13421,6 +14606,7 @@ input UpdateActivityInput {
   IsBounced: Boolean
   IsOpened: Boolean
   IsReplied: Boolean
+  OldValues___: [KeyValuePairInput!]
   Summary: String
   Title: String
   Type: String
@@ -13431,6 +14617,7 @@ input UpdateApplicationEntityInput {
   DefaultForNewUser: Boolean!
   EntityID: Int!
   ID: Int!
+  OldValues___: [KeyValuePairInput!]
   Sequence: Int!
 }
 
@@ -13438,6 +14625,7 @@ input UpdateApplicationInput {
   Description: String
   ID: Int!
   Name: String!
+  OldValues___: [KeyValuePairInput!]
 }
 
 input UpdateApplicationSettingInput {
@@ -13445,6 +14633,7 @@ input UpdateApplicationSettingInput {
   Comments: String
   ID: Int!
   Name: String!
+  OldValues___: [KeyValuePairInput!]
   Value: String!
 }
 
@@ -13455,9 +14644,72 @@ input UpdateAuditLogInput {
   Details: String
   EntityID: Int
   ID: Int!
+  OldValues___: [KeyValuePairInput!]
   RecordID: String
   Status: String!
   UserID: Int!
+}
+
+input UpdateCommunicationBaseMessageTypeInput {
+  ID: Int!
+  MaxBytes: Int
+  OldValues___: [KeyValuePairInput!]
+  SupportsAttachments: Boolean!
+  SupportsHtml: Boolean!
+  SupportsSubjectLine: Boolean!
+  Type: String!
+}
+
+input UpdateCommunicationLogInput {
+  CommunicationProviderID: Int!
+  CommunicationProviderMessageTypeID: Int!
+  CommunicationRunID: Int
+  Direction: String!
+  ErrorMessage: String
+  ID: Int!
+  MessageContent: String
+  MessageDate: Timestamp!
+  OldValues___: [KeyValuePairInput!]
+  Status: String!
+}
+
+input UpdateCommunicationProviderInput {
+  Description: String
+  ID: Int!
+  Name: String!
+  OldValues___: [KeyValuePairInput!]
+  Status: String!
+  SupportsReceiving: Boolean!
+  SupportsSending: Boolean!
+}
+
+input UpdateCommunicationProviderMessageTypeInput {
+  AdditionalAttributes: String
+  CommunicationBaseMessageTypeID: Int!
+  CommunicationProviderID: Int!
+  ID: Int!
+  Name: String!
+  OldValues___: [KeyValuePairInput!]
+  Status: String!
+}
+
+input UpdateCommunicationRunInput {
+  Comments: String
+  Direction: String!
+  ErrorMessage: String
+  ID: Int!
+  OldValues___: [KeyValuePairInput!]
+  Status: String!
+  UserID: Int!
+}
+
+input UpdateCommunicationTemplateInput {
+  Comments: String
+  Content: String!
+  ID: Int!
+  Name: String!
+  OldValues___: [KeyValuePairInput!]
+  ParentID: Int
 }
 
 input UpdateCompanyInput {
@@ -13466,6 +14718,7 @@ input UpdateCompanyInput {
   ID: Int!
   LogoURL: String
   Name: String!
+  OldValues___: [KeyValuePairInput!]
   Website: String
 }
 
@@ -13481,6 +14734,7 @@ input UpdateCompanyIntegrationInput {
   IntegrationName: String!
   IsActive: Boolean
   IsExternalSystemReadOnly: Boolean!
+  OldValues___: [KeyValuePairInput!]
   RefreshToken: String
   TokenExpirationDate: Timestamp
 }
@@ -13491,6 +14745,7 @@ input UpdateCompanyIntegrationRecordMapInput {
   EntityRecordID: String!
   ExternalSystemRecordID: String!
   ID: Int!
+  OldValues___: [KeyValuePairInput!]
 }
 
 input UpdateCompanyIntegrationRunAPILogInput {
@@ -13498,6 +14753,7 @@ input UpdateCompanyIntegrationRunAPILogInput {
   ExecutedAt: Timestamp!
   ID: Int!
   IsSuccess: Boolean!
+  OldValues___: [KeyValuePairInput!]
   Parameters: String
   RequestMethod: String
   URL: String
@@ -13510,6 +14766,7 @@ input UpdateCompanyIntegrationRunDetailInput {
   ExecutedAt: Timestamp!
   ID: Int!
   IsSuccess: Boolean!
+  OldValues___: [KeyValuePairInput!]
   RecordID: String!
 }
 
@@ -13518,6 +14775,7 @@ input UpdateCompanyIntegrationRunInput {
   CompanyIntegrationID: Int!
   EndedAt: Timestamp
   ID: Int!
+  OldValues___: [KeyValuePairInput!]
   RunByUserID: Int!
   StartedAt: Timestamp
   TotalRecords: Int!
@@ -13542,6 +14800,7 @@ input UpdateContactInput {
   LevelID: Int
   LinkedIn: String
   NickName: String
+  OldValues___: [KeyValuePairInput!]
   PhoneNumber: String
   Prefix: String
   ProfilePictureURL: String
@@ -13560,6 +14819,7 @@ input UpdateContactLevelInput {
   ID: Int!
   Keywords: String
   Name: String!
+  OldValues___: [KeyValuePairInput!]
   Rank: Int!
 }
 
@@ -13568,6 +14828,7 @@ input UpdateContactRoleInput {
   ID: Int!
   Keywords: String
   Name: String!
+  OldValues___: [KeyValuePairInput!]
 }
 
 input UpdateContact__client_crmInput {
@@ -13895,6 +15156,7 @@ input UpdateContact__client_crmInput {
   New_renewaldate: String
   NickName: String
   NumberOfChildren: Int
+  OldValues___: [KeyValuePairInput!]
   OnHoldTime: Int
   OriginatingLeadIdName: String
   OriginatingLeadIdYomiName: String
@@ -14027,6 +15289,7 @@ input UpdateConversationDetailInput {
   HiddenToUser: Boolean!
   ID: Int!
   Message: String!
+  OldValues___: [KeyValuePairInput!]
   Role: String!
 }
 
@@ -14039,6 +15302,7 @@ input UpdateConversationInput {
   LinkedEntityID: Int
   LinkedRecordID: String
   Name: String
+  OldValues___: [KeyValuePairInput!]
   Type: String!
   UserID: Int!
 }
@@ -14119,6 +15383,7 @@ input UpdateCustomerAddressInput {
   Minimum_Payment_Type: String
   Modified_Date: Timestamp
   Note_Index: Float
+  OldValues___: [KeyValuePairInput!]
   Order_Fulfillment_Shortage_Default: String
   Payment_Terms_ID: String
   Phone_1: String
@@ -14235,6 +15500,7 @@ input UpdateCustomerAddress__client_financeInput {
   Minimum_Payment_Type: String
   Modified_Date: Timestamp
   Note_Index: Float
+  OldValues___: [KeyValuePairInput!]
   Order_Fulfillment_Shortage_Default: String
   Payment_Terms_ID: String
   Phone_1: String
@@ -14375,6 +15641,7 @@ input UpdateCustomerInput {
   Number_ADTP_Documents___Year: Int
   Number_Of_NSF_Checks_Life: Int
   Number_Of_NSF_Checks_YTD: Int
+  OldValues___: [KeyValuePairInput!]
   On_Order_Amount: Float
   Order_Fulfillment_Shortage_Default: String
   Payment_Terms_ID: String
@@ -14560,6 +15827,7 @@ input UpdateCustomer__client_financeInput {
   Number_ADTP_Documents___Year: Int
   Number_Of_NSF_Checks_Life: Int
   Number_Of_NSF_Checks_YTD: Int
+  OldValues___: [KeyValuePairInput!]
   On_Order_Amount: Float
   Order_Fulfillment_Shortage_Default: String
   Payment_Terms_ID: String
@@ -14649,6 +15917,7 @@ input UpdateDashboardCategoryInput {
   Description: String
   ID: Int!
   Name: String!
+  OldValues___: [KeyValuePairInput!]
   ParentID: Int
   UserID: Int!
 }
@@ -14658,6 +15927,7 @@ input UpdateDashboardInput {
   Description: String
   ID: Int!
   Name: String!
+  OldValues___: [KeyValuePairInput!]
   UIConfigDetails: String!
   UserID: Int
 }
@@ -14667,6 +15937,7 @@ input UpdateDataContextInput {
   ID: Int!
   LastRefreshedAt: Timestamp
   Name: String!
+  OldValues___: [KeyValuePairInput!]
   UserID: Int!
 }
 
@@ -14676,6 +15947,7 @@ input UpdateDataContextItemInput {
   EntityID: Int
   ID: Int!
   LastRefreshedAt: Timestamp
+  OldValues___: [KeyValuePairInput!]
   QueryID: Int
   RecordID: String
   SQL: String
@@ -14688,6 +15960,7 @@ input UpdateDealForecastCategoryInput {
   DisplayName: String
   ID: Int!
   Name: String
+  OldValues___: [KeyValuePairInput!]
 }
 
 input UpdateDealInput {
@@ -14711,6 +15984,7 @@ input UpdateDealInput {
   LeadSource: String
   LeadSourceDetail: String
   MRR: Float!
+  OldValues___: [KeyValuePairInput!]
   OneTimeFees: Float!
   Pipeline: String
   Probability: Float
@@ -14722,6 +15996,7 @@ input UpdateDealStageInput {
   Description: String!
   ID: Int!
   Name: String!
+  OldValues___: [KeyValuePairInput!]
 }
 
 input UpdateDealTypeInput {
@@ -14729,6 +16004,7 @@ input UpdateDealTypeInput {
   DisplayName: String
   ID: Int!
   Name: String
+  OldValues___: [KeyValuePairInput!]
 }
 
 input UpdateDuplicateRunDetailInput {
@@ -14738,6 +16014,7 @@ input UpdateDuplicateRunDetailInput {
   MatchStatus: String!
   MergeErrorMessage: String
   MergeStatus: String!
+  OldValues___: [KeyValuePairInput!]
   RecordID: String!
   SkippedReason: String
 }
@@ -14753,6 +16030,7 @@ input UpdateDuplicateRunDetailMatchInput {
   MatchedAt: Timestamp!
   MergeStatus: String!
   MergedAt: Timestamp!
+  OldValues___: [KeyValuePairInput!]
   RecordMergeLogID: Int
 }
 
@@ -14763,6 +16041,7 @@ input UpdateDuplicateRunInput {
   EndedAt: Timestamp
   EntityID: Int!
   ID: Int!
+  OldValues___: [KeyValuePairInput!]
   ProcessingErrorMessage: String
   ProcessingStatus: String!
   SourceListID: Int!
@@ -14776,6 +16055,7 @@ input UpdateEmployeeCompanyIntegrationInput {
   ExternalSystemRecordID: String!
   ID: Int!
   IsActive: Boolean!
+  OldValues___: [KeyValuePairInput!]
 }
 
 input UpdateEmployeeInput {
@@ -14785,6 +16065,7 @@ input UpdateEmployeeInput {
   FirstName: String!
   ID: Int!
   LastName: String!
+  OldValues___: [KeyValuePairInput!]
   Phone: String
   SupervisorID: Int
   Title: String
@@ -14793,12 +16074,14 @@ input UpdateEmployeeInput {
 input UpdateEmployeeRoleInput {
   EmployeeID: Int!
   ID: Int!
+  OldValues___: [KeyValuePairInput!]
   RoleID: Int!
 }
 
 input UpdateEmployeeSkillInput {
   EmployeeID: Int!
   ID: Int!
+  OldValues___: [KeyValuePairInput!]
   SkillID: Int!
 }
 
@@ -14809,6 +16092,7 @@ input UpdateEntityAIActionInput {
   EntityID: Int!
   ID: Int!
   Name: String!
+  OldValues___: [KeyValuePairInput!]
   OutputEntityID: Int
   OutputField: String
   OutputType: String!
@@ -14816,6 +16100,39 @@ input UpdateEntityAIActionInput {
   SkipIfOutputFieldNotEmpty: Boolean!
   TriggerEvent: String!
   UserMessage: String!
+}
+
+input UpdateEntityActionFilterInput {
+  ActionFilterID: Int!
+  EntityActionID: Int!
+  ID: Int!
+  OldValues___: [KeyValuePairInput!]
+  Sequence: Int!
+  Status: String!
+}
+
+input UpdateEntityActionInput {
+  ActionID: Int!
+  EntityID: Int!
+  ID: Int!
+  OldValues___: [KeyValuePairInput!]
+  Status: String!
+}
+
+input UpdateEntityActionInvocationInput {
+  EntityActionID: Int!
+  ID: Int!
+  InvocationTypeID: Int!
+  OldValues___: [KeyValuePairInput!]
+  Status: String!
+}
+
+input UpdateEntityActionInvocationTypeInput {
+  Description: String
+  DisplaySequence: Int!
+  ID: Int!
+  Name: String!
+  OldValues___: [KeyValuePairInput!]
 }
 
 input UpdateEntityBehaviorInput {
@@ -14826,6 +16143,7 @@ input UpdateEntityBehaviorInput {
   Description: String!
   EntityID: Int!
   ID: Int!
+  OldValues___: [KeyValuePairInput!]
   RegenerateCode: Boolean!
 }
 
@@ -14833,6 +16151,7 @@ input UpdateEntityBehaviorTypeInput {
   Description: String
   ID: Int!
   Name: String!
+  OldValues___: [KeyValuePairInput!]
 }
 
 input UpdateEntityDocumentInput {
@@ -14841,6 +16160,7 @@ input UpdateEntityDocumentInput {
   EntityID: Int!
   ID: Int!
   Name: String!
+  OldValues___: [KeyValuePairInput!]
   PotentialMatchThreshold: Float!
   Status: String!
   Template: String
@@ -14852,6 +16172,7 @@ input UpdateEntityDocumentRunInput {
   EndedAt: Timestamp
   EntityDocumentID: Int!
   ID: Int!
+  OldValues___: [KeyValuePairInput!]
   StartedAt: Timestamp
   Status: String!
 }
@@ -14861,6 +16182,7 @@ input UpdateEntityDocumentSettingInput {
   EntityDocumentID: Int!
   ID: Int!
   Name: String!
+  OldValues___: [KeyValuePairInput!]
   Value: String!
 }
 
@@ -14868,6 +16190,7 @@ input UpdateEntityDocumentTypeInput {
   Description: String
   ID: Int!
   Name: String!
+  OldValues___: [KeyValuePairInput!]
 }
 
 input UpdateEntityFieldInput {
@@ -14875,6 +16198,7 @@ input UpdateEntityFieldInput {
   AllowUpdateInView: Boolean!
   AutoUpdateDescription: Boolean!
   Category: String
+  CodeType: String
   DefaultColumnWidth: Int
   DefaultInView: Boolean!
   Description: String
@@ -14889,6 +16213,7 @@ input UpdateEntityFieldInput {
   IsNameField: Boolean!
   IsPrimaryKey: Boolean!
   IsUnique: Boolean!
+  OldValues___: [KeyValuePairInput!]
   RelatedEntityFieldName: String
   RelatedEntityID: Int
   RelatedEntityNameFieldMap: String
@@ -14924,6 +16249,7 @@ input UpdateEntityInput {
   IncludeInAPI: Boolean!
   Name: String!
   NameSuffix: String
+  OldValues___: [KeyValuePairInput!]
   ParentID: Int
   TrackRecordChanges: Boolean!
   UserFormGenerated: Boolean!
@@ -14947,6 +16273,7 @@ input UpdateEntityPermissionInput {
   DeleteRLSFilterID: Int
   EntityID: Int!
   ID: Int!
+  OldValues___: [KeyValuePairInput!]
   ReadRLSFilterID: Int
   RoleName: String
   UpdateRLSFilterID: Int
@@ -14958,6 +16285,7 @@ input UpdateEntityRecordDocumentInput {
   EntityID: Int!
   EntityRecordUpdatedAt: Timestamp!
   ID: Int!
+  OldValues___: [KeyValuePairInput!]
   RecordID: String!
   VectorID: String
   VectorIndexID: Int!
@@ -14975,6 +16303,7 @@ input UpdateEntityRelationshipInput {
   JoinEntityInverseJoinField: String
   JoinEntityJoinField: String
   JoinView: String
+  OldValues___: [KeyValuePairInput!]
   RelatedEntityID: Int!
   RelatedEntityJoinField: String!
   Sequence: Int!
@@ -14986,6 +16315,7 @@ input UpdateEntitySettingInput {
   EntityID: Int!
   ID: Int!
   Name: String!
+  OldValues___: [KeyValuePairInput!]
   Value: String!
 }
 
@@ -14998,6 +16328,7 @@ input UpdateErrorLogInput {
   Details: String
   ID: Int!
   Message: String
+  OldValues___: [KeyValuePairInput!]
   Status: String
 }
 
@@ -15005,6 +16336,7 @@ input UpdateFileCategoryInput {
   Description: String
   ID: Int!
   Name: String!
+  OldValues___: [KeyValuePairInput!]
   ParentID: Int
 }
 
@@ -15012,6 +16344,7 @@ input UpdateFileEntityRecordLinkInput {
   EntityID: Int!
   FileID: Int!
   ID: Int!
+  OldValues___: [KeyValuePairInput!]
   RecordID: String!
 }
 
@@ -15021,6 +16354,7 @@ input UpdateFileInput {
   Description: String
   ID: Int!
   Name: String!
+  OldValues___: [KeyValuePairInput!]
   ProviderID: Int!
   ProviderKey: String
   Status: String!
@@ -15032,6 +16366,7 @@ input UpdateFileStorageProviderInput {
   ID: Int!
   IsActive: Boolean!
   Name: String!
+  OldValues___: [KeyValuePairInput!]
   Priority: Int!
   ServerDriverKey: String!
 }
@@ -15041,6 +16376,7 @@ input UpdateIndustryInput {
   ID: Int!
   Keywords: String
   Name: String!
+  OldValues___: [KeyValuePairInput!]
 }
 
 input UpdateIntegrationInput {
@@ -15052,12 +16388,14 @@ input UpdateIntegrationInput {
   ImportPath: String
   Name: String!
   NavigationBaseURL: String
+  OldValues___: [KeyValuePairInput!]
 }
 
 input UpdateIntegrationURLFormatInput {
   EntityID: Int!
   ID: Int!
   IntegrationName: String
+  OldValues___: [KeyValuePairInput!]
   URLFormat: String!
 }
 
@@ -15070,6 +16408,7 @@ input UpdateInvoiceInput {
   ID: Int!
   InvoiceDate: Timestamp!
   InvoiceNumber: String!
+  OldValues___: [KeyValuePairInput!]
   PaymentTermsID: Int
   PostingDate: Timestamp
   StatusID: Int!
@@ -15082,6 +16421,7 @@ input UpdateInvoiceStatusTypeInput {
   Description: String!
   ID: Int!
   Name: String!
+  OldValues___: [KeyValuePairInput!]
 }
 
 input UpdateItemInput {
@@ -15145,6 +16485,7 @@ input UpdateItemInput {
   Mfg__Item_Description: String
   Modified_Date: Timestamp
   Note_Index: Float
+  OldValues___: [KeyValuePairInput!]
   PriceLevel: String
   Price_Group: String
   Price_Method: String
@@ -15250,6 +16591,7 @@ input UpdateItem__client_financeInput {
   Mfg__Item_Description: String
   Modified_Date: Timestamp
   Note_Index: Float
+  OldValues___: [KeyValuePairInput!]
   PriceLevel: String
   Price_Group: String
   Price_Method: String
@@ -15294,20 +16636,43 @@ input UpdateItem__client_financeInput {
   Warranty_Days: Int
 }
 
+input UpdateLibraryInput {
+  Description: String
+  ExportedItems: String
+  ID: Int!
+  Name: String!
+  OldValues___: [KeyValuePairInput!]
+  SampleCode: String
+  Status: String!
+  TypeDefinitions: String
+}
+
+input UpdateListCategoryInput {
+  Description: String
+  ID: Int!
+  Name: String!
+  OldValues___: [KeyValuePairInput!]
+  ParentID: Int
+  UserID: Int!
+}
+
 input UpdateListDetailInput {
   ID: Int!
   ListID: Int!
+  OldValues___: [KeyValuePairInput!]
   RecordID: String!
   Sequence: Int!
 }
 
 input UpdateListInput {
+  CategoryID: Int
   CompanyIntegrationID: Int
   Description: String
-  EntityID: Int
+  EntityID: Int!
   ExternalSystemRecordID: String
   ID: Int!
   Name: String!
+  OldValues___: [KeyValuePairInput!]
   UserID: Int!
 }
 
@@ -15315,6 +16680,7 @@ input UpdateOrganizationLinkInput {
   CategoryName: String
   MainGreatPlainsCustomerID: String
   MembershipGreatPlainsCustomerID: String
+  OldValues___: [KeyValuePairInput!]
   OrganizationLinkID: Int!
   OrganizationName: String
 }
@@ -15328,15 +16694,7 @@ input UpdatePaymentTermsTypeInput {
   ExternalSystemRecordID: String
   ID: Int!
   Name: String!
-}
-
-input UpdatePersonLinkInput {
-  Email: String
-  FirstName: String
-  LastName: String
-  MainGreatPlainsCustomerID: String
-  MembershipGreatPlainsCustomerID: String
-  PersonLinkID: Int!
+  OldValues___: [KeyValuePairInput!]
 }
 
 input UpdateProductInput {
@@ -15396,6 +16754,7 @@ input UpdateProductInput {
   ModifiedOnBehalfByName: String
   ModifiedOnBehalfByYomiName: String
   Name: String
+  OldValues___: [KeyValuePairInput!]
   OrganizationIdName: String
   OverriddenCreatedOn: Timestamp
   ParentProductIdName: String
@@ -15500,6 +16859,7 @@ input UpdateProductPriceLevelInput {
   ModifiedOn: Timestamp
   ModifiedOnBehalfByName: String
   ModifiedOnBehalfByYomiName: String
+  OldValues___: [KeyValuePairInput!]
   OverriddenCreatedOn: Timestamp
   Percentage: Float
   PriceLevelIdName: String
@@ -15523,6 +16883,7 @@ input UpdateQueryCategoryInput {
   Description: String
   ID: Int!
   Name: String!
+  OldValues___: [KeyValuePairInput!]
   ParentID: Int
   UserID: Int!
 }
@@ -15534,6 +16895,7 @@ input UpdateQueryFieldInput {
   IsComputed: Boolean!
   IsSummary: Boolean!
   Name: String!
+  OldValues___: [KeyValuePairInput!]
   QueryID: Int!
   SQLBaseType: String!
   SQLFullType: String!
@@ -15549,6 +16911,7 @@ input UpdateQueryInput {
   Feedback: String
   ID: Int!
   Name: String!
+  OldValues___: [KeyValuePairInput!]
   OriginalSQL: String
   QualityRank: Int
   SQL: String
@@ -15557,6 +16920,7 @@ input UpdateQueryInput {
 
 input UpdateQueryPermissionInput {
   ID: Int!
+  OldValues___: [KeyValuePairInput!]
   QueryID: Int!
   RoleName: String!
 }
@@ -15567,6 +16931,7 @@ input UpdateQueueInput {
   IsActive: Boolean!
   LastHeartbeat: Timestamp!
   Name: String!
+  OldValues___: [KeyValuePairInput!]
   ProcessCwd: String
   ProcessHostName: String
   ProcessIPAddress: String
@@ -15587,6 +16952,7 @@ input UpdateQueueTaskInput {
   EndedAt: Timestamp
   ErrorMessage: String
   ID: Int!
+  OldValues___: [KeyValuePairInput!]
   Options: String
   Output: String
   QueueID: Int!
@@ -15597,6 +16963,7 @@ input UpdateQueueTaskInput {
 input UpdateRecordMergeDeletionLogInput {
   DeletedRecordID: String!
   ID: Int!
+  OldValues___: [KeyValuePairInput!]
   ProcessingLog: String
   RecordMergeLogID: Int!
   Status: String!
@@ -15609,6 +16976,7 @@ input UpdateRecordMergeLogInput {
   EntityID: Int!
   ID: Int!
   InitiatedByUserID: Int!
+  OldValues___: [KeyValuePairInput!]
   ProcessingEndedAt: Timestamp
   ProcessingLog: String
   ProcessingStartedAt: Timestamp!
@@ -15620,6 +16988,7 @@ input UpdateReportCategoryInput {
   Description: String
   ID: Int!
   Name: String!
+  OldValues___: [KeyValuePairInput!]
   ParentID: Int
   UserID: Int!
 }
@@ -15633,6 +17002,7 @@ input UpdateReportInput {
   Description: String
   ID: Int!
   Name: String!
+  OldValues___: [KeyValuePairInput!]
   OutputDeliveryTypeID: Int
   OutputEventID: Int
   OutputFormatTypeID: Int
@@ -15646,6 +17016,7 @@ input UpdateReportInput {
 
 input UpdateReportSnapshotInput {
   ID: Int!
+  OldValues___: [KeyValuePairInput!]
   ReportID: Int!
   ResultSet: String!
   UserID: Int
@@ -15656,6 +17027,7 @@ input UpdateRoleInput {
   DirectoryID: String
   ID: Int!
   Name: String!
+  OldValues___: [KeyValuePairInput!]
   SQLName: String
 }
 
@@ -15941,6 +17313,7 @@ input UpdateSalesLineItemInput {
   Number_ADTP_Documents___Year: Int
   Number_Of_NSF_Checks_Life: Int
   Number_Of_NSF_Checks_YTD: Int
+  OldValues___: [KeyValuePairInput!]
   On_Order_Amount: Float
   Order_Date: Timestamp
   Order_Fulfillment_Shortage_Default: String
@@ -16510,6 +17883,7 @@ input UpdateSalesLineItem__client_membershipInput {
   Number_ADTP_Documents___Year: Int
   Number_Of_NSF_Checks_Life: Int
   Number_Of_NSF_Checks_YTD: Int
+  OldValues___: [KeyValuePairInput!]
   On_Order_Amount: Float
   Order_Date: Timestamp
   Order_Fulfillment_Shortage_Default: String
@@ -16824,6 +18198,7 @@ input UpdateSalesOrderDetailInput {
   ModifiedOn: Timestamp
   ModifiedOnBehalfByName: String
   ModifiedOnBehalfByYomiName: String
+  OldValues___: [KeyValuePairInput!]
   OverriddenCreatedOn: Timestamp
   OwnerIdType: Int
   PricePerUnit: Float
@@ -16960,6 +18335,7 @@ input UpdateSalesOrderInput {
   ModifiedOnBehalfByName: String
   ModifiedOnBehalfByYomiName: String
   Name: String
+  OldValues___: [KeyValuePairInput!]
   OnHoldTime: Int
   OpportunityIdName: String
   OrderNumber: String
@@ -17222,6 +18598,7 @@ input UpdateSalesTransactionInput {
   Number_ADTP_Documents___Year: Int
   Number_Of_NSF_Checks_Life: Int
   Number_Of_NSF_Checks_YTD: Int
+  OldValues___: [KeyValuePairInput!]
   On_Order_Amount: Float
   Order_Date: Timestamp
   Order_Fulfillment_Shortage_Default: String
@@ -17592,6 +18969,7 @@ input UpdateSalesTransaction__client_membershipInput {
   Number_ADTP_Documents___Year: Int
   Number_Of_NSF_Checks_Life: Int
   Number_Of_NSF_Checks_YTD: Int
+  OldValues___: [KeyValuePairInput!]
   On_Order_Amount: Float
   Order_Date: Timestamp
   Order_Fulfillment_Shortage_Default: String
@@ -17787,6 +19165,7 @@ input UpdateSchemaInfoInput {
   EntityIDMax: Int!
   EntityIDMin: Int!
   ID: Int!
+  OldValues___: [KeyValuePairInput!]
   SchemaName: String!
 }
 
@@ -17796,6 +19175,7 @@ input UpdateStringMapInput {
   DisplayOrder: Int
   LangId: Int
   ObjectTypeCode: Int
+  OldValues___: [KeyValuePairInput!]
   StringMapId: String!
   Value: String
   VersionNumber: Int!
@@ -17820,6 +19200,7 @@ input UpdateUoMInput {
   ModifiedOnBehalfByName: String
   ModifiedOnBehalfByYomiName: String
   Name: String
+  OldValues___: [KeyValuePairInput!]
   OverriddenCreatedOn: Timestamp
   Quantity: Float
   UoMId: String!
@@ -17829,6 +19210,7 @@ input UpdateUoMInput {
 input UpdateUserApplicationEntityInput {
   EntityID: Int!
   ID: Int!
+  OldValues___: [KeyValuePairInput!]
   Sequence: Int!
   UserApplicationID: Int!
 }
@@ -17837,6 +19219,7 @@ input UpdateUserApplicationInput {
   ApplicationID: Int!
   ID: Int!
   IsActive: Boolean!
+  OldValues___: [KeyValuePairInput!]
   Sequence: Int!
   UserID: Int!
 }
@@ -17844,6 +19227,7 @@ input UpdateUserApplicationInput {
 input UpdateUserFavoriteInput {
   EntityID: Int!
   ID: Int!
+  OldValues___: [KeyValuePairInput!]
   RecordID: String!
   UserID: Int!
 }
@@ -17859,6 +19243,7 @@ input UpdateUserInput {
   LinkedEntityRecordID: Int
   LinkedRecordType: String!
   Name: String!
+  OldValues___: [KeyValuePairInput!]
   Title: String
   Type: String!
 }
@@ -17866,6 +19251,7 @@ input UpdateUserInput {
 input UpdateUserNotificationInput {
   ID: Int!
   Message: String
+  OldValues___: [KeyValuePairInput!]
   ReadAt: Timestamp
   ResourceConfiguration: String
   ResourceRecordID: Int
@@ -17880,6 +19266,7 @@ input UpdateUserRecordLogInput {
   EntityID: Int!
   ID: Int!
   LatestAt: Timestamp!
+  OldValues___: [KeyValuePairInput!]
   RecordID: String!
   TotalCount: Int!
   UserID: Int!
@@ -17890,6 +19277,7 @@ input UpdateUserViewCategoryInput {
   EntityID: Int!
   ID: Int!
   Name: String!
+  OldValues___: [KeyValuePairInput!]
   ParentID: Int
   UserID: Int!
 }
@@ -17906,6 +19294,7 @@ input UpdateUserViewInput {
   IsDefault: Boolean!
   IsShared: Boolean!
   Name: String!
+  OldValues___: [KeyValuePairInput!]
   SmartFilterEnabled: Boolean!
   SmartFilterExplanation: String
   SmartFilterPrompt: String
@@ -17917,12 +19306,14 @@ input UpdateUserViewInput {
 
 input UpdateUserViewRunDetailInput {
   ID: Int!
+  OldValues___: [KeyValuePairInput!]
   RecordID: String!
   UserViewRunID: Int!
 }
 
 input UpdateUserViewRunInput {
   ID: Int!
+  OldValues___: [KeyValuePairInput!]
   RunAt: Timestamp!
   RunByUserID: Int!
   UserViewID: Int!
@@ -17934,6 +19325,7 @@ input UpdateVectorDatabaseInput {
   Description: String
   ID: Int!
   Name: String!
+  OldValues___: [KeyValuePairInput!]
 }
 
 input UpdateVectorIndexInput {
@@ -17941,6 +19333,7 @@ input UpdateVectorIndexInput {
   EmbeddingModelID: Int!
   ID: Int!
   Name: String!
+  OldValues___: [KeyValuePairInput!]
   VectorDatabaseID: Int!
 }
 
@@ -17951,6 +19344,7 @@ input UpdateVersionInstallationInput {
   InstalledAt: Timestamp!
   MajorVersion: Int!
   MinorVersion: Int!
+  OldValues___: [KeyValuePairInput!]
   PatchVersion: Int!
   Status: String!
   Type: String
@@ -17962,6 +19356,7 @@ input UpdateWorkflowEngineInput {
   DriverPath: String!
   ID: Int!
   Name: String!
+  OldValues___: [KeyValuePairInput!]
 }
 
 input UpdateWorkflowInput {
@@ -17973,6 +19368,7 @@ input UpdateWorkflowInput {
   ExternalSystemRecordID: String!
   ID: Int!
   Name: String!
+  OldValues___: [KeyValuePairInput!]
   SubclassName: String
   WorkflowEngineName: String!
 }
@@ -17981,6 +19377,7 @@ input UpdateWorkflowRunInput {
   EndedAt: Timestamp
   ExternalSystemRecordID: String!
   ID: Int!
+  OldValues___: [KeyValuePairInput!]
   Results: String
   StartedAt: Timestamp!
   Status: String!
@@ -17991,6 +19388,7 @@ input UpdateWorkspaceInput {
   Description: String
   ID: Int!
   Name: String!
+  OldValues___: [KeyValuePairInput!]
   UserID: Int!
 }
 
@@ -17999,6 +19397,7 @@ input UpdateWorkspaceItemInput {
   Description: String
   ID: Int!
   Name: String!
+  OldValues___: [KeyValuePairInput!]
   ResourceRecordID: String
   ResourceTypeID: Int!
   Sequence: Int!
@@ -18041,6 +19440,7 @@ input Updateclient_membershipInput {
   ModifiedByName: String
   ModifiedOn: Timestamp
   ModifiedOnBehalfByName: String
+  OldValues___: [KeyValuePairInput!]
   OverriddenCreatedOn: Timestamp
   OwnerIdDsc: Int
   OwnerIdName: String
@@ -18235,7 +19635,10 @@ type UserView_ {
 
 """A list of all users who have or had access to the system"""
 type User_ {
+  ActionExecutionLogsArray: [ActionExecutionLog_!]!
+  ActionsArray: [Action_!]!
   AuditLogsArray: [AuditLog_!]!
+  CommunicationRunsArray: [CommunicationRun_!]!
   CompanyIntegrationRunsArray: [CompanyIntegrationRun_!]!
   ConversationsArray: [Conversation_!]!
   CreatedAt: Timestamp!
@@ -18385,6 +19788,7 @@ type Workflow_ {
 """Tracks the resources that are active within a given worksapce"""
 type WorkspaceItem_ {
   Configuration: String
+  CreatedAt: Timestamp!
   Description: String
   ID: Int!
   Name: String!
@@ -18392,15 +19796,18 @@ type WorkspaceItem_ {
   ResourceType: String!
   ResourceTypeID: Int!
   Sequence: Int!
+  UpdatedAt: Timestamp!
   WorkSpace: String!
   WorkSpaceID: Int!
 }
 
 """A user can have one or more workspaces"""
 type Workspace_ {
+  CreatedAt: Timestamp!
   Description: String
   ID: Int!
   Name: String!
+  UpdatedAt: Timestamp!
   User: String!
   UserID: Int!
   WorkspaceItemsArray: [WorkspaceItem_!]!

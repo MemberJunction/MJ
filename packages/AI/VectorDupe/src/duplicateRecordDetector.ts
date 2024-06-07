@@ -119,7 +119,7 @@ export class DuplicateRecordDetector extends VectorBase {
         const topK: number = 5;
         let results: PotentialDuplicateResult[] = [];
         for (const [index, vector] of embedTextsResult.vectors.entries()){
-            const compositeKey: CompositeKey = records[index].CompositeKey;
+            const compositeKey: CompositeKey = records[index].PrimaryKey;
             let queryResult = await this._vectorDB.getVectorDuplicates({ vector: vector, topK: topK, includeMetadata: true, includeValues: false });
             if(queryResult.success){
                 queryResult.data.Duplicates = queryResult.data.Duplicates.filter((dupe) => {

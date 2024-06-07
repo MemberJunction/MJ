@@ -2,6 +2,13 @@
 @import './typography';
 @import './common';
 
+
+.link-text {
+    cursor: pointer;
+    color: darkblue;
+    font-size: 14px;
+  }
+  
 //Grid
 .customer-photo {
     display: inline-block;

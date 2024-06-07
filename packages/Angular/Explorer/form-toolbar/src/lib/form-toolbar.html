@@ -1,0 +1,90 @@
+
+<div class="toolbar-container" [class.disabled]="CurrentlyDisabled">
+    @if (!form.EditMode) {
+        @if (form.UserCanEdit) {
+            <button kendoButton (click)="form.StartEditMode()" title="Edit this Record">
+                <span class="fa-solid fa-pen-to-square"></span>
+                <span class="button-text">Edit</span>
+            </button> 
+        }
+        @if(form.UserCanDelete){
+            <button kendoButton (click)="toggleDeleteDialog(true)" title="Delete this Record">
+                <span class="fa-regular fa-trash-can"></span>
+            </button> 
+        }
+        @if (form.FavoriteInitDone) {
+            @if (form.IsFavorite) {
+                <button kendoButton (click)="form.RemoveFavorite()" title="Remove Favorite">
+                    <span class="fa-solid fa-star"></span>
+                </button> 
+            }
+            @else {
+                <button kendoButton (click)="form.MakeFavorite()" title="Make Favorite">
+                    <span class="fa-regular fa-star"></span>
+                </button> 
+            }
+        }
+    }
+    @else {
+        <button kendoButton (mouseup)="saveExistingRecord($event)" title="Save Record">
+            <span class="fa-solid fa-floppy-disk"></span>
+            <span class="button-text">Save</span>
+        </button> 
+        @if (form.record.IsSaved) {
+            <!-- Only show the cancel button if the record has already been saved - don't show for a new record. -->
+            <button kendoButton (click)="form.CancelEdit()" title="Cancel Edit">
+                <span class="fa-solid fa-rotate-left"></span>
+                <span class="button-text">Cancel</span>
+            </button>     
+        }
+        @if (form.record.Dirty) {
+            <button kendoButton (click)="form.ShowChanges()" title="Fields you have changed">
+                <span class="fa-solid fa-clipboard-list"></span>
+                <span class="button-text">Changes</span>
+            </button> 
+        }
+    }
+    @if (form.EntityInfo?.TrackRecordChanges && !form.EditMode) {
+        <button kendoButton (click)="form.handleHistoryDialog()" title="Show History">
+            <span class="fa-solid fa-business-time"></span>
+            <span class="button-text">History</span>
+        </button> 
+    }
+    @if (ShowSkipChatButton && !form.EditMode) {
+        <button kendoButton (click)="ShowSkipChat()" title="Discuss this record with Skip">
+            <span class="fa-regular fa-comment-dots"></span>
+        </button> 
+    }
+    @if (form.EntityInfo) {
+        <mj-skip-chat-with-record-window
+            [LinkedEntityID]="form.EntityInfo.ID"
+            [LinkedEntityPrimaryKey]="LinkedEntityPrimaryKey"            
+            #mjChat
+            [WindowOpened]="_skipChatDialogVisible" 
+            (WindowClosed)="ShowSkipChat()"
+        >
+        </mj-skip-chat-with-record-window>
+    }
+    @if (form.isHistoryDialogOpen) {
+        <mj-record-changes [record]="form.record" (dialogClosed)="form.handleHistoryDialog()"></mj-record-changes>
+    }
+    <kendo-dialog 
+    [minWidth]="450"
+    [width]="650"
+    class="dialog-wrapper" 
+    title="Confirm" 
+    *ngIf="_deleteDialogVisible" 
+    (close)="toggleDeleteDialog(false)">
+      <p class="k-m-7.5 k-text-center">
+        Are you sure you want to delete this record?
+      </p>
+      <kendo-dialog-actions class="popup-actions-btn">
+        <button class="cancel-btn" (click)="deleteRecord()" kendoButton themeColor="info">
+          Yes, Delete
+        </button>
+        <button class="yes-btn" (click)="toggleDeleteDialog(false)" kendoButton fillMode="outline" themeColor="info">
+          No, Cancel
+        </button>
+      </kendo-dialog-actions>
+    </kendo-dialog>
+</div>

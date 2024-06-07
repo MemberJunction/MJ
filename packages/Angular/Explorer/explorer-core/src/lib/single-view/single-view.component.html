@@ -1,0 +1,18 @@
+<div class="single-view-wrap" mjFillContainer [bottomMargin]="20">
+  <div class="card-container" class="searchBox">
+    <kendo-textbox
+      id="txtSearch"
+      placeholder="Search here..."
+      kendoTextBox
+      (valueChange)="onSearch($event)"
+      [clearButton]="true"
+      [(ngModel)]="searchText"
+    ></kendo-textbox>
+
+    <div class="flex-row">
+      <mj-user-view-properties-dialog class="padding-left-small" *ngIf="selectedView" [ViewID]="selectedView.ID" (dialogClosed)="this.viewPropertiesDialogClosed($event)"/>
+    </div>
+  </div>
+
+  <mj-user-view-grid-with-analysis class="analysis-wrapper" (rowClicked)="handleRowClick($event)" [AutoNavigate]="false" mjFillContainer/>
+</div>

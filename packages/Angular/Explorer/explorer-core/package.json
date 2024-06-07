@@ -1,0 +1,59 @@
+{
+  "name": "@memberjunction/ng-explorer-core",
+  "version": "1.4.0",
+  "description": "MemberJunction Explorer: Core Angular Components",
+  "main": "./dist/public-api.js",
+  "typings": "./dist/public-api.d.ts",
+  "files": [
+    "/dist"
+  ],
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "ngc",
+    "watch": "ngc -w"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@angular/compiler": "~17.2.2",
+    "@angular/compiler-cli": "~17.2.2"
+  },
+  "peerDependencies": {
+    "@angular/common": "~17.2.2",
+    "@angular/core": "~17.2.2",
+    "@angular/forms": "~17.2.2",
+    "@angular/router": "~17.2.2"
+  },
+  "dependencies": {
+    "@memberjunction/global": "~1.4.0",
+    "@memberjunction/core": "~1.4.0",
+    "@memberjunction/ng-compare-records": "~1.4.0",
+    "@memberjunction/ng-file-storage": "~1.4.0",
+    "@memberjunction/ng-record-changes": "~1.4.0",
+    "@memberjunction/ng-container-directives": "~1.4.0",
+    "@memberjunction/ng-user-view-grid": "~1.4.0",
+    "@memberjunction/ng-query-grid": "~1.4.0",
+    "@memberjunction/ng-user-view-properties": "~1.4.0",
+    "@memberjunction/ng-shared": "~1.4.0",
+    "@memberjunction/ng-tabstrip": "~1.4.0",
+    "@memberjunction/ng-ask-skip": "~1.4.0",
+    "@memberjunction/ng-auth-services": "~1.4.0",
+    "@memberjunction/ng-explorer-settings": "~1.4.0",
+    "@memberjunction/ng-base-forms": "~1.4.0",
+    "@memberjunction/ng-entity-form-dialog": "~1.4.0",
+    "@progress/kendo-angular-grid": "~15.1.0",
+    "@progress/kendo-angular-buttons": "~15.1.0",
+    "@progress/kendo-angular-listview": "~15.1.0",
+    "@progress/kendo-angular-notification": "~15.1.0",
+    "@progress/kendo-angular-dialog": "~15.1.0",
+    "@progress/kendo-angular-layout": "~15.1.0",
+    "@progress/kendo-angular-label": "~15.1.0",
+    "@progress/kendo-angular-sortable": "~15.1.0",
+    "@progress/kendo-angular-charts": "~15.1.0",
+    "@progress/kendo-angular-indicators": "~15.1.0",
+    "@progress/kendo-angular-filter": "~15.1.0",
+    "tslib": "^2.3.0"
+  },
+  "sideEffects": false
+}

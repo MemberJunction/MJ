@@ -20,6 +20,7 @@
   },
   "dependencies": {
     "@memberjunction/ai": "~1.4.0",
+    "@memberjunction/actions": "~1.4.0",
     "@memberjunction/aiengine": "~1.4.0",
     "@memberjunction/core": "~1.4.0",
     "@memberjunction/core-entities": "~1.4.0",

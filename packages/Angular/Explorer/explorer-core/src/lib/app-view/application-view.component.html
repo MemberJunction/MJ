@@ -1,0 +1,48 @@
+<div  class="app-container">
+    <div class="card-header-entity cloumn">
+        <div class="title-wrap">
+            <h1>{{appNameFromURL}}</h1>
+        </div>
+        <div class="row" #entityRow style="max-width: 100%;">
+            <div class="col-xs-12 col-sm-6 example-col">
+                <button
+                    *ngFor="let button of AppEntityButtons"
+                    kendoButton
+                    fillMode="flat"
+                    [toggleable]="true"
+                    [selected]="button.Selected"
+                    (click)="onAppEntityButtonClicked(button)"
+                >
+                    <span>
+                        {{button.Name}}
+                    </span>
+                </button>
+            </div>
+        </div>
+    </div>
+    <div class="main-area margin-top-neg-20">
+        <app-generic-browser-list 
+            iconName="aggregateFields" 
+            [items]="items"
+            [categoryEntityID]="categoryEntityID"
+            addText="Create New View"
+            ItemEntityName="User Views"
+            resourceName="View"
+            [title]="pageTitle"
+            [CategoryEntityName]="categoryEntityName"
+            (itemClickEvent)="onItemClick($event)" 
+            [selectedFolderID]="selectedFolderID"
+            [showLoader]="showLoader"
+            [viewingResource]=false
+            [displayAsGrid]="displayAsGrid"
+            (AfterAddFolderEvent)="onEvent($event)"
+            (AfterAddItemEvent)="onEvent($event)"
+            (AfterDeleteItemEvent)="onEvent($event)"
+            (AfterDeleteFolderEvent)="onEvent($event)"
+            (viewModeChangeEvent)="onViewModeChange($event)"
+            (BeforeAddItemEvent)="createNewView($event)"
+            (BeforeUpdateItemEvent)="editView($event)"
+        />
+    </div>
+    <mj-user-view-properties-dialog #userViewDialog [ShowPropertiesButton]="false"(dialogClosed)="OnViewPropertiesDialogClose($event)"></mj-user-view-properties-dialog>
+</div>

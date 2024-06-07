@@ -84,7 +84,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -94,7 +93,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -156,7 +154,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: BCMID
         * * Display Name: BCMID
         * * SQL Data Type: uniqueidentifier
-        * * Default Value: newid()
         */
         get BCMID(): string {  
             return this.Get('BCMID');
@@ -217,7 +214,6 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: Active
         * * SQL Data Type: bit
-        * * Default Value: 1
         */
         get Active(): boolean {  
             return this.Get('Active');
@@ -253,7 +249,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -263,7 +258,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -394,7 +388,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -404,7 +397,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -527,7 +519,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: IsActive
         * * Display Name: Is Active
         * * SQL Data Type: bit
-        * * Default Value: 1
         */
         get IsActive(): boolean {  
             return this.Get('IsActive');
@@ -539,7 +530,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -549,7 +539,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -636,7 +625,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -646,7 +634,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -742,7 +729,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -752,7 +738,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -856,7 +841,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -866,7 +850,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -963,7 +946,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -973,7 +955,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -1221,7 +1202,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: BatchMaxRequestCount
         * * Display Name: Batch Max Request Count
         * * SQL Data Type: int
-        * * Default Value: -1
         */
         get BatchMaxRequestCount(): number {  
             return this.Get('BatchMaxRequestCount');
@@ -1233,7 +1213,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: BatchRequestWaitTime
         * * Display Name: Batch Request Wait Time
         * * SQL Data Type: int
-        * * Default Value: -1
         */
         get BatchRequestWaitTime(): number {  
             return this.Get('BatchRequestWaitTime');
@@ -1245,7 +1224,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -1255,7 +1233,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -1396,7 +1373,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -1406,7 +1382,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -1427,7 +1402,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: IsExternalSystemReadOnly
         * * Display Name: Is External System Read Only
         * * SQL Data Type: bit
-        * * Default Value: 0
         */
         get IsExternalSystemReadOnly(): boolean {  
             return this.Get('IsExternalSystemReadOnly');
@@ -1601,7 +1575,7 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: Sequence
         * * SQL Data Type: int
-        * * Default Value: 0
+        * * Description: Display order of the field within the entity
         */
         get Sequence(): number {  
             return this.Get('Sequence');
@@ -1610,6 +1584,7 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: Name
         * * SQL Data Type: nvarchar(255)
+        * * Description: Name of the field within the database table
         */
         get Name(): string {  
             return this.Get('Name');
@@ -1619,6 +1594,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: DisplayName
         * * Display Name: Display Name
         * * SQL Data Type: nvarchar(255)
+        * * Description: A user friendly alternative to the field name
         */
         get DisplayName(): string | null {  
             return this.Get('DisplayName');
@@ -1629,6 +1605,7 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: Description
         * * SQL Data Type: nvarchar(MAX)
+        * * Description: Descriptive text explaining the purpose of the field
         */
         get Description(): string | null {  
             return this.Get('Description');
@@ -1640,7 +1617,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: AutoUpdateDescription
         * * Display Name: Auto Update Description
         * * SQL Data Type: bit
-        * * Default Value: 1
         * * Description: When set to 1 (default), whenever a description is modified in the column within the underlying view (first choice) or table (second choice), the Description column in the entity field definition will be automatically updated. If you never set metadata in the database directly, you can leave this alone. However, if you have metadata set in the database level for description, and you want to provide a DIFFERENT description in this entity field definition, turn this bit off and then set the Description field and future CodeGen runs will NOT override the Description field here.
         */
         get AutoUpdateDescription(): boolean {  
@@ -1653,7 +1629,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: IsPrimaryKey
         * * Display Name: Is Primary Key
         * * SQL Data Type: bit
-        * * Default Value: 0
+        * * Description: Indicates if the field is part of the primary key for the entity (auto maintained by CodeGen)
         */
         get IsPrimaryKey(): boolean {  
             return this.Get('IsPrimaryKey');
@@ -1665,7 +1641,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: IsUnique
         * * Display Name: Is Unique
         * * SQL Data Type: bit
-        * * Default Value: 0
+        * * Description: Indicates if the field must have unique values within the entity.
         */
         get IsUnique(): boolean {  
             return this.Get('IsUnique');
@@ -1677,6 +1653,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: Category
         * * Display Name: Category
         * * SQL Data Type: nvarchar(255)
+        * * Description: Used for generating custom tabs in the generated forms, only utilized if GeneratedFormSection=Category
         */
         get Category(): string | null {  
             return this.Get('Category');
@@ -1687,6 +1664,7 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: Type
         * * SQL Data Type: nvarchar(100)
+        * * Description: SQL Data type (auto maintained by CodeGen)
         */
         get Type(): string {  
             return this.Get('Type');
@@ -1695,6 +1673,7 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: Length
         * * SQL Data Type: int
+        * * Description: SQL data length (auto maintained by CodeGen)
         */
         get Length(): number | null {  
             return this.Get('Length');
@@ -1703,6 +1682,7 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: Precision
         * * SQL Data Type: int
+        * * Description: SQL precision (auto maintained by CodeGen)
         */
         get Precision(): number | null {  
             return this.Get('Precision');
@@ -1711,6 +1691,7 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: Scale
         * * SQL Data Type: int
+        * * Description: SQL scale (auto maintained by CodeGen)
         */
         get Scale(): number | null {  
             return this.Get('Scale');
@@ -1720,7 +1701,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: AllowsNull
         * * Display Name: Allows Null
         * * SQL Data Type: bit
-        * * Default Value: 1
+        * * Description: Does the column allow null or not (auto maintained by CodeGen)
         */
         get AllowsNull(): boolean {  
             return this.Get('AllowsNull');
@@ -1730,6 +1711,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: DefaultValue
         * * Display Name: Default Value
         * * SQL Data Type: nvarchar(255)
+        * * Description: If a default value is defined for the field it is stored here (auto maintained by CodeGen)
         */
         get DefaultValue(): string | null {  
             return this.Get('DefaultValue');
@@ -1739,7 +1721,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: AutoIncrement
         * * Display Name: Auto Increment
         * * SQL Data Type: bit
-        * * Default Value: 0
+        * * Description: If this field automatically increments within the table, this field is set to 1 (auto maintained by CodeGen)
         */
         get AutoIncrement(): boolean {  
             return this.Get('AutoIncrement');
@@ -1749,12 +1731,12 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: ValueListType
         * * Display Name: Value List Type
         * * SQL Data Type: nvarchar(20)
-        * * Default Value: N'None'
         * * Value List Type: List
         * * Possible Values 
         *   * None
         *   * List
         *   * ListOrUserEntry
+        * * Description: Possible Values of None, List, ListOrUserEntry - the last option meaning that the list of possible values are options, but a user can enter anything else desired too.
         */
         get ValueListType(): 'None' | 'List' | 'ListOrUserEntry' {  
             return this.Get('ValueListType');
@@ -1766,18 +1748,54 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: ExtendedType
         * * Display Name: Extended Type
         * * SQL Data Type: nvarchar(50)
+        * * Value List Type: List
+        * * Possible Values 
+        *   * Email
+        *   * URL
+        *   * Tel
+        *   * SMS
+        *   * Geo
+        *   * WhatsApp
+        *   * FaceTime
+        *   * Skype
+        *   * SIP
+        *   * MSTeams
+        *   * ZoomMtg
+        *   * Other
+        *   * Code
+        * * Description: Defines extended behaviors for a field such as for Email, Web URLs, Code, etc.
         */
-        get ExtendedType(): string | null {  
+        get ExtendedType(): 'Email' | 'URL' | 'Tel' | 'SMS' | 'Geo' | 'WhatsApp' | 'FaceTime' | 'Skype' | 'SIP' | 'MSTeams' | 'ZoomMtg' | 'Other' | 'Code' | null {  
             return this.Get('ExtendedType');
         }
-        set ExtendedType(value: string | null) {
+        set ExtendedType(value: 'Email' | 'URL' | 'Tel' | 'SMS' | 'Geo' | 'WhatsApp' | 'FaceTime' | 'Skype' | 'SIP' | 'MSTeams' | 'ZoomMtg' | 'Other' | 'Code' | null) {
             this.Set('ExtendedType', value);
+        }
+        /**
+        * * Field Name: CodeType
+        * * Display Name: Code Type
+        * * SQL Data Type: nvarchar(50)
+        * * Value List Type: List
+        * * Possible Values 
+        *   * TypeScript
+        *   * SQL
+        *   * HTML
+        *   * CSS
+        *   * JavaScript
+        *   * Other
+        * * Description: The type of code associated with this field. Only used when the ExtendedType field is set to "Code"
+        */
+        get CodeType(): 'TypeScript' | 'SQL' | 'HTML' | 'CSS' | 'JavaScript' | 'Other' | null {  
+            return this.Get('CodeType');
+        }
+        set CodeType(value: 'TypeScript' | 'SQL' | 'HTML' | 'CSS' | 'JavaScript' | 'Other' | null) {
+            this.Set('CodeType', value);
         }
         /**
         * * Field Name: DefaultInView
         * * Display Name: Default In View
         * * SQL Data Type: bit
-        * * Default Value: 0
+        * * Description: If set to 1, this field will be included by default in any new view created by a user.
         */
         get DefaultInView(): boolean {  
             return this.Get('DefaultInView');
@@ -1789,6 +1807,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: ViewCellTemplate
         * * Display Name: View Cell Template
         * * SQL Data Type: nvarchar(MAX)
+        * * Description: NULL
         */
         get ViewCellTemplate(): string | null {  
             return this.Get('ViewCellTemplate');
@@ -1800,6 +1819,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: DefaultColumnWidth
         * * Display Name: Default Column Width
         * * SQL Data Type: int
+        * * Description: Determines the default width for this field when included in a view
         */
         get DefaultColumnWidth(): number | null {  
             return this.Get('DefaultColumnWidth');
@@ -1811,7 +1831,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: AllowUpdateAPI
         * * Display Name: Allow Update API
         * * SQL Data Type: bit
-        * * Default Value: 1
+        * * Description: If set to 1, this field will be considered updateable by the API and object model. For this field to have effect, the column type must be updateable (e.g. not part of the primary key and not auto-increment)
         */
         get AllowUpdateAPI(): boolean {  
             return this.Get('AllowUpdateAPI');
@@ -1823,7 +1843,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: AllowUpdateInView
         * * Display Name: Allow Update In View
         * * SQL Data Type: bit
-        * * Default Value: 1
+        * * Description: If set to 1, and if AllowUpdateAPI=1, the field can be edited within a view when the view is in edit mode.
         */
         get AllowUpdateInView(): boolean {  
             return this.Get('AllowUpdateInView');
@@ -1835,7 +1855,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: IncludeInUserSearchAPI
         * * Display Name: Include In User Search API
         * * SQL Data Type: bit
-        * * Default Value: 0
+        * * Description: If set to 1, this column will be included in user search queries for both traditional and full text search
         */
         get IncludeInUserSearchAPI(): boolean {  
             return this.Get('IncludeInUserSearchAPI');
@@ -1847,7 +1867,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: FullTextSearchEnabled
         * * Display Name: Full Text Search Enabled
         * * SQL Data Type: bit
-        * * Default Value: 0
+        * * Description: If set to 1, CodeGen will automatically generate a Full Text Catalog/Index in the database and include this field in the search index.
         */
         get FullTextSearchEnabled(): boolean {  
             return this.Get('FullTextSearchEnabled');
@@ -1859,6 +1879,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UserSearchParamFormatAPI
         * * Display Name: User Search Param Format API
         * * SQL Data Type: nvarchar(500)
+        * * Description: NULL
         */
         get UserSearchParamFormatAPI(): string | null {  
             return this.Get('UserSearchParamFormatAPI');
@@ -1870,7 +1891,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: IncludeInGeneratedForm
         * * Display Name: Include In Generated Form
         * * SQL Data Type: bit
-        * * Default Value: 1
+        * * Description: If set to 1, this field will be included in the generated form by CodeGen. If set to 0, this field will be excluded from the generated form. For custom forms, this field has no effect as the layout is controlled independently.
         */
         get IncludeInGeneratedForm(): boolean {  
             return this.Get('IncludeInGeneratedForm');
@@ -1882,19 +1903,24 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: GeneratedFormSection
         * * Display Name: Generated Form Section
         * * SQL Data Type: nvarchar(10)
-        * * Default Value: N'Details'
+        * * Value List Type: List
+        * * Possible Values 
+        *   * Top
+        *   * Category
+        *   * Details
+        * * Description: When set to Top, the field will be placed in a "top area" on the top of a generated form and visible regardless of which tab is displayed. When set to "category" Options: Top, Category, Details
         */
-        get GeneratedFormSection(): string {  
+        get GeneratedFormSection(): 'Top' | 'Category' | 'Details' {  
             return this.Get('GeneratedFormSection');
         }
-        set GeneratedFormSection(value: string) {
+        set GeneratedFormSection(value: 'Top' | 'Category' | 'Details') {
             this.Set('GeneratedFormSection', value);
         }
         /**
         * * Field Name: IsVirtual
         * * Display Name: Is Virtual
         * * SQL Data Type: bit
-        * * Default Value: 0
+        * * Description: NULL
         */
         get IsVirtual(): boolean {  
             return this.Get('IsVirtual');
@@ -1904,7 +1930,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: IsNameField
         * * Display Name: Is Name Field
         * * SQL Data Type: bit
-        * * Default Value: 0
+        * * Description: If set to 1, this column will be used as the "Name" field for the entity and will be used to display the name of the record in various places in the UI.
         */
         get IsNameField(): boolean {  
             return this.Get('IsNameField');
@@ -1917,6 +1943,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: RelatedEntity ID
         * * SQL Data Type: int
         * * Related Entity/Foreign Key: Entities (vwEntities.ID)
+        * * Description: Link to the entity this field points to if it is a foreign key (auto maintained by CodeGen)
         */
         get RelatedEntityID(): number | null {  
             return this.Get('RelatedEntityID');
@@ -1928,6 +1955,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: RelatedEntityFieldName
         * * Display Name: Related Entity Field Name
         * * SQL Data Type: nvarchar(255)
+        * * Description: Name of the field in the Related Entity that this field links to (auto maintained by CodeGen)
         */
         get RelatedEntityFieldName(): string | null {  
             return this.Get('RelatedEntityFieldName');
@@ -1939,7 +1967,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: IncludeRelatedEntityNameFieldInBaseView
         * * Display Name: Include Related Entity Name Field In Base View
         * * SQL Data Type: bit
-        * * Default Value: 1
+        * * Description: If set to 1, the "Name" field of the Related Entity will be included in this entity as a virtual field
         */
         get IncludeRelatedEntityNameFieldInBaseView(): boolean {  
             return this.Get('IncludeRelatedEntityNameFieldInBaseView');
@@ -1962,7 +1990,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -1972,7 +1999,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -2173,7 +2199,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: AutoUpdateDescription
         * * Display Name: Auto Update Description
         * * SQL Data Type: bit
-        * * Default Value: 1
         * * Description: When set to 1 (default), whenever a description is modified in the underlying view (first choice) or table (second choice), the Description column in the entity definition will be automatically updated. If you never set metadata in the database directly, you can leave this alone. However, if you have metadata set in the database level for description, and you want to provide a DIFFERENT description in this entity definition, turn this bit off and then set the Description field and future CodeGen runs will NOT override the Description field here.
         */
         get AutoUpdateDescription(): boolean {  
@@ -2206,7 +2231,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: BaseViewGenerated
         * * Display Name: Base View Generated
         * * SQL Data Type: bit
-        * * Default Value: 1
         * * Description: When set to 0, CodeGen no longer generates a base view for the entity.
         */
         get BaseViewGenerated(): boolean {  
@@ -2219,7 +2243,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: SchemaName
         * * Display Name: Schema Name
         * * SQL Data Type: nvarchar(255)
-        * * Default Value: N'dbo'
         */
         get SchemaName(): string {  
             return this.Get('SchemaName');
@@ -2229,7 +2252,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: VirtualEntity
         * * Display Name: Virtual Entity
         * * SQL Data Type: bit
-        * * Default Value: 0
         */
         get VirtualEntity(): boolean {  
             return this.Get('VirtualEntity');
@@ -2241,7 +2263,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: TrackRecordChanges
         * * Display Name: Track Record Changes
         * * SQL Data Type: bit
-        * * Default Value: 1
         * * Description: When set to 1, changes made via the MemberJunction architecture will result in tracking records being created in the RecordChange table
         */
         get TrackRecordChanges(): boolean {  
@@ -2254,7 +2275,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: AuditRecordAccess
         * * Display Name: Audit Record Access
         * * SQL Data Type: bit
-        * * Default Value: 1
         * * Description: When set to 1, accessing a record by an end-user will result in an Audit Log record being created
         */
         get AuditRecordAccess(): boolean {  
@@ -2267,7 +2287,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: AuditViewRuns
         * * Display Name: Audit View Runs
         * * SQL Data Type: bit
-        * * Default Value: 1
         * * Description: When set to 1, users running a view against this entity will result in an Audit Log record being created.
         */
         get AuditViewRuns(): boolean {  
@@ -2280,7 +2299,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: IncludeInAPI
         * * Display Name: Include In API
         * * SQL Data Type: bit
-        * * Default Value: 0
         * * Description: If set to 0, the entity will not be available at all in the GraphQL API or the object model.
         */
         get IncludeInAPI(): boolean {  
@@ -2293,7 +2311,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: AllowAllRowsAPI
         * * Display Name: Allow All Rows API
         * * SQL Data Type: bit
-        * * Default Value: 0
         * * Description: If set to 1, a GraphQL query will be enabled that allows access to all rows in the entity.
         */
         get AllowAllRowsAPI(): boolean {  
@@ -2306,7 +2323,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: AllowUpdateAPI
         * * Display Name: Allow Update API
         * * SQL Data Type: bit
-        * * Default Value: 0
         * * Description: Global flag controlling if updates are allowed for any user, or not. If set to 1, a GraqhQL mutation and stored procedure are created. Permissions are still required to perform the action but if this flag is set to 0, no user will be able to perform the action.
         */
         get AllowUpdateAPI(): boolean {  
@@ -2319,7 +2335,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: AllowCreateAPI
         * * Display Name: Allow Create API
         * * SQL Data Type: bit
-        * * Default Value: 0
         * * Description: Global flag controlling if creates are allowed for any user, or not. If set to 1, a GraqhQL mutation and stored procedure are created. Permissions are still required to perform the action but if this flag is set to 0, no user will be able to perform the action.
         */
         get AllowCreateAPI(): boolean {  
@@ -2332,7 +2347,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: AllowDeleteAPI
         * * Display Name: Allow Delete API
         * * SQL Data Type: bit
-        * * Default Value: 0
         * * Description: Global flag controlling if deletes are allowed for any user, or not. If set to 1, a GraqhQL mutation and stored procedure are created. Permissions are still required to perform the action but if this flag is set to 0, no user will be able to perform the action.
         */
         get AllowDeleteAPI(): boolean {  
@@ -2345,7 +2359,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CustomResolverAPI
         * * Display Name: Custom Resolver API
         * * SQL Data Type: bit
-        * * Default Value: 0
         * * Description: Set to 1 if a custom resolver has been created for the entity.
         */
         get CustomResolverAPI(): boolean {  
@@ -2358,7 +2371,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: AllowUserSearchAPI
         * * Display Name: Allow User Search API
         * * SQL Data Type: bit
-        * * Default Value: 0
         * * Description: Enabling this bit will result in search being possible at the API and UI layers
         */
         get AllowUserSearchAPI(): boolean {  
@@ -2371,7 +2383,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: FullTextSearchEnabled
         * * Display Name: Full Text Search Enabled
         * * SQL Data Type: bit
-        * * Default Value: 0
         */
         get FullTextSearchEnabled(): boolean {  
             return this.Get('FullTextSearchEnabled');
@@ -2394,7 +2405,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: FullTextCatalogGenerated
         * * Display Name: Full Text Catalog Generated
         * * SQL Data Type: bit
-        * * Default Value: 1
         */
         get FullTextCatalogGenerated(): boolean {  
             return this.Get('FullTextCatalogGenerated');
@@ -2417,7 +2427,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: FullTextIndexGenerated
         * * Display Name: Full Text Index Generated
         * * SQL Data Type: bit
-        * * Default Value: 1
         */
         get FullTextIndexGenerated(): boolean {  
             return this.Get('FullTextIndexGenerated');
@@ -2440,7 +2449,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: FullTextSearchFunctionGenerated
         * * Display Name: Full Text Search Function Generated
         * * SQL Data Type: bit
-        * * Default Value: 1
         */
         get FullTextSearchFunctionGenerated(): boolean {  
             return this.Get('FullTextSearchFunctionGenerated');
@@ -2452,7 +2460,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UserViewMaxRows
         * * Display Name: User View Max Rows
         * * SQL Data Type: int
-        * * Default Value: 1000
         */
         get UserViewMaxRows(): number | null {  
             return this.Get('UserViewMaxRows');
@@ -2497,7 +2504,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: spCreateGenerated
         * * Display Name: sp CreateGenerated
         * * SQL Data Type: bit
-        * * Default Value: 1
         */
         get spCreateGenerated(): boolean {  
             return this.Get('spCreateGenerated');
@@ -2509,7 +2515,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: spUpdateGenerated
         * * Display Name: sp Update Generated
         * * SQL Data Type: bit
-        * * Default Value: 1
         */
         get spUpdateGenerated(): boolean {  
             return this.Get('spUpdateGenerated');
@@ -2521,7 +2526,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: spDeleteGenerated
         * * Display Name: sp Delete Generated
         * * SQL Data Type: bit
-        * * Default Value: 1
         */
         get spDeleteGenerated(): boolean {  
             return this.Get('spDeleteGenerated');
@@ -2533,7 +2537,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CascadeDeletes
         * * Display Name: Cascade Deletes
         * * SQL Data Type: bit
-        * * Default Value: 0
         * * Description: When set to 1, the deleted spDelete will pre-process deletion to related entities that have 1:M cardinality with this entity. This does not have effect if spDeleteGenerated = 0
         */
         get CascadeDeletes(): boolean {  
@@ -2558,7 +2561,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UserFormGenerated
         * * Display Name: User Form Generated
         * * SQL Data Type: bit
-        * * Default Value: 1
         */
         get UserFormGenerated(): boolean {  
             return this.Get('UserFormGenerated');
@@ -2592,7 +2594,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -2602,7 +2603,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -2774,7 +2774,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: IsActive
         * * Display Name: Is Active
         * * SQL Data Type: bit
-        * * Default Value: 0
         */
         get IsActive(): boolean {  
             return this.Get('IsActive');
@@ -2786,7 +2785,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: LinkedRecordType
         * * Display Name: Linked Record Type
         * * SQL Data Type: nchar(10)
-        * * Default Value: N'None'
         */
         get LinkedRecordType(): string {  
             return this.Get('LinkedRecordType');
@@ -2833,7 +2831,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -2843,7 +2840,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -2960,7 +2956,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: Sequence
         * * Display Name: Sequence
         * * SQL Data Type: int
-        * * Default Value: 0
         * * Description: Used for display order in generated forms and in other places in the UI where relationships for an entity are shown
         */
         get Sequence(): number {  
@@ -2985,7 +2980,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: BundleInAPI
         * * Display Name: Bundle In API
         * * SQL Data Type: bit
-        * * Default Value: 1
         */
         get BundleInAPI(): boolean {  
             return this.Get('BundleInAPI');
@@ -2997,7 +2991,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: IncludeInParentAllQuery
         * * Display Name: Include In Parent All Query
         * * SQL Data Type: bit
-        * * Default Value: 0
         */
         get IncludeInParentAllQuery(): boolean {  
             return this.Get('IncludeInParentAllQuery');
@@ -3008,7 +3001,6 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: Type
         * * SQL Data Type: nchar(20)
-        * * Default Value: N'One To Many'
         * * Value List Type: List
         * * Possible Values 
         *   * One To Many
@@ -3079,7 +3071,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: DisplayInForm
         * * Display Name: Display In Form
         * * SQL Data Type: bit
-        * * Default Value: 1
         */
         get DisplayInForm(): boolean {  
             return this.Get('DisplayInForm');
@@ -3112,7 +3103,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -3122,7 +3112,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -3317,7 +3306,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: EarliestAt
         * * Display Name: Earliest At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get EarliestAt(): Date {  
             return this.Get('EarliestAt');
@@ -3329,7 +3317,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: LatestAt
         * * Display Name: Latest At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get LatestAt(): Date {  
             return this.Get('LatestAt');
@@ -3341,7 +3328,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: TotalCount
         * * Display Name: Total Count
         * * SQL Data Type: int
-        * * Default Value: 0
         */
         get TotalCount(): number {  
             return this.Get('TotalCount');
@@ -3482,7 +3468,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: GUID
         * * Display Name: GUID
         * * SQL Data Type: uniqueidentifier
-        * * Default Value: newid()
         */
         get GUID(): string {  
             return this.Get('GUID');
@@ -3514,7 +3499,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: IsShared
         * * Display Name: Is Shared
         * * SQL Data Type: bit
-        * * Default Value: 0
         */
         get IsShared(): boolean {  
             return this.Get('IsShared');
@@ -3526,7 +3510,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: IsDefault
         * * Display Name: Is Default
         * * SQL Data Type: bit
-        * * Default Value: 0
         */
         get IsDefault(): boolean {  
             return this.Get('IsDefault');
@@ -3560,7 +3543,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CustomFilterState
         * * Display Name: Custom Filter State
         * * SQL Data Type: bit
-        * * Default Value: 0
         */
         get CustomFilterState(): boolean {  
             return this.Get('CustomFilterState');
@@ -3572,7 +3554,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: SmartFilterEnabled
         * * Display Name: Smart Filter Enabled
         * * SQL Data Type: bit
-        * * Default Value: 0
         */
         get SmartFilterEnabled(): boolean {  
             return this.Get('SmartFilterEnabled');
@@ -3628,7 +3609,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CustomWhereClause
         * * Display Name: Custom Where Clause
         * * SQL Data Type: bit
-        * * Default Value: 0
         */
         get CustomWhereClause(): boolean {  
             return this.Get('CustomWhereClause');
@@ -3651,7 +3631,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date | null {  
             return this.Get('CreatedAt');
@@ -3661,7 +3640,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date | null {  
             return this.Get('UpdatedAt');
@@ -3950,7 +3928,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: ExecutedAt
         * * Display Name: Executed At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get ExecutedAt(): Date {  
             return this.Get('ExecutedAt');
@@ -3962,7 +3939,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: IsSuccess
         * * Display Name: Is Success
         * * SQL Data Type: bit
-        * * Default Value: 0
         */
         get IsSuccess(): boolean {  
             return this.Get('IsSuccess');
@@ -4096,7 +4072,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -4106,7 +4081,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedBy
         * * Display Name: Created By
         * * SQL Data Type: nvarchar(50)
-        * * Default Value: suser_name()
         */
         get CreatedBy(): string | null {  
             return this.Get('CreatedBy');
@@ -4209,7 +4183,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -4219,7 +4192,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -4304,7 +4276,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: DefaultForNewUser
         * * Display Name: Default For New User
         * * SQL Data Type: bit
-        * * Default Value: 0
         */
         get DefaultForNewUser(): boolean {  
             return this.Get('DefaultForNewUser');
@@ -4316,7 +4287,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -4326,7 +4296,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -4453,7 +4422,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CanCreate
         * * Display Name: Can Create
         * * SQL Data Type: bit
-        * * Default Value: 0
         */
         get CanCreate(): boolean {  
             return this.Get('CanCreate');
@@ -4465,7 +4433,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CanRead
         * * Display Name: Can Read
         * * SQL Data Type: bit
-        * * Default Value: 0
         */
         get CanRead(): boolean {  
             return this.Get('CanRead');
@@ -4477,7 +4444,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CanUpdate
         * * Display Name: Can Update
         * * SQL Data Type: bit
-        * * Default Value: 0
         */
         get CanUpdate(): boolean {  
             return this.Get('CanUpdate');
@@ -4489,7 +4455,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CanDelete
         * * Display Name: Can Delete
         * * SQL Data Type: bit
-        * * Default Value: 0
         */
         get CanDelete(): boolean {  
             return this.Get('CanDelete');
@@ -4549,7 +4514,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -4559,7 +4523,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -4685,7 +4648,6 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: Sequence
         * * SQL Data Type: int
-        * * Default Value: 0
         */
         get Sequence(): number {  
             return this.Get('Sequence');
@@ -4787,7 +4749,6 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: Sequence
         * * SQL Data Type: int
-        * * Default Value: 0
         */
         get Sequence(): number {  
             return this.Get('Sequence');
@@ -4799,7 +4760,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: IsActive
         * * Display Name: Is Active
         * * SQL Data Type: bit
-        * * Default Value: 1
         */
         get IsActive(): boolean {  
             return this.Get('IsActive');
@@ -4893,7 +4853,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: ExecutedAt
         * * Display Name: Executed At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get ExecutedAt(): Date {  
             return this.Get('ExecutedAt');
@@ -4905,7 +4864,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: IsSuccess
         * * Display Name: Is Success
         * * SQL Data Type: bit
-        * * Default Value: 0
         */
         get IsSuccess(): boolean {  
             return this.Get('IsSuccess');
@@ -5020,10 +4978,10 @@ import { RegisterClass } from "@memberjunction/global";
         * * SQL Data Type: int
         * * Related Entity/Foreign Key: Entities (vwEntities.ID)
         */
-        get EntityID(): number | null {  
+        get EntityID(): number {  
             return this.Get('EntityID');
         }
-        set EntityID(value: number | null) {
+        set EntityID(value: number) {
             this.Set('EntityID', value);
         }
         /**
@@ -5065,7 +5023,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -5075,18 +5032,28 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
         }
         
         /**
+        * * Field Name: CategoryID
+        * * Display Name: Category ID
+        * * SQL Data Type: int
+        */
+        get CategoryID(): number | null {  
+            return this.Get('CategoryID');
+        }
+        set CategoryID(value: number | null) {
+            this.Set('CategoryID', value);
+        }
+        /**
         * * Field Name: Entity
         * * Display Name: Entity
         * * SQL Data Type: nvarchar(255)
         */
-        get Entity(): string | null {  
+        get Entity(): string {  
             return this.Get('Entity');
         }
         
@@ -5166,7 +5133,6 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: Sequence
         * * SQL Data Type: int
-        * * Default Value: 0
         */
         get Sequence(): number {  
             return this.Get('Sequence');
@@ -5483,7 +5449,6 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: Status
         * * SQL Data Type: nchar(10)
-        * * Default Value: N'Pending'
         * * Value List Type: List
         * * Possible Values 
         *   * Pending
@@ -5636,7 +5601,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -5646,7 +5610,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -5656,7 +5619,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: AutoRunEnabled
         * * Display Name: Auto Run Enabled
         * * SQL Data Type: bit
-        * * Default Value: 0
         * * Description: If set to 1, the workflow will be run automatically on the interval specified by the AutoRunIntervalType and AutoRunInterval fields
         */
         get AutoRunEnabled(): boolean {  
@@ -5816,7 +5778,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -5826,7 +5787,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -5924,7 +5884,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: ChangedAt
         * * Display Name: Changed At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get ChangedAt(): Date {  
             return this.Get('ChangedAt');
@@ -5968,7 +5927,6 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: Status
         * * SQL Data Type: nchar(15)
-        * * Default Value: N'Complete'
         * * Value List Type: List
         * * Possible Values 
         *   * Pending
@@ -6077,7 +6035,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -6087,7 +6044,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -6204,7 +6160,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -6214,7 +6169,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -6313,7 +6267,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: Status
         * * Display Name: Status
         * * SQL Data Type: nvarchar(50)
-        * * Default Value: N'Allow'
         * * Value List Type: List
         * * Possible Values 
         *   * Success
@@ -6374,7 +6327,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -6384,7 +6336,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -6500,7 +6451,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: IsActive
         * * Display Name: Is Active
         * * SQL Data Type: bit
-        * * Default Value: 1
         */
         get IsActive(): boolean {  
             return this.Get('IsActive');
@@ -6512,7 +6462,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UseAuditLog
         * * Display Name: Use Audit Log
         * * SQL Data Type: bit
-        * * Default Value: 1
         */
         get UseAuditLog(): boolean {  
             return this.Get('UseAuditLog');
@@ -6535,7 +6484,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -6545,7 +6493,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -6653,7 +6600,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: Type
         * * Display Name: Type
         * * SQL Data Type: nchar(10)
-        * * Default Value: N'grant'
         * * Value List Type: List
         * * Possible Values 
         *   * Allow - User allowed to execute tasks linked to this authorization
@@ -6669,7 +6615,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -6679,7 +6624,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -6800,7 +6744,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -6810,7 +6753,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -6962,7 +6904,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -6972,7 +6913,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -7088,7 +7028,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: IsActive
         * * Display Name: Is Active
         * * SQL Data Type: bit
-        * * Default Value: 1
         */
         get IsActive(): boolean {  
             return this.Get('IsActive');
@@ -7157,7 +7096,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -7167,7 +7105,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -7214,19 +7151,7 @@ import { RegisterClass } from "@memberjunction/global";
             compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
-            
-        /**
-        * AI Actions - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
-        * @public
-        * @method
-        * @override
-        * @memberof AIActionEntity
-        * @throws {Error} - Delete is not allowed for AI Actions, to enable it set AllowDeleteAPI to 1 in the database.
-        */
-        public async Delete(): Promise<boolean> {
-            throw new Error('Delete is not allowed for AI Actions, to enable it set AllowDeleteAPI to 1 in the database.');
-        } 
-            
+        
             /**
         * * Field Name: ID
         * * Display Name: ID
@@ -7285,7 +7210,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: IsActive
         * * Display Name: Is Active
         * * SQL Data Type: bit
-        * * Default Value: 1
         */
         get IsActive(): boolean {  
             return this.Get('IsActive');
@@ -7297,7 +7221,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -7307,7 +7230,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -7354,19 +7276,7 @@ import { RegisterClass } from "@memberjunction/global";
             compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
-            
-        /**
-        * AI Model Actions - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
-        * @public
-        * @method
-        * @override
-        * @memberof AIModelActionEntity
-        * @throws {Error} - Delete is not allowed for AI Model Actions, to enable it set AllowDeleteAPI to 1 in the database.
-        */
-        public async Delete(): Promise<boolean> {
-            throw new Error('Delete is not allowed for AI Model Actions, to enable it set AllowDeleteAPI to 1 in the database.');
-        } 
-            
+        
             /**
         * * Field Name: ID
         * * Display Name: ID
@@ -7404,7 +7314,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: IsActive
         * * Display Name: Is Active
         * * SQL Data Type: bit
-        * * Default Value: 1
         */
         get IsActive(): boolean {  
             return this.Get('IsActive');
@@ -7416,7 +7325,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -7426,7 +7334,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -7482,19 +7389,7 @@ import { RegisterClass } from "@memberjunction/global";
             compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
-            
-        /**
-        * Entity AI Actions - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
-        * @public
-        * @method
-        * @override
-        * @memberof EntityAIActionEntity
-        * @throws {Error} - Delete is not allowed for Entity AI Actions, to enable it set AllowDeleteAPI to 1 in the database.
-        */
-        public async Delete(): Promise<boolean> {
-            throw new Error('Delete is not allowed for Entity AI Actions, to enable it set AllowDeleteAPI to 1 in the database.');
-        } 
-            
+        
             /**
         * * Field Name: ID
         * * Display Name: ID
@@ -7566,7 +7461,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: TriggerEvent
         * * Display Name: Trigger Event
         * * SQL Data Type: nchar(15)
-        * * Default Value: N'After Save'
         * * Value List Type: List
         * * Possible Values 
         *   * after save
@@ -7593,7 +7487,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: OutputType
         * * Display Name: Output Type
         * * SQL Data Type: nchar(10)
-        * * Default Value: N'FIeld'
         * * Value List Type: List
         * * Possible Values 
         *   * entity
@@ -7620,7 +7513,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: SkipIfOutputFieldNotEmpty
         * * Display Name: Skip If Output Field Not Empty
         * * SQL Data Type: bit
-        * * Default Value: 1
         */
         get SkipIfOutputFieldNotEmpty(): boolean {  
             return this.Get('SkipIfOutputFieldNotEmpty');
@@ -7876,7 +7768,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: IsActive
         * * Display Name: Is Active
         * * SQL Data Type: bit
-        * * Default Value: 1
         */
         get IsActive(): boolean {  
             return this.Get('IsActive');
@@ -7976,7 +7867,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: IsActive
         * * Display Name: Is Active
         * * SQL Data Type: bit
-        * * Default Value: 0
         */
         get IsActive(): boolean {  
             return this.Get('IsActive');
@@ -8109,7 +7999,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: LastHeartbeat
         * * Display Name: Last Heartbeat
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get LastHeartbeat(): Date {  
             return this.Get('LastHeartbeat');
@@ -8121,7 +8010,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -8131,7 +8019,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -8215,7 +8102,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: Status
         * * Display Name: Status
         * * SQL Data Type: nchar(10)
-        * * Default Value: N'Pending'
         * * Value List Type: List
         * * Possible Values 
         *   * In Progress
@@ -8794,7 +8680,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: SharingScope
         * * Display Name: Sharing Scope
         * * SQL Data Type: nvarchar(20)
-        * * Default Value: N'Personal'
         * * Value List Type: List
         * * Possible Values 
         *   * None
@@ -8940,7 +8825,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -8950,7 +8834,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -9105,7 +8988,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -9266,7 +9148,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -9276,7 +9157,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -9595,6 +9475,24 @@ import { RegisterClass } from "@memberjunction/global";
             this.Set('UserID', value);
         }
         /**
+        * * Field Name: CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetime
+        */
+        get CreatedAt(): Date {  
+            return this.Get('CreatedAt');
+        }
+        
+        /**
+        * * Field Name: UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetime
+        */
+        get UpdatedAt(): Date {  
+            return this.Get('UpdatedAt');
+        }
+        
+        /**
         * * Field Name: User
         * * Display Name: User
         * * SQL Data Type: nvarchar(100)
@@ -9694,7 +9592,7 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: ResourceRecordID
         * * Display Name: Resource Record ID
-        * * SQL Data Type: nvarchar(255)
+        * * SQL Data Type: nvarchar(2000)
         */
         get ResourceRecordID(): string | null {  
             return this.Get('ResourceRecordID');
@@ -9724,6 +9622,24 @@ import { RegisterClass } from "@memberjunction/global";
         set Configuration(value: string | null) {
             this.Set('Configuration', value);
         }
+        /**
+        * * Field Name: CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetime
+        */
+        get CreatedAt(): Date {  
+            return this.Get('CreatedAt');
+        }
+        
+        /**
+        * * Field Name: UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetime
+        */
+        get UpdatedAt(): Date {  
+            return this.Get('UpdatedAt');
+        }
+        
         /**
         * * Field Name: WorkSpace
         * * Display Name: Work Space
@@ -9834,7 +9750,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -9844,7 +9759,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -9943,7 +9857,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: Sequence
         * * Display Name: Sequence
         * * SQL Data Type: int
-        * * Default Value: 0
         */
         get Sequence(): number {  
             return this.Get('Sequence');
@@ -10000,7 +9913,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -10010,7 +9922,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -10093,7 +10004,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: Role
         * * Display Name: Role
         * * SQL Data Type: nvarchar(20)
-        * * Default Value: user_name()
         * * Value List Type: List
         * * Possible Values 
         *   * User
@@ -10132,7 +10042,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: HiddenToUser
         * * Display Name: Hidden To User
         * * SQL Data Type: bit
-        * * Default Value: 0
         */
         get HiddenToUser(): boolean {  
             return this.Get('HiddenToUser');
@@ -10144,7 +10053,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -10154,7 +10062,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -10259,7 +10166,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: Type
         * * Display Name: Type
         * * SQL Data Type: nvarchar(50)
-        * * Default Value: N'Skip'
         */
         get Type(): string {  
             return this.Get('Type');
@@ -10271,7 +10177,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: IsArchived
         * * Display Name: Is Archived
         * * SQL Data Type: bit
-        * * Default Value: 0
         */
         get IsArchived(): boolean {  
             return this.Get('IsArchived');
@@ -10317,7 +10222,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -10327,7 +10231,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -10463,7 +10366,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: Unread
         * * Display Name: Unread
         * * SQL Data Type: bit
-        * * Default Value: 1
         */
         get Unread(): boolean {  
             return this.Get('Unread');
@@ -10486,7 +10388,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -10496,7 +10397,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -10613,7 +10513,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -10623,7 +10522,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -10732,7 +10630,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -10742,7 +10639,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -10849,7 +10745,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: ApprovalStatus
         * * Display Name: Approval Status
         * * SQL Data Type: nvarchar(10)
-        * * Default Value: N'Pending'
         * * Value List Type: List
         * * Possible Values 
         *   * Pending
@@ -10877,7 +10772,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: ProcessingStatus
         * * Display Name: Processing Status
         * * SQL Data Type: nvarchar(10)
-        * * Default Value: N'Pending'
         * * Value List Type: List
         * * Possible Values 
         *   * Started
@@ -10894,7 +10788,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: ProcessingStartedAt
         * * Display Name: Processing Started At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get ProcessingStartedAt(): Date {  
             return this.Get('ProcessingStartedAt');
@@ -10939,7 +10832,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -10949,7 +10841,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date | null {  
             return this.Get('UpdatedAt');
@@ -11053,7 +10944,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: Status
         * * Display Name: Status
         * * SQL Data Type: nvarchar(10)
-        * * Default Value: N'Pending'
         * * Value List Type: List
         * * Possible Values 
         *   * Pending
@@ -11081,7 +10971,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -11091,7 +10980,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -11246,7 +11134,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: IsComputed
         * * Display Name: Is Computed
         * * SQL Data Type: bit
-        * * Default Value: 0
         */
         get IsComputed(): boolean {  
             return this.Get('IsComputed');
@@ -11269,7 +11156,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: IsSummary
         * * Display Name: Is Summary
         * * SQL Data Type: bit
-        * * Default Value: 0
         */
         get IsSummary(): boolean {  
             return this.Get('IsSummary');
@@ -11292,7 +11178,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -11302,7 +11187,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -11405,7 +11289,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -11415,7 +11298,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -11576,7 +11458,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: Status
         * * Display Name: Status
         * * SQL Data Type: nvarchar(15)
-        * * Default Value: N'Pending'
         * * Value List Type: List
         * * Possible Values 
         *   * Pending
@@ -11594,7 +11475,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: QualityRank
         * * Display Name: Quality Rank
         * * SQL Data Type: int
-        * * Default Value: 0
         */
         get QualityRank(): number | null {  
             return this.Get('QualityRank');
@@ -11606,7 +11486,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -11616,7 +11495,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -11712,7 +11590,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -11722,7 +11599,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -11831,7 +11707,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -11841,7 +11716,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -11944,7 +11818,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -11954,7 +11827,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -12051,7 +11923,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: Status
         * * Display Name: Status
         * * SQL Data Type: nvarchar(15)
-        * * Default Value: N'Pending'
         * * Value List Type: List
         * * Possible Values 
         *   * Pending
@@ -12069,7 +11940,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -12079,7 +11949,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -12195,7 +12064,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -12205,7 +12073,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -12346,7 +12213,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -12356,7 +12222,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -12465,7 +12330,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: Status
         * * Display Name: Status
         * * SQL Data Type: nvarchar(15)
-        * * Default Value: N'Active'
         * * Value List Type: List
         * * Possible Values 
         *   * Active
@@ -12516,7 +12380,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: PotentialMatchThreshold
         * * Display Name: Potential Match Threshold
         * * SQL Data Type: numeric(12, 11)
-        * * Default Value: 1
         * * Description: Value between 0 and 1 that determines what is considered a potential matching record. Value must be <= AbsoluteMatchThreshold. This is primarily used for duplicate detection but can be used for other applications as well where matching is relevant.
         */
         get PotentialMatchThreshold(): number {  
@@ -12529,7 +12392,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: AbsoluteMatchThreshold
         * * Display Name: Absolute Match Threshold
         * * SQL Data Type: numeric(12, 11)
-        * * Default Value: 1
         * * Description: Value between 0 and 1 that determines what is considered an absolute matching record. Value must be >= PotentialMatchThreshold. This is primarily used for duplicate detection but can be used for other applications as well where matching is relevant.
         */
         get AbsoluteMatchThreshold(): number {  
@@ -12542,7 +12404,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -12552,7 +12413,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -12741,7 +12601,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -12751,7 +12610,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -12884,7 +12742,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -12894,7 +12751,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -12988,7 +12844,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -12998,7 +12853,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -13125,7 +12979,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -13135,7 +12988,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -13250,7 +13102,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -13260,7 +13111,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -13397,7 +13247,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: Priority
         * * Display Name: Priority
         * * SQL Data Type: int
-        * * Default Value: 0
         */
         get Priority(): number {  
             return this.Get('Priority');
@@ -13409,7 +13258,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: IsActive
         * * Display Name: Is Active
         * * SQL Data Type: bit
-        * * Default Value: 1
         */
         get IsActive(): boolean {  
             return this.Get('IsActive');
@@ -13421,7 +13269,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -13431,7 +13278,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -13550,7 +13396,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: Status
         * * Display Name: Status
         * * SQL Data Type: nvarchar(20)
-        * * Default Value: N'Pending'
         * * Description: Pending, Uploading, Uploaded, Deleting, Deleted
         */
         get Status(): string {  
@@ -13563,7 +13408,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -13573,7 +13417,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -13676,7 +13519,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -13686,7 +13528,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -13793,7 +13634,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -13803,7 +13643,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -13917,7 +13756,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: Type
         * * Display Name: Type
         * * SQL Data Type: nvarchar(20)
-        * * Default Value: N'System'
         * * Value List Type: List
         * * Possible Values 
         *   * New
@@ -13945,7 +13783,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: Status
         * * Display Name: Status
         * * SQL Data Type: nvarchar(20)
-        * * Default Value: N'Pending'
         * * Value List Type: List
         * * Possible Values 
         *   * Pending
@@ -13988,7 +13825,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -13998,7 +13834,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -14082,7 +13917,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: MatchSource
         * * Display Name: Match Source
         * * SQL Data Type: nvarchar(20)
-        * * Default Value: N'Vector'
         * * Value List Type: List
         * * Possible Values 
         *   * SP
@@ -14110,7 +13944,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: MatchProbability
         * * Display Name: Match Probability
         * * SQL Data Type: numeric(12, 11)
-        * * Default Value: 0
         * * Description: Value between 0 and 1 designating the computed probability of a match
         */
         get MatchProbability(): number {  
@@ -14123,7 +13956,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: MatchedAt
         * * Display Name: Matched At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get MatchedAt(): Date {  
             return this.Get('MatchedAt');
@@ -14135,7 +13967,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: Action
         * * Display Name: Action
         * * SQL Data Type: nvarchar(20)
-        * * Default Value: N'Ignore'
         */
         get Action(): string {  
             return this.Get('Action');
@@ -14147,7 +13978,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: ApprovalStatus
         * * Display Name: Approval Status
         * * SQL Data Type: nvarchar(20)
-        * * Default Value: N'Pending'
         * * Value List Type: List
         * * Possible Values 
         *   * Rejected
@@ -14164,7 +13994,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: MergeStatus
         * * Display Name: Merge Status
         * * SQL Data Type: nvarchar(20)
-        * * Default Value: N'Pending'
         * * Value List Type: List
         * * Possible Values 
         *   * Error
@@ -14181,7 +14010,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: MergedAt
         * * Display Name: Merged At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get MergedAt(): Date {  
             return this.Get('MergedAt');
@@ -14205,7 +14033,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -14215,7 +14042,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -14323,7 +14149,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -14333,7 +14158,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -14450,7 +14274,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -14460,7 +14283,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -14556,7 +14378,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: StartedAt
         * * Display Name: Started At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get StartedAt(): Date {  
             return this.Get('StartedAt');
@@ -14579,7 +14400,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: ApprovalStatus
         * * Display Name: Approval Status
         * * SQL Data Type: nvarchar(20)
-        * * Default Value: N'Pending'
         * * Value List Type: List
         * * Possible Values 
         *   * Rejected
@@ -14619,7 +14439,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: ProcessingStatus
         * * Display Name: Processing Status
         * * SQL Data Type: nvarchar(20)
-        * * Default Value: N'Pending'
         * * Value List Type: List
         * * Possible Values 
         *   * Failed
@@ -14660,7 +14479,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -14670,7 +14488,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -14792,7 +14609,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: MatchStatus
         * * Display Name: Match Status
         * * SQL Data Type: nvarchar(20)
-        * * Default Value: N'Pending'
         * * Value List Type: List
         * * Possible Values 
         *   * Error
@@ -14834,7 +14650,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: MergeStatus
         * * Display Name: Merge Status
         * * SQL Data Type: nvarchar(20)
-        * * Default Value: N'Not Applicable'
         * * Value List Type: List
         * * Possible Values 
         *   * Error
@@ -14863,7 +14678,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -14873,7 +14687,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -14961,7 +14774,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: RegenerateCode
         * * Display Name: Regenerate Code
         * * SQL Data Type: bit
-        * * Default Value: 0
         * * Description: This bit field is automatically turned on whenever the Description field is changed so that a future server process will pick it up and regenerate the code. This might happen asynchronously or synchronously depending on system setup.
         */
         get RegenerateCode(): boolean {  
@@ -14998,7 +14810,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CodeGenerated
         * * Display Name: Code Generated
         * * SQL Data Type: bit
-        * * Default Value: 1
         */
         get CodeGenerated(): boolean {  
             return this.Get('CodeGenerated');
@@ -15010,7 +14821,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -15020,7 +14830,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -15113,7 +14922,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -15209,7 +15017,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -15219,7 +15026,2919 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
+        */
+        get UpdatedAt(): Date {  
+            return this.Get('UpdatedAt');
+        }
+        
+
+    }
+        
+    /**
+     * Action Categories - strongly typed entity sub-class
+     * * Schema: __mj
+     * * Base Table: ActionCategory
+     * * Base View: vwActionCategories
+     * * @description Organizes actions into categories, including name, description, and optional parent category for hierarchy.
+     * * Primary Key: ID
+     * @extends {BaseEntity}
+     * @class
+     * @public
+     */
+    @RegisterClass(BaseEntity, 'Action Categories')
+    export class ActionCategoryEntity extends BaseEntity {
+        /**
+        * Loads the Action Categories record from the database
+        * @param ID: number - primary key value to load the Action Categories record.
+        * @param EntityRelationshipsToLoad - (optional) the relationships to load
+        * @returns {Promise<boolean>} - true if successful, false otherwise
+        * @public
+        * @async
+        * @memberof ActionCategoryEntity
+        * @method
+        * @override
+        */      
+        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+        }
+        
+            /**
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: int
+        */
+        get ID(): number {  
+            return this.Get('ID');
+        }
+        
+        /**
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Name of the action category.
+        */
+        get Name(): string {  
+            return this.Get('Name');
+        }
+        set Name(value: string) {
+            this.Set('Name', value);
+        }
+        /**
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Description of the action category.
+        */
+        get Description(): string | null {  
+            return this.Get('Description');
+        }
+        set Description(value: string | null) {
+            this.Set('Description', value);
+        }
+        /**
+        * * Field Name: ParentID
+        * * Display Name: Parent ID
+        * * SQL Data Type: int
+        * * Related Entity/Foreign Key: Action Categories (vwActionCategories.ID)
+        * * Description: Parent category ID for hierarchical organization.
+        */
+        get ParentID(): number | null {  
+            return this.Get('ParentID');
+        }
+        set ParentID(value: number | null) {
+            this.Set('ParentID', value);
+        }
+        /**
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Value List Type: List
+        * * Possible Values 
+        *   * Disabled
+        *   * Active
+        *   * Pending
+        * * Description: Status of the action category (Pending, Active, Disabled).
+        */
+        get Status(): 'Disabled' | 'Active' | 'Pending' {  
+            return this.Get('Status');
+        }
+        set Status(value: 'Disabled' | 'Active' | 'Pending') {
+            this.Set('Status', value);
+        }
+        /**
+        * * Field Name: CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetime
+        */
+        get CreatedAt(): Date {  
+            return this.Get('CreatedAt');
+        }
+        
+        /**
+        * * Field Name: UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetime
+        */
+        get UpdatedAt(): Date {  
+            return this.Get('UpdatedAt');
+        }
+        
+        /**
+        * * Field Name: Parent
+        * * Display Name: Parent
+        * * SQL Data Type: nvarchar(255)
+        */
+        get Parent(): string | null {  
+            return this.Get('Parent');
+        }
+        
+
+    }
+        
+    /**
+     * Entity Actions - strongly typed entity sub-class
+     * * Schema: __mj
+     * * Base Table: EntityAction
+     * * Base View: vwEntityActions
+     * * @description Links entities to actions - this is the main place where you define the actions that part of, or available, for a given entity.
+     * * Primary Key: ID
+     * @extends {BaseEntity}
+     * @class
+     * @public
+     */
+    @RegisterClass(BaseEntity, 'Entity Actions')
+    export class EntityActionEntity extends BaseEntity {
+        /**
+        * Loads the Entity Actions record from the database
+        * @param ID: number - primary key value to load the Entity Actions record.
+        * @param EntityRelationshipsToLoad - (optional) the relationships to load
+        * @returns {Promise<boolean>} - true if successful, false otherwise
+        * @public
+        * @async
+        * @memberof EntityActionEntity
+        * @method
+        * @override
+        */      
+        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+        }
+        
+            /**
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: int
+        */
+        get ID(): number {  
+            return this.Get('ID');
+        }
+        
+        /**
+        * * Field Name: EntityID
+        * * Display Name: Entity ID
+        * * SQL Data Type: int
+        * * Related Entity/Foreign Key: Entities (vwEntities.ID)
+        */
+        get EntityID(): number {  
+            return this.Get('EntityID');
+        }
+        set EntityID(value: number) {
+            this.Set('EntityID', value);
+        }
+        /**
+        * * Field Name: ActionID
+        * * Display Name: Action ID
+        * * SQL Data Type: int
+        * * Related Entity/Foreign Key: Actions (vwActions.ID)
+        */
+        get ActionID(): number {  
+            return this.Get('ActionID');
+        }
+        set ActionID(value: number) {
+            this.Set('ActionID', value);
+        }
+        /**
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Value List Type: List
+        * * Possible Values 
+        *   * Disabled
+        *   * Active
+        *   * Pending
+        * * Description: Status of the entity action (Pending, Active, Disabled).
+        */
+        get Status(): 'Disabled' | 'Active' | 'Pending' {  
+            return this.Get('Status');
+        }
+        set Status(value: 'Disabled' | 'Active' | 'Pending') {
+            this.Set('Status', value);
+        }
+        /**
+        * * Field Name: CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetime
+        */
+        get CreatedAt(): Date {  
+            return this.Get('CreatedAt');
+        }
+        
+        /**
+        * * Field Name: UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetime
+        */
+        get UpdatedAt(): Date {  
+            return this.Get('UpdatedAt');
+        }
+        
+        /**
+        * * Field Name: Entity
+        * * Display Name: Entity
+        * * SQL Data Type: nvarchar(255)
+        */
+        get Entity(): string {  
+            return this.Get('Entity');
+        }
+        
+        /**
+        * * Field Name: Action
+        * * Display Name: Action
+        * * SQL Data Type: nvarchar(425)
+        */
+        get Action(): string {  
+            return this.Get('Action');
+        }
+        
+
+    }
+        
+    /**
+     * Entity Action Invocations - strongly typed entity sub-class
+     * * Schema: __mj
+     * * Base Table: EntityActionInvocation
+     * * Base View: vwEntityActionInvocations
+     * * @description Links invocation types to entity actions – for example you might link a particular EntityAction to just “Create Record” and you might also have a second item in this table allowing the same Entity Action to be invoked from a User View or List, on demand.
+     * * Primary Key: ID
+     * @extends {BaseEntity}
+     * @class
+     * @public
+     */
+    @RegisterClass(BaseEntity, 'Entity Action Invocations')
+    export class EntityActionInvocationEntity extends BaseEntity {
+        /**
+        * Loads the Entity Action Invocations record from the database
+        * @param ID: number - primary key value to load the Entity Action Invocations record.
+        * @param EntityRelationshipsToLoad - (optional) the relationships to load
+        * @returns {Promise<boolean>} - true if successful, false otherwise
+        * @public
+        * @async
+        * @memberof EntityActionInvocationEntity
+        * @method
+        * @override
+        */      
+        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+        }
+        
+            /**
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: int
+        */
+        get ID(): number {  
+            return this.Get('ID');
+        }
+        
+        /**
+        * * Field Name: EntityActionID
+        * * Display Name: Entity Action ID
+        * * SQL Data Type: int
+        * * Related Entity/Foreign Key: Entity Actions (vwEntityActions.ID)
+        */
+        get EntityActionID(): number {  
+            return this.Get('EntityActionID');
+        }
+        set EntityActionID(value: number) {
+            this.Set('EntityActionID', value);
+        }
+        /**
+        * * Field Name: InvocationTypeID
+        * * Display Name: Invocation Type ID
+        * * SQL Data Type: int
+        * * Related Entity/Foreign Key: Entity Action Invocation Types (vwEntityActionInvocationTypes.ID)
+        */
+        get InvocationTypeID(): number {  
+            return this.Get('InvocationTypeID');
+        }
+        set InvocationTypeID(value: number) {
+            this.Set('InvocationTypeID', value);
+        }
+        /**
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Value List Type: List
+        * * Possible Values 
+        *   * Disabled
+        *   * Active
+        *   * Pending
+        * * Description: Status of the entity action invocation (Pending, Active, Disabled).
+        */
+        get Status(): 'Disabled' | 'Active' | 'Pending' {  
+            return this.Get('Status');
+        }
+        set Status(value: 'Disabled' | 'Active' | 'Pending') {
+            this.Set('Status', value);
+        }
+        /**
+        * * Field Name: CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetime
+        */
+        get CreatedAt(): Date {  
+            return this.Get('CreatedAt');
+        }
+        
+        /**
+        * * Field Name: UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetime
+        */
+        get UpdatedAt(): Date {  
+            return this.Get('UpdatedAt');
+        }
+        
+        /**
+        * * Field Name: InvocationType
+        * * Display Name: Invocation Type
+        * * SQL Data Type: nvarchar(255)
+        */
+        get InvocationType(): string {  
+            return this.Get('InvocationType');
+        }
+        
+
+    }
+        
+    /**
+     * Action Authorizations - strongly typed entity sub-class
+     * * Schema: __mj
+     * * Base Table: ActionAuthorization
+     * * Base View: vwActionAuthorizations
+     * * @description Links actions to authorizations, one or more of these must be possessed by a user in order to execute the action.
+     * * Primary Key: ID
+     * @extends {BaseEntity}
+     * @class
+     * @public
+     */
+    @RegisterClass(BaseEntity, 'Action Authorizations')
+    export class ActionAuthorizationEntity extends BaseEntity {
+        /**
+        * Loads the Action Authorizations record from the database
+        * @param ID: number - primary key value to load the Action Authorizations record.
+        * @param EntityRelationshipsToLoad - (optional) the relationships to load
+        * @returns {Promise<boolean>} - true if successful, false otherwise
+        * @public
+        * @async
+        * @memberof ActionAuthorizationEntity
+        * @method
+        * @override
+        */      
+        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+        }
+        
+            /**
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: int
+        */
+        get ID(): number {  
+            return this.Get('ID');
+        }
+        
+        /**
+        * * Field Name: ActionID
+        * * Display Name: Action ID
+        * * SQL Data Type: int
+        * * Related Entity/Foreign Key: Actions (vwActions.ID)
+        */
+        get ActionID(): number {  
+            return this.Get('ActionID');
+        }
+        set ActionID(value: number) {
+            this.Set('ActionID', value);
+        }
+        /**
+        * * Field Name: AuthorizationName
+        * * Display Name: Authorization Name
+        * * SQL Data Type: nvarchar(100)
+        * * Related Entity/Foreign Key: Authorizations (vwAuthorizations.Name)
+        */
+        get AuthorizationName(): string {  
+            return this.Get('AuthorizationName');
+        }
+        set AuthorizationName(value: string) {
+            this.Set('AuthorizationName', value);
+        }
+        /**
+        * * Field Name: Comments
+        * * Display Name: Comments
+        * * SQL Data Type: nvarchar(MAX)
+        */
+        get Comments(): string | null {  
+            return this.Get('Comments');
+        }
+        set Comments(value: string | null) {
+            this.Set('Comments', value);
+        }
+        /**
+        * * Field Name: CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetime
+        */
+        get CreatedAt(): Date {  
+            return this.Get('CreatedAt');
+        }
+        
+        /**
+        * * Field Name: UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetime
+        */
+        get UpdatedAt(): Date {  
+            return this.Get('UpdatedAt');
+        }
+        
+        /**
+        * * Field Name: Action
+        * * Display Name: Action
+        * * SQL Data Type: nvarchar(425)
+        */
+        get Action(): string {  
+            return this.Get('Action');
+        }
+        
+
+    }
+        
+    /**
+     * Entity Action Invocation Types - strongly typed entity sub-class
+     * * Schema: __mj
+     * * Base Table: EntityActionInvocationType
+     * * Base View: vwEntityActionInvocationTypes
+     * * @description Stores the possible invocation types of an action within the context of an entity. Examples would be: Record Created/Updated/Deleted/Accessed as well as things like “View” or “List” where you could run an EntityAction against an entire set of records in a view or list – either by user click or programmatically.
+     * * Primary Key: ID
+     * @extends {BaseEntity}
+     * @class
+     * @public
+     */
+    @RegisterClass(BaseEntity, 'Entity Action Invocation Types')
+    export class EntityActionInvocationTypeEntity extends BaseEntity {
+        /**
+        * Loads the Entity Action Invocation Types record from the database
+        * @param ID: number - primary key value to load the Entity Action Invocation Types record.
+        * @param EntityRelationshipsToLoad - (optional) the relationships to load
+        * @returns {Promise<boolean>} - true if successful, false otherwise
+        * @public
+        * @async
+        * @memberof EntityActionInvocationTypeEntity
+        * @method
+        * @override
+        */      
+        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+        }
+        
+            /**
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: int
+        */
+        get ID(): number {  
+            return this.Get('ID');
+        }
+        
+        /**
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Name of the invocation type such as Record Created/Updated/etc.
+        */
+        get Name(): string {  
+            return this.Get('Name');
+        }
+        set Name(value: string) {
+            this.Set('Name', value);
+        }
+        /**
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Description of the invocation type.
+        */
+        get Description(): string | null {  
+            return this.Get('Description');
+        }
+        set Description(value: string | null) {
+            this.Set('Description', value);
+        }
+        /**
+        * * Field Name: DisplaySequence
+        * * Display Name: Display Sequence
+        * * SQL Data Type: int
+        */
+        get DisplaySequence(): number {  
+            return this.Get('DisplaySequence');
+        }
+        set DisplaySequence(value: number) {
+            this.Set('DisplaySequence', value);
+        }
+        /**
+        * * Field Name: CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetime
+        */
+        get CreatedAt(): Date {  
+            return this.Get('CreatedAt');
+        }
+        
+        /**
+        * * Field Name: UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetime
+        */
+        get UpdatedAt(): Date {  
+            return this.Get('UpdatedAt');
+        }
+        
+
+    }
+        
+    /**
+     * Actions - strongly typed entity sub-class
+     * * Schema: __mj
+     * * Base Table: Action
+     * * Base View: vwActions
+     * * @description Stores action definitions, including prompts, generated code, user comments, and status.
+     * * Primary Key: ID
+     * @extends {BaseEntity}
+     * @class
+     * @public
+     */
+    @RegisterClass(BaseEntity, 'Actions')
+    export class ActionEntity extends BaseEntity {
+        /**
+        * Loads the Actions record from the database
+        * @param ID: number - primary key value to load the Actions record.
+        * @param EntityRelationshipsToLoad - (optional) the relationships to load
+        * @returns {Promise<boolean>} - true if successful, false otherwise
+        * @public
+        * @async
+        * @memberof ActionEntity
+        * @method
+        * @override
+        */      
+        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+        }
+        
+            /**
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: int
+        */
+        get ID(): number {  
+            return this.Get('ID');
+        }
+        
+        /**
+        * * Field Name: CategoryID
+        * * Display Name: Category ID
+        * * SQL Data Type: int
+        * * Related Entity/Foreign Key: Action Categories (vwActionCategories.ID)
+        */
+        get CategoryID(): number | null {  
+            return this.Get('CategoryID');
+        }
+        set CategoryID(value: number | null) {
+            this.Set('CategoryID', value);
+        }
+        /**
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(425)
+        */
+        get Name(): string {  
+            return this.Get('Name');
+        }
+        set Name(value: string) {
+            this.Set('Name', value);
+        }
+        /**
+        * * Field Name: UserPrompt
+        * * Display Name: User Prompt
+        * * SQL Data Type: nvarchar(MAX)
+        */
+        get UserPrompt(): string {  
+            return this.Get('UserPrompt');
+        }
+        set UserPrompt(value: string) {
+            this.Set('UserPrompt', value);
+        }
+        /**
+        * * Field Name: UserComments
+        * * Display Name: User Comments
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: User's comments not shared with the LLM.
+        */
+        get UserComments(): string | null {  
+            return this.Get('UserComments');
+        }
+        set UserComments(value: string | null) {
+            this.Set('UserComments', value);
+        }
+        /**
+        * * Field Name: Code
+        * * Display Name: Code
+        * * SQL Data Type: nvarchar(MAX)
+        */
+        get Code(): string | null {  
+            return this.Get('Code');
+        }
+        set Code(value: string | null) {
+            this.Set('Code', value);
+        }
+        /**
+        * * Field Name: CodeComments
+        * * Display Name: Code Comments
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: AI's explanation of the code.
+        */
+        get CodeComments(): string | null {  
+            return this.Get('CodeComments');
+        }
+        set CodeComments(value: string | null) {
+            this.Set('CodeComments', value);
+        }
+        /**
+        * * Field Name: CodeApprovalStatus
+        * * Display Name: Code Approval Status
+        * * SQL Data Type: nvarchar(20)
+        * * Value List Type: List
+        * * Possible Values 
+        *   * Rejected
+        *   * Approved
+        *   * Pending
+        * * Description: An action won't be usable until the code is approved.
+        */
+        get CodeApprovalStatus(): 'Rejected' | 'Approved' | 'Pending' {  
+            return this.Get('CodeApprovalStatus');
+        }
+        set CodeApprovalStatus(value: 'Rejected' | 'Approved' | 'Pending') {
+            this.Set('CodeApprovalStatus', value);
+        }
+        /**
+        * * Field Name: CodeApprovalComments
+        * * Display Name: Code Approval Comments
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Optional comments when an individual (or an AI) reviews and approves the code.
+        */
+        get CodeApprovalComments(): string | null {  
+            return this.Get('CodeApprovalComments');
+        }
+        set CodeApprovalComments(value: string | null) {
+            this.Set('CodeApprovalComments', value);
+        }
+        /**
+        * * Field Name: CodeApprovedByUserID
+        * * Display Name: Code Approved By User ID
+        * * SQL Data Type: int
+        * * Related Entity/Foreign Key: Users (vwUsers.ID)
+        * * Description: UserID who approved the code.
+        */
+        get CodeApprovedByUserID(): number | null {  
+            return this.Get('CodeApprovedByUserID');
+        }
+        set CodeApprovedByUserID(value: number | null) {
+            this.Set('CodeApprovedByUserID', value);
+        }
+        /**
+        * * Field Name: CodeApprovedAt
+        * * Display Name: Code Approved At
+        * * SQL Data Type: datetime
+        * * Description: When the code was approved.
+        */
+        get CodeApprovedAt(): Date | null {  
+            return this.Get('CodeApprovedAt');
+        }
+        set CodeApprovedAt(value: Date | null) {
+            this.Set('CodeApprovedAt', value);
+        }
+        /**
+        * * Field Name: ForceCodeGeneration
+        * * Display Name: Force Code Generation
+        * * SQL Data Type: bit
+        * * Description: If set to 1, the Action will generate code for the provided UserPrompt on the next Save even if the UserPrompt hasn't changed. This is useful to force regeneration when other candidates (such as a change in Action Inputs/Outputs) occurs or on demand by a user.
+        */
+        get ForceCodeGeneration(): boolean {  
+            return this.Get('ForceCodeGeneration');
+        }
+        set ForceCodeGeneration(value: boolean) {
+            this.Set('ForceCodeGeneration', value);
+        }
+        /**
+        * * Field Name: RetentionPeriod
+        * * Display Name: Retention Period
+        * * SQL Data Type: int
+        * * Description: Number of days to retain execution logs; NULL for indefinite.
+        */
+        get RetentionPeriod(): number | null {  
+            return this.Get('RetentionPeriod');
+        }
+        set RetentionPeriod(value: number | null) {
+            this.Set('RetentionPeriod', value);
+        }
+        /**
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Value List Type: List
+        * * Possible Values 
+        *   * Disabled
+        *   * Active
+        *   * Pending
+        * * Description: Status of the action (Pending, Active, Disabled).
+        */
+        get Status(): 'Disabled' | 'Active' | 'Pending' {  
+            return this.Get('Status');
+        }
+        set Status(value: 'Disabled' | 'Active' | 'Pending') {
+            this.Set('Status', value);
+        }
+        /**
+        * * Field Name: CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetime
+        */
+        get CreatedAt(): Date {  
+            return this.Get('CreatedAt');
+        }
+        
+        /**
+        * * Field Name: UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetime
+        */
+        get UpdatedAt(): Date {  
+            return this.Get('UpdatedAt');
+        }
+        
+        /**
+        * * Field Name: Category
+        * * Display Name: Category
+        * * SQL Data Type: nvarchar(255)
+        */
+        get Category(): string | null {  
+            return this.Get('Category');
+        }
+        
+        /**
+        * * Field Name: CodeApprovedByUser
+        * * Display Name: Code Approved By User
+        * * SQL Data Type: nvarchar(100)
+        */
+        get CodeApprovedByUser(): string | null {  
+            return this.Get('CodeApprovedByUser');
+        }
+        
+
+    }
+        
+    /**
+     * Entity Action Filters - strongly typed entity sub-class
+     * * Schema: __mj
+     * * Base Table: EntityActionFilter
+     * * Base View: vwEntityActionFilters
+     * * @description Optional use. Maps Action Filters to specific EntityAction instances, specifying execution order and status. This allows for “pre-processing” before an Action actually is fired off, to check for various state/dirty/value conditions.
+     * * Primary Key: ID
+     * @extends {BaseEntity}
+     * @class
+     * @public
+     */
+    @RegisterClass(BaseEntity, 'Entity Action Filters')
+    export class EntityActionFilterEntity extends BaseEntity {
+        /**
+        * Loads the Entity Action Filters record from the database
+        * @param ID: number - primary key value to load the Entity Action Filters record.
+        * @param EntityRelationshipsToLoad - (optional) the relationships to load
+        * @returns {Promise<boolean>} - true if successful, false otherwise
+        * @public
+        * @async
+        * @memberof EntityActionFilterEntity
+        * @method
+        * @override
+        */      
+        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+        }
+        
+            /**
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: int
+        */
+        get ID(): number {  
+            return this.Get('ID');
+        }
+        
+        /**
+        * * Field Name: EntityActionID
+        * * Display Name: Entity Action ID
+        * * SQL Data Type: int
+        * * Related Entity/Foreign Key: Entity Actions (vwEntityActions.ID)
+        */
+        get EntityActionID(): number {  
+            return this.Get('EntityActionID');
+        }
+        set EntityActionID(value: number) {
+            this.Set('EntityActionID', value);
+        }
+        /**
+        * * Field Name: ActionFilterID
+        * * Display Name: Action Filter ID
+        * * SQL Data Type: int
+        * * Related Entity/Foreign Key: Action Filters (vwActionFilters.ID)
+        */
+        get ActionFilterID(): number {  
+            return this.Get('ActionFilterID');
+        }
+        set ActionFilterID(value: number) {
+            this.Set('ActionFilterID', value);
+        }
+        /**
+        * * Field Name: Sequence
+        * * Display Name: Sequence
+        * * SQL Data Type: int
+        * * Description: Order of filter execution.
+        */
+        get Sequence(): number {  
+            return this.Get('Sequence');
+        }
+        set Sequence(value: number) {
+            this.Set('Sequence', value);
+        }
+        /**
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Value List Type: List
+        * * Possible Values 
+        *   * Disabled
+        *   * Active
+        *   * Pending
+        * * Description: Status of the entity action filter (Pending, Active, Disabled).
+        */
+        get Status(): 'Disabled' | 'Active' | 'Pending' {  
+            return this.Get('Status');
+        }
+        set Status(value: 'Disabled' | 'Active' | 'Pending') {
+            this.Set('Status', value);
+        }
+        /**
+        * * Field Name: CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetime
+        */
+        get CreatedAt(): Date {  
+            return this.Get('CreatedAt');
+        }
+        
+        /**
+        * * Field Name: UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetime
+        */
+        get UpdatedAt(): Date {  
+            return this.Get('UpdatedAt');
+        }
+        
+
+    }
+        
+    /**
+     * Action Filters - strongly typed entity sub-class
+     * * Schema: __mj
+     * * Base Table: ActionFilter
+     * * Base View: vwActionFilters
+     * * @description Defines filters that can be evaluated ahead of executing an action. Action Filters are usable in any code pipeline you can execute them with the same context as the action itself and use the outcome to determine if the action should execute or not.
+     * * Primary Key: ID
+     * @extends {BaseEntity}
+     * @class
+     * @public
+     */
+    @RegisterClass(BaseEntity, 'Action Filters')
+    export class ActionFilterEntity extends BaseEntity {
+        /**
+        * Loads the Action Filters record from the database
+        * @param ID: number - primary key value to load the Action Filters record.
+        * @param EntityRelationshipsToLoad - (optional) the relationships to load
+        * @returns {Promise<boolean>} - true if successful, false otherwise
+        * @public
+        * @async
+        * @memberof ActionFilterEntity
+        * @method
+        * @override
+        */      
+        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+        }
+        
+            /**
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: int
+        */
+        get ID(): number {  
+            return this.Get('ID');
+        }
+        
+        /**
+        * * Field Name: UserDescription
+        * * Display Name: User Description
+        * * SQL Data Type: nvarchar(MAX)
+        */
+        get UserDescription(): string {  
+            return this.Get('UserDescription');
+        }
+        set UserDescription(value: string) {
+            this.Set('UserDescription', value);
+        }
+        /**
+        * * Field Name: UserComments
+        * * Display Name: User Comments
+        * * SQL Data Type: nvarchar(MAX)
+        */
+        get UserComments(): string | null {  
+            return this.Get('UserComments');
+        }
+        set UserComments(value: string | null) {
+            this.Set('UserComments', value);
+        }
+        /**
+        * * Field Name: Code
+        * * Display Name: Code
+        * * SQL Data Type: nvarchar(MAX)
+        */
+        get Code(): string {  
+            return this.Get('Code');
+        }
+        set Code(value: string) {
+            this.Set('Code', value);
+        }
+        /**
+        * * Field Name: CodeExplanation
+        * * Display Name: Code Explanation
+        * * SQL Data Type: nvarchar(MAX)
+        */
+        get CodeExplanation(): string | null {  
+            return this.Get('CodeExplanation');
+        }
+        set CodeExplanation(value: string | null) {
+            this.Set('CodeExplanation', value);
+        }
+        /**
+        * * Field Name: CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetime
+        */
+        get CreatedAt(): Date {  
+            return this.Get('CreatedAt');
+        }
+        
+        /**
+        * * Field Name: UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetime
+        */
+        get UpdatedAt(): Date {  
+            return this.Get('UpdatedAt');
+        }
+        
+
+    }
+        
+    /**
+     * Action Context Types - strongly typed entity sub-class
+     * * Schema: __mj
+     * * Base Table: ActionContextType
+     * * Base View: vwActionContextTypes
+     * * @description Lists possible contexts for action execution with optional descriptions.
+     * * Primary Key: ID
+     * @extends {BaseEntity}
+     * @class
+     * @public
+     */
+    @RegisterClass(BaseEntity, 'Action Context Types')
+    export class ActionContextTypeEntity extends BaseEntity {
+        /**
+        * Loads the Action Context Types record from the database
+        * @param ID: number - primary key value to load the Action Context Types record.
+        * @param EntityRelationshipsToLoad - (optional) the relationships to load
+        * @returns {Promise<boolean>} - true if successful, false otherwise
+        * @public
+        * @async
+        * @memberof ActionContextTypeEntity
+        * @method
+        * @override
+        */      
+        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+        }
+        
+            /**
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: int
+        */
+        get ID(): number {  
+            return this.Get('ID');
+        }
+        
+        /**
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Name of the context type.
+        */
+        get Name(): string {  
+            return this.Get('Name');
+        }
+        set Name(value: string) {
+            this.Set('Name', value);
+        }
+        /**
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Description of the context type.
+        */
+        get Description(): string | null {  
+            return this.Get('Description');
+        }
+        set Description(value: string | null) {
+            this.Set('Description', value);
+        }
+        /**
+        * * Field Name: CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetime
+        */
+        get CreatedAt(): Date {  
+            return this.Get('CreatedAt');
+        }
+        
+        /**
+        * * Field Name: UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetime
+        */
+        get UpdatedAt(): Date {  
+            return this.Get('UpdatedAt');
+        }
+        
+
+    }
+        
+    /**
+     * Action Result Codes - strongly typed entity sub-class
+     * * Schema: __mj
+     * * Base Table: ActionResultCode
+     * * Base View: vwActionResultCodes
+     * * @description Defines the possible result codes for each action.
+     * * Primary Key: ID
+     * @extends {BaseEntity}
+     * @class
+     * @public
+     */
+    @RegisterClass(BaseEntity, 'Action Result Codes')
+    export class ActionResultCodeEntity extends BaseEntity {
+        /**
+        * Loads the Action Result Codes record from the database
+        * @param ID: number - primary key value to load the Action Result Codes record.
+        * @param EntityRelationshipsToLoad - (optional) the relationships to load
+        * @returns {Promise<boolean>} - true if successful, false otherwise
+        * @public
+        * @async
+        * @memberof ActionResultCodeEntity
+        * @method
+        * @override
+        */      
+        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+        }
+        
+            /**
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: int
+        */
+        get ID(): number {  
+            return this.Get('ID');
+        }
+        
+        /**
+        * * Field Name: ActionID
+        * * Display Name: Action ID
+        * * SQL Data Type: int
+        * * Related Entity/Foreign Key: Actions (vwActions.ID)
+        */
+        get ActionID(): number {  
+            return this.Get('ActionID');
+        }
+        set ActionID(value: number) {
+            this.Set('ActionID', value);
+        }
+        /**
+        * * Field Name: ResultCode
+        * * Display Name: Result Code
+        * * SQL Data Type: nvarchar(255)
+        */
+        get ResultCode(): string {  
+            return this.Get('ResultCode');
+        }
+        set ResultCode(value: string) {
+            this.Set('ResultCode', value);
+        }
+        /**
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Description of the result code.
+        */
+        get Description(): string | null {  
+            return this.Get('Description');
+        }
+        set Description(value: string | null) {
+            this.Set('Description', value);
+        }
+        /**
+        * * Field Name: CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetime
+        */
+        get CreatedAt(): Date {  
+            return this.Get('CreatedAt');
+        }
+        
+        /**
+        * * Field Name: UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetime
+        */
+        get UpdatedAt(): Date {  
+            return this.Get('UpdatedAt');
+        }
+        
+        /**
+        * * Field Name: Action
+        * * Display Name: Action
+        * * SQL Data Type: nvarchar(425)
+        */
+        get Action(): string {  
+            return this.Get('Action');
+        }
+        
+
+    }
+        
+    /**
+     * Action Contexts - strongly typed entity sub-class
+     * * Schema: __mj
+     * * Base Table: ActionContext
+     * * Base View: vwActionContexts
+     * * @description Links actions to their supported context types enabling a given action to be executable in more than one context.
+     * * Primary Key: ID
+     * @extends {BaseEntity}
+     * @class
+     * @public
+     */
+    @RegisterClass(BaseEntity, 'Action Contexts')
+    export class ActionContextEntity extends BaseEntity {
+        /**
+        * Loads the Action Contexts record from the database
+        * @param ID: number - primary key value to load the Action Contexts record.
+        * @param EntityRelationshipsToLoad - (optional) the relationships to load
+        * @returns {Promise<boolean>} - true if successful, false otherwise
+        * @public
+        * @async
+        * @memberof ActionContextEntity
+        * @method
+        * @override
+        */      
+        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+        }
+        
+            /**
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: int
+        */
+        get ID(): number {  
+            return this.Get('ID');
+        }
+        
+        /**
+        * * Field Name: ActionID
+        * * Display Name: Action ID
+        * * SQL Data Type: int
+        * * Related Entity/Foreign Key: Actions (vwActions.ID)
+        */
+        get ActionID(): number {  
+            return this.Get('ActionID');
+        }
+        set ActionID(value: number) {
+            this.Set('ActionID', value);
+        }
+        /**
+        * * Field Name: ContextTypeID
+        * * Display Name: Context Type ID
+        * * SQL Data Type: int
+        * * Related Entity/Foreign Key: Action Context Types (vwActionContextTypes.ID)
+        */
+        get ContextTypeID(): number {  
+            return this.Get('ContextTypeID');
+        }
+        set ContextTypeID(value: number) {
+            this.Set('ContextTypeID', value);
+        }
+        /**
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Value List Type: List
+        * * Possible Values 
+        *   * Disabled
+        *   * Active
+        *   * Pending
+        * * Description: Status of the action context (Pending, Active, Disabled).
+        */
+        get Status(): 'Disabled' | 'Active' | 'Pending' {  
+            return this.Get('Status');
+        }
+        set Status(value: 'Disabled' | 'Active' | 'Pending') {
+            this.Set('Status', value);
+        }
+        /**
+        * * Field Name: CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetime
+        */
+        get CreatedAt(): Date {  
+            return this.Get('CreatedAt');
+        }
+        
+        /**
+        * * Field Name: UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetime
+        */
+        get UpdatedAt(): Date {  
+            return this.Get('UpdatedAt');
+        }
+        
+        /**
+        * * Field Name: Action
+        * * Display Name: Action
+        * * SQL Data Type: nvarchar(425)
+        */
+        get Action(): string {  
+            return this.Get('Action');
+        }
+        
+        /**
+        * * Field Name: ContextType
+        * * Display Name: Context Type
+        * * SQL Data Type: nvarchar(255)
+        */
+        get ContextType(): string {  
+            return this.Get('ContextType');
+        }
+        
+
+    }
+        
+    /**
+     * Action Execution Logs - strongly typed entity sub-class
+     * * Schema: __mj
+     * * Base Table: ActionExecutionLog
+     * * Base View: vwActionExecutionLogs
+     * * @description Tracks every execution of an action, including start and end times, inputs, outputs, and result codes.
+     * * Primary Key: ID
+     * @extends {BaseEntity}
+     * @class
+     * @public
+     */
+    @RegisterClass(BaseEntity, 'Action Execution Logs')
+    export class ActionExecutionLogEntity extends BaseEntity {
+        /**
+        * Loads the Action Execution Logs record from the database
+        * @param ID: number - primary key value to load the Action Execution Logs record.
+        * @param EntityRelationshipsToLoad - (optional) the relationships to load
+        * @returns {Promise<boolean>} - true if successful, false otherwise
+        * @public
+        * @async
+        * @memberof ActionExecutionLogEntity
+        * @method
+        * @override
+        */      
+        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+        }
+        
+            /**
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: int
+        */
+        get ID(): number {  
+            return this.Get('ID');
+        }
+        
+        /**
+        * * Field Name: ActionID
+        * * Display Name: Action ID
+        * * SQL Data Type: int
+        * * Related Entity/Foreign Key: Actions (vwActions.ID)
+        */
+        get ActionID(): number {  
+            return this.Get('ActionID');
+        }
+        set ActionID(value: number) {
+            this.Set('ActionID', value);
+        }
+        /**
+        * * Field Name: StartedAt
+        * * Display Name: Started At
+        * * SQL Data Type: datetime
+        * * Description: Timestamp of when the action started execution.
+        */
+        get StartedAt(): Date {  
+            return this.Get('StartedAt');
+        }
+        set StartedAt(value: Date) {
+            this.Set('StartedAt', value);
+        }
+        /**
+        * * Field Name: EndedAt
+        * * Display Name: Ended At
+        * * SQL Data Type: datetime
+        * * Description: Timestamp of when the action ended execution.
+        */
+        get EndedAt(): Date | null {  
+            return this.Get('EndedAt');
+        }
+        set EndedAt(value: Date | null) {
+            this.Set('EndedAt', value);
+        }
+        /**
+        * * Field Name: Params
+        * * Display Name: Params
+        * * SQL Data Type: nvarchar(MAX)
+        */
+        get Params(): string | null {  
+            return this.Get('Params');
+        }
+        set Params(value: string | null) {
+            this.Set('Params', value);
+        }
+        /**
+        * * Field Name: ResultCode
+        * * Display Name: Result Code
+        * * SQL Data Type: nvarchar(255)
+        */
+        get ResultCode(): string | null {  
+            return this.Get('ResultCode');
+        }
+        set ResultCode(value: string | null) {
+            this.Set('ResultCode', value);
+        }
+        /**
+        * * Field Name: UserID
+        * * Display Name: User ID
+        * * SQL Data Type: int
+        * * Related Entity/Foreign Key: Users (vwUsers.ID)
+        */
+        get UserID(): number {  
+            return this.Get('UserID');
+        }
+        set UserID(value: number) {
+            this.Set('UserID', value);
+        }
+        /**
+        * * Field Name: RetentionPeriod
+        * * Display Name: Retention Period
+        * * SQL Data Type: int
+        * * Description: Number of days to retain the log; NULL for indefinite retention.
+        */
+        get RetentionPeriod(): number | null {  
+            return this.Get('RetentionPeriod');
+        }
+        set RetentionPeriod(value: number | null) {
+            this.Set('RetentionPeriod', value);
+        }
+        /**
+        * * Field Name: CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetime
+        */
+        get CreatedAt(): Date {  
+            return this.Get('CreatedAt');
+        }
+        
+        /**
+        * * Field Name: UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetime
+        */
+        get UpdatedAt(): Date {  
+            return this.Get('UpdatedAt');
+        }
+        
+        /**
+        * * Field Name: Action
+        * * Display Name: Action
+        * * SQL Data Type: nvarchar(425)
+        */
+        get Action(): string {  
+            return this.Get('Action');
+        }
+        
+        /**
+        * * Field Name: User
+        * * Display Name: User
+        * * SQL Data Type: nvarchar(100)
+        */
+        get User(): string {  
+            return this.Get('User');
+        }
+        
+
+    }
+        
+    /**
+     * Action Params - strongly typed entity sub-class
+     * * Schema: __mj
+     * * Base Table: ActionParam
+     * * Base View: vwActionParams
+     * * @description Tracks the input and output parameters for Actions.
+     * * Primary Key: ID
+     * @extends {BaseEntity}
+     * @class
+     * @public
+     */
+    @RegisterClass(BaseEntity, 'Action Params')
+    export class ActionParamEntity extends BaseEntity {
+        /**
+        * Loads the Action Params record from the database
+        * @param ID: number - primary key value to load the Action Params record.
+        * @param EntityRelationshipsToLoad - (optional) the relationships to load
+        * @returns {Promise<boolean>} - true if successful, false otherwise
+        * @public
+        * @async
+        * @memberof ActionParamEntity
+        * @method
+        * @override
+        */      
+        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+        }
+        
+            /**
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: int
+        */
+        get ID(): number {  
+            return this.Get('ID');
+        }
+        
+        /**
+        * * Field Name: ActionID
+        * * Display Name: Action ID
+        * * SQL Data Type: int
+        * * Related Entity/Foreign Key: Actions (vwActions.ID)
+        */
+        get ActionID(): number {  
+            return this.Get('ActionID');
+        }
+        set ActionID(value: number) {
+            this.Set('ActionID', value);
+        }
+        /**
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(255)
+        */
+        get Name(): string {  
+            return this.Get('Name');
+        }
+        set Name(value: string) {
+            this.Set('Name', value);
+        }
+        /**
+        * * Field Name: DefaultValue
+        * * Display Name: Default Value
+        * * SQL Data Type: nvarchar(MAX)
+        */
+        get DefaultValue(): string | null {  
+            return this.Get('DefaultValue');
+        }
+        set DefaultValue(value: string | null) {
+            this.Set('DefaultValue', value);
+        }
+        /**
+        * * Field Name: Type
+        * * Display Name: Type
+        * * SQL Data Type: nchar(10)
+        * * Value List Type: List
+        * * Possible Values 
+        *   * Input
+        *   * Output
+        *   * Both
+        */
+        get Type(): 'Input' | 'Output' | 'Both' {  
+            return this.Get('Type');
+        }
+        set Type(value: 'Input' | 'Output' | 'Both') {
+            this.Set('Type', value);
+        }
+        /**
+        * * Field Name: ValueType
+        * * Display Name: Value Type
+        * * SQL Data Type: nvarchar(30)
+        * * Value List Type: List
+        * * Possible Values 
+        *   * Scalar
+        *   * Simple Object
+        *   * BaseEntity Sub-Class
+        *   * Other
+        * * Description: Tracks the basic value type of the parameter, additional information can be provided in the Description field
+        */
+        get ValueType(): 'Scalar' | 'Simple Object' | 'BaseEntity Sub-Class' | 'Other' {  
+            return this.Get('ValueType');
+        }
+        set ValueType(value: 'Scalar' | 'Simple Object' | 'BaseEntity Sub-Class' | 'Other') {
+            this.Set('ValueType', value);
+        }
+        /**
+        * * Field Name: IsArray
+        * * Display Name: Is Array
+        * * SQL Data Type: bit
+        */
+        get IsArray(): boolean {  
+            return this.Get('IsArray');
+        }
+        set IsArray(value: boolean) {
+            this.Set('IsArray', value);
+        }
+        /**
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        */
+        get Description(): string | null {  
+            return this.Get('Description');
+        }
+        set Description(value: string | null) {
+            this.Set('Description', value);
+        }
+        /**
+        * * Field Name: IsRequired
+        * * Display Name: Is Required
+        * * SQL Data Type: bit
+        */
+        get IsRequired(): boolean {  
+            return this.Get('IsRequired');
+        }
+        set IsRequired(value: boolean) {
+            this.Set('IsRequired', value);
+        }
+        /**
+        * * Field Name: CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetime
+        */
+        get CreatedAt(): Date {  
+            return this.Get('CreatedAt');
+        }
+        
+        /**
+        * * Field Name: UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetime
+        */
+        get UpdatedAt(): Date {  
+            return this.Get('UpdatedAt');
+        }
+        
+        /**
+        * * Field Name: Action
+        * * Display Name: Action
+        * * SQL Data Type: nvarchar(425)
+        */
+        get Action(): string {  
+            return this.Get('Action');
+        }
+        
+
+    }
+        
+    /**
+     * Action Libraries - strongly typed entity sub-class
+     * * Schema: __mj
+     * * Base Table: ActionLibrary
+     * * Base View: vwActionLibraries
+     * * @description Tracks the list of libraries that a given Action uses, including a list of classes/functions for each library.
+     * * Primary Key: ID
+     * @extends {BaseEntity}
+     * @class
+     * @public
+     */
+    @RegisterClass(BaseEntity, 'Action Libraries')
+    export class ActionLibraryEntity extends BaseEntity {
+        /**
+        * Loads the Action Libraries record from the database
+        * @param ID: number - primary key value to load the Action Libraries record.
+        * @param EntityRelationshipsToLoad - (optional) the relationships to load
+        * @returns {Promise<boolean>} - true if successful, false otherwise
+        * @public
+        * @async
+        * @memberof ActionLibraryEntity
+        * @method
+        * @override
+        */      
+        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+        }
+        
+            /**
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: int
+        */
+        get ID(): number {  
+            return this.Get('ID');
+        }
+        
+        /**
+        * * Field Name: ActionID
+        * * Display Name: Action ID
+        * * SQL Data Type: int
+        * * Related Entity/Foreign Key: Actions (vwActions.ID)
+        */
+        get ActionID(): number {  
+            return this.Get('ActionID');
+        }
+        set ActionID(value: number) {
+            this.Set('ActionID', value);
+        }
+        /**
+        * * Field Name: LibraryID
+        * * Display Name: Library ID
+        * * SQL Data Type: int
+        * * Related Entity/Foreign Key: Libraries (vwLibraries.ID)
+        */
+        get LibraryID(): number {  
+            return this.Get('LibraryID');
+        }
+        set LibraryID(value: number) {
+            this.Set('LibraryID', value);
+        }
+        /**
+        * * Field Name: ItemsUsed
+        * * Display Name: Items Used
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: List of classes and functions used by the action from the library.
+        */
+        get ItemsUsed(): string | null {  
+            return this.Get('ItemsUsed');
+        }
+        set ItemsUsed(value: string | null) {
+            this.Set('ItemsUsed', value);
+        }
+        /**
+        * * Field Name: CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetime
+        */
+        get CreatedAt(): Date {  
+            return this.Get('CreatedAt');
+        }
+        
+        /**
+        * * Field Name: UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetime
+        */
+        get UpdatedAt(): Date {  
+            return this.Get('UpdatedAt');
+        }
+        
+        /**
+        * * Field Name: Action
+        * * Display Name: Action
+        * * SQL Data Type: nvarchar(425)
+        */
+        get Action(): string {  
+            return this.Get('Action');
+        }
+        
+        /**
+        * * Field Name: Library
+        * * Display Name: Library
+        * * SQL Data Type: nvarchar(255)
+        */
+        get Library(): string {  
+            return this.Get('Library');
+        }
+        
+
+    }
+        
+    /**
+     * Libraries - strongly typed entity sub-class
+     * * Schema: __mj
+     * * Base Table: Library
+     * * Base View: vwLibraries
+     * * @description Stores information about the available libraries, including a list of classes/functions, type definitions, and sample code. You can add additional custom libraries here to make them avaialable to code generation features within the system.
+     * * Primary Key: ID
+     * @extends {BaseEntity}
+     * @class
+     * @public
+     */
+    @RegisterClass(BaseEntity, 'Libraries')
+    export class LibraryEntity extends BaseEntity {
+        /**
+        * Loads the Libraries record from the database
+        * @param ID: number - primary key value to load the Libraries record.
+        * @param EntityRelationshipsToLoad - (optional) the relationships to load
+        * @returns {Promise<boolean>} - true if successful, false otherwise
+        * @public
+        * @async
+        * @memberof LibraryEntity
+        * @method
+        * @override
+        */      
+        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+        }
+            
+        /**
+        * Libraries - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
+        * @public
+        * @method
+        * @override
+        * @memberof LibraryEntity
+        * @throws {Error} - Delete is not allowed for Libraries, to enable it set AllowDeleteAPI to 1 in the database.
+        */
+        public async Delete(): Promise<boolean> {
+            throw new Error('Delete is not allowed for Libraries, to enable it set AllowDeleteAPI to 1 in the database.');
+        } 
+            
+            /**
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: int
+        */
+        get ID(): number {  
+            return this.Get('ID');
+        }
+        
+        /**
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(255)
+        */
+        get Name(): string {  
+            return this.Get('Name');
+        }
+        set Name(value: string) {
+            this.Set('Name', value);
+        }
+        /**
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        */
+        get Description(): string | null {  
+            return this.Get('Description');
+        }
+        set Description(value: string | null) {
+            this.Set('Description', value);
+        }
+        /**
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Value List Type: List
+        * * Possible Values 
+        *   * Pending
+        *   * Active
+        *   * Disabled
+        * * Description: Status of the library, only libraries marked as Active will be available for use by generated code. If a library was once active but no longer is, existing code that used the library will not be affected.
+        */
+        get Status(): 'Pending' | 'Active' | 'Disabled' {  
+            return this.Get('Status');
+        }
+        set Status(value: 'Pending' | 'Active' | 'Disabled') {
+            this.Set('Status', value);
+        }
+        /**
+        * * Field Name: ExportedItems
+        * * Display Name: Exported Items
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: List of classes and functions exported by the library.
+        */
+        get ExportedItems(): string | null {  
+            return this.Get('ExportedItems');
+        }
+        set ExportedItems(value: string | null) {
+            this.Set('ExportedItems', value);
+        }
+        /**
+        * * Field Name: TypeDefinitions
+        * * Display Name: Type Definitions
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Code showing the types and functions defined in the library to be used for reference by humans and AI
+        */
+        get TypeDefinitions(): string | null {  
+            return this.Get('TypeDefinitions');
+        }
+        set TypeDefinitions(value: string | null) {
+            this.Set('TypeDefinitions', value);
+        }
+        /**
+        * * Field Name: SampleCode
+        * * Display Name: Sample Code
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Examples of code use of the classes and/or functions from within the library
+        */
+        get SampleCode(): string | null {  
+            return this.Get('SampleCode');
+        }
+        set SampleCode(value: string | null) {
+            this.Set('SampleCode', value);
+        }
+        /**
+        * * Field Name: CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetime
+        */
+        get CreatedAt(): Date {  
+            return this.Get('CreatedAt');
+        }
+        
+        /**
+        * * Field Name: UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetime
+        */
+        get UpdatedAt(): Date {  
+            return this.Get('UpdatedAt');
+        }
+        
+
+    }
+        
+    /**
+     * List Categories - strongly typed entity sub-class
+     * * Schema: __mj
+     * * Base Table: ListCategory
+     * * Base View: vwListCategories
+     * * Primary Key: ID
+     * @extends {BaseEntity}
+     * @class
+     * @public
+     */
+    @RegisterClass(BaseEntity, 'List Categories')
+    export class ListCategoryEntity extends BaseEntity {
+        /**
+        * Loads the List Categories record from the database
+        * @param ID: number - primary key value to load the List Categories record.
+        * @param EntityRelationshipsToLoad - (optional) the relationships to load
+        * @returns {Promise<boolean>} - true if successful, false otherwise
+        * @public
+        * @async
+        * @memberof ListCategoryEntity
+        * @method
+        * @override
+        */      
+        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+        }
+            
+        /**
+        * List Categories - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
+        * @public
+        * @method
+        * @override
+        * @memberof ListCategoryEntity
+        * @throws {Error} - Delete is not allowed for List Categories, to enable it set AllowDeleteAPI to 1 in the database.
+        */
+        public async Delete(): Promise<boolean> {
+            throw new Error('Delete is not allowed for List Categories, to enable it set AllowDeleteAPI to 1 in the database.');
+        } 
+            
+            /**
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: int
+        */
+        get ID(): number {  
+            return this.Get('ID');
+        }
+        
+        /**
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(100)
+        */
+        get Name(): string {  
+            return this.Get('Name');
+        }
+        set Name(value: string) {
+            this.Set('Name', value);
+        }
+        /**
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        */
+        get Description(): string | null {  
+            return this.Get('Description');
+        }
+        set Description(value: string | null) {
+            this.Set('Description', value);
+        }
+        /**
+        * * Field Name: ParentID
+        * * Display Name: Parent ID
+        * * SQL Data Type: int
+        */
+        get ParentID(): number | null {  
+            return this.Get('ParentID');
+        }
+        set ParentID(value: number | null) {
+            this.Set('ParentID', value);
+        }
+        /**
+        * * Field Name: CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetime
+        */
+        get CreatedAt(): Date {  
+            return this.Get('CreatedAt');
+        }
+        
+        /**
+        * * Field Name: UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetime
+        */
+        get UpdatedAt(): Date {  
+            return this.Get('UpdatedAt');
+        }
+        
+        /**
+        * * Field Name: UserID
+        * * Display Name: User ID
+        * * SQL Data Type: int
+        */
+        get UserID(): number {  
+            return this.Get('UserID');
+        }
+        set UserID(value: number) {
+            this.Set('UserID', value);
+        }
+
+    }
+        
+    /**
+     * Communication Templates - strongly typed entity sub-class
+     * * Schema: __mj
+     * * Base Table: CommunicationTemplate
+     * * Base View: vwCommunicationTemplates
+     * * @description Reusable templates for communication.
+     * * Primary Key: ID
+     * @extends {BaseEntity}
+     * @class
+     * @public
+     */
+    @RegisterClass(BaseEntity, 'Communication Templates')
+    export class CommunicationTemplateEntity extends BaseEntity {
+        /**
+        * Loads the Communication Templates record from the database
+        * @param ID: number - primary key value to load the Communication Templates record.
+        * @param EntityRelationshipsToLoad - (optional) the relationships to load
+        * @returns {Promise<boolean>} - true if successful, false otherwise
+        * @public
+        * @async
+        * @memberof CommunicationTemplateEntity
+        * @method
+        * @override
+        */      
+        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+        }
+            
+        /**
+        * Communication Templates - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
+        * @public
+        * @method
+        * @override
+        * @memberof CommunicationTemplateEntity
+        * @throws {Error} - Delete is not allowed for Communication Templates, to enable it set AllowDeleteAPI to 1 in the database.
+        */
+        public async Delete(): Promise<boolean> {
+            throw new Error('Delete is not allowed for Communication Templates, to enable it set AllowDeleteAPI to 1 in the database.');
+        } 
+            
+            /**
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: int
+        */
+        get ID(): number {  
+            return this.Get('ID');
+        }
+        
+        /**
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(255)
+        */
+        get Name(): string {  
+            return this.Get('Name');
+        }
+        set Name(value: string) {
+            this.Set('Name', value);
+        }
+        /**
+        * * Field Name: Content
+        * * Display Name: Content
+        * * SQL Data Type: nvarchar(MAX)
+        */
+        get Content(): string {  
+            return this.Get('Content');
+        }
+        set Content(value: string) {
+            this.Set('Content', value);
+        }
+        /**
+        * * Field Name: ParentID
+        * * Display Name: Parent ID
+        * * SQL Data Type: int
+        * * Related Entity/Foreign Key: Communication Templates (vwCommunicationTemplates.ID)
+        */
+        get ParentID(): number | null {  
+            return this.Get('ParentID');
+        }
+        set ParentID(value: number | null) {
+            this.Set('ParentID', value);
+        }
+        /**
+        * * Field Name: Comments
+        * * Display Name: Comments
+        * * SQL Data Type: nvarchar(MAX)
+        */
+        get Comments(): string | null {  
+            return this.Get('Comments');
+        }
+        set Comments(value: string | null) {
+            this.Set('Comments', value);
+        }
+        /**
+        * * Field Name: CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetime
+        */
+        get CreatedAt(): Date {  
+            return this.Get('CreatedAt');
+        }
+        
+        /**
+        * * Field Name: UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetime
+        */
+        get UpdatedAt(): Date {  
+            return this.Get('UpdatedAt');
+        }
+        
+        /**
+        * * Field Name: Parent
+        * * Display Name: Parent
+        * * SQL Data Type: nvarchar(255)
+        */
+        get Parent(): string | null {  
+            return this.Get('Parent');
+        }
+        
+
+    }
+        
+    /**
+     * Communication Providers - strongly typed entity sub-class
+     * * Schema: __mj
+     * * Base Table: CommunicationProvider
+     * * Base View: vwCommunicationProviders
+     * * @description All supported communication providers.
+     * * Primary Key: ID
+     * @extends {BaseEntity}
+     * @class
+     * @public
+     */
+    @RegisterClass(BaseEntity, 'Communication Providers')
+    export class CommunicationProviderEntity extends BaseEntity {
+        /**
+        * Loads the Communication Providers record from the database
+        * @param ID: number - primary key value to load the Communication Providers record.
+        * @param EntityRelationshipsToLoad - (optional) the relationships to load
+        * @returns {Promise<boolean>} - true if successful, false otherwise
+        * @public
+        * @async
+        * @memberof CommunicationProviderEntity
+        * @method
+        * @override
+        */      
+        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+        }
+            
+        /**
+        * Communication Providers - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
+        * @public
+        * @method
+        * @override
+        * @memberof CommunicationProviderEntity
+        * @throws {Error} - Delete is not allowed for Communication Providers, to enable it set AllowDeleteAPI to 1 in the database.
+        */
+        public async Delete(): Promise<boolean> {
+            throw new Error('Delete is not allowed for Communication Providers, to enable it set AllowDeleteAPI to 1 in the database.');
+        } 
+            
+            /**
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: int
+        */
+        get ID(): number {  
+            return this.Get('ID');
+        }
+        
+        /**
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(255)
+        */
+        get Name(): string {  
+            return this.Get('Name');
+        }
+        set Name(value: string) {
+            this.Set('Name', value);
+        }
+        /**
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        */
+        get Description(): string | null {  
+            return this.Get('Description');
+        }
+        set Description(value: string | null) {
+            this.Set('Description', value);
+        }
+        /**
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Value List Type: List
+        * * Possible Values 
+        *   * Disabled
+        *   * Active
+        * * Description: The status of the communication provider (Disabled or Active).
+        */
+        get Status(): 'Disabled' | 'Active' {  
+            return this.Get('Status');
+        }
+        set Status(value: 'Disabled' | 'Active') {
+            this.Set('Status', value);
+        }
+        /**
+        * * Field Name: SupportsSending
+        * * Display Name: Supports Sending
+        * * SQL Data Type: bit
+        * * Description: Indicates if the provider supports sending messages.
+        */
+        get SupportsSending(): boolean {  
+            return this.Get('SupportsSending');
+        }
+        set SupportsSending(value: boolean) {
+            this.Set('SupportsSending', value);
+        }
+        /**
+        * * Field Name: SupportsReceiving
+        * * Display Name: Supports Receiving
+        * * SQL Data Type: bit
+        * * Description: Indicates if the provider supports receiving messages.
+        */
+        get SupportsReceiving(): boolean {  
+            return this.Get('SupportsReceiving');
+        }
+        set SupportsReceiving(value: boolean) {
+            this.Set('SupportsReceiving', value);
+        }
+        /**
+        * * Field Name: CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetime
+        */
+        get CreatedAt(): Date {  
+            return this.Get('CreatedAt');
+        }
+        
+        /**
+        * * Field Name: UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetime
+        */
+        get UpdatedAt(): Date {  
+            return this.Get('UpdatedAt');
+        }
+        
+
+    }
+        
+    /**
+     * Communication Runs - strongly typed entity sub-class
+     * * Schema: __mj
+     * * Base Table: CommunicationRun
+     * * Base View: vwCommunicationRuns
+     * * @description Runs of bulk message sends and receives.
+     * * Primary Key: ID
+     * @extends {BaseEntity}
+     * @class
+     * @public
+     */
+    @RegisterClass(BaseEntity, 'Communication Runs')
+    export class CommunicationRunEntity extends BaseEntity {
+        /**
+        * Loads the Communication Runs record from the database
+        * @param ID: number - primary key value to load the Communication Runs record.
+        * @param EntityRelationshipsToLoad - (optional) the relationships to load
+        * @returns {Promise<boolean>} - true if successful, false otherwise
+        * @public
+        * @async
+        * @memberof CommunicationRunEntity
+        * @method
+        * @override
+        */      
+        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+        }
+            
+        /**
+        * Communication Runs - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
+        * @public
+        * @method
+        * @override
+        * @memberof CommunicationRunEntity
+        * @throws {Error} - Delete is not allowed for Communication Runs, to enable it set AllowDeleteAPI to 1 in the database.
+        */
+        public async Delete(): Promise<boolean> {
+            throw new Error('Delete is not allowed for Communication Runs, to enable it set AllowDeleteAPI to 1 in the database.');
+        } 
+            
+            /**
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: int
+        */
+        get ID(): number {  
+            return this.Get('ID');
+        }
+        
+        /**
+        * * Field Name: UserID
+        * * Display Name: User ID
+        * * SQL Data Type: int
+        * * Related Entity/Foreign Key: Users (vwUsers.ID)
+        */
+        get UserID(): number {  
+            return this.Get('UserID');
+        }
+        set UserID(value: number) {
+            this.Set('UserID', value);
+        }
+        /**
+        * * Field Name: Direction
+        * * Display Name: Direction
+        * * SQL Data Type: nvarchar(20)
+        * * Value List Type: List
+        * * Possible Values 
+        *   * Sending
+        *   * Receiving
+        * * Description: The direction of the communication run (Sending or Receiving).
+        */
+        get Direction(): 'Sending' | 'Receiving' {  
+            return this.Get('Direction');
+        }
+        set Direction(value: 'Sending' | 'Receiving') {
+            this.Set('Direction', value);
+        }
+        /**
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Value List Type: List
+        * * Possible Values 
+        *   * Pending
+        *   * In-Progress
+        *   * Complete
+        *   * Failed
+        * * Description: The status of the communication run (Pending, In-Progress, Complete, Failed).
+        */
+        get Status(): 'Pending' | 'In-Progress' | 'Complete' | 'Failed' {  
+            return this.Get('Status');
+        }
+        set Status(value: 'Pending' | 'In-Progress' | 'Complete' | 'Failed') {
+            this.Set('Status', value);
+        }
+        /**
+        * * Field Name: Comments
+        * * Display Name: Comments
+        * * SQL Data Type: nvarchar(MAX)
+        */
+        get Comments(): string | null {  
+            return this.Get('Comments');
+        }
+        set Comments(value: string | null) {
+            this.Set('Comments', value);
+        }
+        /**
+        * * Field Name: ErrorMessage
+        * * Display Name: Error Message
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: The error message if the communication run failed.
+        */
+        get ErrorMessage(): string | null {  
+            return this.Get('ErrorMessage');
+        }
+        set ErrorMessage(value: string | null) {
+            this.Set('ErrorMessage', value);
+        }
+        /**
+        * * Field Name: CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetime
+        */
+        get CreatedAt(): Date {  
+            return this.Get('CreatedAt');
+        }
+        
+        /**
+        * * Field Name: UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetime
+        */
+        get UpdatedAt(): Date {  
+            return this.Get('UpdatedAt');
+        }
+        
+        /**
+        * * Field Name: User
+        * * Display Name: User
+        * * SQL Data Type: nvarchar(100)
+        */
+        get User(): string {  
+            return this.Get('User');
+        }
+        
+
+    }
+        
+    /**
+     * Communication Provider Message Types - strongly typed entity sub-class
+     * * Schema: __mj
+     * * Base Table: CommunicationProviderMessageType
+     * * Base View: vwCommunicationProviderMessageTypes
+     * * @description Providers and their supported message types with additional attributes.
+     * * Primary Key: ID
+     * @extends {BaseEntity}
+     * @class
+     * @public
+     */
+    @RegisterClass(BaseEntity, 'Communication Provider Message Types')
+    export class CommunicationProviderMessageTypeEntity extends BaseEntity {
+        /**
+        * Loads the Communication Provider Message Types record from the database
+        * @param ID: number - primary key value to load the Communication Provider Message Types record.
+        * @param EntityRelationshipsToLoad - (optional) the relationships to load
+        * @returns {Promise<boolean>} - true if successful, false otherwise
+        * @public
+        * @async
+        * @memberof CommunicationProviderMessageTypeEntity
+        * @method
+        * @override
+        */      
+        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+        }
+            
+        /**
+        * Communication Provider Message Types - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
+        * @public
+        * @method
+        * @override
+        * @memberof CommunicationProviderMessageTypeEntity
+        * @throws {Error} - Delete is not allowed for Communication Provider Message Types, to enable it set AllowDeleteAPI to 1 in the database.
+        */
+        public async Delete(): Promise<boolean> {
+            throw new Error('Delete is not allowed for Communication Provider Message Types, to enable it set AllowDeleteAPI to 1 in the database.');
+        } 
+            
+            /**
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: int
+        */
+        get ID(): number {  
+            return this.Get('ID');
+        }
+        
+        /**
+        * * Field Name: CommunicationProviderID
+        * * Display Name: Communication Provider ID
+        * * SQL Data Type: int
+        * * Related Entity/Foreign Key: Communication Providers (vwCommunicationProviders.ID)
+        */
+        get CommunicationProviderID(): number {  
+            return this.Get('CommunicationProviderID');
+        }
+        set CommunicationProviderID(value: number) {
+            this.Set('CommunicationProviderID', value);
+        }
+        /**
+        * * Field Name: CommunicationBaseMessageTypeID
+        * * Display Name: Communication Base Message Type ID
+        * * SQL Data Type: int
+        * * Related Entity/Foreign Key: Communication Base Message Types (vwCommunicationBaseMessageTypes.ID)
+        */
+        get CommunicationBaseMessageTypeID(): number {  
+            return this.Get('CommunicationBaseMessageTypeID');
+        }
+        set CommunicationBaseMessageTypeID(value: number) {
+            this.Set('CommunicationBaseMessageTypeID', value);
+        }
+        /**
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(255)
+        */
+        get Name(): string {  
+            return this.Get('Name');
+        }
+        set Name(value: string) {
+            this.Set('Name', value);
+        }
+        /**
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Value List Type: List
+        * * Possible Values 
+        *   * Disabled
+        *   * Active
+        * * Description: The status of the provider message type (Disabled or Active).
+        */
+        get Status(): 'Disabled' | 'Active' {  
+            return this.Get('Status');
+        }
+        set Status(value: 'Disabled' | 'Active') {
+            this.Set('Status', value);
+        }
+        /**
+        * * Field Name: AdditionalAttributes
+        * * Display Name: Additional Attributes
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Additional attributes specific to the provider message type.
+        */
+        get AdditionalAttributes(): string | null {  
+            return this.Get('AdditionalAttributes');
+        }
+        set AdditionalAttributes(value: string | null) {
+            this.Set('AdditionalAttributes', value);
+        }
+        /**
+        * * Field Name: CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetime
+        */
+        get CreatedAt(): Date {  
+            return this.Get('CreatedAt');
+        }
+        
+        /**
+        * * Field Name: UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetime
+        */
+        get UpdatedAt(): Date {  
+            return this.Get('UpdatedAt');
+        }
+        
+        /**
+        * * Field Name: CommunicationProvider
+        * * Display Name: Communication Provider
+        * * SQL Data Type: nvarchar(255)
+        */
+        get CommunicationProvider(): string {  
+            return this.Get('CommunicationProvider');
+        }
+        
+        /**
+        * * Field Name: CommunicationBaseMessageType
+        * * Display Name: Communication Base Message Type
+        * * SQL Data Type: nvarchar(100)
+        */
+        get CommunicationBaseMessageType(): string {  
+            return this.Get('CommunicationBaseMessageType');
+        }
+        
+
+    }
+        
+    /**
+     * Communication Logs - strongly typed entity sub-class
+     * * Schema: __mj
+     * * Base Table: CommunicationLog
+     * * Base View: vwCommunicationLogs
+     * * @description Logs of sent and received messages.
+     * * Primary Key: ID
+     * @extends {BaseEntity}
+     * @class
+     * @public
+     */
+    @RegisterClass(BaseEntity, 'Communication Logs')
+    export class CommunicationLogEntity extends BaseEntity {
+        /**
+        * Loads the Communication Logs record from the database
+        * @param ID: number - primary key value to load the Communication Logs record.
+        * @param EntityRelationshipsToLoad - (optional) the relationships to load
+        * @returns {Promise<boolean>} - true if successful, false otherwise
+        * @public
+        * @async
+        * @memberof CommunicationLogEntity
+        * @method
+        * @override
+        */      
+        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+        }
+            
+        /**
+        * Communication Logs - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
+        * @public
+        * @method
+        * @override
+        * @memberof CommunicationLogEntity
+        * @throws {Error} - Delete is not allowed for Communication Logs, to enable it set AllowDeleteAPI to 1 in the database.
+        */
+        public async Delete(): Promise<boolean> {
+            throw new Error('Delete is not allowed for Communication Logs, to enable it set AllowDeleteAPI to 1 in the database.');
+        } 
+            
+            /**
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: int
+        */
+        get ID(): number {  
+            return this.Get('ID');
+        }
+        
+        /**
+        * * Field Name: CommunicationProviderID
+        * * Display Name: Communication Provider ID
+        * * SQL Data Type: int
+        * * Related Entity/Foreign Key: Communication Providers (vwCommunicationProviders.ID)
+        */
+        get CommunicationProviderID(): number {  
+            return this.Get('CommunicationProviderID');
+        }
+        set CommunicationProviderID(value: number) {
+            this.Set('CommunicationProviderID', value);
+        }
+        /**
+        * * Field Name: CommunicationProviderMessageTypeID
+        * * Display Name: Communication Provider Message Type ID
+        * * SQL Data Type: int
+        * * Related Entity/Foreign Key: Communication Provider Message Types (vwCommunicationProviderMessageTypes.ID)
+        */
+        get CommunicationProviderMessageTypeID(): number {  
+            return this.Get('CommunicationProviderMessageTypeID');
+        }
+        set CommunicationProviderMessageTypeID(value: number) {
+            this.Set('CommunicationProviderMessageTypeID', value);
+        }
+        /**
+        * * Field Name: CommunicationRunID
+        * * Display Name: Communication Run ID
+        * * SQL Data Type: int
+        * * Related Entity/Foreign Key: Communication Runs (vwCommunicationRuns.ID)
+        */
+        get CommunicationRunID(): number | null {  
+            return this.Get('CommunicationRunID');
+        }
+        set CommunicationRunID(value: number | null) {
+            this.Set('CommunicationRunID', value);
+        }
+        /**
+        * * Field Name: Direction
+        * * Display Name: Direction
+        * * SQL Data Type: nvarchar(20)
+        * * Value List Type: List
+        * * Possible Values 
+        *   * Sending
+        *   * Receiving
+        * * Description: The direction of the communication log (Sending or Receiving).
+        */
+        get Direction(): 'Sending' | 'Receiving' {  
+            return this.Get('Direction');
+        }
+        set Direction(value: 'Sending' | 'Receiving') {
+            this.Set('Direction', value);
+        }
+        /**
+        * * Field Name: MessageDate
+        * * Display Name: Message Date
+        * * SQL Data Type: datetime
+        * * Description: The date and time when the message was logged.
+        */
+        get MessageDate(): Date {  
+            return this.Get('MessageDate');
+        }
+        set MessageDate(value: Date) {
+            this.Set('MessageDate', value);
+        }
+        /**
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(50)
+        * * Value List Type: List
+        * * Possible Values 
+        *   * Pending
+        *   * In-Progress
+        *   * Complete
+        *   * Failed
+        * * Description: The status of the logged message (Pending, In-Progress, Complete, Failed).
+        */
+        get Status(): 'Pending' | 'In-Progress' | 'Complete' | 'Failed' {  
+            return this.Get('Status');
+        }
+        set Status(value: 'Pending' | 'In-Progress' | 'Complete' | 'Failed') {
+            this.Set('Status', value);
+        }
+        /**
+        * * Field Name: MessageContent
+        * * Display Name: Message Content
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: The content of the logged message.
+        */
+        get MessageContent(): string | null {  
+            return this.Get('MessageContent');
+        }
+        set MessageContent(value: string | null) {
+            this.Set('MessageContent', value);
+        }
+        /**
+        * * Field Name: ErrorMessage
+        * * Display Name: Error Message
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: The error message if the message sending failed.
+        */
+        get ErrorMessage(): string | null {  
+            return this.Get('ErrorMessage');
+        }
+        set ErrorMessage(value: string | null) {
+            this.Set('ErrorMessage', value);
+        }
+        /**
+        * * Field Name: CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetime
+        */
+        get CreatedAt(): Date {  
+            return this.Get('CreatedAt');
+        }
+        
+        /**
+        * * Field Name: UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetime
+        */
+        get UpdatedAt(): Date {  
+            return this.Get('UpdatedAt');
+        }
+        
+        /**
+        * * Field Name: CommunicationProvider
+        * * Display Name: Communication Provider
+        * * SQL Data Type: nvarchar(255)
+        */
+        get CommunicationProvider(): string {  
+            return this.Get('CommunicationProvider');
+        }
+        
+        /**
+        * * Field Name: CommunicationProviderMessageType
+        * * Display Name: Communication Provider Message Type
+        * * SQL Data Type: nvarchar(255)
+        */
+        get CommunicationProviderMessageType(): string {  
+            return this.Get('CommunicationProviderMessageType');
+        }
+        
+
+    }
+        
+    /**
+     * Communication Base Message Types - strongly typed entity sub-class
+     * * Schema: __mj
+     * * Base Table: CommunicationBaseMessageType
+     * * Base View: vwCommunicationBaseMessageTypes
+     * * @description Base message types and their supported functionalities.
+     * * Primary Key: ID
+     * @extends {BaseEntity}
+     * @class
+     * @public
+     */
+    @RegisterClass(BaseEntity, 'Communication Base Message Types')
+    export class CommunicationBaseMessageTypeEntity extends BaseEntity {
+        /**
+        * Loads the Communication Base Message Types record from the database
+        * @param ID: number - primary key value to load the Communication Base Message Types record.
+        * @param EntityRelationshipsToLoad - (optional) the relationships to load
+        * @returns {Promise<boolean>} - true if successful, false otherwise
+        * @public
+        * @async
+        * @memberof CommunicationBaseMessageTypeEntity
+        * @method
+        * @override
+        */      
+        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+        }
+            
+        /**
+        * Communication Base Message Types - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
+        * @public
+        * @method
+        * @override
+        * @memberof CommunicationBaseMessageTypeEntity
+        * @throws {Error} - Delete is not allowed for Communication Base Message Types, to enable it set AllowDeleteAPI to 1 in the database.
+        */
+        public async Delete(): Promise<boolean> {
+            throw new Error('Delete is not allowed for Communication Base Message Types, to enable it set AllowDeleteAPI to 1 in the database.');
+        } 
+            
+            /**
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: int
+        */
+        get ID(): number {  
+            return this.Get('ID');
+        }
+        
+        /**
+        * * Field Name: Type
+        * * Display Name: Type
+        * * SQL Data Type: nvarchar(100)
+        */
+        get Type(): string {  
+            return this.Get('Type');
+        }
+        set Type(value: string) {
+            this.Set('Type', value);
+        }
+        /**
+        * * Field Name: SupportsAttachments
+        * * Display Name: Supports Attachments
+        * * SQL Data Type: bit
+        * * Description: Indicates if attachments are supported.
+        */
+        get SupportsAttachments(): boolean {  
+            return this.Get('SupportsAttachments');
+        }
+        set SupportsAttachments(value: boolean) {
+            this.Set('SupportsAttachments', value);
+        }
+        /**
+        * * Field Name: SupportsSubjectLine
+        * * Display Name: Supports Subject Line
+        * * SQL Data Type: bit
+        * * Description: Indicates if a subject line is supported.
+        */
+        get SupportsSubjectLine(): boolean {  
+            return this.Get('SupportsSubjectLine');
+        }
+        set SupportsSubjectLine(value: boolean) {
+            this.Set('SupportsSubjectLine', value);
+        }
+        /**
+        * * Field Name: SupportsHtml
+        * * Display Name: Supports Html
+        * * SQL Data Type: bit
+        * * Description: Indicates if HTML content is supported.
+        */
+        get SupportsHtml(): boolean {  
+            return this.Get('SupportsHtml');
+        }
+        set SupportsHtml(value: boolean) {
+            this.Set('SupportsHtml', value);
+        }
+        /**
+        * * Field Name: MaxBytes
+        * * Display Name: Max Bytes
+        * * SQL Data Type: int
+        * * Description: The maximum size in bytes for the message.
+        */
+        get MaxBytes(): number | null {  
+            return this.Get('MaxBytes');
+        }
+        set MaxBytes(value: number | null) {
+            this.Set('MaxBytes', value);
+        }
+        /**
+        * * Field Name: CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetime
+        */
+        get CreatedAt(): Date {  
+            return this.Get('CreatedAt');
+        }
+        
+        /**
+        * * Field Name: UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetime
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');

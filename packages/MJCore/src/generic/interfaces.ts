@@ -1,5 +1,5 @@
-import { BaseEntity, EntityField } from "./baseEntity";
-import { EntityDependency, EntityFieldInfo, EntityInfo, KeyValuePair, RecordChange, RecordDependency, RecordMergeRequest, RecordMergeResult } from "./entityInfo";
+import { BaseEntity } from "./baseEntity";
+import { EntityDependency, EntityInfo,  RecordChange, RecordDependency, RecordMergeRequest, RecordMergeResult } from "./entityInfo";
 import { ApplicationInfo } from "./applicationInfo";
 import { RunViewParams } from "../views/runView";
 import { AuditLogTypeInfo, AuthorizationInfo, RoleInfo, RowLevelSecurityFilterInfo, UserInfo } from "./securityInfo";
@@ -7,6 +7,8 @@ import { TransactionGroupBase } from "./transactionGroup";
 import { RunReportParams } from "./runReport";
 import { QueryCategoryInfo, QueryFieldInfo, QueryInfo, QueryPermissionInfo } from "./queryInfo";
 import { RunQueryParams } from "./runQuery";
+import { LibraryInfo } from "./libraryInfo";
+import { CompositeKey } from "./compositeKey";
 
 export class ProviderConfigDataBase {
     private _includeSchemas: string[] = [];
@@ -48,211 +50,6 @@ export const ProviderType = {
 
 export type ProviderType = typeof ProviderType[keyof typeof ProviderType];
 
-export class CompositeKey {
-
-    KeyValuePairs: KeyValuePair[];
-
-    constructor(keyValuePairs?: KeyValuePair[]) {
-        this.KeyValuePairs = keyValuePairs || [];
-    }
-
-    /**
-     * returns the value of the key value pair for the specified field name
-     * @param fieldName the field name to get the value for
-     * @returns the value of the key value pair for the specified field name
-     */
-    GetValueByFieldName(fieldName: string): any {
-        let key = this.KeyValuePairs.find((keyValue) => {
-            return keyValue.FieldName === fieldName;
-        });
-
-        return key ? key.Value : null;
-    }
-
-    /**
-     * returns the value of the key value pair at the specified index
-     * @param index the index of the key value pair to get the value for
-     * @returns the value of the key value pair at the specified index
-     */
-    GetValueByIndex(index: number): any {
-        if (index >= 0 && index < this.KeyValuePairs.length) {
-            return this.KeyValuePairs[index].Value;
-        }
-
-        return null;
-    }
-
-    /** 
-    * @returns a string representation of the primary key values in the format "FieldName=Value"
-    * @example "ID=1 AND Name=John"
-    * @param useIsNull if true, will return "FieldName IS NULL" for any key value pair that has a null or undefined value
-    */
-    ToString(useIsNull?: boolean): string {
-        return this.KeyValuePairs.map((keyValue: KeyValuePair) => {
-            if(useIsNull && (keyValue.Value === null || keyValue.Value === undefined)){
-                return `${keyValue.FieldName} IS NULL`;
-            }
-
-            return `${keyValue.FieldName}=${keyValue.Value}`;
-        }).join(" AND ");
-    }
-
-    /**
-    * @returns a copy of the KeyValuePairs array but with the Value properties as type string
-    */
-    ValuesAsString(): KeyValuePair[] {
-        return this.KeyValuePairs.map((keyValue: KeyValuePair) => {
-            return {
-                FieldName: keyValue.FieldName,
-                Value: keyValue.Value.toString()
-            }
-        });
-    }
-
-    /**
-     * Utility function to return a copy of the CompositeKey with the Value properties as string
-     * @returns a copy of the KeyValuePairs array but with the Value properties as string
-     */
-    Copy(): CompositeKey {
-        let copy = new CompositeKey();
-        copy.KeyValuePairs = this.ValuesAsString();
-        return copy;
-    }
-
-    /**
-    * @returns the KeyValuePairs as a list of strings in the format "FieldName=Value"
-    * @param delimiter the delimiter to use between the field name and value. Defaults to '='
-    * @example ["ID=1", "Name=John"]
-    */
-    ToList(delimiter?: string): string[] {
-        return this.KeyValuePairs.map((pk) => {
-            return delimiter ? `${pk.FieldName}${delimiter}${pk.Value}` : `${pk.FieldName}=${pk.Value}`;
-        });
-    }
-
-    /**
-     * @returns the value of each key value pair in the format "Value1, Value2, Value3"
-     * @param delimiter - the delimiter to use between the values. Defaults to ', '
-     * @example "1, John"
-     */
-    Values(delimiter?: string): string {
-        return this.KeyValuePairs.map((keyValue: KeyValuePair) => {
-            return keyValue.Value;
-        }).join(delimiter || ", ");
-    }
-
-    /**
-    * Utility function to compare the key primary key of this object to another sets to see if they are the same or not
-    * @param kvPairs the primary key values to compare against
-    * @returns true if the primary key values are the same, false if they are different
-    */
-    EqualsKey(kvPairs: KeyValuePair[]): boolean {
-        if(!kvPairs || kvPairs.length === 0){
-            return false;
-        }
-
-        if (kvPairs.length !== this.KeyValuePairs.length){
-            return false;
-        }
-
-        for( const [index, kvPair] of kvPairs.entries()){
-            const sourcekvPair = this.KeyValuePairs[index];
-            if(kvPair.FieldName !== sourcekvPair.FieldName || kvPair.Value !== sourcekvPair.Value){
-                return false;
-            }
-        }
-
-        return true;
-    }
-
-    /**
-    * Utility function to compare this composite key to another
-    * @param compositeKey the composite key to compare against
-    * @returns true if the primary key values are the same, false if they are different
-    */
-    Equals(compositeKey: CompositeKey): boolean {
-        if(!compositeKey){
-            return false;
-        }
-
-        return this.EqualsKey(compositeKey.KeyValuePairs);
-    }
-
-    LoadFromEntityFields(fields: EntityField[]): void {
-        this.KeyValuePairs = fields.map((field) => {
-            return {
-                FieldName: field.Name,
-                Value: field.Value
-            }
-        });
-    }
-
-    LoadFromEntityInfoAndRecord(entity: EntityInfo, entityRecord: any): void {
-        this.KeyValuePairs = entity.PrimaryKeys.map((pk) => {
-            return {
-                FieldName: pk.Name,
-                Value: entityRecord[pk.Name]
-            }
-        });
-    }
-
-    /**
-     * Loads the KeyValuePairs from a list of strings in the format "FieldName=Value"
-     * @param list - the list of strings to load from
-     * @param delimiter - the delimiter to use between the field name and value. Defaults to '='
-     * @example ["ID=1", "Name=John"]
-     */
-    LoadFromList(list: string[], delimiter?: string): void {
-        this.KeyValuePairs = list.map((pk: string) => {
-            let keyValue = delimiter ? pk.split(delimiter) : pk.split("=");
-            if(keyValue.length === 2){
-                let keyValuePair: KeyValuePair = new KeyValuePair();
-                keyValuePair.FieldName = keyValue[0];
-                keyValuePair.Value = keyValue[1];
-                return keyValuePair;
-            }
-            return;
-        });
-    }
-
-    ToURLSegment(segment?: string): string {
-        return this.KeyValuePairs.map((pk) => {
-            return `${pk.FieldName}|${pk.Value}`;
-        }).join(segment || "||");
-    }
-
-    LoadFromURLSegment(entity: EntityInfo, routeSegment: string, segment?: string): void {
-        if (!routeSegment.includes('|')) {
-          // If not, return a single element array with a default field name
-          this.KeyValuePairs = [{ FieldName: entity.PrimaryKey.Name, Value: routeSegment }];
-        }
-        else {
-          const parts = segment ? routeSegment.split(segment) : routeSegment.split('||');
-          const pkVals: KeyValuePair[] = [];
-          for (let p of parts) {
-            const kv = p.split('|');
-            pkVals.push({ FieldName: kv[0], Value: kv[1] });
-          }
-
-          this.KeyValuePairs = pkVals;
-        }
-    }
-
-    /**
-     * Helper method to check if the underlying key value pairs are valid or not
-     * i.e. if any of the key value pairs are null or undefined
-     * @returns true if all key value pairs are valid, false if any are null or undefined
-     */
-    Validate(): {IsValid: boolean, ErrorMessage: string} {
-        for (let j = 0; j < this.KeyValuePairs.length; j++) {
-            if (!this.KeyValuePairs[j] || !this.KeyValuePairs[j].Value) {
-                return {IsValid: false, ErrorMessage: 'CompositeKey.Validate: KeyValuePair cannot contain null values. FieldName: ' + this.KeyValuePairs[j]?.FieldName };
-            }
-        }
-
-        return {IsValid: true, ErrorMessage: ''};
-    }
-}
 
 export class PotentialDuplicate extends CompositeKey {
     ProbabilityScore: number;
@@ -308,14 +105,42 @@ export interface IEntityDataProvider {
 
     Save(entity: BaseEntity, user: UserInfo, options: EntitySaveOptions) : Promise<{}>  
 
-    Delete(entity: BaseEntity, user: UserInfo) : Promise<boolean>
+    Delete(entity: BaseEntity, options: EntityDeleteOptions, user: UserInfo) : Promise<boolean>
 
     GetRecordChanges(entityName: string, CompositeKey: CompositeKey): Promise<RecordChange[]>
 }
 
+/**
+ * Save options used when saving an entity record
+ */
 export class EntitySaveOptions {
+    /**
+     * If set to true, the record will be saved to the database even if nothing is detected to be "dirty" or changed since the prior load.
+     */
     IgnoreDirtyState: boolean = false;
+    /**
+     * If set to true, an AI actions associated with the entity will be skipped during the save operation
+     */
     SkipEntityAIActions?: boolean = false;
+    /**
+     * If set to true, any Entity Actions associated with invocation types of Create or Update will be skipped during the save operation
+     */
+    SkipEntityActions?: boolean = false;
+}
+
+/**
+ * Options used when deleting an entity record
+ */
+export class EntityDeleteOptions {
+    /**
+     * If set to true, an AI actions associated with the entity will be skipped during the delete operation
+     */
+    SkipEntityAIActions?: boolean = false;
+
+    /**
+     * If set to true, any Entity Actions associated with invocation types of Delete will be skipped during the delete operation
+     */
+    SkipEntityActions?: boolean = false;
 }
 
 export class EntityRecordNameInput  {
@@ -363,6 +188,8 @@ export interface IMetadataProvider {
     get QueryCategories(): QueryCategoryInfo[]
 
     get QueryPermissions(): QueryPermissionInfo[]
+
+    get Libraries(): LibraryInfo[]
 
     get LatestRemoteMetadata(): MetadataInfo[]
 
@@ -525,7 +352,7 @@ export interface IMetadataProvider {
 /**
  * Result of a RunView() execution
  */
-export type RunViewResult = {
+export type RunViewResult<T = any> = {
     /**
      * Was the view run successful or not
      */
@@ -533,7 +360,7 @@ export type RunViewResult = {
     /**
      * The array of records returned by the view, only valid if Success is true
      */
-    Results: any[];
+    Results: Array<T>;
     /**
      * The newly created UserViews.ID value - only provided if RunViewParams.SaveViewResults=true
      */
@@ -561,7 +388,7 @@ export type RunViewResult = {
 export interface IRunViewProvider {
     Config(configData: ProviderConfigDataBase): Promise<boolean>
 
-    RunView(params: RunViewParams, contextUser?: UserInfo): Promise<RunViewResult>
+    RunView<T = any>(params: RunViewParams, contextUser?: UserInfo): Promise<RunViewResult<T>>
 }
 
 export type RunQueryResult = {

@@ -18,7 +18,7 @@
         },
         {
             "name": "skip_database_generation",
-            "value": false
+            "value": true
         }
     ],
     "logging": {
@@ -160,7 +160,7 @@
         },
         {
             "type": "AngularCoreEntities",
-            "directory": "../Angular/core-entity-forms/src/lib/generated",
+            "directory": "../Angular/Explorer/core-entity-forms/src/lib/generated",
             "options": [
                 {
                     "name": "maxComponentsPerModule",
@@ -175,6 +175,14 @@
         {
             "type": "GraphQLCoreEntityResolvers",
             "directory": "../MJServer/src/generated"
+        },
+        {
+            "type": "CoreActionSubclasses",
+            "directory": "../CoreActions/src/generated"
+        },
+        {
+            "type": "ActionSubclasses",
+            "directory": "../GeneratedActions/src/generated"
         },
         {
             "type": "CoreEntitySubclasses",
@@ -200,7 +208,16 @@
             "when": "after"
         },
         {
-            "workingDirectory": "../Angular/core-entity-forms",
+            "workingDirectory": "../CoreActions",
+            "command": "npm",
+            "args": [
+                "run",
+                "build"
+            ],
+            "when": "after"
+        },
+        {
+            "workingDirectory": "../Angular/Explorer/core-entity-forms",
             "command": "npm",
             "args": [
                 "run",
@@ -210,6 +227,15 @@
         },
         {
             "workingDirectory": "../GeneratedEntities",
+            "command": "npm",
+            "args": [
+                "run",
+                "build"
+            ],
+            "when": "after"
+        },
+        {
+            "workingDirectory": "../GeneratedActions",
             "command": "npm",
             "args": [
                 "run",
