@@ -2,6 +2,27 @@
   "name": "@memberjunction/ng-chat",
   "entries": [
     {
+      "date": "Fri, 07 Jun 2024 14:26:47 GMT",
+      "version": "1.5.1",
+      "tag": "@memberjunction/ng-chat_v1.5.1",
+      "comments": {
+        "patch": [
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-chat",
+            "comment": "Bump @memberjunction/codegen-lib to v1.5.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-chat",
+            "comment": "Bump @memberjunction/ng-container-directives to v1.5.1",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
       "date": "Fri, 07 Jun 2024 05:45:57 GMT",
       "version": "1.5.0",
       "tag": "@memberjunction/ng-chat_v1.5.0",

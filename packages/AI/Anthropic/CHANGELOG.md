@@ -1,8 +1,17 @@
 # Change Log - @memberjunction/ai-anthropic
 
-This log was last generated on Fri, 07 Jun 2024 05:45:57 GMT and should not be manually modified.
+This log was last generated on Fri, 07 Jun 2024 14:26:47 GMT and should not be manually modified.
 
 <!-- Start content -->
+
+## 1.5.1
+
+Fri, 07 Jun 2024 14:26:47 GMT
+
+### Patches
+
+- Bump @memberjunction/ai to v1.5.1
+- Bump @memberjunction/global to v1.5.1
 
 ## 1.5.0
 

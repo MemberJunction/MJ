@@ -1,8 +1,22 @@
 # Change Log - @memberjunction/ng-user-view-grid
 
-This log was last generated on Fri, 07 Jun 2024 05:45:57 GMT and should not be manually modified.
+This log was last generated on Fri, 07 Jun 2024 14:26:47 GMT and should not be manually modified.
 
 <!-- Start content -->
+
+## 1.5.1
+
+Fri, 07 Jun 2024 14:26:47 GMT
+
+### Patches
+
+- Bump @memberjunction/core-entities to v1.5.1
+- Bump @memberjunction/global to v1.5.1
+- Bump @memberjunction/core to v1.5.1
+- Bump @memberjunction/ng-shared to v1.5.1
+- Bump @memberjunction/ng-entity-form-dialog to v1.5.1
+- Bump @memberjunction/ng-compare-records to v1.5.1
+- Bump @memberjunction/ng-container-directives to v1.5.1
 
 ## 1.5.0
 

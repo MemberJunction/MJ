@@ -1,8 +1,34 @@
 # Change Log - @memberjunction/server
 
-This log was last generated on Fri, 07 Jun 2024 05:45:57 GMT and should not be manually modified.
+This log was last generated on Fri, 07 Jun 2024 14:26:47 GMT and should not be manually modified.
 
 <!-- Start content -->
+
+## 1.5.1
+
+Fri, 07 Jun 2024 14:26:47 GMT
+
+### Patches
+
+- Bump @memberjunction/actions to v1.5.1
+- Bump @memberjunction/core-actions to v1.5.1
+- Bump @memberjunction/ai to v1.5.1
+- Bump @memberjunction/ai-openai to v1.5.1
+- Bump @memberjunction/aiengine to v1.5.1
+- Bump @memberjunction/ai-mistral to v1.5.1
+- Bump @memberjunction/ai-vectors-pinecone to v1.5.1
+- Bump @memberjunction/core to v1.5.1
+- Bump @memberjunction/core-entities to v1.5.1
+- Bump @memberjunction/communication-core to v1.5.1
+- Bump @memberjunction/doc-utils to v1.5.1
+- Bump @memberjunction/templates to v1.5.1
+- Bump @memberjunction/data-context to v1.5.1
+- Bump @memberjunction/data-context-server to v1.5.1
+- Bump @memberjunction/global to v1.5.1
+- Bump @memberjunction/storage to v1.5.1
+- Bump @memberjunction/queue to v1.5.1
+- Bump @memberjunction/sqlserver-dataprovider to v1.5.1
+- Bump @memberjunction/skip-types to v1.5.1
 
 ## 1.5.0
 

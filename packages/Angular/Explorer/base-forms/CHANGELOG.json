@@ -2,6 +2,57 @@
   "name": "@memberjunction/ng-base-forms",
   "entries": [
     {
+      "date": "Fri, 07 Jun 2024 14:26:47 GMT",
+      "version": "1.5.1",
+      "tag": "@memberjunction/ng-base-forms_v1.5.1",
+      "comments": {
+        "patch": [
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-base-forms",
+            "comment": "Bump @memberjunction/global to v1.5.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-base-forms",
+            "comment": "Bump @memberjunction/core to v1.5.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-base-forms",
+            "comment": "Bump @memberjunction/ng-shared to v1.5.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-base-forms",
+            "comment": "Bump @memberjunction/ng-tabstrip to v1.5.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-base-forms",
+            "comment": "Bump @memberjunction/ng-link-directives to v1.5.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-base-forms",
+            "comment": "Bump @memberjunction/ng-container-directives to v1.5.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-base-forms",
+            "comment": "Bump @memberjunction/ng-record-changes to v1.5.1",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
       "date": "Fri, 07 Jun 2024 05:45:57 GMT",
       "version": "1.5.0",
       "tag": "@memberjunction/ng-base-forms_v1.5.0",

@@ -2,6 +2,27 @@
   "name": "@memberjunction/ai-mistral",
   "entries": [
     {
+      "date": "Fri, 07 Jun 2024 14:26:47 GMT",
+      "version": "1.5.1",
+      "tag": "@memberjunction/ai-mistral_v1.5.1",
+      "comments": {
+        "patch": [
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ai-mistral",
+            "comment": "Bump @memberjunction/ai to v1.5.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ai-mistral",
+            "comment": "Bump @memberjunction/global to v1.5.1",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
       "date": "Fri, 07 Jun 2024 05:45:57 GMT",
       "version": "1.5.0",
       "tag": "@memberjunction/ai-mistral_v1.5.0",
