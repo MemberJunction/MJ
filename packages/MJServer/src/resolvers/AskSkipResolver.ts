@@ -99,7 +99,10 @@ export class AskSkipResolver {
       const ck = new CompositeKey();
       ck.KeyValuePairs = compositeKey.KeyValuePairs;
       dci.RecordID = ck.Values();
-      await dci.Save();
+      let dciSaveResult: boolean = await dci.Save();
+      if (!dciSaveResult) {
+        LogError(`Error saving DataContextItemEntity for record chat: ${EntityName} ${ck.Values()}`, undefined, dci.LatestResult);
+      }
   
       await dataContext.Load(dataContext.ID, dataSource, false, true, 10, user); // load again because we added a new data context item  
       await dataContext.SaveItems(user, true); // persist the data becuase the deep loading above with related data is expensive
@@ -108,7 +111,10 @@ export class AskSkipResolver {
       convoEntity.LinkedEntityID = dci.EntityID;
       convoEntity.LinkedRecordID = ck.Values();
       convoEntity.DataContextID = dataContext.ID;
-      await convoEntity.Save();
+      const convoEntitySaveResult: boolean = await convoEntity.Save();
+      if (!convoEntitySaveResult) {
+        LogError(`Error saving ConversationEntity for record chat: ${EntityName} ${ck.Values()}`, undefined, convoEntity.LatestResult);
+      }
     } 
 
     const input = this.buildSkipAPIRequest(messages, ConversationId, dataContext, 'chat_with_a_record', false, false);
@@ -158,6 +164,7 @@ export class AskSkipResolver {
     const md = new Metadata();
     const convoDetailEntityAI = <ConversationDetailEntity>await md.GetEntityObject('Conversation Details', user);
     convoDetailEntityAI.NewRecord();
+    convoDetailEntityAI.HiddenToUser = false;
     convoDetailEntityAI.ConversationID = conversationID; 
     const systemMessages = apiResponse.messages.filter((m) => m.role === 'system');
     const lastSystemMessage = systemMessages[systemMessages.length - 1];
@@ -166,8 +173,10 @@ export class AskSkipResolver {
     if (await convoDetailEntityAI.Save()) {
       return convoDetailEntityAI.ID;
     }
-    else
+    else{
+      LogError(`Error saving conversation detail entity for AI message: ${lastSystemMessage?.content}`, undefined, convoDetailEntityAI.LatestResult);
       return 0;
+    }
   }
 
   protected buildSkipAPIRequest(messages: SkipMessage[], conversationId: number, dataContext: DataContext, requestPhase: SkipRequestPhase, includeEntities: boolean, includeQueries: boolean): SkipAPIRequest {
@@ -385,11 +394,16 @@ export class AskSkipResolver {
           dataContextEntity.NewRecord();
           dataContextEntity.UserID = user.ID;
           dataContextEntity.Name = 'Data Context for Skip Conversation';
-          if (!await dataContextEntity.Save())
+          if (!await dataContextEntity.Save()){
+            LogError(`Creating a new data context failed`, undefined, dataContextEntity.LatestResult);
             throw new Error(`Creating a new data context failed`);
+          }
         }
         else {
-          await dataContextEntity.Load(DataContextId);
+          const dcLoadResult = await dataContextEntity.Load(DataContextId);
+          if (!dcLoadResult) {
+            throw new Error(`Loading DataContextEntity for DataContextId ${DataContextId} failed`);
+          }
         }
         convoEntity.DataContextID = dataContextEntity.ID;
         if (await convoEntity.Save()) {
@@ -397,11 +411,16 @@ export class AskSkipResolver {
           if (!DataContextId || dataContextEntity.ID <= 0) {
             // only do this if we created a new data context for this conversation
             dataContextEntity.Name += ` ${ConversationId}`;
-            await dataContextEntity.Save();  
+            const dciSaveResult: boolean = await dataContextEntity.Save();
+            if (!dciSaveResult) {
+              LogError(`Error saving DataContextEntity for conversation: ${ConversationId}`, undefined, dataContextEntity.LatestResult);
+            }
           }
         }
-        else 
+        else{
+          LogError(`Creating a new conversation failed`, undefined, convoEntity.LatestResult);
           throw new Error(`Creating a new conversation failed`);
+        }
       } 
       else { 
         throw new Error(`User ${userPayload.email} not found in UserCache`);
@@ -414,7 +433,10 @@ export class AskSkipResolver {
       if (DataContextId && DataContextId > 0 && DataContextId !== convoEntity.DataContextID) {
         if (convoEntity.DataContextID === null) {
           convoEntity.DataContextID = DataContextId;
-          await convoEntity.Save();
+          const convoEntitySaveResult: boolean = await convoEntity.Save();
+          if (!convoEntitySaveResult) {
+            LogError(`Error saving conversation entity for conversation: ${ConversationId}`, undefined, convoEntity.LatestResult);
+          }
         }
         else
           console.warn(`AskSkipResolver: DataContextId ${DataContextId} was passed in but it was ignored because it was different than the DataContextID in the conversation ${convoEntity.DataContextID}`);
@@ -430,9 +452,13 @@ export class AskSkipResolver {
     convoDetailEntity.ConversationID = ConversationId;
     convoDetailEntity.Message = UserQuestion;
     convoDetailEntity.Role = 'User';
+    convoDetailEntity.HiddenToUser = false;
     convoDetailEntity.Set('Sequence', 1); // using weakly typed here because we're going to get rid of this field soon
-    await convoDetailEntity.Save();
-
+    let convoDetailSaveResult: boolean = await convoDetailEntity.Save();
+    if(!convoDetailSaveResult) {
+      LogError(`Error saving conversation detail entity for user message: ${UserQuestion}`, undefined, convoDetailEntity.LatestResult);
+    }
+    
     const dataContext = MJGlobal.Instance.ClassFactory.CreateInstance<DataContext>(DataContext); // await this.LoadDataContext(md, dataSource, dataContextEntity, user, false);
     await dataContext.Load(dataContextEntity.ID, dataSource, false, false, 0, user);
     return {dataContext, convoEntity, dataContextEntity, convoDetailEntity};
@@ -642,8 +668,7 @@ export class AskSkipResolver {
     // all done, wrap things up
     const md = new Metadata();
     const {AIMessageConversationDetailID} = await this.FinishConversationAndNotifyUser(apiResponse, dataContext, dataContextEntity, md, user, convoEntity, pubSub, userPayload);
-
-    return {
+    const response: AskSkipResultType = {
       Success: true,
       Status: 'OK',
       ResponsePhase: SkipResponsePhase.AnalysisComplete,
@@ -651,7 +676,8 @@ export class AskSkipResolver {
       UserMessageConversationDetailId: convoDetailEntity.ID,
       AIMessageConversationDetailId: AIMessageConversationDetailID,
       Result: JSON.stringify(apiResponse)
-    };
+    }; 
+    return response;
   }
 
   protected async HandleClarifyingQuestionPhase(apiRequest: SkipAPIRequest, apiResponse: SkipAPIClarifyingQuestionResponse, UserQuestion: string, user: UserInfo, dataSource: DataSource, 
@@ -663,6 +689,7 @@ export class AskSkipResolver {
     convoDetailEntityAI.ConversationID = ConversationId; 
     convoDetailEntityAI.Message = JSON.stringify(apiResponse);//.clarifyingQuestion;
     convoDetailEntityAI.Role = 'AI';
+    convoDetailEntityAI.HiddenToUser = false;
     if (await convoDetailEntityAI.Save()) {
       return {
         Success: true,
@@ -675,6 +702,7 @@ export class AskSkipResolver {
       };        
     }
     else {
+      LogError(`Error saving conversation detail entity for AI message: ${apiResponse.clarifyingQuestion}`, undefined, convoDetailEntityAI.LatestResult);
       return {
         Success: false,
         Status: 'Error',
@@ -828,13 +856,20 @@ export class AskSkipResolver {
     convoDetailEntityAI.ConversationID = convoEntity.ID;
     convoDetailEntityAI.Message = sResult;
     convoDetailEntityAI.Role = 'AI';
+    convoDetailEntityAI.HiddenToUser = false;
     convoDetailEntityAI.Set('Sequence', 2); // using weakly typed here because we're going to get rid of this field soon
-    await convoDetailEntityAI.Save();
+    const convoDetailSaveResult: boolean = await convoDetailEntityAI.Save();
+    if(!convoDetailSaveResult){
+      LogError(`Error saving conversation detail entity for AI message: ${sResult}`, undefined, convoDetailEntityAI.LatestResult);
+    }
 
     // finally update the convo name if it is still the default
     if (convoEntity.Name === AskSkipResolver._defaultNewChatName && sTitle && sTitle !== AskSkipResolver._defaultNewChatName) {
       convoEntity.Name = sTitle; // use the title from the response
-      await convoEntity.Save();
+      const convoEntitySaveResult: boolean = await convoEntity.Save();
+      if(!convoEntitySaveResult){
+        LogError(`Error saving conversation entity for AI message: ${sResult}`, undefined, convoEntity.LatestResult);
+      }
     }
 
     // now create a notification for the user
@@ -848,7 +883,11 @@ export class AskSkipResolver {
       type: 'askskip',
       conversationId: convoEntity.ID,
     });
-    await userNotification.Save();
+
+    const userNotificationSaveResult: boolean = await userNotification.Save();
+    if(!userNotificationSaveResult){
+      LogError(`Error saving user notification entity for AI message: ${sResult}`, undefined, userNotification.LatestResult);
+    }
     
     // Save the data context items...
     // FOR NOW, we don't want to store the data in the database, we will just load it from the data context when we need it 

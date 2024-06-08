@@ -3808,6 +3808,14 @@ input CreatePaymentTermsTypeInput {
   Name: String!
 }
 
+input CreatePersonLinkInput {
+  Email: String
+  FirstName: String
+  LastName: String
+  MainGreatPlainsCustomerID: String
+  MembershipGreatPlainsCustomerID: String
+}
+
 input CreateProductInput {
   Acep_AllowWebQuantity: Boolean
   Acep_Date: Timestamp
@@ -8553,6 +8561,7 @@ type Mutation {
   CreateListDetail(input: CreateListDetailInput!): ListDetail_!
   CreateOrganizationLink(input: CreateOrganizationLinkInput!): OrganizationLink_!
   CreatePaymentTermsType(input: CreatePaymentTermsTypeInput!): PaymentTermsType_!
+  CreatePersonLink(input: CreatePersonLinkInput!): PersonLink_!
   CreateProduct(input: CreateProductInput!): Product_!
   CreateProductPriceLevel(input: CreateProductPriceLevelInput!): ProductPriceLevel_!
   CreateQuery(input: CreateQueryInput!): Query_!
@@ -8745,6 +8754,7 @@ type Mutation {
   UpdateListDetail(input: UpdateListDetailInput!): ListDetail_!
   UpdateOrganizationLink(input: UpdateOrganizationLinkInput!): OrganizationLink_!
   UpdatePaymentTermsType(input: UpdatePaymentTermsTypeInput!): PaymentTermsType_!
+  UpdatePersonLink(input: UpdatePersonLinkInput!): PersonLink_!
   UpdateProduct(input: UpdateProductInput!): Product_!
   UpdateProductPriceLevel(input: UpdateProductPriceLevelInput!): ProductPriceLevel_!
   UpdateQuery(input: UpdateQueryInput!): Query_!
@@ -9264,6 +9274,7 @@ type Query {
   OutputFormatType(ID: Int!): OutputFormatType_
   OutputTriggerType(ID: Int!): OutputTriggerType_
   PaymentTermsType(ID: Int!): PaymentTermsType_
+  PersonLink(PersonLinkID: Int!): PersonLink_
   Product(ProductId: String!): Product_
   ProductPriceLevel(ProductPriceLevelId: String!): ProductPriceLevel_
   Query(ID: Int!): Query_
@@ -9589,6 +9600,9 @@ type Query {
   RunPaymentTermsTypeDynamicView(input: RunDynamicViewInput!): RunPaymentTermsTypeViewResult!
   RunPaymentTermsTypeViewByID(input: RunViewByIDInput!): RunPaymentTermsTypeViewResult!
   RunPaymentTermsTypeViewByName(input: RunViewByNameInput!): RunPaymentTermsTypeViewResult!
+  RunPersonLinkDynamicView(input: RunDynamicViewInput!): RunPersonLinkViewResult!
+  RunPersonLinkViewByID(input: RunViewByIDInput!): RunPersonLinkViewResult!
+  RunPersonLinkViewByName(input: RunViewByNameInput!): RunPersonLinkViewResult!
   RunProductDynamicView(input: RunDynamicViewInput!): RunProductViewResult!
   RunProductPriceLevelDynamicView(input: RunDynamicViewInput!): RunProductPriceLevelViewResult!
   RunProductPriceLevelViewByID(input: RunViewByIDInput!): RunProductPriceLevelViewResult!
@@ -11170,6 +11184,16 @@ type RunPaymentTermsTypeViewResult {
   ErrorMessage: String
   ExecutionTime: Int
   Results: [PaymentTermsType_!]!
+  RowCount: Int
+  Success: Boolean!
+  TotalRowCount: Int
+  UserViewRunID: Int
+}
+
+type RunPersonLinkViewResult {
+  ErrorMessage: String
+  ExecutionTime: Int
+  Results: [PersonLink_!]!
   RowCount: Int
   Success: Boolean!
   TotalRowCount: Int
@@ -16734,6 +16758,16 @@ input UpdatePaymentTermsTypeInput {
   ID: Int!
   Name: String!
   OldValues___: [KeyValuePairInput!]
+}
+
+input UpdatePersonLinkInput {
+  Email: String
+  FirstName: String
+  LastName: String
+  MainGreatPlainsCustomerID: String
+  MembershipGreatPlainsCustomerID: String
+  OldValues___: [KeyValuePairInput!]
+  PersonLinkID: Int!
 }
 
 input UpdateProductInput {

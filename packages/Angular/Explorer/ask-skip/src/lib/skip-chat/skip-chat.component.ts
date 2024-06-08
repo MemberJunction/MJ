@@ -459,6 +459,8 @@ export class SkipChatComponent implements OnInit, AfterViewInit, AfterViewChecke
     convo.NewRecord();
     convo.Name = 'New Chat'; // default value
     convo.UserID = md.CurrentUser.ID;
+    convo.Type = 'skip';
+    convo.IsArchived = false;
     const linkedEntityID = this.LinkedEntityID;
     if (linkedEntityID && linkedEntityID > 0 && this.CompositeKeyIsPopulated()) {
       convo.LinkedEntityID = linkedEntityID;
@@ -488,12 +490,22 @@ export class SkipChatComponent implements OnInit, AfterViewInit, AfterViewChecke
           dci.RecordID = this.LinkedEntityCompositeKey.Values();
           dci.EntityID = this.LinkedEntityID;
         }
-        await dci.Save();
+        let dciSaveResult: boolean = await dci.Save();
+        if(!dciSaveResult){
+          this.sharedService.CreateSimpleNotification('Error creating data context item', 'error', 5000);
+          LogError('Error creating data context item', undefined, dci.LatestResult);
+        }
       }
 
       convo.DataContextID = dc.ID;
       this.DataContextID = dc.ID;
-      await convo.Save();
+      const convoSaveResult: boolean = await convo.Save();
+      if(!convoSaveResult){
+        this.sharedService.CreateSimpleNotification('Error creating conversation', 'error', 5000);
+        LogError("Error creating conversation", undefined, convo.LatestResult);
+        return;
+      }
+
       this.DataContext = new DataContext();
       await this.DataContext.LoadMetadata(this.DataContextID);
       
@@ -510,7 +522,7 @@ export class SkipChatComponent implements OnInit, AfterViewInit, AfterViewChecke
       this._scrollToBottom = true; // this results in the angular after Viewchecked scrolling to bottom when it's done  
     }
     else {
-      this.sharedService.CreateSimpleNotification('Error creating data context', 'error', 5000)
+      this.sharedService.CreateSimpleNotification('Error creating data context', 'error', 5000);
     }
 
   }
@@ -978,7 +990,7 @@ export class SkipChatComponent implements OnInit, AfterViewInit, AfterViewChecke
       return result;
     }
     catch (err) {
-      console.error(err);          
+      LogError('Error executing AskSkip query', undefined, err);          
       const md = new Metadata();
       const errorMessage = <ConversationDetailEntity>await md.GetEntityObject('Conversation Details');
       errorMessage.NewRecord();

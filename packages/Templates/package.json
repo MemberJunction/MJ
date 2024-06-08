@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/templates",
-  "version": "1.4.0",
-  "description": "Provides types and functionality for managing and executing templates.",
+  "version": "1.5.2",
+  "description": "MemberJunction Templating Engine and Utilities - Used for any application that requires templating utility functionality. NOTE: this package does use Angular Universal for compilation but is not marked with the usual ng prefix because it is a server-side library and not used within Angular apps.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": [
@@ -18,11 +18,14 @@
     "typescript": "^5.3.3"
   },
   "dependencies": {
-    "@memberjunction/ai": "~1.4.0",
-    "@memberjunction/core": "~1.4.0",
-    "@memberjunction/core-entities": "~1.4.0",
-    "@memberjunction/global": "~1.4.0",
-    "nunjucks": "3.2.4",
-    "@types/nunjucks": "3.2.6"
+    "@memberjunction/core": "~1.5.2",
+    "@memberjunction/core-entities": "~1.5.2",
+    "@memberjunction/global": "~1.5.2",
+    "@memberjunction/data-context": "~1.5.2",
+    "@angular/core": "~17.2.2",
+    "@angular/common": "~17.2.2",
+    "@angular/compiler": "~17.2.2",
+    "@angular/platform-server": "~17.2.2",
+    "@angular/platform-browser-dynamic": "~17.2.2"
   }
 }

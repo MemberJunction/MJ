@@ -132,8 +132,8 @@ CONFIG_FILE='config.json'
     // Process MJAPI
     //*******************************************************************
     this.log('\n\nBootstrapping MJAPI...');
-    this.log('   Running npm link for GeneratedEntities...');
-    execSync('npm link ../GeneratedEntities', { stdio: 'inherit', cwd: MJAPI_DIR });
+    this.log('   Running npm link for generated code...');
+    execSync('npm link ../GeneratedEntities ../GeneratedActions', { stdio: 'inherit', cwd: MJAPI_DIR });
     this.log('   Setting up MJAPI .env file...');
     const mjAPIENV = `#Database Setup
 DB_HOST='${this.userConfig.dbUrl}'

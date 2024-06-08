@@ -96,7 +96,8 @@ export abstract class ProviderBase implements IMetadataProvider {
         this._ConfigData = data;
         this._localMetadata = new AllMetadata(); // start with fresh metadata
 
-        if (this._refresh || await this.IsRefreshNeeded()) {
+        const isRefresh = await this.RefreshIfNeeded();
+        if (this._refresh || isRefresh) {
             // either a hard refresh flag was set within Refresh(), or LocalMetadata is Obsolete
 
             // first, make sure we reset the flag to false so that if another call to this function happens
@@ -274,7 +275,7 @@ export abstract class ProviderBase implements IMetadataProvider {
 
     public async Refresh(): Promise<boolean> {
         // do nothing here, but set a _refresh flag for next time things are requested
-        if (this.AllowRefresh) {
+        if (this.AllowRefresh()) {
             this._refresh = true;
             return this.Config(this._ConfigData);
         }
@@ -283,7 +284,7 @@ export abstract class ProviderBase implements IMetadataProvider {
     }
 
     public async IsRefreshNeeded(): Promise<boolean> {
-        if (this.AllowRefresh) {
+        if (this.AllowRefresh()) {
             await this.RefreshRemoteMetadataTimestamps(); // get the latest timestamps from the server first
             await this.LoadLocalMetadataFromStorage(); // then, attempt to load before we check to see if it is obsolete
             return this.LocalMetadataObsolete()

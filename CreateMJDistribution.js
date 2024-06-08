@@ -112,7 +112,7 @@ async function handleSingleEnvironmentFile(dir, normalizedDir, archive, subDir, 
 
   // Clear values for sensitive keys in the environment configuration
   fileContent = clearSensitiveAngularEnvironmentValues(fileContent, isDevelopment);
-  fileContent = `export const environment = ${fileContent}`
+  fileContent = `export const environment = ${fileContent}`;
 
   // Append modified content to the archive
   archive.append(fileContent, { name: path.join(normalizedDir, subDir, fileName) });
@@ -184,7 +184,14 @@ async function createMJDistribution() {
   const dateTime = new Date().toISOString().replace(/\W/g, '_').substring(0, 16);
 
   // Define directories and output
-  const directories = ['SQL Scripts', 'packages/CodeGen', 'packages/MJAPI', 'packages/MJExplorer', 'packages/GeneratedEntities', 'packages/GeneratedActions'];
+  const directories = [
+    'SQL Scripts',
+    'packages/CodeGen',
+    'packages/MJAPI',
+    'packages/MJExplorer',
+    'packages/GeneratedEntities',
+    'packages/GeneratedActions',
+  ];
   const filename = process.env.MJ_DISTRIBUTION_FILENAME || `Distributions/MemberJunction_Code_Bootstrap_${dateTime}.zip`;
   const output = fs.createWriteStream(filename);
   const archive = archiver('zip');
@@ -217,7 +224,7 @@ async function createMJDistribution() {
         {
           cwd: dir,
           ignore: [
-            ...gitignore.split('\n').filter((l) => !l.trimStart().startsWith('#')),
+            ...gitignore.split('\n').filter((l) => l.trim() && !l.trimStart().startsWith('#')),
             'node_modules/**',
             'dist/**',
             '.vscode/**',

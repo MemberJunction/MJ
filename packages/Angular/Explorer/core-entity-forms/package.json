@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-core-entity-forms",
-  "version": "1.4.0",
+  "version": "1.5.2",
   "description": "MemberJunction Core Entity Angular Forms",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",
@@ -24,15 +24,15 @@
     "@angular/forms": "~17.2.2"
   },
   "dependencies": {
-    "@memberjunction/core": "~1.4.0",
-    "@memberjunction/core-entities": "~1.4.0",
-    "@memberjunction/ng-explorer-core": "~1.4.0",
-    "@memberjunction/ng-base-forms": "~1.4.0",
-    "@memberjunction/ng-form-toolbar": "~1.4.0",
-    "@memberjunction/ng-tabstrip": "~1.4.0",
-    "@memberjunction/ng-container-directives": "~1.4.0",
-    "@memberjunction/ng-code-editor": "~1.4.0",
-    "@memberjunction/ng-timeline": "~1.4.0",
+    "@memberjunction/core": "~1.5.2",
+    "@memberjunction/core-entities": "~1.5.2",
+    "@memberjunction/ng-explorer-core": "~1.5.2",
+    "@memberjunction/ng-base-forms": "~1.5.2",
+    "@memberjunction/ng-form-toolbar": "~1.5.2",
+    "@memberjunction/ng-tabstrip": "~1.5.2",
+    "@memberjunction/ng-container-directives": "~1.5.2",
+    "@memberjunction/ng-code-editor": "~1.5.2",
+    "@memberjunction/ng-timeline": "~1.5.2",
     "@progress/kendo-angular-grid": "~15.1.0",
     "@progress/kendo-angular-dropdowns": "~15.1.0",
     "tslib": "^2.3.0"
