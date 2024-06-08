@@ -5,8 +5,8 @@
 **************************************************************************************************************/
 
 import { BaseEntity, IEntityDataProvider, IMetadataProvider, IRunViewProvider, ProviderConfigDataBase, RunViewResult, MetadataInfo,
-         EntityInfo, EntityFieldInfo, ApplicationInfo, RunViewParams, ProviderBase,
-         TypeScriptTypeFromSQLType, EntityFieldTSType, ProviderType, UserInfo, RoleInfo, RecordChange, UserRoleInfo, ILocalStorageProvider, RowLevelSecurityFilterInfo,
+         EntityInfo, EntityFieldInfo, ApplicationInfo, RunViewParams, ProviderBase, 
+         EntityFieldTSType, ProviderType, UserInfo, RoleInfo, RecordChange, UserRoleInfo, ILocalStorageProvider, RowLevelSecurityFilterInfo,
          AuditLogTypeInfo, AuthorizationInfo, TransactionGroupBase, TransactionItem, EntityPermissionType, EntitySaveOptions, LogError, RunReportParams,
          DatasetItemFilterType, DatasetResultType, DatasetStatusEntityUpdateDateType, DatasetStatusResultType, EntityRecordNameInput, EntityRecordNameResult, IRunReportProvider, RunReportResult,
          StripStopWords, RecordDependency, RecordMergeRequest, RecordMergeResult, RecordMergeDetailResult, EntityDependency, KeyValuePair, IRunQueryProvider, RunQueryResult, PotentialDuplicateRequest, PotentialDuplicateResponse, LogStatus,
@@ -73,7 +73,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
         }
     }
 
-    protected AllowRefresh(): boolean {
+    protected get AllowRefresh(): boolean {
         return this._bAllowRefresh;
     }
 

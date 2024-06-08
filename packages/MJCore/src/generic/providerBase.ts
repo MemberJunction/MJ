@@ -79,8 +79,14 @@ export abstract class ProviderBase implements IMetadataProvider {
     /******** ABSTRACT SECTION ****************************************************************** */
     // Subclass can determine if we allow refresh at any given point in time
     // subclass should return FALSE if it is doing something that should STOP refreshes
-    protected abstract AllowRefresh(): boolean;
+    /**
+     * Determines if a refresh is currently allowed or not
+     */
+    protected abstract get AllowRefresh(): boolean;
 
+    /**
+     * Returns the provider type for the instance 
+     */
     public abstract get ProviderType(): ProviderType;
 
     public abstract GetEntityRecordName(entityName: string, compositeKey: CompositeKey): Promise<string>;
@@ -96,8 +102,7 @@ export abstract class ProviderBase implements IMetadataProvider {
         this._ConfigData = data;
         this._localMetadata = new AllMetadata(); // start with fresh metadata
 
-        const isRefresh = await this.RefreshIfNeeded();
-        if (this._refresh || isRefresh) {
+        if (this._refresh || await this.CheckToSeeIfRefreshNeeded()) {
             // either a hard refresh flag was set within Refresh(), or LocalMetadata is Obsolete
 
             // first, make sure we reset the flag to false so that if another call to this function happens
@@ -275,7 +280,7 @@ export abstract class ProviderBase implements IMetadataProvider {
 
     public async Refresh(): Promise<boolean> {
         // do nothing here, but set a _refresh flag for next time things are requested
-        if (this.AllowRefresh()) {
+        if (this.AllowRefresh) {
             this._refresh = true;
             return this.Config(this._ConfigData);
         }
@@ -283,8 +288,8 @@ export abstract class ProviderBase implements IMetadataProvider {
             return true; // subclass is telling us not to do any refresh ops right now
     }
 
-    public async IsRefreshNeeded(): Promise<boolean> {
-        if (this.AllowRefresh()) {
+    public async CheckToSeeIfRefreshNeeded(): Promise<boolean> {
+        if (this.AllowRefresh) {
             await this.RefreshRemoteMetadataTimestamps(); // get the latest timestamps from the server first
             await this.LoadLocalMetadataFromStorage(); // then, attempt to load before we check to see if it is obsolete
             return this.LocalMetadataObsolete()
@@ -294,7 +299,7 @@ export abstract class ProviderBase implements IMetadataProvider {
     }
 
     public async RefreshIfNeeded(): Promise<boolean> {
-        if (await this.IsRefreshNeeded()) 
+        if (await this.CheckToSeeIfRefreshNeeded()) 
             return this.Refresh();
         else
             return true;
