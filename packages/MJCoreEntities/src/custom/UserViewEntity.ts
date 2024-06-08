@@ -3,7 +3,7 @@ import { Metadata, BaseEntity, BaseInfo, EntityInfo, EntityFieldInfo,RunView, Us
 import { UserViewEntity } from "../generated/entity_subclasses";
 
 
-@RegisterClass(BaseEntity, 'User Views', 2) // 2 priority so this gets used ahead of the generated sub-class
+@RegisterClass(BaseEntity, 'User Views') 
 export class UserViewEntityExtended extends UserViewEntity  {
     private _ViewEntityInfo: EntityInfo = null
 

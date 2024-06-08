@@ -888,19 +888,6 @@ type CommunicationRun_ {
   UserID: Int!
 }
 
-"""Reusable templates for communication."""
-type CommunicationTemplate_ {
-  Comments: String
-  CommunicationTemplatesArray: [CommunicationTemplate_!]!
-  Content: String!
-  CreatedAt: Timestamp!
-  ID: Int!
-  Name: String!
-  Parent: String
-  ParentID: Int
-  UpdatedAt: Timestamp!
-}
-
 type CompanyIntegrationRecordMap_ {
   CompanyIntegrationID: Int!
   CreatedAt: Timestamp!
@@ -2054,13 +2041,6 @@ input CreateCommunicationRunInput {
   ErrorMessage: String
   Status: String!
   UserID: Int!
-}
-
-input CreateCommunicationTemplateInput {
-  Comments: String
-  Content: String!
-  Name: String!
-  ParentID: Int
 }
 
 input CreateCompanyInput {
@@ -3826,14 +3806,6 @@ input CreatePaymentTermsTypeInput {
   DueDateCalculation: String
   ExternalSystemRecordID: String
   Name: String!
-}
-
-input CreatePersonLinkInput {
-  Email: String
-  FirstName: String
-  LastName: String
-  MainGreatPlainsCustomerID: String
-  MembershipGreatPlainsCustomerID: String
 }
 
 input CreateProductInput {
@@ -6295,6 +6267,20 @@ input CreateStringMapInput {
   VersionNumber: Int!
 }
 
+input CreateTemplateCategoryInput {
+  Description: String
+  Name: String!
+  ParentID: Int
+  UserID: Int!
+}
+
+input CreateTemplateInput {
+  CategoryID: Int
+  Description: String
+  Name: String!
+  UserID: Int!
+}
+
 input CreateUoMInput {
   BaseUoMName: String
   CreatedByExternalPartyName: String
@@ -8512,7 +8498,6 @@ type Mutation {
   CreateCommunicationProvider(input: CreateCommunicationProviderInput!): CommunicationProvider_!
   CreateCommunicationProviderMessageType(input: CreateCommunicationProviderMessageTypeInput!): CommunicationProviderMessageType_!
   CreateCommunicationRun(input: CreateCommunicationRunInput!): CommunicationRun_!
-  CreateCommunicationTemplate(input: CreateCommunicationTemplateInput!): CommunicationTemplate_!
   CreateCompany(input: CreateCompanyInput!): Company_!
   CreateCompanyIntegrationRecordMap(input: CreateCompanyIntegrationRecordMapInput!): CompanyIntegrationRecordMap_!
   CreateContact(input: CreateContactInput!): Contact_!
@@ -8568,7 +8553,6 @@ type Mutation {
   CreateListDetail(input: CreateListDetailInput!): ListDetail_!
   CreateOrganizationLink(input: CreateOrganizationLinkInput!): OrganizationLink_!
   CreatePaymentTermsType(input: CreatePaymentTermsTypeInput!): PaymentTermsType_!
-  CreatePersonLink(input: CreatePersonLinkInput!): PersonLink_!
   CreateProduct(input: CreateProductInput!): Product_!
   CreateProductPriceLevel(input: CreateProductPriceLevelInput!): ProductPriceLevel_!
   CreateQuery(input: CreateQueryInput!): Query_!
@@ -8593,6 +8577,8 @@ type Mutation {
   CreateSalesTransaction__client_membership(input: CreateSalesTransaction__client_membershipInput!): SalesTransaction__client_membership_!
   CreateSchemaInfo(input: CreateSchemaInfoInput!): SchemaInfo_!
   CreateStringMap(input: CreateStringMapInput!): StringMap_!
+  CreateTemplate(input: CreateTemplateInput!): Template_!
+  CreateTemplateCategory(input: CreateTemplateCategoryInput!): TemplateCategory_!
   CreateUoM(input: CreateUoMInput!): UoM_!
   CreateUser(input: CreateUserInput!): User_!
   CreateUserApplicationEntity(input: CreateUserApplicationEntityInput!): UserApplicationEntity_!
@@ -8693,7 +8679,6 @@ type Mutation {
   UpdateCommunicationProvider(input: UpdateCommunicationProviderInput!): CommunicationProvider_!
   UpdateCommunicationProviderMessageType(input: UpdateCommunicationProviderMessageTypeInput!): CommunicationProviderMessageType_!
   UpdateCommunicationRun(input: UpdateCommunicationRunInput!): CommunicationRun_!
-  UpdateCommunicationTemplate(input: UpdateCommunicationTemplateInput!): CommunicationTemplate_!
   UpdateCompany(input: UpdateCompanyInput!): Company_!
   UpdateCompanyIntegration(input: UpdateCompanyIntegrationInput!): CompanyIntegration_!
   UpdateCompanyIntegrationRecordMap(input: UpdateCompanyIntegrationRecordMapInput!): CompanyIntegrationRecordMap_!
@@ -8760,7 +8745,6 @@ type Mutation {
   UpdateListDetail(input: UpdateListDetailInput!): ListDetail_!
   UpdateOrganizationLink(input: UpdateOrganizationLinkInput!): OrganizationLink_!
   UpdatePaymentTermsType(input: UpdatePaymentTermsTypeInput!): PaymentTermsType_!
-  UpdatePersonLink(input: UpdatePersonLinkInput!): PersonLink_!
   UpdateProduct(input: UpdateProductInput!): Product_!
   UpdateProductPriceLevel(input: UpdateProductPriceLevelInput!): ProductPriceLevel_!
   UpdateQuery(input: UpdateQueryInput!): Query_!
@@ -8783,6 +8767,8 @@ type Mutation {
   UpdateSalesTransaction__client_membership(input: UpdateSalesTransaction__client_membershipInput!): SalesTransaction__client_membership_!
   UpdateSchemaInfo(input: UpdateSchemaInfoInput!): SchemaInfo_!
   UpdateStringMap(input: UpdateStringMapInput!): StringMap_!
+  UpdateTemplate(input: UpdateTemplateInput!): Template_!
+  UpdateTemplateCategory(input: UpdateTemplateCategoryInput!): TemplateCategory_!
   UpdateUoM(input: UpdateUoMInput!): UoM_!
   UpdateUser(input: UpdateUserInput!): User_!
   UpdateUserApplication(input: UpdateUserApplicationInput!): UserApplication_!
@@ -9188,7 +9174,6 @@ type Query {
   CommunicationProvider(ID: Int!): CommunicationProvider_
   CommunicationProviderMessageType(ID: Int!): CommunicationProviderMessageType_
   CommunicationRun(ID: Int!): CommunicationRun_
-  CommunicationTemplate(ID: Int!): CommunicationTemplate_
   Company(ID: Int!): Company_
   CompanyIntegration(ID: Int!): CompanyIntegration_
   CompanyIntegrationRecordMap(ID: Int!): CompanyIntegrationRecordMap_
@@ -9279,7 +9264,6 @@ type Query {
   OutputFormatType(ID: Int!): OutputFormatType_
   OutputTriggerType(ID: Int!): OutputTriggerType_
   PaymentTermsType(ID: Int!): PaymentTermsType_
-  PersonLink(PersonLinkID: Int!): PersonLink_
   Product(ProductId: String!): Product_
   ProductPriceLevel(ProductPriceLevelId: String!): ProductPriceLevel_
   Query(ID: Int!): Query_
@@ -9388,9 +9372,6 @@ type Query {
   RunCommunicationRunDynamicView(input: RunDynamicViewInput!): RunCommunicationRunViewResult!
   RunCommunicationRunViewByID(input: RunViewByIDInput!): RunCommunicationRunViewResult!
   RunCommunicationRunViewByName(input: RunViewByNameInput!): RunCommunicationRunViewResult!
-  RunCommunicationTemplateDynamicView(input: RunDynamicViewInput!): RunCommunicationTemplateViewResult!
-  RunCommunicationTemplateViewByID(input: RunViewByIDInput!): RunCommunicationTemplateViewResult!
-  RunCommunicationTemplateViewByName(input: RunViewByNameInput!): RunCommunicationTemplateViewResult!
   RunCompanyDynamicView(input: RunDynamicViewInput!): RunCompanyViewResult!
   RunCompanyIntegrationDynamicView(input: RunDynamicViewInput!): RunCompanyIntegrationViewResult!
   RunCompanyIntegrationRecordMapDynamicView(input: RunDynamicViewInput!): RunCompanyIntegrationRecordMapViewResult!
@@ -9608,9 +9589,6 @@ type Query {
   RunPaymentTermsTypeDynamicView(input: RunDynamicViewInput!): RunPaymentTermsTypeViewResult!
   RunPaymentTermsTypeViewByID(input: RunViewByIDInput!): RunPaymentTermsTypeViewResult!
   RunPaymentTermsTypeViewByName(input: RunViewByNameInput!): RunPaymentTermsTypeViewResult!
-  RunPersonLinkDynamicView(input: RunDynamicViewInput!): RunPersonLinkViewResult!
-  RunPersonLinkViewByID(input: RunViewByIDInput!): RunPersonLinkViewResult!
-  RunPersonLinkViewByName(input: RunViewByNameInput!): RunPersonLinkViewResult!
   RunProductDynamicView(input: RunDynamicViewInput!): RunProductViewResult!
   RunProductPriceLevelDynamicView(input: RunDynamicViewInput!): RunProductPriceLevelViewResult!
   RunProductPriceLevelViewByID(input: RunViewByIDInput!): RunProductPriceLevelViewResult!
@@ -9698,6 +9676,12 @@ type Query {
   RunTaggedItemDynamicView(input: RunDynamicViewInput!): RunTaggedItemViewResult!
   RunTaggedItemViewByID(input: RunViewByIDInput!): RunTaggedItemViewResult!
   RunTaggedItemViewByName(input: RunViewByNameInput!): RunTaggedItemViewResult!
+  RunTemplateCategoryDynamicView(input: RunDynamicViewInput!): RunTemplateCategoryViewResult!
+  RunTemplateCategoryViewByID(input: RunViewByIDInput!): RunTemplateCategoryViewResult!
+  RunTemplateCategoryViewByName(input: RunViewByNameInput!): RunTemplateCategoryViewResult!
+  RunTemplateDynamicView(input: RunDynamicViewInput!): RunTemplateViewResult!
+  RunTemplateViewByID(input: RunViewByIDInput!): RunTemplateViewResult!
+  RunTemplateViewByName(input: RunViewByNameInput!): RunTemplateViewResult!
   RunUoMDynamicView(input: RunDynamicViewInput!): RunUoMViewResult!
   RunUoMViewByID(input: RunViewByIDInput!): RunUoMViewResult!
   RunUoMViewByName(input: RunViewByNameInput!): RunUoMViewResult!
@@ -9774,6 +9758,8 @@ type Query {
   StringMap(StringMapId: String!): StringMap_
   Tag(ID: Int!): Tag_
   TaggedItem(ID: Int!): TaggedItem_
+  Template(ID: Int!): Template_
+  TemplateCategory(ID: Int!): TemplateCategory_
   UoM(UoMId: String!): UoM_
   UpdateWhereClause(ID: Int!): [UserView_!]!
   User(ID: Int!): User_
@@ -10410,16 +10396,6 @@ type RunCommunicationRunViewResult {
   ErrorMessage: String
   ExecutionTime: Int
   Results: [CommunicationRun_!]!
-  RowCount: Int
-  Success: Boolean!
-  TotalRowCount: Int
-  UserViewRunID: Int
-}
-
-type RunCommunicationTemplateViewResult {
-  ErrorMessage: String
-  ExecutionTime: Int
-  Results: [CommunicationTemplate_!]!
   RowCount: Int
   Success: Boolean!
   TotalRowCount: Int
@@ -11200,16 +11176,6 @@ type RunPaymentTermsTypeViewResult {
   UserViewRunID: Int
 }
 
-type RunPersonLinkViewResult {
-  ErrorMessage: String
-  ExecutionTime: Int
-  Results: [PersonLink_!]!
-  RowCount: Int
-  Success: Boolean!
-  TotalRowCount: Int
-  UserViewRunID: Int
-}
-
 type RunProductPriceLevelViewResult {
   ErrorMessage: String
   ExecutionTime: Int
@@ -11512,6 +11478,26 @@ type RunTaggedItemViewResult {
   ErrorMessage: String
   ExecutionTime: Int
   Results: [TaggedItem_!]!
+  RowCount: Int
+  Success: Boolean!
+  TotalRowCount: Int
+  UserViewRunID: Int
+}
+
+type RunTemplateCategoryViewResult {
+  ErrorMessage: String
+  ExecutionTime: Int
+  Results: [TemplateCategory_!]!
+  RowCount: Int
+  Success: Boolean!
+  TotalRowCount: Int
+  UserViewRunID: Int
+}
+
+type RunTemplateViewResult {
+  ErrorMessage: String
+  ExecutionTime: Int
+  Results: [Template_!]!
   RowCount: Int
   Success: Boolean!
   TotalRowCount: Int
@@ -14139,6 +14125,44 @@ type TaggedItem_ {
   TagID: Int!
 }
 
+"""Template categories for organizing templates"""
+type TemplateCategory_ {
+  CreatedAt: Timestamp!
+
+  """Description of the template category"""
+  Description: String
+  ID: Int!
+
+  """Name of the template category"""
+  Name: String!
+  Parent: String
+  ParentID: Int
+  TemplateCategoriesArray: [TemplateCategory_!]!
+  TemplatesArray: [Template_!]!
+  UpdatedAt: Timestamp!
+  User: String!
+  UserID: Int!
+}
+
+"""
+Templates are used for dynamic expansion of a static template with data from a given context. Templates can be used to create documents, messages and anything else that requires dynamic document creation merging together static text, data and lightweight logic
+"""
+type Template_ {
+  Category: String
+  CategoryID: Int
+  CreatedAt: Timestamp!
+
+  """Description of the template"""
+  Description: String
+  ID: Int!
+
+  """Name of the template"""
+  Name: String!
+  UpdatedAt: Timestamp!
+  User: String!
+  UserID: Int!
+}
+
 """
 The javascript `Date` as integer. Type represents date and time as number of milliseconds from start of UNIX epoch.
 """
@@ -14725,15 +14749,6 @@ input UpdateCommunicationRunInput {
   OldValues___: [KeyValuePairInput!]
   Status: String!
   UserID: Int!
-}
-
-input UpdateCommunicationTemplateInput {
-  Comments: String
-  Content: String!
-  ID: Int!
-  Name: String!
-  OldValues___: [KeyValuePairInput!]
-  ParentID: Int
 }
 
 input UpdateCompanyInput {
@@ -16719,16 +16734,6 @@ input UpdatePaymentTermsTypeInput {
   ID: Int!
   Name: String!
   OldValues___: [KeyValuePairInput!]
-}
-
-input UpdatePersonLinkInput {
-  Email: String
-  FirstName: String
-  LastName: String
-  MainGreatPlainsCustomerID: String
-  MembershipGreatPlainsCustomerID: String
-  OldValues___: [KeyValuePairInput!]
-  PersonLinkID: Int!
 }
 
 input UpdateProductInput {
@@ -19215,6 +19220,24 @@ input UpdateStringMapInput {
   VersionNumber: Int!
 }
 
+input UpdateTemplateCategoryInput {
+  Description: String
+  ID: Int!
+  Name: String!
+  OldValues___: [KeyValuePairInput!]
+  ParentID: Int
+  UserID: Int!
+}
+
+input UpdateTemplateInput {
+  CategoryID: Int
+  Description: String
+  ID: Int!
+  Name: String!
+  OldValues___: [KeyValuePairInput!]
+  UserID: Int!
+}
+
 input UpdateUoMInput {
   BaseUoMName: String
   CreatedByExternalPartyName: String
@@ -19703,6 +19726,8 @@ type User_ {
   ReportCategoriesArray: [ReportCategory_!]!
   ReportSnapshotsArray: [ReportSnapshot_!]!
   ReportsArray: [Report_!]!
+  TemplateCategoriesArray: [TemplateCategory_!]!
+  TemplatesArray: [Template_!]!
   Title: String
   Type: String!
   UpdatedAt: Timestamp!
