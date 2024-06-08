@@ -43,12 +43,8 @@ export class EntityActionInvocationParams {
  * The purpose of this class is to handle the invocation of actions for entities in all of the supported invocation contexts.
  */
 export class EntityActionEngine extends BaseEngine<EntityActionEngine> {
-    private constructor() {
-        super('MJ_EntityAction_Metadata');
-    }
-
     public static get Instance(): EntityActionEngine {
-        return super.getInstance<EntityActionEngine>('MJ_EntityAction_Metadata');
+        return super.getInstance<EntityActionEngine>();
     }
 
  

@@ -9,18 +9,11 @@ import { BaseCommunicationProvider, CommunicationProviderEntityExtended, Message
  * @RegisterClass decorator from the @memberjunction/global package to register your sub-class with the ClassFactory. This will cause your sub-class to be used instead of this base class when the Metadata object insantiates the ActionEngine.
  */
 export class CommunicationEngine extends BaseEngine<CommunicationEngine> {
-     // implement a singleton pattern for caching metadata. All uses of the engine will first call Config() to get started which is an async method. This method will load the metadata and cache it in a variable wtihin the "GlobalObjectStore"
-     // which is an MJ utility that is available to all packages. This will allow the metadata to be loaded once and then used by all instances of the engine. This is important because the metadata is not expected to change during the lifecycle
-    // of the application.
-    private constructor() {
-       super('MJ_Communication_Metadata');
-    }
- 
     /**
      * Returns the global instance of the class. This is a singleton class, so there is only one instance of it in the application. Do not directly create new instances of it, always use this method to get the instance.
      */
     public static get Instance(): CommunicationEngine {
-       return super.getInstance<CommunicationEngine>('MJ_Communication_Metadata');
+       return super.getInstance<CommunicationEngine>();
     }
   
      private _BaseMessageTypes: CommunicationBaseMessageTypeEntity[];

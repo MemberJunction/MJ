@@ -2,7 +2,7 @@
 * ALL ENTITIES - TypeGraphQL Type Class Definition - AUTO GENERATED FILE
 * Generated Entities and Resolvers for Server
 * 
-* GENERATED: 6/8/2024, 11:06:47 AM
+* GENERATED: 6/8/2024, 1:37:23 PM
 * 
 *   >>> DO NOT MODIFY THIS FILE!!!!!!!!!!!!
 *   >>> YOUR CHANGES WILL BE OVERWRITTEN
@@ -21608,6 +21608,9 @@ export class TemplateParam_ {
     @Field({nullable: true, description: 'Default value of the parameter'}) 
     DefaultValue?: string;
           
+    @Field(() => Boolean) 
+    IsRequired: boolean;
+          
     @Field(() => Int, {nullable: true, description: 'Entity ID, used only when Type is Record'}) 
     EntityID?: number;
           
@@ -21653,6 +21656,9 @@ export class CreateTemplateParamInput {
     @Field({ nullable: true })
     DefaultValue?: string;
 
+    @Field(() => Boolean)
+    IsRequired: boolean;
+
     @Field(() => Int, { nullable: true })
     EntityID?: number;
 
@@ -21683,6 +21689,9 @@ export class UpdateTemplateParamInput {
 
     @Field({ nullable: true })
     DefaultValue?: string;
+
+    @Field(() => Boolean)
+    IsRequired: boolean;
 
     @Field(() => Int, { nullable: true })
     EntityID?: number;
