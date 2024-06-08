@@ -84,6 +84,8 @@ export class EntityRecordNameResolver {
   }
 
   private async TestCommunicationFramework(user: UserInfo, EntityName: string, primaryKey: CompositeKeyInputType) {
+    return;
+    
     const engine = CommunicationEngine.Instance;
     await engine.Config(false, user);
     const tEngine = TemplateEngine.Instance;
