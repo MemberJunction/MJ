@@ -13,10 +13,12 @@
   ],
   "scripts": {
     "build": "turbo build --filter=\"@memberjunction*\"",
-    "watch": "turbo watch --filter=\"!mj_*\"",
+    "watch": "turbo watch --filter=\"@memberjunction*\"",
     "start": "turbo start --filter=mj_explorer --filter=mj_api",
     "start:api": "turbo start --filter=mj_api",
     "start:explorer": "turbo start --filter=mj_explorer",
+    "deps:check": "syncpack list-mismatches",
+    "deps:fix": "syncpack fix-mismatches",
     "docs": "typedoc",
     "change": "beachball change",
     "checkchange": "beachball check --verbose",
@@ -30,6 +32,7 @@
   },
   "devDependencies": {
     "beachball": "^2.43.0",
+    "syncpack": "^12.3.2",
     "turbo": "^1.12.5",
     "typedoc": "^0.25.12",
     "typedoc-plugin-missing-exports": "^2.2.0"

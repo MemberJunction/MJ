@@ -1,0 +1,13 @@
+{
+  "dependencyTypes": [
+    "prod"
+  ],
+  "versionGroups": [
+    {
+      "dependencies": [
+        "@memberjunction/**"
+      ],
+      "isIgnored": true
+    }
+  ]
+}

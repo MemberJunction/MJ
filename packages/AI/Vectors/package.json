@@ -21,8 +21,8 @@
     "@memberjunction/aiengine": "~1.5.2",
     "@memberjunction/ai": "~1.5.2",
     "@memberjunction/ai-vectordb": "~1.5.2",
-    "dotenv": "^16.0.3",
-    "openai": "^3.2.1"
+    "dotenv": "^16.4.1",
+    "openai": "^4.28.4"
   },
   "devDependencies": {
     "@types/node": "^20.1.7",
