@@ -2,7 +2,7 @@
 * ALL ENTITIES - TypeGraphQL Type Class Definition - AUTO GENERATED FILE
 * Generated Entities and Resolvers for Server
 * 
-* GENERATED: 6/7/2024, 8:04:43 PM
+* GENERATED: 6/8/2024, 9:07:50 AM
 * 
 *   >>> DO NOT MODIFY THIS FILE!!!!!!!!!!!!
 *   >>> YOUR CHANGES WILL BE OVERWRITTEN
@@ -21035,11 +21035,14 @@ export class Template_ {
     @Field({nullable: true, description: 'Description of the template'}) 
     Description?: string;
           
-    @Field(() => Int, {nullable: true}) 
+    @Field(() => Int, {nullable: true, description: 'Optional, Category that this template is part of'}) 
     CategoryID?: number;
           
     @Field(() => Int) 
     UserID: number;
+          
+    @Field({nullable: true, description: 'Contains the template text'}) 
+    TemplateText?: string;
           
     @Field() 
     @MaxLength(8)
@@ -21075,6 +21078,9 @@ export class CreateTemplateInput {
 
     @Field(() => Int)
     UserID: number;
+
+    @Field({ nullable: true })
+    TemplateText?: string;
 }
     
         
@@ -21097,6 +21103,9 @@ export class UpdateTemplateInput {
 
     @Field(() => Int)
     UserID: number;
+
+    @Field({ nullable: true })
+    TemplateText?: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];

@@ -5,7 +5,7 @@ import { UserCache, setupSQLServerClient } from '@memberjunction/sqlserver-datap
 import AppDataSource from "./db"
 import { ManageMetadataBase } from './manageMetadata';
 import { outputDir, commands, mj_core_schema, mjCoreSchema, configInfo, getSettingValue } from './config';
-import { logError, logMessage, logStatus } from './logging';
+import { logError, logMessage, logStatus, logWarning } from './logging';
 import * as MJ from '@memberjunction/core'
 import { RunCommandsBase } from './runCommand';
 import { DBSchemaGeneratorBase } from './dbSchema';
@@ -93,8 +93,16 @@ export class RunCodeGenBase {
                 const newUserSetup = configInfo.newUserSetup;
                 if (newUserSetup) {
                     const newUserObject = MJGlobal.Instance.ClassFactory.CreateInstance<CreateNewUserBase>(CreateNewUserBase);
-                    if (!await newUserObject.createNewUser(newUserSetup))
-                        logError('ERROR creating new user');
+                    const result = await newUserObject.createNewUser(newUserSetup);
+                    if (!result.Success) {
+                        if (result.Severity === 'error') {
+                            logError('ERROR creating new user')
+                            logError('   ' + result.Message);
+                        }
+                        else {
+                            logWarning('Warning: (New User Setup) ' + result.Message);
+                        }
+                    }
                 }
     
     
