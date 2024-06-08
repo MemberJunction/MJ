@@ -2,7 +2,7 @@ import { BaseEngine, LogError, RunView, UserInfo } from "@memberjunction/core";
 import { CommunicationBaseMessageTypeEntity, CommunicationProviderEntity, CommunicationProviderMessageTypeEntity } from "@memberjunction/core-entities";
 import { BaseSingleton, MJGlobal } from "@memberjunction/global";
 import { BehaviorSubject } from "rxjs";
-import { BaseCommunicationProvider, CommunicationProviderEntityExtended, Message, MessageResult } from "./BaseProvider";
+import { BaseCommunicationProvider, CommunicationProviderEntityExtended, Message, MessageResult, ProcessedMessage } from "./BaseProvider";
 
 /**
  * Base class for communications. This class can be sub-classed if desired if you would like to modify the logic across ALL actions. To do so, sub-class this class and use the 
@@ -115,6 +115,9 @@ export class CommunicationEngine extends BaseEngine<CommunicationEngine> {
             message.MessageType = providerMessageType;
         }
 
-        return provider.SendSingleMessage(message);
+        // now, process the message
+        const processedMessage = new ProcessedMessage(message);
+        await processedMessage.Process(false, this.ContextUser);
+        return provider.SendSingleMessage(processedMessage);
      }
 }

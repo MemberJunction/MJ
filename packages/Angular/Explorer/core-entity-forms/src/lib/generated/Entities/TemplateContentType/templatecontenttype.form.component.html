@@ -10,31 +10,16 @@
                     </mj-tab>
                     <mj-tab-body>
                         <mj-form-section 
-                            Entity="Templates" 
+                            Entity="Template Content Types" 
                             Section="details" 
                             [record]="record" 
                             [EditMode]="this.EditMode">
                         </mj-form-section>
                     </mj-tab-body>
                     
-                    <mj-tab Name="Template Params" 
-                        [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: 281}">
-                        Template Params
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Template Params')"  
-                            [NewRecordValues]="NewRecordValues('Template Params')"
-                            [AllowLoad]="IsCurrentTab('Template Params')"  
-                            [EditMode]="GridEditMode()"  
-                            [BottomMargin]="GridBottomMargin">
-                        </mj-user-view-grid>
-                    </mj-tab-body>
-
                     <mj-tab Name="Template Contents" 
                         [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: 282}">
+                        [Props]="{EntityRelationshipID: 283}">
                         Template Contents
                     </mj-tab>
                     <mj-tab-body>

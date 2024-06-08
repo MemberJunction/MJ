@@ -548,6 +548,21 @@
                             [BottomMargin]="GridBottomMargin">
                         </mj-user-view-grid>
                     </mj-tab-body>
+
+                    <mj-tab Name="Template Params" 
+                        [Visible]="record.IsSaved" 
+                        [Props]="{EntityRelationshipID: 280}">
+                        Template Params
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Template Params')"  
+                            [NewRecordValues]="NewRecordValues('Template Params')"
+                            [AllowLoad]="IsCurrentTab('Template Params')"  
+                            [EditMode]="GridEditMode()"  
+                            [BottomMargin]="GridBottomMargin">
+                        </mj-user-view-grid>
+                    </mj-tab-body>
                 </mj-tabstrip>
             </kendo-splitter-pane>
         </kendo-splitter>
