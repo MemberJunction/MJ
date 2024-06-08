@@ -17058,132 +17058,6 @@ import { RegisterClass } from "@memberjunction/global";
     }
         
     /**
-     * Communication Templates - strongly typed entity sub-class
-     * * Schema: __mj
-     * * Base Table: CommunicationTemplate
-     * * Base View: vwCommunicationTemplates
-     * * @description Reusable templates for communication.
-     * * Primary Key: ID
-     * @extends {BaseEntity}
-     * @class
-     * @public
-     */
-    @RegisterClass(BaseEntity, 'Communication Templates')
-    export class CommunicationTemplateEntity extends BaseEntity {
-        /**
-        * Loads the Communication Templates record from the database
-        * @param ID: number - primary key value to load the Communication Templates record.
-        * @param EntityRelationshipsToLoad - (optional) the relationships to load
-        * @returns {Promise<boolean>} - true if successful, false otherwise
-        * @public
-        * @async
-        * @memberof CommunicationTemplateEntity
-        * @method
-        * @override
-        */      
-        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const compositeKey: CompositeKey = new CompositeKey();
-            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
-        }
-            
-        /**
-        * Communication Templates - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
-        * @public
-        * @method
-        * @override
-        * @memberof CommunicationTemplateEntity
-        * @throws {Error} - Delete is not allowed for Communication Templates, to enable it set AllowDeleteAPI to 1 in the database.
-        */
-        public async Delete(): Promise<boolean> {
-            throw new Error('Delete is not allowed for Communication Templates, to enable it set AllowDeleteAPI to 1 in the database.');
-        } 
-            
-            /**
-        * * Field Name: ID
-        * * Display Name: ID
-        * * SQL Data Type: int
-        */
-        get ID(): number {  
-            return this.Get('ID');
-        }
-        
-        /**
-        * * Field Name: Name
-        * * Display Name: Name
-        * * SQL Data Type: nvarchar(255)
-        */
-        get Name(): string {  
-            return this.Get('Name');
-        }
-        set Name(value: string) {
-            this.Set('Name', value);
-        }
-        /**
-        * * Field Name: Content
-        * * Display Name: Content
-        * * SQL Data Type: nvarchar(MAX)
-        */
-        get Content(): string {  
-            return this.Get('Content');
-        }
-        set Content(value: string) {
-            this.Set('Content', value);
-        }
-        /**
-        * * Field Name: ParentID
-        * * Display Name: Parent ID
-        * * SQL Data Type: int
-        * * Related Entity/Foreign Key: Communication Templates (vwCommunicationTemplates.ID)
-        */
-        get ParentID(): number | null {  
-            return this.Get('ParentID');
-        }
-        set ParentID(value: number | null) {
-            this.Set('ParentID', value);
-        }
-        /**
-        * * Field Name: Comments
-        * * Display Name: Comments
-        * * SQL Data Type: nvarchar(MAX)
-        */
-        get Comments(): string | null {  
-            return this.Get('Comments');
-        }
-        set Comments(value: string | null) {
-            this.Set('Comments', value);
-        }
-        /**
-        * * Field Name: CreatedAt
-        * * Display Name: Created At
-        * * SQL Data Type: datetime
-        */
-        get CreatedAt(): Date {  
-            return this.Get('CreatedAt');
-        }
-        
-        /**
-        * * Field Name: UpdatedAt
-        * * Display Name: Updated At
-        * * SQL Data Type: datetime
-        */
-        get UpdatedAt(): Date {  
-            return this.Get('UpdatedAt');
-        }
-        
-        /**
-        * * Field Name: Parent
-        * * Display Name: Parent
-        * * SQL Data Type: nvarchar(255)
-        */
-        get Parent(): string | null {  
-            return this.Get('Parent');
-        }
-        
-
-    }
-        
-    /**
      * Communication Providers - strongly typed entity sub-class
      * * Schema: __mj
      * * Base Table: CommunicationProvider
@@ -17942,6 +17816,282 @@ import { RegisterClass } from "@memberjunction/global";
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
+        }
+        
+
+    }
+        
+    /**
+     * Templates - strongly typed entity sub-class
+     * * Schema: __mj
+     * * Base Table: Template
+     * * Base View: vwTemplates
+     * * @description Templates are used for dynamic expansion of a static template with data from a given context. Templates can be used to create documents, messages and anything else that requires dynamic document creation merging together static text, data and lightweight logic
+     * * Primary Key: ID
+     * @extends {BaseEntity}
+     * @class
+     * @public
+     */
+    @RegisterClass(BaseEntity, 'Templates')
+    export class TemplateEntity extends BaseEntity {
+        /**
+        * Loads the Templates record from the database
+        * @param ID: number - primary key value to load the Templates record.
+        * @param EntityRelationshipsToLoad - (optional) the relationships to load
+        * @returns {Promise<boolean>} - true if successful, false otherwise
+        * @public
+        * @async
+        * @memberof TemplateEntity
+        * @method
+        * @override
+        */      
+        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+        }
+            
+        /**
+        * Templates - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
+        * @public
+        * @method
+        * @override
+        * @memberof TemplateEntity
+        * @throws {Error} - Delete is not allowed for Templates, to enable it set AllowDeleteAPI to 1 in the database.
+        */
+        public async Delete(): Promise<boolean> {
+            throw new Error('Delete is not allowed for Templates, to enable it set AllowDeleteAPI to 1 in the database.');
+        } 
+            
+            /**
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: int
+        */
+        get ID(): number {  
+            return this.Get('ID');
+        }
+        
+        /**
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Name of the template
+        */
+        get Name(): string {  
+            return this.Get('Name');
+        }
+        set Name(value: string) {
+            this.Set('Name', value);
+        }
+        /**
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Description of the template
+        */
+        get Description(): string | null {  
+            return this.Get('Description');
+        }
+        set Description(value: string | null) {
+            this.Set('Description', value);
+        }
+        /**
+        * * Field Name: CategoryID
+        * * Display Name: Category ID
+        * * SQL Data Type: int
+        * * Related Entity/Foreign Key: Template Categories (vwTemplateCategories.ID)
+        */
+        get CategoryID(): number | null {  
+            return this.Get('CategoryID');
+        }
+        set CategoryID(value: number | null) {
+            this.Set('CategoryID', value);
+        }
+        /**
+        * * Field Name: UserID
+        * * Display Name: User ID
+        * * SQL Data Type: int
+        * * Related Entity/Foreign Key: Users (vwUsers.ID)
+        */
+        get UserID(): number {  
+            return this.Get('UserID');
+        }
+        set UserID(value: number) {
+            this.Set('UserID', value);
+        }
+        /**
+        * * Field Name: CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetime
+        */
+        get CreatedAt(): Date {  
+            return this.Get('CreatedAt');
+        }
+        
+        /**
+        * * Field Name: UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetime
+        */
+        get UpdatedAt(): Date {  
+            return this.Get('UpdatedAt');
+        }
+        
+        /**
+        * * Field Name: Category
+        * * Display Name: Category
+        * * SQL Data Type: nvarchar(255)
+        */
+        get Category(): string | null {  
+            return this.Get('Category');
+        }
+        
+        /**
+        * * Field Name: User
+        * * Display Name: User
+        * * SQL Data Type: nvarchar(100)
+        */
+        get User(): string {  
+            return this.Get('User');
+        }
+        
+
+    }
+        
+    /**
+     * Template Categories - strongly typed entity sub-class
+     * * Schema: __mj
+     * * Base Table: TemplateCategory
+     * * Base View: vwTemplateCategories
+     * * @description Template categories for organizing templates
+     * * Primary Key: ID
+     * @extends {BaseEntity}
+     * @class
+     * @public
+     */
+    @RegisterClass(BaseEntity, 'Template Categories')
+    export class TemplateCategoryEntity extends BaseEntity {
+        /**
+        * Loads the Template Categories record from the database
+        * @param ID: number - primary key value to load the Template Categories record.
+        * @param EntityRelationshipsToLoad - (optional) the relationships to load
+        * @returns {Promise<boolean>} - true if successful, false otherwise
+        * @public
+        * @async
+        * @memberof TemplateCategoryEntity
+        * @method
+        * @override
+        */      
+        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+        }
+            
+        /**
+        * Template Categories - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
+        * @public
+        * @method
+        * @override
+        * @memberof TemplateCategoryEntity
+        * @throws {Error} - Delete is not allowed for Template Categories, to enable it set AllowDeleteAPI to 1 in the database.
+        */
+        public async Delete(): Promise<boolean> {
+            throw new Error('Delete is not allowed for Template Categories, to enable it set AllowDeleteAPI to 1 in the database.');
+        } 
+            
+            /**
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: int
+        */
+        get ID(): number {  
+            return this.Get('ID');
+        }
+        
+        /**
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Name of the template category
+        */
+        get Name(): string {  
+            return this.Get('Name');
+        }
+        set Name(value: string) {
+            this.Set('Name', value);
+        }
+        /**
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Description of the template category
+        */
+        get Description(): string | null {  
+            return this.Get('Description');
+        }
+        set Description(value: string | null) {
+            this.Set('Description', value);
+        }
+        /**
+        * * Field Name: ParentID
+        * * Display Name: Parent ID
+        * * SQL Data Type: int
+        * * Related Entity/Foreign Key: Template Categories (vwTemplateCategories.ID)
+        */
+        get ParentID(): number | null {  
+            return this.Get('ParentID');
+        }
+        set ParentID(value: number | null) {
+            this.Set('ParentID', value);
+        }
+        /**
+        * * Field Name: UserID
+        * * Display Name: User ID
+        * * SQL Data Type: int
+        * * Related Entity/Foreign Key: Users (vwUsers.ID)
+        */
+        get UserID(): number {  
+            return this.Get('UserID');
+        }
+        set UserID(value: number) {
+            this.Set('UserID', value);
+        }
+        /**
+        * * Field Name: CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetime
+        */
+        get CreatedAt(): Date {  
+            return this.Get('CreatedAt');
+        }
+        
+        /**
+        * * Field Name: UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetime
+        */
+        get UpdatedAt(): Date {  
+            return this.Get('UpdatedAt');
+        }
+        
+        /**
+        * * Field Name: Parent
+        * * Display Name: Parent
+        * * SQL Data Type: nvarchar(255)
+        */
+        get Parent(): string | null {  
+            return this.Get('Parent');
+        }
+        
+        /**
+        * * Field Name: User
+        * * Display Name: User
+        * * SQL Data Type: nvarchar(100)
+        */
+        get User(): string {  
+            return this.Get('User');
         }
         
 

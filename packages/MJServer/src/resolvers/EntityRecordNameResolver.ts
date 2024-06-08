@@ -4,7 +4,7 @@ import { AppContext } from '../types';
 import { CompositeKeyInputType, CompositeKeyOutputType } from '../generic/KeyInputOutputTypes';
 import { CommunicationEngine } from '@memberjunction/communication-core';
 import { DocumentationEngine } from '@memberjunction/doc-utils';
-import { TemplateEngineService } from '@memberjunction/templates';
+//import { TemplateEngineService } from '@memberjunction/templates';
 
 @InputType()
 export class EntityRecordNameInput {
