@@ -1,14 +1,22 @@
 import { Component, Input } from '@angular/core';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormSectionComponent } from '@memberjunction/ng-base-forms';
-import { TemplateEntity } from '@memberjunction/core-entities';
+import { TemplateParamEntity } from '@memberjunction/core-entities';
 
-@RegisterClass(BaseFormSectionComponent, 'Templates.details') // Tell MemberJunction about this class 
+@RegisterClass(BaseFormSectionComponent, 'Template Params.details') // Tell MemberJunction about this class 
 @Component({
-    selector: 'gen-template-form-details',
+    selector: 'gen-templateparam-form-details',
     styleUrls: ['../../../../../shared/form-styles.css'],
     template: `<div *ngIf="this.record">
     <div class="record-form">
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="TemplateID"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+            LinkType="Record"
+        ></mj-form-field>
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
@@ -26,14 +34,21 @@ import { TemplateEntity } from '@memberjunction/core-entities';
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="UserPrompt"
+            FieldName="Type"
+            Type="dropdownlist"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="DefaultValue"
             Type="textarea"
             [EditMode]="EditMode"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="CategoryID"
+            FieldName="EntityID"
             Type="numerictextbox"
             [EditMode]="EditMode"
             LinkType="Record"
@@ -41,30 +56,8 @@ import { TemplateEntity } from '@memberjunction/core-entities';
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="UserID"
-            Type="numerictextbox"
-            [EditMode]="EditMode"
-            LinkType="Record"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="ActiveAt"
-            Type="datepicker"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="DisabledAt"
-            Type="datepicker"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="IsActive"
-            Type="checkbox"
+            FieldName="RecordID"
+            Type="textarea"
             [EditMode]="EditMode"
         ></mj-form-field>
         <mj-form-field 
@@ -84,14 +77,14 @@ import { TemplateEntity } from '@memberjunction/core-entities';
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="Category"
+            FieldName="Template"
             Type="textbox"
             [EditMode]="EditMode"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="User"
+            FieldName="Entity"
             Type="textbox"
             [EditMode]="EditMode"
         ></mj-form-field>
@@ -100,12 +93,12 @@ import { TemplateEntity } from '@memberjunction/core-entities';
 </div>
     `
 })
-export class TemplateDetailsComponent extends BaseFormSectionComponent {
-    @Input() override record!: TemplateEntity;
+export class TemplateParamDetailsComponent extends BaseFormSectionComponent {
+    @Input() override record!: TemplateParamEntity;
     @Input() override EditMode: boolean = false;
 }
 
-export function LoadTemplateDetailsComponent() {
+export function LoadTemplateParamDetailsComponent() {
     // does nothing, but called in order to prevent tree-shaking from eliminating this component from the build
 }
       

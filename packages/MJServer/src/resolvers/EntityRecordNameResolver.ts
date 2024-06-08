@@ -43,9 +43,9 @@ export class EntityRecordNameResolver {
     @Ctx() {userPayload}: AppContext
   ): Promise<EntityRecordNameResult> {
     //TEMPORARY: test harness for communication framework - dumb place but quick test grounds, will delete
-    //this.TestCommunicationFramework(userPayload.userRecord, EntityName, primaryKey);
+    this.TestCommunicationFramework(userPayload.userRecord, EntityName, primaryKey);
     //this.TestDocLibraries(userPayload.userRecord);
-    this.TestTemplates(userPayload.userRecord);
+    //this.TestTemplates(userPayload.userRecord);
 
     const md = new Metadata();
     return await this.InnerGetEntityRecordName(md, EntityName, primaryKey);
@@ -83,16 +83,48 @@ export class EntityRecordNameResolver {
       return { Success: false, Status: `Entity ${EntityName} not found`, CompositeKey: pk, EntityName };
   }
 
-  // private async TestCommunicationFramework(user: UserInfo, EntityName: string, primaryKey: CompositeKeyInputType) {
-  //   const engine = CommunicationEngine.Instance;
-  //   await engine.Config(false, user);
-  //   await engine.SendSingleMessage('SendGrid', 'Email', {
-  //     To: 'user@domain.com',
-  //     Subject: `MJServer Notification: GetEntityRecordName Called For: ${EntityName}`,
-  //     Body: `Entity: ${EntityName}, Key: ${JSON.stringify(primaryKey)}`,
-  //     MessageType: null
-  //   });
-  // }
+  private async TestCommunicationFramework(user: UserInfo, EntityName: string, primaryKey: CompositeKeyInputType) {
+    const engine = CommunicationEngine.Instance;
+    await engine.Config(false, user);
+    const tEngine = TemplateEngine.Instance;
+    await tEngine.Config(false, user);
+    const t = TemplateEngine.Instance.FindTemplate('Test Template');
+    const s = TemplateEngine.Instance.FindTemplate('Test Subject Tempalte');
+    const d = { 
+      firstName: 'John',
+      lastName: 'Doe',
+      age: 25,
+      address: {
+        street: '123 Main St',
+        city: 'Springfield',
+        state: 'IL',
+        zip: '62701'
+      },
+      recommendedArticles: [
+        {
+          title: 'How to Write Better Code',
+          url: 'https://example.com/article1'
+        },
+        {
+          title: 'The Art of Debugging',
+          url: 'https://example.com/article2'      
+        },
+        {
+          title: 'Using Templates Effectively',
+          url: 'https://example.com/article3'
+        }
+      ]
+    }
+    await engine.SendSingleMessage('SendGrid', 'Email', {
+      To: 'amith_nagarajan@hotmail.com',
+      From: "amith@bluecypress.io",
+      Subject: `MJServer Notification: GetEntityRecordName Called For: ${EntityName}`,
+      BodyTemplate: t,
+      SubjectTemplate: s,
+      ContextData: d,
+      MessageType: null
+    });
+  }
 
   // private async TestDocLibraries(user: UserInfo) {
   //   const engine = DocumentationEngine.Instance;
@@ -114,10 +146,11 @@ export class EntityRecordNameResolver {
 
   private async TestTemplates(user: UserInfo) {
     return; 
-    
+
     const engine = TemplateEngine.Instance;
     await engine.Config(false, user);
     const t = engine.FindTemplate('Test Template');
+    const tc = t.GetHighestPriorityContent('Text');
     const d = { 
       firstName: 'John',
       lastName: 'Doe',
@@ -144,7 +177,7 @@ export class EntityRecordNameResolver {
       ]
     }
     
-    const result = await engine.RenderTemplate(t, d);
+    const result = await engine.RenderTemplate(tc, d);
     console.log(result);
   }
 }

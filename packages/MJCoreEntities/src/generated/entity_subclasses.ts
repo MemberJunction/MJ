@@ -18237,6 +18237,18 @@ import { RegisterClass } from "@memberjunction/global";
             this.Set('Description', value);
         }
         /**
+        * * Field Name: UserPrompt
+        * * Display Name: User Prompt
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: This prompt will be used by the AI to generate template content as requested by the user.
+        */
+        get UserPrompt(): string | null {  
+            return this.Get('UserPrompt');
+        }
+        set UserPrompt(value: string | null) {
+            this.Set('UserPrompt', value);
+        }
+        /**
         * * Field Name: CategoryID
         * * Display Name: Category ID
         * * SQL Data Type: int
@@ -18262,16 +18274,41 @@ import { RegisterClass } from "@memberjunction/global";
             this.Set('UserID', value);
         }
         /**
-        * * Field Name: TemplateText
-        * * Display Name: Template Text
-        * * SQL Data Type: nvarchar(MAX)
-        * * Description: Contains the template text
+        * * Field Name: ActiveAt
+        * * Display Name: Active At
+        * * SQL Data Type: datetime
+        * * Description: Optional, if provided, this template will not be available for use until the specified date. Requires IsActive to be set to 1
         */
-        get TemplateText(): string | null {  
-            return this.Get('TemplateText');
+        get ActiveAt(): Date | null {  
+            return this.Get('ActiveAt');
         }
-        set TemplateText(value: string | null) {
-            this.Set('TemplateText', value);
+        set ActiveAt(value: Date | null) {
+            this.Set('ActiveAt', value);
+        }
+        /**
+        * * Field Name: DisabledAt
+        * * Display Name: Disabled At
+        * * SQL Data Type: datetime
+        * * Description: Optional, if provided, this template will not be available for use after the specified date. If IsActive=0, this has no effect.
+        */
+        get DisabledAt(): Date | null {  
+            return this.Get('DisabledAt');
+        }
+        set DisabledAt(value: Date | null) {
+            this.Set('DisabledAt', value);
+        }
+        /**
+        * * Field Name: IsActive
+        * * Display Name: Is Active
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: If set to 0, the template will be disabled regardless of the values in ActiveAt/DisabledAt. 
+        */
+        get IsActive(): boolean {  
+            return this.Get('IsActive');
+        }
+        set IsActive(value: boolean) {
+            this.Set('IsActive', value);
         }
         /**
         * * Field Name: CreatedAt
@@ -18449,6 +18486,442 @@ import { RegisterClass } from "@memberjunction/global";
         */
         get User(): string {  
             return this.Get('User');
+        }
+        
+
+    }
+        
+    /**
+     * Template Contents - strongly typed entity sub-class
+     * * Schema: __mj
+     * * Base Table: TemplateContent
+     * * Base View: vwTemplateContents
+     * * @description Template content for different versions of a template for purposes like HTML/Text/etc
+     * * Primary Key: ID
+     * @extends {BaseEntity}
+     * @class
+     * @public
+     */
+    @RegisterClass(BaseEntity, 'Template Contents')
+    export class TemplateContentEntity extends BaseEntity {
+        /**
+        * Loads the Template Contents record from the database
+        * @param ID: number - primary key value to load the Template Contents record.
+        * @param EntityRelationshipsToLoad - (optional) the relationships to load
+        * @returns {Promise<boolean>} - true if successful, false otherwise
+        * @public
+        * @async
+        * @memberof TemplateContentEntity
+        * @method
+        * @override
+        */      
+        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+        }
+            
+        /**
+        * Template Contents - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
+        * @public
+        * @method
+        * @override
+        * @memberof TemplateContentEntity
+        * @throws {Error} - Delete is not allowed for Template Contents, to enable it set AllowDeleteAPI to 1 in the database.
+        */
+        public async Delete(): Promise<boolean> {
+            throw new Error('Delete is not allowed for Template Contents, to enable it set AllowDeleteAPI to 1 in the database.');
+        } 
+            
+            /**
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: int
+        */
+        get ID(): number {  
+            return this.Get('ID');
+        }
+        
+        /**
+        * * Field Name: TemplateID
+        * * Display Name: Template ID
+        * * SQL Data Type: int
+        * * Related Entity/Foreign Key: Templates (vwTemplates.ID)
+        */
+        get TemplateID(): number {  
+            return this.Get('TemplateID');
+        }
+        set TemplateID(value: number) {
+            this.Set('TemplateID', value);
+        }
+        /**
+        * * Field Name: TypeID
+        * * Display Name: Type ID
+        * * SQL Data Type: int
+        * * Related Entity/Foreign Key: Template Content Types (vwTemplateContentTypes.ID)
+        */
+        get TypeID(): number {  
+            return this.Get('TypeID');
+        }
+        set TypeID(value: number) {
+            this.Set('TypeID', value);
+        }
+        /**
+        * * Field Name: TemplateText
+        * * Display Name: Template Text
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: The actual text content for the template
+        */
+        get TemplateText(): string | null {  
+            return this.Get('TemplateText');
+        }
+        set TemplateText(value: string | null) {
+            this.Set('TemplateText', value);
+        }
+        /**
+        * * Field Name: Priority
+        * * Display Name: Priority
+        * * SQL Data Type: int
+        * * Description: Priority of the content version, higher priority versions will be used ahead of lower priority versions for a given Type
+        */
+        get Priority(): number {  
+            return this.Get('Priority');
+        }
+        set Priority(value: number) {
+            this.Set('Priority', value);
+        }
+        /**
+        * * Field Name: IsActive
+        * * Display Name: Is Active
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: Indicates whether the content is active or not. Use this to disable a particular Template Content item without having to remove it
+        */
+        get IsActive(): boolean {  
+            return this.Get('IsActive');
+        }
+        set IsActive(value: boolean) {
+            this.Set('IsActive', value);
+        }
+        /**
+        * * Field Name: CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()
+        */
+        get CreatedAt(): Date {  
+            return this.Get('CreatedAt');
+        }
+        
+        /**
+        * * Field Name: UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()
+        */
+        get UpdatedAt(): Date {  
+            return this.Get('UpdatedAt');
+        }
+        
+        /**
+        * * Field Name: Template
+        * * Display Name: Template
+        * * SQL Data Type: nvarchar(255)
+        */
+        get Template(): string {  
+            return this.Get('Template');
+        }
+        
+        /**
+        * * Field Name: Type
+        * * Display Name: Type
+        * * SQL Data Type: nvarchar(255)
+        */
+        get Type(): string {  
+            return this.Get('Type');
+        }
+        
+
+    }
+        
+    /**
+     * Template Params - strongly typed entity sub-class
+     * * Schema: __mj
+     * * Base Table: TemplateParam
+     * * Base View: vwTemplateParams
+     * * @description Parameters allowed for use inside the template
+     * * Primary Key: ID
+     * @extends {BaseEntity}
+     * @class
+     * @public
+     */
+    @RegisterClass(BaseEntity, 'Template Params')
+    export class TemplateParamEntity extends BaseEntity {
+        /**
+        * Loads the Template Params record from the database
+        * @param ID: number - primary key value to load the Template Params record.
+        * @param EntityRelationshipsToLoad - (optional) the relationships to load
+        * @returns {Promise<boolean>} - true if successful, false otherwise
+        * @public
+        * @async
+        * @memberof TemplateParamEntity
+        * @method
+        * @override
+        */      
+        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+        }
+            
+        /**
+        * Template Params - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
+        * @public
+        * @method
+        * @override
+        * @memberof TemplateParamEntity
+        * @throws {Error} - Delete is not allowed for Template Params, to enable it set AllowDeleteAPI to 1 in the database.
+        */
+        public async Delete(): Promise<boolean> {
+            throw new Error('Delete is not allowed for Template Params, to enable it set AllowDeleteAPI to 1 in the database.');
+        } 
+            
+            /**
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: int
+        */
+        get ID(): number {  
+            return this.Get('ID');
+        }
+        
+        /**
+        * * Field Name: TemplateID
+        * * Display Name: Template ID
+        * * SQL Data Type: int
+        * * Related Entity/Foreign Key: Templates (vwTemplates.ID)
+        * * Description: ID of the template this parameter belongs to
+        */
+        get TemplateID(): number {  
+            return this.Get('TemplateID');
+        }
+        set TemplateID(value: number) {
+            this.Set('TemplateID', value);
+        }
+        /**
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Name of the parameter
+        */
+        get Name(): string {  
+            return this.Get('Name');
+        }
+        set Name(value: string) {
+            this.Set('Name', value);
+        }
+        /**
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Description of the parameter
+        */
+        get Description(): string | null {  
+            return this.Get('Description');
+        }
+        set Description(value: string | null) {
+            this.Set('Description', value);
+        }
+        /**
+        * * Field Name: Type
+        * * Display Name: Type
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Scalar
+        * * Value List Type: List
+        * * Possible Values 
+        *   * Scalar
+        *   * Array
+        *   * Object
+        *   * Record
+        * * Description: Type of the parameter
+        */
+        get Type(): 'Scalar' | 'Array' | 'Object' | 'Record' {  
+            return this.Get('Type');
+        }
+        set Type(value: 'Scalar' | 'Array' | 'Object' | 'Record') {
+            this.Set('Type', value);
+        }
+        /**
+        * * Field Name: DefaultValue
+        * * Display Name: Default Value
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Default value of the parameter
+        */
+        get DefaultValue(): string | null {  
+            return this.Get('DefaultValue');
+        }
+        set DefaultValue(value: string | null) {
+            this.Set('DefaultValue', value);
+        }
+        /**
+        * * Field Name: EntityID
+        * * Display Name: Entity ID
+        * * SQL Data Type: int
+        * * Related Entity/Foreign Key: Entities (vwEntities.ID)
+        * * Description: Entity ID, used only when Type is Record
+        */
+        get EntityID(): number | null {  
+            return this.Get('EntityID');
+        }
+        set EntityID(value: number | null) {
+            this.Set('EntityID', value);
+        }
+        /**
+        * * Field Name: RecordID
+        * * Display Name: Record ID
+        * * SQL Data Type: nvarchar(2000)
+        * * Description: Record ID, used only when Type is Record
+        */
+        get RecordID(): string | null {  
+            return this.Get('RecordID');
+        }
+        set RecordID(value: string | null) {
+            this.Set('RecordID', value);
+        }
+        /**
+        * * Field Name: CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()
+        */
+        get CreatedAt(): Date {  
+            return this.Get('CreatedAt');
+        }
+        
+        /**
+        * * Field Name: UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()
+        */
+        get UpdatedAt(): Date {  
+            return this.Get('UpdatedAt');
+        }
+        
+        /**
+        * * Field Name: Template
+        * * Display Name: Template
+        * * SQL Data Type: nvarchar(255)
+        */
+        get Template(): string {  
+            return this.Get('Template');
+        }
+        
+        /**
+        * * Field Name: Entity
+        * * Display Name: Entity
+        * * SQL Data Type: nvarchar(255)
+        */
+        get Entity(): string | null {  
+            return this.Get('Entity');
+        }
+        
+
+    }
+        
+    /**
+     * Template Content Types - strongly typed entity sub-class
+     * * Schema: __mj
+     * * Base Table: TemplateContentType
+     * * Base View: vwTemplateContentTypes
+     * * @description Template content types for categorizing content within templates
+     * * Primary Key: ID
+     * @extends {BaseEntity}
+     * @class
+     * @public
+     */
+    @RegisterClass(BaseEntity, 'Template Content Types')
+    export class TemplateContentTypeEntity extends BaseEntity {
+        /**
+        * Loads the Template Content Types record from the database
+        * @param ID: number - primary key value to load the Template Content Types record.
+        * @param EntityRelationshipsToLoad - (optional) the relationships to load
+        * @returns {Promise<boolean>} - true if successful, false otherwise
+        * @public
+        * @async
+        * @memberof TemplateContentTypeEntity
+        * @method
+        * @override
+        */      
+        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+        }
+            
+        /**
+        * Template Content Types - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
+        * @public
+        * @method
+        * @override
+        * @memberof TemplateContentTypeEntity
+        * @throws {Error} - Delete is not allowed for Template Content Types, to enable it set AllowDeleteAPI to 1 in the database.
+        */
+        public async Delete(): Promise<boolean> {
+            throw new Error('Delete is not allowed for Template Content Types, to enable it set AllowDeleteAPI to 1 in the database.');
+        } 
+            
+            /**
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: int
+        */
+        get ID(): number {  
+            return this.Get('ID');
+        }
+        
+        /**
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Name of the template content type
+        */
+        get Name(): string {  
+            return this.Get('Name');
+        }
+        set Name(value: string) {
+            this.Set('Name', value);
+        }
+        /**
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Description of the template content type
+        */
+        get Description(): string | null {  
+            return this.Get('Description');
+        }
+        set Description(value: string | null) {
+            this.Set('Description', value);
+        }
+        /**
+        * * Field Name: CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()
+        */
+        get CreatedAt(): Date {  
+            return this.Get('CreatedAt');
+        }
+        
+        /**
+        * * Field Name: UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()
+        */
+        get UpdatedAt(): Date {  
+            return this.Get('UpdatedAt');
         }
         
 

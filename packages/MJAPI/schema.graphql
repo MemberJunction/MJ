@@ -6282,12 +6282,38 @@ input CreateTemplateCategoryInput {
   UserID: Int!
 }
 
-input CreateTemplateInput {
-  CategoryID: Int
+input CreateTemplateContentInput {
+  IsActive: Boolean!
+  Priority: Int!
+  TemplateID: Int!
+  TemplateText: String
+  TypeID: Int!
+}
+
+input CreateTemplateContentTypeInput {
   Description: String
   Name: String!
-  TemplateText: String
+}
+
+input CreateTemplateInput {
+  ActiveAt: Timestamp
+  CategoryID: Int
+  Description: String
+  DisabledAt: Timestamp
+  IsActive: Boolean!
+  Name: String!
   UserID: Int!
+  UserPrompt: String
+}
+
+input CreateTemplateParamInput {
+  DefaultValue: String
+  Description: String
+  EntityID: Int
+  Name: String!
+  RecordID: String
+  TemplateID: Int!
+  Type: String!
 }
 
 input CreateUoMInput {
@@ -8010,6 +8036,7 @@ type Entity_ {
   ResourceTypesArray: [ResourceType_!]!
   SchemaName: String!
   TaggedItemsArray: [TaggedItem_!]!
+  TemplateParamsArray: [TemplateParam_!]!
 
   """
   When set to 1, changes made via the MemberJunction architecture will result in tracking records being created in the RecordChange table
@@ -8589,6 +8616,9 @@ type Mutation {
   CreateStringMap(input: CreateStringMapInput!): StringMap_!
   CreateTemplate(input: CreateTemplateInput!): Template_!
   CreateTemplateCategory(input: CreateTemplateCategoryInput!): TemplateCategory_!
+  CreateTemplateContent(input: CreateTemplateContentInput!): TemplateContent_!
+  CreateTemplateContentType(input: CreateTemplateContentTypeInput!): TemplateContentType_!
+  CreateTemplateParam(input: CreateTemplateParamInput!): TemplateParam_!
   CreateUoM(input: CreateUoMInput!): UoM_!
   CreateUser(input: CreateUserInput!): User_!
   CreateUserApplicationEntity(input: CreateUserApplicationEntityInput!): UserApplicationEntity_!
@@ -8780,6 +8810,9 @@ type Mutation {
   UpdateStringMap(input: UpdateStringMapInput!): StringMap_!
   UpdateTemplate(input: UpdateTemplateInput!): Template_!
   UpdateTemplateCategory(input: UpdateTemplateCategoryInput!): TemplateCategory_!
+  UpdateTemplateContent(input: UpdateTemplateContentInput!): TemplateContent_!
+  UpdateTemplateContentType(input: UpdateTemplateContentTypeInput!): TemplateContentType_!
+  UpdateTemplateParam(input: UpdateTemplateParamInput!): TemplateParam_!
   UpdateUoM(input: UpdateUoMInput!): UoM_!
   UpdateUser(input: UpdateUserInput!): User_!
   UpdateUserApplication(input: UpdateUserApplicationInput!): UserApplication_!
@@ -9694,7 +9727,16 @@ type Query {
   RunTemplateCategoryDynamicView(input: RunDynamicViewInput!): RunTemplateCategoryViewResult!
   RunTemplateCategoryViewByID(input: RunViewByIDInput!): RunTemplateCategoryViewResult!
   RunTemplateCategoryViewByName(input: RunViewByNameInput!): RunTemplateCategoryViewResult!
+  RunTemplateContentDynamicView(input: RunDynamicViewInput!): RunTemplateContentViewResult!
+  RunTemplateContentTypeDynamicView(input: RunDynamicViewInput!): RunTemplateContentTypeViewResult!
+  RunTemplateContentTypeViewByID(input: RunViewByIDInput!): RunTemplateContentTypeViewResult!
+  RunTemplateContentTypeViewByName(input: RunViewByNameInput!): RunTemplateContentTypeViewResult!
+  RunTemplateContentViewByID(input: RunViewByIDInput!): RunTemplateContentViewResult!
+  RunTemplateContentViewByName(input: RunViewByNameInput!): RunTemplateContentViewResult!
   RunTemplateDynamicView(input: RunDynamicViewInput!): RunTemplateViewResult!
+  RunTemplateParamDynamicView(input: RunDynamicViewInput!): RunTemplateParamViewResult!
+  RunTemplateParamViewByID(input: RunViewByIDInput!): RunTemplateParamViewResult!
+  RunTemplateParamViewByName(input: RunViewByNameInput!): RunTemplateParamViewResult!
   RunTemplateViewByID(input: RunViewByIDInput!): RunTemplateViewResult!
   RunTemplateViewByName(input: RunViewByNameInput!): RunTemplateViewResult!
   RunUoMDynamicView(input: RunDynamicViewInput!): RunUoMViewResult!
@@ -9775,6 +9817,9 @@ type Query {
   TaggedItem(ID: Int!): TaggedItem_
   Template(ID: Int!): Template_
   TemplateCategory(ID: Int!): TemplateCategory_
+  TemplateContent(ID: Int!): TemplateContent_
+  TemplateContentType(ID: Int!): TemplateContentType_
+  TemplateParam(ID: Int!): TemplateParam_
   UoM(UoMId: String!): UoM_
   UpdateWhereClause(ID: Int!): [UserView_!]!
   User(ID: Int!): User_
@@ -11513,6 +11558,36 @@ type RunTemplateCategoryViewResult {
   ErrorMessage: String
   ExecutionTime: Int
   Results: [TemplateCategory_!]!
+  RowCount: Int
+  Success: Boolean!
+  TotalRowCount: Int
+  UserViewRunID: Int
+}
+
+type RunTemplateContentTypeViewResult {
+  ErrorMessage: String
+  ExecutionTime: Int
+  Results: [TemplateContentType_!]!
+  RowCount: Int
+  Success: Boolean!
+  TotalRowCount: Int
+  UserViewRunID: Int
+}
+
+type RunTemplateContentViewResult {
+  ErrorMessage: String
+  ExecutionTime: Int
+  Results: [TemplateContent_!]!
+  RowCount: Int
+  Success: Boolean!
+  TotalRowCount: Int
+  UserViewRunID: Int
+}
+
+type RunTemplateParamViewResult {
+  ErrorMessage: String
+  ExecutionTime: Int
+  Results: [TemplateParam_!]!
   RowCount: Int
   Success: Boolean!
   TotalRowCount: Int
@@ -14169,10 +14244,84 @@ type TemplateCategory_ {
   UserID: Int!
 }
 
+"""Template content types for categorizing content within templates"""
+type TemplateContentType_ {
+  CreatedAt: Timestamp!
+
+  """Description of the template content type"""
+  Description: String
+  ID: Int!
+
+  """Name of the template content type"""
+  Name: String!
+  TemplateContentsArray: [TemplateContent_!]!
+  UpdatedAt: Timestamp!
+}
+
+"""
+Template content for different versions of a template for purposes like HTML/Text/etc
+"""
+type TemplateContent_ {
+  CreatedAt: Timestamp!
+  ID: Int!
+
+  """
+  Indicates whether the content is active or not. Use this to disable a particular Template Content item without having to remove it
+  """
+  IsActive: Boolean!
+
+  """
+  Priority of the content version, higher priority versions will be used ahead of lower priority versions for a given Type
+  """
+  Priority: Int!
+  Template: String!
+  TemplateID: Int!
+
+  """The actual text content for the template"""
+  TemplateText: String
+  Type: String!
+  TypeID: Int!
+  UpdatedAt: Timestamp!
+}
+
+"""Parameters allowed for use inside the template"""
+type TemplateParam_ {
+  CreatedAt: Timestamp!
+
+  """Default value of the parameter"""
+  DefaultValue: String
+
+  """Description of the parameter"""
+  Description: String
+  Entity: String
+
+  """Entity ID, used only when Type is Record"""
+  EntityID: Int
+  ID: Int!
+
+  """Name of the parameter"""
+  Name: String!
+
+  """Record ID, used only when Type is Record"""
+  RecordID: String
+  Template: String!
+
+  """ID of the template this parameter belongs to"""
+  TemplateID: Int!
+
+  """Type of the parameter"""
+  Type: String!
+  UpdatedAt: Timestamp!
+}
+
 """
 Templates are used for dynamic expansion of a static template with data from a given context. Templates can be used to create documents, messages and anything else that requires dynamic document creation merging together static text, data and lightweight logic
 """
 type Template_ {
+  """
+  Optional, if provided, this template will not be available for use until the specified date. Requires IsActive to be set to 1
+  """
+  ActiveAt: Timestamp
   Category: String
 
   """Optional, Category that this template is part of"""
@@ -14181,16 +14330,30 @@ type Template_ {
 
   """Description of the template"""
   Description: String
+
+  """
+  Optional, if provided, this template will not be available for use after the specified date. If IsActive=0, this has no effect.
+  """
+  DisabledAt: Timestamp
   ID: Int!
+
+  """
+  If set to 0, the template will be disabled regardless of the values in ActiveAt/DisabledAt. 
+  """
+  IsActive: Boolean!
 
   """Name of the template"""
   Name: String!
-
-  """Contains the template text"""
-  TemplateText: String
+  TemplateContentsArray: [TemplateContent_!]!
+  TemplateParamsArray: [TemplateParam_!]!
   UpdatedAt: Timestamp!
   User: String!
   UserID: Int!
+
+  """
+  This prompt will be used by the AI to generate template content as requested by the user.
+  """
+  UserPrompt: String
 }
 
 """
@@ -19269,14 +19432,46 @@ input UpdateTemplateCategoryInput {
   UserID: Int!
 }
 
-input UpdateTemplateInput {
-  CategoryID: Int
+input UpdateTemplateContentInput {
+  ID: Int!
+  IsActive: Boolean!
+  OldValues___: [KeyValuePairInput!]
+  Priority: Int!
+  TemplateID: Int!
+  TemplateText: String
+  TypeID: Int!
+}
+
+input UpdateTemplateContentTypeInput {
   Description: String
   ID: Int!
   Name: String!
   OldValues___: [KeyValuePairInput!]
-  TemplateText: String
+}
+
+input UpdateTemplateInput {
+  ActiveAt: Timestamp
+  CategoryID: Int
+  Description: String
+  DisabledAt: Timestamp
+  ID: Int!
+  IsActive: Boolean!
+  Name: String!
+  OldValues___: [KeyValuePairInput!]
   UserID: Int!
+  UserPrompt: String
+}
+
+input UpdateTemplateParamInput {
+  DefaultValue: String
+  Description: String
+  EntityID: Int
+  ID: Int!
+  Name: String!
+  OldValues___: [KeyValuePairInput!]
+  RecordID: String
+  TemplateID: Int!
+  Type: String!
 }
 
 input UpdateUoMInput {

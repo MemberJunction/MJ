@@ -1,6 +1,7 @@
 import { BaseEngine, BaseEnginePropertyConfig, UserInfo } from "@memberjunction/core";
-import { TemplateEntity } from "@memberjunction/core-entities";
+import { TemplateCategoryEntity, TemplateContentEntity, TemplateContentTypeEntity, TemplateEntity, TemplateParamEntity } from "@memberjunction/core-entities";
 import * as nunjucks from 'nunjucks';
+import { TemplateEntityExtended } from "./TemplateEntityExtended";
 
 
 /**
@@ -19,14 +20,14 @@ export class TemplateRenderResult {
  * This class extends the nunjucks loader to allow adding templates directly to the loader
  */
 export class TemplateEntityLoader extends nunjucks.Loader {
-    private templates: { [templateId: number]: TemplateEntity } = {};
+    private templates: { [templateId: number]: TemplateEntityExtended } = {};
 
     /**
      * Add a new template to the loader
      * @param templateId 
      * @param template 
      */
-    public AddTemplate(templateId: number, template: TemplateEntity) {
+    public AddTemplate(templateId: number, template: TemplateEntityExtended) {
         this.templates[templateId] = template;
     }
 
@@ -40,7 +41,7 @@ export class TemplateEntityLoader extends nunjucks.Loader {
         const template = this.templates[templateId];
         if (template) {
             return {
-                src: template.TemplateText,
+                src: template.Get,
                 path: templateId,
                 noCache: true
             };
@@ -67,9 +68,26 @@ export class TemplateEngine extends BaseEngine<TemplateEngine> {
     public async Config(forceRefresh?: boolean, contextUser?: UserInfo) {
         const c: BaseEnginePropertyConfig[] = [
             {
+                EntityName: 'Template Content Types',
+                PropertyName: '_TemplateContentTypes',
+            },
+            {
+                EntityName: 'Template Categories',
+                PropertyName: '_TemplateCategories'
+            },
+            {
                 EntityName: 'Templates',
                 PropertyName: '_Templates',
-            }
+            },
+            {
+                EntityName: 'Template Contents',
+                PropertyName: '_TemplateContents',
+            },
+            {
+                EntityName: 'Template Params',
+                PropertyName: '_TemplateParams',
+            },
+
         ]
         await this.Load(c, forceRefresh, contextUser);
 
@@ -77,15 +95,44 @@ export class TemplateEngine extends BaseEngine<TemplateEngine> {
         this._nunjucksEnv = new nunjucks.Environment(this._templateLoader, { autoescape: true });
     }
 
+    protected async AdditionalLoading(contextUser?: UserInfo): Promise<void> {
+        // post-process the template content and params to associate them with a template
+        this.Templates.forEach((t) => {
+            t.Content = this.TemplateContents.filter((tc) => tc.TemplateID === t.ID);
+            t.Params = this.TemplateParams.filter((tp) => tp.TemplateID === t.ID);
+        });
+    }
+
 
     private _nunjucksEnv: nunjucks.Environment;
     private _templateLoader: TemplateEntityLoader;
-    private _Templates: TemplateEntity[];
-    public get Templates(): TemplateEntity[] {
+
+    private _Templates: TemplateEntityExtended[];
+    public get Templates(): TemplateEntityExtended[] {
         return this._Templates;
     }
 
-    public AddTemplate(templateEntity: TemplateEntity) {
+    private _TemplateContentTypes: TemplateContentTypeEntity[];
+    public get TemplateContentTypes(): TemplateContentTypeEntity[] {
+        return this._TemplateContentTypes;
+    }
+
+    private _TemplateCategories: TemplateCategoryEntity[];
+    public get TemplateCategories(): TemplateCategoryEntity[] {
+        return this._TemplateCategories;
+    }
+    private _TemplateContents: TemplateContentEntity[];
+    public get TemplateContents(): TemplateContentEntity[] {
+        return this._TemplateContents;
+    }
+
+    private _TemplateParams: TemplateParamEntity[];
+    public get TemplateParams(): TemplateParamEntity[] {
+        return this._TemplateParams;
+    }
+
+
+    public AddTemplate(templateEntity: TemplateEntityExtended) {
         this._templateLoader.AddTemplate(templateEntity.ID, templateEntity);
     }
 
@@ -94,7 +141,7 @@ export class TemplateEngine extends BaseEngine<TemplateEngine> {
      * @param templateName 
      * @returns 
      */
-    public FindTemplate(templateName: string): TemplateEntity {
+    public FindTemplate(templateName: string): TemplateEntityExtended {
         return this.Templates.find((t) => t.Name.trim().toLowerCase() === templateName.trim().toLowerCase())
     }
 
@@ -103,9 +150,12 @@ export class TemplateEngine extends BaseEngine<TemplateEngine> {
      * @param templateString 
      * @param data 
      */
-    public async RenderTemplate(templateEntity: TemplateEntity, data: any): Promise<TemplateRenderResult> {
+    public async RenderTemplate(templateContent: TemplateContentEntity, data: any): Promise<TemplateRenderResult> {
+        if (!templateContent)
+            throw new Error('templateContent variable is required');
+
         return new Promise((resolve, reject) => {
-            const template = new nunjucks.Template(templateEntity.TemplateText, this._nunjucksEnv);
+            const template = new nunjucks.Template(templateContent.TemplateText, this._nunjucksEnv);
             template.render(data, (err, result) => {
                 if (err) {
                     reject({
