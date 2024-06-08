@@ -113,6 +113,8 @@ export class EntityRecordNameResolver {
   // }
 
   private async TestTemplates(user: UserInfo) {
+    return; 
+    
     const engine = TemplateEngine.Instance;
     await engine.Config(false, user);
     const t = engine.FindTemplate('Test Template');
