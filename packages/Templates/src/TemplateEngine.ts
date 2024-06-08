@@ -304,7 +304,7 @@ function AIPromptExtension() {
         // then we will create an instance of the LLM class
         AIEngine.Instance.LoadAIMetadata(this._contextUser).then(async () => {
             try {
-                const model = await AIEngine.Instance.GetHighestPowerModel('OpenAI','llm', this._contextUser) 
+                const model = await AIEngine.Instance.GetHighestPowerModel('Groq','llm', this._contextUser) 
                 const llm = MJGlobal.Instance.ClassFactory.CreateInstance<BaseLLM>(BaseLLM, model.DriverClass, GetAIAPIKey(model.DriverClass))
                 const llmResult = await llm.ChatCompletion({
                     messages: [

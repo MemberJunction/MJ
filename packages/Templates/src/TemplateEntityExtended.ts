@@ -1,4 +1,4 @@
-import { BaseEntity, ValidationResult } from "@memberjunction/core";
+import { BaseEntity, EntitySaveOptions, ValidationResult } from "@memberjunction/core";
 import { TemplateContentEntity, TemplateEntity, TemplateParamEntity } from "@memberjunction/core-entities";
 import { RegisterClass } from "@memberjunction/global";
 
