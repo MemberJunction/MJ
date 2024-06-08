@@ -24,21 +24,16 @@ export class MJGlobal extends BaseSingleton<MJGlobal> {
     private _eventsReplay$: Observable<MJ.MJEvent> = this._eventsReplaySubject.asObservable();
 
     private _components: MJ.IMJComponent[] = [];
-    private static _instance: MJGlobal;
 
     private _classFactory: ClassFactory = new ClassFactory();
 
     private _properties: MJ.MJGlobalProperty[] = [];
 
-    private constructor() {
-        super('MJGlobalInstance');
-    }
-
     /**
      * Returns the global instance of the MJGlobal class. This is a singleton class, so there is only one instance of it in the application. Do not directly create new instances of MJGlobal, always use this method to get the instance.
      */
     public static get Instance(): MJGlobal {
-        return super.getInstance<MJGlobal>('MJGlobalInstance');
+        return super.getInstance<MJGlobal>();
     }
 
     public RegisterComponent(component: MJ.IMJComponent) {

@@ -84,7 +84,7 @@ export class EntityRecordNameResolver {
   }
 
   private async TestCommunicationFramework(user: UserInfo, EntityName: string, primaryKey: CompositeKeyInputType) {
-    return;
+//    return;
 
     const engine = CommunicationEngine.Instance;
     await engine.Config(false, user);
@@ -118,7 +118,7 @@ export class EntityRecordNameResolver {
       ]
     }
     await engine.SendSingleMessage('SendGrid', 'Email', {
-      To: 'amith@bluecypress.io',
+      To: 'amith_nagarajan@hotmail.com',
       From: "amith@bluecypress.io",
       Subject: `MJServer Notification: GetEntityRecordName Called For: ${EntityName}`,
       BodyTemplate: t,
@@ -179,7 +179,7 @@ export class EntityRecordNameResolver {
       ]
     }
     
-    const result = await engine.RenderTemplate(tc, d);
+    const result = await engine.RenderTemplate(t, tc, d);
     console.log(result);
   }
 }

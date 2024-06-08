@@ -18764,6 +18764,18 @@ import { RegisterClass } from "@memberjunction/global";
             this.Set('DefaultValue', value);
         }
         /**
+        * * Field Name: IsRequired
+        * * Display Name: Is Required
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        */
+        get IsRequired(): boolean {  
+            return this.Get('IsRequired');
+        }
+        set IsRequired(value: boolean) {
+            this.Set('IsRequired', value);
+        }
+        /**
         * * Field Name: EntityID
         * * Display Name: Entity ID
         * * SQL Data Type: int

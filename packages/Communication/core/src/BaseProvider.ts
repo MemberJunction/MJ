@@ -100,7 +100,7 @@ export class ProcessedMessage extends Message {
                     Message: 'BodyTemplate does not have a Text option and this is required for processing the body of the message.'
                 };
 
-            const result = await TemplateEngine.Instance.RenderTemplate(regularContent, this.ContextData);
+            const result = await TemplateEngine.Instance.RenderTemplate(this.BodyTemplate, regularContent, this.ContextData);
             if (result && result.Success) {
                 this.ProcessedBody = result.Output;
             }
@@ -114,7 +114,7 @@ export class ProcessedMessage extends Message {
             if (!this.HTMLBodyTemplate) { // if we have an HTMLBodyTemplate, we will process it separately below
                 const htmlContent = this.BodyTemplate.GetHighestPriorityContent('HTML');
                 if (htmlContent) {
-                    const result = await TemplateEngine.Instance.RenderTemplate(htmlContent, this.ContextData);
+                    const result = await TemplateEngine.Instance.RenderTemplate(this.BodyTemplate, htmlContent, this.ContextData);
                     if (result && result.Success) {
                         this.ProcessedHTMLBody = result.Output;
                     }
@@ -139,7 +139,7 @@ export class ProcessedMessage extends Message {
             // process the subject template
             const htmlContent = this.HTMLBodyTemplate.GetHighestPriorityContent('HTML');
             if (htmlContent) {
-                const result = await TemplateEngine.Instance.RenderTemplate(htmlContent, this.ContextData);
+                const result = await TemplateEngine.Instance.RenderTemplate(this.HTMLBodyTemplate, htmlContent, this.ContextData);
                 if (result && result.Success) {
                     this.ProcessedHTMLBody = result.Output;
                 }
@@ -162,7 +162,7 @@ export class ProcessedMessage extends Message {
             // process the subject template
             const subjectContent = this.SubjectTemplate.GetHighestPriorityContent('Text');
             if (subjectContent) {
-                const result = await TemplateEngine.Instance.RenderTemplate(subjectContent, this.ContextData);
+                const result = await TemplateEngine.Instance.RenderTemplate(this.SubjectTemplate, subjectContent, this.ContextData);
                 if (result && result.Success) {
                     this.ProcessedSubject = result.Output;
                 }

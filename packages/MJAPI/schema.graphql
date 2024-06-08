@@ -6310,6 +6310,7 @@ input CreateTemplateParamInput {
   DefaultValue: String
   Description: String
   EntityID: Int
+  IsRequired: Boolean!
   Name: String!
   RecordID: String
   TemplateID: Int!
@@ -14298,6 +14299,7 @@ type TemplateParam_ {
   """Entity ID, used only when Type is Record"""
   EntityID: Int
   ID: Int!
+  IsRequired: Boolean!
 
   """Name of the parameter"""
   Name: String!
@@ -19467,6 +19469,7 @@ input UpdateTemplateParamInput {
   Description: String
   EntityID: Int
   ID: Int!
+  IsRequired: Boolean!
   Name: String!
   OldValues___: [KeyValuePairInput!]
   RecordID: String

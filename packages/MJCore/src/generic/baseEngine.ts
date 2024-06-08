@@ -36,10 +36,6 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> {
     private _loadingSubject: BehaviorSubject<boolean> = new BehaviorSubject<boolean>(false);
     private _contextUser: UserInfo;
 
-    constructor(instanceKey: string) {
-        super(instanceKey);
-    }
-
     /**
      * Configures the engine by loading metadata from the database.  
      */
