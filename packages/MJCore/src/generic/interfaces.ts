@@ -265,7 +265,7 @@ export interface IMetadataProvider {
 
     RefreshIfNeeded(): Promise<boolean>
 
-    IsRefreshNeeded(): Promise<boolean>
+    CheckToSeeIfRefreshNeeded(): Promise<boolean>
 
     get LocalStorageProvider(): ILocalStorageProvider
 

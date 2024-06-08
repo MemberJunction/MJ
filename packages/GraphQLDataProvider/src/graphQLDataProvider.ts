@@ -10,9 +10,9 @@ import { BaseEntity, IEntityDataProvider, IMetadataProvider, IRunViewProvider, P
          RunViewParams, ProviderBase, ProviderType, UserInfo, UserRoleInfo, RecordChange, 
          ILocalStorageProvider, EntitySaveOptions, LogError,
          TransactionGroupBase, TransactionItem, DatasetItemFilterType, DatasetResultType, DatasetStatusResultType, EntityRecordNameInput, 
-         EntityRecordNameResult, IRunReportProvider, RunReportResult, RunReportParams, RecordDependency, RecordMergeRequest, RecordMergeResult, KeyValuePair, IRunQueryProvider, RunQueryResult, PotentialDuplicateRequest, PotentialDuplicateResponse, CompositeKey,  
-         EntityDeleteOptions,
-         BaseEntityResult} from "@memberjunction/core";
+         EntityRecordNameResult, IRunReportProvider, RunReportResult, RunReportParams, RecordDependency, RecordMergeRequest, RecordMergeResult, 
+         IRunQueryProvider, RunQueryResult, PotentialDuplicateRequest, PotentialDuplicateResponse, CompositeKey, EntityDeleteOptions, 
+         RunQueryParams, BaseEntityResult} from "@memberjunction/core";
 import { UserViewEntityExtended, ViewInfo } from '@memberjunction/core-entities'
 
 
@@ -21,8 +21,6 @@ import { GraphQLTransactionGroup } from "./graphQLTransactionGroup";
 import { openDB, DBSchema, IDBPDatabase } from 'idb';
 import { Observable } from 'rxjs';
 import { Client, createClient } from 'graphql-ws';
-import { RunQueryParams } from "@memberjunction/core/dist/generic/runQuery";
-
 
 // define the shape for a RefreshToken function that can be called by the GraphQLDataProvider whenever it receives an exception that the JWT it has already is expired
 export type RefreshTokenFunction = () => Promise<string>;
@@ -123,7 +121,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         return GraphQLDataProvider._sessionId;
     }
 
-    protected AllowRefresh(): boolean {
+    protected get AllowRefresh(): boolean {
         return true; // this provider doesn't have any issues with allowing refreshes at any time
     }
 
