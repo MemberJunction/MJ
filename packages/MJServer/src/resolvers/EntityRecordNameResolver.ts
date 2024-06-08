@@ -4,6 +4,7 @@ import { AppContext } from '../types';
 import { CompositeKeyInputType, CompositeKeyOutputType } from '../generic/KeyInputOutputTypes';
 import { CommunicationEngine } from '@memberjunction/communication-core';
 import { DocumentationEngine } from '@memberjunction/doc-utils';
+import { TemplateEngine } from '@memberjunction/templates';
 //import { TemplateEngineService } from '@memberjunction/templates';
 
 @InputType()
@@ -44,7 +45,7 @@ export class EntityRecordNameResolver {
     //TEMPORARY: test harness for communication framework - dumb place but quick test grounds, will delete
     //this.TestCommunicationFramework(userPayload.userRecord, EntityName, primaryKey);
     //this.TestDocLibraries(userPayload.userRecord);
-    //this.TestTemplates();
+    this.TestTemplates(userPayload.userRecord);
 
     const md = new Metadata();
     return await this.InnerGetEntityRecordName(md, EntityName, primaryKey);
@@ -110,6 +111,40 @@ export class EntityRecordNameResolver {
   //   const renderedHtml = await templateEngine.render(template, { name: 'World' });
   //   console.log(renderedHtml);
   // }
+
+  private async TestTemplates(user: UserInfo) {
+    const engine = TemplateEngine.Instance;
+    await engine.Config(false, user);
+    const t = engine.FindTemplate('Test Template');
+    const d = { 
+      firstName: 'John',
+      lastName: 'Doe',
+      age: 25,
+      address: {
+        street: '123 Main St',
+        city: 'Springfield',
+        state: 'IL',
+        zip: '62701'
+      },
+      recommendedArticles: [
+        {
+          title: 'How to Write Better Code',
+          url: 'https://example.com/article1'
+        },
+        {
+          title: 'The Art of Debugging',
+          url: 'https://example.com/article2'      
+        },
+        {
+          title: 'Using Templates Effectively',
+          url: 'https://example.com/article3'
+        }
+      ]
+    }
+    
+    const result = await engine.RenderTemplate(t, d);
+    console.log(result);
+  }
 }
 
 export default EntityRecordNameResolver;

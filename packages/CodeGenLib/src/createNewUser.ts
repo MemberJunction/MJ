@@ -10,14 +10,17 @@ import { RegisterClass } from "@memberjunction/global";
  */
 @RegisterClass(CreateNewUserBase)
 export class CreateNewUserBase {
-    public async createNewUser(newUserSetup: NewUserSetup): Promise<boolean> {
+    public async createNewUser(newUserSetup: NewUserSetup): Promise<{Success: boolean, Message: string, Severity: 'warning' | 'error' | undefined}> {
         try {   
             const matches: UserInfo = UserCache.Users.find(u => u?.Type?.trim().toLowerCase() ==='owner');
             const currentUser = matches ? matches : UserCache.Users[0]; // if we don't find an Owner, use the first user in the cache
     
             if (!currentUser) {
-                logError("No existing users found in the database, cannot create a new user");
-                return false;
+                return {
+                    Success: false,
+                    Message: "No existing users found in the database, cannot create a new user",
+                    Severity: 'error'
+                };
             }
     
             if (newUserSetup) {
@@ -52,32 +55,51 @@ export class CreateNewUserBase {
                             logStatus("Finished creating new user: " + newUserSetup.Email + ", saving config file");
                             newUserSetup.IsComplete = true; 
                             saveConfigFileFromMemory();
-                            return true;
+                            return {
+                                Success: true,
+                                Message: "Successfully created new user: " + newUserSetup.Email,
+                                Severity: undefined
+                            };
                         }
                         else {
                             // saving the user failed, so we don't atempt to create User Roles, throw error
-                            logError("Failed to save user: " + newUserSetup.Email);
-                            return false;
+                            return {
+                                Success: false,
+                                Message: "Failed to save new user: " + newUserSetup.Email,
+                                Severity: 'error'
+                            };
                         }
                     }
                     else {
-                        logError("No email address provided for new user, cannot create new user", newUserSetup);
-                        return false;
+                        return {
+                            Success: false,
+                            Message: "No email address provided for new user, cannot create new user. Params:" + JSON.stringify(newUserSetup),
+                            Severity: 'warning'
+                        };
                     }
                 }
                 else {
-                    logStatus("New user setup is already complete, skipping");
+                    return {
+                        Success: true,
+                        Message: "New user setup is already complete, skipping",
+                        Severity: undefined
+                    }
                 }
             }
             else {
-                logError("No newUserSetup object provided, createNewUser() shouldn't be called without a valid object");
-                return false;
+                return {
+                    Success: false,
+                    Message: "No newUserSetup object provided, createNewUser() shouldn't be called without a valid object",
+                    Severity: 'error'
+                };
             }
-            return true;
         } 
         catch (err) {
-            logError("Error attemping to create a new user", err);
-            return false;
+            return {
+                Success: false,
+                Message: "Error attemping to create a new user: " + err,
+                Severity: 'error'
+            }
         }
     }
 }

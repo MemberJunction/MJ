@@ -85,6 +85,10 @@ export function logError(message: string, ...args: any[]) {
    return _logger.logError(message, SeverityType.Critical, ...args);
 }
 
+export function logWarning(message: string, ...args: any[]) {
+   return _logger.logError(message, SeverityType.Warning, ...args);
+}
+
 /**
  * Wrapper for the LoggerBase.logStatus method
  */
