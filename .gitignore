@@ -25,6 +25,7 @@ dist/
 # Maven
 target/
 dist/
+dist-browser/
 
 # JetBrains IDE
 .idea/

@@ -3,24 +3,5 @@
     "source.fixAll": "never",
     "source.organizeImports": "never"
   },
-  "angular.enable-strict-mode-prompt": false,
-  "workbench.colorCustomizations": {
-    "activityBar.activeBackground": "#4A90E2",
-    "activityBar.background": "#4A90E2",
-    "activityBar.foreground": "#FFFFFF",
-    "activityBar.inactiveForeground": "#FFFFFF99",
-    "activityBarBadge.background": "#FFFFFF",
-    "activityBarBadge.foreground": "#4A90E2",
-    "commandCenter.border": "#FFFFFF99",
-    "sash.hoverBorder": "#4A90E2",
-    "statusBar.background": "#357ABD",
-    "statusBar.foreground": "#FFFFFF",
-    "statusBarItem.hoverBackground": "#4A90E2",
-    "statusBarItem.remoteBackground": "#357ABD",
-    "statusBarItem.remoteForeground": "#FFFFFF",
-    "titleBar.activeBackground": "#357ABD",
-    "titleBar.activeForeground": "#FFFFFF",
-    "titleBar.inactiveBackground": "#357ABD99",
-    "titleBar.inactiveForeground": "#FFFFFF99"
-  }
+  "angular.enable-strict-mode-prompt": false
 }

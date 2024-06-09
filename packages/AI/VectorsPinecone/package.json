@@ -15,19 +15,24 @@
   "author": "MemberJunction.com",
   "license": "ISC",
   "dependencies": {
-    "@memberjunction/aiengine": "~1.5.2",
-    "@memberjunction/core": "~1.5.2",
-    "@memberjunction/global": "~1.5.2",
-    "@memberjunction/ai-vectors": "~1.5.2",
-    "@pinecone-database/pinecone": "^2.0.1",
+    "@memberjunction/aiengine": "1.5.2",
+    "@memberjunction/core": "1.5.2",
+    "@memberjunction/global": "1.5.2",
+    "@memberjunction/ai-vectors": "1.5.2",
+    "@pinecone-database/pinecone": "2.2.2",
     "dotenv": "^16.4.1",
     "openai": "^4.28.4",
     "rxjs": "^7.8.1",
     "typeorm": "^0.3.20"
   },
   "devDependencies": {
-    "@types/node": "^20.1.7",
+    "@types/node": "20.14.2",
     "ts-node-dev": "^2.0.0",
-    "typescript": "^5.3.3"
+    "typescript": "^5.4.5"
+  },
+  "overrides": {
+    "@pinecone-database/pinecone@2.2.2": {
+      "@sinclair/typebox": "0.32.31"
+    }
   }
 }
