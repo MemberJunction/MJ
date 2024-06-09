@@ -19,7 +19,7 @@ import { UserViewEntityExtended, ViewInfo } from '@memberjunction/core-entities'
 
 import { gql, GraphQLClient } from 'graphql-request'
 import { GraphQLTransactionGroup } from "./graphQLTransactionGroup";
-import { openDB, DBSchema, IDBPDatabase } from 'idb';
+import { openDB, DBSchema, IDBPDatabase } from '@tempfix/idb';
 import { Observable } from 'rxjs';
 import { Client, createClient } from 'graphql-ws';
 
