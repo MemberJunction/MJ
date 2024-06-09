@@ -27,8 +27,7 @@ export const External = Annotation.define<boolean>();
 
 @Component({
   selector: 'mj-code-editor',
-  templateUrl: './ng-code-editor.component.html',
-  styleUrls: ['./ng-code-editor.component.css'],
+  template: '',
   encapsulation: ViewEncapsulation.None,
   changeDetection: ChangeDetectionStrategy.OnPush,
   providers: [
