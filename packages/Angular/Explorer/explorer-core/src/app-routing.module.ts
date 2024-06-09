@@ -1,5 +1,5 @@
 import { ComponentRef, Injectable, NgModule } from '@angular/core';
-import { Routes, RouterModule, Resolve, ActivatedRouteSnapshot, RouterStateSnapshot } from '@angular/router';
+import { Routes, RouterModule, Resolve, ActivatedRouteSnapshot, RouterStateSnapshot, Router, NavigationEnd, NavigationError, NavigationCancel } from '@angular/router';
 import {
   SingleApplicationComponent,
   SingleEntityComponent,
@@ -16,7 +16,7 @@ import {
   SingleListDetailComponent
 } from './public-api';
 import { SettingsComponent } from '@memberjunction/ng-explorer-settings';
-import { LogError } from '@memberjunction/core';
+import { LogError, LogStatus, Metadata } from '@memberjunction/core';
 import { MJEventType, MJGlobal } from '@memberjunction/global';
 import { SkipChatComponent } from '@memberjunction/ng-ask-skip';
 import { EventCodes, SharedService, ResourceData } from '@memberjunction/ng-shared';
@@ -90,7 +90,20 @@ export class CustomReuseStrategy implements RouteReuseStrategy {
   providedIn: 'root',
 })
 export class ResourceResolver implements Resolve<void> {
-  constructor(private sharedService: SharedService) {}
+  constructor(private sharedService: SharedService, private router: Router) {
+    // Subscribe to router events
+    this.router.events.subscribe(event => {
+      if (event instanceof NavigationEnd) {
+        LogStatus('NavigationEnd:', event.url);
+      }
+      if (event instanceof NavigationError) {
+        LogError(`NavigationError: ${event.error}`);
+      }
+      if (event instanceof NavigationCancel) {
+        LogError(`NavigationCancel: ${event.reason}`);
+      }
+    });    
+  }
 
   resolve(route: ActivatedRouteSnapshot, state: RouterStateSnapshot): void {
     let resourceType = route.params['resourceType'];
@@ -106,6 +119,8 @@ export class ResourceResolver implements Resolve<void> {
       });
 
       let code: EventCodes = EventCodes.AddDashboard;
+      const entityNameDecoded = decodeURIComponent(route.queryParams['Entity'] || route.queryParams['entity']);
+      const md = new Metadata();
       switch (resourceType.trim().toLowerCase()) {
         case 'user views':
           code = EventCodes.ViewClicked;
@@ -121,23 +136,34 @@ export class ResourceResolver implements Resolve<void> {
           break;
         case 'records':
           code = EventCodes.EntityRecordClicked;
-          data.Configuration.Entity = route.queryParams['Entity'] || route.queryParams['entity']; // Entity or entity is specified for this resource type since resource record id isn't good enough
-          data.Configuration.NewRecordValues = route.queryParams['NewRecordValues'] || route.queryParams['newRecordValues'];
+          data.Configuration.Entity = entityNameDecoded; // Entity or entity is specified for this resource type since resource record id isn't good enough
+          const newRecordVals = route.queryParams['NewRecordValues'] || route.queryParams['newRecordValues'];
+          if (newRecordVals) {
+            data.Configuration.NewRecordValues = decodeURIComponent(newRecordVals);  
+          }
           data.Configuration.___rawQueryParams = route.queryParams;
           if (data.Configuration.Entity === undefined || data.Configuration.Entity === null) {
             LogError('No Entity provided in the URL, must have Entity as a query parameter for this resource type');
-            return; // should handle the error better - TO-DO
+            return;  
+          }
+          else {
+            const entityInfo = md.Entities.find(e => e.Name.trim().toLowerCase() === data.Configuration.Entity.trim().toLowerCase());
+            if (!entityInfo) {
+              LogError(`Entity ${data.Configuration.Entity} not found in metadata`);
+              return;
+            }
           }
           break;
         case 'search results':
           code = EventCodes.RunSearch;
-          data.Configuration.Entity = route.queryParams['Entity'] || route.queryParams['entity'];
+          data.Configuration.Entity = entityNameDecoded;
           data.Configuration.SearchInput = resourceRecordId;
           data.ResourceRecordID = 0; /*tell nav to create new tab*/
           break;
         default:
-          // unsupported resource type
-          return; // should handle the error better - TO-DO
+          LogError(`Unsupported resource type: ${resourceType}`);
+          // Handle the unsupported resource type error appropriately
+          return;           
       }
       MJGlobal.Instance.RaiseEvent({
         component: this,
@@ -146,7 +172,7 @@ export class ResourceResolver implements Resolve<void> {
         args: data,
       });
     } else {
-      // to-do - handle error
+      LogError(`ResourceType: ${resourceType} or ResourceRecordId: ${resourceRecordId} is undefined in the route parameters`);
     }
   }
 }

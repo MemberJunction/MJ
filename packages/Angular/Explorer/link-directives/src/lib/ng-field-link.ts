@@ -1,6 +1,6 @@
 import { Directive, ElementRef, Renderer2, Input, OnInit, HostListener } from '@angular/core';
-import { ActivatedRoute, Router } from '@angular/router';
-import { BaseEntity, CompositeKey, EntityField, EntityInfo, LogStatus, Metadata } from '@memberjunction/core';
+import { ActivatedRoute, NavigationCancel, NavigationEnd, NavigationError, Router } from '@angular/router';
+import { BaseEntity, CompositeKey, EntityField, EntityInfo, LogError, LogStatus, Metadata } from '@memberjunction/core';
 import { BaseLink } from './ng-base-link';
 
 @Directive({
@@ -18,6 +18,18 @@ export class FieldLink extends BaseLink implements OnInit {
 
   constructor(private el: ElementRef, private renderer: Renderer2, private route: ActivatedRoute, private router: Router) {
     super();
+
+    this.router.events.subscribe(event => {
+      if (event instanceof NavigationEnd) {
+        console.log('NavigationEnd:', event.url);
+      }
+      if (event instanceof NavigationError) {
+        LogError(`NavigationError: ${event.error}`);
+      }
+      if (event instanceof NavigationCancel) {
+        LogError(`NavigationCancel: ${event.reason}`);
+      }
+    });
   }
 
   public get field(): EntityField {
@@ -80,7 +92,13 @@ export class FieldLink extends BaseLink implements OnInit {
 
     // AT THE MOMENT - we only support foreign keys with a single value
     const keyVals = `${this._targetEntityInfo.FirstPrimaryKey.Name}|${this._targetRecordID}`
-    this.router.navigate(['resource', 'record', keyVals], { queryParams: { Entity: this._targetEntity } })
-  }  
+    const newURL: string[] = ['resource', 'record', keyVals];
 
+    this.router.navigate(newURL, { queryParams: { Entity: this._targetEntity } }).then(params => {
+      console.log('navigated to:', newURL.join('/'));
+    }).catch(err => {
+      const newURLString: string = newURL.join('/');
+      LogError(`Error navigating to ${newURLString}: ${err}`);
+    })
+  }  
 }
