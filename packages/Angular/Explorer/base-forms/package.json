@@ -27,6 +27,7 @@
   "dependencies": {
     "@memberjunction/global": "1.5.2",
     "@memberjunction/core": "1.5.2",
+    "@memberjunction/ng-code-editor": "1.5.2",
     "@memberjunction/ng-shared": "1.5.2",
     "@memberjunction/ng-tabstrip": "1.5.2",
     "@memberjunction/ng-link-directives": "1.5.2",

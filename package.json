@@ -13,6 +13,7 @@
   ],
   "scripts": {
     "build": "turbo build --filter=\"@memberjunction*\"",
+    "build:stream": "turbo --log-order=stream build --filter=\"@memberjunction*\"",
     "watch": "turbo watch --filter=\"@memberjunction*\"",
     "start": "turbo start --filter=mj_explorer --filter=mj_api",
     "start:api": "turbo start --filter=mj_api",
