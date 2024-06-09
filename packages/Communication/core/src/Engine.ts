@@ -1,7 +1,6 @@
-import { BaseEngine, LogError, RunView, UserInfo } from "@memberjunction/core";
-import { CommunicationBaseMessageTypeEntity, CommunicationProviderEntity, CommunicationProviderMessageTypeEntity } from "@memberjunction/core-entities";
-import { BaseSingleton, MJGlobal } from "@memberjunction/global";
-import { BehaviorSubject } from "rxjs";
+import { BaseEngine, Metadata, UserInfo } from "@memberjunction/core";
+import { CommunicationBaseMessageTypeEntity, CommunicationLogEntity, CommunicationProviderEntity, CommunicationProviderMessageTypeEntity, CommunicationRunEntity } from "@memberjunction/core-entities";
+import { MJGlobal } from "@memberjunction/global";
 import { BaseCommunicationProvider, CommunicationProviderEntityExtended, Message, MessageResult, ProcessedMessage } from "./BaseProvider";
 
 /**
@@ -88,7 +87,7 @@ export class CommunicationEngine extends BaseEngine<CommunicationEngine> {
      /**
       * Sends a single message using the specified provider. The provider must be one of the providers that are configured in the system.
       */
-     public async SendSingleMessage(providerName: string, providerMessageTypeName: string, message: Message): Promise<MessageResult> {
+     public async SendSingleMessage(providerName: string, providerMessageTypeName: string, message: Message, run?: CommunicationRunEntity): Promise<MessageResult> {
         if (!this.Loaded)
             throw new Error(`Metadata not loaded. Call Config() before accessing metadata.`);
 
@@ -110,7 +109,50 @@ export class CommunicationEngine extends BaseEngine<CommunicationEngine> {
 
         // now, process the message
         const processedMessage = new ProcessedMessage(message);
-        await processedMessage.Process(false, this.ContextUser);
-        return provider.SendSingleMessage(processedMessage);
+        const processResult = await processedMessage.Process(false, this.ContextUser);
+        if (processResult.Success) {
+            const log = await this.StartLog(processedMessage, run);
+            if (log) {
+                const sendResult = await provider.SendSingleMessage(processedMessage);
+                log.Status = sendResult.Success ? 'Complete' : 'Failed';
+                log.ErrorMessage = sendResult.Error;
+                if (!await log.Save())
+                    throw new Error(`Failed to complete log for message.`);
+                else
+                    return sendResult;
+            }
+            else
+                throw new Error(`Failed to start log for message.`);
+        }
+        else
+            throw new Error(`Failed to process message.`);
+     }
+
+     /**
+      * This method creates a new Communication Log record and saves it to the database with a status of pending. It returns the new Communication Log record.
+      * @param processedMessage 
+      * @param run 
+      */
+     protected async StartLog(processedMessage: ProcessedMessage, run?: CommunicationRunEntity): Promise<CommunicationLogEntity> {
+        const md = new Metadata();
+        const log = await md.GetEntityObject<CommunicationLogEntity>('Commnication Logs', this.ContextUser);
+        log.CommunicationRunID = run?.ID;
+        log.Status = 'Pending';
+        log.CommunicationProviderID = processedMessage.MessageType.CommunicationProviderID;
+        log.CommunicationProviderMessageTypeID = processedMessage.MessageType.ID;
+        log.MessageDate = new Date();
+        log.Direction = 'Sending';
+        log.MessageContent = JSON.stringify({
+            To: processedMessage.To,
+            From: processedMessage.From,
+            Subject: processedMessage.ProcessedSubject,
+            HTMLBody: processedMessage.ProcessedHTMLBody,
+            TextBody: processedMessage.ProcessedBody,
+        });
+        if (await log.Save()) {
+            return log;
+        }
+        else
+            return null;
      }
 }
