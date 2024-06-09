@@ -406,6 +406,9 @@ export function Load${entity.ClassName}${this.stripWhiteSpace(section.Name)}Comp
                     }
                 }
             }
+            if (field.ExtendedType === 'Code') {
+              editControl = 'code';
+            }
 
             let linkType = null;
             if (field.RelatedEntity && field.RelatedEntity.length > 0)
@@ -419,7 +422,7 @@ export function Load${entity.ClassName}${this.stripWhiteSpace(section.Name)}Comp
                         linkType = 'Email'
                         break;
                 }
-            }
+            } 
             // next, generate HTML for the field, use fillContainer if we have just one field
             html += `        <mj-form-field ${section.Fields.length === 1 ? 'mjFillContainer' : ''}
             [record]="record"
