@@ -2,7 +2,7 @@
 * ALL ENTITIES - TypeGraphQL Type Class Definition - AUTO GENERATED FILE
 * Generated Entities and Resolvers for Server
 * 
-* GENERATED: 6/8/2024, 11:06:47 AM
+* GENERATED: 6/8/2024, 4:42:00 PM
 * 
 *   >>> DO NOT MODIFY THIS FILE!!!!!!!!!!!!
 *   >>> YOUR CHANGES WILL BE OVERWRITTEN
@@ -8121,6 +8121,40 @@ export class AIModel_ {
 // INPUT TYPE for AI Models   
 //****************************************************************************
 @InputType()
+export class CreateAIModelInput {
+    @Field()
+    Name: string;
+
+    @Field({ nullable: true })
+    Vendor?: string;
+
+    @Field(() => Int)
+    AIModelTypeID: number;
+
+    @Field(() => Boolean)
+    IsActive: boolean;
+
+    @Field({ nullable: true })
+    Description?: string;
+
+    @Field({ nullable: true })
+    DriverClass?: string;
+
+    @Field({ nullable: true })
+    DriverImportPath?: string;
+
+    @Field({ nullable: true })
+    APIName?: string;
+
+    @Field(() => Int, { nullable: true })
+    PowerRank?: number;
+}
+    
+        
+//****************************************************************************
+// INPUT TYPE for AI Models   
+//****************************************************************************
+@InputType()
 export class UpdateAIModelInput {
     @Field(() => Int)
     ID: number;
@@ -8257,12 +8291,27 @@ export class AIModelResolver extends ResolverBase {
     }
         
     @Mutation(() => AIModel_)
+    async CreateAIModel(
+        @Arg('input', () => CreateAIModelInput) input: CreateAIModelInput,
+        @Ctx() { dataSource, userPayload }: AppContext, 
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.CreateRecord('AI Models', input, dataSource, userPayload, pubSub)
+    }
+        
+    @Mutation(() => AIModel_)
     async UpdateAIModel(
         @Arg('input', () => UpdateAIModelInput) input: UpdateAIModelInput,
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.UpdateRecord('AI Models', input, dataSource, userPayload, pubSub);
+    }
+    
+    @Mutation(() => AIModel_)
+    async DeleteAIModel(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('AI Models', key, options, dataSource, userPayload, pubSub);
     }
     
 }
@@ -8310,6 +8359,28 @@ export class AIAction_ {
     EntityAIActionsArray: mj_core_schema_server_object_types.EntityAIAction_[]; // Link to EntityAIActions
     
 }
+        
+//****************************************************************************
+// INPUT TYPE for AI Actions   
+//****************************************************************************
+@InputType()
+export class CreateAIActionInput {
+    @Field()
+    Name: string;
+
+    @Field({ nullable: true })
+    Description?: string;
+
+    @Field(() => Int, { nullable: true })
+    DefaultModelID?: number;
+
+    @Field({ nullable: true })
+    DefaultPrompt?: string;
+
+    @Field(() => Boolean)
+    IsActive: boolean;
+}
+    
         
 //****************************************************************************
 // INPUT TYPE for AI Actions   
@@ -8415,6 +8486,15 @@ export class AIActionResolver extends ResolverBase {
     }
         
     @Mutation(() => AIAction_)
+    async CreateAIAction(
+        @Arg('input', () => CreateAIActionInput) input: CreateAIActionInput,
+        @Ctx() { dataSource, userPayload }: AppContext, 
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.CreateRecord('AI Actions', input, dataSource, userPayload, pubSub)
+    }
+        
+    @Mutation(() => AIAction_)
     async UpdateAIAction(
         @Arg('input', () => UpdateAIActionInput) input: UpdateAIActionInput,
         @Ctx() { dataSource, userPayload }: AppContext,
@@ -8465,6 +8545,22 @@ export class AIModelAction_ {
     AIAction: string;
         
 }
+        
+//****************************************************************************
+// INPUT TYPE for AI Model Actions   
+//****************************************************************************
+@InputType()
+export class CreateAIModelActionInput {
+    @Field(() => Int)
+    AIModelID: number;
+
+    @Field(() => Int)
+    AIActionID: number;
+
+    @Field(() => Boolean)
+    IsActive: boolean;
+}
+    
         
 //****************************************************************************
 // INPUT TYPE for AI Model Actions   
@@ -8548,6 +8644,15 @@ export class AIModelActionResolver extends ResolverBase {
     }
     
     @Mutation(() => AIModelAction_)
+    async CreateAIModelAction(
+        @Arg('input', () => CreateAIModelActionInput) input: CreateAIModelActionInput,
+        @Ctx() { dataSource, userPayload }: AppContext, 
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.CreateRecord('AI Model Actions', input, dataSource, userPayload, pubSub)
+    }
+        
+    @Mutation(() => AIModelAction_)
     async UpdateAIModelAction(
         @Arg('input', () => UpdateAIModelActionInput) input: UpdateAIModelActionInput,
         @Ctx() { dataSource, userPayload }: AppContext,
@@ -8629,6 +8734,49 @@ export class EntityAIAction_ {
     OutputEntity?: string;
         
 }
+        
+//****************************************************************************
+// INPUT TYPE for Entity AI Actions   
+//****************************************************************************
+@InputType()
+export class CreateEntityAIActionInput {
+    @Field(() => Int)
+    EntityID: number;
+
+    @Field(() => Int)
+    AIActionID: number;
+
+    @Field(() => Int, { nullable: true })
+    AIModelID?: number;
+
+    @Field()
+    Name: string;
+
+    @Field({ nullable: true })
+    Prompt?: string;
+
+    @Field()
+    TriggerEvent: string;
+
+    @Field()
+    UserMessage: string;
+
+    @Field()
+    OutputType: string;
+
+    @Field({ nullable: true })
+    OutputField?: string;
+
+    @Field(() => Boolean)
+    SkipIfOutputFieldNotEmpty: boolean;
+
+    @Field(() => Int, { nullable: true })
+    OutputEntityID?: number;
+
+    @Field({ nullable: true })
+    Comments?: string;
+}
+    
         
 //****************************************************************************
 // INPUT TYPE for Entity AI Actions   
@@ -8739,6 +8887,15 @@ export class EntityAIActionResolver extends ResolverBase {
     }
     
     @Mutation(() => EntityAIAction_)
+    async CreateEntityAIAction(
+        @Arg('input', () => CreateEntityAIActionInput) input: CreateEntityAIActionInput,
+        @Ctx() { dataSource, userPayload }: AppContext, 
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.CreateRecord('Entity AI Actions', input, dataSource, userPayload, pubSub)
+    }
+        
+    @Mutation(() => EntityAIAction_)
     async UpdateEntityAIAction(
         @Arg('input', () => UpdateEntityAIActionInput) input: UpdateEntityAIActionInput,
         @Ctx() { dataSource, userPayload }: AppContext,
@@ -8774,6 +8931,19 @@ export class AIModelType_ {
     AIModelsArray: mj_core_schema_server_object_types.AIModel_[]; // Link to AIModels
     
 }
+        
+//****************************************************************************
+// INPUT TYPE for AI Model Types   
+//****************************************************************************
+@InputType()
+export class CreateAIModelTypeInput {
+    @Field()
+    Name: string;
+
+    @Field({ nullable: true })
+    Description?: string;
+}
+    
         
 //****************************************************************************
 // INPUT TYPE for AI Model Types   
@@ -8862,12 +9032,27 @@ export class AIModelTypeResolver extends ResolverBase {
     }
         
     @Mutation(() => AIModelType_)
+    async CreateAIModelType(
+        @Arg('input', () => CreateAIModelTypeInput) input: CreateAIModelTypeInput,
+        @Ctx() { dataSource, userPayload }: AppContext, 
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.CreateRecord('AI Model Types', input, dataSource, userPayload, pubSub)
+    }
+        
+    @Mutation(() => AIModelType_)
     async UpdateAIModelType(
         @Arg('input', () => UpdateAIModelTypeInput) input: UpdateAIModelTypeInput,
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.UpdateRecord('AI Model Types', input, dataSource, userPayload, pubSub);
+    }
+    
+    @Mutation(() => AIModelType_)
+    async DeleteAIModelType(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('AI Model Types', key, options, dataSource, userPayload, pubSub);
     }
     
 }
@@ -21608,6 +21793,9 @@ export class TemplateParam_ {
     @Field({nullable: true, description: 'Default value of the parameter'}) 
     DefaultValue?: string;
           
+    @Field(() => Boolean) 
+    IsRequired: boolean;
+          
     @Field(() => Int, {nullable: true, description: 'Entity ID, used only when Type is Record'}) 
     EntityID?: number;
           
@@ -21653,6 +21841,9 @@ export class CreateTemplateParamInput {
     @Field({ nullable: true })
     DefaultValue?: string;
 
+    @Field(() => Boolean)
+    IsRequired: boolean;
+
     @Field(() => Int, { nullable: true })
     EntityID?: number;
 
@@ -21683,6 +21874,9 @@ export class UpdateTemplateParamInput {
 
     @Field({ nullable: true })
     DefaultValue?: string;
+
+    @Field(() => Boolean)
+    IsRequired: boolean;
 
     @Field(() => Int, { nullable: true })
     EntityID?: number;

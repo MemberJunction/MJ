@@ -30,12 +30,8 @@ export class LibraryEntityExtended extends LibraryEntity {
  * Provides utility functionality for documentation of the MemberJunction system using external website content from the MemberJunction project.
  */
 export class DocumentationEngine extends BaseEngine<DocumentationEngine> {
-    private constructor() {
-        super('MJ_Documentation_Metadata');
-    }
-
     public static get Instance(): DocumentationEngine {
-        return super.getInstance<DocumentationEngine>('MJ_Documentation_Metadata');
+        return super.getInstance<DocumentationEngine>();
     }
 
  

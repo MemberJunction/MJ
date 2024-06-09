@@ -1,4 +1,4 @@
-import { BaseEntity } from "@memberjunction/core";
+import { BaseEntity, EntitySaveOptions, ValidationResult } from "@memberjunction/core";
 import { TemplateContentEntity, TemplateEntity, TemplateParamEntity } from "@memberjunction/core-entities";
 import { RegisterClass } from "@memberjunction/global";
 
@@ -42,5 +42,30 @@ export class TemplateEntityExtended extends TemplateEntity {
         else {
             return this.Content.sort((a, b) => a.Priority - b.Priority)[0];
         }
+    }
+
+    /**
+     * This method is different from the Validate() method which validates the state of the Template itself. This method validates the data object provided meets the requirements for the template's parameter definitions.
+     * @param data - the data object to validate against the template's parameter definitions
+     */
+    public ValidateTemplateInput(data: any): ValidationResult {
+        const result = new ValidationResult();
+        this.Params.forEach((p) => {
+            if (p.IsRequired) {
+                if (!data ||
+                    data[p.Name] === undefined || 
+                    data[p.Name] === null || 
+                    (typeof data[p.Name] === 'string' && data[p.Name].toString().trim() === ''))
+                    result.Errors.push({
+                        Source: p.Name,
+                        Message: `Parameter ${p.Name} is required.`,
+                        Value: data[p.Name],
+                        Type: 'Failure'
+                    });
+            }
+        });
+        // now set result's top level success falg based on the existence of ANY failure record within the errors collection
+        result.Success = result.Errors.some(e => e.Type === 'Failure') ? false : true;
+        return result;
     }
 }

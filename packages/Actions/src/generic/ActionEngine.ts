@@ -135,17 +135,11 @@ export class RunActionParams {
 export class ActionEngine extends BaseEngine<ActionEngine> {
    private __coreCategoryName = '__mj';
 
-   // implement a singleton pattern for caching metadata. All uses of the ActionEngine will first call Config() to get started which is an async method. This method will load the metadata and cache it in a variable wtihin the "GlobalObjectStore"
-   // which is an MJ utility that is available to all packages. This will allow the metadata to be loaded once and then used by all instances of the ActionEngine. This is important because the metadata is not expected to change.
-   private constructor() {
-      super('MJ_Action_Metadata');
-   }
-
    /**
     * Returns the global instance of the class. This is a singleton class, so there is only one instance of it in the application. Do not directly create new instances of it, always use this method to get the instance.
     */
    public static get Instance(): ActionEngine {
-      return super.getInstance<ActionEngine>('MJ_Action_Metadata');
+      return super.getInstance<ActionEngine>();
    }
 
     private _Actions: ActionEntityServerEntity[];

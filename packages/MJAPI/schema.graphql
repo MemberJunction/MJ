@@ -1583,6 +1583,37 @@ type Conversation_ {
   UserID: Int!
 }
 
+input CreateAIActionInput {
+  DefaultModelID: Int
+  DefaultPrompt: String
+  Description: String
+  IsActive: Boolean!
+  Name: String!
+}
+
+input CreateAIModelActionInput {
+  AIActionID: Int!
+  AIModelID: Int!
+  IsActive: Boolean!
+}
+
+input CreateAIModelInput {
+  AIModelTypeID: Int!
+  APIName: String
+  Description: String
+  DriverClass: String
+  DriverImportPath: String
+  IsActive: Boolean!
+  Name: String!
+  PowerRank: Int
+  Vendor: String
+}
+
+input CreateAIModelTypeInput {
+  Description: String
+  Name: String!
+}
+
 input CreateAccountInput {
   Acronym: String
   ActivityCount: Int!
@@ -3297,6 +3328,21 @@ input CreateEmployeeInput {
   Phone: String
   SupervisorID: Int
   Title: String
+}
+
+input CreateEntityAIActionInput {
+  AIActionID: Int!
+  AIModelID: Int
+  Comments: String
+  EntityID: Int!
+  Name: String!
+  OutputEntityID: Int
+  OutputField: String
+  OutputType: String!
+  Prompt: String
+  SkipIfOutputFieldNotEmpty: Boolean!
+  TriggerEvent: String!
+  UserMessage: String!
 }
 
 input CreateEntityActionFilterInput {
@@ -6310,6 +6356,7 @@ input CreateTemplateParamInput {
   DefaultValue: String
   Description: String
   EntityID: Int
+  IsRequired: Boolean!
   Name: String!
   RecordID: String
   TemplateID: Int!
@@ -8511,6 +8558,10 @@ type List_ {
 }
 
 type Mutation {
+  CreateAIAction(input: CreateAIActionInput!): AIAction_!
+  CreateAIModel(input: CreateAIModelInput!): AIModel_!
+  CreateAIModelAction(input: CreateAIModelActionInput!): AIModelAction_!
+  CreateAIModelType(input: CreateAIModelTypeInput!): AIModelType_!
   CreateAccount(input: CreateAccountInput!): Account_!
   CreateAccount__client_crm(input: CreateAccount__client_crmInput!): Account__client_crm_!
   CreateAction(input: CreateActionInput!): Action_!
@@ -8559,6 +8610,7 @@ type Mutation {
   CreateDuplicateRunDetailMatch(input: CreateDuplicateRunDetailMatchInput!): DuplicateRunDetailMatch_!
   CreateEmployee(input: CreateEmployeeInput!): Employee_!
   CreateEntity(input: CreateEntityInput!): Entity_!
+  CreateEntityAIAction(input: CreateEntityAIActionInput!): EntityAIAction_!
   CreateEntityAction(input: CreateEntityActionInput!): EntityAction_!
   CreateEntityActionFilter(input: CreateEntityActionFilterInput!): EntityActionFilter_!
   CreateEntityActionInvocation(input: CreateEntityActionInvocationInput!): EntityActionInvocation_!
@@ -8636,7 +8688,9 @@ type Mutation {
   CreateWorkspaceItem(input: CreateWorkspaceItemInput!): WorkspaceItem_!
   Createclient_membership(input: Createclient_membershipInput!): client_membership_!
   DeleteAIAction(ID: Int!, options___: DeleteOptionsInput!): AIAction_!
+  DeleteAIModel(ID: Int!, options___: DeleteOptionsInput!): AIModel_!
   DeleteAIModelAction(ID: Int!, options___: DeleteOptionsInput!): AIModelAction_!
+  DeleteAIModelType(ID: Int!, options___: DeleteOptionsInput!): AIModelType_!
   DeleteAccount(ID: Int!, options___: DeleteOptionsInput!): Account_!
   DeleteAction(ID: Int!, options___: DeleteOptionsInput!): Action_!
   DeleteActionAuthorization(ID: Int!, options___: DeleteOptionsInput!): ActionAuthorization_!
@@ -14298,6 +14352,7 @@ type TemplateParam_ {
   """Entity ID, used only when Type is Record"""
   EntityID: Int
   ID: Int!
+  IsRequired: Boolean!
 
   """Name of the parameter"""
   Name: String!
@@ -19467,6 +19522,7 @@ input UpdateTemplateParamInput {
   Description: String
   EntityID: Int
   ID: Int!
+  IsRequired: Boolean!
   Name: String!
   OldValues___: [KeyValuePairInput!]
   RecordID: String

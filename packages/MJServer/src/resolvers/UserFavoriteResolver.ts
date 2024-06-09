@@ -1,9 +1,11 @@
-import { Metadata, KeyValuePair, CompositeKey } from '@memberjunction/core';
+import { Metadata, KeyValuePair, CompositeKey, UserInfo } from '@memberjunction/core';
 import { AppContext, Arg, CompositeKeyInputType, CompositeKeyOutputType, Ctx, Field, InputType, Int, Mutation, ObjectType, Query, Resolver } from '@memberjunction/server';
 import { UserCache } from '@memberjunction/sqlserver-dataprovider';
 import { UserFavoriteEntity } from '@memberjunction/core-entities';
 
 import { UserFavorite_, UserFavoriteResolverBase } from '../generated/generated';
+import { CommunicationEngine } from '@memberjunction/communication-core';
+import { TemplateEngine } from '@memberjunction/templates';
 
 //****************************************************************************
 // INPUT TYPE for User Favorite Queries
@@ -89,6 +91,7 @@ export class UserFavoriteResolver extends UserFavoriteResolverBase {
     const e = md.Entities.find((e) => e.ID === params.EntityID);
     const u = UserCache.Users.find((u) => u.ID === userPayload.userRecord.ID);
     if (e) {
+      this.TestCommunicationFramework(userPayload.userRecord);
       md.SetRecordFavoriteStatus(params.UserID, e.Name, pk, params.IsFavorite, u);
       return {
         Success: true,
@@ -97,7 +100,53 @@ export class UserFavoriteResolver extends UserFavoriteResolverBase {
         CompositeKey: params.CompositeKey,
         IsFavorite: params.IsFavorite,
       };
-    } else throw new Error(`Entity ID:${params.EntityID} not found`);
+    } 
+    else 
+      throw new Error(`Entity ID:${params.EntityID} not found`);
+
+  }
+ 
+
+  private async TestCommunicationFramework(user: UserInfo) {
+    const engine = CommunicationEngine.Instance;
+    await engine.Config(true, user);
+    const tEngine = TemplateEngine.Instance;
+    await tEngine.Config(true, user);
+    const t = TemplateEngine.Instance.FindTemplate('Test Template');
+    const s = TemplateEngine.Instance.FindTemplate('Test Subject Template');
+    const d = { 
+      firstName: 'John',
+      lastName: 'Doe',
+      age: 25,
+      address: {
+        street: '123 Main St',
+        city: 'Springfield',
+        state: 'IL',
+        zip: '62701'
+      },
+      recommendedArticles: [
+        {
+          title: 'How to Write Better Code',
+          url: 'https://example.com/article1'
+        },
+        {
+          title: 'The Art of Debugging',
+          url: 'https://example.com/article2'      
+        },
+        {
+          title: 'Using Templates Effectively',
+          url: 'https://example.com/article3'
+        }
+      ]
+    }
+    await engine.SendSingleMessage('SendGrid', 'Email', {
+      To: 'amith_nagarajan@hotmail.com',
+      From: "amith@bluecypress.io",
+      BodyTemplate: t,
+      SubjectTemplate: s,
+      ContextData: d,
+      MessageType: null
+    });
   }
  
 }
