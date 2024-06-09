@@ -19,10 +19,13 @@ import { AccountFormComponent_Demo } from "./Forms/Accounts/account.form.compone
 import { CommonModule } from "@angular/common";
 import { FormsModule } from "@angular/forms";
 import { TimelineModule } from "@memberjunction/ng-timeline";
+import { TreelistModule } from "@memberjunction/ng-treelist";
+import { DealFormComponent_Demo } from "./Deals/deal.form.component";
 
 @NgModule({
     declarations: [
-        AccountFormComponent_Demo
+        AccountFormComponent_Demo, 
+        DealFormComponent_Demo
     ],
     imports: [
         CommonModule,
@@ -39,7 +42,8 @@ import { TimelineModule } from "@memberjunction/ng-timeline";
         ContainerDirectivesModule,
         DropDownListModule,
         ComboBoxModule,
-        TimelineModule
+        TimelineModule, 
+        TreelistModule
     ],
     exports: [
     ]

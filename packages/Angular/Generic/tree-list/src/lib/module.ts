@@ -5,7 +5,7 @@ import { CommonModule } from '@angular/common';
 import { ButtonsModule } from '@progress/kendo-angular-buttons'; 
 import { IndicatorsModule } from '@progress/kendo-angular-indicators';
 import { LayoutModule } from '@progress/kendo-angular-layout';
-import { SchedulerModule } from '@progress/kendo-angular-scheduler';
+import { TreeListModule  } from "@progress/kendo-angular-treelist";
 
 // MJ
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
@@ -24,11 +24,11 @@ import { TreelistComponent } from './component/treelist.component';
     ButtonsModule,
     EntityFormDialogModule,
     IndicatorsModule,
-    LayoutModule, 
-    SchedulerModule
+    LayoutModule,
+    TreeListModule
   ],
   exports: [
     TreelistComponent
   ]
 })
-export class TimelineModule { }
+export class TreelistModule { }

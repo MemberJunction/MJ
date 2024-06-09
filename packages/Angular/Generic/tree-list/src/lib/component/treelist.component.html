@@ -1,11 +1,17 @@
 <div mjFillContainer class="wrapper"> 
-    <kendo-scheduler
-      [events]="events"
-      [selectedDate]="selectedDate"
-    >
-      <ng-template kendoSchedulerAllDayEventTemplate let-event="event">
-        <span style="color:yellow;">{{ event.title }}</span>
-      </ng-template>
-      <kendo-scheduler-week-view> </kendo-scheduler-week-view>
-  </kendo-scheduler>
+    <kendo-treelist
+    [kendoTreeListFlatBinding]="data"
+    kendoTreeListExpandable
+    idField="id"
+    parentIdField="dealID">
+        <ng-template kendoTreeListToolbarTemplate>
+            <button kendoTreeListAddCommand>Add New</button>
+        </ng-template>
+        <kendo-treelist-column field="id" title="ID">
+        </kendo-treelist-column>
+        <kendo-treelist-column field="age" title="Age">
+        </kendo-treelist-column>
+        <kendo-treelist-column field="job" title="Job">
+        </kendo-treelist-column>
+    </kendo-treelist>
 </div> 
