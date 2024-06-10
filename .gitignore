@@ -87,3 +87,4 @@ packages/MJExplorer/kendo-ui-license.txt
 build.log.json
 
 packages/Templates-Old/.angular/
+packages/MJAPI/schema.graphql
