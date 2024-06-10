@@ -93,15 +93,15 @@ export class ResourceResolver implements Resolve<void> {
   constructor(private sharedService: SharedService, private router: Router) {
     // Subscribe to router events
     this.router.events.subscribe(event => {
-      if (event instanceof NavigationEnd) {
-        LogStatus('NavigationEnd:', event.url);
-      }
-      if (event instanceof NavigationError) {
-        LogError(`NavigationError: ${event.error}`);
-      }
-      if (event instanceof NavigationCancel) {
-        LogError(`NavigationCancel: ${event.reason}`);
-      }
+      // if (event instanceof NavigationEnd) {
+      //   LogStatus('NavigationEnd:', event.url);
+      // }
+      // if (event instanceof NavigationError) {
+      //   LogError(`NavigationError: ${event.error}`);
+      // }
+      // if (event instanceof NavigationCancel) {
+      //   LogError(`NavigationCancel: ${event.reason}`);
+      // }
     });    
   }
 
