@@ -216,7 +216,7 @@ export class ProcessedMessage extends Message {
  * MessageResult class, holds information and functionality specific to a single message result
  */
 export class MessageResult {
-    public Run: CommunicationRunEntity;
+    public Run?: CommunicationRunEntity;
     public Message: ProcessedMessage;
     public Success: boolean;
     public Error: string;
