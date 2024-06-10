@@ -874,10 +874,12 @@ type CommunicationRun_ {
 
   """The direction of the communication run (Sending or Receiving)."""
   Direction: String!
+  EndedAt: Timestamp
 
   """The error message if the communication run failed."""
   ErrorMessage: String
   ID: Int!
+  StartedAt: Timestamp
 
   """
   The status of the communication run (Pending, In-Progress, Complete, Failed).
@@ -2069,7 +2071,9 @@ input CreateCommunicationProviderMessageTypeInput {
 input CreateCommunicationRunInput {
   Comments: String
   Direction: String!
+  EndedAt: Timestamp
   ErrorMessage: String
+  StartedAt: Timestamp
   Status: String!
   UserID: Int!
 }
@@ -4106,6 +4110,33 @@ input CreateQueueTaskInput {
   Output: String
   QueueID: Int!
   StartedAt: Timestamp
+  Status: String!
+}
+
+input CreateRecommendationInput {
+  RecommendationRunID: Int!
+  SourceEntityID: Int!
+  SourceEntityRecordID: String!
+}
+
+input CreateRecommendationItemInput {
+  DestinationEntityID: Int!
+  DestinationEntityRecordID: String!
+  MatchProbability: Float
+  RecommendationID: Int!
+}
+
+input CreateRecommendationProviderInput {
+  Description: String
+  Name: String!
+}
+
+input CreateRecommendationRunInput {
+  Description: String
+  EndDate: Timestamp
+  RecommendationProviderID: Int!
+  RunByUserID: Int!
+  StartDate: Timestamp!
   Status: String!
 }
 
@@ -8078,6 +8109,8 @@ type Entity_ {
   ParentEntity: String
   ParentID: Int
   QueryFieldsArray: [QueryField_!]!
+  RecommendationItemsArray: [RecommendationItem_!]!
+  RecommendationsArray: [Recommendation_!]!
   RecordChangesArray: [RecordChange_!]!
   RecordMergeLogsArray: [RecordMergeLog_!]!
   ResourceTypesArray: [ResourceType_!]!
@@ -8650,6 +8683,10 @@ type Mutation {
   CreateQueryPermission(input: CreateQueryPermissionInput!): QueryPermission_!
   CreateQueue(input: CreateQueueInput!): Queue_!
   CreateQueueTask(input: CreateQueueTaskInput!): QueueTask_!
+  CreateRecommendation(input: CreateRecommendationInput!): Recommendation_!
+  CreateRecommendationItem(input: CreateRecommendationItemInput!): RecommendationItem_!
+  CreateRecommendationProvider(input: CreateRecommendationProviderInput!): RecommendationProvider_!
+  CreateRecommendationRun(input: CreateRecommendationRunInput!): RecommendationRun_!
   CreateRecordChange(input: CreateRecordChangeInput!): RecordChange_!
   CreateRecordMergeDeletionLog(input: CreateRecordMergeDeletionLogInput!): RecordMergeDeletionLog_!
   CreateRecordMergeLog(input: CreateRecordMergeLogInput!): RecordMergeLog_!
@@ -8848,6 +8885,10 @@ type Mutation {
   UpdateQueryPermission(input: UpdateQueryPermissionInput!): QueryPermission_!
   UpdateQueue(input: UpdateQueueInput!): Queue_!
   UpdateQueueTask(input: UpdateQueueTaskInput!): QueueTask_!
+  UpdateRecommendation(input: UpdateRecommendationInput!): Recommendation_!
+  UpdateRecommendationItem(input: UpdateRecommendationItemInput!): RecommendationItem_!
+  UpdateRecommendationProvider(input: UpdateRecommendationProviderInput!): RecommendationProvider_!
+  UpdateRecommendationRun(input: UpdateRecommendationRunInput!): RecommendationRun_!
   UpdateRecordMergeDeletionLog(input: UpdateRecordMergeDeletionLogInput!): RecordMergeDeletionLog_!
   UpdateRecordMergeLog(input: UpdateRecordMergeLogInput!): RecordMergeLog_!
   UpdateReport(input: UpdateReportInput!): Report_!
@@ -9372,6 +9413,10 @@ type Query {
   Queue(ID: Int!): Queue_
   QueueTask(ID: Int!): QueueTask_
   QueueType(ID: Int!): QueueType_
+  Recommendation(ID: Int!): Recommendation_
+  RecommendationItem(ID: Int!): RecommendationItem_
+  RecommendationProvider(ID: Int!): RecommendationProvider_
+  RecommendationRun(ID: Int!): RecommendationRun_
   RecordChange(ID: Int!): RecordChange_
   RecordMergeDeletionLog(ID: Int!): RecordMergeDeletionLog_
   RecordMergeLog(ID: Int!): RecordMergeLog_
@@ -9718,6 +9763,18 @@ type Query {
   RunQueueTypeViewByName(input: RunViewByNameInput!): RunQueueTypeViewResult!
   RunQueueViewByID(input: RunViewByIDInput!): RunQueueViewResult!
   RunQueueViewByName(input: RunViewByNameInput!): RunQueueViewResult!
+  RunRecommendationDynamicView(input: RunDynamicViewInput!): RunRecommendationViewResult!
+  RunRecommendationItemDynamicView(input: RunDynamicViewInput!): RunRecommendationItemViewResult!
+  RunRecommendationItemViewByID(input: RunViewByIDInput!): RunRecommendationItemViewResult!
+  RunRecommendationItemViewByName(input: RunViewByNameInput!): RunRecommendationItemViewResult!
+  RunRecommendationProviderDynamicView(input: RunDynamicViewInput!): RunRecommendationProviderViewResult!
+  RunRecommendationProviderViewByID(input: RunViewByIDInput!): RunRecommendationProviderViewResult!
+  RunRecommendationProviderViewByName(input: RunViewByNameInput!): RunRecommendationProviderViewResult!
+  RunRecommendationRunDynamicView(input: RunDynamicViewInput!): RunRecommendationRunViewResult!
+  RunRecommendationRunViewByID(input: RunViewByIDInput!): RunRecommendationRunViewResult!
+  RunRecommendationRunViewByName(input: RunViewByNameInput!): RunRecommendationRunViewResult!
+  RunRecommendationViewByID(input: RunViewByIDInput!): RunRecommendationViewResult!
+  RunRecommendationViewByName(input: RunViewByNameInput!): RunRecommendationViewResult!
   RunRecordChangeDynamicView(input: RunDynamicViewInput!): RunRecordChangeViewResult!
   RunRecordChangeViewByID(input: RunViewByIDInput!): RunRecordChangeViewResult!
   RunRecordChangeViewByName(input: RunViewByNameInput!): RunRecordChangeViewResult!
@@ -10023,6 +10080,78 @@ type Queue_ {
   QueueType: String!
   QueueTypeID: Int!
   UpdatedAt: Timestamp!
+}
+
+"""
+Table to store individual recommendation items that are the right side of the recommendation which we track in the DestinationEntityID/DestinationEntityRecordID
+"""
+type RecommendationItem_ {
+  CreatedAt: Timestamp
+  DestinationEntity: String!
+
+  """The ID of the destination entity"""
+  DestinationEntityID: Int!
+
+  """The record ID of the destination entity"""
+  DestinationEntityRecordID: String!
+  ID: Int!
+
+  """
+  A value between 0 and 1 indicating the probability of the match, higher numbers indicating a more certain match/recommendation.
+  """
+  MatchProbability: Float
+  RecommendationID: Int!
+  UpdatedAt: Timestamp
+}
+
+"""Recommendation providers details"""
+type RecommendationProvider_ {
+  CreatedAt: Timestamp
+  Description: String
+  ID: Int!
+  Name: String!
+  RecommendationRunsArray: [RecommendationRun_!]!
+  UpdatedAt: Timestamp
+}
+
+"""
+Recommendation runs log each time a provider is requested to provide recommendations
+"""
+type RecommendationRun_ {
+  CreatedAt: Timestamp
+  Description: String
+
+  """The end date of the recommendation run"""
+  EndDate: Timestamp
+  ID: Int!
+  RecommendationProvider: String!
+  RecommendationProviderID: Int!
+  RecommendationsArray: [Recommendation_!]!
+  RunByUser: String!
+  RunByUserID: Int!
+
+  """The start date of the recommendation run"""
+  StartDate: Timestamp!
+
+  """The status of the recommendation run"""
+  Status: String!
+  UpdatedAt: Timestamp
+}
+
+"""
+Recommendation headers that store the left side of the recommendation which we track in the SourceEntityID/SourceEntityRecordID
+"""
+type Recommendation_ {
+  CreatedAt: Timestamp
+  ID: Int!
+  RecommendationItemsArray: [RecommendationItem_!]!
+  RecommendationRunID: Int!
+  SourceEntity: String!
+  SourceEntityID: Int!
+
+  """The record ID of the source entity"""
+  SourceEntityRecordID: String!
+  UpdatedAt: Timestamp
 }
 
 """
@@ -11393,6 +11522,46 @@ type RunQueueViewResult {
   ErrorMessage: String
   ExecutionTime: Int
   Results: [Queue_!]!
+  RowCount: Int
+  Success: Boolean!
+  TotalRowCount: Int
+  UserViewRunID: Int
+}
+
+type RunRecommendationItemViewResult {
+  ErrorMessage: String
+  ExecutionTime: Int
+  Results: [RecommendationItem_!]!
+  RowCount: Int
+  Success: Boolean!
+  TotalRowCount: Int
+  UserViewRunID: Int
+}
+
+type RunRecommendationProviderViewResult {
+  ErrorMessage: String
+  ExecutionTime: Int
+  Results: [RecommendationProvider_!]!
+  RowCount: Int
+  Success: Boolean!
+  TotalRowCount: Int
+  UserViewRunID: Int
+}
+
+type RunRecommendationRunViewResult {
+  ErrorMessage: String
+  ExecutionTime: Int
+  Results: [RecommendationRun_!]!
+  RowCount: Int
+  Success: Boolean!
+  TotalRowCount: Int
+  UserViewRunID: Int
+}
+
+type RunRecommendationViewResult {
+  ErrorMessage: String
+  ExecutionTime: Int
+  Results: [Recommendation_!]!
   RowCount: Int
   Success: Boolean!
   TotalRowCount: Int
@@ -14992,9 +15161,11 @@ input UpdateCommunicationProviderMessageTypeInput {
 input UpdateCommunicationRunInput {
   Comments: String
   Direction: String!
+  EndedAt: Timestamp
   ErrorMessage: String
   ID: Int!
   OldValues___: [KeyValuePairInput!]
+  StartedAt: Timestamp
   Status: String!
   UserID: Int!
 }
@@ -17254,6 +17425,41 @@ input UpdateQueueTaskInput {
   Output: String
   QueueID: Int!
   StartedAt: Timestamp
+  Status: String!
+}
+
+input UpdateRecommendationInput {
+  ID: Int!
+  OldValues___: [KeyValuePairInput!]
+  RecommendationRunID: Int!
+  SourceEntityID: Int!
+  SourceEntityRecordID: String!
+}
+
+input UpdateRecommendationItemInput {
+  DestinationEntityID: Int!
+  DestinationEntityRecordID: String!
+  ID: Int!
+  MatchProbability: Float
+  OldValues___: [KeyValuePairInput!]
+  RecommendationID: Int!
+}
+
+input UpdateRecommendationProviderInput {
+  Description: String
+  ID: Int!
+  Name: String!
+  OldValues___: [KeyValuePairInput!]
+}
+
+input UpdateRecommendationRunInput {
+  Description: String
+  EndDate: Timestamp
+  ID: Int!
+  OldValues___: [KeyValuePairInput!]
+  RecommendationProviderID: Int!
+  RunByUserID: Int!
+  StartDate: Timestamp!
   Status: String!
 }
 
@@ -20013,6 +20219,7 @@ type User_ {
   ListsArray: [List_!]!
   Name: String!
   QueryCategoriesArray: [QueryCategory_!]!
+  RecommendationRunsArray: [RecommendationRun_!]!
   RecordChangesArray: [RecordChange_!]!
   RecordMergeLogsArray: [RecordMergeLog_!]!
   ReportCategoriesArray: [ReportCategory_!]!

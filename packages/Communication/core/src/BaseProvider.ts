@@ -1,8 +1,30 @@
 import { BaseEntity, UserInfo } from "@memberjunction/core";
-import { CommunicationProviderEntity, CommunicationProviderMessageTypeEntity, TemplateEntity } from "@memberjunction/core-entities";
+import { CommunicationProviderEntity, CommunicationProviderMessageTypeEntity, CommunicationRunEntity, TemplateEntity } from "@memberjunction/core-entities";
 import { RegisterClass } from "@memberjunction/global";
 import { TemplateEngine } from '@memberjunction/templates';
 import { TemplateEntityExtended } from "@memberjunction/templates/dist/TemplateEntityExtended";
+
+/**
+ * Information about a single recipient
+ */
+export class MessageRecipient {
+    /**
+     * The address is the "TO" field for the message and would be either an email, phone #, social handle, etc
+     * it is provider-specific and can be anything that the provider supports as a recipient
+     */
+    public To: string;
+    /**
+     * The full name of the recipient, if available
+     */
+    public FullName?: string;
+
+    /**
+     * When using templates, this is the context data that is used to render the template for this recipient
+     */
+    public ContextData: any;
+}
+
+
 /**
  * Message class, holds information and functionality specific to a single message
  */
@@ -60,6 +82,11 @@ export class Message {
      * Optional, any context data that is needed to render the message template
      */
     public ContextData?: any;
+
+    constructor(copyFrom: Message) {
+        // copy all properties from the message to us, used for copying a message
+        Object.assign(this, copyFrom);
+    }
 }
 
 /**
@@ -81,11 +108,6 @@ export class ProcessedMessage extends Message {
      */
     public ProcessedSubject: string;
 
-    constructor(Message: Message) {
-        // copy all properties from the message to us
-        super();
-        Object.assign(this, Message);
-    }
 
     public async Process(forceTemplateRefresh?: boolean, contextUser?: UserInfo): Promise<{Success: boolean, Message?: string}> {
         if (this.BodyTemplate || this.SubjectTemplate || this.HTMLBodyTemplate)
@@ -194,7 +216,8 @@ export class ProcessedMessage extends Message {
  * MessageResult class, holds information and functionality specific to a single message result
  */
 export class MessageResult {
-    public Message: Message;
+    public Run: CommunicationRunEntity;
+    public Message: ProcessedMessage;
     public Success: boolean;
     public Error: string;
 }

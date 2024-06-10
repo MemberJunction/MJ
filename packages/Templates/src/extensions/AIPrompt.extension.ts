@@ -49,7 +49,8 @@ export class AIPromptExtension extends TemplateExtensionBase {
         // See above for notes about CallExtension
         return new nodes.CallExtensionAsync(this, 'run', params, [body, errorBody, params]);    
     }
-    public run(context: Context, body: any, errorBody: any, callBack: NunjucksCallback) {
+
+    public run(context: Context, body: any, errorBody: any, params, callBack: NunjucksCallback, a, b, c) {
         const prompt = body();
         // we now have the LLM prompt in the prompt variable
         // we can't use async/await here because this is a synchronous function

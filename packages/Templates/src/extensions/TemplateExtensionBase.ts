@@ -32,5 +32,5 @@ export abstract class TemplateExtensionBase {
     /**
      * Required, must implement this method to run the extension.
      */
-    public abstract run(context: Context, body: any, errorBody: any, params: any, callBack: NunjucksCallback);
+    public abstract run(context: Context, body: any, errorBody: any, params, callBack: NunjucksCallback, a, b, c);
 }

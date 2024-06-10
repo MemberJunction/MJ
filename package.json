@@ -5,9 +5,9 @@
   "workspaces": [
     "packages/*",
     "packages/AI/*",
-    "packages/AI/Vectors/*",
     "packages/AI/Providers/*",
     "packages/AI/Recommendations/*",
+    "packages/AI/Vectors/*",
     "packages/Communication/*",
     "packages/Angular/*",
     "packages/Angular/Explorer/*",
