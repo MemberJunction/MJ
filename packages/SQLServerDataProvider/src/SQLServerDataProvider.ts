@@ -1585,29 +1585,27 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
                 });    
             }
             else {
-                return this._dataSource.transaction(async () => {
-                    const d = await this.ExecuteSQL(sSQL);
-    
-                    if (d && d[0]) {
-                        // SP executed, now make sure the return value matches up as that is how we know the SP was succesfully internally
-                        for (let key of entity.PrimaryKeys) {
-                            if (key.Value !== d[0][key.Name]) 
-                                return false;
-                        }
+                const d = await this.ExecuteSQL(sSQL);
 
-                        // Entity AI Actions and Actions - fired off async, NO await on purpose
-                        this.HandleEntityActions(entity, 'delete', false, user);
-                        this.HandleEntityAIActions(entity, 'delete', false, user);
-            
-                        result.EndedAt = new Date();
-                        return true
+                if (d && d[0]) {
+                    // SP executed, now make sure the return value matches up as that is how we know the SP was succesfully internally
+                    for (let key of entity.PrimaryKeys) {
+                        if (key.Value !== d[0][key.Name]) 
+                            return false;
                     }
-                    else {
-                        result.Message = 'No result returned from SQL';
-                        result.EndedAt = new Date();
-                        return false;
-                    }
-                });
+
+                    // Entity AI Actions and Actions - fired off async, NO await on purpose
+                    this.HandleEntityActions(entity, 'delete', false, user);
+                    this.HandleEntityAIActions(entity, 'delete', false, user);
+        
+                    result.EndedAt = new Date();
+                    return true
+                }
+                else {
+                    result.Message = 'No result returned from SQL';
+                    result.EndedAt = new Date();
+                    return false;
+                }
             }
         }
         catch (e) {
