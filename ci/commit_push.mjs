@@ -1,9 +1,7 @@
 import { gitAsync } from 'beachball/lib/git/gitAsync.js';
-import { findProjectRoot, parseRemoteBranch } from 'workspace-tools';
+import { findProjectRoot } from 'workspace-tools';
 
-const branch = 'origin/main';
 const message = 'Update distribution zip [skip ci]';
-const { remote, remoteBranch } = parseRemoteBranch(branch);
 const cwd = findProjectRoot(process.cwd());
 
 const commitResult = await gitAsync(['commit', '--all', '-m', message], {
@@ -15,13 +13,13 @@ if (!commitResult.success) {
   throw new Error(`Committing has failed!`);
 }
 
-console.log(`\nPushing to ${branch}...`);
+console.log('\nPushing to origin/main...');
 
-const pushResult = await gitAsync(['push', '--no-verify', '--follow-tags', '--verbose', remote, `HEAD:${remoteBranch}`], {
+const pushResult = await gitAsync(['push', '--no-verify', '--follow-tags', '--verbose', 'origin', 'HEAD:main'], {
   cwd,
   verbose: true,
 });
 if (!pushResult.success) {
   console.error(JSON.stringify(pushResult));
-  throw new Error(`Pushing to ${branch} has failed!`);
+  throw new Error('Pushing to origin/main has failed!');
 }
