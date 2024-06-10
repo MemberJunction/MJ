@@ -5,6 +5,8 @@
   "workspaces": [
     "packages/*",
     "packages/AI/*",
+    "packages/AI/Vectors/*",
+    "packages/AI/Providers/*",
     "packages/AI/Recommendations/*",
     "packages/Communication/*",
     "packages/Angular/*",
