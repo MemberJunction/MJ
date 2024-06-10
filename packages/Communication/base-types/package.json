@@ -1,7 +1,7 @@
 {
-  "name": "@memberjunction/communication-core",
+  "name": "@memberjunction/communication-types",
   "version": "1.5.2",
-  "description": "MemberJunction: Core Communication Framework Library",
+  "description": "MemberJunction: Communication Framework Library Generic Types",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": [
@@ -21,7 +21,7 @@
   "dependencies": {
     "@memberjunction/global": "1.5.2",
     "@memberjunction/core": "1.5.2",
-    "@memberjunction/templates": "1.5.2",
+    "@memberjunction/templates-base-types": "1.5.2",
     "@memberjunction/core-entities": "1.5.2",
     "rxjs": "^7.8.1"
   }

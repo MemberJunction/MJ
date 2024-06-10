@@ -1,23 +1,10 @@
 import { BaseEngine, BaseEnginePropertyConfig, UserInfo } from "@memberjunction/core";
 import { TemplateCategoryEntity, TemplateContentEntity, TemplateContentTypeEntity, TemplateParamEntity } from "@memberjunction/core-entities";
 import * as nunjucks from 'nunjucks';
-import { TemplateEntityExtended } from "./TemplateEntityExtended";
 import { MJGlobal } from "@memberjunction/global";
 import { TemplateExtensionBase } from "./extensions/TemplateExtensionBase";
-
-
-/**
- * Contains the results of a call to render a template
- */
-export class TemplateRenderResult {
-    Success: boolean;
-    Output: string;
-    /**
-     * Optional, typically used only for Success=false
-     */
-    Message?: string;
-}
-
+import { TemplateEntityExtended, TemplateRenderResult } from '@memberjunction/templates-base-types'
+  
 /**
  * This class extends the nunjucks loader to allow adding templates directly to the loader
  */

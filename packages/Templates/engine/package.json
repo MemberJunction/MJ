@@ -19,6 +19,7 @@
   },
   "dependencies": {
     "@memberjunction/core": "1.5.2",
+    "@memberjunction/templates-base-types": "1.5.2",
     "@memberjunction/ai": "1.5.2",
     "@memberjunction/aiengine": "1.5.2",
     "@memberjunction/ai-groq": "1.5.2",

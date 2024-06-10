@@ -32,6 +32,7 @@
     "@memberjunction/ng-entity-form-dialog": "1.5.2",
     "@memberjunction/ng-compare-records": "1.5.2",
     "@memberjunction/ng-container-directives": "1.5.2",
+    "@memberjunction/entity-communications-client": "1.5.2",
     "@progress/kendo-angular-grid": "16.2.0",
     "@progress/kendo-angular-layout": "16.2.0",
     "@progress/kendo-angular-inputs": "16.2.0",

@@ -50,6 +50,12 @@
                     Compare
                 </button>
 
+                @if (ShowCommunicationButton && EntitySupportsCommunication) {
+                    <button (click)="doCommunication()" kendoButton class="k-button-solid-base list-button">
+                        <span class="fa-regular fa-envelope"></span>
+                    </button>    
+                }
+
                 @if(showRefreshButton){
                     <button kendoButton class="list-button" (click)="RefreshFromSavedParams()">
                         <span class="fa-solid fa-arrows-rotate"></span>
