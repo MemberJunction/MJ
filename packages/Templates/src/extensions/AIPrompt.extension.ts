@@ -56,7 +56,7 @@ export class AIPromptExtension extends TemplateExtensionBase {
         // so instead we will use the callback pattern
         // we will get the highest power model from the AI Engine
         // then we will create an instance of the LLM class
-        AIEngine.Instance.LoadAIMetadata(this.ContextUser).then(async () => {
+        AIEngine.Instance.Config(false, this.ContextUser).then(async () => {
             try {
                 const model = await AIEngine.Instance.GetHighestPowerModel('Groq','llm', this.ContextUser) 
                 const llm = MJGlobal.Instance.ClassFactory.CreateInstance<BaseLLM>(BaseLLM, model.DriverClass, GetAIAPIKey(model.DriverClass))
@@ -100,7 +100,7 @@ export class AIPromptExtension extends TemplateExtensionBase {
      * @returns 
      */
     protected async GetAIModel(vendorName: string, contextUser: UserInfo): Promise<AIModelEntityExtended> {
-        await AIEngine.LoadAIMetadata(contextUser); // most of the time this is already loaded, but just in case it isn't we will load it here
+        await AIEngine.Instance.Config(false, contextUser); // most of the time this is already loaded, but just in case it isn't we will load it here
         const models = AIEngine.Models.filter(m => m.AIModelType.trim().toLowerCase() === 'llm' && 
                                                     m.Vendor.trim().toLowerCase() === vendorName.trim().toLowerCase())  
         // next, sort the models by the PowerRank field so that the highest power rank model is the first array element

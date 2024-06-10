@@ -28,7 +28,7 @@ export class UserViewEntity_Server extends UserViewEntityExtended  {
      * @returns 
      */
     protected async GetAIModel(): Promise<AIModelEntityExtended> {
-        await AIEngine.LoadAIMetadata(this.ContextCurrentUser); // most of the time this is already loaded, but just in case it isn't we will load it here
+        await AIEngine.Instance.Config(false, this.ContextCurrentUser); // most of the time this is already loaded, but just in case it isn't we will load it here
         const models = AIEngine.Models.filter(m => m.AIModelType.trim().toLowerCase() === 'llm' && 
                                                    m.Vendor.trim().toLowerCase() === this.AIVendorName.trim().toLowerCase())  
         // next, sort the models by the PowerRank field so that the highest power rank model is the first array element

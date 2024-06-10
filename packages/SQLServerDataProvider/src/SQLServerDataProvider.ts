@@ -1036,11 +1036,11 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
             return;
 
         // Make sure AI Metadata is loaded here...
-        await AIEngine.LoadAIMetadata(user);
+        await AIEngine.Instance.Config(false, user);
         
         const actions = this.GetEntityAIActions(entity.EntityInfo, before); // get the actions we need to do for this entity
         if (actions && actions.length > 0) {
-            const ai = new AIEngine();
+            const ai = AIEngine.Instance;
             for (let i = 0; i < actions.length; i++) {
                 const a = actions[i];
                 if (a.TriggerEvent === 'before save' && before || 

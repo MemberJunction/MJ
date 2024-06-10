@@ -13,7 +13,7 @@ import { ActionEntity } from '@memberjunction/core-entities';
             [record]="record"
             [ShowLabel]="false"
             FieldName="Code"
-            Type="code"
+            Type="textarea"
             [EditMode]="EditMode"
         ></mj-form-field>
 

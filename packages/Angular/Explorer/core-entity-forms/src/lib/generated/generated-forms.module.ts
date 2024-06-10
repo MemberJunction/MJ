@@ -149,6 +149,10 @@ import { TemplateCategoryFormComponent, LoadTemplateCategoryFormComponent } from
 import { TemplateContentFormComponent, LoadTemplateContentFormComponent } from "./Entities/TemplateContent/templatecontent.form.component";
 import { TemplateParamFormComponent, LoadTemplateParamFormComponent } from "./Entities/TemplateParam/templateparam.form.component";
 import { TemplateContentTypeFormComponent, LoadTemplateContentTypeFormComponent } from "./Entities/TemplateContentType/templatecontenttype.form.component";
+import { RecommendationFormComponent, LoadRecommendationFormComponent } from "./Entities/Recommendation/recommendation.form.component";
+import { RecommendationProviderFormComponent, LoadRecommendationProviderFormComponent } from "./Entities/RecommendationProvider/recommendationprovider.form.component";
+import { RecommendationRunFormComponent, LoadRecommendationRunFormComponent } from "./Entities/RecommendationRun/recommendationrun.form.component";
+import { RecommendationItemFormComponent, LoadRecommendationItemFormComponent } from "./Entities/RecommendationItem/recommendationitem.form.component";
 import { CompanyDetailsComponent, LoadCompanyDetailsComponent } from "./Entities/Company/sections/details.component"
 import { EmployeeDetailsComponent, LoadEmployeeDetailsComponent } from "./Entities/Employee/sections/details.component"
 import { UserFavoriteDetailsComponent, LoadUserFavoriteDetailsComponent } from "./Entities/UserFavorite/sections/details.component"
@@ -279,6 +283,10 @@ import { TemplateCategoryDetailsComponent, LoadTemplateCategoryDetailsComponent 
 import { TemplateContentDetailsComponent, LoadTemplateContentDetailsComponent } from "./Entities/TemplateContent/sections/details.component"
 import { TemplateParamDetailsComponent, LoadTemplateParamDetailsComponent } from "./Entities/TemplateParam/sections/details.component"
 import { TemplateContentTypeDetailsComponent, LoadTemplateContentTypeDetailsComponent } from "./Entities/TemplateContentType/sections/details.component"
+import { RecommendationDetailsComponent, LoadRecommendationDetailsComponent } from "./Entities/Recommendation/sections/details.component"
+import { RecommendationProviderDetailsComponent, LoadRecommendationProviderDetailsComponent } from "./Entities/RecommendationProvider/sections/details.component"
+import { RecommendationRunDetailsComponent, LoadRecommendationRunDetailsComponent } from "./Entities/RecommendationRun/sections/details.component"
+import { RecommendationItemDetailsComponent, LoadRecommendationItemDetailsComponent } from "./Entities/RecommendationItem/sections/details.component"
     
 
 @NgModule({
@@ -556,6 +564,10 @@ declarations: [
     TemplateContentFormComponent,
     TemplateParamFormComponent,
     TemplateContentTypeFormComponent,
+    RecommendationFormComponent,
+    RecommendationProviderFormComponent,
+    RecommendationRunFormComponent,
+    RecommendationItemFormComponent,
     CompanyDetailsComponent,
     EmployeeDetailsComponent,
     UserFavoriteDetailsComponent,
@@ -568,11 +580,7 @@ declarations: [
     IntegrationDetailsComponent,
     CompanyIntegrationDetailsComponent,
     EntityFieldDetailsComponent,
-    EntityDetailsComponent,
-    EntityTopComponent,
-    EntityAuditComponent,
-    EntityAPIComponent,
-    EntityDBComponent],
+    EntityDetailsComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -598,6 +606,10 @@ export class GeneratedForms_SubModule_6 { }
 
 @NgModule({
 declarations: [
+    EntityTopComponent,
+    EntityAuditComponent,
+    EntityAPIComponent,
+    EntityDBComponent,
     EntityUIComponent,
     UserDetailsComponent,
     EntityRelationshipDetailsComponent,
@@ -613,11 +625,7 @@ declarations: [
     UserApplicationDetailsComponent,
     CompanyIntegrationRunAPILogDetailsComponent,
     ListDetailsComponent,
-    ListDetailDetailsComponent,
-    UserViewRunDetailsComponent,
-    UserViewRunDetailDetailsComponent,
-    WorkflowRunDetailsComponent,
-    WorkflowDetailsComponent],
+    ListDetailDetailsComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -643,6 +651,10 @@ export class GeneratedForms_SubModule_7 { }
 
 @NgModule({
 declarations: [
+    UserViewRunDetailsComponent,
+    UserViewRunDetailDetailsComponent,
+    WorkflowRunDetailsComponent,
+    WorkflowDetailsComponent,
     WorkflowEngineDetailsComponent,
     RecordChangeDetailsComponent,
     UserRoleDetailsComponent,
@@ -658,11 +670,7 @@ declarations: [
     EntityAIActionDetailsComponent,
     AIModelTypeDetailsComponent,
     QueueTypeDetailsComponent,
-    QueueDetailsComponent,
-    QueueTaskDetailsComponent,
-    DashboardDetailsComponent,
-    OutputTriggerTypeDetailsComponent,
-    OutputFormatTypeDetailsComponent],
+    QueueDetailsComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -688,6 +696,10 @@ export class GeneratedForms_SubModule_8 { }
 
 @NgModule({
 declarations: [
+    QueueTaskDetailsComponent,
+    DashboardDetailsComponent,
+    OutputTriggerTypeDetailsComponent,
+    OutputFormatTypeDetailsComponent,
     OutputDeliveryTypeDetailsComponent,
     ReportDetailsComponent,
     ReportSnapshotDetailsComponent,
@@ -703,11 +715,7 @@ declarations: [
     UserNotificationDetailsComponent,
     SchemaInfoDetailsComponent,
     CompanyIntegrationRecordMapDetailsComponent,
-    RecordMergeLogDetailsComponent,
-    RecordMergeDeletionLogDetailsComponent,
-    QueryFieldDetailsComponent,
-    QueryCategoryDetailsComponent,
-    QueryDetailsComponent],
+    RecordMergeLogDetailsComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -733,6 +741,10 @@ export class GeneratedForms_SubModule_9 { }
 
 @NgModule({
 declarations: [
+    RecordMergeDeletionLogDetailsComponent,
+    QueryFieldDetailsComponent,
+    QueryCategoryDetailsComponent,
+    QueryDetailsComponent,
     QueryPermissionDetailsComponent,
     VectorIndexDetailsComponent,
     EntityDocumentTypeDetailsComponent,
@@ -748,11 +760,7 @@ declarations: [
     FileStorageProviderDetailsComponent,
     FileDetailsComponent,
     FileCategoryDetailsComponent,
-    FileEntityRecordLinkDetailsComponent,
-    VersionInstallationDetailsComponent,
-    DuplicateRunDetailMatchDetailsComponent,
-    EntityDocumentSettingDetailsComponent,
-    EntitySettingDetailsComponent],
+    FileEntityRecordLinkDetailsComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -778,6 +786,10 @@ export class GeneratedForms_SubModule_10 { }
 
 @NgModule({
 declarations: [
+    VersionInstallationDetailsComponent,
+    DuplicateRunDetailMatchDetailsComponent,
+    EntityDocumentSettingDetailsComponent,
+    EntitySettingDetailsComponent,
     DuplicateRunDetailsComponent,
     DuplicateRunDetailDetailsComponent,
     EntityBehaviorDetailsComponent,
@@ -793,11 +805,7 @@ declarations: [
     ActionCodeComponent,
     EntityActionFilterDetailsComponent,
     ActionFilterDetailsComponent,
-    ActionContextTypeDetailsComponent,
-    ActionResultCodeDetailsComponent,
-    ActionContextDetailsComponent,
-    ActionExecutionLogDetailsComponent,
-    ActionParamDetailsComponent],
+    ActionContextTypeDetailsComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -823,6 +831,10 @@ export class GeneratedForms_SubModule_11 { }
 
 @NgModule({
 declarations: [
+    ActionResultCodeDetailsComponent,
+    ActionContextDetailsComponent,
+    ActionExecutionLogDetailsComponent,
+    ActionParamDetailsComponent,
     ActionLibraryDetailsComponent,
     LibraryDetailsComponent,
     ListCategoryDetailsComponent,
@@ -835,7 +847,10 @@ declarations: [
     TemplateCategoryDetailsComponent,
     TemplateContentDetailsComponent,
     TemplateParamDetailsComponent,
-    TemplateContentTypeDetailsComponent],
+    TemplateContentTypeDetailsComponent,
+    RecommendationDetailsComponent,
+    RecommendationProviderDetailsComponent,
+    RecommendationRunDetailsComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -861,6 +876,32 @@ export class GeneratedForms_SubModule_12 { }
 
 @NgModule({
 declarations: [
+    RecommendationItemDetailsComponent],
+imports: [
+    CommonModule,
+    FormsModule,
+    LayoutModule,
+    InputsModule,
+    ButtonsModule,
+    DateInputsModule,
+    UserViewGridModule,
+    LinkDirectivesModule,
+    BaseFormsModule,
+    FormToolbarModule,
+    MJTabStripModule,
+    ContainerDirectivesModule,
+    DropDownListModule,
+    ComboBoxModule
+],
+exports: [
+]
+})
+export class GeneratedForms_SubModule_13 { }
+    
+
+
+@NgModule({
+declarations: [
 ],
 imports: [
     GeneratedForms_SubModule_0,
@@ -875,7 +916,8 @@ imports: [
     GeneratedForms_SubModule_9,
     GeneratedForms_SubModule_10,
     GeneratedForms_SubModule_11,
-    GeneratedForms_SubModule_12
+    GeneratedForms_SubModule_12,
+    GeneratedForms_SubModule_13
 ]
 })
 export class CoreGeneratedFormsModule { }
@@ -1009,6 +1051,10 @@ export function LoadCoreGeneratedForms() {
     LoadTemplateContentFormComponent();
     LoadTemplateParamFormComponent();
     LoadTemplateContentTypeFormComponent();
+    LoadRecommendationFormComponent();
+    LoadRecommendationProviderFormComponent();
+    LoadRecommendationRunFormComponent();
+    LoadRecommendationItemFormComponent();
     LoadCompanyDetailsComponent();
     LoadEmployeeDetailsComponent();
     LoadUserFavoriteDetailsComponent();
@@ -1139,5 +1185,9 @@ export function LoadCoreGeneratedForms() {
     LoadTemplateContentDetailsComponent();
     LoadTemplateParamDetailsComponent();
     LoadTemplateContentTypeDetailsComponent();
+    LoadRecommendationDetailsComponent();
+    LoadRecommendationProviderDetailsComponent();
+    LoadRecommendationRunDetailsComponent();
+    LoadRecommendationItemDetailsComponent();
 }
     
