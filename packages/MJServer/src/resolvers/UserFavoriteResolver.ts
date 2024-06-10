@@ -106,17 +106,12 @@ export class UserFavoriteResolver extends UserFavoriteResolverBase {
 
   }
  
-
-  private async TestCommunicationFramework(user: UserInfo) {
-    const engine = CommunicationEngine.Instance;
-    await engine.Config(true, user);
-    const tEngine = TemplateEngine.Instance;
-    await tEngine.Config(true, user);
-    const t = TemplateEngine.Instance.FindTemplate('Test Template');
-    const s = TemplateEngine.Instance.FindTemplate('Test Subject Template');
-    const d = { 
+  private GetTestData() {
+    return [{ 
       firstName: 'John',
       lastName: 'Doe',
+      title: 'Software Engineer II',
+      email: 'amith+john.doe@nagarajan.org',
       age: 25,
       address: {
         street: '123 Main St',
@@ -138,15 +133,70 @@ export class UserFavoriteResolver extends UserFavoriteResolverBase {
           url: 'https://example.com/article3'
         }
       ]
+    },
+    {
+      firstName: 'Jane',
+      lastName: 'Smith',
+      title: 'Executive Vice President of Software Development',
+      email: 'amith+jane.smith@nagarajan.org',
+      age: 30,
+      address: {
+        street: '456 Elm St',
+        city: 'Chicago',
+        state: 'IL',
+        zip: '62702'
+      },
+      recommendedArticles: [
+        {
+          title: 'Exemplifying the Importance of Code Reviews',
+          url: 'https://example.com/article1'
+        },
+        {
+          title: 'AI and Software Development: A New Frontier',
+          url: 'https://example.com/article2'      
+        },
+        {
+          title: 'Gardening Tips for Fun Loving Software Developers',
+          url: 'https://example.com/article3'
+        }
+      ]
     }
-    await engine.SendSingleMessage('SendGrid', 'Email', {
-      To: 'amith_nagarajan@hotmail.com',
+  ]
+  }
+  private async TestCommunicationFramework(user: UserInfo) {
+    const engine = CommunicationEngine.Instance;
+    await engine.Config(true, user);
+    const tEngine = TemplateEngine.Instance;
+    await tEngine.Config(true, user);
+    const t = TemplateEngine.Instance.FindTemplate('Test Template');
+    const s = TemplateEngine.Instance.FindTemplate('Test Subject Template');
+    const data = this.GetTestData();
+
+    // try single message
+    // const d = data[0];
+    // await engine.SendSingleMessage('SendGrid', 'Email', {
+    //   To: d.email,
+    //   From: "amith@bluecypress.io",
+    //   BodyTemplate: t,
+    //   SubjectTemplate: s,
+    //   ContextData: d,
+    //   MessageType: null
+    // });
+
+    // try multiple messages
+    await engine.SendMessages('SendGrid', 'Email', {
+      To: null,
       From: "amith@bluecypress.io",
       BodyTemplate: t,
       SubjectTemplate: s,
-      ContextData: d,
+      ContextData: data,
       MessageType: null
-    });
+    }, data.map((d) => {
+      return {
+        To: d.email,
+        ContextData: d
+      }
+    }));
   }
  
 }

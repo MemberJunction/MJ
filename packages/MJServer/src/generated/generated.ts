@@ -2,7 +2,7 @@
 * ALL ENTITIES - TypeGraphQL Type Class Definition - AUTO GENERATED FILE
 * Generated Entities and Resolvers for Server
 * 
-* GENERATED: 6/9/2024, 7:29:32 PM
+* GENERATED: 6/10/2024, 12:17:58 PM
 * 
 *   >>> DO NOT MODIFY THIS FILE!!!!!!!!!!!!
 *   >>> YOUR CHANGES WILL BE OVERWRITTEN
@@ -20565,6 +20565,14 @@ export class CommunicationRun_ {
     Status: string;
           
     @Field({nullable: true}) 
+    @MaxLength(8)
+    StartedAt?: Date;
+          
+    @Field({nullable: true}) 
+    @MaxLength(8)
+    EndedAt?: Date;
+          
+    @Field({nullable: true}) 
     Comments?: string;
           
     @Field({nullable: true, description: 'The error message if the communication run failed.'}) 
@@ -20602,6 +20610,12 @@ export class CreateCommunicationRunInput {
     Status: string;
 
     @Field({ nullable: true })
+    StartedAt?: Date;
+
+    @Field({ nullable: true })
+    EndedAt?: Date;
+
+    @Field({ nullable: true })
     Comments?: string;
 
     @Field({ nullable: true })
@@ -20625,6 +20639,12 @@ export class UpdateCommunicationRunInput {
 
     @Field()
     Status: string;
+
+    @Field({ nullable: true })
+    StartedAt?: Date;
+
+    @Field({ nullable: true })
+    EndedAt?: Date;
 
     @Field({ nullable: true })
     Comments?: string;

@@ -17593,6 +17593,28 @@ import { RegisterClass } from "@memberjunction/global";
             this.Set('Status', value);
         }
         /**
+        * * Field Name: StartedAt
+        * * Display Name: Started At
+        * * SQL Data Type: datetime
+        */
+        get StartedAt(): Date | null {  
+            return this.Get('StartedAt');
+        }
+        set StartedAt(value: Date | null) {
+            this.Set('StartedAt', value);
+        }
+        /**
+        * * Field Name: EndedAt
+        * * Display Name: Ended At
+        * * SQL Data Type: datetime
+        */
+        get EndedAt(): Date | null {  
+            return this.Get('EndedAt');
+        }
+        set EndedAt(value: Date | null) {
+            this.Set('EndedAt', value);
+        }
+        /**
         * * Field Name: Comments
         * * Display Name: Comments
         * * SQL Data Type: nvarchar(MAX)
@@ -19026,7 +19048,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: SourceEntity
         * * Display Name: Source Entity
         * * SQL Data Type: nvarchar(255)
-        * * Default Value: null
         */
         get SourceEntity(): string {  
             return this.Get('SourceEntity');
@@ -19284,7 +19305,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: RecommendationProvider
         * * Display Name: Recommendation Provider
         * * SQL Data Type: nvarchar(255)
-        * * Default Value: null
         */
         get RecommendationProvider(): string {  
             return this.Get('RecommendationProvider');
@@ -19294,7 +19314,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: RunByUser
         * * Display Name: Run By User
         * * SQL Data Type: nvarchar(100)
-        * * Default Value: null
         */
         get RunByUser(): string {  
             return this.Get('RunByUser');
@@ -19427,7 +19446,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: DestinationEntity
         * * Display Name: Destination Entity
         * * SQL Data Type: nvarchar(255)
-        * * Default Value: null
         */
         get DestinationEntity(): string {  
             return this.Get('DestinationEntity');

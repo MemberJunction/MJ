@@ -1,7 +1,8 @@
 import { BaseEngine, Metadata, UserInfo } from "@memberjunction/core";
-import { CommunicationBaseMessageTypeEntity, CommunicationLogEntity, CommunicationProviderEntity, CommunicationProviderMessageTypeEntity, CommunicationRunEntity } from "@memberjunction/core-entities";
+import { CommunicationBaseMessageTypeEntity, CommunicationLogEntity, CommunicationProviderMessageTypeEntity, CommunicationRunEntity, TemplateContentEntity, TemplateEntity } from "@memberjunction/core-entities";
 import { MJGlobal } from "@memberjunction/global";
-import { BaseCommunicationProvider, CommunicationProviderEntityExtended, Message, MessageResult, ProcessedMessage } from "./BaseProvider";
+import { BaseCommunicationProvider, CommunicationProviderEntityExtended, Message, MessageRecipient, MessageResult, ProcessedMessage } from "./BaseProvider";
+ 
 
 /**
  * Base class for communications. This class can be sub-classed if desired if you would like to modify the logic across ALL actions. To do so, sub-class this class and use the 
@@ -84,6 +85,34 @@ export class CommunicationEngine extends BaseEngine<CommunicationEngine> {
             throw new Error(`Provider ${providerName} not found.`);
      }
 
+ 
+     /**
+      * Sends multiple messages using the specified provider. The provider must be one of the providers that are configured in the 
+      * system.
+      * @param providerName 
+      * @param providerMessageTypeName 
+      * @param message this will be used as a starting point but the To will be replaced with the recipient in the recipients array
+      */
+     public async SendMessages(providerName: string, providerMessageTypeName: string, message: Message, recipients: MessageRecipient[]): Promise<MessageResult[]> {
+        const run = await this.StartRun();
+        if (!run)
+            throw new Error(`Failed to start communication run.`);
+
+        const results: MessageResult[] = [];
+        for (const r of recipients) {
+            const messageCopy = new Message(message);
+            messageCopy.To = r.To;
+            messageCopy.ContextData = r.ContextData;
+            const result = await this.SendSingleMessage(providerName, providerMessageTypeName, messageCopy, run);
+            results.push(result);
+        }
+
+        if (!await this.EndRun(run))
+            throw new Error(`Failed to end communication run.`);
+
+        return results;
+     }
+
      /**
       * Sends a single message using the specified provider. The provider must be one of the providers that are configured in the system.
       */
@@ -129,13 +158,41 @@ export class CommunicationEngine extends BaseEngine<CommunicationEngine> {
      }
 
      /**
+      * Starts a communication run
+      */
+     protected async StartRun(): Promise<CommunicationRunEntity> {
+        const md = new Metadata();
+        const run = await md.GetEntityObject<CommunicationRunEntity>('Communication Runs', this.ContextUser);
+        run.Status = 'Pending';
+        run.Direction = 'Sending';
+        run.StartedAt = new Date();
+        run.UserID = this.ContextUser.ID;
+        if (await run.Save()) {
+            return run;
+        }
+        else
+            return null;
+     }
+
+     /**
+      * Ends a communication run
+      * @param run 
+      * @returns 
+      */
+     protected async EndRun(run: CommunicationRunEntity): Promise<boolean> {
+        run.Status = 'Complete';
+        run.EndedAt = new Date();
+        return await run.Save();
+     }
+
+     /**
       * This method creates a new Communication Log record and saves it to the database with a status of pending. It returns the new Communication Log record.
       * @param processedMessage 
       * @param run 
       */
      protected async StartLog(processedMessage: ProcessedMessage, run?: CommunicationRunEntity): Promise<CommunicationLogEntity> {
         const md = new Metadata();
-        const log = await md.GetEntityObject<CommunicationLogEntity>('Commnication Logs', this.ContextUser);
+        const log = await md.GetEntityObject<CommunicationLogEntity>('Communication Logs', this.ContextUser);
         log.CommunicationRunID = run?.ID;
         log.Status = 'Pending';
         log.CommunicationProviderID = processedMessage.MessageType.CommunicationProviderID;

@@ -48,7 +48,7 @@ import { LibraryEntity } from '@memberjunction/core-entities';
             [record]="record"
             [ShowLabel]="true"
             FieldName="SampleCode"
-            Type="textarea"
+            Type="code"
             [EditMode]="EditMode"
         ></mj-form-field>
         <mj-form-field 

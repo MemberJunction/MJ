@@ -184,24 +184,30 @@ export class TemplateEngine extends BaseEngine<TemplateEngine> {
                 };
             }
     
-            return new Promise((resolve, reject) => {
+//            return new Promise((resolve, reject) => {
                 const template = new nunjucks.Template(templateContent.TemplateText, this._nunjucksEnv);
-                template.render(data, (err, result) => {
-                    if (err) {
-                        reject({
-                            Success: false,
-                            Output: null,
-                            Message: err                    
-                        });
-                    } else {
-                        resolve({
-                            Success: true,
-                            Output: result,
-                            Message: undefined
-                        });
-                    }
-                });
-            });
+                const result = await this.renderTemplateAsync(template, data); 
+                return {
+                    Success: true,
+                    Output: result,
+                    Message: undefined
+                };
+                // template.render(data, (err, result) => {
+                //     if (err) {
+                //         reject({
+                //             Success: false,
+                //             Output: null,
+                //             Message: err                    
+                //         });
+                //     } else {
+                //         resolve({
+                //             Success: true,
+                //             Output: result,
+                //             Message: undefined
+                //         });
+                //     }
+                // });
+//            });
         }
         catch (e) {
             return {
@@ -210,6 +216,23 @@ export class TemplateEngine extends BaseEngine<TemplateEngine> {
                 Message: e.message
             };
         }
+    }
+
+    /**
+     * Promisifies the Nunjucks template rendering process.
+     * @param template the Nunjucks template object
+     * @param data the data to render the template with
+     */
+    protected async renderTemplateAsync(template: nunjucks.Template, data: any): Promise<string> {
+        return new Promise((resolve, reject) => {
+            template.render(data, (err, result) => {
+                if (err) {
+                    reject(err);
+                } else {
+                    resolve(result);
+                }
+            });
+        });
     }
 }
 
