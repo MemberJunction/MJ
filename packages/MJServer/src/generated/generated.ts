@@ -2,7 +2,7 @@
 * ALL ENTITIES - TypeGraphQL Type Class Definition - AUTO GENERATED FILE
 * Generated Entities and Resolvers for Server
 * 
-* GENERATED: 6/9/2024, 9:02:19 AM
+* GENERATED: 6/9/2024, 7:29:32 PM
 * 
 *   >>> DO NOT MODIFY THIS FILE!!!!!!!!!!!!
 *   >>> YOUR CHANGES WILL BE OVERWRITTEN
@@ -20,7 +20,7 @@ import { mj_core_schema } from '../config';
 
 import * as mj_core_schema_server_object_types from '@memberjunction/server'
 
-import { CompanyEntity, EmployeeEntity, UserFavoriteEntity, EmployeeCompanyIntegrationEntity, EmployeeRoleEntity, EmployeeSkillEntity, RoleEntity, SkillEntity, IntegrationURLFormatEntity, IntegrationEntity, CompanyIntegrationEntity, EntityFieldEntity, EntityEntity, UserEntity, EntityRelationshipEntity, UserRecordLogEntity, UserViewEntity, CompanyIntegrationRunEntity, CompanyIntegrationRunDetailEntity, ErrorLogEntity, ApplicationEntity, ApplicationEntityEntity, EntityPermissionEntity, UserApplicationEntityEntity, UserApplicationEntity, CompanyIntegrationRunAPILogEntity, ListEntity, ListDetailEntity, UserViewRunEntity, UserViewRunDetailEntity, WorkflowRunEntity, WorkflowEntity, WorkflowEngineEntity, RecordChangeEntity, UserRoleEntity, RowLevelSecurityFilterEntity, AuditLogEntity, AuthorizationEntity, AuthorizationRoleEntity, AuditLogTypeEntity, EntityFieldValueEntity, AIModelEntity, AIActionEntity, AIModelActionEntity, EntityAIActionEntity, AIModelTypeEntity, QueueTypeEntity, QueueEntity, QueueTaskEntity, DashboardEntity, OutputTriggerTypeEntity, OutputFormatTypeEntity, OutputDeliveryTypeEntity, ReportEntity, ReportSnapshotEntity, ResourceTypeEntity, TagEntity, TaggedItemEntity, WorkspaceEntity, WorkspaceItemEntity, DatasetEntity, DatasetItemEntity, ConversationDetailEntity, ConversationEntity, UserNotificationEntity, SchemaInfoEntity, CompanyIntegrationRecordMapEntity, RecordMergeLogEntity, RecordMergeDeletionLogEntity, QueryFieldEntity, QueryCategoryEntity, QueryEntity, QueryPermissionEntity, VectorIndexEntity, EntityDocumentTypeEntity, EntityDocumentRunEntity, VectorDatabaseEntity, EntityRecordDocumentEntity, EntityDocumentEntity, DataContextItemEntity, DataContextEntity, UserViewCategoryEntity, DashboardCategoryEntity, ReportCategoryEntity, FileStorageProviderEntity, FileEntity, FileCategoryEntity, FileEntityRecordLinkEntity, VersionInstallationEntity, DuplicateRunDetailMatchEntity, EntityDocumentSettingEntity, EntitySettingEntity, DuplicateRunEntity, DuplicateRunDetailEntity, EntityBehaviorEntity, EntityBehaviorTypeEntity, ApplicationSettingEntity, ActionCategoryEntity, EntityActionEntity, EntityActionInvocationEntity, ActionAuthorizationEntity, EntityActionInvocationTypeEntity, ActionEntity, EntityActionFilterEntity, ActionFilterEntity, ActionContextTypeEntity, ActionResultCodeEntity, ActionContextEntity, ActionExecutionLogEntity, ActionParamEntity, ActionLibraryEntity, LibraryEntity, ListCategoryEntity, CommunicationProviderEntity, CommunicationRunEntity, CommunicationProviderMessageTypeEntity, CommunicationLogEntity, CommunicationBaseMessageTypeEntity, TemplateEntity, TemplateCategoryEntity, TemplateContentEntity, TemplateParamEntity, TemplateContentTypeEntity } from '@memberjunction/core-entities';
+import { CompanyEntity, EmployeeEntity, UserFavoriteEntity, EmployeeCompanyIntegrationEntity, EmployeeRoleEntity, EmployeeSkillEntity, RoleEntity, SkillEntity, IntegrationURLFormatEntity, IntegrationEntity, CompanyIntegrationEntity, EntityFieldEntity, EntityEntity, UserEntity, EntityRelationshipEntity, UserRecordLogEntity, UserViewEntity, CompanyIntegrationRunEntity, CompanyIntegrationRunDetailEntity, ErrorLogEntity, ApplicationEntity, ApplicationEntityEntity, EntityPermissionEntity, UserApplicationEntityEntity, UserApplicationEntity, CompanyIntegrationRunAPILogEntity, ListEntity, ListDetailEntity, UserViewRunEntity, UserViewRunDetailEntity, WorkflowRunEntity, WorkflowEntity, WorkflowEngineEntity, RecordChangeEntity, UserRoleEntity, RowLevelSecurityFilterEntity, AuditLogEntity, AuthorizationEntity, AuthorizationRoleEntity, AuditLogTypeEntity, EntityFieldValueEntity, AIModelEntity, AIActionEntity, AIModelActionEntity, EntityAIActionEntity, AIModelTypeEntity, QueueTypeEntity, QueueEntity, QueueTaskEntity, DashboardEntity, OutputTriggerTypeEntity, OutputFormatTypeEntity, OutputDeliveryTypeEntity, ReportEntity, ReportSnapshotEntity, ResourceTypeEntity, TagEntity, TaggedItemEntity, WorkspaceEntity, WorkspaceItemEntity, DatasetEntity, DatasetItemEntity, ConversationDetailEntity, ConversationEntity, UserNotificationEntity, SchemaInfoEntity, CompanyIntegrationRecordMapEntity, RecordMergeLogEntity, RecordMergeDeletionLogEntity, QueryFieldEntity, QueryCategoryEntity, QueryEntity, QueryPermissionEntity, VectorIndexEntity, EntityDocumentTypeEntity, EntityDocumentRunEntity, VectorDatabaseEntity, EntityRecordDocumentEntity, EntityDocumentEntity, DataContextItemEntity, DataContextEntity, UserViewCategoryEntity, DashboardCategoryEntity, ReportCategoryEntity, FileStorageProviderEntity, FileEntity, FileCategoryEntity, FileEntityRecordLinkEntity, VersionInstallationEntity, DuplicateRunDetailMatchEntity, EntityDocumentSettingEntity, EntitySettingEntity, DuplicateRunEntity, DuplicateRunDetailEntity, EntityBehaviorEntity, EntityBehaviorTypeEntity, ApplicationSettingEntity, ActionCategoryEntity, EntityActionEntity, EntityActionInvocationEntity, ActionAuthorizationEntity, EntityActionInvocationTypeEntity, ActionEntity, EntityActionFilterEntity, ActionFilterEntity, ActionContextTypeEntity, ActionResultCodeEntity, ActionContextEntity, ActionExecutionLogEntity, ActionParamEntity, ActionLibraryEntity, LibraryEntity, ListCategoryEntity, CommunicationProviderEntity, CommunicationRunEntity, CommunicationProviderMessageTypeEntity, CommunicationLogEntity, CommunicationBaseMessageTypeEntity, TemplateEntity, TemplateCategoryEntity, TemplateContentEntity, TemplateParamEntity, TemplateContentTypeEntity, RecommendationEntity, RecommendationProviderEntity, RecommendationRunEntity, RecommendationItemEntity } from '@memberjunction/core-entities';
     
 
 //****************************************************************************
@@ -2584,6 +2584,12 @@ export class Entity_ {
     @Field(() => [mj_core_schema_server_object_types.TemplateParam_])
     TemplateParamsArray: mj_core_schema_server_object_types.TemplateParam_[]; // Link to TemplateParams
     
+    @Field(() => [mj_core_schema_server_object_types.Recommendation_])
+    RecommendationsArray: mj_core_schema_server_object_types.Recommendation_[]; // Link to Recommendations
+    
+    @Field(() => [mj_core_schema_server_object_types.RecommendationItem_])
+    RecommendationItemsArray: mj_core_schema_server_object_types.RecommendationItem_[]; // Link to RecommendationItems
+    
 }
         
 //****************************************************************************
@@ -3153,6 +3159,22 @@ export class EntityResolverBase extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Template Params', await dataSource.query(sSQL));
         return result;
     }
+          
+    @FieldResolver(() => [mj_core_schema_server_object_types.Recommendation_])
+    async RecommendationsArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Recommendations', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwRecommendations] WHERE [SourceEntityID]=${entity_.ID} ` + this.getRowLevelSecurityWhereClause('Recommendations', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Recommendations', await dataSource.query(sSQL));
+        return result;
+    }
+          
+    @FieldResolver(() => [mj_core_schema_server_object_types.RecommendationItem_])
+    async RecommendationItemsArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Recommendation Items', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwRecommendationItems] WHERE [DestinationEntityID]=${entity_.ID} ` + this.getRowLevelSecurityWhereClause('Recommendation Items', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Recommendation Items', await dataSource.query(sSQL));
+        return result;
+    }
         
     @Mutation(() => Entity_)
     async CreateEntity(
@@ -3343,6 +3365,9 @@ export class User_ {
     
     @Field(() => [mj_core_schema_server_object_types.TemplateCategory_])
     TemplateCategoriesArray: mj_core_schema_server_object_types.TemplateCategory_[]; // Link to TemplateCategories
+    
+    @Field(() => [mj_core_schema_server_object_types.RecommendationRun_])
+    RecommendationRunsArray: mj_core_schema_server_object_types.RecommendationRun_[]; // Link to RecommendationRuns
     
 }
         
@@ -3712,6 +3737,14 @@ export class UserResolverBase extends ResolverBase {
         this.CheckUserReadPermissions('Template Categories', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwTemplateCategories] WHERE [UserID]=${user_.ID} ` + this.getRowLevelSecurityWhereClause('Template Categories', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Template Categories', await dataSource.query(sSQL));
+        return result;
+    }
+          
+    @FieldResolver(() => [mj_core_schema_server_object_types.RecommendationRun_])
+    async RecommendationRunsArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Recommendation Runs', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwRecommendationRuns] WHERE [RunByUserID]=${user_.ID} ` + this.getRowLevelSecurityWhereClause('Recommendation Runs', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Recommendation Runs', await dataSource.query(sSQL));
         return result;
     }
         
@@ -22095,6 +22128,630 @@ export class TemplateContentTypeResolver extends ResolverBase {
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.UpdateRecord('Template Content Types', input, dataSource, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for Recommendations
+//****************************************************************************
+@ObjectType({ description: 'Recommendation headers that store the left side of the recommendation which we track in the SourceEntityID/SourceEntityRecordID' })
+export class Recommendation_ {  
+    @Field(() => Int) 
+    ID: number;
+          
+    @Field(() => Int) 
+    RecommendationRunID: number;
+          
+    @Field(() => Int) 
+    SourceEntityID: number;
+          
+    @Field({description: 'The record ID of the source entity'}) 
+    SourceEntityRecordID: string;
+          
+    @Field({nullable: true}) 
+    @MaxLength(8)
+    CreatedAt?: Date;
+          
+    @Field({nullable: true}) 
+    @MaxLength(8)
+    UpdatedAt?: Date;
+          
+    @Field() 
+    @MaxLength(510)
+    SourceEntity: string;
+        
+    @Field(() => [mj_core_schema_server_object_types.RecommendationItem_])
+    RecommendationItemsArray: mj_core_schema_server_object_types.RecommendationItem_[]; // Link to RecommendationItems
+    
+}
+        
+//****************************************************************************
+// INPUT TYPE for Recommendations   
+//****************************************************************************
+@InputType()
+export class CreateRecommendationInput {
+    @Field(() => Int)
+    RecommendationRunID: number;
+
+    @Field(() => Int)
+    SourceEntityID: number;
+
+    @Field()
+    SourceEntityRecordID: string;
+}
+    
+        
+//****************************************************************************
+// INPUT TYPE for Recommendations   
+//****************************************************************************
+@InputType()
+export class UpdateRecommendationInput {
+    @Field(() => Int)
+    ID: number;
+
+    @Field(() => Int)
+    RecommendationRunID: number;
+
+    @Field(() => Int)
+    SourceEntityID: number;
+
+    @Field()
+    SourceEntityRecordID: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
+//****************************************************************************
+// RESOLVER for Recommendations
+//****************************************************************************
+@ObjectType()
+export class RunRecommendationViewResult {
+    @Field(() => [Recommendation_])
+    Results: Recommendation_[];
+
+    @Field(() => Int, {nullable: true})
+    UserViewRunID?: number;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(Recommendation_)
+export class RecommendationResolver extends ResolverBase {
+    @Query(() => RunRecommendationViewResult)
+    async RunRecommendationViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunRecommendationViewResult)
+    async RunRecommendationViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunRecommendationViewResult)
+    async RunRecommendationDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        input.EntityName = 'Recommendations';
+        return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
+    }
+    @Query(() => Recommendation_, { nullable: true })
+    async Recommendation(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<Recommendation_ | null> {
+        this.CheckUserReadPermissions('Recommendations', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwRecommendations] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Recommendations', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Recommendations', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
+    }
+      
+    @FieldResolver(() => [mj_core_schema_server_object_types.RecommendationItem_])
+    async RecommendationItemsArray(@Root() recommendation_: Recommendation_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Recommendation Items', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwRecommendationItems] WHERE [RecommendationID]=${recommendation_.ID} ` + this.getRowLevelSecurityWhereClause('Recommendation Items', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Recommendation Items', await dataSource.query(sSQL));
+        return result;
+    }
+        
+    @Mutation(() => Recommendation_)
+    async CreateRecommendation(
+        @Arg('input', () => CreateRecommendationInput) input: CreateRecommendationInput,
+        @Ctx() { dataSource, userPayload }: AppContext, 
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.CreateRecord('Recommendations', input, dataSource, userPayload, pubSub)
+    }
+        
+    @Mutation(() => Recommendation_)
+    async UpdateRecommendation(
+        @Arg('input', () => UpdateRecommendationInput) input: UpdateRecommendationInput,
+        @Ctx() { dataSource, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.UpdateRecord('Recommendations', input, dataSource, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for Recommendation Providers
+//****************************************************************************
+@ObjectType({ description: 'Recommendation providers details' })
+export class RecommendationProvider_ {  
+    @Field(() => Int) 
+    ID: number;
+          
+    @Field() 
+    @MaxLength(510)
+    Name: string;
+          
+    @Field({nullable: true}) 
+    Description?: string;
+          
+    @Field({nullable: true}) 
+    @MaxLength(8)
+    CreatedAt?: Date;
+          
+    @Field({nullable: true}) 
+    @MaxLength(8)
+    UpdatedAt?: Date;
+        
+    @Field(() => [mj_core_schema_server_object_types.RecommendationRun_])
+    RecommendationRunsArray: mj_core_schema_server_object_types.RecommendationRun_[]; // Link to RecommendationRuns
+    
+}
+        
+//****************************************************************************
+// INPUT TYPE for Recommendation Providers   
+//****************************************************************************
+@InputType()
+export class CreateRecommendationProviderInput {
+    @Field()
+    Name: string;
+
+    @Field({ nullable: true })
+    Description?: string;
+}
+    
+        
+//****************************************************************************
+// INPUT TYPE for Recommendation Providers   
+//****************************************************************************
+@InputType()
+export class UpdateRecommendationProviderInput {
+    @Field(() => Int)
+    ID: number;
+
+    @Field()
+    Name: string;
+
+    @Field({ nullable: true })
+    Description?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
+//****************************************************************************
+// RESOLVER for Recommendation Providers
+//****************************************************************************
+@ObjectType()
+export class RunRecommendationProviderViewResult {
+    @Field(() => [RecommendationProvider_])
+    Results: RecommendationProvider_[];
+
+    @Field(() => Int, {nullable: true})
+    UserViewRunID?: number;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(RecommendationProvider_)
+export class RecommendationProviderResolver extends ResolverBase {
+    @Query(() => RunRecommendationProviderViewResult)
+    async RunRecommendationProviderViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunRecommendationProviderViewResult)
+    async RunRecommendationProviderViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunRecommendationProviderViewResult)
+    async RunRecommendationProviderDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        input.EntityName = 'Recommendation Providers';
+        return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
+    }
+    @Query(() => RecommendationProvider_, { nullable: true })
+    async RecommendationProvider(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<RecommendationProvider_ | null> {
+        this.CheckUserReadPermissions('Recommendation Providers', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwRecommendationProviders] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Recommendation Providers', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Recommendation Providers', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
+    }
+      
+    @FieldResolver(() => [mj_core_schema_server_object_types.RecommendationRun_])
+    async RecommendationRunsArray(@Root() recommendationprovider_: RecommendationProvider_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Recommendation Runs', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwRecommendationRuns] WHERE [RecommendationProviderID]=${recommendationprovider_.ID} ` + this.getRowLevelSecurityWhereClause('Recommendation Runs', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Recommendation Runs', await dataSource.query(sSQL));
+        return result;
+    }
+        
+    @Mutation(() => RecommendationProvider_)
+    async CreateRecommendationProvider(
+        @Arg('input', () => CreateRecommendationProviderInput) input: CreateRecommendationProviderInput,
+        @Ctx() { dataSource, userPayload }: AppContext, 
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.CreateRecord('Recommendation Providers', input, dataSource, userPayload, pubSub)
+    }
+        
+    @Mutation(() => RecommendationProvider_)
+    async UpdateRecommendationProvider(
+        @Arg('input', () => UpdateRecommendationProviderInput) input: UpdateRecommendationProviderInput,
+        @Ctx() { dataSource, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.UpdateRecord('Recommendation Providers', input, dataSource, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for Recommendation Runs
+//****************************************************************************
+@ObjectType({ description: 'Recommendation runs log each time a provider is requested to provide recommendations' })
+export class RecommendationRun_ {  
+    @Field(() => Int) 
+    ID: number;
+          
+    @Field(() => Int) 
+    RecommendationProviderID: number;
+          
+    @Field({description: 'The start date of the recommendation run'}) 
+    @MaxLength(8)
+    StartDate: Date;
+          
+    @Field({nullable: true, description: 'The end date of the recommendation run'}) 
+    @MaxLength(8)
+    EndDate?: Date;
+          
+    @Field({description: 'The status of the recommendation run'}) 
+    @MaxLength(100)
+    Status: string;
+          
+    @Field({nullable: true}) 
+    Description?: string;
+          
+    @Field(() => Int) 
+    RunByUserID: number;
+          
+    @Field({nullable: true}) 
+    @MaxLength(8)
+    CreatedAt?: Date;
+          
+    @Field({nullable: true}) 
+    @MaxLength(8)
+    UpdatedAt?: Date;
+          
+    @Field() 
+    @MaxLength(510)
+    RecommendationProvider: string;
+          
+    @Field() 
+    @MaxLength(200)
+    RunByUser: string;
+        
+    @Field(() => [mj_core_schema_server_object_types.Recommendation_])
+    RecommendationsArray: mj_core_schema_server_object_types.Recommendation_[]; // Link to Recommendations
+    
+}
+        
+//****************************************************************************
+// INPUT TYPE for Recommendation Runs   
+//****************************************************************************
+@InputType()
+export class CreateRecommendationRunInput {
+    @Field(() => Int)
+    RecommendationProviderID: number;
+
+    @Field()
+    StartDate: Date;
+
+    @Field({ nullable: true })
+    EndDate?: Date;
+
+    @Field()
+    Status: string;
+
+    @Field({ nullable: true })
+    Description?: string;
+
+    @Field(() => Int)
+    RunByUserID: number;
+}
+    
+        
+//****************************************************************************
+// INPUT TYPE for Recommendation Runs   
+//****************************************************************************
+@InputType()
+export class UpdateRecommendationRunInput {
+    @Field(() => Int)
+    ID: number;
+
+    @Field(() => Int)
+    RecommendationProviderID: number;
+
+    @Field()
+    StartDate: Date;
+
+    @Field({ nullable: true })
+    EndDate?: Date;
+
+    @Field()
+    Status: string;
+
+    @Field({ nullable: true })
+    Description?: string;
+
+    @Field(() => Int)
+    RunByUserID: number;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
+//****************************************************************************
+// RESOLVER for Recommendation Runs
+//****************************************************************************
+@ObjectType()
+export class RunRecommendationRunViewResult {
+    @Field(() => [RecommendationRun_])
+    Results: RecommendationRun_[];
+
+    @Field(() => Int, {nullable: true})
+    UserViewRunID?: number;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(RecommendationRun_)
+export class RecommendationRunResolver extends ResolverBase {
+    @Query(() => RunRecommendationRunViewResult)
+    async RunRecommendationRunViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunRecommendationRunViewResult)
+    async RunRecommendationRunViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunRecommendationRunViewResult)
+    async RunRecommendationRunDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        input.EntityName = 'Recommendation Runs';
+        return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
+    }
+    @Query(() => RecommendationRun_, { nullable: true })
+    async RecommendationRun(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<RecommendationRun_ | null> {
+        this.CheckUserReadPermissions('Recommendation Runs', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwRecommendationRuns] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Recommendation Runs', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Recommendation Runs', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
+    }
+      
+    @FieldResolver(() => [mj_core_schema_server_object_types.Recommendation_])
+    async RecommendationsArray(@Root() recommendationrun_: RecommendationRun_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Recommendations', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwRecommendations] WHERE [RecommendationRunID]=${recommendationrun_.ID} ` + this.getRowLevelSecurityWhereClause('Recommendations', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Recommendations', await dataSource.query(sSQL));
+        return result;
+    }
+        
+    @Mutation(() => RecommendationRun_)
+    async CreateRecommendationRun(
+        @Arg('input', () => CreateRecommendationRunInput) input: CreateRecommendationRunInput,
+        @Ctx() { dataSource, userPayload }: AppContext, 
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.CreateRecord('Recommendation Runs', input, dataSource, userPayload, pubSub)
+    }
+        
+    @Mutation(() => RecommendationRun_)
+    async UpdateRecommendationRun(
+        @Arg('input', () => UpdateRecommendationRunInput) input: UpdateRecommendationRunInput,
+        @Ctx() { dataSource, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.UpdateRecord('Recommendation Runs', input, dataSource, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for Recommendation Items
+//****************************************************************************
+@ObjectType({ description: 'Table to store individual recommendation items that are the right side of the recommendation which we track in the DestinationEntityID/DestinationEntityRecordID' })
+export class RecommendationItem_ {  
+    @Field(() => Int) 
+    ID: number;
+          
+    @Field(() => Int) 
+    RecommendationID: number;
+          
+    @Field(() => Int, {description: 'The ID of the destination entity'}) 
+    DestinationEntityID: number;
+          
+    @Field({description: 'The record ID of the destination entity'}) 
+    DestinationEntityRecordID: string;
+          
+    @Field(() => Float, {nullable: true, description: 'A value between 0 and 1 indicating the probability of the match, higher numbers indicating a more certain match/recommendation.'}) 
+    MatchProbability?: number;
+          
+    @Field({nullable: true}) 
+    @MaxLength(8)
+    CreatedAt?: Date;
+          
+    @Field({nullable: true}) 
+    @MaxLength(8)
+    UpdatedAt?: Date;
+          
+    @Field() 
+    @MaxLength(510)
+    DestinationEntity: string;
+        
+}
+        
+//****************************************************************************
+// INPUT TYPE for Recommendation Items   
+//****************************************************************************
+@InputType()
+export class CreateRecommendationItemInput {
+    @Field(() => Int)
+    RecommendationID: number;
+
+    @Field(() => Int)
+    DestinationEntityID: number;
+
+    @Field()
+    DestinationEntityRecordID: string;
+
+    @Field(() => Float, { nullable: true })
+    MatchProbability?: number;
+}
+    
+        
+//****************************************************************************
+// INPUT TYPE for Recommendation Items   
+//****************************************************************************
+@InputType()
+export class UpdateRecommendationItemInput {
+    @Field(() => Int)
+    ID: number;
+
+    @Field(() => Int)
+    RecommendationID: number;
+
+    @Field(() => Int)
+    DestinationEntityID: number;
+
+    @Field()
+    DestinationEntityRecordID: string;
+
+    @Field(() => Float, { nullable: true })
+    MatchProbability?: number;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
+//****************************************************************************
+// RESOLVER for Recommendation Items
+//****************************************************************************
+@ObjectType()
+export class RunRecommendationItemViewResult {
+    @Field(() => [RecommendationItem_])
+    Results: RecommendationItem_[];
+
+    @Field(() => Int, {nullable: true})
+    UserViewRunID?: number;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(RecommendationItem_)
+export class RecommendationItemResolver extends ResolverBase {
+    @Query(() => RunRecommendationItemViewResult)
+    async RunRecommendationItemViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunRecommendationItemViewResult)
+    async RunRecommendationItemViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunRecommendationItemViewResult)
+    async RunRecommendationItemDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        input.EntityName = 'Recommendation Items';
+        return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
+    }
+    @Query(() => RecommendationItem_, { nullable: true })
+    async RecommendationItem(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<RecommendationItem_ | null> {
+        this.CheckUserReadPermissions('Recommendation Items', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwRecommendationItems] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Recommendation Items', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Recommendation Items', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
+    }
+    
+    @Mutation(() => RecommendationItem_)
+    async CreateRecommendationItem(
+        @Arg('input', () => CreateRecommendationItemInput) input: CreateRecommendationItemInput,
+        @Ctx() { dataSource, userPayload }: AppContext, 
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.CreateRecord('Recommendation Items', input, dataSource, userPayload, pubSub)
+    }
+        
+    @Mutation(() => RecommendationItem_)
+    async UpdateRecommendationItem(
+        @Arg('input', () => UpdateRecommendationItemInput) input: UpdateRecommendationItemInput,
+        @Ctx() { dataSource, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.UpdateRecord('Recommendation Items', input, dataSource, userPayload, pubSub);
     }
     
 }

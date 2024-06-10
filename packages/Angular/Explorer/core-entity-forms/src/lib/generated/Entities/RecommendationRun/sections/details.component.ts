@@ -1,26 +1,34 @@
 import { Component, Input } from '@angular/core';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormSectionComponent } from '@memberjunction/ng-base-forms';
-import { LibraryEntity } from '@memberjunction/core-entities';
+import { RecommendationRunEntity } from '@memberjunction/core-entities';
 
-@RegisterClass(BaseFormSectionComponent, 'Libraries.details') // Tell MemberJunction about this class 
+@RegisterClass(BaseFormSectionComponent, 'Recommendation Runs.details') // Tell MemberJunction about this class 
 @Component({
-    selector: 'gen-library-form-details',
+    selector: 'gen-recommendationrun-form-details',
     styleUrls: ['../../../../../shared/form-styles.css'],
     template: `<div *ngIf="this.record">
     <div class="record-form">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="Name"
-            Type="textarea"
+            FieldName="RecommendationProviderID"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+            LinkType="Record"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="StartDate"
+            Type="datepicker"
             [EditMode]="EditMode"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="Description"
-            Type="textarea"
+            FieldName="EndDate"
+            Type="datepicker"
             [EditMode]="EditMode"
         ></mj-form-field>
         <mj-form-field 
@@ -33,23 +41,17 @@ import { LibraryEntity } from '@memberjunction/core-entities';
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="ExportedItems"
+            FieldName="Description"
             Type="textarea"
             [EditMode]="EditMode"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="TypeDefinitions"
-            Type="textarea"
+            FieldName="RunByUserID"
+            Type="numerictextbox"
             [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="SampleCode"
-            Type="textarea"
-            [EditMode]="EditMode"
+            LinkType="Record"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -65,17 +67,31 @@ import { LibraryEntity } from '@memberjunction/core-entities';
             Type="textbox"
             [EditMode]="EditMode"
         ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="RecommendationProvider"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="RunByUser"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
 
     </div>
 </div>
     `
 })
-export class LibraryDetailsComponent extends BaseFormSectionComponent {
-    @Input() override record!: LibraryEntity;
+export class RecommendationRunDetailsComponent extends BaseFormSectionComponent {
+    @Input() override record!: RecommendationRunEntity;
     @Input() override EditMode: boolean = false;
 }
 
-export function LoadLibraryDetailsComponent() {
+export function LoadRecommendationRunDetailsComponent() {
     // does nothing, but called in order to prevent tree-shaking from eliminating this component from the build
 }
       

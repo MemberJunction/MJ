@@ -1,11 +1,11 @@
 import { Component, Input } from '@angular/core';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormSectionComponent } from '@memberjunction/ng-base-forms';
-import { LibraryEntity } from '@memberjunction/core-entities';
+import { RecommendationProviderEntity } from '@memberjunction/core-entities';
 
-@RegisterClass(BaseFormSectionComponent, 'Libraries.details') // Tell MemberJunction about this class 
+@RegisterClass(BaseFormSectionComponent, 'Recommendation Providers.details') // Tell MemberJunction about this class 
 @Component({
-    selector: 'gen-library-form-details',
+    selector: 'gen-recommendationprovider-form-details',
     styleUrls: ['../../../../../shared/form-styles.css'],
     template: `<div *ngIf="this.record">
     <div class="record-form">
@@ -20,34 +20,6 @@ import { LibraryEntity } from '@memberjunction/core-entities';
             [record]="record"
             [ShowLabel]="true"
             FieldName="Description"
-            Type="textarea"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="Status"
-            Type="dropdownlist"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="ExportedItems"
-            Type="textarea"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="TypeDefinitions"
-            Type="textarea"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="SampleCode"
             Type="textarea"
             [EditMode]="EditMode"
         ></mj-form-field>
@@ -70,12 +42,12 @@ import { LibraryEntity } from '@memberjunction/core-entities';
 </div>
     `
 })
-export class LibraryDetailsComponent extends BaseFormSectionComponent {
-    @Input() override record!: LibraryEntity;
+export class RecommendationProviderDetailsComponent extends BaseFormSectionComponent {
+    @Input() override record!: RecommendationProviderEntity;
     @Input() override EditMode: boolean = false;
 }
 
-export function LoadLibraryDetailsComponent() {
+export function LoadRecommendationProviderDetailsComponent() {
     // does nothing, but called in order to prevent tree-shaking from eliminating this component from the build
 }
       

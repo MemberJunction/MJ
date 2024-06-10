@@ -18915,3 +18915,524 @@ import { RegisterClass } from "@memberjunction/global";
 
     }
         
+    /**
+     * Recommendations - strongly typed entity sub-class
+     * * Schema: __mj
+     * * Base Table: Recommendation
+     * * Base View: vwRecommendations
+     * * @description Recommendation headers that store the left side of the recommendation which we track in the SourceEntityID/SourceEntityRecordID
+     * * Primary Key: ID
+     * @extends {BaseEntity}
+     * @class
+     * @public
+     */
+    @RegisterClass(BaseEntity, 'Recommendations')
+    export class RecommendationEntity extends BaseEntity {
+        /**
+        * Loads the Recommendations record from the database
+        * @param ID: number - primary key value to load the Recommendations record.
+        * @param EntityRelationshipsToLoad - (optional) the relationships to load
+        * @returns {Promise<boolean>} - true if successful, false otherwise
+        * @public
+        * @async
+        * @memberof RecommendationEntity
+        * @method
+        * @override
+        */      
+        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+        }
+            
+        /**
+        * Recommendations - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
+        * @public
+        * @method
+        * @override
+        * @memberof RecommendationEntity
+        * @throws {Error} - Delete is not allowed for Recommendations, to enable it set AllowDeleteAPI to 1 in the database.
+        */
+        public async Delete(): Promise<boolean> {
+            throw new Error('Delete is not allowed for Recommendations, to enable it set AllowDeleteAPI to 1 in the database.');
+        } 
+            
+            /**
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: int
+        */
+        get ID(): number {  
+            return this.Get('ID');
+        }
+        
+        /**
+        * * Field Name: RecommendationRunID
+        * * Display Name: Recommendation Run ID
+        * * SQL Data Type: int
+        * * Related Entity/Foreign Key: Recommendation Runs (vwRecommendationRuns.ID)
+        */
+        get RecommendationRunID(): number {  
+            return this.Get('RecommendationRunID');
+        }
+        set RecommendationRunID(value: number) {
+            this.Set('RecommendationRunID', value);
+        }
+        /**
+        * * Field Name: SourceEntityID
+        * * Display Name: Source Entity ID
+        * * SQL Data Type: int
+        * * Related Entity/Foreign Key: Entities (vwEntities.ID)
+        */
+        get SourceEntityID(): number {  
+            return this.Get('SourceEntityID');
+        }
+        set SourceEntityID(value: number) {
+            this.Set('SourceEntityID', value);
+        }
+        /**
+        * * Field Name: SourceEntityRecordID
+        * * Display Name: Source Entity Record ID
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: The record ID of the source entity
+        */
+        get SourceEntityRecordID(): string {  
+            return this.Get('SourceEntityRecordID');
+        }
+        set SourceEntityRecordID(value: string) {
+            this.Set('SourceEntityRecordID', value);
+        }
+        /**
+        * * Field Name: CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()
+        */
+        get CreatedAt(): Date | null {  
+            return this.Get('CreatedAt');
+        }
+        
+        /**
+        * * Field Name: UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()
+        */
+        get UpdatedAt(): Date | null {  
+            return this.Get('UpdatedAt');
+        }
+        
+        /**
+        * * Field Name: SourceEntity
+        * * Display Name: Source Entity
+        * * SQL Data Type: nvarchar(255)
+        * * Default Value: null
+        */
+        get SourceEntity(): string {  
+            return this.Get('SourceEntity');
+        }
+        
+
+    }
+        
+    /**
+     * Recommendation Providers - strongly typed entity sub-class
+     * * Schema: __mj
+     * * Base Table: RecommendationProvider
+     * * Base View: vwRecommendationProviders
+     * * @description Recommendation providers details
+     * * Primary Key: ID
+     * @extends {BaseEntity}
+     * @class
+     * @public
+     */
+    @RegisterClass(BaseEntity, 'Recommendation Providers')
+    export class RecommendationProviderEntity extends BaseEntity {
+        /**
+        * Loads the Recommendation Providers record from the database
+        * @param ID: number - primary key value to load the Recommendation Providers record.
+        * @param EntityRelationshipsToLoad - (optional) the relationships to load
+        * @returns {Promise<boolean>} - true if successful, false otherwise
+        * @public
+        * @async
+        * @memberof RecommendationProviderEntity
+        * @method
+        * @override
+        */      
+        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+        }
+            
+        /**
+        * Recommendation Providers - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
+        * @public
+        * @method
+        * @override
+        * @memberof RecommendationProviderEntity
+        * @throws {Error} - Delete is not allowed for Recommendation Providers, to enable it set AllowDeleteAPI to 1 in the database.
+        */
+        public async Delete(): Promise<boolean> {
+            throw new Error('Delete is not allowed for Recommendation Providers, to enable it set AllowDeleteAPI to 1 in the database.');
+        } 
+            
+            /**
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: int
+        */
+        get ID(): number {  
+            return this.Get('ID');
+        }
+        
+        /**
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(255)
+        */
+        get Name(): string {  
+            return this.Get('Name');
+        }
+        set Name(value: string) {
+            this.Set('Name', value);
+        }
+        /**
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        */
+        get Description(): string | null {  
+            return this.Get('Description');
+        }
+        set Description(value: string | null) {
+            this.Set('Description', value);
+        }
+        /**
+        * * Field Name: CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()
+        */
+        get CreatedAt(): Date | null {  
+            return this.Get('CreatedAt');
+        }
+        
+        /**
+        * * Field Name: UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()
+        */
+        get UpdatedAt(): Date | null {  
+            return this.Get('UpdatedAt');
+        }
+        
+
+    }
+        
+    /**
+     * Recommendation Runs - strongly typed entity sub-class
+     * * Schema: __mj
+     * * Base Table: RecommendationRun
+     * * Base View: vwRecommendationRuns
+     * * @description Recommendation runs log each time a provider is requested to provide recommendations
+     * * Primary Key: ID
+     * @extends {BaseEntity}
+     * @class
+     * @public
+     */
+    @RegisterClass(BaseEntity, 'Recommendation Runs')
+    export class RecommendationRunEntity extends BaseEntity {
+        /**
+        * Loads the Recommendation Runs record from the database
+        * @param ID: number - primary key value to load the Recommendation Runs record.
+        * @param EntityRelationshipsToLoad - (optional) the relationships to load
+        * @returns {Promise<boolean>} - true if successful, false otherwise
+        * @public
+        * @async
+        * @memberof RecommendationRunEntity
+        * @method
+        * @override
+        */      
+        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+        }
+            
+        /**
+        * Recommendation Runs - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
+        * @public
+        * @method
+        * @override
+        * @memberof RecommendationRunEntity
+        * @throws {Error} - Delete is not allowed for Recommendation Runs, to enable it set AllowDeleteAPI to 1 in the database.
+        */
+        public async Delete(): Promise<boolean> {
+            throw new Error('Delete is not allowed for Recommendation Runs, to enable it set AllowDeleteAPI to 1 in the database.');
+        } 
+            
+            /**
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: int
+        */
+        get ID(): number {  
+            return this.Get('ID');
+        }
+        
+        /**
+        * * Field Name: RecommendationProviderID
+        * * Display Name: Recommendation Provider ID
+        * * SQL Data Type: int
+        * * Related Entity/Foreign Key: Recommendation Providers (vwRecommendationProviders.ID)
+        */
+        get RecommendationProviderID(): number {  
+            return this.Get('RecommendationProviderID');
+        }
+        set RecommendationProviderID(value: number) {
+            this.Set('RecommendationProviderID', value);
+        }
+        /**
+        * * Field Name: StartDate
+        * * Display Name: Start Date
+        * * SQL Data Type: datetime
+        * * Description: The start date of the recommendation run
+        */
+        get StartDate(): Date {  
+            return this.Get('StartDate');
+        }
+        set StartDate(value: Date) {
+            this.Set('StartDate', value);
+        }
+        /**
+        * * Field Name: EndDate
+        * * Display Name: End Date
+        * * SQL Data Type: datetime
+        * * Description: The end date of the recommendation run
+        */
+        get EndDate(): Date | null {  
+            return this.Get('EndDate');
+        }
+        set EndDate(value: Date | null) {
+            this.Set('EndDate', value);
+        }
+        /**
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(50)
+        * * Value List Type: List
+        * * Possible Values 
+        *   * Pending
+        *   * In Progress
+        *   * Completed
+        *   * Canceled
+        *   * Error
+        * * Description: The status of the recommendation run
+        */
+        get Status(): 'Pending' | 'In Progress' | 'Completed' | 'Canceled' | 'Error' {  
+            return this.Get('Status');
+        }
+        set Status(value: 'Pending' | 'In Progress' | 'Completed' | 'Canceled' | 'Error') {
+            this.Set('Status', value);
+        }
+        /**
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        */
+        get Description(): string | null {  
+            return this.Get('Description');
+        }
+        set Description(value: string | null) {
+            this.Set('Description', value);
+        }
+        /**
+        * * Field Name: RunByUserID
+        * * Display Name: Run By User ID
+        * * SQL Data Type: int
+        * * Related Entity/Foreign Key: Users (vwUsers.ID)
+        */
+        get RunByUserID(): number {  
+            return this.Get('RunByUserID');
+        }
+        set RunByUserID(value: number) {
+            this.Set('RunByUserID', value);
+        }
+        /**
+        * * Field Name: CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()
+        */
+        get CreatedAt(): Date | null {  
+            return this.Get('CreatedAt');
+        }
+        
+        /**
+        * * Field Name: UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()
+        */
+        get UpdatedAt(): Date | null {  
+            return this.Get('UpdatedAt');
+        }
+        
+        /**
+        * * Field Name: RecommendationProvider
+        * * Display Name: Recommendation Provider
+        * * SQL Data Type: nvarchar(255)
+        * * Default Value: null
+        */
+        get RecommendationProvider(): string {  
+            return this.Get('RecommendationProvider');
+        }
+        
+        /**
+        * * Field Name: RunByUser
+        * * Display Name: Run By User
+        * * SQL Data Type: nvarchar(100)
+        * * Default Value: null
+        */
+        get RunByUser(): string {  
+            return this.Get('RunByUser');
+        }
+        
+
+    }
+        
+    /**
+     * Recommendation Items - strongly typed entity sub-class
+     * * Schema: __mj
+     * * Base Table: RecommendationItem
+     * * Base View: vwRecommendationItems
+     * * @description Table to store individual recommendation items that are the right side of the recommendation which we track in the DestinationEntityID/DestinationEntityRecordID
+     * * Primary Key: ID
+     * @extends {BaseEntity}
+     * @class
+     * @public
+     */
+    @RegisterClass(BaseEntity, 'Recommendation Items')
+    export class RecommendationItemEntity extends BaseEntity {
+        /**
+        * Loads the Recommendation Items record from the database
+        * @param ID: number - primary key value to load the Recommendation Items record.
+        * @param EntityRelationshipsToLoad - (optional) the relationships to load
+        * @returns {Promise<boolean>} - true if successful, false otherwise
+        * @public
+        * @async
+        * @memberof RecommendationItemEntity
+        * @method
+        * @override
+        */      
+        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+        }
+            
+        /**
+        * Recommendation Items - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
+        * @public
+        * @method
+        * @override
+        * @memberof RecommendationItemEntity
+        * @throws {Error} - Delete is not allowed for Recommendation Items, to enable it set AllowDeleteAPI to 1 in the database.
+        */
+        public async Delete(): Promise<boolean> {
+            throw new Error('Delete is not allowed for Recommendation Items, to enable it set AllowDeleteAPI to 1 in the database.');
+        } 
+            
+            /**
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: int
+        */
+        get ID(): number {  
+            return this.Get('ID');
+        }
+        
+        /**
+        * * Field Name: RecommendationID
+        * * Display Name: Recommendation ID
+        * * SQL Data Type: int
+        * * Related Entity/Foreign Key: Recommendations (vwRecommendations.ID)
+        */
+        get RecommendationID(): number {  
+            return this.Get('RecommendationID');
+        }
+        set RecommendationID(value: number) {
+            this.Set('RecommendationID', value);
+        }
+        /**
+        * * Field Name: DestinationEntityID
+        * * Display Name: Destination Entity ID
+        * * SQL Data Type: int
+        * * Related Entity/Foreign Key: Entities (vwEntities.ID)
+        * * Description: The ID of the destination entity
+        */
+        get DestinationEntityID(): number {  
+            return this.Get('DestinationEntityID');
+        }
+        set DestinationEntityID(value: number) {
+            this.Set('DestinationEntityID', value);
+        }
+        /**
+        * * Field Name: DestinationEntityRecordID
+        * * Display Name: Destination Entity Record ID
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: The record ID of the destination entity
+        */
+        get DestinationEntityRecordID(): string {  
+            return this.Get('DestinationEntityRecordID');
+        }
+        set DestinationEntityRecordID(value: string) {
+            this.Set('DestinationEntityRecordID', value);
+        }
+        /**
+        * * Field Name: MatchProbability
+        * * Display Name: Match Probability
+        * * SQL Data Type: decimal(18, 15)
+        * * Description: A value between 0 and 1 indicating the probability of the match, higher numbers indicating a more certain match/recommendation.
+        */
+        get MatchProbability(): number | null {  
+            return this.Get('MatchProbability');
+        }
+        set MatchProbability(value: number | null) {
+            this.Set('MatchProbability', value);
+        }
+        /**
+        * * Field Name: CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()
+        */
+        get CreatedAt(): Date | null {  
+            return this.Get('CreatedAt');
+        }
+        
+        /**
+        * * Field Name: UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()
+        */
+        get UpdatedAt(): Date | null {  
+            return this.Get('UpdatedAt');
+        }
+        
+        /**
+        * * Field Name: DestinationEntity
+        * * Display Name: Destination Entity
+        * * SQL Data Type: nvarchar(255)
+        * * Default Value: null
+        */
+        get DestinationEntity(): string {  
+            return this.Get('DestinationEntity');
+        }
+        
+
+    }
+        
