@@ -16,8 +16,9 @@
     "packages/AngularElements/*"
   ],
   "scripts": {
-    "build": "turbo build --filter=\"@memberjunction*\"",
+    "build": "npm run build:stream",
     "build:stream": "turbo --log-order=stream build --filter=\"@memberjunction*\"",
+    "build:table": "turbo build --filter=\"@memberjunction*\"",
     "watch": "turbo watch --filter=\"@memberjunction*\"",
     "start": "turbo start --filter=mj_explorer --filter=mj_api",
     "start:api": "turbo start --filter=mj_api",

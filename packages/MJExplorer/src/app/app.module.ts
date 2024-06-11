@@ -6,7 +6,7 @@ import { BrowserModule } from '@angular/platform-browser';
 import { BrowserAnimationsModule } from '@angular/platform-browser/animations';
 import { FormsModule } from '@angular/forms';
 import { ReactiveFormsModule } from '@angular/forms';
-import { HttpClientModule } from '@angular/common/http';
+import { provideHttpClient, withInterceptorsFromDi } from '@angular/common/http';
 
 //***********************************************************
 // MJ
@@ -51,8 +51,6 @@ import { AppComponent } from './app.component';
 import { GeneratedFormsModule, LoadGeneratedForms } from './generated/generated-forms.module';
 import { environment } from 'src/environments/environment';
 import { ExplorerSettingsModule } from '@memberjunction/ng-explorer-settings';
-import { DemoFormsModule } from './demo/demo.module';
-
 
 LoadGeneratedForms(); // prevent tree shaking and component loss through this call
 LoadResourceWrappers(); // prevent tree shaking and component loss through this call
@@ -90,13 +88,11 @@ export function MSALGuardConfigFactory(): MsalGuardConfiguration {
     ExplorerCoreModule,
     CoreGeneratedFormsModule,
     GeneratedFormsModule,
-    DemoFormsModule,
     NotificationModule,
-    HttpClientModule,
     ReactiveFormsModule,
     AuthServicesModule.forRoot(environment),
   ],
-  providers: [SharedService],
+  providers: [SharedService, provideHttpClient(withInterceptorsFromDi())],
   bootstrap: [AppComponent, RedirectComponent],
 })
 export class AppModule {}
