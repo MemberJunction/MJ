@@ -29,6 +29,9 @@ import { BaseFormsModule } from '@memberjunction/ng-base-forms';
 import { RecordChangesModule } from '@memberjunction/ng-record-changes';
 import { UserViewGridModule } from '@memberjunction/ng-user-view-grid';
 import { MJTabStripModule } from '@memberjunction/ng-tabstrip';
+import { EntityFormDialogModule } from '@memberjunction/ng-entity-form-dialog';
+import { UserViewPropertiesDialogModule } from '@memberjunction/ng-user-view-properties';
+import { RecordSelectorModule } from '@memberjunction/ng-record-selector';
 
 // Local Components
 import { AskSkipModule } from '@memberjunction/ng-ask-skip';
@@ -69,11 +72,9 @@ import { UserNotificationsComponent } from './lib/user-notifications/user-notifi
 import { UserProfileComponent } from './lib/user-profile/user-profile.component';
 import { ExpansionPanelComponent } from './lib/expansion-panel-component/expansion-panel-component';
 import { ApplicationViewComponent } from './lib/app-view/application-view.component';
-import { UserViewPropertiesDialogModule } from '@memberjunction/ng-user-view-properties';
 import { AppRoutingModule, CustomReuseStrategy } from './app-routing.module';
 import { ListViewComponent } from './lib/list-view/list-view.component';  
 import { SingleListDetailComponent } from './lib/single-list-detail/single-list-detail.component';
-import { EntityFormDialogModule } from '@memberjunction/ng-entity-form-dialog';
 
 @NgModule({
   declarations: [
@@ -157,7 +158,8 @@ import { EntityFormDialogModule } from '@memberjunction/ng-entity-form-dialog';
     FileStorageModule,
     UserViewPropertiesDialogModule,
     MJTabStripModule,
-    EntityFormDialogModule
+    EntityFormDialogModule,
+    RecordSelectorModule
   ],
   exports: [
     FormToolbarComponent,

@@ -2692,6 +2692,18 @@ import { RegisterClass } from "@memberjunction/global";
             this.Set('PreferredCommunicationField', value);
         }
         /**
+        * * Field Name: Icon
+        * * Display Name: Icon
+        * * SQL Data Type: nvarchar(500)
+        * * Description: Optional, specify an icon (CSS Class) for each entity for display in the UI
+        */
+        get Icon(): string | null {  
+            return this.Get('Icon');
+        }
+        set Icon(value: string | null) {
+            this.Set('Icon', value);
+        }
+        /**
         * * Field Name: CodeName
         * * Display Name: Code Name
         * * SQL Data Type: nvarchar(MAX)
@@ -4289,6 +4301,31 @@ import { RegisterClass } from "@memberjunction/global";
             this.Set('Description', value);
         }
         /**
+        * * Field Name: Icon
+        * * Display Name: Icon
+        * * SQL Data Type: nvarchar(500)
+        * * Description: Specify the CSS class information for the display icon for each application.
+        */
+        get Icon(): string | null {  
+            return this.Get('Icon');
+        }
+        set Icon(value: string | null) {
+            this.Set('Icon', value);
+        }
+        /**
+        * * Field Name: DefaultForNewUser
+        * * Display Name: Default For New User
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: If turned on, when a new user first uses the MJ Explorer app, the application records with this turned on will have this application included in their selected application list.
+        */
+        get DefaultForNewUser(): boolean {  
+            return this.Get('DefaultForNewUser');
+        }
+        set DefaultForNewUser(value: boolean) {
+            this.Set('DefaultForNewUser', value);
+        }
+        /**
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
@@ -4387,7 +4424,8 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: DefaultForNewUser
         * * Display Name: Default For New User
         * * SQL Data Type: bit
-        * * Default Value: 0
+        * * Default Value: 1
+        * * Description: When set to 1, the entity will be included by default for a new user when they first access the application in question
         */
         get DefaultForNewUser(): boolean {  
             return this.Get('DefaultForNewUser');
@@ -11591,6 +11629,17 @@ import { RegisterClass } from "@memberjunction/global";
             this.Set('Name', value);
         }
         /**
+        * * Field Name: UserQuestion
+        * * Display Name: User Question
+        * * SQL Data Type: nvarchar(MAX)
+        */
+        get UserQuestion(): string | null {  
+            return this.Get('UserQuestion');
+        }
+        set UserQuestion(value: string | null) {
+            this.Set('UserQuestion', value);
+        }
+        /**
         * * Field Name: Description
         * * Display Name: Description
         * * SQL Data Type: nvarchar(MAX)
@@ -11623,6 +11672,17 @@ import { RegisterClass } from "@memberjunction/global";
         }
         set SQL(value: string | null) {
             this.Set('SQL', value);
+        }
+        /**
+        * * Field Name: TechnicalDescription
+        * * Display Name: Technical Description
+        * * SQL Data Type: nvarchar(MAX)
+        */
+        get TechnicalDescription(): string | null {  
+            return this.Get('TechnicalDescription');
+        }
+        set TechnicalDescription(value: string | null) {
+            this.Set('TechnicalDescription', value);
         }
         /**
         * * Field Name: OriginalSQL
@@ -11669,12 +11729,25 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Quality Rank
         * * SQL Data Type: int
         * * Default Value: 0
+        * * Description: Value indicating the quality of the query, higher values mean a better quality
         */
         get QualityRank(): number | null {  
             return this.Get('QualityRank');
         }
         set QualityRank(value: number | null) {
             this.Set('QualityRank', value);
+        }
+        /**
+        * * Field Name: ExecutionCostRank
+        * * Display Name: Execution Cost Rank
+        * * SQL Data Type: int
+        * * Description: Higher numbers indicate more execution overhead/time required. Useful for planning which queries to use in various scenarios.
+        */
+        get ExecutionCostRank(): number | null {  
+            return this.Get('ExecutionCostRank');
+        }
+        set ExecutionCostRank(value: number | null) {
+            this.Set('ExecutionCostRank', value);
         }
         /**
         * * Field Name: CreatedAt

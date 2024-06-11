@@ -1,0 +1,22 @@
+<div mjFillContainer> 
+    <kendo-listbox
+        class="list-box"
+        #unselected
+        kendoListBoxDataBinding
+        [data]="UnselectedRecords"
+        [textField]="DisplayField"
+        [connectedWith]="selected"
+        [toolbar]="ToolbarSettings"
+        (dblclick)="onDblClick($event, 'unselected')"
+    >
+    </kendo-listbox>
+    <kendo-listbox 
+        class="list-box"
+        #selected 
+        [data]="SelectedRecords" 
+        [textField]="DisplayField"
+        [toolbar]="false"
+        (dblclick)="onDblClick($event, 'selected')"
+    >
+    </kendo-listbox>
+</div>

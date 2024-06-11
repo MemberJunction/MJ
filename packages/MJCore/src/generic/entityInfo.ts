@@ -565,6 +565,7 @@ export class EntityInfo extends BaseInfo {
     EntityObjectSubclassName: string = null
     EntityObjectSubclassImport: string = null
     PreferredCommunicationField: string = null
+    Icon: string = null
     CreatedAt: Date = null
     UpdatedAt: Date = null
 

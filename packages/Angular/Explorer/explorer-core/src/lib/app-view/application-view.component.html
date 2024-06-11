@@ -1,20 +1,45 @@
-<div  class="app-container">
+<div class="app-container" *ngIf="this.app">
     <div class="card-header-entity cloumn">
-        <div class="title-wrap">
-            <h1>{{appNameFromURL}}</h1>
-        </div>
+        <div class="header-wrap"> 
+            @if (this.app.Icon && this.app.Icon.length > 0) {
+                <div class="title-icon">
+                    <span [ngClass]="this.app.Icon"></span>
+                </div>    
+            }
+            <div class="title-wrap">
+                <div class="title-wrap-inner">
+                    <span class="breadcrumb" (click)="GoHome($event)">Home</span><span class="breadrcrumb-separator">:</span><span  class="breadcrumb" (click)="GoToApps($event)">Applications</span><span class="breadrcrumb-separator">:</span><span>{{this.app.Name}}</span>
+                </div>
+            </div>
+            <div class="config-button">
+                <button kendoButton (click)="ShowAppEntitySelectionDialog()"><span class="fa-solid fa-gear"></span></button>
+                <mj-record-selector-dialog  
+                                            EntityName="Entities"
+                                            [AvailableRecords]="AllAppEntities" 
+                                            [SelectedRecords]="SelectedAppEntities" 
+                                            [UnselectedRecords]="UnselectedAppEntities"
+                                            [DialogVisible]="AppEntitySelectionDialogVisible"
+                                            DisplayField="Name"
+                                            (DialogClosed)="OnAppEntitySelectionDialogClosed($event)"
+                >
+                </mj-record-selector-dialog>
+            </div>
+        </div>        
         <div class="row" #entityRow style="max-width: 100%;">
             <div class="col-xs-12 col-sm-6 example-col">
                 <button
-                    *ngFor="let button of AppEntityButtons"
+                    *ngFor="let item of SelectedAppEntities"
                     kendoButton
                     fillMode="flat"
                     [toggleable]="true"
-                    [selected]="button.Selected"
-                    (click)="onAppEntityButtonClicked(button)"
+                    [selected]="IsEntitySelected(item)"
+                    (click)="onAppEntityButtonClicked(item)"
                 >
                     <span>
-                        {{button.Name}}
+                        @if (item.Icon && item.Icon.length > 0) {
+                            <span [ngClass]="item.Icon + ' button-icon'" ></span>
+                        }
+                        {{item.Name}}
                     </span>
                 </button>
             </div>

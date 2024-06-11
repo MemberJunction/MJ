@@ -1,10 +1,10 @@
 .data-browser-container {
-    padding: 10px;
+   padding: 15px;
 }
 .main-area .card-list .card-item {
     background: #fff;
     border-radius: 10px;
-    height: 250px;
+    height: 200px;
     border: 3px solid transparent;
 }
 
@@ -29,6 +29,17 @@
     line-height: 28px;
     color: var(--text-darked);
  }
+ 
+.view-card-content .icon {
+   position: absolute;
+   top: 20px; 
+   left: 20px;  
+   font-size: 32px;
+}
+.card-list .card-item {
+   position: relative;  
+}
+
  .card-wrapper {
     height: 100%;
     border: none;
@@ -38,3 +49,33 @@
     justify-content: center;    
     align-items: center;
  }
+
+ .card-header-entity {
+   display: flex;
+   justify-content: space-between;
+   align-items: center;
+}
+
+.title-wrap {
+   flex-grow: 1;
+   display: block;
+   font-size: 24px;
+}
+
+.breadcrumb {
+   color: darkblue;
+   cursor: pointer;
+   display: inline
+}
+.breadcrumb-separator {
+   font-weight: lighter;
+   display: inline;
+   margin-left: 5px;
+   margin-right: 5px;
+}
+
+
+.config-button {
+   display: flex;
+   align-items: center;
+}

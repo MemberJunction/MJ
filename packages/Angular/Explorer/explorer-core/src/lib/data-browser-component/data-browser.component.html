@@ -1,16 +1,29 @@
 <div  class="data-browser-container">
   <div class="card-header-entity">
       <div class="title-wrap">
-          <h1>Data Applications</h1>
+        <span class="breadcrumb" (click)="GoHome($event)">Home</span><span class="breadrcrumb-separator">:</span><span>Applications</span>
+      </div>
+      <div class="config-button">
+        <button kendoButton (click)="ShowAppSelectionDialog()"><span class="fa-solid fa-gear"></span></button>
+        <mj-record-selector-dialog [AvailableRecords]="AllApplications" 
+                                   [SelectedRecords]="SelectedApplications" 
+                                   [UnselectedRecords]="UnselectedApplications"
+                                   [DialogVisible]="AppSelectionDialogVisible"
+                                   DisplayField="Name"
+                                   (DialogClosed)="OnAppSelectionDialogClosed($event)">
+        </mj-record-selector-dialog>
       </div>
   </div>
   <div class="main-area"> 
       <kendo-loader *ngIf="showLoader" type="converging-spinner" ></kendo-loader>
       <div class="card-list k-d-flex k-flex-row k-h-full k-flex-wrap" *ngIf="!showLoader">
-        <div class="card-item" *ngFor="let app of applications">
+        <div class="card-item" *ngFor="let app of SelectedApplications"  (click)="appItemClick(app)">
           <kendo-card class="card-wrapper">
-            <kendo-card-body (click)="appItemClick(app)">
+            <kendo-card-body>
               <div class="view-card-content k-cursor-pointer">
+                @if (app.Icon && app.Icon.length > 0) {
+                  <span [ngClass]="app.Icon + ' icon'"></span>
+                }
                 <h2 kendoCardTitle>{{ app.Name }}</h2>
                 <p kendoCardSubtitle>{{ app.Description }}</p>
               </div>

@@ -1,7 +1,7 @@
-import { Component, OnInit, ViewChild, viewChild } from '@angular/core';
+import { ChangeDetectorRef, Component, Input, OnInit, ViewChild, viewChild } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router'
-import { ApplicationEntityInfo, Metadata, LogStatus, LogError } from '@memberjunction/core';
-import { UserFavoriteEntity, UserViewEntity, UserViewEntityExtended } from '@memberjunction/core-entities';
+import { ApplicationEntityInfo, Metadata, LogStatus, LogError, RunView, ApplicationInfo, BaseEntity } from '@memberjunction/core';
+import { EntityEntity, UserApplicationEntity, UserApplicationEntityEntity, UserFavoriteEntity, UserViewEntity, UserViewEntityExtended } from '@memberjunction/core-entities';
 import { SharedService } from '@memberjunction/ng-shared';
 import { Folder, Item, ItemType } from '../../generic/Item.types';
 import { BaseBrowserComponent } from '../base-browser-component/base-browser-component';
@@ -10,24 +10,26 @@ import { UserViewPropertiesDialogComponent } from '@memberjunction/ng-user-view-
 import { BeforeAddItemEvent, BeforeUpdateItemEvent } from '../../generic/Events.types';
 
 @Component({
-  selector: 'application-view',
+  selector: 'mj-application-view',
   templateUrl: './application-view.component.html',
   styleUrls: ['./application-view.component.css', '../../shared/first-tab-styles.css']
 })
 export class ApplicationViewComponent extends BaseBrowserComponent implements OnInit {
-
     @ViewChild('entityRow') entityRowRef: Element | undefined;
     @ViewChild('userViewDialog') viewPropertiesDialog!: UserViewPropertiesDialogComponent;
 
-    public appNameFromURL: string = '';
-    public appName: string = ''
-    public appDescription: string = ''
-    public appEntities: ApplicationEntityInfo[] = [];
-    public AppEntityButtons: ApplicationEntityButton[] = []
-    public selectedAppEntity: ApplicationEntityInfo | null = null;
-    public categoryEntityID: number | null = null;
+    @Input() public categoryEntityID!: number;
 
-    constructor (private router: Router, private route: ActivatedRoute, private location: Location, private sharedService: SharedService){
+    public currentlySelectedAppEntity: EntityEntity | undefined;
+
+    public AppEntitySelectionDialogVisible: boolean = false;
+    public AllAppEntities: EntityEntity[] = [];
+    public SelectedAppEntities: EntityEntity[] = []; 
+    public UnselectedAppEntities: EntityEntity[] = [];
+    public app: ApplicationInfo | undefined;
+    public userApp: UserApplicationEntity | undefined;
+
+    constructor (private router: Router, private route: ActivatedRoute, private location: Location, private sharedService: SharedService, private cdr: ChangeDetectorRef){
         super();
         this.categoryEntityName = "User View Categories";
         this.itemEntityName = "User Views";
@@ -43,57 +45,166 @@ export class ApplicationViewComponent extends BaseBrowserComponent implements On
                 this.selectedFolderID = parseInt(folderID) || null;
             }
             
-            if (appName) {
-                this.appName = this.appNameFromURL = appName;
+            if (appName && appName !== this.app?.Name) {
                 const md = new Metadata();
-                const app = md.Applications.find(a => a.Name == appName);
-                
-                if (app) {
-                    this.appDescription = app.Description
-                    this.appEntities = app.ApplicationEntities 
-                }
+                const rv = new RunView();
 
-                this.AppEntityButtons = this.appEntities.map(entity => new ApplicationEntityButton(entity));
+                this.app = md.Applications.find(a => a.Name === appName);
 
-                if(this.AppEntityButtons.length){
-                    if(entityName){
-                        const entityNameToLower: string = entityName.toLowerCase();
-                        const selectedAppEntity = this.AppEntityButtons.find(e => e.Name.toLocaleLowerCase() == entityNameToLower);
-                        if(selectedAppEntity){
-                            selectedAppEntity.Selected = true;
-                            await this.loadEntitiesAndFolders(selectedAppEntity);
-                            return;
-                        }
+                // if we get here and we have a blank app, problem
+                if (!this.app)
+                    throw new Error(`Application ${appName} not found`);
+
+                // next up we need to find the UserApplication record based on the app and the current user
+                const userAppResult = await rv.RunView<UserApplicationEntity>({
+                    EntityName: "User Applications",
+                    ExtraFilter: `UserID=${md.CurrentUser.ID} AND ApplicationID=${this.app.ID}`,
+                    ResultType: 'entity_object'
+                })
+                if (!userAppResult || userAppResult.Success === false || userAppResult.Results.length === 0)
+                    throw new Error('User Application Record for current user and selected application not found')
+
+                this.userApp = userAppResult.Results[0];
+
+                const matches =  this.app.ApplicationEntities.map(ae => md.Entities.find(e => e.ID === ae.EntityID)).filter(e => e); // filter out null entries
+                // store the entire list of POSSIBLE app entities in this list
+                this.AllAppEntities = <EntityEntity[]><unknown[]>matches; // we filter out null above so this cast is safe;
+            
+                const userAppEntities = await rv.RunView<UserApplicationEntityEntity>({
+                  EntityName: 'User Application Entities',
+                  ResultType: 'entity_object',
+                  ExtraFilter: `UserApplicationID = ${this.userApp!.ID}`,
+                  OrderBy: 'Sequence'
+                })
+                if (userAppEntities && userAppEntities.Success) {
+                    this.SelectedAppEntities = this.AllAppEntities.filter(e => userAppEntities.Results.some(uae => uae.EntityID === e.ID))
+                    this.UnselectedAppEntities = this.AllAppEntities.filter(e => !this.SelectedAppEntities.some(sa => sa.ID === e.ID));
+
+                    // special case - if we have NO user app entities and the application has entities that are marked as DefaultForNewUser=1 we will add them now
+                    const defaultEntities = this.app.ApplicationEntities.filter(a => a.DefaultForNewUser);
+                    if (this.SelectedAppEntities.length === 0 && defaultEntities.length > 0) {
+                        // there are some entities that should default for a new user, so let's add them to the selected entities and remove from the Unselected
+                        // app entities and then call the Save method that we use when the user dialog ends
+                        this.SelectedAppEntities = <EntityEntity[]>defaultEntities.map(de => this.AllAppEntities.find(aae => de.EntityID === aae.ID)).filter(val => val);
+                        // now we have the default entities in place for the app, remove them from the Unselected array
+                        this.UnselectedAppEntities = this.UnselectedAppEntities.filter(e => !this.SelectedAppEntities.some(se => se.ID === e.ID));
+                        // now save
+                        await this.OnAppEntitySelectionDialogClosed(true);
                     }
-
-                    const defaultEntity = this.AppEntityButtons[0];
-                    defaultEntity.Selected = true;
-                    await this.loadEntitiesAndFolders(defaultEntity);
                 }
             }
+
+            // now down here we have either loaded the app above, or already had the current app loaded. Now we move on to set the current entity and load er up
+            if ( this.app && this.SelectedAppEntities.length ){
+                if ( entityName ) {
+                    const entityNameToLower: string = entityName.toLowerCase();
+                    const selectedAppEntity = this.SelectedAppEntities.find(e => e.Name.toLocaleLowerCase() == entityNameToLower);
+                    if ( selectedAppEntity ) {
+                        await this.loadEntityAndFolders(selectedAppEntity);
+                    }
+                    else
+                        await this.loadEntityAndFolders(this.SelectedAppEntities[0]);    
+                }
+                else {
+                    await this.loadEntityAndFolders(this.SelectedAppEntities[0]);    
+                }
+            }
+            this.showLoader = false;
         });    
     }
 
-    public onAppEntityButtonClicked(appEntityButton: ApplicationEntityButton): void {
-        if(appEntityButton.Selected){
-            return;
+
+    public IsEntitySelected(entity: EntityEntity) {
+        if (this.currentlySelectedAppEntity?.ID === entity.ID)
+            return true;
+        else
+            return false;
+    }
+    public ShowAppEntitySelectionDialog() {
+        this.AppEntitySelectionDialogVisible = true;
+    }
+
+
+    public async OnAppEntitySelectionDialogClosed(save: boolean) {
+        this.AppEntitySelectionDialogVisible = false;
+        // now we need to process the changes if the user hit save
+        if (save) {
+          // we need to basically make sure the User Application Entities entity for this user maps to the set of selected Entities within the application, in the order selected as well
+          const rv = new RunView();
+          const md = new Metadata();
+          const userAppEntities = await rv.RunView<UserApplicationEntityEntity>({
+            EntityName: 'User Application Entities',
+            ResultType: 'entity_object',
+            ExtraFilter: `UserApplicationID = ${this.userApp!.ID}`,
+            OrderBy: 'Sequence'
+          })
+
+          // userAppEntities.results is the current DB state, we need to now compare it to the SelectedAppEntities array
+          // and if there are changes either update sequence values or delete records that aren't selected anymore.  
+          const existingUserAppEntities = userAppEntities.Results;
+          const userAppEntitiesToSave: UserApplicationEntityEntity[] = [];
+          const userAppEntitiesToDelete: UserApplicationEntityEntity[] = [];
+          // first we need to update the sequence values for the selected applications
+          for (let index = 0; index < this.SelectedAppEntities.length; index++) {
+            const e = this.SelectedAppEntities[index];
+            const existing = existingUserAppEntities.find(uae => uae.EntityID === e.ID);
+            if (existing) {
+              existing.Sequence = index;
+              userAppEntitiesToSave.push(existing);
+            } 
+            else {
+              // this is a new app entity that the user has selected
+              const newApp = await md.GetEntityObject<UserApplicationEntityEntity>("User Application Entities");
+              newApp.UserApplicationID = this.userApp!.ID;
+              newApp.EntityID = e.ID;
+              newApp.Sequence = index;
+              userAppEntitiesToSave.push(newApp);
+            }
+          }
+          // now we need to add the records that aren't selected anymore to a delete array
+          for (let index = 0; index < existingUserAppEntities.length; index++) {
+            const existing = existingUserAppEntities[index];
+            if (!this.SelectedAppEntities.some(sa => sa.ID === existing.EntityID)) {
+              userAppEntitiesToDelete.push(existing);
+            }
+          }
+          // finally, we need to submit a single transaction so we have one server round trip to commit all this good stuff
+          const tg = await md.CreateTransactionGroup();
+          userAppEntitiesToSave.forEach(toSave => {
+            toSave.TransactionGroup = tg;
+            toSave.Save(); // no await since we are in a transaction group
+          })
+          userAppEntitiesToDelete.forEach(d => {
+            d.TransactionGroup = tg;
+            d.Delete(); // no await 
+          })
+
+          if (!await tg.Submit()) {
+            // the data doesn't need to be updated when we are succesful because we're all bound to the same data which is cool
+            // but in this case we need to notify the user it failed
+            this.sharedService.CreateSimpleNotification('There was an error saving your entity selections. Please try again later or notify a system administrator.', "error", 3500);
+          }
         }
+    }
+
+    public onAppEntityButtonClicked(e: EntityEntity): void {
+        if (e.ID === this.currentlySelectedAppEntity?.ID) 
+            return;
 
         this.selectedFolderID = null;
-        this.selectedAppEntity = appEntityButton.Data;
+        this.currentlySelectedAppEntity = e;
         this.navigateToCurrentPage();
     }
 
-    public async loadEntitiesAndFolders(appEntityButton: ApplicationEntityButton): Promise<void> {
-        if(!appEntityButton){
+    protected async loadEntityAndFolders(entity: EntityEntity | undefined): Promise<void> {
+        if(!entity) {
+            this.currentlySelectedAppEntity = undefined; // make sure our current selection is wiped out here
             return;
         }
 
         this.showLoader = true;
-        this.appName = appEntityButton.Name;
-        this.selectedAppEntity = appEntityButton.Data;
-        this.categoryEntityID = this.selectedAppEntity.EntityID;
-
+        this.currentlySelectedAppEntity = entity;
+        
         if(this.selectedFolderID){
             let viewResult: Folder[] = await super.RunView(this.categoryEntityName, `ID=${this.selectedFolderID}`);
             if(viewResult.length > 0){
@@ -101,15 +212,15 @@ export class ApplicationViewComponent extends BaseBrowserComponent implements On
             }
         }
         else{
-            this.pageTitle = this.selectedAppEntity.Entity;
+            this.pageTitle = this.currentlySelectedAppEntity.Name;
         }
 
         const md = new Metadata();
         const parentFolderIDFilter: string = this.selectedFolderID ? `ParentID=${this.selectedFolderID}` : 'ParentID IS NULL';
-        const categoryFilter: string = `UserID=${md.CurrentUser.ID} AND EntityID=${this.selectedAppEntity.EntityID} AND ` + parentFolderIDFilter;
+        const categoryFilter: string = `UserID=${md.CurrentUser.ID} AND EntityID=${this.currentlySelectedAppEntity.ID} AND ` + parentFolderIDFilter;
         
         const categoryIDFilter: string = this.selectedFolderID ? `CategoryID=${this.selectedFolderID}` : 'CategoryID IS NULL';
-        const userViewFilter: string = `UserID = ${md.CurrentUser.ID} AND EntityID = ${appEntityButton.Data.EntityID} AND ` + categoryIDFilter;
+        const userViewFilter: string = `UserID = ${md.CurrentUser.ID} AND EntityID = ${this.currentlySelectedAppEntity.ID} AND ` + categoryIDFilter;
 
         await super.LoadData({
             sortItemsAfterLoad: true, 
@@ -119,6 +230,7 @@ export class ApplicationViewComponent extends BaseBrowserComponent implements On
         });
 
         this.showLoader = false;
+        this.cdr.detectChanges(); // tell Angular to detect changes as we just change the current entity so that affects some UI elements visualy like which button shows as selected
     }
 
     public onItemClick(item: Item) {
@@ -155,13 +267,16 @@ export class ApplicationViewComponent extends BaseBrowserComponent implements On
     }
 
     private navigateToCurrentPage(): void{
+        if (!this.app) 
+            throw new Error('Application Not Loaded')
+
         //we're capable of loading the data associated with the selected ApplicationEntityInfo object
         //without a page refresh, but we'd need additonal logic to handle routing, e.g. back
         //button in the browser taking you to the last selected entity.
         //so its easier if we instead navigate to this page with an updated url and leverage angular's router
         let folderID: string | null = this.selectedFolderID ? this.selectedFolderID.toString() : null;
-        let url: string[] = ["/app", this.appNameFromURL];
-        let appEntityName: string | null = this.selectedAppEntity ? this.selectedAppEntity.Entity : null;
+        let url: string[] = ["/app", this.app.Name];
+        let appEntityName: string | null = this.currentlySelectedAppEntity ? this.currentlySelectedAppEntity.Name : null;
         if(appEntityName){
             url.push(`${appEntityName}`);
             if(folderID){
@@ -183,9 +298,9 @@ export class ApplicationViewComponent extends BaseBrowserComponent implements On
 
     createNewView(event: BeforeAddItemEvent) {
         event.Cancel = true;
-        if(this.viewPropertiesDialog){
-            console.log("Creating new view", this.appName);
-            this.viewPropertiesDialog.CreateView(this.appName);
+        if(this.viewPropertiesDialog && this.currentlySelectedAppEntity){
+            console.log("Creating new view ", this.currentlySelectedAppEntity?.Name);
+            this.viewPropertiesDialog.CreateView(this.currentlySelectedAppEntity.Name);
         }
         else{
             LogError("View Properties Dialog not found");
@@ -210,29 +325,22 @@ export class ApplicationViewComponent extends BaseBrowserComponent implements On
             return;
         }
         
-        if(args && args.Saved){
+        if(args && args.Saved && this.currentlySelectedAppEntity){
             args.Cancel = true;
 
-            const entityNameToLower: string = this.appName.toLowerCase();
-            const selectedAppEntity = this.AppEntityButtons.find(e => e.Name.toLocaleLowerCase() == entityNameToLower);
-            if(selectedAppEntity){
-                selectedAppEntity.Selected = true;
-                await this.loadEntitiesAndFolders(selectedAppEntity);
-            }
+            await this.loadEntityAndFolders(this.currentlySelectedAppEntity);
         }
     }
-} 
 
-//This is a simple wrapper for the ApplicationEntityInfo class 
-//that just adds a Selected property
-class ApplicationEntityButton {
-    public Data: ApplicationEntityInfo;
-    public Name: string;
-    public Selected: boolean;
-
-    constructor(data: ApplicationEntityInfo) {
-        this.Data = data;
-        this.Name = data.Entity;
-        this.Selected = false;
+    async GoToApps(event: Event) {
+        event.preventDefault();
+        this.router.navigate(['data']);
     }
-}
+
+    async GoHome(event: Event) {
+        event.preventDefault();
+        // tell the router to go to /home
+        this.router.navigate(['home']);
+    }
+} 
+ 

@@ -2,7 +2,7 @@
 * ALL ENTITIES - TypeGraphQL Type Class Definition - AUTO GENERATED FILE
 * Generated Entities and Resolvers for Server
 * 
-* GENERATED: 6/10/2024, 3:22:34 PM
+* GENERATED: 6/11/2024, 11:31:47 AM
 * 
 *   >>> DO NOT MODIFY THIS FILE!!!!!!!!!!!!
 *   >>> YOUR CHANGES WILL BE OVERWRITTEN
@@ -2468,6 +2468,10 @@ export class Entity_ {
     @MaxLength(510)
     PreferredCommunicationField?: string;
           
+    @Field({nullable: true, description: 'Optional, specify an icon (CSS Class) for each entity for display in the UI'}) 
+    @MaxLength(1000)
+    Icon?: string;
+          
     @Field({nullable: true}) 
     CodeName?: string;
           
@@ -2720,6 +2724,9 @@ export class CreateEntityInput {
 
     @Field({ nullable: true })
     PreferredCommunicationField?: string;
+
+    @Field({ nullable: true })
+    Icon?: string;
 }
     
         
@@ -2844,6 +2851,9 @@ export class UpdateEntityInput {
 
     @Field({ nullable: true })
     PreferredCommunicationField?: string;
+
+    @Field({ nullable: true })
+    Icon?: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -5035,6 +5045,13 @@ export class Application_ {
     @Field({nullable: true}) 
     Description?: string;
           
+    @Field({nullable: true, description: 'Specify the CSS class information for the display icon for each application.'}) 
+    @MaxLength(1000)
+    Icon?: string;
+          
+    @Field(() => Boolean, {description: 'If turned on, when a new user first uses the MJ Explorer app, the application records with this turned on will have this application included in their selected application list.'}) 
+    DefaultForNewUser: boolean;
+          
     @Field() 
     @MaxLength(8)
     CreatedAt: Date;
@@ -5064,6 +5081,12 @@ export class CreateApplicationInput {
 
     @Field({ nullable: true })
     Description?: string;
+
+    @Field({ nullable: true })
+    Icon?: string;
+
+    @Field(() => Boolean)
+    DefaultForNewUser: boolean;
 }
     
         
@@ -5080,6 +5103,12 @@ export class UpdateApplicationInput {
 
     @Field({ nullable: true })
     Description?: string;
+
+    @Field({ nullable: true })
+    Icon?: string;
+
+    @Field(() => Boolean)
+    DefaultForNewUser: boolean;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -5213,7 +5242,7 @@ export class ApplicationEntity_ {
     @Field(() => Int) 
     Sequence: number;
           
-    @Field(() => Boolean) 
+    @Field(() => Boolean, {description: 'When set to 1, the entity will be included by default for a new user when they first access the application in question'}) 
     DefaultForNewUser: boolean;
           
     @Field() 
@@ -5789,6 +5818,25 @@ export class UserApplication_ {
 // INPUT TYPE for User Applications   
 //****************************************************************************
 @InputType()
+export class CreateUserApplicationInput {
+    @Field(() => Int)
+    UserID: number;
+
+    @Field(() => Int)
+    ApplicationID: number;
+
+    @Field(() => Int)
+    Sequence: number;
+
+    @Field(() => Boolean)
+    IsActive: boolean;
+}
+    
+        
+//****************************************************************************
+// INPUT TYPE for User Applications   
+//****************************************************************************
+@InputType()
 export class UpdateUserApplicationInput {
     @Field(() => Int)
     ID: number;
@@ -5867,6 +5915,15 @@ export class UserApplicationResolver extends ResolverBase {
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwUserApplicationEntities] WHERE [UserApplicationID]=${userapplication_.ID} ` + this.getRowLevelSecurityWhereClause('User Application Entities', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('User Application Entities', await dataSource.query(sSQL));
         return result;
+    }
+        
+    @Mutation(() => UserApplication_)
+    async CreateUserApplication(
+        @Arg('input', () => CreateUserApplicationInput) input: CreateUserApplicationInput,
+        @Ctx() { dataSource, userPayload }: AppContext, 
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.CreateRecord('User Applications', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => UserApplication_)
@@ -13068,6 +13125,9 @@ export class Query_ {
     Name: string;
           
     @Field({nullable: true}) 
+    UserQuestion?: string;
+          
+    @Field({nullable: true}) 
     Description?: string;
           
     @Field(() => Int, {nullable: true}) 
@@ -13075,6 +13135,9 @@ export class Query_ {
           
     @Field({nullable: true}) 
     SQL?: string;
+          
+    @Field({nullable: true}) 
+    TechnicalDescription?: string;
           
     @Field({nullable: true}) 
     OriginalSQL?: string;
@@ -13086,8 +13149,11 @@ export class Query_ {
     @MaxLength(30)
     Status: string;
           
-    @Field(() => Int, {nullable: true}) 
+    @Field(() => Int, {nullable: true, description: 'Value indicating the quality of the query, higher values mean a better quality'}) 
     QualityRank?: number;
+          
+    @Field(() => Int, {nullable: true, description: 'Higher numbers indicate more execution overhead/time required. Useful for planning which queries to use in various scenarios.'}) 
+    ExecutionCostRank?: number;
           
     @Field() 
     @MaxLength(8)
@@ -13121,6 +13187,9 @@ export class CreateQueryInput {
     Name: string;
 
     @Field({ nullable: true })
+    UserQuestion?: string;
+
+    @Field({ nullable: true })
     Description?: string;
 
     @Field(() => Int, { nullable: true })
@@ -13128,6 +13197,9 @@ export class CreateQueryInput {
 
     @Field({ nullable: true })
     SQL?: string;
+
+    @Field({ nullable: true })
+    TechnicalDescription?: string;
 
     @Field({ nullable: true })
     OriginalSQL?: string;
@@ -13140,6 +13212,9 @@ export class CreateQueryInput {
 
     @Field(() => Int, { nullable: true })
     QualityRank?: number;
+
+    @Field(() => Int, { nullable: true })
+    ExecutionCostRank?: number;
 }
     
         
@@ -13155,6 +13230,9 @@ export class UpdateQueryInput {
     Name: string;
 
     @Field({ nullable: true })
+    UserQuestion?: string;
+
+    @Field({ nullable: true })
     Description?: string;
 
     @Field(() => Int, { nullable: true })
@@ -13162,6 +13240,9 @@ export class UpdateQueryInput {
 
     @Field({ nullable: true })
     SQL?: string;
+
+    @Field({ nullable: true })
+    TechnicalDescription?: string;
 
     @Field({ nullable: true })
     OriginalSQL?: string;
@@ -13174,6 +13255,9 @@ export class UpdateQueryInput {
 
     @Field(() => Int, { nullable: true })
     QualityRank?: number;
+
+    @Field(() => Int, { nullable: true })
+    ExecutionCostRank?: number;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
