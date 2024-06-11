@@ -1,0 +1,38 @@
+{
+  "name": "@memberjunction/templates-base-types",
+  "entries": [
+    {
+      "date": "Tue, 11 Jun 2024 04:01:37 GMT",
+      "version": "1.5.3",
+      "tag": "@memberjunction/templates-base-types_v1.5.3",
+      "comments": {
+        "patch": [
+          {
+            "author": "97354817+AN-BC@users.noreply.github.com",
+            "package": "@memberjunction/templates-base-types",
+            "commit": "8d2617ab2ab9e671d342ff5d15cffcca4894d759",
+            "comment": "Applying package updates [skip ci]"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/templates-base-types",
+            "comment": "Bump @memberjunction/core to v1.5.3",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/templates-base-types",
+            "comment": "Bump @memberjunction/core-entities to v1.5.3",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/templates-base-types",
+            "comment": "Bump @memberjunction/global to v1.5.3",
+            "commit": "not available"
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -1,6 +1,51 @@
 {
-  "name": "@memberjunction/communication-sendgrid",
+  "name": "@memberjunction/entity-communications-server",
   "entries": [
+    {
+      "date": "Tue, 11 Jun 2024 04:01:37 GMT",
+      "version": "1.5.3",
+      "tag": "@memberjunction/entity-communications-server_v1.5.3",
+      "comments": {
+        "patch": [
+          {
+            "author": "97354817+AN-BC@users.noreply.github.com",
+            "package": "@memberjunction/entity-communications-server",
+            "commit": "8d2617ab2ab9e671d342ff5d15cffcca4894d759",
+            "comment": "Applying package updates [skip ci]"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/entity-communications-server",
+            "comment": "Bump @memberjunction/global to v1.5.3",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/entity-communications-server",
+            "comment": "Bump @memberjunction/core to v1.5.3",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/entity-communications-server",
+            "comment": "Bump @memberjunction/core-entities to v1.5.3",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/entity-communications-server",
+            "comment": "Bump @memberjunction/communication-engine to v1.5.3",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/entity-communications-server",
+            "comment": "Bump @memberjunction/entity-communications-base to v1.5.3",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
     {
       "date": "Fri, 07 Jun 2024 15:05:21 GMT",
       "version": "1.5.2",

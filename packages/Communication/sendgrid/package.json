@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/communication-sendgrid",
-  "version": "1.5.2",
+  "version": "1.5.3",
   "description": "MemberJunction: SendGrid Provider for the MJ Communication Framework",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -19,10 +19,10 @@
     "typescript": "^5.4.5"
   },
   "dependencies": {
-    "@memberjunction/global": "1.5.2",
-    "@memberjunction/core": "1.5.2",
-    "@memberjunction/core-entities": "1.5.2",
-    "@memberjunction/communication-types": "1.5.2",
+    "@memberjunction/global": "1.5.3",
+    "@memberjunction/core": "1.5.3",
+    "@memberjunction/core-entities": "1.5.3",
+    "@memberjunction/communication-types": "1.5.3",
     "@sendgrid/mail": "^8.1.3"
   }
 }
