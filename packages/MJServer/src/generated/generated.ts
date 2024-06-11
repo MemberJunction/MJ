@@ -2,7 +2,7 @@
 * ALL ENTITIES - TypeGraphQL Type Class Definition - AUTO GENERATED FILE
 * Generated Entities and Resolvers for Server
 * 
-* GENERATED: 6/10/2024, 3:22:34 PM
+* GENERATED: 6/11/2024, 10:23:59 AM
 * 
 *   >>> DO NOT MODIFY THIS FILE!!!!!!!!!!!!
 *   >>> YOUR CHANGES WILL BE OVERWRITTEN
@@ -5789,6 +5789,25 @@ export class UserApplication_ {
 // INPUT TYPE for User Applications   
 //****************************************************************************
 @InputType()
+export class CreateUserApplicationInput {
+    @Field(() => Int)
+    UserID: number;
+
+    @Field(() => Int)
+    ApplicationID: number;
+
+    @Field(() => Int)
+    Sequence: number;
+
+    @Field(() => Boolean)
+    IsActive: boolean;
+}
+    
+        
+//****************************************************************************
+// INPUT TYPE for User Applications   
+//****************************************************************************
+@InputType()
 export class UpdateUserApplicationInput {
     @Field(() => Int)
     ID: number;
@@ -5867,6 +5886,15 @@ export class UserApplicationResolver extends ResolverBase {
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwUserApplicationEntities] WHERE [UserApplicationID]=${userapplication_.ID} ` + this.getRowLevelSecurityWhereClause('User Application Entities', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('User Application Entities', await dataSource.query(sSQL));
         return result;
+    }
+        
+    @Mutation(() => UserApplication_)
+    async CreateUserApplication(
+        @Arg('input', () => CreateUserApplicationInput) input: CreateUserApplicationInput,
+        @Ctx() { dataSource, userPayload }: AppContext, 
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.CreateRecord('User Applications', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => UserApplication_)

@@ -12,6 +12,7 @@
     "watch": "tsc -w",
     "clean": "rimraf output",
     "start": "ts-node-dev src/index.ts",
+    "start:npx": "npx ts-node src/index.ts -skipdb",
     "lint:eslint": "eslint \"**/*.{ts,js,}\" --max-warnings=0",
     "lint:tsc": "tsc --noemit",
     "lint": "concurrently \"npm:lint:eslint\" \"npm:lint:tsc\""

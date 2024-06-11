@@ -53,7 +53,7 @@ export class DuplicateRecordDetector extends VectorBase {
             return response;
         }
 
-        /*
+        
         //for testing
         const request: VectorSyncRequest = {
             entityID: entityDocument.EntityID,
@@ -63,7 +63,6 @@ export class DuplicateRecordDetector extends VectorBase {
         }
 
         await vectorizer.VectorizeEntity(request, super.CurrentUser);
-        */
 
         const list: ListEntity = await this.getListEntity(params.ListID);
         let duplicateRun: DuplicateRunEntity = params.Options?.DuplicateRunID ? await this.getDuplicateRunEntity(params.Options?.DuplicateRunID) : await this.getDuplicateRunEntityByListID(list.ID);

@@ -533,6 +533,7 @@ export class AskSkipResolver {
             content: skipRole === 'system' ? outputMessage : r.Message,
             role: skipRole,
           };
+          LogStatus("system message:", undefined, m);
           return m;
         });
       }
@@ -849,6 +850,7 @@ export class AskSkipResolver {
   protected async FinishConversationAndNotifyUser(apiResponse: SkipAPIAnalysisCompleteResponse, dataContext: DataContext, dataContextEntity: DataContextEntity, md: Metadata, user: UserInfo, convoEntity: ConversationEntity, pubSub: PubSubEngine, userPayload: UserPayload): Promise<{AIMessageConversationDetailID: number}> {
     const sTitle = apiResponse.reportTitle; 
     const sResult = JSON.stringify(apiResponse);
+    console.log("sResult is", sResult);
 
     // Create a conversation detail record for the Skip response
     const convoDetailEntityAI = <ConversationDetailEntity>await md.GetEntityObject('Conversation Details', user);
