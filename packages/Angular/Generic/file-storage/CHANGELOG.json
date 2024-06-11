@@ -2,6 +2,51 @@
   "name": "@memberjunction/ng-file-storage",
   "entries": [
     {
+      "date": "Tue, 11 Jun 2024 04:59:29 GMT",
+      "version": "1.6.0",
+      "tag": "@memberjunction/ng-file-storage_v1.6.0",
+      "comments": {
+        "minor": [
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-file-storage",
+            "comment": "Bump @memberjunction/core to v1.6.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-file-storage",
+            "comment": "Bump @memberjunction/core-entities to v1.6.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-file-storage",
+            "comment": "Bump @memberjunction/global to v1.6.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-file-storage",
+            "comment": "Bump @memberjunction/graphql-dataprovider to v1.6.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-file-storage",
+            "comment": "Bump @memberjunction/ng-container-directives to v1.6.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-file-storage",
+            "comment": "Bump @memberjunction/ng-shared to v1.6.0",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
       "date": "Tue, 11 Jun 2024 04:01:37 GMT",
       "version": "1.5.3",
       "tag": "@memberjunction/ng-file-storage_v1.5.3",

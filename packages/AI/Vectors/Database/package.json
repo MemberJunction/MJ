@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ai-vectordb",
-  "version": "1.5.3",
+  "version": "1.6.0",
   "description": "MemberJunction: AI Vector Database Module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -15,8 +15,8 @@
   "author": "MemberJunction.com",
   "license": "ISC",
   "dependencies": {
-    "@memberjunction/core": "1.5.3",
-    "@memberjunction/global": "1.5.3",
+    "@memberjunction/core": "1.6.0",
+    "@memberjunction/global": "1.6.0",
     "dotenv": "^16.4.1"
   },
   "devDependencies": {

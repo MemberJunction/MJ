@@ -2,6 +2,21 @@
   "name": "@memberjunction/ai",
   "entries": [
     {
+      "date": "Tue, 11 Jun 2024 04:59:29 GMT",
+      "version": "1.6.0",
+      "tag": "@memberjunction/ai_v1.6.0",
+      "comments": {
+        "minor": [
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ai",
+            "comment": "Bump @memberjunction/global to v1.6.0",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
       "date": "Tue, 11 Jun 2024 04:01:37 GMT",
       "version": "1.5.3",
       "tag": "@memberjunction/ai_v1.5.3",
