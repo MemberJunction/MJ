@@ -82,8 +82,10 @@ export class SkipSingleMessageComponent implements AfterViewInit {
                 this._cachedMessage = clarifyingQuestion.clarifyingQuestion;
                 break;
               case SkipResponsePhase.analysis_complete:
-                this._cachedMessage = '';//"Here's the report I've prepared for you, please let me know if you need anything changed or another report!"
-                break;
+                //"Here's the report I've prepared for you, please let me know if you need anything changed or another report!"
+                const response: string | undefined = resultObject.messages.at(-1)?.content;
+                this._cachedMessage = response && response.includes("__hg-a1__") ? response : "";
+                break;  
               default:
                 this._cachedMessage = "";
             }
@@ -124,12 +126,15 @@ export class SkipSingleMessageComponent implements AfterViewInit {
 
     protected AddReportToConversation() {
       const detail = this.ConversationDetailRecord;
-
+      detail.Message
       if (detail.ID > 0 && detail.Role.trim().toLowerCase() === 'ai' ) {
         const resultObject = <SkipAPIResponse>JSON.parse(detail.Message);
   
         if (resultObject.success) {
           if (resultObject.responsePhase ===  SkipResponsePhase.analysis_complete ) {
+            if(this.Message){
+              return;
+            }
             const analysisResult = <SkipAPIAnalysisCompleteResponse>resultObject;
             const componentRef = this.reportContainerRef.createComponent(SkipDynamicReportComponent);
     

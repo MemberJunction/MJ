@@ -19454,3 +19454,148 @@ import { RegisterClass } from "@memberjunction/global";
 
     }
         
+    /**
+     * Entity Communication Message Types - strongly typed entity sub-class
+     * * Schema: __mj
+     * * Base Table: EntityCommunicationMessageType
+     * * Base View: vwEntityCommunicationMessageTypes
+     * * @description Mapping between entities and communication base message types
+     * * Primary Key: ID
+     * @extends {BaseEntity}
+     * @class
+     * @public
+     */
+    @RegisterClass(BaseEntity, 'Entity Communication Message Types')
+    export class EntityCommunicationMessageTypeEntity extends BaseEntity {
+        /**
+        * Loads the Entity Communication Message Types record from the database
+        * @param ID: number - primary key value to load the Entity Communication Message Types record.
+        * @param EntityRelationshipsToLoad - (optional) the relationships to load
+        * @returns {Promise<boolean>} - true if successful, false otherwise
+        * @public
+        * @async
+        * @memberof EntityCommunicationMessageTypeEntity
+        * @method
+        * @override
+        */      
+        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+        }
+            
+        /**
+        * Entity Communication Message Types - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
+        * @public
+        * @method
+        * @override
+        * @memberof EntityCommunicationMessageTypeEntity
+        * @throws {Error} - Delete is not allowed for Entity Communication Message Types, to enable it set AllowDeleteAPI to 1 in the database.
+        */
+        public async Delete(): Promise<boolean> {
+            throw new Error('Delete is not allowed for Entity Communication Message Types, to enable it set AllowDeleteAPI to 1 in the database.');
+        } 
+            
+            /**
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: int
+        */
+        get ID(): number {  
+            return this.Get('ID');
+        }
+        
+        /**
+        * * Field Name: EntityID
+        * * Display Name: Entity ID
+        * * SQL Data Type: int
+        * * Related Entity/Foreign Key: Entities (vwEntities.ID)
+        * * Description: ID of the entity
+        */
+        get EntityID(): number {  
+            return this.Get('EntityID');
+        }
+        set EntityID(value: number) {
+            this.Set('EntityID', value);
+        }
+        /**
+        * * Field Name: BaseMessageTypeID
+        * * Display Name: Base Message Type ID
+        * * SQL Data Type: int
+        * * Related Entity/Foreign Key: Communication Base Message Types (vwCommunicationBaseMessageTypes.ID)
+        * * Description: ID of the communication base message type
+        */
+        get BaseMessageTypeID(): number {  
+            return this.Get('BaseMessageTypeID');
+        }
+        set BaseMessageTypeID(value: number) {
+            this.Set('BaseMessageTypeID', value);
+        }
+        /**
+        * * Field Name: IsActive
+        * * Display Name: Is Active
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: Indicates whether the message type is active
+        */
+        get IsActive(): boolean {  
+            return this.Get('IsActive');
+        }
+        set IsActive(value: boolean) {
+            this.Set('IsActive', value);
+        }
+        /**
+        * * Field Name: ToField
+        * * Display Name: To Field
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Name of the field in the entity that maps to the "TO" field for delivery
+        */
+        get ToField(): string {  
+            return this.Get('ToField');
+        }
+        set ToField(value: string) {
+            this.Set('ToField', value);
+        }
+        /**
+        * * Field Name: CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()
+        */
+        get CreatedAt(): Date {  
+            return this.Get('CreatedAt');
+        }
+        
+        /**
+        * * Field Name: UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()
+        */
+        get UpdatedAt(): Date {  
+            return this.Get('UpdatedAt');
+        }
+        
+        /**
+        * * Field Name: Entity
+        * * Display Name: Entity
+        * * SQL Data Type: nvarchar(255)
+        * * Default Value: null
+        */
+        get Entity(): string {  
+            return this.Get('Entity');
+        }
+        
+        /**
+        * * Field Name: BaseMessageType
+        * * Display Name: Base Message Type
+        * * SQL Data Type: nvarchar(100)
+        * * Default Value: null
+        */
+        get BaseMessageType(): string {  
+            return this.Get('BaseMessageType');
+        }
+        
+
+    }
+        

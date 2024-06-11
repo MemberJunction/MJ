@@ -6,9 +6,9 @@
         <div class="message"
             [id]="'skip_message_' + ConversationDetailRecord.ID">
             <div class="message-user-name">{{IsAIMessage ? 'Skip' : (ConversationUser ? ConversationUser.FirstName + ' ' + ConversationUser.LastName : 'You')}}</div>
-            <div>
+            <markdown>
                 {{Message}}
-            </div>
+            </markdown>
             <div #reportContainer>
                 <!-- this is where the report will go - dynamically instantiated -->
             </div>
