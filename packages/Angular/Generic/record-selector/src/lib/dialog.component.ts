@@ -12,8 +12,8 @@ import { ListBoxToolbarConfig } from '@progress/kendo-angular-listbox';
 })
 export class RecordSelectorDialogComponent {
   @Input() DialogTitle: string = 'Select Records';
-  @Input() DialogWidth: string = '800px';
-  @Input() DialogHeight: string = '600px';
+  @Input() DialogWidth: string = '700px';
+  @Input() DialogHeight: string = '450px';
 
   @Input() get DialogVisible(): boolean {
     return this._dialogVisible;

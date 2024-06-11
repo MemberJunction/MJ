@@ -46,13 +46,27 @@
 .breadcrumb {
      color: darkblue;
      cursor: pointer;
-     display: inline
-}
-.breadcrumb-separator {
-     font-weight: lighter;
      display: inline;
      margin-left: 5px;
      margin-right: 5px;
+}
+
+.breadcrumb-end {
+     display: inline;
+     margin-left: 5px;
+}
+
+
+.breadcrumb-separator {
+     font-size: 14px;
+     display: inline;
+     margin-left: 5px;
+     margin-right: 5px;
+}
+.home-icon {
+     margin-right: 5px;
+     font-size: 18px;
+     vertical-align: middle;
 }
   
 .title-icon {

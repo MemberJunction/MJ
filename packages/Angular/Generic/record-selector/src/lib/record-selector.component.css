@@ -1,4 +1,8 @@
 .list-box {
-    width: 45%;
-    height: 80%;
+    width: 320px;
+    height: 300px;
+}
+
+.k-listbox-actions-right {
+    margin-left: 10px;
 }

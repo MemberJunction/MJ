@@ -40,6 +40,7 @@ export class ApplicationViewComponent extends BaseBrowserComponent implements On
             const appName = params.get('appName');
             const entityName = params.get('entityName');
             const folderID = params.get('folderID'); 
+            this.showLoader = true;
 
             if(folderID){
                 this.selectedFolderID = parseInt(folderID) || null;

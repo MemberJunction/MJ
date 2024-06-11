@@ -8,7 +8,11 @@
             }
             <div class="title-wrap">
                 <div class="title-wrap-inner">
-                    <span class="breadcrumb" (click)="GoHome($event)">Home</span><span class="breadrcrumb-separator">:</span><span  class="breadcrumb" (click)="GoToApps($event)">Applications</span><span class="breadrcrumb-separator">:</span><span>{{this.app.Name}}</span>
+                    <span class="breadcrumb" (click)="GoHome($event)">Home</span>  
+                    <span class="breadcrumb-separator"><span class="fa-solid fa-chevron-right"></span></span>
+                    <span  class="breadcrumb" (click)="GoToApps($event)">Applications</span>
+                    <span class="breadcrumb-separator"><span class="fa-solid fa-chevron-right"></span></span>
+                    <span class="breadcrumb-end">{{this.app.Name}}</span>
                 </div>
             </div>
             <div class="config-button">
@@ -45,29 +49,41 @@
             </div>
         </div>
     </div>
-    <div class="main-area margin-top-neg-20">
-        <app-generic-browser-list 
-            iconName="aggregateFields" 
-            [items]="items"
-            [categoryEntityID]="categoryEntityID"
-            addText="Create New View"
-            ItemEntityName="User Views"
-            resourceName="View"
-            [title]="pageTitle"
-            [CategoryEntityName]="categoryEntityName"
-            (itemClickEvent)="onItemClick($event)" 
-            [selectedFolderID]="selectedFolderID"
-            [showLoader]="showLoader"
-            [viewingResource]=false
-            [displayAsGrid]="displayAsGrid"
-            (AfterAddFolderEvent)="onEvent($event)"
-            (AfterAddItemEvent)="onEvent($event)"
-            (AfterDeleteItemEvent)="onEvent($event)"
-            (AfterDeleteFolderEvent)="onEvent($event)"
-            (viewModeChangeEvent)="onViewModeChange($event)"
-            (BeforeAddItemEvent)="createNewView($event)"
-            (BeforeUpdateItemEvent)="editView($event)"
-        />
-    </div>
+    @if (SelectedAppEntities.length === 0 && !showLoader) {
+        <div (click)="ShowAppEntitySelectionDialog()">
+            <span class="fa-solid fa-gear"></span>
+            Click Here to Select Entities
+        </div>
+    }
+    @if(showLoader) {
+        <kendo-loader></kendo-loader>
+    }
+    @else {
+        <div class="main-area margin-top-neg-20" *ngIf="SelectedAppEntities.length > 0">
+            <app-generic-browser-list 
+                iconName="aggregateFields" 
+                [items]="items"
+                [categoryEntityID]="categoryEntityID"
+                addText="Create New View"
+                ItemEntityName="User Views"
+                resourceName="View"
+                [title]="pageTitle"
+                [CategoryEntityName]="categoryEntityName"
+                (itemClickEvent)="onItemClick($event)" 
+                [selectedFolderID]="selectedFolderID"
+                [showLoader]="showLoader"
+                [viewingResource]=false
+                [displayAsGrid]="displayAsGrid"
+                (AfterAddFolderEvent)="onEvent($event)"
+                (AfterAddItemEvent)="onEvent($event)"
+                (AfterDeleteItemEvent)="onEvent($event)"
+                (AfterDeleteFolderEvent)="onEvent($event)"
+                (viewModeChangeEvent)="onViewModeChange($event)"
+                (BeforeAddItemEvent)="createNewView($event)"
+                (BeforeUpdateItemEvent)="editView($event)"
+            />
+        </div>
+    }
+
     <mj-user-view-properties-dialog #userViewDialog [ShowPropertiesButton]="false"(dialogClosed)="OnViewPropertiesDialogClose($event)"></mj-user-view-properties-dialog>
 </div>

@@ -1,7 +1,13 @@
 <div  class="data-browser-container">
   <div class="card-header-entity">
       <div class="title-wrap">
-        <span class="breadcrumb" (click)="GoHome($event)">Home</span><span class="breadrcrumb-separator">:</span><span>Applications</span>
+        <div class="title-wrap-inner">
+          <span class="breadcrumb" (click)="GoHome($event)">
+            <span class="fa-solid fa-house home-icon"></span>Home
+          </span>
+          <span class="breadcrumb-separator"><span class="fa-solid fa-chevron-right"></span></span>
+          <span class="breadcrumb-end">Applications</span>
+        </div>
       </div>
       <div class="config-button">
         <button kendoButton (click)="ShowAppSelectionDialog()"><span class="fa-solid fa-gear"></span></button>
@@ -30,6 +36,19 @@
             </kendo-card-body>
           </kendo-card>
         </div>
+        @if (SelectedApplications.length === 0 && !showLoader) {
+          <div class="card-item" (click)="ShowAppSelectionDialog()">
+            <kendo-card class="card-wrapper">
+              <kendo-card-body>
+                <div class="view-card-content k-cursor-pointer">
+                  <span class="fa-solid fa-gear"></span>
+                  <h2 kendoCardTitle>Select Apps</h2>
+                  <p kendoCardSubtitle>No apps selected yet, click here to add some</p>
+                </div>
+              </kendo-card-body>
+            </kendo-card>
+          </div>
+        }
       </div>
   </div>
 </div>
