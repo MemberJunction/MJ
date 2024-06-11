@@ -2,6 +2,129 @@
   "name": "@memberjunction/server",
   "entries": [
     {
+      "date": "Tue, 11 Jun 2024 06:50:06 GMT",
+      "version": "1.6.1",
+      "tag": "@memberjunction/server_v1.6.1",
+      "comments": {
+        "patch": [
+          {
+            "author": "beachball",
+            "package": "@memberjunction/server",
+            "comment": "Bump @memberjunction/actions to v1.6.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/server",
+            "comment": "Bump @memberjunction/ai to v1.6.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/server",
+            "comment": "Bump @memberjunction/ai-mistral to v1.6.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/server",
+            "comment": "Bump @memberjunction/ai-openai to v1.6.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/server",
+            "comment": "Bump @memberjunction/ai-vectors-pinecone to v1.6.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/server",
+            "comment": "Bump @memberjunction/aiengine to v1.6.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/server",
+            "comment": "Bump @memberjunction/core to v1.6.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/server",
+            "comment": "Bump @memberjunction/core-actions to v1.6.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/server",
+            "comment": "Bump @memberjunction/core-entities to v1.6.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/server",
+            "comment": "Bump @memberjunction/data-context to v1.6.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/server",
+            "comment": "Bump @memberjunction/data-context-server to v1.6.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/server",
+            "comment": "Bump @memberjunction/doc-utils to v1.6.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/server",
+            "comment": "Bump @memberjunction/global to v1.6.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/server",
+            "comment": "Bump @memberjunction/queue to v1.6.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/server",
+            "comment": "Bump @memberjunction/skip-types to v1.6.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/server",
+            "comment": "Bump @memberjunction/sqlserver-dataprovider to v1.6.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/server",
+            "comment": "Bump @memberjunction/storage to v1.6.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/server",
+            "comment": "Bump @memberjunction/templates to v1.6.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/server",
+            "comment": "Bump @memberjunction/entity-communications-server to v1.6.1",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
       "date": "Tue, 11 Jun 2024 04:59:29 GMT",
       "version": "1.6.0",
       "tag": "@memberjunction/server_v1.6.0",

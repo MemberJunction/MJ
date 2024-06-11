@@ -2,6 +2,117 @@
   "name": "@memberjunction/ng-explorer-core",
   "entries": [
     {
+      "date": "Tue, 11 Jun 2024 06:50:06 GMT",
+      "version": "1.6.1",
+      "tag": "@memberjunction/ng-explorer-core_v1.6.1",
+      "comments": {
+        "patch": [
+          {
+            "author": "craig.adam@bluecypress.io",
+            "package": "@memberjunction/ng-explorer-core",
+            "commit": "2893343379d557912bd878e1d766e52a69a2de00",
+            "comment": "Applying package updates [skip ci]"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-core",
+            "comment": "Bump @memberjunction/global to v1.6.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-core",
+            "comment": "Bump @memberjunction/core to v1.6.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-core",
+            "comment": "Bump @memberjunction/ng-compare-records to v1.6.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-core",
+            "comment": "Bump @memberjunction/ng-file-storage to v1.6.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-core",
+            "comment": "Bump @memberjunction/ng-record-changes to v1.6.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-core",
+            "comment": "Bump @memberjunction/ng-container-directives to v1.6.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-core",
+            "comment": "Bump @memberjunction/ng-user-view-grid to v1.6.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-core",
+            "comment": "Bump @memberjunction/ng-query-grid to v1.6.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-core",
+            "comment": "Bump @memberjunction/ng-user-view-properties to v1.6.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-core",
+            "comment": "Bump @memberjunction/ng-shared to v1.6.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-core",
+            "comment": "Bump @memberjunction/ng-tabstrip to v1.6.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-core",
+            "comment": "Bump @memberjunction/ng-ask-skip to v1.6.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-core",
+            "comment": "Bump @memberjunction/ng-auth-services to v1.6.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-core",
+            "comment": "Bump @memberjunction/ng-explorer-settings to v1.6.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-core",
+            "comment": "Bump @memberjunction/ng-base-forms to v1.6.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-core",
+            "comment": "Bump @memberjunction/ng-entity-form-dialog to v1.6.1",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
       "date": "Tue, 11 Jun 2024 04:59:29 GMT",
       "version": "1.6.0",
       "tag": "@memberjunction/ng-explorer-core_v1.6.0",
