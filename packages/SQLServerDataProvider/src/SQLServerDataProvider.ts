@@ -1922,7 +1922,14 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
     }
 
 
-    protected async ExecuteSQL(query: string, parameters: any = null): Promise<any> {
+    /**
+     * This method can be used to execute raw SQL statements outside of the MJ infrastructure. 
+     * *CAUTION* - use this method with great care.
+     * @param query 
+     * @param parameters 
+     * @returns 
+     */
+    public async ExecuteSQL(query: string, parameters: any = null): Promise<any> {
         try {
             if (this._queryRunner) {
                 const data = await this._queryRunner.query(query, parameters);
