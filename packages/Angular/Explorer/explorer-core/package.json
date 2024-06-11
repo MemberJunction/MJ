@@ -32,7 +32,7 @@
     "@memberjunction/ng-file-storage": "1.6.0",
     "@memberjunction/ng-record-changes": "1.6.0",
     "@memberjunction/ng-container-directives": "1.6.0",
-    "@memberjunction/ng-user-view-grid": "1.5.4",
+    "@memberjunction/ng-user-view-grid": "1.6.0",
     "@memberjunction/ng-query-grid": "1.6.0",
     "@memberjunction/ng-user-view-properties": "1.6.0",
     "@memberjunction/ng-shared": "1.6.0",
