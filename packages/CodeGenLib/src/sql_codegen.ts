@@ -781,12 +781,40 @@ END
 GO${permissions}
     `
     }
+
+
+    protected generateUpdatedAtTrigger(entity: EntityInfo): string {
+        const updatedAtField = entity.Fields.find(f => f.Name.toLowerCase().trim() === 'updatedat');
+        if (!updatedAtField)
+            return '';
+
+        const triggerStatement = `
+------------------------------------------------------------
+----- TRIGGER FOR UpdatedAt field for the ${entity.BaseTable} table
+------------------------------------------------------------
+CREATE OR ALTER TRIGGER trgUpdate${entity.ClassName}
+ON [${entity.SchemaName}].[${entity.BaseTable}]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [${entity.SchemaName}].[${entity.BaseTable}]
+    SET 
+        UpdatedAt = GETDATE()
+    WHERE 
+        ${entity.PrimaryKeys.map(k => `[${k.Name}] = INSERTED.[${k.Name}]`).join(' AND ')};
+END;
+GO`;
+                
+    }
     
     protected generateSPUpdate(entity: EntityInfo): string {
         const spName: string = entity.spUpdate ? entity.spUpdate : `spUpdate${entity.ClassName}`;
         const efParamString: string = this.createEntityFieldsParamString(entity.Fields, true);
         const permissions: string = this.generateSPPermissions(entity, spName, SPType.Update);
-    
+        const hasUpdatedAtField: boolean = entity.Fields.find(f => f.Name.toLowerCase().trim() === 'updatedat') !== undefined;
+        const updatedAtTrigger: string = hasUpdatedAtField ? this.generateUpdatedAtTrigger(entity) : '';
         let selectInsertedRecord = `SELECT 
                                         * 
                                     FROM 
@@ -818,6 +846,7 @@ BEGIN
     ${selectInsertedRecord}
 END
 GO${permissions}
+${updatedAtTrigger}
         `
     }
     
@@ -892,13 +921,15 @@ GO${permissions}
     
                 sOutput += `[${ef.Name}] = @${ef.CodeName}`; // always put field names in brackets for field names that have spaces or use reserved words. Also, we use CodeName for the param name, which is the field name unless it has spaces
             }
-            else if (ef.Name.trim().toLowerCase() === 'updatedat') {
-                if (!isFirst) 
-                    sOutput += ',\n        '
-                else
-                    isFirst = false;
-                sOutput += `[${ef.Name}] = GETDATE()`;
-            }
+            // AN - 11 JUNE 2024
+            // below is commented out because we now do this via TRIGGER - see calling code for this function for more info
+            // else if (ef.Name.trim().toLowerCase() === 'updatedat') {
+            //     if (!isFirst) 
+            //         sOutput += ',\n        '
+            //     else
+            //         isFirst = false;
+            //     sOutput += `[${ef.Name}] = GETDATE()`;
+            // }
         }
         return sOutput;
     }
