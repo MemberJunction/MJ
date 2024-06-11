@@ -5,8 +5,8 @@
 **************************************************************************************************************/
 
 import { BaseEntity, IEntityDataProvider, IMetadataProvider, IRunViewProvider, ProviderConfigDataBase, RunViewResult, MetadataInfo,
-         EntityInfo, EntityFieldInfo, ApplicationInfo, RunViewParams, ProviderBase,
-         TypeScriptTypeFromSQLType, EntityFieldTSType, ProviderType, UserInfo, RoleInfo, RecordChange, UserRoleInfo, ILocalStorageProvider, RowLevelSecurityFilterInfo,
+         EntityInfo, EntityFieldInfo, ApplicationInfo, RunViewParams, ProviderBase, 
+         EntityFieldTSType, ProviderType, UserInfo, RoleInfo, RecordChange, UserRoleInfo, ILocalStorageProvider, RowLevelSecurityFilterInfo,
          AuditLogTypeInfo, AuthorizationInfo, TransactionGroupBase, TransactionItem, EntityPermissionType, EntitySaveOptions, LogError, RunReportParams,
          DatasetItemFilterType, DatasetResultType, DatasetStatusEntityUpdateDateType, DatasetStatusResultType, EntityRecordNameInput, EntityRecordNameResult, IRunReportProvider, RunReportResult,
          StripStopWords, RecordDependency, RecordMergeRequest, RecordMergeResult, RecordMergeDetailResult, EntityDependency, KeyValuePair, IRunQueryProvider, RunQueryResult, PotentialDuplicateRequest, PotentialDuplicateResponse, LogStatus,
@@ -73,7 +73,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
         }
     }
 
-    protected AllowRefresh(): boolean {
+    protected get AllowRefresh(): boolean {
         return this._bAllowRefresh;
     }
 
@@ -1036,11 +1036,11 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
             return;
 
         // Make sure AI Metadata is loaded here...
-        await AIEngine.LoadAIMetadata(user);
+        await AIEngine.Instance.Config(false, user);
         
         const actions = this.GetEntityAIActions(entity.EntityInfo, before); // get the actions we need to do for this entity
         if (actions && actions.length > 0) {
-            const ai = new AIEngine();
+            const ai = AIEngine.Instance;
             for (let i = 0; i < actions.length; i++) {
                 const a = actions[i];
                 if (a.TriggerEvent === 'before save' && before || 
@@ -1585,29 +1585,27 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
                 });    
             }
             else {
-                return this._dataSource.transaction(async () => {
-                    const d = await this.ExecuteSQL(sSQL);
-    
-                    if (d && d[0]) {
-                        // SP executed, now make sure the return value matches up as that is how we know the SP was succesfully internally
-                        for (let key of entity.PrimaryKeys) {
-                            if (key.Value !== d[0][key.Name]) 
-                                return false;
-                        }
+                const d = await this.ExecuteSQL(sSQL);
 
-                        // Entity AI Actions and Actions - fired off async, NO await on purpose
-                        this.HandleEntityActions(entity, 'delete', false, user);
-                        this.HandleEntityAIActions(entity, 'delete', false, user);
-            
-                        result.EndedAt = new Date();
-                        return true
+                if (d && d[0]) {
+                    // SP executed, now make sure the return value matches up as that is how we know the SP was succesfully internally
+                    for (let key of entity.PrimaryKeys) {
+                        if (key.Value !== d[0][key.Name]) 
+                            return false;
                     }
-                    else {
-                        result.Message = 'No result returned from SQL';
-                        result.EndedAt = new Date();
-                        return false;
-                    }
-                });
+
+                    // Entity AI Actions and Actions - fired off async, NO await on purpose
+                    this.HandleEntityActions(entity, 'delete', false, user);
+                    this.HandleEntityAIActions(entity, 'delete', false, user);
+        
+                    result.EndedAt = new Date();
+                    return true
+                }
+                else {
+                    result.Message = 'No result returned from SQL';
+                    result.EndedAt = new Date();
+                    return false;
+                }
             }
         }
         catch (e) {

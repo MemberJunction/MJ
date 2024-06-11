@@ -18,6 +18,7 @@ import { SectionLoaderComponent } from './lib/section-loader-component';
 import { MJFormField } from './lib/base-field-component';
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
 import { MemberJunctionSharedModule } from '@memberjunction/ng-shared';
+import { CodeEditorModule } from '@memberjunction/ng-code-editor';
 
 // Markdown
 import { MarkdownModule } from 'ngx-markdown';
@@ -43,6 +44,7 @@ import { MJLinkField } from './lib/link-field.component';
     IndicatorsModule,
     ContainerDirectivesModule,
     MemberJunctionSharedModule,
+    CodeEditorModule,
     MarkdownModule.forRoot()
   ],
   exports: [

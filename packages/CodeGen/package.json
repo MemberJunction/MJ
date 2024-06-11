@@ -19,13 +19,13 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "@memberjunction/codegen-lib": "~1.5.2",
-    "dotenv": "^16.3.1",
+    "@memberjunction/codegen-lib": "1.5.2",
+    "dotenv": "^16.4.1",
     "ts-node-dev": "^2.0.0",
-    "typescript": "^5.3.3"
+    "typescript": "^5.4.5"
   },
   "devDependencies": {
-    "@types/node": "^18.15.11",
-    "rimraf": "^4.4.0"
+    "@types/node": "20.14.2",
+    "rimraf": "5.0.7"
   }
 }

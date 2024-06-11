@@ -17,7 +17,7 @@
   "license": "ISC",
   "devDependencies": {
     "ts-node-dev": "^2.0.0",
-    "typescript": "^5.3.3"
+    "typescript": "^5.4.5"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.537.0",
@@ -25,10 +25,10 @@
     "@azure/identity": "^4.0.1",
     "@azure/storage-blob": "^12.17.0",
     "@google-cloud/storage": "^7.9.0",
-    "@memberjunction/core": "~1.5.2",
-    "@memberjunction/core-entities": "~1.5.2",
-    "@memberjunction/global": "~1.5.2",
-    "env-var": "^7.3.0",
+    "@memberjunction/core": "1.5.2",
+    "@memberjunction/core-entities": "1.5.2",
+    "@memberjunction/global": "1.5.2",
+    "env-var": "^7.4.1",
     "mime-types": "^2.1.35"
   }
 }

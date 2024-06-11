@@ -16,17 +16,17 @@
   "license": "ISC",
   "devDependencies": {
     "ts-node-dev": "^2.0.0",
-    "typescript": "^5.3.3"
+    "typescript": "^5.4.5"
   },
   "dependencies": {
-    "@memberjunction/ai": "~1.5.2",
-    "@memberjunction/actions": "~1.5.2",
-    "@memberjunction/aiengine": "~1.5.2",
-    "@memberjunction/core": "~1.5.2",
-    "@memberjunction/core-entities": "~1.5.2",
-    "@memberjunction/global": "~1.5.2",
-    "@memberjunction/queue": "~1.5.2",
-    "@memberjunction/ai-vector-dupe": "~1.5.2",
+    "@memberjunction/actions": "1.5.2",
+    "@memberjunction/ai": "1.5.2",
+    "@memberjunction/ai-vector-dupe": "1.5.2",
+    "@memberjunction/aiengine": "1.5.2",
+    "@memberjunction/core": "1.5.2",
+    "@memberjunction/core-entities": "1.5.2",
+    "@memberjunction/global": "1.5.2",
+    "@memberjunction/queue": "1.5.2",
     "mssql": "^10.0.2",
     "typeorm": "^0.3.20"
   }

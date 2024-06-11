@@ -10,19 +10,18 @@ import { BaseEntity, IEntityDataProvider, IMetadataProvider, IRunViewProvider, P
          RunViewParams, ProviderBase, ProviderType, UserInfo, UserRoleInfo, RecordChange, 
          ILocalStorageProvider, EntitySaveOptions, LogError,
          TransactionGroupBase, TransactionItem, DatasetItemFilterType, DatasetResultType, DatasetStatusResultType, EntityRecordNameInput, 
-         EntityRecordNameResult, IRunReportProvider, RunReportResult, RunReportParams, RecordDependency, RecordMergeRequest, RecordMergeResult, KeyValuePair, IRunQueryProvider, RunQueryResult, PotentialDuplicateRequest, PotentialDuplicateResponse, CompositeKey,  
-         EntityDeleteOptions,
-         BaseEntityResult} from "@memberjunction/core";
+         EntityRecordNameResult, IRunReportProvider, RunReportResult, RunReportParams, RecordDependency, RecordMergeRequest, RecordMergeResult, 
+         IRunQueryProvider, RunQueryResult, PotentialDuplicateRequest, PotentialDuplicateResponse, CompositeKey, EntityDeleteOptions, 
+         RunQueryParams, BaseEntityResult,
+         KeyValuePair} from "@memberjunction/core";
 import { UserViewEntityExtended, ViewInfo } from '@memberjunction/core-entities'
 
 
 import { gql, GraphQLClient } from 'graphql-request'
 import { GraphQLTransactionGroup } from "./graphQLTransactionGroup";
-import { openDB, DBSchema, IDBPDatabase } from 'idb';
+import { openDB, DBSchema, IDBPDatabase } from '@tempfix/idb';
 import { Observable } from 'rxjs';
 import { Client, createClient } from 'graphql-ws';
-import { RunQueryParams } from "@memberjunction/core/dist/generic/runQuery";
-
 
 // define the shape for a RefreshToken function that can be called by the GraphQLDataProvider whenever it receives an exception that the JWT it has already is expired
 export type RefreshTokenFunction = () => Promise<string>;
@@ -123,7 +122,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         return GraphQLDataProvider._sessionId;
     }
 
-    protected AllowRefresh(): boolean {
+    protected get AllowRefresh(): boolean {
         return true; // this provider doesn't have any issues with allowing refreshes at any time
     }
 
@@ -436,7 +435,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             // now we have our query built, execute it
             const vars = {
                 entityName: entityName,
-                CompositeKey: {KeyValuePairs: primaryKey.KeyValuePairs}
+                CompositeKey: {KeyValuePairs: this.ensureKeyValuePairValueIsString(primaryKey.KeyValuePairs)}
             };
             const data = await GraphQLDataProvider.ExecuteGQL(query, vars);
 
@@ -446,6 +445,12 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             LogError(e);
             throw (e)
         }
+    }
+
+    protected ensureKeyValuePairValueIsString(kvps: KeyValuePair[]): {FieldName: string, Value: string}[] {
+        return kvps.map(kv => {
+            return {FieldName: kv.FieldName, Value: kv.Value.toString()}
+        })
     }
 
     public async GetRecordDuplicates(params: PotentialDuplicateRequest, contextUser?: UserInfo): Promise<PotentialDuplicateResponse>
@@ -520,7 +525,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             // create a new request that is compatible with the server's expectations where field maps and also the primary key values are all strings
             const newRequest = {
                 EntityName: request.EntityName,
-                SurvivingRecordCompositeKey: {KeyValuePairs: request.SurvivingRecordCompositeKey.KeyValuePairs},
+                SurvivingRecordCompositeKey: {KeyValuePairs: this.ensureKeyValuePairValueIsString(request.SurvivingRecordCompositeKey.KeyValuePairs)},
                 FieldMap: request.FieldMap?.map(fm => {
                     return {
                         FieldName: fm.FieldName,
@@ -945,7 +950,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         const data = await GraphQLDataProvider.ExecuteGQL(query,  {params: {
                                                                             UserID: userId, 
                                                                             EntityID: e.ID, 
-                                                                            CompositeKey: {KeyValuePairs: primaryKey.KeyValuePairs}
+                                                                            CompositeKey: {KeyValuePairs: this.ensureKeyValuePairValueIsString(primaryKey.KeyValuePairs)}
                                                                             } 
                                                                   }
                                                          );
@@ -968,7 +973,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         const data = await GraphQLDataProvider.ExecuteGQL(query,  { params: {
                                                                                 UserID: userId, 
                                                                                 EntityID: e.ID, 
-                                                                                CompositeKey: {KeyValuePairs: primaryKey.KeyValuePairs},
+                                                                                CompositeKey: {KeyValuePairs: this.ensureKeyValuePairValueIsString(primaryKey.KeyValuePairs)},
                                                                                 IsFavorite: isFavorite} 
                                                                  }
                                                          );
@@ -991,9 +996,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
 
         const data = await GraphQLDataProvider.ExecuteGQL(query, {
                                                                     EntityName: entityName, 
-                                                                    CompositeKey: {KeyValuePairs: primaryKey.KeyValuePairs.map(kv => {
-                                                                                            return {FieldName: kv.FieldName, Value: kv.Value.toString()}
-                                                                                        })}
+                                                                    CompositeKey: {KeyValuePairs: this.ensureKeyValuePairValueIsString(primaryKey.KeyValuePairs)}
                                                                 });
         if (data && data.GetEntityRecordName && data.GetEntityRecordName.Success)
             return data.GetEntityRecordName.RecordName;
@@ -1021,9 +1024,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         const data = await GraphQLDataProvider.ExecuteGQL(query,  {info: info.map(i => { 
             return { 
                      EntityName: i.EntityName, 
-                     CompositeKey: {KeyValuePairs: i.CompositeKey.KeyValuePairs.map(kv => {
-                                    return {FieldName: kv.FieldName, Value: kv.Value.toString()}
-                                })}
+                     CompositeKey: {KeyValuePairs: this.ensureKeyValuePairValueIsString(i.CompositeKey.KeyValuePairs)}
                     } 
                 })});
         if (data && data.GetEntityRecordNames)

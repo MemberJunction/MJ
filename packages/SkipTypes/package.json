@@ -16,10 +16,10 @@
   "license": "ISC",
   "devDependencies": {
     "ts-node-dev": "^2.0.0",
-    "typescript": "^5.3.3"
+    "typescript": "^5.4.5"
   },
   "dependencies": {
-    "@memberjunction/core-entities": "~1.5.2",
-    "@memberjunction/data-context": "~1.5.2"
+    "@memberjunction/core-entities": "1.5.2",
+    "@memberjunction/data-context": "1.5.2"
   }
 }

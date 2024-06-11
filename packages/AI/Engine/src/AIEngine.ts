@@ -2,7 +2,7 @@ import { BaseLLM, BaseModel, BaseResult, ChatParams, GetAIAPIKey } from "@member
 import { SummarizeResult } from "@memberjunction/ai";
 import { ClassifyResult } from "@memberjunction/ai";
 import { ChatResult } from "@memberjunction/ai";
-import { BaseEntity, Metadata, RunView, UserInfo } from "@memberjunction/core";
+import { BaseEngine, BaseEntity, Metadata, RunView, UserInfo } from "@memberjunction/core";
 import { MJGlobal } from "@memberjunction/global";
 import { AIActionEntity, AIModelActionEntity, AIModelEntityExtended, EntityAIActionEntity, VectorDatabaseEntity } from "@memberjunction/core-entities";
 
@@ -21,42 +21,38 @@ export class EntityAIActionParams extends AIActionParams {
 }
 
 // this class handles execution of AI Actions
-export class AIEngine {
-    private static _instance: AIEngine | null = null;
-    private static _globalInstanceKey = '__mj_ai_engine_instance__';
-
+export class AIEngine extends BaseEngine<AIEngine> {
     private _models: AIModelEntityExtended[] = [];
     private _vectorDatabases: VectorDatabaseEntity[] = [];
     private _actions: AIActionEntity[] = [];
     private _entityActions: EntityAIActionEntity[] = [];
     private _modelActions: AIModelActionEntity[] = [];
     private _metadataLoaded: boolean = false;
-    public async LoadAIMetadata(contextUser?: UserInfo): Promise<boolean> {
-        if (this._metadataLoaded === false) {
-            // Load up AI Models
-            const rv = new RunView();
-            const models = await rv.RunView({EntityName: 'AI Models', ResultType: 'entity_object'}, contextUser)
-            this._models = models?.Results
 
-            // load up vector database models
-            const vectorDatabases = await rv.RunView({EntityName: 'Vector Databases'}, contextUser)
-            this._vectorDatabases = vectorDatabases?.Results
-
-            // load up AI Actions
-            const actions = await rv.RunView({EntityName: 'AI Actions'}, contextUser)
-            this._actions = actions?.Results
-
-            // now load up the AIModelActions - join view between MOdels/Actions
-            const modelActions = await rv.RunView({EntityName: 'AI Model Actions'}, contextUser)
-            this._modelActions = modelActions?.Results
-
-            // now load up the EntityAIActions - instructions for executing AI Actions on specific entities at specific times
-            const entityAIActions = await rv.RunView({EntityName: 'Entity AI Actions'}, contextUser)
-            this._entityActions = entityAIActions?.Results
-
-            this._metadataLoaded = true;
-        }
-        return this._metadataLoaded;
+    public async Config(forceRefresh?: boolean, contextUser?: UserInfo) {
+        const params = [
+            {
+                PropertyName: '_models',
+                EntityName: 'AI Models'
+            },
+            {
+                PropertyName: '_vectorDatabases',
+                EntityName: 'Vector Databases'
+            },
+            {
+                PropertyName: '_actions',
+                EntityName: 'AI Actions'
+            },
+            {
+                PropertyName: '_entityActions',
+                EntityName: 'Entity AI Actions'
+            },
+            {
+                PropertyName: '_modelActions',
+                EntityName: 'AI Model Actions'
+            }
+        ];
+        return await this.Load(params, forceRefresh, contextUser);
     }
 
     /**
@@ -67,7 +63,7 @@ export class AIEngine {
      * @returns 
      */
     public async GetHighestPowerModel(vendorName: string, modelType: string, contextUser?: UserInfo): Promise<AIModelEntityExtended> {
-        await AIEngine.LoadAIMetadata(contextUser); // most of the time this is already loaded, but just in case it isn't we will load it here
+        await AIEngine.Instance.Config(false, contextUser); // most of the time this is already loaded, but just in case it isn't we will load it here
         const models = AIEngine.Models.filter(m => m.AIModelType.trim().toLowerCase() === modelType.trim().toLowerCase() && 
                                                    m.Vendor.trim().toLowerCase() === vendorName.trim().toLowerCase())  
         // next, sort the models by the PowerRank field so that the highest power rank model is the first array element
@@ -75,9 +71,6 @@ export class AIEngine {
         return models[0];
     }
 
-    public static async LoadAIMetadata(contextUser?: UserInfo) {
-        return AIEngine.Instance.LoadAIMetadata(contextUser);
-    }
     public static get Models(): AIModelEntityExtended[] {
         AIEngine.checkMetadataLoaded();
         return AIEngine.Instance._models;
@@ -100,15 +93,12 @@ export class AIEngine {
     }
 
     public static get Instance(): AIEngine {
-        if (AIEngine._instance === null)
-            AIEngine._instance = new AIEngine();
-    
-        return AIEngine._instance;
-      }
+        return super.getInstance<AIEngine>();
+    }
 
     protected static checkMetadataLoaded(): void {
-        if (!AIEngine.Instance._metadataLoaded)
-            throw new Error("AI Metadata not loaded, call AIEngine.LoadAIMetadata() first.");
+        if (!AIEngine.Instance.Loaded)
+            throw new Error("AI Metadata not loaded, call AIEngine.Config() first.");
     }
 
     public async ExecuteEntityAIAction(params: EntityAIActionParams): Promise<BaseResult> {
@@ -321,23 +311,4 @@ export class AIEngine {
             throw new Error(`Error loading driver '${driverModuleName}' / '${driverClassName}' : ${e.message}`);
         }
     }
-
-    constructor() {
-        if (AIEngine._instance === null) {
-          // check the global object first to see if we have an instance there since multiple modules might load this code
-          // and the static instance colud be different for each module based on JS import paths
-          const g = MJGlobal.Instance.GetGlobalObjectStore();
-          if (g && g[AIEngine._globalInstanceKey]) {
-            AIEngine._instance = g[AIEngine._globalInstanceKey];
-          } 
-          else {
-            if (g)
-              g[AIEngine._globalInstanceKey] = this; // save the instance to the global object store if we have a global object store
-    
-              AIEngine._instance = this; // and save our new instance to the static member for future use
-          }
-        }
-    
-        return AIEngine._instance;
-      }
 }

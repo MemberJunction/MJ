@@ -2,7 +2,7 @@
 * ALL ENTITIES - TypeGraphQL Type Class Definition - AUTO GENERATED FILE
 * Generated Entities and Resolvers for Server
 * 
-* GENERATED: 6/6/2024, 4:59:51 PM
+* GENERATED: 6/10/2024, 3:22:34 PM
 * 
 *   >>> DO NOT MODIFY THIS FILE!!!!!!!!!!!!
 *   >>> YOUR CHANGES WILL BE OVERWRITTEN
@@ -20,7 +20,7 @@ import { mj_core_schema } from '../config';
 
 import * as mj_core_schema_server_object_types from '@memberjunction/server'
 
-import { CompanyEntity, EmployeeEntity, UserFavoriteEntity, EmployeeCompanyIntegrationEntity, EmployeeRoleEntity, EmployeeSkillEntity, RoleEntity, SkillEntity, IntegrationURLFormatEntity, IntegrationEntity, CompanyIntegrationEntity, EntityFieldEntity, EntityEntity, UserEntity, EntityRelationshipEntity, UserRecordLogEntity, UserViewEntity, CompanyIntegrationRunEntity, CompanyIntegrationRunDetailEntity, ErrorLogEntity, ApplicationEntity, ApplicationEntityEntity, EntityPermissionEntity, UserApplicationEntityEntity, UserApplicationEntity, CompanyIntegrationRunAPILogEntity, ListEntity, ListDetailEntity, UserViewRunEntity, UserViewRunDetailEntity, WorkflowRunEntity, WorkflowEntity, WorkflowEngineEntity, RecordChangeEntity, UserRoleEntity, RowLevelSecurityFilterEntity, AuditLogEntity, AuthorizationEntity, AuthorizationRoleEntity, AuditLogTypeEntity, EntityFieldValueEntity, AIModelEntity, AIActionEntity, AIModelActionEntity, EntityAIActionEntity, AIModelTypeEntity, QueueTypeEntity, QueueEntity, QueueTaskEntity, DashboardEntity, OutputTriggerTypeEntity, OutputFormatTypeEntity, OutputDeliveryTypeEntity, ReportEntity, ReportSnapshotEntity, ResourceTypeEntity, TagEntity, TaggedItemEntity, WorkspaceEntity, WorkspaceItemEntity, DatasetEntity, DatasetItemEntity, ConversationDetailEntity, ConversationEntity, UserNotificationEntity, SchemaInfoEntity, CompanyIntegrationRecordMapEntity, RecordMergeLogEntity, RecordMergeDeletionLogEntity, QueryFieldEntity, QueryCategoryEntity, QueryEntity, QueryPermissionEntity, VectorIndexEntity, EntityDocumentTypeEntity, EntityDocumentRunEntity, VectorDatabaseEntity, EntityRecordDocumentEntity, EntityDocumentEntity, DataContextItemEntity, DataContextEntity, UserViewCategoryEntity, DashboardCategoryEntity, ReportCategoryEntity, FileStorageProviderEntity, FileEntity, FileCategoryEntity, FileEntityRecordLinkEntity, VersionInstallationEntity, DuplicateRunDetailMatchEntity, EntityDocumentSettingEntity, EntitySettingEntity, DuplicateRunEntity, DuplicateRunDetailEntity, EntityBehaviorEntity, EntityBehaviorTypeEntity, ApplicationSettingEntity, ActionCategoryEntity, EntityActionEntity, EntityActionInvocationEntity, ActionAuthorizationEntity, EntityActionInvocationTypeEntity, ActionEntity, EntityActionFilterEntity, ActionFilterEntity, ActionContextTypeEntity, ActionResultCodeEntity, ActionContextEntity, ActionExecutionLogEntity, ActionParamEntity, ActionLibraryEntity, LibraryEntity, ListCategoryEntity, CommunicationTemplateEntity, CommunicationProviderEntity, CommunicationRunEntity, CommunicationProviderMessageTypeEntity, CommunicationLogEntity, CommunicationBaseMessageTypeEntity } from '@memberjunction/core-entities';
+import { CompanyEntity, EmployeeEntity, UserFavoriteEntity, EmployeeCompanyIntegrationEntity, EmployeeRoleEntity, EmployeeSkillEntity, RoleEntity, SkillEntity, IntegrationURLFormatEntity, IntegrationEntity, CompanyIntegrationEntity, EntityFieldEntity, EntityEntity, UserEntity, EntityRelationshipEntity, UserRecordLogEntity, UserViewEntity, CompanyIntegrationRunEntity, CompanyIntegrationRunDetailEntity, ErrorLogEntity, ApplicationEntity, ApplicationEntityEntity, EntityPermissionEntity, UserApplicationEntityEntity, UserApplicationEntity, CompanyIntegrationRunAPILogEntity, ListEntity, ListDetailEntity, UserViewRunEntity, UserViewRunDetailEntity, WorkflowRunEntity, WorkflowEntity, WorkflowEngineEntity, RecordChangeEntity, UserRoleEntity, RowLevelSecurityFilterEntity, AuditLogEntity, AuthorizationEntity, AuthorizationRoleEntity, AuditLogTypeEntity, EntityFieldValueEntity, AIModelEntity, AIActionEntity, AIModelActionEntity, EntityAIActionEntity, AIModelTypeEntity, QueueTypeEntity, QueueEntity, QueueTaskEntity, DashboardEntity, OutputTriggerTypeEntity, OutputFormatTypeEntity, OutputDeliveryTypeEntity, ReportEntity, ReportSnapshotEntity, ResourceTypeEntity, TagEntity, TaggedItemEntity, WorkspaceEntity, WorkspaceItemEntity, DatasetEntity, DatasetItemEntity, ConversationDetailEntity, ConversationEntity, UserNotificationEntity, SchemaInfoEntity, CompanyIntegrationRecordMapEntity, RecordMergeLogEntity, RecordMergeDeletionLogEntity, QueryFieldEntity, QueryCategoryEntity, QueryEntity, QueryPermissionEntity, VectorIndexEntity, EntityDocumentTypeEntity, EntityDocumentRunEntity, VectorDatabaseEntity, EntityRecordDocumentEntity, EntityDocumentEntity, DataContextItemEntity, DataContextEntity, UserViewCategoryEntity, DashboardCategoryEntity, ReportCategoryEntity, FileStorageProviderEntity, FileEntity, FileCategoryEntity, FileEntityRecordLinkEntity, VersionInstallationEntity, DuplicateRunDetailMatchEntity, EntityDocumentSettingEntity, EntitySettingEntity, DuplicateRunEntity, DuplicateRunDetailEntity, EntityBehaviorEntity, EntityBehaviorTypeEntity, ApplicationSettingEntity, ActionCategoryEntity, EntityActionEntity, EntityActionInvocationEntity, ActionAuthorizationEntity, EntityActionInvocationTypeEntity, ActionEntity, EntityActionFilterEntity, ActionFilterEntity, ActionContextTypeEntity, ActionResultCodeEntity, ActionContextEntity, ActionExecutionLogEntity, ActionParamEntity, ActionLibraryEntity, LibraryEntity, ListCategoryEntity, CommunicationProviderEntity, CommunicationRunEntity, CommunicationProviderMessageTypeEntity, CommunicationLogEntity, CommunicationBaseMessageTypeEntity, TemplateEntity, TemplateCategoryEntity, TemplateContentEntity, TemplateParamEntity, TemplateContentTypeEntity, RecommendationEntity, RecommendationProviderEntity, RecommendationRunEntity, RecommendationItemEntity, EntityCommunicationMessageTypeEntity, EntityCommunicationFieldEntity } from '@memberjunction/core-entities';
     
 
 //****************************************************************************
@@ -2464,6 +2464,10 @@ export class Entity_ {
     @MaxLength(8)
     UpdatedAt: Date;
           
+    @Field({nullable: true, description: 'Used to specify a field within the entity that in turn contains the field name that will be used for record-level communication preferences. For example in a hypothetical entity called Contacts, say there is a field called PreferredComm and that field had possible values of Email1, SMS, and Phone, and those value in turn corresponded to field names in the entity. Each record in the Contacts entity could have a specific preference for which field would be used for communication. The MJ Communication Framework will use this information when available, as a priority ahead of the data in the Entity Communication Fields entity which is entity-level and not record-level.'}) 
+    @MaxLength(510)
+    PreferredCommunicationField?: string;
+          
     @Field({nullable: true}) 
     CodeName?: string;
           
@@ -2580,6 +2584,18 @@ export class Entity_ {
     
     @Field(() => [mj_core_schema_server_object_types.EntityAction_])
     EntityActionsArray: mj_core_schema_server_object_types.EntityAction_[]; // Link to EntityActions
+    
+    @Field(() => [mj_core_schema_server_object_types.TemplateParam_])
+    TemplateParamsArray: mj_core_schema_server_object_types.TemplateParam_[]; // Link to TemplateParams
+    
+    @Field(() => [mj_core_schema_server_object_types.Recommendation_])
+    RecommendationsArray: mj_core_schema_server_object_types.Recommendation_[]; // Link to Recommendations
+    
+    @Field(() => [mj_core_schema_server_object_types.RecommendationItem_])
+    RecommendationItemsArray: mj_core_schema_server_object_types.RecommendationItem_[]; // Link to RecommendationItems
+    
+    @Field(() => [mj_core_schema_server_object_types.EntityCommunicationMessageType_])
+    EntityCommunicationMessageTypesArray: mj_core_schema_server_object_types.EntityCommunicationMessageType_[]; // Link to EntityCommunicationMessageTypes
     
 }
         
@@ -2701,6 +2717,9 @@ export class CreateEntityInput {
 
     @Field({ nullable: true })
     EntityObjectSubclassImport?: string;
+
+    @Field({ nullable: true })
+    PreferredCommunicationField?: string;
 }
     
         
@@ -2822,6 +2841,9 @@ export class UpdateEntityInput {
 
     @Field({ nullable: true })
     EntityObjectSubclassImport?: string;
+
+    @Field({ nullable: true })
+    PreferredCommunicationField?: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -3142,6 +3164,38 @@ export class EntityResolverBase extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Entity Actions', await dataSource.query(sSQL));
         return result;
     }
+          
+    @FieldResolver(() => [mj_core_schema_server_object_types.TemplateParam_])
+    async TemplateParamsArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Template Params', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwTemplateParams] WHERE [EntityID]=${entity_.ID} ` + this.getRowLevelSecurityWhereClause('Template Params', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Template Params', await dataSource.query(sSQL));
+        return result;
+    }
+          
+    @FieldResolver(() => [mj_core_schema_server_object_types.Recommendation_])
+    async RecommendationsArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Recommendations', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwRecommendations] WHERE [SourceEntityID]=${entity_.ID} ` + this.getRowLevelSecurityWhereClause('Recommendations', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Recommendations', await dataSource.query(sSQL));
+        return result;
+    }
+          
+    @FieldResolver(() => [mj_core_schema_server_object_types.RecommendationItem_])
+    async RecommendationItemsArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Recommendation Items', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwRecommendationItems] WHERE [DestinationEntityID]=${entity_.ID} ` + this.getRowLevelSecurityWhereClause('Recommendation Items', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Recommendation Items', await dataSource.query(sSQL));
+        return result;
+    }
+          
+    @FieldResolver(() => [mj_core_schema_server_object_types.EntityCommunicationMessageType_])
+    async EntityCommunicationMessageTypesArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Entity Communication Message Types', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityCommunicationMessageTypes] WHERE [EntityID]=${entity_.ID} ` + this.getRowLevelSecurityWhereClause('Entity Communication Message Types', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Entity Communication Message Types', await dataSource.query(sSQL));
+        return result;
+    }
         
     @Mutation(() => Entity_)
     async CreateEntity(
@@ -3326,6 +3380,15 @@ export class User_ {
     
     @Field(() => [mj_core_schema_server_object_types.CommunicationRun_])
     CommunicationRunsArray: mj_core_schema_server_object_types.CommunicationRun_[]; // Link to CommunicationRuns
+    
+    @Field(() => [mj_core_schema_server_object_types.Template_])
+    TemplatesArray: mj_core_schema_server_object_types.Template_[]; // Link to Templates
+    
+    @Field(() => [mj_core_schema_server_object_types.TemplateCategory_])
+    TemplateCategoriesArray: mj_core_schema_server_object_types.TemplateCategory_[]; // Link to TemplateCategories
+    
+    @Field(() => [mj_core_schema_server_object_types.RecommendationRun_])
+    RecommendationRunsArray: mj_core_schema_server_object_types.RecommendationRun_[]; // Link to RecommendationRuns
     
 }
         
@@ -3679,6 +3742,30 @@ export class UserResolverBase extends ResolverBase {
         this.CheckUserReadPermissions('Communication Runs', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwCommunicationRuns] WHERE [UserID]=${user_.ID} ` + this.getRowLevelSecurityWhereClause('Communication Runs', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Communication Runs', await dataSource.query(sSQL));
+        return result;
+    }
+          
+    @FieldResolver(() => [mj_core_schema_server_object_types.Template_])
+    async TemplatesArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Templates', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwTemplates] WHERE [UserID]=${user_.ID} ` + this.getRowLevelSecurityWhereClause('Templates', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Templates', await dataSource.query(sSQL));
+        return result;
+    }
+          
+    @FieldResolver(() => [mj_core_schema_server_object_types.TemplateCategory_])
+    async TemplateCategoriesArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Template Categories', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwTemplateCategories] WHERE [UserID]=${user_.ID} ` + this.getRowLevelSecurityWhereClause('Template Categories', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Template Categories', await dataSource.query(sSQL));
+        return result;
+    }
+          
+    @FieldResolver(() => [mj_core_schema_server_object_types.RecommendationRun_])
+    async RecommendationRunsArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Recommendation Runs', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwRecommendationRuns] WHERE [RunByUserID]=${user_.ID} ` + this.getRowLevelSecurityWhereClause('Recommendation Runs', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Recommendation Runs', await dataSource.query(sSQL));
         return result;
     }
         
@@ -8088,6 +8175,40 @@ export class AIModel_ {
 // INPUT TYPE for AI Models   
 //****************************************************************************
 @InputType()
+export class CreateAIModelInput {
+    @Field()
+    Name: string;
+
+    @Field({ nullable: true })
+    Vendor?: string;
+
+    @Field(() => Int)
+    AIModelTypeID: number;
+
+    @Field(() => Boolean)
+    IsActive: boolean;
+
+    @Field({ nullable: true })
+    Description?: string;
+
+    @Field({ nullable: true })
+    DriverClass?: string;
+
+    @Field({ nullable: true })
+    DriverImportPath?: string;
+
+    @Field({ nullable: true })
+    APIName?: string;
+
+    @Field(() => Int, { nullable: true })
+    PowerRank?: number;
+}
+    
+        
+//****************************************************************************
+// INPUT TYPE for AI Models   
+//****************************************************************************
+@InputType()
 export class UpdateAIModelInput {
     @Field(() => Int)
     ID: number;
@@ -8224,12 +8345,27 @@ export class AIModelResolver extends ResolverBase {
     }
         
     @Mutation(() => AIModel_)
+    async CreateAIModel(
+        @Arg('input', () => CreateAIModelInput) input: CreateAIModelInput,
+        @Ctx() { dataSource, userPayload }: AppContext, 
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.CreateRecord('AI Models', input, dataSource, userPayload, pubSub)
+    }
+        
+    @Mutation(() => AIModel_)
     async UpdateAIModel(
         @Arg('input', () => UpdateAIModelInput) input: UpdateAIModelInput,
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.UpdateRecord('AI Models', input, dataSource, userPayload, pubSub);
+    }
+    
+    @Mutation(() => AIModel_)
+    async DeleteAIModel(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('AI Models', key, options, dataSource, userPayload, pubSub);
     }
     
 }
@@ -8277,6 +8413,28 @@ export class AIAction_ {
     EntityAIActionsArray: mj_core_schema_server_object_types.EntityAIAction_[]; // Link to EntityAIActions
     
 }
+        
+//****************************************************************************
+// INPUT TYPE for AI Actions   
+//****************************************************************************
+@InputType()
+export class CreateAIActionInput {
+    @Field()
+    Name: string;
+
+    @Field({ nullable: true })
+    Description?: string;
+
+    @Field(() => Int, { nullable: true })
+    DefaultModelID?: number;
+
+    @Field({ nullable: true })
+    DefaultPrompt?: string;
+
+    @Field(() => Boolean)
+    IsActive: boolean;
+}
+    
         
 //****************************************************************************
 // INPUT TYPE for AI Actions   
@@ -8382,6 +8540,15 @@ export class AIActionResolver extends ResolverBase {
     }
         
     @Mutation(() => AIAction_)
+    async CreateAIAction(
+        @Arg('input', () => CreateAIActionInput) input: CreateAIActionInput,
+        @Ctx() { dataSource, userPayload }: AppContext, 
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.CreateRecord('AI Actions', input, dataSource, userPayload, pubSub)
+    }
+        
+    @Mutation(() => AIAction_)
     async UpdateAIAction(
         @Arg('input', () => UpdateAIActionInput) input: UpdateAIActionInput,
         @Ctx() { dataSource, userPayload }: AppContext,
@@ -8432,6 +8599,22 @@ export class AIModelAction_ {
     AIAction: string;
         
 }
+        
+//****************************************************************************
+// INPUT TYPE for AI Model Actions   
+//****************************************************************************
+@InputType()
+export class CreateAIModelActionInput {
+    @Field(() => Int)
+    AIModelID: number;
+
+    @Field(() => Int)
+    AIActionID: number;
+
+    @Field(() => Boolean)
+    IsActive: boolean;
+}
+    
         
 //****************************************************************************
 // INPUT TYPE for AI Model Actions   
@@ -8515,6 +8698,15 @@ export class AIModelActionResolver extends ResolverBase {
     }
     
     @Mutation(() => AIModelAction_)
+    async CreateAIModelAction(
+        @Arg('input', () => CreateAIModelActionInput) input: CreateAIModelActionInput,
+        @Ctx() { dataSource, userPayload }: AppContext, 
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.CreateRecord('AI Model Actions', input, dataSource, userPayload, pubSub)
+    }
+        
+    @Mutation(() => AIModelAction_)
     async UpdateAIModelAction(
         @Arg('input', () => UpdateAIModelActionInput) input: UpdateAIModelActionInput,
         @Ctx() { dataSource, userPayload }: AppContext,
@@ -8596,6 +8788,49 @@ export class EntityAIAction_ {
     OutputEntity?: string;
         
 }
+        
+//****************************************************************************
+// INPUT TYPE for Entity AI Actions   
+//****************************************************************************
+@InputType()
+export class CreateEntityAIActionInput {
+    @Field(() => Int)
+    EntityID: number;
+
+    @Field(() => Int)
+    AIActionID: number;
+
+    @Field(() => Int, { nullable: true })
+    AIModelID?: number;
+
+    @Field()
+    Name: string;
+
+    @Field({ nullable: true })
+    Prompt?: string;
+
+    @Field()
+    TriggerEvent: string;
+
+    @Field()
+    UserMessage: string;
+
+    @Field()
+    OutputType: string;
+
+    @Field({ nullable: true })
+    OutputField?: string;
+
+    @Field(() => Boolean)
+    SkipIfOutputFieldNotEmpty: boolean;
+
+    @Field(() => Int, { nullable: true })
+    OutputEntityID?: number;
+
+    @Field({ nullable: true })
+    Comments?: string;
+}
+    
         
 //****************************************************************************
 // INPUT TYPE for Entity AI Actions   
@@ -8706,6 +8941,15 @@ export class EntityAIActionResolver extends ResolverBase {
     }
     
     @Mutation(() => EntityAIAction_)
+    async CreateEntityAIAction(
+        @Arg('input', () => CreateEntityAIActionInput) input: CreateEntityAIActionInput,
+        @Ctx() { dataSource, userPayload }: AppContext, 
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.CreateRecord('Entity AI Actions', input, dataSource, userPayload, pubSub)
+    }
+        
+    @Mutation(() => EntityAIAction_)
     async UpdateEntityAIAction(
         @Arg('input', () => UpdateEntityAIActionInput) input: UpdateEntityAIActionInput,
         @Ctx() { dataSource, userPayload }: AppContext,
@@ -8741,6 +8985,19 @@ export class AIModelType_ {
     AIModelsArray: mj_core_schema_server_object_types.AIModel_[]; // Link to AIModels
     
 }
+        
+//****************************************************************************
+// INPUT TYPE for AI Model Types   
+//****************************************************************************
+@InputType()
+export class CreateAIModelTypeInput {
+    @Field()
+    Name: string;
+
+    @Field({ nullable: true })
+    Description?: string;
+}
+    
         
 //****************************************************************************
 // INPUT TYPE for AI Model Types   
@@ -8829,12 +9086,27 @@ export class AIModelTypeResolver extends ResolverBase {
     }
         
     @Mutation(() => AIModelType_)
+    async CreateAIModelType(
+        @Arg('input', () => CreateAIModelTypeInput) input: CreateAIModelTypeInput,
+        @Ctx() { dataSource, userPayload }: AppContext, 
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.CreateRecord('AI Model Types', input, dataSource, userPayload, pubSub)
+    }
+        
+    @Mutation(() => AIModelType_)
     async UpdateAIModelType(
         @Arg('input', () => UpdateAIModelTypeInput) input: UpdateAIModelTypeInput,
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.UpdateRecord('AI Model Types', input, dataSource, userPayload, pubSub);
+    }
+    
+    @Mutation(() => AIModelType_)
+    async DeleteAIModelType(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('AI Model Types', key, options, dataSource, userPayload, pubSub);
     }
     
 }
@@ -20117,167 +20389,6 @@ export class ListCategoryResolver extends ResolverBase {
 }
 
 //****************************************************************************
-// ENTITY CLASS for Communication Templates
-//****************************************************************************
-@ObjectType({ description: 'Reusable templates for communication.' })
-export class CommunicationTemplate_ {  
-    @Field(() => Int) 
-    ID: number;
-          
-    @Field() 
-    @MaxLength(510)
-    Name: string;
-          
-    @Field() 
-    Content: string;
-          
-    @Field(() => Int, {nullable: true}) 
-    ParentID?: number;
-          
-    @Field({nullable: true}) 
-    Comments?: string;
-          
-    @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
-          
-    @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
-          
-    @Field({nullable: true}) 
-    @MaxLength(510)
-    Parent?: string;
-        
-    @Field(() => [mj_core_schema_server_object_types.CommunicationTemplate_])
-    CommunicationTemplatesArray: mj_core_schema_server_object_types.CommunicationTemplate_[]; // Link to CommunicationTemplates
-    
-}
-        
-//****************************************************************************
-// INPUT TYPE for Communication Templates   
-//****************************************************************************
-@InputType()
-export class CreateCommunicationTemplateInput {
-    @Field()
-    Name: string;
-
-    @Field()
-    Content: string;
-
-    @Field(() => Int, { nullable: true })
-    ParentID?: number;
-
-    @Field({ nullable: true })
-    Comments?: string;
-}
-    
-        
-//****************************************************************************
-// INPUT TYPE for Communication Templates   
-//****************************************************************************
-@InputType()
-export class UpdateCommunicationTemplateInput {
-    @Field(() => Int)
-    ID: number;
-
-    @Field()
-    Name: string;
-
-    @Field()
-    Content: string;
-
-    @Field(() => Int, { nullable: true })
-    ParentID?: number;
-
-    @Field({ nullable: true })
-    Comments?: string;
-
-    @Field(() => [KeyValuePairInput], { nullable: true })
-    OldValues___?: KeyValuePairInput[];
-}
-    
-//****************************************************************************
-// RESOLVER for Communication Templates
-//****************************************************************************
-@ObjectType()
-export class RunCommunicationTemplateViewResult {
-    @Field(() => [CommunicationTemplate_])
-    Results: CommunicationTemplate_[];
-
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
-
-    @Field(() => Int, {nullable: true})
-    RowCount: number;
-
-    @Field(() => Int, {nullable: true})
-    TotalRowCount: number;
-
-    @Field(() => Int, {nullable: true})
-    ExecutionTime: number;
-
-    @Field({nullable: true})
-    ErrorMessage?: string;
-
-    @Field(() => Boolean, {nullable: false})
-    Success: boolean;
-}
-
-@Resolver(CommunicationTemplate_)
-export class CommunicationTemplateResolver extends ResolverBase {
-    @Query(() => RunCommunicationTemplateViewResult)
-    async RunCommunicationTemplateViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
-    }
-
-    @Query(() => RunCommunicationTemplateViewResult)
-    async RunCommunicationTemplateViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
-    }
-
-    @Query(() => RunCommunicationTemplateViewResult)
-    async RunCommunicationTemplateDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        input.EntityName = 'Communication Templates';
-        return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
-    }
-    @Query(() => CommunicationTemplate_, { nullable: true })
-    async CommunicationTemplate(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<CommunicationTemplate_ | null> {
-        this.CheckUserReadPermissions('Communication Templates', userPayload);
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwCommunicationTemplates] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Communication Templates', userPayload, EntityPermissionType.Read, 'AND');
-        const result = this.MapFieldNamesToCodeNames('Communication Templates', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
-        return result;
-    }
-      
-    @FieldResolver(() => [mj_core_schema_server_object_types.CommunicationTemplate_])
-    async CommunicationTemplatesArray(@Root() communicationtemplate_: CommunicationTemplate_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('Communication Templates', userPayload);
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwCommunicationTemplates] WHERE [ParentID]=${communicationtemplate_.ID} ` + this.getRowLevelSecurityWhereClause('Communication Templates', userPayload, EntityPermissionType.Read, 'AND');
-        const result = this.ArrayMapFieldNamesToCodeNames('Communication Templates', await dataSource.query(sSQL));
-        return result;
-    }
-        
-    @Mutation(() => CommunicationTemplate_)
-    async CreateCommunicationTemplate(
-        @Arg('input', () => CreateCommunicationTemplateInput) input: CreateCommunicationTemplateInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
-        @PubSub() pubSub: PubSubEngine
-    ) {
-        return this.CreateRecord('Communication Templates', input, dataSource, userPayload, pubSub)
-    }
-        
-    @Mutation(() => CommunicationTemplate_)
-    async UpdateCommunicationTemplate(
-        @Arg('input', () => UpdateCommunicationTemplateInput) input: UpdateCommunicationTemplateInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
-        @PubSub() pubSub: PubSubEngine
-    ) {
-        return this.UpdateRecord('Communication Templates', input, dataSource, userPayload, pubSub);
-    }
-    
-}
-
-//****************************************************************************
 // ENTITY CLASS for Communication Providers
 //****************************************************************************
 @ObjectType({ description: 'All supported communication providers.' })
@@ -20475,6 +20586,14 @@ export class CommunicationRun_ {
     Status: string;
           
     @Field({nullable: true}) 
+    @MaxLength(8)
+    StartedAt?: Date;
+          
+    @Field({nullable: true}) 
+    @MaxLength(8)
+    EndedAt?: Date;
+          
+    @Field({nullable: true}) 
     Comments?: string;
           
     @Field({nullable: true, description: 'The error message if the communication run failed.'}) 
@@ -20512,6 +20631,12 @@ export class CreateCommunicationRunInput {
     Status: string;
 
     @Field({ nullable: true })
+    StartedAt?: Date;
+
+    @Field({ nullable: true })
+    EndedAt?: Date;
+
+    @Field({ nullable: true })
     Comments?: string;
 
     @Field({ nullable: true })
@@ -20535,6 +20660,12 @@ export class UpdateCommunicationRunInput {
 
     @Field()
     Status: string;
+
+    @Field({ nullable: true })
+    StartedAt?: Date;
+
+    @Field({ nullable: true })
+    EndedAt?: Date;
 
     @Field({ nullable: true })
     Comments?: string;
@@ -21028,6 +21159,9 @@ export class CommunicationBaseMessageType_ {
     @Field(() => [mj_core_schema_server_object_types.CommunicationProviderMessageType_])
     CommunicationProviderMessageTypesArray: mj_core_schema_server_object_types.CommunicationProviderMessageType_[]; // Link to CommunicationProviderMessageTypes
     
+    @Field(() => [mj_core_schema_server_object_types.EntityCommunicationMessageType_])
+    EntityCommunicationMessageTypesArray: mj_core_schema_server_object_types.EntityCommunicationMessageType_[]; // Link to EntityCommunicationMessageTypes
+    
 }
         
 //****************************************************************************
@@ -21138,6 +21272,14 @@ export class CommunicationBaseMessageTypeResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Communication Provider Message Types', await dataSource.query(sSQL));
         return result;
     }
+          
+    @FieldResolver(() => [mj_core_schema_server_object_types.EntityCommunicationMessageType_])
+    async EntityCommunicationMessageTypesArray(@Root() communicationbasemessagetype_: CommunicationBaseMessageType_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Entity Communication Message Types', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityCommunicationMessageTypes] WHERE [BaseMessageTypeID]=${communicationbasemessagetype_.ID} ` + this.getRowLevelSecurityWhereClause('Entity Communication Message Types', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Entity Communication Message Types', await dataSource.query(sSQL));
+        return result;
+    }
         
     @Mutation(() => CommunicationBaseMessageType_)
     async CreateCommunicationBaseMessageType(
@@ -21155,6 +21297,1805 @@ export class CommunicationBaseMessageTypeResolver extends ResolverBase {
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.UpdateRecord('Communication Base Message Types', input, dataSource, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for Templates
+//****************************************************************************
+@ObjectType({ description: 'Templates are used for dynamic expansion of a static template with data from a given context. Templates can be used to create documents, messages and anything else that requires dynamic document creation merging together static text, data and lightweight logic' })
+export class Template_ {  
+    @Field(() => Int) 
+    ID: number;
+          
+    @Field({description: 'Name of the template'}) 
+    @MaxLength(510)
+    Name: string;
+          
+    @Field({nullable: true, description: 'Description of the template'}) 
+    Description?: string;
+          
+    @Field({nullable: true, description: 'This prompt will be used by the AI to generate template content as requested by the user.'}) 
+    UserPrompt?: string;
+          
+    @Field(() => Int, {nullable: true, description: 'Optional, Category that this template is part of'}) 
+    CategoryID?: number;
+          
+    @Field(() => Int) 
+    UserID: number;
+          
+    @Field({nullable: true, description: 'Optional, if provided, this template will not be available for use until the specified date. Requires IsActive to be set to 1'}) 
+    @MaxLength(8)
+    ActiveAt?: Date;
+          
+    @Field({nullable: true, description: 'Optional, if provided, this template will not be available for use after the specified date. If IsActive=0, this has no effect.'}) 
+    @MaxLength(8)
+    DisabledAt?: Date;
+          
+    @Field(() => Boolean, {description: 'If set to 0, the template will be disabled regardless of the values in ActiveAt/DisabledAt. '}) 
+    IsActive: boolean;
+          
+    @Field() 
+    @MaxLength(8)
+    CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(8)
+    UpdatedAt: Date;
+          
+    @Field({nullable: true}) 
+    @MaxLength(510)
+    Category?: string;
+          
+    @Field() 
+    @MaxLength(200)
+    User: string;
+        
+    @Field(() => [mj_core_schema_server_object_types.TemplateParam_])
+    TemplateParamsArray: mj_core_schema_server_object_types.TemplateParam_[]; // Link to TemplateParams
+    
+    @Field(() => [mj_core_schema_server_object_types.TemplateContent_])
+    TemplateContentsArray: mj_core_schema_server_object_types.TemplateContent_[]; // Link to TemplateContents
+    
+}
+        
+//****************************************************************************
+// INPUT TYPE for Templates   
+//****************************************************************************
+@InputType()
+export class CreateTemplateInput {
+    @Field()
+    Name: string;
+
+    @Field({ nullable: true })
+    Description?: string;
+
+    @Field({ nullable: true })
+    UserPrompt?: string;
+
+    @Field(() => Int, { nullable: true })
+    CategoryID?: number;
+
+    @Field(() => Int)
+    UserID: number;
+
+    @Field({ nullable: true })
+    ActiveAt?: Date;
+
+    @Field({ nullable: true })
+    DisabledAt?: Date;
+
+    @Field(() => Boolean)
+    IsActive: boolean;
+}
+    
+        
+//****************************************************************************
+// INPUT TYPE for Templates   
+//****************************************************************************
+@InputType()
+export class UpdateTemplateInput {
+    @Field(() => Int)
+    ID: number;
+
+    @Field()
+    Name: string;
+
+    @Field({ nullable: true })
+    Description?: string;
+
+    @Field({ nullable: true })
+    UserPrompt?: string;
+
+    @Field(() => Int, { nullable: true })
+    CategoryID?: number;
+
+    @Field(() => Int)
+    UserID: number;
+
+    @Field({ nullable: true })
+    ActiveAt?: Date;
+
+    @Field({ nullable: true })
+    DisabledAt?: Date;
+
+    @Field(() => Boolean)
+    IsActive: boolean;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
+//****************************************************************************
+// RESOLVER for Templates
+//****************************************************************************
+@ObjectType()
+export class RunTemplateViewResult {
+    @Field(() => [Template_])
+    Results: Template_[];
+
+    @Field(() => Int, {nullable: true})
+    UserViewRunID?: number;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(Template_)
+export class TemplateResolver extends ResolverBase {
+    @Query(() => RunTemplateViewResult)
+    async RunTemplateViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunTemplateViewResult)
+    async RunTemplateViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunTemplateViewResult)
+    async RunTemplateDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        input.EntityName = 'Templates';
+        return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
+    }
+    @Query(() => Template_, { nullable: true })
+    async Template(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<Template_ | null> {
+        this.CheckUserReadPermissions('Templates', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwTemplates] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Templates', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Templates', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
+    }
+      
+    @FieldResolver(() => [mj_core_schema_server_object_types.TemplateParam_])
+    async TemplateParamsArray(@Root() template_: Template_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Template Params', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwTemplateParams] WHERE [TemplateID]=${template_.ID} ` + this.getRowLevelSecurityWhereClause('Template Params', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Template Params', await dataSource.query(sSQL));
+        return result;
+    }
+          
+    @FieldResolver(() => [mj_core_schema_server_object_types.TemplateContent_])
+    async TemplateContentsArray(@Root() template_: Template_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Template Contents', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwTemplateContents] WHERE [TemplateID]=${template_.ID} ` + this.getRowLevelSecurityWhereClause('Template Contents', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Template Contents', await dataSource.query(sSQL));
+        return result;
+    }
+        
+    @Mutation(() => Template_)
+    async CreateTemplate(
+        @Arg('input', () => CreateTemplateInput) input: CreateTemplateInput,
+        @Ctx() { dataSource, userPayload }: AppContext, 
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.CreateRecord('Templates', input, dataSource, userPayload, pubSub)
+    }
+        
+    @Mutation(() => Template_)
+    async UpdateTemplate(
+        @Arg('input', () => UpdateTemplateInput) input: UpdateTemplateInput,
+        @Ctx() { dataSource, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.UpdateRecord('Templates', input, dataSource, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for Template Categories
+//****************************************************************************
+@ObjectType({ description: 'Template categories for organizing templates' })
+export class TemplateCategory_ {  
+    @Field(() => Int) 
+    ID: number;
+          
+    @Field({description: 'Name of the template category'}) 
+    @MaxLength(510)
+    Name: string;
+          
+    @Field({nullable: true, description: 'Description of the template category'}) 
+    Description?: string;
+          
+    @Field(() => Int, {nullable: true}) 
+    ParentID?: number;
+          
+    @Field(() => Int) 
+    UserID: number;
+          
+    @Field() 
+    @MaxLength(8)
+    CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(8)
+    UpdatedAt: Date;
+          
+    @Field({nullable: true}) 
+    @MaxLength(510)
+    Parent?: string;
+          
+    @Field() 
+    @MaxLength(200)
+    User: string;
+        
+    @Field(() => [mj_core_schema_server_object_types.Template_])
+    TemplatesArray: mj_core_schema_server_object_types.Template_[]; // Link to Templates
+    
+    @Field(() => [mj_core_schema_server_object_types.TemplateCategory_])
+    TemplateCategoriesArray: mj_core_schema_server_object_types.TemplateCategory_[]; // Link to TemplateCategories
+    
+}
+        
+//****************************************************************************
+// INPUT TYPE for Template Categories   
+//****************************************************************************
+@InputType()
+export class CreateTemplateCategoryInput {
+    @Field()
+    Name: string;
+
+    @Field({ nullable: true })
+    Description?: string;
+
+    @Field(() => Int, { nullable: true })
+    ParentID?: number;
+
+    @Field(() => Int)
+    UserID: number;
+}
+    
+        
+//****************************************************************************
+// INPUT TYPE for Template Categories   
+//****************************************************************************
+@InputType()
+export class UpdateTemplateCategoryInput {
+    @Field(() => Int)
+    ID: number;
+
+    @Field()
+    Name: string;
+
+    @Field({ nullable: true })
+    Description?: string;
+
+    @Field(() => Int, { nullable: true })
+    ParentID?: number;
+
+    @Field(() => Int)
+    UserID: number;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
+//****************************************************************************
+// RESOLVER for Template Categories
+//****************************************************************************
+@ObjectType()
+export class RunTemplateCategoryViewResult {
+    @Field(() => [TemplateCategory_])
+    Results: TemplateCategory_[];
+
+    @Field(() => Int, {nullable: true})
+    UserViewRunID?: number;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(TemplateCategory_)
+export class TemplateCategoryResolver extends ResolverBase {
+    @Query(() => RunTemplateCategoryViewResult)
+    async RunTemplateCategoryViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunTemplateCategoryViewResult)
+    async RunTemplateCategoryViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunTemplateCategoryViewResult)
+    async RunTemplateCategoryDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        input.EntityName = 'Template Categories';
+        return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
+    }
+    @Query(() => TemplateCategory_, { nullable: true })
+    async TemplateCategory(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<TemplateCategory_ | null> {
+        this.CheckUserReadPermissions('Template Categories', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwTemplateCategories] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Template Categories', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Template Categories', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
+    }
+      
+    @FieldResolver(() => [mj_core_schema_server_object_types.Template_])
+    async TemplatesArray(@Root() templatecategory_: TemplateCategory_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Templates', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwTemplates] WHERE [CategoryID]=${templatecategory_.ID} ` + this.getRowLevelSecurityWhereClause('Templates', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Templates', await dataSource.query(sSQL));
+        return result;
+    }
+          
+    @FieldResolver(() => [mj_core_schema_server_object_types.TemplateCategory_])
+    async TemplateCategoriesArray(@Root() templatecategory_: TemplateCategory_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Template Categories', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwTemplateCategories] WHERE [ParentID]=${templatecategory_.ID} ` + this.getRowLevelSecurityWhereClause('Template Categories', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Template Categories', await dataSource.query(sSQL));
+        return result;
+    }
+        
+    @Mutation(() => TemplateCategory_)
+    async CreateTemplateCategory(
+        @Arg('input', () => CreateTemplateCategoryInput) input: CreateTemplateCategoryInput,
+        @Ctx() { dataSource, userPayload }: AppContext, 
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.CreateRecord('Template Categories', input, dataSource, userPayload, pubSub)
+    }
+        
+    @Mutation(() => TemplateCategory_)
+    async UpdateTemplateCategory(
+        @Arg('input', () => UpdateTemplateCategoryInput) input: UpdateTemplateCategoryInput,
+        @Ctx() { dataSource, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.UpdateRecord('Template Categories', input, dataSource, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for Template Contents
+//****************************************************************************
+@ObjectType({ description: 'Template content for different versions of a template for purposes like HTML/Text/etc' })
+export class TemplateContent_ {  
+    @Field(() => Int) 
+    ID: number;
+          
+    @Field(() => Int) 
+    TemplateID: number;
+          
+    @Field(() => Int) 
+    TypeID: number;
+          
+    @Field({nullable: true, description: 'The actual text content for the template'}) 
+    TemplateText?: string;
+          
+    @Field(() => Int, {description: 'Priority of the content version, higher priority versions will be used ahead of lower priority versions for a given Type'}) 
+    Priority: number;
+          
+    @Field(() => Boolean, {description: 'Indicates whether the content is active or not. Use this to disable a particular Template Content item without having to remove it'}) 
+    IsActive: boolean;
+          
+    @Field() 
+    @MaxLength(8)
+    CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(8)
+    UpdatedAt: Date;
+          
+    @Field() 
+    @MaxLength(510)
+    Template: string;
+          
+    @Field() 
+    @MaxLength(510)
+    Type: string;
+        
+}
+        
+//****************************************************************************
+// INPUT TYPE for Template Contents   
+//****************************************************************************
+@InputType()
+export class CreateTemplateContentInput {
+    @Field(() => Int)
+    TemplateID: number;
+
+    @Field(() => Int)
+    TypeID: number;
+
+    @Field({ nullable: true })
+    TemplateText?: string;
+
+    @Field(() => Int)
+    Priority: number;
+
+    @Field(() => Boolean)
+    IsActive: boolean;
+}
+    
+        
+//****************************************************************************
+// INPUT TYPE for Template Contents   
+//****************************************************************************
+@InputType()
+export class UpdateTemplateContentInput {
+    @Field(() => Int)
+    ID: number;
+
+    @Field(() => Int)
+    TemplateID: number;
+
+    @Field(() => Int)
+    TypeID: number;
+
+    @Field({ nullable: true })
+    TemplateText?: string;
+
+    @Field(() => Int)
+    Priority: number;
+
+    @Field(() => Boolean)
+    IsActive: boolean;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
+//****************************************************************************
+// RESOLVER for Template Contents
+//****************************************************************************
+@ObjectType()
+export class RunTemplateContentViewResult {
+    @Field(() => [TemplateContent_])
+    Results: TemplateContent_[];
+
+    @Field(() => Int, {nullable: true})
+    UserViewRunID?: number;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(TemplateContent_)
+export class TemplateContentResolver extends ResolverBase {
+    @Query(() => RunTemplateContentViewResult)
+    async RunTemplateContentViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunTemplateContentViewResult)
+    async RunTemplateContentViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunTemplateContentViewResult)
+    async RunTemplateContentDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        input.EntityName = 'Template Contents';
+        return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
+    }
+    @Query(() => TemplateContent_, { nullable: true })
+    async TemplateContent(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<TemplateContent_ | null> {
+        this.CheckUserReadPermissions('Template Contents', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwTemplateContents] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Template Contents', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Template Contents', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
+    }
+    
+    @Mutation(() => TemplateContent_)
+    async CreateTemplateContent(
+        @Arg('input', () => CreateTemplateContentInput) input: CreateTemplateContentInput,
+        @Ctx() { dataSource, userPayload }: AppContext, 
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.CreateRecord('Template Contents', input, dataSource, userPayload, pubSub)
+    }
+        
+    @Mutation(() => TemplateContent_)
+    async UpdateTemplateContent(
+        @Arg('input', () => UpdateTemplateContentInput) input: UpdateTemplateContentInput,
+        @Ctx() { dataSource, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.UpdateRecord('Template Contents', input, dataSource, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for Template Params
+//****************************************************************************
+@ObjectType({ description: 'Parameters allowed for use inside the template' })
+export class TemplateParam_ {  
+    @Field(() => Int) 
+    ID: number;
+          
+    @Field(() => Int, {description: 'ID of the template this parameter belongs to'}) 
+    TemplateID: number;
+          
+    @Field({description: 'Name of the parameter'}) 
+    @MaxLength(510)
+    Name: string;
+          
+    @Field({nullable: true, description: 'Description of the parameter'}) 
+    Description?: string;
+          
+    @Field({description: 'Type of the parameter'}) 
+    @MaxLength(40)
+    Type: string;
+          
+    @Field({nullable: true, description: 'Default value of the parameter'}) 
+    DefaultValue?: string;
+          
+    @Field(() => Boolean) 
+    IsRequired: boolean;
+          
+    @Field(() => Int, {nullable: true, description: 'Entity ID, used only when Type is Record'}) 
+    EntityID?: number;
+          
+    @Field({nullable: true, description: 'Record ID, used only when Type is Record'}) 
+    @MaxLength(4000)
+    RecordID?: string;
+          
+    @Field() 
+    @MaxLength(8)
+    CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(8)
+    UpdatedAt: Date;
+          
+    @Field() 
+    @MaxLength(510)
+    Template: string;
+          
+    @Field({nullable: true}) 
+    @MaxLength(510)
+    Entity?: string;
+        
+}
+        
+//****************************************************************************
+// INPUT TYPE for Template Params   
+//****************************************************************************
+@InputType()
+export class CreateTemplateParamInput {
+    @Field(() => Int)
+    TemplateID: number;
+
+    @Field()
+    Name: string;
+
+    @Field({ nullable: true })
+    Description?: string;
+
+    @Field()
+    Type: string;
+
+    @Field({ nullable: true })
+    DefaultValue?: string;
+
+    @Field(() => Boolean)
+    IsRequired: boolean;
+
+    @Field(() => Int, { nullable: true })
+    EntityID?: number;
+
+    @Field({ nullable: true })
+    RecordID?: string;
+}
+    
+        
+//****************************************************************************
+// INPUT TYPE for Template Params   
+//****************************************************************************
+@InputType()
+export class UpdateTemplateParamInput {
+    @Field(() => Int)
+    ID: number;
+
+    @Field(() => Int)
+    TemplateID: number;
+
+    @Field()
+    Name: string;
+
+    @Field({ nullable: true })
+    Description?: string;
+
+    @Field()
+    Type: string;
+
+    @Field({ nullable: true })
+    DefaultValue?: string;
+
+    @Field(() => Boolean)
+    IsRequired: boolean;
+
+    @Field(() => Int, { nullable: true })
+    EntityID?: number;
+
+    @Field({ nullable: true })
+    RecordID?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
+//****************************************************************************
+// RESOLVER for Template Params
+//****************************************************************************
+@ObjectType()
+export class RunTemplateParamViewResult {
+    @Field(() => [TemplateParam_])
+    Results: TemplateParam_[];
+
+    @Field(() => Int, {nullable: true})
+    UserViewRunID?: number;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(TemplateParam_)
+export class TemplateParamResolver extends ResolverBase {
+    @Query(() => RunTemplateParamViewResult)
+    async RunTemplateParamViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunTemplateParamViewResult)
+    async RunTemplateParamViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunTemplateParamViewResult)
+    async RunTemplateParamDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        input.EntityName = 'Template Params';
+        return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
+    }
+    @Query(() => TemplateParam_, { nullable: true })
+    async TemplateParam(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<TemplateParam_ | null> {
+        this.CheckUserReadPermissions('Template Params', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwTemplateParams] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Template Params', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Template Params', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
+    }
+    
+    @Mutation(() => TemplateParam_)
+    async CreateTemplateParam(
+        @Arg('input', () => CreateTemplateParamInput) input: CreateTemplateParamInput,
+        @Ctx() { dataSource, userPayload }: AppContext, 
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.CreateRecord('Template Params', input, dataSource, userPayload, pubSub)
+    }
+        
+    @Mutation(() => TemplateParam_)
+    async UpdateTemplateParam(
+        @Arg('input', () => UpdateTemplateParamInput) input: UpdateTemplateParamInput,
+        @Ctx() { dataSource, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.UpdateRecord('Template Params', input, dataSource, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for Template Content Types
+//****************************************************************************
+@ObjectType({ description: 'Template content types for categorizing content within templates' })
+export class TemplateContentType_ {  
+    @Field(() => Int) 
+    ID: number;
+          
+    @Field({description: 'Name of the template content type'}) 
+    @MaxLength(510)
+    Name: string;
+          
+    @Field({nullable: true, description: 'Description of the template content type'}) 
+    Description?: string;
+          
+    @Field() 
+    @MaxLength(8)
+    CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(8)
+    UpdatedAt: Date;
+        
+    @Field(() => [mj_core_schema_server_object_types.TemplateContent_])
+    TemplateContentsArray: mj_core_schema_server_object_types.TemplateContent_[]; // Link to TemplateContents
+    
+}
+        
+//****************************************************************************
+// INPUT TYPE for Template Content Types   
+//****************************************************************************
+@InputType()
+export class CreateTemplateContentTypeInput {
+    @Field()
+    Name: string;
+
+    @Field({ nullable: true })
+    Description?: string;
+}
+    
+        
+//****************************************************************************
+// INPUT TYPE for Template Content Types   
+//****************************************************************************
+@InputType()
+export class UpdateTemplateContentTypeInput {
+    @Field(() => Int)
+    ID: number;
+
+    @Field()
+    Name: string;
+
+    @Field({ nullable: true })
+    Description?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
+//****************************************************************************
+// RESOLVER for Template Content Types
+//****************************************************************************
+@ObjectType()
+export class RunTemplateContentTypeViewResult {
+    @Field(() => [TemplateContentType_])
+    Results: TemplateContentType_[];
+
+    @Field(() => Int, {nullable: true})
+    UserViewRunID?: number;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(TemplateContentType_)
+export class TemplateContentTypeResolver extends ResolverBase {
+    @Query(() => RunTemplateContentTypeViewResult)
+    async RunTemplateContentTypeViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunTemplateContentTypeViewResult)
+    async RunTemplateContentTypeViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunTemplateContentTypeViewResult)
+    async RunTemplateContentTypeDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        input.EntityName = 'Template Content Types';
+        return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
+    }
+    @Query(() => TemplateContentType_, { nullable: true })
+    async TemplateContentType(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<TemplateContentType_ | null> {
+        this.CheckUserReadPermissions('Template Content Types', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwTemplateContentTypes] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Template Content Types', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Template Content Types', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
+    }
+      
+    @FieldResolver(() => [mj_core_schema_server_object_types.TemplateContent_])
+    async TemplateContentsArray(@Root() templatecontenttype_: TemplateContentType_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Template Contents', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwTemplateContents] WHERE [TypeID]=${templatecontenttype_.ID} ` + this.getRowLevelSecurityWhereClause('Template Contents', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Template Contents', await dataSource.query(sSQL));
+        return result;
+    }
+        
+    @Mutation(() => TemplateContentType_)
+    async CreateTemplateContentType(
+        @Arg('input', () => CreateTemplateContentTypeInput) input: CreateTemplateContentTypeInput,
+        @Ctx() { dataSource, userPayload }: AppContext, 
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.CreateRecord('Template Content Types', input, dataSource, userPayload, pubSub)
+    }
+        
+    @Mutation(() => TemplateContentType_)
+    async UpdateTemplateContentType(
+        @Arg('input', () => UpdateTemplateContentTypeInput) input: UpdateTemplateContentTypeInput,
+        @Ctx() { dataSource, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.UpdateRecord('Template Content Types', input, dataSource, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for Recommendations
+//****************************************************************************
+@ObjectType({ description: 'Recommendation headers that store the left side of the recommendation which we track in the SourceEntityID/SourceEntityRecordID' })
+export class Recommendation_ {  
+    @Field(() => Int) 
+    ID: number;
+          
+    @Field(() => Int) 
+    RecommendationRunID: number;
+          
+    @Field(() => Int) 
+    SourceEntityID: number;
+          
+    @Field({description: 'The record ID of the source entity'}) 
+    SourceEntityRecordID: string;
+          
+    @Field({nullable: true}) 
+    @MaxLength(8)
+    CreatedAt?: Date;
+          
+    @Field({nullable: true}) 
+    @MaxLength(8)
+    UpdatedAt?: Date;
+          
+    @Field() 
+    @MaxLength(510)
+    SourceEntity: string;
+        
+    @Field(() => [mj_core_schema_server_object_types.RecommendationItem_])
+    RecommendationItemsArray: mj_core_schema_server_object_types.RecommendationItem_[]; // Link to RecommendationItems
+    
+}
+        
+//****************************************************************************
+// INPUT TYPE for Recommendations   
+//****************************************************************************
+@InputType()
+export class CreateRecommendationInput {
+    @Field(() => Int)
+    RecommendationRunID: number;
+
+    @Field(() => Int)
+    SourceEntityID: number;
+
+    @Field()
+    SourceEntityRecordID: string;
+}
+    
+        
+//****************************************************************************
+// INPUT TYPE for Recommendations   
+//****************************************************************************
+@InputType()
+export class UpdateRecommendationInput {
+    @Field(() => Int)
+    ID: number;
+
+    @Field(() => Int)
+    RecommendationRunID: number;
+
+    @Field(() => Int)
+    SourceEntityID: number;
+
+    @Field()
+    SourceEntityRecordID: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
+//****************************************************************************
+// RESOLVER for Recommendations
+//****************************************************************************
+@ObjectType()
+export class RunRecommendationViewResult {
+    @Field(() => [Recommendation_])
+    Results: Recommendation_[];
+
+    @Field(() => Int, {nullable: true})
+    UserViewRunID?: number;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(Recommendation_)
+export class RecommendationResolver extends ResolverBase {
+    @Query(() => RunRecommendationViewResult)
+    async RunRecommendationViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunRecommendationViewResult)
+    async RunRecommendationViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunRecommendationViewResult)
+    async RunRecommendationDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        input.EntityName = 'Recommendations';
+        return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
+    }
+    @Query(() => Recommendation_, { nullable: true })
+    async Recommendation(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<Recommendation_ | null> {
+        this.CheckUserReadPermissions('Recommendations', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwRecommendations] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Recommendations', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Recommendations', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
+    }
+      
+    @FieldResolver(() => [mj_core_schema_server_object_types.RecommendationItem_])
+    async RecommendationItemsArray(@Root() recommendation_: Recommendation_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Recommendation Items', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwRecommendationItems] WHERE [RecommendationID]=${recommendation_.ID} ` + this.getRowLevelSecurityWhereClause('Recommendation Items', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Recommendation Items', await dataSource.query(sSQL));
+        return result;
+    }
+        
+    @Mutation(() => Recommendation_)
+    async CreateRecommendation(
+        @Arg('input', () => CreateRecommendationInput) input: CreateRecommendationInput,
+        @Ctx() { dataSource, userPayload }: AppContext, 
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.CreateRecord('Recommendations', input, dataSource, userPayload, pubSub)
+    }
+        
+    @Mutation(() => Recommendation_)
+    async UpdateRecommendation(
+        @Arg('input', () => UpdateRecommendationInput) input: UpdateRecommendationInput,
+        @Ctx() { dataSource, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.UpdateRecord('Recommendations', input, dataSource, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for Recommendation Providers
+//****************************************************************************
+@ObjectType({ description: 'Recommendation providers details' })
+export class RecommendationProvider_ {  
+    @Field(() => Int) 
+    ID: number;
+          
+    @Field() 
+    @MaxLength(510)
+    Name: string;
+          
+    @Field({nullable: true}) 
+    Description?: string;
+          
+    @Field({nullable: true}) 
+    @MaxLength(8)
+    CreatedAt?: Date;
+          
+    @Field({nullable: true}) 
+    @MaxLength(8)
+    UpdatedAt?: Date;
+        
+    @Field(() => [mj_core_schema_server_object_types.RecommendationRun_])
+    RecommendationRunsArray: mj_core_schema_server_object_types.RecommendationRun_[]; // Link to RecommendationRuns
+    
+}
+        
+//****************************************************************************
+// INPUT TYPE for Recommendation Providers   
+//****************************************************************************
+@InputType()
+export class CreateRecommendationProviderInput {
+    @Field()
+    Name: string;
+
+    @Field({ nullable: true })
+    Description?: string;
+}
+    
+        
+//****************************************************************************
+// INPUT TYPE for Recommendation Providers   
+//****************************************************************************
+@InputType()
+export class UpdateRecommendationProviderInput {
+    @Field(() => Int)
+    ID: number;
+
+    @Field()
+    Name: string;
+
+    @Field({ nullable: true })
+    Description?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
+//****************************************************************************
+// RESOLVER for Recommendation Providers
+//****************************************************************************
+@ObjectType()
+export class RunRecommendationProviderViewResult {
+    @Field(() => [RecommendationProvider_])
+    Results: RecommendationProvider_[];
+
+    @Field(() => Int, {nullable: true})
+    UserViewRunID?: number;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(RecommendationProvider_)
+export class RecommendationProviderResolver extends ResolverBase {
+    @Query(() => RunRecommendationProviderViewResult)
+    async RunRecommendationProviderViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunRecommendationProviderViewResult)
+    async RunRecommendationProviderViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunRecommendationProviderViewResult)
+    async RunRecommendationProviderDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        input.EntityName = 'Recommendation Providers';
+        return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
+    }
+    @Query(() => RecommendationProvider_, { nullable: true })
+    async RecommendationProvider(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<RecommendationProvider_ | null> {
+        this.CheckUserReadPermissions('Recommendation Providers', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwRecommendationProviders] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Recommendation Providers', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Recommendation Providers', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
+    }
+      
+    @FieldResolver(() => [mj_core_schema_server_object_types.RecommendationRun_])
+    async RecommendationRunsArray(@Root() recommendationprovider_: RecommendationProvider_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Recommendation Runs', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwRecommendationRuns] WHERE [RecommendationProviderID]=${recommendationprovider_.ID} ` + this.getRowLevelSecurityWhereClause('Recommendation Runs', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Recommendation Runs', await dataSource.query(sSQL));
+        return result;
+    }
+        
+    @Mutation(() => RecommendationProvider_)
+    async CreateRecommendationProvider(
+        @Arg('input', () => CreateRecommendationProviderInput) input: CreateRecommendationProviderInput,
+        @Ctx() { dataSource, userPayload }: AppContext, 
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.CreateRecord('Recommendation Providers', input, dataSource, userPayload, pubSub)
+    }
+        
+    @Mutation(() => RecommendationProvider_)
+    async UpdateRecommendationProvider(
+        @Arg('input', () => UpdateRecommendationProviderInput) input: UpdateRecommendationProviderInput,
+        @Ctx() { dataSource, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.UpdateRecord('Recommendation Providers', input, dataSource, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for Recommendation Runs
+//****************************************************************************
+@ObjectType({ description: 'Recommendation runs log each time a provider is requested to provide recommendations' })
+export class RecommendationRun_ {  
+    @Field(() => Int) 
+    ID: number;
+          
+    @Field(() => Int) 
+    RecommendationProviderID: number;
+          
+    @Field({description: 'The start date of the recommendation run'}) 
+    @MaxLength(8)
+    StartDate: Date;
+          
+    @Field({nullable: true, description: 'The end date of the recommendation run'}) 
+    @MaxLength(8)
+    EndDate?: Date;
+          
+    @Field({description: 'The status of the recommendation run'}) 
+    @MaxLength(100)
+    Status: string;
+          
+    @Field({nullable: true}) 
+    Description?: string;
+          
+    @Field(() => Int) 
+    RunByUserID: number;
+          
+    @Field({nullable: true}) 
+    @MaxLength(8)
+    CreatedAt?: Date;
+          
+    @Field({nullable: true}) 
+    @MaxLength(8)
+    UpdatedAt?: Date;
+          
+    @Field() 
+    @MaxLength(510)
+    RecommendationProvider: string;
+          
+    @Field() 
+    @MaxLength(200)
+    RunByUser: string;
+        
+    @Field(() => [mj_core_schema_server_object_types.Recommendation_])
+    RecommendationsArray: mj_core_schema_server_object_types.Recommendation_[]; // Link to Recommendations
+    
+}
+        
+//****************************************************************************
+// INPUT TYPE for Recommendation Runs   
+//****************************************************************************
+@InputType()
+export class CreateRecommendationRunInput {
+    @Field(() => Int)
+    RecommendationProviderID: number;
+
+    @Field()
+    StartDate: Date;
+
+    @Field({ nullable: true })
+    EndDate?: Date;
+
+    @Field()
+    Status: string;
+
+    @Field({ nullable: true })
+    Description?: string;
+
+    @Field(() => Int)
+    RunByUserID: number;
+}
+    
+        
+//****************************************************************************
+// INPUT TYPE for Recommendation Runs   
+//****************************************************************************
+@InputType()
+export class UpdateRecommendationRunInput {
+    @Field(() => Int)
+    ID: number;
+
+    @Field(() => Int)
+    RecommendationProviderID: number;
+
+    @Field()
+    StartDate: Date;
+
+    @Field({ nullable: true })
+    EndDate?: Date;
+
+    @Field()
+    Status: string;
+
+    @Field({ nullable: true })
+    Description?: string;
+
+    @Field(() => Int)
+    RunByUserID: number;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
+//****************************************************************************
+// RESOLVER for Recommendation Runs
+//****************************************************************************
+@ObjectType()
+export class RunRecommendationRunViewResult {
+    @Field(() => [RecommendationRun_])
+    Results: RecommendationRun_[];
+
+    @Field(() => Int, {nullable: true})
+    UserViewRunID?: number;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(RecommendationRun_)
+export class RecommendationRunResolver extends ResolverBase {
+    @Query(() => RunRecommendationRunViewResult)
+    async RunRecommendationRunViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunRecommendationRunViewResult)
+    async RunRecommendationRunViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunRecommendationRunViewResult)
+    async RunRecommendationRunDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        input.EntityName = 'Recommendation Runs';
+        return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
+    }
+    @Query(() => RecommendationRun_, { nullable: true })
+    async RecommendationRun(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<RecommendationRun_ | null> {
+        this.CheckUserReadPermissions('Recommendation Runs', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwRecommendationRuns] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Recommendation Runs', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Recommendation Runs', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
+    }
+      
+    @FieldResolver(() => [mj_core_schema_server_object_types.Recommendation_])
+    async RecommendationsArray(@Root() recommendationrun_: RecommendationRun_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Recommendations', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwRecommendations] WHERE [RecommendationRunID]=${recommendationrun_.ID} ` + this.getRowLevelSecurityWhereClause('Recommendations', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Recommendations', await dataSource.query(sSQL));
+        return result;
+    }
+        
+    @Mutation(() => RecommendationRun_)
+    async CreateRecommendationRun(
+        @Arg('input', () => CreateRecommendationRunInput) input: CreateRecommendationRunInput,
+        @Ctx() { dataSource, userPayload }: AppContext, 
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.CreateRecord('Recommendation Runs', input, dataSource, userPayload, pubSub)
+    }
+        
+    @Mutation(() => RecommendationRun_)
+    async UpdateRecommendationRun(
+        @Arg('input', () => UpdateRecommendationRunInput) input: UpdateRecommendationRunInput,
+        @Ctx() { dataSource, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.UpdateRecord('Recommendation Runs', input, dataSource, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for Recommendation Items
+//****************************************************************************
+@ObjectType({ description: 'Table to store individual recommendation items that are the right side of the recommendation which we track in the DestinationEntityID/DestinationEntityRecordID' })
+export class RecommendationItem_ {  
+    @Field(() => Int) 
+    ID: number;
+          
+    @Field(() => Int) 
+    RecommendationID: number;
+          
+    @Field(() => Int, {description: 'The ID of the destination entity'}) 
+    DestinationEntityID: number;
+          
+    @Field({description: 'The record ID of the destination entity'}) 
+    DestinationEntityRecordID: string;
+          
+    @Field(() => Float, {nullable: true, description: 'A value between 0 and 1 indicating the probability of the match, higher numbers indicating a more certain match/recommendation.'}) 
+    MatchProbability?: number;
+          
+    @Field({nullable: true}) 
+    @MaxLength(8)
+    CreatedAt?: Date;
+          
+    @Field({nullable: true}) 
+    @MaxLength(8)
+    UpdatedAt?: Date;
+          
+    @Field() 
+    @MaxLength(510)
+    DestinationEntity: string;
+        
+}
+        
+//****************************************************************************
+// INPUT TYPE for Recommendation Items   
+//****************************************************************************
+@InputType()
+export class CreateRecommendationItemInput {
+    @Field(() => Int)
+    RecommendationID: number;
+
+    @Field(() => Int)
+    DestinationEntityID: number;
+
+    @Field()
+    DestinationEntityRecordID: string;
+
+    @Field(() => Float, { nullable: true })
+    MatchProbability?: number;
+}
+    
+        
+//****************************************************************************
+// INPUT TYPE for Recommendation Items   
+//****************************************************************************
+@InputType()
+export class UpdateRecommendationItemInput {
+    @Field(() => Int)
+    ID: number;
+
+    @Field(() => Int)
+    RecommendationID: number;
+
+    @Field(() => Int)
+    DestinationEntityID: number;
+
+    @Field()
+    DestinationEntityRecordID: string;
+
+    @Field(() => Float, { nullable: true })
+    MatchProbability?: number;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
+//****************************************************************************
+// RESOLVER for Recommendation Items
+//****************************************************************************
+@ObjectType()
+export class RunRecommendationItemViewResult {
+    @Field(() => [RecommendationItem_])
+    Results: RecommendationItem_[];
+
+    @Field(() => Int, {nullable: true})
+    UserViewRunID?: number;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(RecommendationItem_)
+export class RecommendationItemResolver extends ResolverBase {
+    @Query(() => RunRecommendationItemViewResult)
+    async RunRecommendationItemViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunRecommendationItemViewResult)
+    async RunRecommendationItemViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunRecommendationItemViewResult)
+    async RunRecommendationItemDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        input.EntityName = 'Recommendation Items';
+        return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
+    }
+    @Query(() => RecommendationItem_, { nullable: true })
+    async RecommendationItem(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<RecommendationItem_ | null> {
+        this.CheckUserReadPermissions('Recommendation Items', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwRecommendationItems] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Recommendation Items', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Recommendation Items', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
+    }
+    
+    @Mutation(() => RecommendationItem_)
+    async CreateRecommendationItem(
+        @Arg('input', () => CreateRecommendationItemInput) input: CreateRecommendationItemInput,
+        @Ctx() { dataSource, userPayload }: AppContext, 
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.CreateRecord('Recommendation Items', input, dataSource, userPayload, pubSub)
+    }
+        
+    @Mutation(() => RecommendationItem_)
+    async UpdateRecommendationItem(
+        @Arg('input', () => UpdateRecommendationItemInput) input: UpdateRecommendationItemInput,
+        @Ctx() { dataSource, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.UpdateRecord('Recommendation Items', input, dataSource, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for Entity Communication Message Types
+//****************************************************************************
+@ObjectType({ description: 'Mapping between entities and communication base message types' })
+export class EntityCommunicationMessageType_ {  
+    @Field(() => Int) 
+    ID: number;
+          
+    @Field(() => Int, {description: 'ID of the entity'}) 
+    EntityID: number;
+          
+    @Field(() => Int, {description: 'ID of the communication base message type'}) 
+    BaseMessageTypeID: number;
+          
+    @Field(() => Boolean, {description: 'Indicates whether the message type is active'}) 
+    IsActive: boolean;
+          
+    @Field() 
+    @MaxLength(8)
+    CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(8)
+    UpdatedAt: Date;
+          
+    @Field() 
+    @MaxLength(510)
+    Entity: string;
+          
+    @Field() 
+    @MaxLength(200)
+    BaseMessageType: string;
+        
+    @Field(() => [mj_core_schema_server_object_types.EntityCommunicationField_])
+    EntityCommunicationFieldsArray: mj_core_schema_server_object_types.EntityCommunicationField_[]; // Link to EntityCommunicationFields
+    
+}
+        
+//****************************************************************************
+// INPUT TYPE for Entity Communication Message Types   
+//****************************************************************************
+@InputType()
+export class CreateEntityCommunicationMessageTypeInput {
+    @Field(() => Int)
+    EntityID: number;
+
+    @Field(() => Int)
+    BaseMessageTypeID: number;
+
+    @Field(() => Boolean)
+    IsActive: boolean;
+}
+    
+        
+//****************************************************************************
+// INPUT TYPE for Entity Communication Message Types   
+//****************************************************************************
+@InputType()
+export class UpdateEntityCommunicationMessageTypeInput {
+    @Field(() => Int)
+    ID: number;
+
+    @Field(() => Int)
+    EntityID: number;
+
+    @Field(() => Int)
+    BaseMessageTypeID: number;
+
+    @Field(() => Boolean)
+    IsActive: boolean;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
+//****************************************************************************
+// RESOLVER for Entity Communication Message Types
+//****************************************************************************
+@ObjectType()
+export class RunEntityCommunicationMessageTypeViewResult {
+    @Field(() => [EntityCommunicationMessageType_])
+    Results: EntityCommunicationMessageType_[];
+
+    @Field(() => Int, {nullable: true})
+    UserViewRunID?: number;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(EntityCommunicationMessageType_)
+export class EntityCommunicationMessageTypeResolver extends ResolverBase {
+    @Query(() => RunEntityCommunicationMessageTypeViewResult)
+    async RunEntityCommunicationMessageTypeViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunEntityCommunicationMessageTypeViewResult)
+    async RunEntityCommunicationMessageTypeViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunEntityCommunicationMessageTypeViewResult)
+    async RunEntityCommunicationMessageTypeDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        input.EntityName = 'Entity Communication Message Types';
+        return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
+    }
+    @Query(() => EntityCommunicationMessageType_, { nullable: true })
+    async EntityCommunicationMessageType(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<EntityCommunicationMessageType_ | null> {
+        this.CheckUserReadPermissions('Entity Communication Message Types', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityCommunicationMessageTypes] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Entity Communication Message Types', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Entity Communication Message Types', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
+    }
+      
+    @FieldResolver(() => [mj_core_schema_server_object_types.EntityCommunicationField_])
+    async EntityCommunicationFieldsArray(@Root() entitycommunicationmessagetype_: EntityCommunicationMessageType_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Entity Communication Fields', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityCommunicationFields] WHERE [EntityCommunicationMessageTypeID]=${entitycommunicationmessagetype_.ID} ` + this.getRowLevelSecurityWhereClause('Entity Communication Fields', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Entity Communication Fields', await dataSource.query(sSQL));
+        return result;
+    }
+        
+    @Mutation(() => EntityCommunicationMessageType_)
+    async CreateEntityCommunicationMessageType(
+        @Arg('input', () => CreateEntityCommunicationMessageTypeInput) input: CreateEntityCommunicationMessageTypeInput,
+        @Ctx() { dataSource, userPayload }: AppContext, 
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.CreateRecord('Entity Communication Message Types', input, dataSource, userPayload, pubSub)
+    }
+        
+    @Mutation(() => EntityCommunicationMessageType_)
+    async UpdateEntityCommunicationMessageType(
+        @Arg('input', () => UpdateEntityCommunicationMessageTypeInput) input: UpdateEntityCommunicationMessageTypeInput,
+        @Ctx() { dataSource, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.UpdateRecord('Entity Communication Message Types', input, dataSource, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for Entity Communication Fields
+//****************************************************************************
+@ObjectType({ description: 'Mapping between entity fields and communication base message types with priority' })
+export class EntityCommunicationField_ {  
+    @Field(() => Int) 
+    ID: number;
+          
+    @Field(() => Int, {description: 'ID of the entity communication message type'}) 
+    EntityCommunicationMessageTypeID: number;
+          
+    @Field({description: 'Name of the field in the entity that maps to the communication base message type'}) 
+    @MaxLength(1000)
+    FieldName: string;
+          
+    @Field(() => Int, {description: 'Priority of the field for the communication base message type'}) 
+    Priority: number;
+          
+    @Field() 
+    @MaxLength(8)
+    CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(8)
+    UpdatedAt: Date;
+        
+}
+        
+//****************************************************************************
+// INPUT TYPE for Entity Communication Fields   
+//****************************************************************************
+@InputType()
+export class CreateEntityCommunicationFieldInput {
+    @Field(() => Int)
+    EntityCommunicationMessageTypeID: number;
+
+    @Field()
+    FieldName: string;
+
+    @Field(() => Int)
+    Priority: number;
+}
+    
+        
+//****************************************************************************
+// INPUT TYPE for Entity Communication Fields   
+//****************************************************************************
+@InputType()
+export class UpdateEntityCommunicationFieldInput {
+    @Field(() => Int)
+    ID: number;
+
+    @Field(() => Int)
+    EntityCommunicationMessageTypeID: number;
+
+    @Field()
+    FieldName: string;
+
+    @Field(() => Int)
+    Priority: number;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
+//****************************************************************************
+// RESOLVER for Entity Communication Fields
+//****************************************************************************
+@ObjectType()
+export class RunEntityCommunicationFieldViewResult {
+    @Field(() => [EntityCommunicationField_])
+    Results: EntityCommunicationField_[];
+
+    @Field(() => Int, {nullable: true})
+    UserViewRunID?: number;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(EntityCommunicationField_)
+export class EntityCommunicationFieldResolver extends ResolverBase {
+    @Query(() => RunEntityCommunicationFieldViewResult)
+    async RunEntityCommunicationFieldViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunEntityCommunicationFieldViewResult)
+    async RunEntityCommunicationFieldViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunEntityCommunicationFieldViewResult)
+    async RunEntityCommunicationFieldDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        input.EntityName = 'Entity Communication Fields';
+        return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
+    }
+    @Query(() => EntityCommunicationField_, { nullable: true })
+    async EntityCommunicationField(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<EntityCommunicationField_ | null> {
+        this.CheckUserReadPermissions('Entity Communication Fields', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityCommunicationFields] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Entity Communication Fields', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Entity Communication Fields', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
+    }
+    
+    @Mutation(() => EntityCommunicationField_)
+    async CreateEntityCommunicationField(
+        @Arg('input', () => CreateEntityCommunicationFieldInput) input: CreateEntityCommunicationFieldInput,
+        @Ctx() { dataSource, userPayload }: AppContext, 
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.CreateRecord('Entity Communication Fields', input, dataSource, userPayload, pubSub)
+    }
+        
+    @Mutation(() => EntityCommunicationField_)
+    async UpdateEntityCommunicationField(
+        @Arg('input', () => UpdateEntityCommunicationFieldInput) input: UpdateEntityCommunicationFieldInput,
+        @Ctx() { dataSource, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.UpdateRecord('Entity Communication Fields', input, dataSource, userPayload, pubSub);
     }
     
 }

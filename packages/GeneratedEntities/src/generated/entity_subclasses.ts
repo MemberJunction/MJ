@@ -77,6 +77,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
+        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -86,6 +87,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
+        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -192,6 +194,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
+        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -201,6 +204,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
+        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -285,6 +289,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: Rank
         * * Display Name: Rank
         * * SQL Data Type: int
+        * * Default Value: 100
         */
         get Rank(): number {  
             return this.Get('Rank');
@@ -318,6 +323,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
+        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -327,6 +333,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
+        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -377,6 +384,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: BCMID
         * * Display Name: BCMID
         * * SQL Data Type: uniqueidentifier
+        * * Default Value: newid()
         */
         get BCMID(): string {  
             return this.Get('BCMID');
@@ -662,6 +670,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: ActivityCount
         * * Display Name: Activity Count
         * * SQL Data Type: int
+        * * Default Value: 0
         */
         get ActivityCount(): number {  
             return this.Get('ActivityCount');
@@ -706,6 +715,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
+        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -715,6 +725,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
+        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -788,6 +799,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: BCMID
         * * Display Name: BCMID
         * * SQL Data Type: uniqueidentifier
+        * * Default Value: newid()
         */
         get BCMID(): string {  
             return this.Get('BCMID');
@@ -1042,6 +1054,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: ActivityCount
         * * Display Name: Activity Count
         * * SQL Data Type: int
+        * * Default Value: 0
         */
         get ActivityCount(): number {  
             return this.Get('ActivityCount');
@@ -1086,6 +1099,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
+        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -1095,6 +1109,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
+        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -1199,6 +1214,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
+        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -1208,6 +1224,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
+        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -1270,6 +1287,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: BCMID
         * * Display Name: BCMID
         * * SQL Data Type: uniqueidentifier
+        * * Default Value: newid()
         */
         get BCMID(): string {  
             return this.Get('BCMID');
@@ -1327,6 +1345,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: ActivityDate
         * * Display Name: Activity Date
         * * SQL Data Type: datetime
+        * * Default Value: getdate()
         */
         get ActivityDate(): Date | null {  
             return this.Get('ActivityDate');
@@ -1405,6 +1424,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
+        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -1414,6 +1434,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
+        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -1573,6 +1594,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
+        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -1582,6 +1604,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
+        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -1644,6 +1667,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: BCMID
         * * Display Name: BCMID
         * * SQL Data Type: uniqueidentifier
+        * * Default Value: newid()
         */
         get BCMID(): string {  
             return this.Get('BCMID');
@@ -1833,6 +1857,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
+        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -1842,6 +1867,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
+        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -1887,6 +1913,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: MRR
         * * Display Name: MRR
         * * SQL Data Type: money
+        * * Default Value: 0
         */
         get MRR(): number {  
             return this.Get('MRR');
@@ -1898,6 +1925,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: OneTimeFees
         * * Display Name: One Time Fees
         * * SQL Data Type: money
+        * * Default Value: 0
         */
         get OneTimeFees(): number {  
             return this.Get('OneTimeFees');
@@ -1909,6 +1937,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: ContractTermMonths
         * * Display Name: Contract Term Months
         * * SQL Data Type: int
+        * * Default Value: 0
         */
         get ContractTermMonths(): number {  
             return this.Get('ContractTermMonths');
@@ -1931,6 +1960,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: IsDeleted
         * * Display Name: Is Deleted
         * * SQL Data Type: bit
+        * * Default Value: 0
         */
         get IsDeleted(): boolean {  
             return this.Get('IsDeleted');
@@ -2053,6 +2083,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
+        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -2062,6 +2093,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
+        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -2135,6 +2167,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: BCMID
         * * Display Name: BCMID
         * * SQL Data Type: uniqueidentifier
+        * * Default Value: newid()
         */
         get BCMID(): string {  
             return this.Get('BCMID');
@@ -2179,6 +2212,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: SubTotal
         * * Display Name: Sub Total
         * * SQL Data Type: money
+        * * Default Value: 0
         */
         get SubTotal(): number {  
             return this.Get('SubTotal');
@@ -2190,6 +2224,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: Tax
         * * Display Name: Tax
         * * SQL Data Type: money
+        * * Default Value: 0
         */
         get Tax(): number {  
             return this.Get('Tax');
@@ -2201,6 +2236,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: Total
         * * Display Name: Total
         * * SQL Data Type: money
+        * * Default Value: 0
         */
         get Total(): number {  
             return this.Get('Total');
@@ -2292,6 +2328,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
+        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -2301,6 +2338,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
+        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -2401,6 +2439,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
+        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -2410,6 +2449,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
+        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -2527,6 +2567,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
+        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -2536,6 +2577,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
+        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -2643,6 +2685,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
+        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -2652,6 +2695,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
+        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -17613,6 +17657,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
+        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -17622,6 +17667,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
+        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -17762,6 +17808,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
+        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -17771,6 +17818,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
+        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');

@@ -435,7 +435,10 @@ export class ResolverBase {
             }
           }
           else {
-            throw new Error(`Record not found for ${entityName} with key ${JSON.stringify(cKey)}`);
+            // save failed, return null
+            throw new GraphQLError(`Record not found for ${entityName} with key ${JSON.stringify(cKey)}`, {
+              extensions: { code: 'LOAD_ENTITY_ERROR', entityName },
+            });
           }
         }
         else {
@@ -458,15 +461,16 @@ export class ResolverBase {
           return entityObject.GetAll();
         }
         else {
-          // save failed, return null
           throw new GraphQLError(entityObject.LatestResult?.Message ?? 'Unknown error', {
             extensions: { code: 'SAVE_ENTITY_ERROR', entityName },
           });
         }
       }
       else
-          return null; // update canceled by the BeforeUpdate event, return null
-  }
+        throw new GraphQLError('Save Canceled by BeforeSave() handler in ResolverBase', {
+          extensions: { code: 'SAVE_ENTITY_ERROR', entityName },
+        });
+}
 
   /**
    * This routine compares the OldValues property in the input object to the values in the DB that we just loaded. If there are differences, we need to check to see if the client 
@@ -566,11 +570,17 @@ export class ResolverBase {
             await this.AfterDelete(dataSource, key); // fire event
             return returnValue;
         }
-        else 
-            return null; // delete failed, this will cause an exception
+        else {
+          throw new GraphQLError(entityObject.LatestResult?.Message ?? 'Unknown error', {
+            extensions: { code: 'DELETE_ENTITY_ERROR', entityName },
+          });
+        }
     }
-    else
-        return null; // BeforeDelete canceled the operation, this will cause an exception
+    else {
+      throw new GraphQLError('Delete operation canceled by BeforeDelete() handler in ResolverBase', {
+        extensions: { code: 'DELETE_ENTITY_ERROR', entityName },
+      });
+    }
   }
 
   // Before/After DELETE Event Hooks for Sub-Classes to Override
