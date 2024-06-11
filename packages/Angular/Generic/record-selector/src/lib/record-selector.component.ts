@@ -20,6 +20,11 @@ export class RecordSelectorComponent  {
   @Input() DisplayField: string = '';
 
   /**
+   * The field name within the entity that has a CSS class representing an icon that should be displayed in the list items
+   */
+  @Input() DisplayIconField: string = '';
+
+  /**
    * The list of records that are available
    */
   @Input() AvailableRecords: BaseEntity[] = [];
@@ -39,7 +44,7 @@ export class RecordSelectorComponent  {
    */
   @Input() public ToolbarSettings: ListBoxToolbarConfig = {
     position: "right",
-    tools: ["moveUp", "moveDown", "transferAllFrom", "transferFrom", "transferAllTo", "transferTo"],
+    tools: ["moveUp", "transferFrom", "transferAllFrom", "transferAllTo", "transferTo", "moveDown"],
   };
 
   @Output() RecordSelected = new EventEmitter<BaseEntity[]>();
