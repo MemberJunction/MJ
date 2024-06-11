@@ -63,6 +63,8 @@ export abstract class BaseResourceComponent {
     }
 
     abstract GetResourceDisplayName(data: ResourceData): Promise<string>
+
+    abstract GetResourceIconClass(data: ResourceData): Promise<string>
 }
 
 export class ResourceData {

@@ -1,5 +1,5 @@
 .app-container {
-     padding: 10px;
+     padding: 15px;
 }
   
 .entity-list {
@@ -25,4 +25,61 @@
 .margin-top-neg-20 {
      margin-top: -20px;
      padding: 0px !important
+}
+
+.header-wrap {
+     display: flex;
+     justify-content: space-between;
+     align-items: center;
+     margin-bottom: 10px;
+     width: 100%;
+}
+
+.title-wrap {
+     flex-grow: 1;
+     font-size: 24px;
+}
+.title-wrap-inner {
+     display: block;
+}
+
+.breadcrumb {
+     color: darkblue;
+     cursor: pointer;
+     display: inline;
+     margin-left: 5px;
+     margin-right: 5px;
+}
+
+.breadcrumb-end {
+     display: inline;
+     margin-left: 5px;
+}
+
+
+.breadcrumb-separator {
+     font-size: 14px;
+     display: inline;
+     margin-left: 5px;
+     margin-right: 5px;
+}
+.home-icon {
+     margin-right: 5px;
+     font-size: 18px;
+     vertical-align: middle;
+}
+  
+.title-icon {
+     font-size: 32px;
+     margin-right: 15px;
+}
+
+.config-button {
+     display: flex;
+     align-items: center;
+}
+
+.button-icon {
+     margin-right: 5px;
+     font-size: 16px;
 }
