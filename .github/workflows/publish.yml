@@ -44,7 +44,7 @@ jobs:
 
       - name: Build packages
         run: npm run build
-      
+
       - name: Set up git credentials
         run: |
           git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -52,13 +52,13 @@ jobs:
           git remote set-url origin "https://$REPO_PAT@github.com/MemberJunction/MJ"
         env:
           REPO_PAT: ${{ secrets.MJ_GH_BOT_GITHUB_TOKEN }}
-      
+
       - name: Publish changes to npm main packages
         if: ${{ env.BRANCH == 'main' }}
         run: npm run release -- --branch origin/main --token "$NPM_TOKEN"
         env:
           NPM_TOKEN: ${{ secrets.CRAIG_BC_NPM_TOKEN }}
- 
+
       - name: Publish changes to npm next packages
         if: ${{ env.BRANCH == 'next' }}
         run: npm run release -- --no-push --branch origin/next --prerelease-prefix beta --tag beta --token "$NPM_TOKEN"
@@ -79,10 +79,11 @@ jobs:
         if: ${{ env.BRANCH == 'main' }}
         env:
           MJ_DISTRIBUTION_FILENAME: Distributions/MemberJunction_Code_Bootstrap.zip
+          VERSION: ${{ steps.version.outputs.VERSION }}
         run: |
           node CreateMJDistribution.js
           ARTIFACT=$(cat CreateMJDistribution.log)
-          npm run commitpush          
+          npm run commitpush
           SHA=$(git log -n1 --format=format:%H)
           echo "SHA=$SHA" >> $GITHUB_OUTPUT
           echo "Distribution zip created at $ARTIFACT" >> $GITHUB_STEP_SUMMARY

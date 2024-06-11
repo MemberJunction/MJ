@@ -9,6 +9,7 @@
 # Node artifact files
 node_modules/
 dist/
+dist-browser/
 
 # Compiled Java class files
 *.class
@@ -25,7 +26,6 @@ dist/
 # Maven
 target/
 dist/
-dist-browser/
 
 # JetBrains IDE
 .idea/

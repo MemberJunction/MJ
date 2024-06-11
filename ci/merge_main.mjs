@@ -14,13 +14,13 @@ if (!mergeResult.success) {
   throw new Error(`Merging with latest origin/main has failed!`);
 }
 
-console.log(`\nPushing to origin/main...`);
+console.log(`\nPushing to origin/next...`);
 
-const pushResult = await gitAsync(['push', '--no-verify', '--follow-tags', '--verbose', 'origin', 'HEAD:main'], {
+const pushResult = await gitAsync(['push', '--no-verify', '--follow-tags', '--verbose', 'origin', 'HEAD:next'], {
   cwd,
   verbose: true,
 });
 if (!pushResult.success) {
   console.error(JSON.stringify(pushResult));
-  throw new Error('Pushing to origin/main has failed!');
+  throw new Error('Pushing to origin/next has failed!');
 }

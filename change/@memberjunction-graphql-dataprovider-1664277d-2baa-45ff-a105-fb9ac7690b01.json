@@ -1,7 +1,7 @@
 {
   "type": "patch",
   "comment": "Applying package updates [skip ci]",
-  "packageName": "@memberjunction/communication-core",
+  "packageName": "@memberjunction/graphql-dataprovider",
   "email": "craig.adam@bluecypress.io",
   "dependentChangeType": "patch"
 }
