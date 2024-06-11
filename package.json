@@ -9,6 +9,7 @@
     "packages/AI/Recommendations/*",
     "packages/AI/Vectors/*",
     "packages/Communication/*",
+    "packages/Templates/*",
     "packages/Angular/*",
     "packages/Angular/Explorer/*",
     "packages/Angular/Generic/*",

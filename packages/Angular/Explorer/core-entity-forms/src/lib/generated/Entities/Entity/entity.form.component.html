@@ -593,6 +593,21 @@
                             [BottomMargin]="GridBottomMargin">
                         </mj-user-view-grid>
                     </mj-tab-body>
+
+                    <mj-tab Name="Entity Communication Message Types" 
+                        [Visible]="record.IsSaved" 
+                        [Props]="{EntityRelationshipID: 290}">
+                        Entity Communication Message Types
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Entity Communication Message Types')"  
+                            [NewRecordValues]="NewRecordValues('Entity Communication Message Types')"
+                            [AllowLoad]="IsCurrentTab('Entity Communication Message Types')"  
+                            [EditMode]="GridEditMode()"  
+                            [BottomMargin]="GridBottomMargin">
+                        </mj-user-view-grid>
+                    </mj-tab-body>
                 </mj-tabstrip>
             </kendo-splitter-pane>
         </kendo-splitter>

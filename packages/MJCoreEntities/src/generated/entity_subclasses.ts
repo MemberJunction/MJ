@@ -2680,6 +2680,18 @@ import { RegisterClass } from "@memberjunction/global";
         }
         
         /**
+        * * Field Name: PreferredCommunicationField
+        * * Display Name: Preferred Communication Field
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Used to specify a field within the entity that in turn contains the field name that will be used for record-level communication preferences. For example in a hypothetical entity called Contacts, say there is a field called PreferredComm and that field had possible values of Email1, SMS, and Phone, and those value in turn corresponded to field names in the entity. Each record in the Contacts entity could have a specific preference for which field would be used for communication. The MJ Communication Framework will use this information when available, as a priority ahead of the data in the Entity Communication Fields entity which is entity-level and not record-level.
+        */
+        get PreferredCommunicationField(): string | null {  
+            return this.Get('PreferredCommunicationField');
+        }
+        set PreferredCommunicationField(value: string | null) {
+            this.Set('PreferredCommunicationField', value);
+        }
+        /**
         * * Field Name: CodeName
         * * Display Name: Code Name
         * * SQL Data Type: nvarchar(MAX)
@@ -19449,6 +19461,248 @@ import { RegisterClass } from "@memberjunction/global";
         */
         get DestinationEntity(): string {  
             return this.Get('DestinationEntity');
+        }
+        
+
+    }
+        
+    /**
+     * Entity Communication Message Types - strongly typed entity sub-class
+     * * Schema: __mj
+     * * Base Table: EntityCommunicationMessageType
+     * * Base View: vwEntityCommunicationMessageTypes
+     * * @description Mapping between entities and communication base message types
+     * * Primary Key: ID
+     * @extends {BaseEntity}
+     * @class
+     * @public
+     */
+    @RegisterClass(BaseEntity, 'Entity Communication Message Types')
+    export class EntityCommunicationMessageTypeEntity extends BaseEntity {
+        /**
+        * Loads the Entity Communication Message Types record from the database
+        * @param ID: number - primary key value to load the Entity Communication Message Types record.
+        * @param EntityRelationshipsToLoad - (optional) the relationships to load
+        * @returns {Promise<boolean>} - true if successful, false otherwise
+        * @public
+        * @async
+        * @memberof EntityCommunicationMessageTypeEntity
+        * @method
+        * @override
+        */      
+        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+        }
+            
+        /**
+        * Entity Communication Message Types - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
+        * @public
+        * @method
+        * @override
+        * @memberof EntityCommunicationMessageTypeEntity
+        * @throws {Error} - Delete is not allowed for Entity Communication Message Types, to enable it set AllowDeleteAPI to 1 in the database.
+        */
+        public async Delete(): Promise<boolean> {
+            throw new Error('Delete is not allowed for Entity Communication Message Types, to enable it set AllowDeleteAPI to 1 in the database.');
+        } 
+            
+            /**
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: int
+        */
+        get ID(): number {  
+            return this.Get('ID');
+        }
+        
+        /**
+        * * Field Name: EntityID
+        * * Display Name: Entity ID
+        * * SQL Data Type: int
+        * * Related Entity/Foreign Key: Entities (vwEntities.ID)
+        * * Description: ID of the entity
+        */
+        get EntityID(): number {  
+            return this.Get('EntityID');
+        }
+        set EntityID(value: number) {
+            this.Set('EntityID', value);
+        }
+        /**
+        * * Field Name: BaseMessageTypeID
+        * * Display Name: Base Message Type ID
+        * * SQL Data Type: int
+        * * Related Entity/Foreign Key: Communication Base Message Types (vwCommunicationBaseMessageTypes.ID)
+        * * Description: ID of the communication base message type
+        */
+        get BaseMessageTypeID(): number {  
+            return this.Get('BaseMessageTypeID');
+        }
+        set BaseMessageTypeID(value: number) {
+            this.Set('BaseMessageTypeID', value);
+        }
+        /**
+        * * Field Name: IsActive
+        * * Display Name: Is Active
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: Indicates whether the message type is active
+        */
+        get IsActive(): boolean {  
+            return this.Get('IsActive');
+        }
+        set IsActive(value: boolean) {
+            this.Set('IsActive', value);
+        }
+        /**
+        * * Field Name: CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetime
+        */
+        get CreatedAt(): Date {  
+            return this.Get('CreatedAt');
+        }
+        
+        /**
+        * * Field Name: UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()
+        */
+        get UpdatedAt(): Date {  
+            return this.Get('UpdatedAt');
+        }
+        
+        /**
+        * * Field Name: Entity
+        * * Display Name: Entity
+        * * SQL Data Type: nvarchar(255)
+        * * Default Value: getdate()
+        */
+        get Entity(): string {  
+            return this.Get('Entity');
+        }
+        
+        /**
+        * * Field Name: BaseMessageType
+        * * Display Name: Base Message Type
+        * * SQL Data Type: nvarchar(100)
+        */
+        get BaseMessageType(): string {  
+            return this.Get('BaseMessageType');
+        }
+        
+
+    }
+        
+    /**
+     * Entity Communication Fields - strongly typed entity sub-class
+     * * Schema: __mj
+     * * Base Table: EntityCommunicationField
+     * * Base View: vwEntityCommunicationFields
+     * * @description Mapping between entity fields and communication base message types with priority
+     * * Primary Key: ID
+     * @extends {BaseEntity}
+     * @class
+     * @public
+     */
+    @RegisterClass(BaseEntity, 'Entity Communication Fields')
+    export class EntityCommunicationFieldEntity extends BaseEntity {
+        /**
+        * Loads the Entity Communication Fields record from the database
+        * @param ID: number - primary key value to load the Entity Communication Fields record.
+        * @param EntityRelationshipsToLoad - (optional) the relationships to load
+        * @returns {Promise<boolean>} - true if successful, false otherwise
+        * @public
+        * @async
+        * @memberof EntityCommunicationFieldEntity
+        * @method
+        * @override
+        */      
+        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+        }
+            
+        /**
+        * Entity Communication Fields - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
+        * @public
+        * @method
+        * @override
+        * @memberof EntityCommunicationFieldEntity
+        * @throws {Error} - Delete is not allowed for Entity Communication Fields, to enable it set AllowDeleteAPI to 1 in the database.
+        */
+        public async Delete(): Promise<boolean> {
+            throw new Error('Delete is not allowed for Entity Communication Fields, to enable it set AllowDeleteAPI to 1 in the database.');
+        } 
+            
+            /**
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: int
+        */
+        get ID(): number {  
+            return this.Get('ID');
+        }
+        
+        /**
+        * * Field Name: EntityCommunicationMessageTypeID
+        * * Display Name: Entity Communication Message Type ID
+        * * SQL Data Type: int
+        * * Related Entity/Foreign Key: Entity Communication Message Types (vwEntityCommunicationMessageTypes.ID)
+        * * Description: ID of the entity communication message type
+        */
+        get EntityCommunicationMessageTypeID(): number {  
+            return this.Get('EntityCommunicationMessageTypeID');
+        }
+        set EntityCommunicationMessageTypeID(value: number) {
+            this.Set('EntityCommunicationMessageTypeID', value);
+        }
+        /**
+        * * Field Name: FieldName
+        * * Display Name: Field Name
+        * * SQL Data Type: nvarchar(500)
+        * * Description: Name of the field in the entity that maps to the communication base message type
+        */
+        get FieldName(): string {  
+            return this.Get('FieldName');
+        }
+        set FieldName(value: string) {
+            this.Set('FieldName', value);
+        }
+        /**
+        * * Field Name: Priority
+        * * Display Name: Priority
+        * * SQL Data Type: int
+        * * Description: Priority of the field for the communication base message type
+        */
+        get Priority(): number {  
+            return this.Get('Priority');
+        }
+        set Priority(value: number) {
+            this.Set('Priority', value);
+        }
+        /**
+        * * Field Name: CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()
+        */
+        get CreatedAt(): Date {  
+            return this.Get('CreatedAt');
+        }
+        
+        /**
+        * * Field Name: UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()
+        */
+        get UpdatedAt(): Date {  
+            return this.Get('UpdatedAt');
         }
         
 

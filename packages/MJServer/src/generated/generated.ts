@@ -2,7 +2,7 @@
 * ALL ENTITIES - TypeGraphQL Type Class Definition - AUTO GENERATED FILE
 * Generated Entities and Resolvers for Server
 * 
-* GENERATED: 6/10/2024, 12:17:58 PM
+* GENERATED: 6/10/2024, 3:22:34 PM
 * 
 *   >>> DO NOT MODIFY THIS FILE!!!!!!!!!!!!
 *   >>> YOUR CHANGES WILL BE OVERWRITTEN
@@ -20,7 +20,7 @@ import { mj_core_schema } from '../config';
 
 import * as mj_core_schema_server_object_types from '@memberjunction/server'
 
-import { CompanyEntity, EmployeeEntity, UserFavoriteEntity, EmployeeCompanyIntegrationEntity, EmployeeRoleEntity, EmployeeSkillEntity, RoleEntity, SkillEntity, IntegrationURLFormatEntity, IntegrationEntity, CompanyIntegrationEntity, EntityFieldEntity, EntityEntity, UserEntity, EntityRelationshipEntity, UserRecordLogEntity, UserViewEntity, CompanyIntegrationRunEntity, CompanyIntegrationRunDetailEntity, ErrorLogEntity, ApplicationEntity, ApplicationEntityEntity, EntityPermissionEntity, UserApplicationEntityEntity, UserApplicationEntity, CompanyIntegrationRunAPILogEntity, ListEntity, ListDetailEntity, UserViewRunEntity, UserViewRunDetailEntity, WorkflowRunEntity, WorkflowEntity, WorkflowEngineEntity, RecordChangeEntity, UserRoleEntity, RowLevelSecurityFilterEntity, AuditLogEntity, AuthorizationEntity, AuthorizationRoleEntity, AuditLogTypeEntity, EntityFieldValueEntity, AIModelEntity, AIActionEntity, AIModelActionEntity, EntityAIActionEntity, AIModelTypeEntity, QueueTypeEntity, QueueEntity, QueueTaskEntity, DashboardEntity, OutputTriggerTypeEntity, OutputFormatTypeEntity, OutputDeliveryTypeEntity, ReportEntity, ReportSnapshotEntity, ResourceTypeEntity, TagEntity, TaggedItemEntity, WorkspaceEntity, WorkspaceItemEntity, DatasetEntity, DatasetItemEntity, ConversationDetailEntity, ConversationEntity, UserNotificationEntity, SchemaInfoEntity, CompanyIntegrationRecordMapEntity, RecordMergeLogEntity, RecordMergeDeletionLogEntity, QueryFieldEntity, QueryCategoryEntity, QueryEntity, QueryPermissionEntity, VectorIndexEntity, EntityDocumentTypeEntity, EntityDocumentRunEntity, VectorDatabaseEntity, EntityRecordDocumentEntity, EntityDocumentEntity, DataContextItemEntity, DataContextEntity, UserViewCategoryEntity, DashboardCategoryEntity, ReportCategoryEntity, FileStorageProviderEntity, FileEntity, FileCategoryEntity, FileEntityRecordLinkEntity, VersionInstallationEntity, DuplicateRunDetailMatchEntity, EntityDocumentSettingEntity, EntitySettingEntity, DuplicateRunEntity, DuplicateRunDetailEntity, EntityBehaviorEntity, EntityBehaviorTypeEntity, ApplicationSettingEntity, ActionCategoryEntity, EntityActionEntity, EntityActionInvocationEntity, ActionAuthorizationEntity, EntityActionInvocationTypeEntity, ActionEntity, EntityActionFilterEntity, ActionFilterEntity, ActionContextTypeEntity, ActionResultCodeEntity, ActionContextEntity, ActionExecutionLogEntity, ActionParamEntity, ActionLibraryEntity, LibraryEntity, ListCategoryEntity, CommunicationProviderEntity, CommunicationRunEntity, CommunicationProviderMessageTypeEntity, CommunicationLogEntity, CommunicationBaseMessageTypeEntity, TemplateEntity, TemplateCategoryEntity, TemplateContentEntity, TemplateParamEntity, TemplateContentTypeEntity, RecommendationEntity, RecommendationProviderEntity, RecommendationRunEntity, RecommendationItemEntity } from '@memberjunction/core-entities';
+import { CompanyEntity, EmployeeEntity, UserFavoriteEntity, EmployeeCompanyIntegrationEntity, EmployeeRoleEntity, EmployeeSkillEntity, RoleEntity, SkillEntity, IntegrationURLFormatEntity, IntegrationEntity, CompanyIntegrationEntity, EntityFieldEntity, EntityEntity, UserEntity, EntityRelationshipEntity, UserRecordLogEntity, UserViewEntity, CompanyIntegrationRunEntity, CompanyIntegrationRunDetailEntity, ErrorLogEntity, ApplicationEntity, ApplicationEntityEntity, EntityPermissionEntity, UserApplicationEntityEntity, UserApplicationEntity, CompanyIntegrationRunAPILogEntity, ListEntity, ListDetailEntity, UserViewRunEntity, UserViewRunDetailEntity, WorkflowRunEntity, WorkflowEntity, WorkflowEngineEntity, RecordChangeEntity, UserRoleEntity, RowLevelSecurityFilterEntity, AuditLogEntity, AuthorizationEntity, AuthorizationRoleEntity, AuditLogTypeEntity, EntityFieldValueEntity, AIModelEntity, AIActionEntity, AIModelActionEntity, EntityAIActionEntity, AIModelTypeEntity, QueueTypeEntity, QueueEntity, QueueTaskEntity, DashboardEntity, OutputTriggerTypeEntity, OutputFormatTypeEntity, OutputDeliveryTypeEntity, ReportEntity, ReportSnapshotEntity, ResourceTypeEntity, TagEntity, TaggedItemEntity, WorkspaceEntity, WorkspaceItemEntity, DatasetEntity, DatasetItemEntity, ConversationDetailEntity, ConversationEntity, UserNotificationEntity, SchemaInfoEntity, CompanyIntegrationRecordMapEntity, RecordMergeLogEntity, RecordMergeDeletionLogEntity, QueryFieldEntity, QueryCategoryEntity, QueryEntity, QueryPermissionEntity, VectorIndexEntity, EntityDocumentTypeEntity, EntityDocumentRunEntity, VectorDatabaseEntity, EntityRecordDocumentEntity, EntityDocumentEntity, DataContextItemEntity, DataContextEntity, UserViewCategoryEntity, DashboardCategoryEntity, ReportCategoryEntity, FileStorageProviderEntity, FileEntity, FileCategoryEntity, FileEntityRecordLinkEntity, VersionInstallationEntity, DuplicateRunDetailMatchEntity, EntityDocumentSettingEntity, EntitySettingEntity, DuplicateRunEntity, DuplicateRunDetailEntity, EntityBehaviorEntity, EntityBehaviorTypeEntity, ApplicationSettingEntity, ActionCategoryEntity, EntityActionEntity, EntityActionInvocationEntity, ActionAuthorizationEntity, EntityActionInvocationTypeEntity, ActionEntity, EntityActionFilterEntity, ActionFilterEntity, ActionContextTypeEntity, ActionResultCodeEntity, ActionContextEntity, ActionExecutionLogEntity, ActionParamEntity, ActionLibraryEntity, LibraryEntity, ListCategoryEntity, CommunicationProviderEntity, CommunicationRunEntity, CommunicationProviderMessageTypeEntity, CommunicationLogEntity, CommunicationBaseMessageTypeEntity, TemplateEntity, TemplateCategoryEntity, TemplateContentEntity, TemplateParamEntity, TemplateContentTypeEntity, RecommendationEntity, RecommendationProviderEntity, RecommendationRunEntity, RecommendationItemEntity, EntityCommunicationMessageTypeEntity, EntityCommunicationFieldEntity } from '@memberjunction/core-entities';
     
 
 //****************************************************************************
@@ -2464,6 +2464,10 @@ export class Entity_ {
     @MaxLength(8)
     UpdatedAt: Date;
           
+    @Field({nullable: true, description: 'Used to specify a field within the entity that in turn contains the field name that will be used for record-level communication preferences. For example in a hypothetical entity called Contacts, say there is a field called PreferredComm and that field had possible values of Email1, SMS, and Phone, and those value in turn corresponded to field names in the entity. Each record in the Contacts entity could have a specific preference for which field would be used for communication. The MJ Communication Framework will use this information when available, as a priority ahead of the data in the Entity Communication Fields entity which is entity-level and not record-level.'}) 
+    @MaxLength(510)
+    PreferredCommunicationField?: string;
+          
     @Field({nullable: true}) 
     CodeName?: string;
           
@@ -2590,6 +2594,9 @@ export class Entity_ {
     @Field(() => [mj_core_schema_server_object_types.RecommendationItem_])
     RecommendationItemsArray: mj_core_schema_server_object_types.RecommendationItem_[]; // Link to RecommendationItems
     
+    @Field(() => [mj_core_schema_server_object_types.EntityCommunicationMessageType_])
+    EntityCommunicationMessageTypesArray: mj_core_schema_server_object_types.EntityCommunicationMessageType_[]; // Link to EntityCommunicationMessageTypes
+    
 }
         
 //****************************************************************************
@@ -2710,6 +2717,9 @@ export class CreateEntityInput {
 
     @Field({ nullable: true })
     EntityObjectSubclassImport?: string;
+
+    @Field({ nullable: true })
+    PreferredCommunicationField?: string;
 }
     
         
@@ -2831,6 +2841,9 @@ export class UpdateEntityInput {
 
     @Field({ nullable: true })
     EntityObjectSubclassImport?: string;
+
+    @Field({ nullable: true })
+    PreferredCommunicationField?: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -3173,6 +3186,14 @@ export class EntityResolverBase extends ResolverBase {
         this.CheckUserReadPermissions('Recommendation Items', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwRecommendationItems] WHERE [DestinationEntityID]=${entity_.ID} ` + this.getRowLevelSecurityWhereClause('Recommendation Items', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Recommendation Items', await dataSource.query(sSQL));
+        return result;
+    }
+          
+    @FieldResolver(() => [mj_core_schema_server_object_types.EntityCommunicationMessageType_])
+    async EntityCommunicationMessageTypesArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Entity Communication Message Types', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityCommunicationMessageTypes] WHERE [EntityID]=${entity_.ID} ` + this.getRowLevelSecurityWhereClause('Entity Communication Message Types', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Entity Communication Message Types', await dataSource.query(sSQL));
         return result;
     }
         
@@ -21138,6 +21159,9 @@ export class CommunicationBaseMessageType_ {
     @Field(() => [mj_core_schema_server_object_types.CommunicationProviderMessageType_])
     CommunicationProviderMessageTypesArray: mj_core_schema_server_object_types.CommunicationProviderMessageType_[]; // Link to CommunicationProviderMessageTypes
     
+    @Field(() => [mj_core_schema_server_object_types.EntityCommunicationMessageType_])
+    EntityCommunicationMessageTypesArray: mj_core_schema_server_object_types.EntityCommunicationMessageType_[]; // Link to EntityCommunicationMessageTypes
+    
 }
         
 //****************************************************************************
@@ -21246,6 +21270,14 @@ export class CommunicationBaseMessageTypeResolver extends ResolverBase {
         this.CheckUserReadPermissions('Communication Provider Message Types', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwCommunicationProviderMessageTypes] WHERE [CommunicationBaseMessageTypeID]=${communicationbasemessagetype_.ID} ` + this.getRowLevelSecurityWhereClause('Communication Provider Message Types', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Communication Provider Message Types', await dataSource.query(sSQL));
+        return result;
+    }
+          
+    @FieldResolver(() => [mj_core_schema_server_object_types.EntityCommunicationMessageType_])
+    async EntityCommunicationMessageTypesArray(@Root() communicationbasemessagetype_: CommunicationBaseMessageType_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Entity Communication Message Types', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityCommunicationMessageTypes] WHERE [BaseMessageTypeID]=${communicationbasemessagetype_.ID} ` + this.getRowLevelSecurityWhereClause('Entity Communication Message Types', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Entity Communication Message Types', await dataSource.query(sSQL));
         return result;
     }
         
@@ -22772,6 +22804,298 @@ export class RecommendationItemResolver extends ResolverBase {
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.UpdateRecord('Recommendation Items', input, dataSource, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for Entity Communication Message Types
+//****************************************************************************
+@ObjectType({ description: 'Mapping between entities and communication base message types' })
+export class EntityCommunicationMessageType_ {  
+    @Field(() => Int) 
+    ID: number;
+          
+    @Field(() => Int, {description: 'ID of the entity'}) 
+    EntityID: number;
+          
+    @Field(() => Int, {description: 'ID of the communication base message type'}) 
+    BaseMessageTypeID: number;
+          
+    @Field(() => Boolean, {description: 'Indicates whether the message type is active'}) 
+    IsActive: boolean;
+          
+    @Field() 
+    @MaxLength(8)
+    CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(8)
+    UpdatedAt: Date;
+          
+    @Field() 
+    @MaxLength(510)
+    Entity: string;
+          
+    @Field() 
+    @MaxLength(200)
+    BaseMessageType: string;
+        
+    @Field(() => [mj_core_schema_server_object_types.EntityCommunicationField_])
+    EntityCommunicationFieldsArray: mj_core_schema_server_object_types.EntityCommunicationField_[]; // Link to EntityCommunicationFields
+    
+}
+        
+//****************************************************************************
+// INPUT TYPE for Entity Communication Message Types   
+//****************************************************************************
+@InputType()
+export class CreateEntityCommunicationMessageTypeInput {
+    @Field(() => Int)
+    EntityID: number;
+
+    @Field(() => Int)
+    BaseMessageTypeID: number;
+
+    @Field(() => Boolean)
+    IsActive: boolean;
+}
+    
+        
+//****************************************************************************
+// INPUT TYPE for Entity Communication Message Types   
+//****************************************************************************
+@InputType()
+export class UpdateEntityCommunicationMessageTypeInput {
+    @Field(() => Int)
+    ID: number;
+
+    @Field(() => Int)
+    EntityID: number;
+
+    @Field(() => Int)
+    BaseMessageTypeID: number;
+
+    @Field(() => Boolean)
+    IsActive: boolean;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
+//****************************************************************************
+// RESOLVER for Entity Communication Message Types
+//****************************************************************************
+@ObjectType()
+export class RunEntityCommunicationMessageTypeViewResult {
+    @Field(() => [EntityCommunicationMessageType_])
+    Results: EntityCommunicationMessageType_[];
+
+    @Field(() => Int, {nullable: true})
+    UserViewRunID?: number;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(EntityCommunicationMessageType_)
+export class EntityCommunicationMessageTypeResolver extends ResolverBase {
+    @Query(() => RunEntityCommunicationMessageTypeViewResult)
+    async RunEntityCommunicationMessageTypeViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunEntityCommunicationMessageTypeViewResult)
+    async RunEntityCommunicationMessageTypeViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunEntityCommunicationMessageTypeViewResult)
+    async RunEntityCommunicationMessageTypeDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        input.EntityName = 'Entity Communication Message Types';
+        return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
+    }
+    @Query(() => EntityCommunicationMessageType_, { nullable: true })
+    async EntityCommunicationMessageType(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<EntityCommunicationMessageType_ | null> {
+        this.CheckUserReadPermissions('Entity Communication Message Types', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityCommunicationMessageTypes] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Entity Communication Message Types', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Entity Communication Message Types', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
+    }
+      
+    @FieldResolver(() => [mj_core_schema_server_object_types.EntityCommunicationField_])
+    async EntityCommunicationFieldsArray(@Root() entitycommunicationmessagetype_: EntityCommunicationMessageType_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Entity Communication Fields', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityCommunicationFields] WHERE [EntityCommunicationMessageTypeID]=${entitycommunicationmessagetype_.ID} ` + this.getRowLevelSecurityWhereClause('Entity Communication Fields', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Entity Communication Fields', await dataSource.query(sSQL));
+        return result;
+    }
+        
+    @Mutation(() => EntityCommunicationMessageType_)
+    async CreateEntityCommunicationMessageType(
+        @Arg('input', () => CreateEntityCommunicationMessageTypeInput) input: CreateEntityCommunicationMessageTypeInput,
+        @Ctx() { dataSource, userPayload }: AppContext, 
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.CreateRecord('Entity Communication Message Types', input, dataSource, userPayload, pubSub)
+    }
+        
+    @Mutation(() => EntityCommunicationMessageType_)
+    async UpdateEntityCommunicationMessageType(
+        @Arg('input', () => UpdateEntityCommunicationMessageTypeInput) input: UpdateEntityCommunicationMessageTypeInput,
+        @Ctx() { dataSource, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.UpdateRecord('Entity Communication Message Types', input, dataSource, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for Entity Communication Fields
+//****************************************************************************
+@ObjectType({ description: 'Mapping between entity fields and communication base message types with priority' })
+export class EntityCommunicationField_ {  
+    @Field(() => Int) 
+    ID: number;
+          
+    @Field(() => Int, {description: 'ID of the entity communication message type'}) 
+    EntityCommunicationMessageTypeID: number;
+          
+    @Field({description: 'Name of the field in the entity that maps to the communication base message type'}) 
+    @MaxLength(1000)
+    FieldName: string;
+          
+    @Field(() => Int, {description: 'Priority of the field for the communication base message type'}) 
+    Priority: number;
+          
+    @Field() 
+    @MaxLength(8)
+    CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(8)
+    UpdatedAt: Date;
+        
+}
+        
+//****************************************************************************
+// INPUT TYPE for Entity Communication Fields   
+//****************************************************************************
+@InputType()
+export class CreateEntityCommunicationFieldInput {
+    @Field(() => Int)
+    EntityCommunicationMessageTypeID: number;
+
+    @Field()
+    FieldName: string;
+
+    @Field(() => Int)
+    Priority: number;
+}
+    
+        
+//****************************************************************************
+// INPUT TYPE for Entity Communication Fields   
+//****************************************************************************
+@InputType()
+export class UpdateEntityCommunicationFieldInput {
+    @Field(() => Int)
+    ID: number;
+
+    @Field(() => Int)
+    EntityCommunicationMessageTypeID: number;
+
+    @Field()
+    FieldName: string;
+
+    @Field(() => Int)
+    Priority: number;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
+//****************************************************************************
+// RESOLVER for Entity Communication Fields
+//****************************************************************************
+@ObjectType()
+export class RunEntityCommunicationFieldViewResult {
+    @Field(() => [EntityCommunicationField_])
+    Results: EntityCommunicationField_[];
+
+    @Field(() => Int, {nullable: true})
+    UserViewRunID?: number;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(EntityCommunicationField_)
+export class EntityCommunicationFieldResolver extends ResolverBase {
+    @Query(() => RunEntityCommunicationFieldViewResult)
+    async RunEntityCommunicationFieldViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunEntityCommunicationFieldViewResult)
+    async RunEntityCommunicationFieldViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunEntityCommunicationFieldViewResult)
+    async RunEntityCommunicationFieldDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        input.EntityName = 'Entity Communication Fields';
+        return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
+    }
+    @Query(() => EntityCommunicationField_, { nullable: true })
+    async EntityCommunicationField(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<EntityCommunicationField_ | null> {
+        this.CheckUserReadPermissions('Entity Communication Fields', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityCommunicationFields] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Entity Communication Fields', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Entity Communication Fields', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
+    }
+    
+    @Mutation(() => EntityCommunicationField_)
+    async CreateEntityCommunicationField(
+        @Arg('input', () => CreateEntityCommunicationFieldInput) input: CreateEntityCommunicationFieldInput,
+        @Ctx() { dataSource, userPayload }: AppContext, 
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.CreateRecord('Entity Communication Fields', input, dataSource, userPayload, pubSub)
+    }
+        
+    @Mutation(() => EntityCommunicationField_)
+    async UpdateEntityCommunicationField(
+        @Arg('input', () => UpdateEntityCommunicationFieldInput) input: UpdateEntityCommunicationFieldInput,
+        @Ctx() { dataSource, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.UpdateRecord('Entity Communication Fields', input, dataSource, userPayload, pubSub);
     }
     
 }
