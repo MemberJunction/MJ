@@ -4,8 +4,6 @@ import { UserCache } from '@memberjunction/sqlserver-dataprovider';
 import { UserFavoriteEntity } from '@memberjunction/core-entities';
 
 import { UserFavorite_, UserFavoriteResolverBase } from '../generated/generated';
-import { CommunicationEngine } from '@memberjunction/communication-core';
-import { TemplateEngineServer } from '@memberjunction/templates';
 
 //****************************************************************************
 // INPUT TYPE for User Favorite Queries
@@ -91,7 +89,6 @@ export class UserFavoriteResolver extends UserFavoriteResolverBase {
     const e = md.Entities.find((e) => e.ID === params.EntityID);
     const u = UserCache.Users.find((u) => u.ID === userPayload.userRecord.ID);
     if (e) {
-      this.TestCommunicationFramework(userPayload.userRecord);
       md.SetRecordFavoriteStatus(params.UserID, e.Name, pk, params.IsFavorite, u);
       return {
         Success: true,
@@ -100,14 +97,14 @@ export class UserFavoriteResolver extends UserFavoriteResolverBase {
         CompositeKey: params.CompositeKey,
         IsFavorite: params.IsFavorite,
       };
-    } 
-    else 
+    }
+    else
       throw new Error(`Entity ID:${params.EntityID} not found`);
 
   }
- 
+
   private GetTestData() {
-    return [{ 
+    return [{
       firstName: 'John',
       lastName: 'Doe',
       title: 'Software Engineer II',
@@ -126,7 +123,7 @@ export class UserFavoriteResolver extends UserFavoriteResolverBase {
         },
         {
           title: 'The Art of Debugging',
-          url: 'https://example.com/article2'      
+          url: 'https://example.com/article2'
         },
         {
           title: 'Using Templates Effectively',
@@ -153,7 +150,7 @@ export class UserFavoriteResolver extends UserFavoriteResolverBase {
         },
         {
           title: 'AI and Software Development: A New Frontier',
-          url: 'https://example.com/article2'      
+          url: 'https://example.com/article2'
         },
         {
           title: 'Gardening Tips for Fun Loving Software Developers',
@@ -163,42 +160,7 @@ export class UserFavoriteResolver extends UserFavoriteResolverBase {
     }
   ]
   }
-  private async TestCommunicationFramework(user: UserInfo) {
-    const engine = CommunicationEngine.Instance;
-    await engine.Config(true, user);
-    const tEngine = TemplateEngineServer.Instance;
-    await tEngine.Config(true, user);
-    const t = TemplateEngineServer.Instance.FindTemplate('Test Template');
-    const s = TemplateEngineServer.Instance.FindTemplate('Test Subject Template');
-    const data = this.GetTestData();
 
-    // try single message
-    // const d = data[0];
-    // await engine.SendSingleMessage('SendGrid', 'Email', {
-    //   To: d.email,
-    //   From: "amith@bluecypress.io",
-    //   BodyTemplate: t,
-    //   SubjectTemplate: s,
-    //   ContextData: d,
-    //   MessageType: null
-    // });
-
-    // try multiple messages
-    await engine.SendMessages('SendGrid', 'Email', {
-      To: null,
-      From: "amith@bluecypress.io",
-      BodyTemplate: t,
-      SubjectTemplate: s,
-      ContextData: data,
-      MessageType: null
-    }, data.map((d) => {
-      return {
-        To: d.email,
-        ContextData: d
-      }
-    }));
-  }
- 
 }
 
 export default UserFavoriteResolver;
