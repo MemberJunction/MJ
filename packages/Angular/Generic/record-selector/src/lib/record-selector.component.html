@@ -9,6 +9,12 @@
         [toolbar]="ToolbarSettings"
         (dblclick)="onDblClick($event, 'unselected')"
     >
+        <ng-template kendoListBoxItemTemplate let-dataItem>
+            @if (this.DisplayIconField) {
+                <span [ngClass]="dataItem[this.DisplayIconField] + ' item-icon'"></span>
+            }
+            <span>{{ dataItem[DisplayField] }}</span>
+        </ng-template>
     </kendo-listbox>
     <kendo-listbox 
         class="list-box"
@@ -18,5 +24,11 @@
         [toolbar]="false"
         (dblclick)="onDblClick($event, 'selected')"
     >
+        <ng-template kendoListBoxItemTemplate let-dataItem>
+            @if (this.DisplayIconField) {
+                <span [ngClass]="dataItem[this.DisplayIconField] + ' item-icon'"></span>
+            }
+            <span>{{ dataItem[DisplayField] }}</span>
+        </ng-template>
     </kendo-listbox>
 </div>
