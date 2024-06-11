@@ -5,6 +5,7 @@ import { Message } from '@memberjunction/communication-types';
 import { EntityCommunicationsEngine } from '@memberjunction/entity-communications-server';
 import { RunViewParams } from '@memberjunction/core';
 import { GraphQLJSONObject } from 'graphql-type-json';
+import { TemplateEngineServer } from '@memberjunction/templates';
 
 
 @InputType()
@@ -51,20 +52,20 @@ export class TemplateInputType {
     @Field()
     Description: string;
 
-    @Field()
-    UserPrompt: string;
+    @Field({ nullable: true})
+    UserPrompt?: string;
 
-    @Field()
-    CategoryID: number;
+    @Field({ nullable: true})
+    CategoryID?: number;
 
     @Field()
     UserID: number;
 
-    @Field()
-    ActiveAt: Date;
+    @Field({ nullable: true})
+    ActiveAt?: Date;
 
-    @Field()
-    DisabledAt: Date;
+    @Field({ nullable: true})
+    DisabledAt?: Date;
  
     @Field()
     IsActive: boolean;
@@ -75,10 +76,10 @@ export class TemplateInputType {
     @Field()
     UpdatedAt: Date;
 
-    @Field()
+    @Field({ nullable: true})
     Category?: string;
 
-    @Field()
+    @Field({ nullable: true})
     User?: string;
 }
 @InputType()
@@ -168,11 +169,20 @@ export class ReportResolver {
                                         @Ctx() { userPayload }: AppContext): Promise<RunEntityCommunicationResultType> {
     try {
         await EntityCommunicationsEngine.Instance.Config(false, userPayload.userRecord);
-        EntityCommunicationsEngine.Instance.RunEntityCommunication(entityID, <RunViewParams>runViewByIDInput, providerName, providerMessageTypeName, <Message>message);  
-        return {
-            Success: true,
-            ErrorMessage: ''
-        }                        
+        const newMessage = new Message(<Message>message);
+        await TemplateEngineServer.Instance.Config(false, userPayload.userRecord);
+        // for the templates, replace the values from the input with the objects from the Template Engine we have here
+        if (newMessage.BodyTemplate) {
+            newMessage.BodyTemplate = TemplateEngineServer.Instance.FindTemplate(newMessage.BodyTemplate.Name);
+        }
+        if (newMessage.HTMLBodyTemplate) {
+            newMessage.HTMLBodyTemplate = TemplateEngineServer.Instance.FindTemplate(newMessage.HTMLBodyTemplate.Name);
+        }
+        if (newMessage.SubjectTemplate) {
+            newMessage.SubjectTemplate = TemplateEngineServer.Instance.FindTemplate(newMessage.SubjectTemplate.Name);
+        }
+        const result = await EntityCommunicationsEngine.Instance.RunEntityCommunication(entityID, <RunViewParams>runViewByIDInput, providerName, providerMessageTypeName, newMessage);  
+        return result;
     }   
     catch (e) {
         return {

@@ -3,7 +3,7 @@ import { TemplateCategoryEntity, TemplateContentEntity, TemplateContentTypeEntit
 import * as nunjucks from 'nunjucks';
 import { MJGlobal } from "@memberjunction/global";
 import { TemplateExtensionBase } from "./extensions/TemplateExtensionBase";
-import { TemplateEntityExtended, TemplateRenderResult } from '@memberjunction/templates-base-types'
+import { TemplateEntityExtended, TemplateRenderResult, TemplateEngineBase } from '@memberjunction/templates-base-types'
   
 /**
  * This class extends the nunjucks loader to allow adding templates directly to the loader
@@ -43,48 +43,13 @@ export class TemplateEntityLoader extends nunjucks.Loader {
 /**
  * TemplateEngine is used for accessing template metadata/caching it, and rendering templates
  */
-export class TemplateEngine extends BaseEngine<TemplateEngine> {
-    /**
-     * Returns the global instance of the class. This is a singleton class, so there is only one instance of it in the application. Do not directly create new instances of it, always use this method to get the instance.
-     */
-    public static get Instance(): TemplateEngine {
-       return super.getInstance<TemplateEngine>();
-    }
-
-    public async Config(forceRefresh?: boolean, contextUser?: UserInfo) {
-        const c: BaseEnginePropertyConfig[] = [
-            {
-                EntityName: 'Template Content Types',
-                PropertyName: '_TemplateContentTypes',
-            },
-            {
-                EntityName: 'Template Categories',
-                PropertyName: '_TemplateCategories'
-            },
-            {
-                EntityName: 'Templates',
-                PropertyName: '_Templates',
-            },
-            {
-                EntityName: 'Template Contents',
-                PropertyName: '_TemplateContents',
-            },
-            {
-                EntityName: 'Template Params',
-                PropertyName: '_TemplateParams',
-            },
-
-        ]
-        await this.Load(c, forceRefresh, contextUser);
+export class TemplateEngineServer extends TemplateEngineBase {
+    public static get Instance(): TemplateEngineServer {
+        return super.getInstance<TemplateEngineServer>();
     }
 
     protected async AdditionalLoading(contextUser?: UserInfo): Promise<void> {
-        // post-process the template content and params to associate them with a template
-        this.Templates.forEach((t) => {
-            t.Content = this.TemplateContents.filter((tc) => tc.TemplateID === t.ID);
-            t.Params = this.TemplateParams.filter((tp) => tp.TemplateID === t.ID);
-        });
-
+        await super.AdditionalLoading(contextUser);
 
         // do this after the templates are loaded and doing it inside AdditionalLoading() ensures it is done after the templates are loaded and
         // only done once
@@ -104,47 +69,14 @@ export class TemplateEngine extends BaseEngine<TemplateEngine> {
         }
     }
 
-
     private _nunjucksEnv: nunjucks.Environment;
     private _templateLoader: TemplateEntityLoader;
-
-    private _Templates: TemplateEntityExtended[];
-    public get Templates(): TemplateEntityExtended[] {
-        return this._Templates;
-    }
-
-    private _TemplateContentTypes: TemplateContentTypeEntity[];
-    public get TemplateContentTypes(): TemplateContentTypeEntity[] {
-        return this._TemplateContentTypes;
-    }
-
-    private _TemplateCategories: TemplateCategoryEntity[];
-    public get TemplateCategories(): TemplateCategoryEntity[] {
-        return this._TemplateCategories;
-    }
-    private _TemplateContents: TemplateContentEntity[];
-    public get TemplateContents(): TemplateContentEntity[] {
-        return this._TemplateContents;
-    }
-
-    private _TemplateParams: TemplateParamEntity[];
-    public get TemplateParams(): TemplateParamEntity[] {
-        return this._TemplateParams;
-    }
-
+ 
 
     public AddTemplate(templateEntity: TemplateEntityExtended) {
         this._templateLoader.AddTemplate(templateEntity.ID, templateEntity);
     }
-
-    /**
-     * Convenience method to find a template by name, case-insensitive
-     * @param templateName 
-     * @returns 
-     */
-    public FindTemplate(templateName: string): TemplateEntityExtended {
-        return this.Templates.find((t) => t.Name.trim().toLowerCase() === templateName.trim().toLowerCase())
-    }
+ 
 
     /**
      * Renders a template with the given data.

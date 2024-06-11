@@ -5,7 +5,7 @@ import { UserFavoriteEntity } from '@memberjunction/core-entities';
 
 import { UserFavorite_, UserFavoriteResolverBase } from '../generated/generated';
 import { CommunicationEngine } from '@memberjunction/communication-core';
-import { TemplateEngine } from '@memberjunction/templates';
+import { TemplateEngineServer } from '@memberjunction/templates';
 
 //****************************************************************************
 // INPUT TYPE for User Favorite Queries
@@ -166,10 +166,10 @@ export class UserFavoriteResolver extends UserFavoriteResolverBase {
   private async TestCommunicationFramework(user: UserInfo) {
     const engine = CommunicationEngine.Instance;
     await engine.Config(true, user);
-    const tEngine = TemplateEngine.Instance;
+    const tEngine = TemplateEngineServer.Instance;
     await tEngine.Config(true, user);
-    const t = TemplateEngine.Instance.FindTemplate('Test Template');
-    const s = TemplateEngine.Instance.FindTemplate('Test Subject Template');
+    const t = TemplateEngineServer.Instance.FindTemplate('Test Template');
+    const s = TemplateEngineServer.Instance.FindTemplate('Test Subject Template');
     const data = this.GetTestData();
 
     // try single message
