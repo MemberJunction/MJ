@@ -1,4 +1,4 @@
-import { BaseCommunicationProvider, Message, MessageResult, ProcessedMessage } from "@memberjunction/communication-core";
+import { BaseCommunicationProvider, Message, MessageResult, ProcessedMessage } from "@memberjunction/communication-types";
 import { RegisterClass } from "@memberjunction/global";
 import sgMail from '@sendgrid/mail';
 import { __API_KEY } from "./config";

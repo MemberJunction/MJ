@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/doc-utils",
-  "version": "1.5.2",
+  "version": "1.6.1",
   "description": "This library provides functionality for dynamically retreiving documentation from the official MemberJunction object model documentation site, parsing it, and caching elements in memory for performance. Use this whenever you need dynamic access to the MJ documentation to feed to AI models and for any other similar purpose.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -19,12 +19,12 @@
     "typescript": "^5.4.5"
   },
   "dependencies": {
-    "@memberjunction/ai": "1.5.2",
-    "@memberjunction/core": "1.5.2",
-    "@memberjunction/actions": "1.5.2",
-    "@memberjunction/core-entities": "1.5.2",
-    "@memberjunction/global": "1.5.2",
-    "@memberjunction/sqlserver-dataprovider": "1.5.2",
+    "@memberjunction/ai": "1.6.1",
+    "@memberjunction/core": "1.6.1",
+    "@memberjunction/actions": "1.6.1",
+    "@memberjunction/core-entities": "1.6.1",
+    "@memberjunction/global": "1.6.1",
+    "@memberjunction/sqlserver-dataprovider": "1.6.1",
     "env-var": "^7.4.1",
     "fs-extra": "^11.2.0",
     "glob": "^10.3.10",

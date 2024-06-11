@@ -154,6 +154,7 @@ import { RecommendationProviderFormComponent, LoadRecommendationProviderFormComp
 import { RecommendationRunFormComponent, LoadRecommendationRunFormComponent } from "./Entities/RecommendationRun/recommendationrun.form.component";
 import { RecommendationItemFormComponent, LoadRecommendationItemFormComponent } from "./Entities/RecommendationItem/recommendationitem.form.component";
 import { EntityCommunicationMessageTypeFormComponent, LoadEntityCommunicationMessageTypeFormComponent } from "./Entities/EntityCommunicationMessageType/entitycommunicationmessagetype.form.component";
+import { EntityCommunicationFieldFormComponent, LoadEntityCommunicationFieldFormComponent } from "./Entities/EntityCommunicationField/entitycommunicationfield.form.component";
 import { CompanyDetailsComponent, LoadCompanyDetailsComponent } from "./Entities/Company/sections/details.component"
 import { EmployeeDetailsComponent, LoadEmployeeDetailsComponent } from "./Entities/Employee/sections/details.component"
 import { UserFavoriteDetailsComponent, LoadUserFavoriteDetailsComponent } from "./Entities/UserFavorite/sections/details.component"
@@ -289,6 +290,7 @@ import { RecommendationProviderDetailsComponent, LoadRecommendationProviderDetai
 import { RecommendationRunDetailsComponent, LoadRecommendationRunDetailsComponent } from "./Entities/RecommendationRun/sections/details.component"
 import { RecommendationItemDetailsComponent, LoadRecommendationItemDetailsComponent } from "./Entities/RecommendationItem/sections/details.component"
 import { EntityCommunicationMessageTypeDetailsComponent, LoadEntityCommunicationMessageTypeDetailsComponent } from "./Entities/EntityCommunicationMessageType/sections/details.component"
+import { EntityCommunicationFieldDetailsComponent, LoadEntityCommunicationFieldDetailsComponent } from "./Entities/EntityCommunicationField/sections/details.component"
     
 
 @NgModule({
@@ -571,6 +573,7 @@ declarations: [
     RecommendationRunFormComponent,
     RecommendationItemFormComponent,
     EntityCommunicationMessageTypeFormComponent,
+    EntityCommunicationFieldFormComponent,
     CompanyDetailsComponent,
     EmployeeDetailsComponent,
     UserFavoriteDetailsComponent,
@@ -581,8 +584,7 @@ declarations: [
     SkillDetailsComponent,
     IntegrationURLFormatDetailsComponent,
     IntegrationDetailsComponent,
-    CompanyIntegrationDetailsComponent,
-    EntityFieldDetailsComponent],
+    CompanyIntegrationDetailsComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -608,6 +610,7 @@ export class GeneratedForms_SubModule_6 { }
 
 @NgModule({
 declarations: [
+    EntityFieldDetailsComponent,
     EntityDetailsComponent,
     EntityTopComponent,
     EntityAuditComponent,
@@ -626,8 +629,7 @@ declarations: [
     EntityPermissionDetailsComponent,
     UserApplicationEntityDetailsComponent,
     UserApplicationDetailsComponent,
-    CompanyIntegrationRunAPILogDetailsComponent,
-    ListDetailsComponent],
+    CompanyIntegrationRunAPILogDetailsComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -653,6 +655,7 @@ export class GeneratedForms_SubModule_7 { }
 
 @NgModule({
 declarations: [
+    ListDetailsComponent,
     ListDetailDetailsComponent,
     UserViewRunDetailsComponent,
     UserViewRunDetailDetailsComponent,
@@ -671,8 +674,7 @@ declarations: [
     AIActionDetailsComponent,
     AIModelActionDetailsComponent,
     EntityAIActionDetailsComponent,
-    AIModelTypeDetailsComponent,
-    QueueTypeDetailsComponent],
+    AIModelTypeDetailsComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -698,6 +700,7 @@ export class GeneratedForms_SubModule_8 { }
 
 @NgModule({
 declarations: [
+    QueueTypeDetailsComponent,
     QueueDetailsComponent,
     QueueTaskDetailsComponent,
     DashboardDetailsComponent,
@@ -716,8 +719,7 @@ declarations: [
     ConversationDetailDetailsComponent,
     ConversationDetailsComponent,
     UserNotificationDetailsComponent,
-    SchemaInfoDetailsComponent,
-    CompanyIntegrationRecordMapDetailsComponent],
+    SchemaInfoDetailsComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -743,6 +745,7 @@ export class GeneratedForms_SubModule_9 { }
 
 @NgModule({
 declarations: [
+    CompanyIntegrationRecordMapDetailsComponent,
     RecordMergeLogDetailsComponent,
     RecordMergeDeletionLogDetailsComponent,
     QueryFieldDetailsComponent,
@@ -761,8 +764,7 @@ declarations: [
     DashboardCategoryDetailsComponent,
     ReportCategoryDetailsComponent,
     FileStorageProviderDetailsComponent,
-    FileDetailsComponent,
-    FileCategoryDetailsComponent],
+    FileDetailsComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -788,6 +790,7 @@ export class GeneratedForms_SubModule_10 { }
 
 @NgModule({
 declarations: [
+    FileCategoryDetailsComponent,
     FileEntityRecordLinkDetailsComponent,
     VersionInstallationDetailsComponent,
     DuplicateRunDetailMatchDetailsComponent,
@@ -806,8 +809,7 @@ declarations: [
     ActionDetailsComponent,
     ActionTopComponent,
     ActionCodeComponent,
-    EntityActionFilterDetailsComponent,
-    ActionFilterDetailsComponent],
+    EntityActionFilterDetailsComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -833,6 +835,7 @@ export class GeneratedForms_SubModule_11 { }
 
 @NgModule({
 declarations: [
+    ActionFilterDetailsComponent,
     ActionContextTypeDetailsComponent,
     ActionResultCodeDetailsComponent,
     ActionContextDetailsComponent,
@@ -851,8 +854,7 @@ declarations: [
     TemplateContentDetailsComponent,
     TemplateParamDetailsComponent,
     TemplateContentTypeDetailsComponent,
-    RecommendationDetailsComponent,
-    RecommendationProviderDetailsComponent],
+    RecommendationDetailsComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -878,9 +880,11 @@ export class GeneratedForms_SubModule_12 { }
 
 @NgModule({
 declarations: [
+    RecommendationProviderDetailsComponent,
     RecommendationRunDetailsComponent,
     RecommendationItemDetailsComponent,
-    EntityCommunicationMessageTypeDetailsComponent],
+    EntityCommunicationMessageTypeDetailsComponent,
+    EntityCommunicationFieldDetailsComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -1060,6 +1064,7 @@ export function LoadCoreGeneratedForms() {
     LoadRecommendationRunFormComponent();
     LoadRecommendationItemFormComponent();
     LoadEntityCommunicationMessageTypeFormComponent();
+    LoadEntityCommunicationFieldFormComponent();
     LoadCompanyDetailsComponent();
     LoadEmployeeDetailsComponent();
     LoadUserFavoriteDetailsComponent();
@@ -1195,5 +1200,6 @@ export function LoadCoreGeneratedForms() {
     LoadRecommendationRunDetailsComponent();
     LoadRecommendationItemDetailsComponent();
     LoadEntityCommunicationMessageTypeDetailsComponent();
+    LoadEntityCommunicationFieldDetailsComponent();
 }
     

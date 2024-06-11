@@ -19,6 +19,10 @@ import { TextAreaComponent } from '@progress/kendo-angular-inputs';
 import { EntityFormDialogComponent } from '@memberjunction/ng-entity-form-dialog';
 import { BaseFormComponentEvent, BaseFormComponentEventCodes, SharedService } from '@memberjunction/ng-shared';
 
+import { EntityCommunicationsEngineClient } from '@memberjunction/entity-communications-client';
+import { CommunicationEngineBase, Message } from '@memberjunction/communication-types';
+import { TemplateEngineBase } from '@memberjunction/templates-base-types';
+
 
 export type GridRowClickedEvent = {
   entityId: number;
@@ -63,6 +67,10 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
    * If set to true, the Create New Record button will be displayed if the user is allowed to create new records for the entity being shown. If set to false, the Create New Record button will be hidden.
    */
   @Input() ShowCreateNewRecordButton: boolean = true;
+  /**
+   * If set to true, and if the entity being displayed supports communication, the communication button will be displayed. If set to false, the communication button will be hidden.
+   */
+  @Input() ShowCommunicationButton: boolean = true;
 
   /**
    * When set to Dialog, the Create New Record button will open a dialog to create a new record. When set to Tab, the Create New Record button will open a new tab to create a new record.
@@ -648,6 +656,10 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
   async Refresh(params: RunViewParams) {
     this.Params = params;
 
+    await TemplateEngineBase.Instance.Config(false);
+    await EntityCommunicationsEngineClient.Instance.Config(false);
+    await CommunicationEngineBase.Instance.Config(false);
+
     if (this.AllowLoad === false) {
       return;
     }
@@ -1009,6 +1021,48 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
     }
     else  
       throw new Error("Unable to get export data");    
+  }
+
+
+  /**
+   * Handles communication functionality for a given view, only available if the entity being displayed supports communication.
+   */
+  public async doCommunication() {
+    if (!this.Params)
+      return;
+
+    const msg: Message = new Message();
+    msg.From = "amith@bluecypress.io"
+    msg.Body = "This is a test message";
+    msg.Subject = "Test Subject";
+
+    const sendGrid = CommunicationEngineBase.Instance.Providers.find(p => p.Name === "SendGrid")
+    if (!sendGrid)
+      throw new Error("SendGrid provider not found");
+
+    const email = sendGrid.MessageTypes.find(mt => mt.Name === "Email");
+    if (!email) 
+      throw new Error("Email message type not found");
+    msg.MessageType = email;
+
+
+    msg.BodyTemplate = TemplateEngineBase.Instance.FindTemplate('Test Template')
+    msg.HTMLBodyTemplate = msg.BodyTemplate;
+    msg.SubjectTemplate = TemplateEngineBase.Instance.FindTemplate('Test Subject Template')
+    
+    const result = await EntityCommunicationsEngineClient.Instance.RunEntityCommunication(this._entityInfo!.ID, this.Params, "SendGrid", "Email", msg);
+    if (result && result.Success) {
+      this.CreateSimpleNotification("Communication Sent", 'success', 2000)
+    }
+    else
+      this.CreateSimpleNotification("Error sending communication", 'error', 5000)
+  }
+
+
+  public get EntitySupportsCommunication(): boolean {
+    if(!this._entityInfo)
+      return false;
+    return EntityCommunicationsEngineClient.Instance.EntitySupportsCommunication(this._entityInfo.ID);
   }
 
 

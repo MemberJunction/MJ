@@ -1,8 +1,45 @@
 # Change Log - @memberjunction/ng-join-grid
 
-This log was last generated on Fri, 07 Jun 2024 15:05:21 GMT and should not be manually modified.
+This log was last generated on Tue, 11 Jun 2024 06:50:06 GMT and should not be manually modified.
 
 <!-- Start content -->
+
+## 1.6.1
+
+Tue, 11 Jun 2024 06:50:06 GMT
+
+### Patches
+
+- Bump @memberjunction/core-entities to v1.6.1
+- Bump @memberjunction/global to v1.6.1
+- Bump @memberjunction/core to v1.6.1
+- Bump @memberjunction/ng-shared to v1.6.1
+- Bump @memberjunction/ng-container-directives to v1.6.1
+
+## 1.6.0
+
+Tue, 11 Jun 2024 04:59:29 GMT
+
+### Minor changes
+
+- Bump @memberjunction/core-entities to v1.6.0
+- Bump @memberjunction/global to v1.6.0
+- Bump @memberjunction/core to v1.6.0
+- Bump @memberjunction/ng-shared to v1.6.0
+- Bump @memberjunction/ng-container-directives to v1.6.0
+
+## 1.5.3
+
+Tue, 11 Jun 2024 04:01:37 GMT
+
+### Patches
+
+- Applying package updates [skip ci] (craig.adam@bluecypress.io)
+- Bump @memberjunction/core-entities to v1.5.3
+- Bump @memberjunction/global to v1.5.3
+- Bump @memberjunction/core to v1.5.3
+- Bump @memberjunction/ng-shared to v1.5.3
+- Bump @memberjunction/ng-container-directives to v1.5.3
 
 ## 1.5.2
 

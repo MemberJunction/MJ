@@ -2,6 +2,153 @@
   "name": "@memberjunction/ai-vectors",
   "entries": [
     {
+      "date": "Tue, 11 Jun 2024 06:50:06 GMT",
+      "version": "1.6.1",
+      "tag": "@memberjunction/ai-vectors_v1.6.1",
+      "comments": {
+        "patch": [
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ai-vectors",
+            "comment": "Bump @memberjunction/core to v1.6.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ai-vectors",
+            "comment": "Bump @memberjunction/global to v1.6.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ai-vectors",
+            "comment": "Bump @memberjunction/core-entities to v1.6.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ai-vectors",
+            "comment": "Bump @memberjunction/aiengine to v1.6.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ai-vectors",
+            "comment": "Bump @memberjunction/ai to v1.6.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ai-vectors",
+            "comment": "Bump @memberjunction/ai-vectordb to v1.6.1",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
+      "date": "Tue, 11 Jun 2024 04:59:29 GMT",
+      "version": "1.6.0",
+      "tag": "@memberjunction/ai-vectors_v1.6.0",
+      "comments": {
+        "minor": [
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ai-vectors",
+            "comment": "Bump @memberjunction/core to v1.6.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ai-vectors",
+            "comment": "Bump @memberjunction/global to v1.6.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ai-vectors",
+            "comment": "Bump @memberjunction/core-entities to v1.6.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ai-vectors",
+            "comment": "Bump @memberjunction/aiengine to v1.6.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ai-vectors",
+            "comment": "Bump @memberjunction/ai to v1.6.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ai-vectors",
+            "comment": "Bump @memberjunction/ai-vectordb to v1.6.0",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
+      "date": "Tue, 11 Jun 2024 04:01:37 GMT",
+      "version": "1.5.3",
+      "tag": "@memberjunction/ai-vectors_v1.5.3",
+      "comments": {
+        "patch": [
+          {
+            "author": "97354817+AN-BC@users.noreply.github.com",
+            "package": "@memberjunction/ai-vectors",
+            "commit": "6025f45593ac0c0fafb7efe4caa449a141886ae1",
+            "comment": "Applying package updates [skip ci]"
+          },
+          {
+            "author": "craig.adam@bluecypress.io",
+            "package": "@memberjunction/ai-vectors",
+            "commit": "0d794ab2ef0a18022cc1f4cf7719dfd9d4bc7501",
+            "comment": "Applying package updates [skip ci]"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ai-vectors",
+            "comment": "Bump @memberjunction/core to v1.5.3",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ai-vectors",
+            "comment": "Bump @memberjunction/global to v1.5.3",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ai-vectors",
+            "comment": "Bump @memberjunction/core-entities to v1.5.3",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ai-vectors",
+            "comment": "Bump @memberjunction/aiengine to v1.5.3",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ai-vectors",
+            "comment": "Bump @memberjunction/ai to v1.5.3",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ai-vectors",
+            "comment": "Bump @memberjunction/ai-vectordb to v1.5.3",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
       "date": "Fri, 07 Jun 2024 15:05:21 GMT",
       "version": "1.5.2",
       "tag": "@memberjunction/ai-vectors_v1.5.2",

@@ -2,6 +2,249 @@
   "name": "@memberjunction/ng-core-entity-forms",
   "entries": [
     {
+      "date": "Tue, 11 Jun 2024 06:50:06 GMT",
+      "version": "1.6.1",
+      "tag": "@memberjunction/ng-core-entity-forms_v1.6.1",
+      "comments": {
+        "patch": [
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-core-entity-forms",
+            "comment": "Bump @memberjunction/core to v1.6.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-core-entity-forms",
+            "comment": "Bump @memberjunction/core-entities to v1.6.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-core-entity-forms",
+            "comment": "Bump @memberjunction/ng-explorer-core to v1.6.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-core-entity-forms",
+            "comment": "Bump @memberjunction/ng-base-forms to v1.6.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-core-entity-forms",
+            "comment": "Bump @memberjunction/ng-form-toolbar to v1.6.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-core-entity-forms",
+            "comment": "Bump @memberjunction/ng-tabstrip to v1.6.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-core-entity-forms",
+            "comment": "Bump @memberjunction/ng-container-directives to v1.6.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-core-entity-forms",
+            "comment": "Bump @memberjunction/ng-code-editor to v1.6.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-core-entity-forms",
+            "comment": "Bump @memberjunction/ng-timeline to v1.6.1",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
+      "date": "Tue, 11 Jun 2024 04:59:29 GMT",
+      "version": "1.6.0",
+      "tag": "@memberjunction/ng-core-entity-forms_v1.6.0",
+      "comments": {
+        "minor": [
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-core-entity-forms",
+            "comment": "Bump @memberjunction/core to v1.6.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-core-entity-forms",
+            "comment": "Bump @memberjunction/core-entities to v1.6.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-core-entity-forms",
+            "comment": "Bump @memberjunction/ng-explorer-core to v1.6.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-core-entity-forms",
+            "comment": "Bump @memberjunction/ng-base-forms to v1.6.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-core-entity-forms",
+            "comment": "Bump @memberjunction/ng-form-toolbar to v1.6.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-core-entity-forms",
+            "comment": "Bump @memberjunction/ng-tabstrip to v1.6.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-core-entity-forms",
+            "comment": "Bump @memberjunction/ng-container-directives to v1.6.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-core-entity-forms",
+            "comment": "Bump @memberjunction/ng-code-editor to v1.6.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-core-entity-forms",
+            "comment": "Bump @memberjunction/ng-timeline to v1.6.0",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
+      "date": "Tue, 11 Jun 2024 04:01:37 GMT",
+      "version": "1.5.3",
+      "tag": "@memberjunction/ng-core-entity-forms_v1.5.3",
+      "comments": {
+        "patch": [
+          {
+            "author": "craig.adam@bluecypress.io",
+            "package": "@memberjunction/ng-core-entity-forms",
+            "commit": "5ef57040dd351c2b2a33c2d154c2b8104c7ebf70",
+            "comment": "Applying package updates [skip ci]"
+          },
+          {
+            "author": "97354817+AN-BC@users.noreply.github.com",
+            "package": "@memberjunction/ng-core-entity-forms",
+            "commit": "e9dc1dea7353acca5f5c284186e4acd833a1fd92",
+            "comment": "Applying package updates [skip ci]"
+          },
+          {
+            "author": "97354817+AN-BC@users.noreply.github.com",
+            "package": "@memberjunction/ng-core-entity-forms",
+            "commit": "8d2617ab2ab9e671d342ff5d15cffcca4894d759",
+            "comment": "Applying package updates [skip ci]"
+          },
+          {
+            "author": "97354817+AN-BC@users.noreply.github.com",
+            "package": "@memberjunction/ng-core-entity-forms",
+            "commit": "f0ffbc3f9042fc78e6a43c9d23af49c9495fb232",
+            "comment": "Applying package updates [skip ci]"
+          },
+          {
+            "author": "97354817+AN-BC@users.noreply.github.com",
+            "package": "@memberjunction/ng-core-entity-forms",
+            "commit": "3f2830c746fc368d549f318e322b6fa68e5ebabe",
+            "comment": "Applying package updates [skip ci]"
+          },
+          {
+            "author": "97354817+AN-BC@users.noreply.github.com",
+            "package": "@memberjunction/ng-core-entity-forms",
+            "commit": "14f1b4161ae0bf075ebc205553aa1dedd4010c8c",
+            "comment": "Applying package updates [skip ci]"
+          },
+          {
+            "author": "craig.adam@bluecypress.io",
+            "package": "@memberjunction/ng-core-entity-forms",
+            "commit": "0d794ab2ef0a18022cc1f4cf7719dfd9d4bc7501",
+            "comment": "Applying package updates [skip ci]"
+          },
+          {
+            "author": "97354817+AN-BC@users.noreply.github.com",
+            "package": "@memberjunction/ng-core-entity-forms",
+            "commit": "9e92999110c6fb49195819426a0fa0df1aa518f4",
+            "comment": "Applying package updates [skip ci]"
+          },
+          {
+            "author": "97354817+AN-BC@users.noreply.github.com",
+            "package": "@memberjunction/ng-core-entity-forms",
+            "commit": "d8fde79a160600ab575dd0287f64c3ee150a1195",
+            "comment": "Applying package updates [skip ci]"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-core-entity-forms",
+            "comment": "Bump @memberjunction/core to v1.5.3",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-core-entity-forms",
+            "comment": "Bump @memberjunction/core-entities to v1.5.3",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-core-entity-forms",
+            "comment": "Bump @memberjunction/ng-explorer-core to v1.5.3",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-core-entity-forms",
+            "comment": "Bump @memberjunction/ng-base-forms to v1.5.3",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-core-entity-forms",
+            "comment": "Bump @memberjunction/ng-form-toolbar to v1.5.3",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-core-entity-forms",
+            "comment": "Bump @memberjunction/ng-tabstrip to v1.5.3",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-core-entity-forms",
+            "comment": "Bump @memberjunction/ng-container-directives to v1.5.3",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-core-entity-forms",
+            "comment": "Bump @memberjunction/ng-code-editor to v1.5.3",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-core-entity-forms",
+            "comment": "Bump @memberjunction/ng-timeline to v1.5.3",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
       "date": "Fri, 07 Jun 2024 15:05:21 GMT",
       "version": "1.5.2",
       "tag": "@memberjunction/ng-core-entity-forms_v1.5.2",

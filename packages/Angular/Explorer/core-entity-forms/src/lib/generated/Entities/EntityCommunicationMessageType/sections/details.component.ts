@@ -35,13 +35,6 @@ import { EntityCommunicationMessageTypeEntity } from '@memberjunction/core-entit
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="ToField"
-            Type="textarea"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
             FieldName="CreatedAt"
             Type="textbox"
             [EditMode]="EditMode"

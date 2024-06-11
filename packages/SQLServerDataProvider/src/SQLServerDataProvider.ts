@@ -1000,8 +1000,11 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
         const baseTypeType = baseType === 'save' ? (newRecord ? 'Create' : 'Update') : 'Delete';
         const invocationType = baseType === 'validate' ? 'Validate' : (before ? 'Before' + baseTypeType : 'After' + baseTypeType);
         const invocationTypeEntity = engine.InvocationTypes.find((i) => i.Name === invocationType);
-        if (!invocationTypeEntity)
-            throw new Error(`Invocation Type ${invocationType} not found in metadata`);
+        if (!invocationTypeEntity) {
+            LogError(`Invocation Type ${invocationType} not found in metadata`);
+            return; 
+//            throw new Error(`Invocation Type ${invocationType} not found in metadata`);
+        }
 
         const actions = engine.GetActionsByEntityNameAndInvocationType(entity.EntityInfo.Name, invocationType);
         const results: ActionResult[] = [];

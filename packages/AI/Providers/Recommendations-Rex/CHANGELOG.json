@@ -1,0 +1,80 @@
+{
+  "name": "@memberjunction/ai-recommendations-rex",
+  "entries": [
+    {
+      "date": "Tue, 11 Jun 2024 06:50:06 GMT",
+      "version": "1.6.1",
+      "tag": "@memberjunction/ai-recommendations-rex_v1.6.1",
+      "comments": {
+        "patch": [
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ai-recommendations-rex",
+            "comment": "Bump @memberjunction/ai to v1.6.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ai-recommendations-rex",
+            "comment": "Bump @memberjunction/global to v1.6.1",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
+      "date": "Tue, 11 Jun 2024 04:59:29 GMT",
+      "version": "1.6.0",
+      "tag": "@memberjunction/ai-recommendations-rex_v1.6.0",
+      "comments": {
+        "minor": [
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ai-recommendations-rex",
+            "comment": "Bump @memberjunction/ai to v1.6.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ai-recommendations-rex",
+            "comment": "Bump @memberjunction/global to v1.6.0",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
+      "date": "Tue, 11 Jun 2024 04:01:37 GMT",
+      "version": "1.5.3",
+      "tag": "@memberjunction/ai-recommendations-rex_v1.5.3",
+      "comments": {
+        "patch": [
+          {
+            "author": "97354817+AN-BC@users.noreply.github.com",
+            "package": "@memberjunction/ai-recommendations-rex",
+            "commit": "6025f45593ac0c0fafb7efe4caa449a141886ae1",
+            "comment": "Applying package updates [skip ci]"
+          },
+          {
+            "author": "97354817+AN-BC@users.noreply.github.com",
+            "package": "@memberjunction/ai-recommendations-rex",
+            "commit": "3f2830c746fc368d549f318e322b6fa68e5ebabe",
+            "comment": "Applying package updates [skip ci]"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ai-recommendations-rex",
+            "comment": "Bump @memberjunction/ai to v1.5.3",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ai-recommendations-rex",
+            "comment": "Bump @memberjunction/global to v1.5.3",
+            "commit": "not available"
+          }
+        ]
+      }
+    }
+  ]
+}

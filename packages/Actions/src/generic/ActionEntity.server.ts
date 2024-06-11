@@ -308,8 +308,7 @@ the parameter has a type of input/output, you will receive the value as an input
 
 <AVAILABLE_LIBRARIES>
 The following libraries are available for use in your code. THEY ARE ALREADY IMPORTED. **DO NOT IMPORT THEM IN YOUR CODE**
-Use these libraries as needed along with the documentation available at https://docs.memberjunction.org that explains these libraries/objects in detail to generate
-code that will conform to our framework and achieve the business logic desired by the user's prompt.
+Use the code examples and reference information shown below, only use properties and methods shown in the documentation/examples.
 IMPORTANT: DO NOT GENERATE IMPORT STATEMENTS FOR THESE LIBRARIES, THEY ARE ALREADY IMPORTED FOR YOU!
 ${
     JSON.stringify(Metadata.Provider.Libraries)

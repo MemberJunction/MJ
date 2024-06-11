@@ -1,0 +1,25 @@
+{
+  "name": "@memberjunction/templates-base-types",
+  "version": "1.6.1",
+  "description": "MemberJunction Templating Base Types for Client/Server Use",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "/dist"
+  ],
+  "scripts": {
+    "start": "ts-node-dev src/index.ts",
+    "build": "tsc",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "MemberJunction.com",
+  "license": "ISC",
+  "devDependencies": {
+    "typescript": "^5.4.5"
+  },
+  "dependencies": {
+    "@memberjunction/core": "1.6.1",
+    "@memberjunction/core-entities": "1.6.1",
+    "@memberjunction/global": "1.6.1"
+  }
+}
