@@ -20,7 +20,8 @@ import { EntityFormDialogComponent } from '@memberjunction/ng-entity-form-dialog
 import { BaseFormComponentEvent, BaseFormComponentEventCodes, SharedService } from '@memberjunction/ng-shared';
 
 import { EntityCommunicationsEngineClient } from '@memberjunction/entity-communications-client';
-import { Message } from '@memberjunction/communication-types';
+import { CommunicationEngineBase, Message } from '@memberjunction/communication-types';
+import { TemplateEngineBase } from '@memberjunction/templates-base-types';
 
 
 export type GridRowClickedEvent = {
@@ -655,7 +656,9 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
   async Refresh(params: RunViewParams) {
     this.Params = params;
 
+    await TemplateEngineBase.Instance.Config(false);
     await EntityCommunicationsEngineClient.Instance.Config(false);
+    await CommunicationEngineBase.Instance.Config(false);
 
     if (this.AllowLoad === false) {
       return;
@@ -1029,8 +1032,23 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
       return;
 
     const msg: Message = new Message();
+    msg.From = "amith@bluecypress.io"
     msg.Body = "This is a test message";
     msg.Subject = "Test Subject";
+
+    const sendGrid = CommunicationEngineBase.Instance.Providers.find(p => p.Name === "SendGrid")
+    if (!sendGrid)
+      throw new Error("SendGrid provider not found");
+
+    const email = sendGrid.MessageTypes.find(mt => mt.Name === "Email");
+    if (!email) 
+      throw new Error("Email message type not found");
+    msg.MessageType = email;
+
+
+    msg.BodyTemplate = TemplateEngineBase.Instance.FindTemplate('Test Template')
+    msg.HTMLBodyTemplate = msg.BodyTemplate;
+    msg.SubjectTemplate = TemplateEngineBase.Instance.FindTemplate('Test Subject Template')
     
     const result = await EntityCommunicationsEngineClient.Instance.RunEntityCommunication(this._entityInfo!.ID, this.Params, "SendGrid", "Email", msg);
     if (result && result.Success) {
