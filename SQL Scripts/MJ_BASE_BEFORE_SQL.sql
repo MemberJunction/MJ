@@ -557,8 +557,8 @@ DROP PROCEDURE IF EXISTS [__mj].[spCreateRecordChange]
 GO
 CREATE PROCEDURE [__mj].[spCreateRecordChange]
     @EntityName nvarchar(100),
-    @RecordID NVARCHAR(255),
-	@UserID int,
+    @RecordID NVARCHAR(750),
+	  @UserID int,
     @ChangesJSON nvarchar(MAX),
     @ChangesDescription nvarchar(MAX),
     @FullRecordJSON nvarchar(MAX),
@@ -572,7 +572,7 @@ BEGIN
         (
             EntityID,
             RecordID,
-			UserID,
+			      UserID,
             ChangedAt,
             ChangesJSON,
             ChangesDescription,
@@ -584,7 +584,7 @@ BEGIN
         (
             (SELECT ID FROM __mj.Entity WHERE Name = @EntityName),
             @RecordID,
-			@UserID,
+			      @UserID,
             GETDATE(),
             @ChangesJSON,
             @ChangesDescription,

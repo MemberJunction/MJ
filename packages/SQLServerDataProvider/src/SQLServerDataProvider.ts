@@ -1078,7 +1078,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
             const bNewRecord = !entity.IsSaved;
             if (!options)
                 options = new EntitySaveOptions();
-            const bReplay = options.ReplayOnly ? true : false;
+            const bReplay = !!options.ReplayOnly;
             if (!bReplay && !bNewRecord && !entity.EntityInfo.AllowUpdateAPI) {
                 // existing record and not allowed to update
                 throw new Error(`UPDATE not allowed for entity ${entity.EntityInfo.Name}`);
@@ -1170,10 +1170,10 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
                         this._bAllowRefresh = false; // stop refreshes of metadata while we're doing work
 
                         let result;
-                        if (!bReplay) 
-                            result = await this.ExecuteSQL(sSQL);
-                        else
+                        if (bReplay) 
                             result = [entity.GetAll()]; // just return the entity as it was before the save as we are NOT saving anything as we are in replay mode
+                        else
+                            result = await this.ExecuteSQL(sSQL);
 
                         this._bAllowRefresh = true; // allow refreshes now
 
@@ -1602,10 +1602,10 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
             }
             else {
                 let d;
-                if (!bReplay)
-                    d = await this.ExecuteSQL(sSQL);
-                else
+                if (bReplay)
                     d = [entity.GetAll()]; // just return the entity as it was before the save as we are NOT saving anything as we are in replay mode
+                else
+                    d = await this.ExecuteSQL(sSQL);
 
                 if (d && d[0]) {
                     // SP executed, now make sure the return value matches up as that is how we know the SP was succesfully internally

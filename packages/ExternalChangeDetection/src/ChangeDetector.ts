@@ -109,9 +109,11 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
                     item.ChangedAt = row.UpdatedAt;
                     item.Changes = [];
 
-
-                    make sure to remove stuff in createResult...BaseEngine.
-                    changes.push(item);
+                    // push the item but first make sure it is NOT already in the changes from the
+                    // create detection, if it is, we do not push it into changes
+                    if (!changes.find(c => c.PrimaryKey.Equals(item.PrimaryKey))) {
+                        changes.push(item);
+                    }
                 });
             }
 
@@ -160,12 +162,12 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
             SELECT 
                 ${entity.PrimaryKeys.map(pk => `ot.[${pk.Name}]` ).join(', ')}, ot.UpdatedAt
             FROM 
-                [${entity.SchemaName}].[${entity.BaseTable}] ot
+                [${entity.SchemaName}].[${entity.BaseView}] ot
             LEFT JOIN (
                 SELECT 
                     RecordID, MAX(ChangedAt) AS last_change_time
                 FROM 
-                    __mj.RecordChange
+                    __mj.vwRecordChanges
                 WHERE 
                     Type IN ('Update', 'Create')
                 GROUP BY 
@@ -183,9 +185,9 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
             SELECT 
                 ${entity.PrimaryKeys.map(pk => `ot.[${pk.Name}]`).join(', ')}, ot.CreatedAt
             FROM 
-                [${entity.SchemaName}].[${entity.BaseTable}] ot
+                [${entity.SchemaName}].[${entity.BaseView}] ot
             LEFT JOIN 
-                __mj.RecordChange rc ON ${primaryKeyString} = rc.RecordID AND rc.Type = 'Create'
+                __mj.vwRecordChanges rc ON ${primaryKeyString} = rc.RecordID AND rc.Type = 'Create'
             WHERE 
                 rc.RecordID IS NULL;
         `;
@@ -196,11 +198,11 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
     
         return `
             SELECT 
-                rc.RecordID, rc.ChangeDate
+                rc.RecordID, rc.ChangedAt
             FROM 
-                __mj.RecordChange rc
+                __mj.vwRecordChanges rc
             LEFT JOIN 
-                [${entity.SchemaName}].[${entity.BaseTable}] ot ON ${primaryKeyString} = rc.RecordID
+                [${entity.SchemaName}].[${entity.BaseView}] ot ON ${primaryKeyString} = rc.RecordID
             WHERE 
                 ${entity.PrimaryKeys.map(pk => `ot.[${pk.Name}] IS NULL`).join(' AND ')}
             AND 
@@ -239,6 +241,6 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
     }
 
     public async DetectChangesForAllEligibleEntities(): Promise<ChangeDetectionResult> {
-        return this.DetectChangesForEntities(this.EligibleEntities);
+        return await this.DetectChangesForEntities(this.EligibleEntities);
     }
 }

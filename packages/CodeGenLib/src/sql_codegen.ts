@@ -802,11 +802,14 @@ BEGIN
         [${entity.SchemaName}].[${entity.BaseTable}]
     SET 
         UpdatedAt = GETDATE()
-    WHERE 
-        ${entity.PrimaryKeys.map(k => `[${k.Name}] = INSERTED.[${k.Name}]`).join(' AND ')};
+    FROM 
+        [${entity.SchemaName}].[${entity.BaseTable}] AS _organicTable
+    INNER JOIN 
+        INSERTED AS I ON 
+        ${entity.PrimaryKeys.map(k => `_organicTable.[${k.Name}] = I.[${k.Name}]`).join(' AND ')};
 END;
 GO`;
-                
+        return triggerStatement;    
     }
     
     protected generateSPUpdate(entity: EntityInfo): string {
@@ -845,7 +848,9 @@ BEGIN
     -- return the updated record so the caller can see the updated values and any calculated fields
     ${selectInsertedRecord}
 END
-GO${permissions}
+GO
+${permissions}
+GO
 ${updatedAtTrigger}
         `
     }

@@ -95,9 +95,8 @@ export const serve = async (resolverPaths: Array<string>) => {
   const cd = ExternalChangeDetectorEngine.Instance;
   await cd.Config(false, UserCache.Users[0]);
 
-  console.log(cd.DetectChangesForAllEligibleEntities());
-
-
+  // don't wait for this, just run it and show in console whenever done.
+  cd.DetectChangesForAllEligibleEntities().then(result => console.log(result));
 
   console.log(`Data Source has been initialized. ${md?.Entities ? md.Entities.length : 0} entities loaded.`);
 
