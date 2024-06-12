@@ -40,6 +40,7 @@
     "@memberjunction/sqlserver-dataprovider": "1.6.1",
     "@memberjunction/storage": "1.6.1",
     "@memberjunction/templates": "1.6.1",
+    "@memberjunction/external-change-detection": "1.6.1",
     "@memberjunction/entity-communications-server": "1.6.1",
     "@types/cors": "^2.8.13",
     "@types/jsonwebtoken": "9.0.6",

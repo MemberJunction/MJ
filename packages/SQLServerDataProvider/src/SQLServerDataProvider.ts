@@ -1000,8 +1000,11 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
         const baseTypeType = baseType === 'save' ? (newRecord ? 'Create' : 'Update') : 'Delete';
         const invocationType = baseType === 'validate' ? 'Validate' : (before ? 'Before' + baseTypeType : 'After' + baseTypeType);
         const invocationTypeEntity = engine.InvocationTypes.find((i) => i.Name === invocationType);
-        if (!invocationTypeEntity)
-            throw new Error(`Invocation Type ${invocationType} not found in metadata`);
+        if (!invocationTypeEntity) {
+            LogError(`Invocation Type ${invocationType} not found in metadata`);
+            return; 
+//            throw new Error(`Invocation Type ${invocationType} not found in metadata`);
+        }
 
         const actions = engine.GetActionsByEntityNameAndInvocationType(entity.EntityInfo.Name, invocationType);
         const results: ActionResult[] = [];
@@ -1073,18 +1076,21 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
         const entityResult = new BaseEntityResult();
         try {
             const bNewRecord = !entity.IsSaved;
-            if (!bNewRecord && !entity.EntityInfo.AllowUpdateAPI) {
+            if (!options)
+                options = new EntitySaveOptions();
+            const bReplay = !!options.ReplayOnly;
+            if (!bReplay && !bNewRecord && !entity.EntityInfo.AllowUpdateAPI) {
                 // existing record and not allowed to update
                 throw new Error(`UPDATE not allowed for entity ${entity.EntityInfo.Name}`);
             }
-            else if ( bNewRecord && !entity.EntityInfo.AllowCreateAPI) {
+            else if ( !bReplay && bNewRecord && !entity.EntityInfo.AllowCreateAPI) {
                 // new record and not allowed to create
                 throw new Error(`CREATE not allowed for entity ${entity.EntityInfo.Name}`);
             }
             else { 
                 // getting here means we are good to save, now check to see if we're dirty and need to save
                 // REMEMBER - this is the provider and the BaseEntity/subclasses handle user-level permission checking already, we just make sure API was turned on for the operation
-                if ( entity.Dirty || (options && options.IgnoreDirtyState) ) {
+                if ( entity.Dirty || (options.IgnoreDirtyState || options.ReplayOnly) ) {
                     entityResult.StartedAt = new Date();
                     entityResult.Type = bNewRecord ? 'create' : 'update';
                     entityResult.OriginalValues = entity.Fields.map(f => { return {FieldName: f.Name, Value: f.Value} }); // save the original values before we start the process
@@ -1093,27 +1099,30 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
                     // The assumption is that Validate() has already been called by the BaseEntity object that is invoking this provider.
                     // However, we have an extra responsibility in this situation which is to fire off the EntityActions for the Validate invocation type and
                     // make sure they clear. If they don't clear we throw an exception with the message provided.
-                    const validationResult = await this.HandleEntityActions(entity, 'validate', false, user);
-                    if (validationResult && validationResult.length > 0) {
-                        // one or more actions executed, see the reults and if any failed, concat their messages and return as exception being thrown
-                        const message = validationResult.filter(v => !v.Success).map(v => v.Message).join('\n\n');
-                        if (message) {
-                            entityResult.Success = false;
-                            entityResult.EndedAt = new Date();
-                            entityResult.Message = message;
-                            return false;
-                        }
+                    if (!bReplay) {
+                        const validationResult = await this.HandleEntityActions(entity, 'validate', false, user);
+                        if (validationResult && validationResult.length > 0) {
+                            // one or more actions executed, see the reults and if any failed, concat their messages and return as exception being thrown
+                            const message = validationResult.filter(v => !v.Success).map(v => v.Message).join('\n\n');
+                            if (message) {
+                                entityResult.Success = false;
+                                entityResult.EndedAt = new Date();
+                                entityResult.Message = message;
+                                return false;
+                            }
+                        }    
+                    }
+                    else {
+                        // we are in replay mode we so do NOT need to do the validation stuff, skipping it...
                     }
 
                     const spName = bNewRecord ? (entity.EntityInfo.spCreate && entity.EntityInfo.spCreate.length > 0 ? entity.EntityInfo.spCreate : 'spCreate' + entity.EntityInfo.BaseTable) : 
                                                 (entity.EntityInfo.spUpdate && entity.EntityInfo.spUpdate.length > 0 ? entity.EntityInfo.spUpdate : 'spUpdate' + entity.EntityInfo.BaseTable);
-                    if (!options /*no options set*/ ||
-                        options.SkipEntityActions !== true /*options set, but not set to skip entity actions*/ ) {
+                    if (options.SkipEntityActions !== true /*options set, but not set to skip entity actions*/ ) {
                         await this.HandleEntityActions(entity, 'save', true, user);
                     }
 
-                    if (!options /*no options set*/ || 
-                         options.SkipEntityAIActions !== true /*options set, but not set to skip entity AI actions*/ ) {
+                    if (options.SkipEntityAIActions !== true /*options set, but not set to skip entity AI actions*/ ) {
                         // process any Entity AI actions that are set to trigger BEFORE the save, these are generally a really bad idea to do before save
                         // but they are supported (for now)
                         await this.HandleEntityAIActions(entity, 'save', true, user);
@@ -1121,7 +1130,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
 
                     const sSQL = this.GetSaveSQL(entity, bNewRecord, spName, user);
 
-                    if (entity.TransactionGroup) {
+                    if (entity.TransactionGroup && !bReplay /*we never participate in a transaction if we're in replay mode*/) {
                         // we have a transaction group, need to play nice and be part of it
                         return new Promise((resolve, reject) => {
                             // we are part of a transaction group, so just add our query to the list
@@ -1136,12 +1145,11 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
                                     // process any Entity AI actions that are set to trigger AFTER the save
                                     // these are fired off but are NOT part of the transaction group, so if they fail,
                                     // the transaction group will still commit, but the AI action will not be executed
-                                    if (!options /*no options set*/ || 
-                                        options.SkipEntityAIActions !== true /*options set, but not set to skip entity AI actions*/ ) 
+                                    if (options.SkipEntityAIActions !== true /*options set, but not set to skip entity AI actions*/ ) 
                                         this.HandleEntityAIActions(entity, 'save', false, user);
 
                                     // Same approach to Entity Actions as Entity AI Actions
-                                    if (!options || options.SkipEntityActions !== true) 
+                                    if (options.SkipEntityActions !== true) 
                                         this.HandleEntityActions(entity, 'save', false, user);
 
                                     entityResult.Success = true;
@@ -1161,19 +1169,22 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
                         // no transaction group, just execute this immediately...
                         this._bAllowRefresh = false; // stop refreshes of metadata while we're doing work
 
-                        const result = await this.ExecuteSQL(sSQL);
+                        let result;
+                        if (bReplay) 
+                            result = [entity.GetAll()]; // just return the entity as it was before the save as we are NOT saving anything as we are in replay mode
+                        else
+                            result = await this.ExecuteSQL(sSQL);
 
                         this._bAllowRefresh = true; // allow refreshes now
 
                         entityResult.EndedAt = new Date();
                         if (result && result.length > 0) {
                             // Entity AI Actions - fired off async, NO await on purpose
-                            if (!options /*no options set*/ || 
-                                 options.SkipEntityAIActions !== true /*options set, but not set to skip entity AI actions*/ ) 
+                            if (options.SkipEntityAIActions !== true /*options set, but not set to skip entity AI actions*/ ) 
                                 this.HandleEntityAIActions(entity, 'save', false, user); // fire off any AFTER SAVE AI actions, but don't wait for them
 
                             // Entity Actions - fired off async, NO await on purpose
-                            if (!options || options.SkipEntityActions !== true) 
+                            if (options.SkipEntityActions !== true) 
                                 this.HandleEntityActions(entity, 'save', false, user);
                                 
                             entityResult.Success = true;
@@ -1524,10 +1535,15 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
     public async Delete(entity: BaseEntity, options: EntityDeleteOptions, user: UserInfo) : Promise<boolean> {
         const result = new BaseEntityResult();
         try {
-            if (!entity.IsSaved)
+            if (!options)
+                options = new EntityDeleteOptions();
+
+            const bReplay = options.ReplayOnly;
+
+            if (!entity.IsSaved && !bReplay)
                 // existing record and not allowed to update
                 throw new Error(`Delete() isn't callable for records that haven't yet been saved - ${entity.EntityInfo.Name}`);
-            if (!entity.EntityInfo.AllowDeleteAPI) 
+            if (!entity.EntityInfo.AllowDeleteAPI && !bReplay) 
                 // not allowed to delete
                 throw new Error(`Delete() isn't callable for ${entity.EntityInfo.Name} as AllowDeleteAPI is false`);
 
@@ -1542,12 +1558,12 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
             const sSQL = this.GetDeleteSQL(entity, user);
 
             // Handle Entity and Entity AI Actions here w/ before and after handling
-            if (!options || false === options?.SkipEntityActions)
+            if (false === options?.SkipEntityActions)
                 await this.HandleEntityActions(entity, 'delete', true, user);
-            if (!options || false === options?.SkipEntityAIActions)
+            if (false === options?.SkipEntityAIActions)
                 await this.HandleEntityAIActions(entity, 'delete', true, user);
        
-            if (entity.TransactionGroup) {
+            if (entity.TransactionGroup && !bReplay) {
                 // we have a transaction group, need to play nice and be part of it
                 return new Promise((resolve, reject) => {
                     // we are part of a transaction group, so just add our query to the list
@@ -1558,9 +1574,9 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
                         result.EndedAt = new Date();
                         if (success && results) {
                             // Entity AI Actions and Actions - fired off async, NO await on purpose
-                            if (!options || false === options?.SkipEntityActions)
+                            if (false === options?.SkipEntityActions)
                                 this.HandleEntityActions(entity, 'delete', false, user);
-                            if (!options || false === options?.SkipEntityAIActions)
+                            if (false === options?.SkipEntityAIActions)
                                 this.HandleEntityAIActions(entity, 'delete', false, user);
 
                             // Make sure the return value matches up as that is how we know the SP was succesfully internally
@@ -1585,7 +1601,11 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
                 });    
             }
             else {
-                const d = await this.ExecuteSQL(sSQL);
+                let d;
+                if (bReplay)
+                    d = [entity.GetAll()]; // just return the entity as it was before the save as we are NOT saving anything as we are in replay mode
+                else
+                    d = await this.ExecuteSQL(sSQL);
 
                 if (d && d[0]) {
                     // SP executed, now make sure the return value matches up as that is how we know the SP was succesfully internally
@@ -1919,7 +1939,14 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
     }
 
 
-    protected async ExecuteSQL(query: string, parameters: any = null): Promise<any> {
+    /**
+     * This method can be used to execute raw SQL statements outside of the MJ infrastructure. 
+     * *CAUTION* - use this method with great care.
+     * @param query 
+     * @param parameters 
+     * @returns 
+     */
+    public async ExecuteSQL(query: string, parameters: any = null): Promise<any> {
         try {
             if (this._queryRunner) {
                 const data = await this._queryRunner.query(query, parameters);

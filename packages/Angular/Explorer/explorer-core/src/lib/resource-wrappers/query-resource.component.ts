@@ -22,4 +22,7 @@ export class QueryResource extends BaseResourceComponent implements OnInit {
         const name = await md.GetEntityRecordName('Queries', compositeKey);
         return `${name ? name : 'Query ID: ' + data.ResourceRecordID}`;
     }
+    async GetResourceIconClass(data: ResourceData): Promise<string> {
+        return '';
+    }
 }

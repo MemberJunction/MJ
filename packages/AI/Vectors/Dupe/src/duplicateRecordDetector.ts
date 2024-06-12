@@ -1,5 +1,5 @@
 import { Embeddings, GetAIAPIKey } from "@memberjunction/ai";
-import { PotentialDuplicateRequest, PotentialDuplicateResponse, CompositeKey, RunView, UserInfo, BaseEntity, PotentialDuplicateResult, Metadata, LogError, EntityField, RecordMergeRequest } from "@memberjunction/core";
+import { PotentialDuplicateRequest, PotentialDuplicateResponse, CompositeKey, RunView, UserInfo, BaseEntity, PotentialDuplicateResult, Metadata, LogError, EntityField, RecordMergeRequest, EntityInfo } from "@memberjunction/core";
 import { LogStatus } from "@memberjunction/core";
 import { VectorDBBase } from "@memberjunction/ai-vectordb";
 import { MJGlobal } from "@memberjunction/global";
@@ -53,7 +53,6 @@ export class DuplicateRecordDetector extends VectorBase {
             return response;
         }
 
-        /*
         //for testing
         const request: VectorSyncRequest = {
             entityID: entityDocument.EntityID,
@@ -62,8 +61,8 @@ export class DuplicateRecordDetector extends VectorBase {
             options: {}
         }
 
+        console.log("vectorizing entity...");
         await vectorizer.VectorizeEntity(request, super.CurrentUser);
-        */
 
         const list: ListEntity = await this.getListEntity(params.ListID);
         let duplicateRun: DuplicateRunEntity = params.Options?.DuplicateRunID ? await this.getDuplicateRunEntity(params.Options?.DuplicateRunID) : await this.getDuplicateRunEntityByListID(list.ID);
@@ -103,8 +102,16 @@ export class DuplicateRecordDetector extends VectorBase {
         }
 
         let records = await this.GetRecordsByListID(list.ID, entityDocument.EntityID);
+        if(records.length === 0){
+            LogError(`No records found in list ${list.Name}, with listID ${list.ID} and EntityID ${entityDocument.EntityID} exiting early`);
+            response.ErrorMessage = `No records found in list ${list.Name}`;
+            response.Status = 'Error';
+            return response;
+
+        }
 
         LogStatus("Vectorizing " + records.length + " records");
+
         const templateParser: EntityDocumentTemplateParserBase = EntityDocumentTemplateParser.CreateInstance();
         const recordTemplates: string[] = [];
         //Relationship(entityID: number, entityRecord: any, relationshipName: string, maxRows: number, entityDocumentName: string)
@@ -168,13 +175,13 @@ export class DuplicateRecordDetector extends VectorBase {
     }
 
     private async GetRecordsByListID(listID: number, entityID: number): Promise<BaseEntity[]> {
-        const entity = await super.runViewForSingleValue<EntityEntity>("Entities", `ID = ${entityID}`);
-        if(!entity){
-            throw new Error(`Failed to load Entity record ${entityID}`);
+        const entityInfo: EntityInfo = super.Metadata.EntityByID(entityID);
+        if(!entityInfo){
+            throw new Error(`Failed to load Entity Info with ID ${entityID}`);
         }
 
-        const rvResult = await super.RunView.RunView({
-            EntityName: entity.Name,
+        const rvResult = await super.RunView.RunView<BaseEntity>({
+            EntityName: entityInfo.Name,
             ExtraFilter: `ID IN (SELECT RecordID FROM __mj.vwListDetails WHERE ListID = ${listID})`,
             ResultType: 'entity_object'
         }, super.CurrentUser);
@@ -183,8 +190,7 @@ export class DuplicateRecordDetector extends VectorBase {
             throw new Error(rvResult.ErrorMessage);
         }
 
-        const records: BaseEntity[] = rvResult.Results as BaseEntity[];
-        return records;
+        return rvResult.Results;
     }
 
     private async createDuplicateRunRecord(entityDocument: EntityDocumentEntity, listID: number): Promise<DuplicateRunEntity> {
@@ -230,7 +236,8 @@ export class DuplicateRecordDetector extends VectorBase {
         const viewResults = await super.RunView.RunView({ 
             EntityName: 'List Details', 
             ExtraFilter: `ListID = ${listID}`,
-            ResultType: 'entity_object'}, super.CurrentUser);
+            ResultType: 'entity_object'}, 
+            super.CurrentUser);
 
         if(!viewResults.Success){
             throw new Error(viewResults.ErrorMessage);
@@ -249,6 +256,9 @@ export class DuplicateRecordDetector extends VectorBase {
             const success = await super.SaveEntity(runDetail);
             if(success){
                 results.push(runDetail);
+            }
+            else{
+                LogError("Failed to save DuplicateRunDetailEntity", undefined, runDetail.LatestResult);
             }
         }
 

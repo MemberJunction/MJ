@@ -25,10 +25,11 @@ export class VectorBase {
             throw new Error(`Entity with ID ${entityID} not found.`);
         }
 
-        const rvResult = await this._runView.RunView({
+        const rvResult = await this._runView.RunView<BaseEntity>({
             EntityName: entity.Name,
             ExtraFilter: recordIDs ? this.buildExtraFilter(recordIDs): undefined,
-            ResultType: 'entity_object'
+            ResultType: 'entity_object',
+            IgnoreMaxRows: true
         }, this.CurrentUser);
 
         if(!rvResult.Success){

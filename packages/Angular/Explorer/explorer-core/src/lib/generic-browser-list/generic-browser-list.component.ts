@@ -79,7 +79,11 @@ export class GenericBrowserListComponent implements OnInit{
   private createNewRecordName: string = "Record";
 
   public entityObjectName: string = "";
-  public createButtonDropdownData = [
+
+  /**
+   * Data for the create button dropdown
+   */
+  @Input() public createButtonDropdownData = [
     { text: "Folder" },
   ];
 

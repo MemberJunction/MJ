@@ -714,12 +714,18 @@ export abstract class BaseEntity {
             const type: EntityPermissionType = this.IsSaved ? EntityPermissionType.Update : EntityPermissionType.Create;            
             this.CheckPermissions(type, true) // this will throw an error and exit out if we don't have permission
     
-            if (_options.IgnoreDirtyState || this.Dirty) {
+            if (_options.IgnoreDirtyState || this.Dirty || _options.ReplayOnly) {
                 if (BaseEntity.Provider == null) {    
                     throw new Error('No provider set');
                 }
                 else  {
-                    const valResult = this.Validate();
+                    let valResult = new ValidationResult();
+                    if (_options.ReplayOnly) {
+                        valResult.Success = true; // bypassing validation since we are in replay only....
+                    }
+                    else {
+                        valResult = this.Validate();
+                    }
                     if (valResult.Success) {
                         const data = await BaseEntity.Provider.Save(this, this.ActiveUser, _options)
                         if (data) {
@@ -778,6 +784,26 @@ export abstract class BaseEntity {
         if (!u)
             throw new Error('No user set - either the context user for the entity object must be set, or the Metadata.Provider.CurrentUser must be set');
 
+        // first check if the AllowCreateAPI/AllowUpdateAPI/AllowDeleteAPI settings are flipped on for the entity in question
+        switch (type) {
+            case EntityPermissionType.Create:
+                if (!this.EntityInfo.AllowCreateAPI)
+                    throw new Error(`Create API is disabled for ${this.EntityInfo.Name}`);
+                break;
+            case EntityPermissionType.Update:
+                if (!this.EntityInfo.AllowUpdateAPI)
+                    throw new Error(`Update API is disabled for ${this.EntityInfo.Name}`);
+                break;
+            case EntityPermissionType.Delete:
+                if (!this.EntityInfo.AllowDeleteAPI)
+                    throw new Error(`Delete API is disabled for ${this.EntityInfo.Name}`);
+                break;
+            case EntityPermissionType.Read:
+                if (!this.EntityInfo.IncludeInAPI)
+                    throw new Error(`API is disabled for ${this.EntityInfo.Name}`);
+                break;
+        }
+        
         const permissions = this.EntityInfo.GetUserPermisions(u);
         let bAllowed: boolean = false;
         switch (type) {
@@ -796,7 +822,6 @@ export abstract class BaseEntity {
         }
         if (!bAllowed && throwError) {
             this.ThrowPermissionError(u, type, null);
-            return false; // this never happens due to the thrown error but have it anyway to avoid strict compile errors 
         }
         else 
             return bAllowed

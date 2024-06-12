@@ -3,12 +3,13 @@ import { error } from 'console';
 import { RegisterClass } from '@memberjunction/global'
 import { FetchResponse, Index, Pinecone, QueryOptions } from '@pinecone-database/pinecone';
 import { BaseRequestParams, BaseResponse, CreateIndexParams, EditIndexParams, IndexDescription, IndexList, RecordMetadata, VectorDBBase, VectorRecord } from '@memberjunction/ai-vectordb';
-import { PotentialDuplicate, PotentialDuplicateResult, KeyValuePair } from '@memberjunction/core';
+import { LogStatus, PotentialDuplicate, PotentialDuplicateResult } from '@memberjunction/core';
 
 @RegisterClass(VectorDBBase, "PineconeDatabase", 1)
 export class PineconeDatabase extends VectorDBBase {
 
     static _pinecone: Pinecone;
+    static _defaultIndex: Index<RecordMetadata> = null;
     
     constructor(apiKey: string){
         super(apiKey);
@@ -30,19 +31,26 @@ export class PineconeDatabase extends VectorDBBase {
     }
 
     public async getDefaultIndex(): Promise<Index<RecordMetadata>> {
+        if(PineconeDatabase._defaultIndex){
+            return PineconeDatabase._defaultIndex;
+        }
+
         if(pineconeDefaultIndex){
             let defaultIndex = this.pinecone.Index(pineconeDefaultIndex);
             if(defaultIndex){
+                PineconeDatabase._defaultIndex = defaultIndex;
                 return defaultIndex;
             }
         }
 
         const indexList = await this.listIndexes();
-
         if(indexList && indexList.indexes && indexList.indexes.length > 0){
             const indexName: string = indexList.indexes[0].name;
-            return this.pinecone.index(indexName);
+            PineconeDatabase._defaultIndex = this.pinecone.index(indexName);
+            return PineconeDatabase._defaultIndex;
         }
+
+        LogStatus("Attempted to fetch default index but none were found");
         return null;
     }
 
@@ -57,6 +65,10 @@ export class PineconeDatabase extends VectorDBBase {
      */
     public getIndex(params?: BaseRequestParams): BaseResponse {
         const name: string = params?.id || pineconeDefaultIndex;
+        if(!name){
+            throw new Error("id not found in params and PINECONE_DEFAULT_INDEX not found in env variables");
+        }
+        
         const result: BaseResponse = {
             message: "",
             success: true,

@@ -22,4 +22,8 @@ export class ReportResource extends BaseResourceComponent implements OnInit {
         const name = await md.GetEntityRecordName('Reports', compositeKey);
         return `${name ? name : 'Report ID: ' + data.ResourceRecordID}`;
     }
+
+    async GetResourceIconClass(data: ResourceData): Promise<string> {
+        return '';
+    }
 }

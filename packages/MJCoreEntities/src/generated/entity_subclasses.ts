@@ -2692,6 +2692,18 @@ import { RegisterClass } from "@memberjunction/global";
             this.Set('PreferredCommunicationField', value);
         }
         /**
+        * * Field Name: Icon
+        * * Display Name: Icon
+        * * SQL Data Type: nvarchar(500)
+        * * Description: Optional, specify an icon (CSS Class) for each entity for display in the UI
+        */
+        get Icon(): string | null {  
+            return this.Get('Icon');
+        }
+        set Icon(value: string | null) {
+            this.Set('Icon', value);
+        }
+        /**
         * * Field Name: CodeName
         * * Display Name: Code Name
         * * SQL Data Type: nvarchar(MAX)
@@ -4289,6 +4301,31 @@ import { RegisterClass } from "@memberjunction/global";
             this.Set('Description', value);
         }
         /**
+        * * Field Name: Icon
+        * * Display Name: Icon
+        * * SQL Data Type: nvarchar(500)
+        * * Description: Specify the CSS class information for the display icon for each application.
+        */
+        get Icon(): string | null {  
+            return this.Get('Icon');
+        }
+        set Icon(value: string | null) {
+            this.Set('Icon', value);
+        }
+        /**
+        * * Field Name: DefaultForNewUser
+        * * Display Name: Default For New User
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: If turned on, when a new user first uses the MJ Explorer app, the application records with this turned on will have this application included in their selected application list.
+        */
+        get DefaultForNewUser(): boolean {  
+            return this.Get('DefaultForNewUser');
+        }
+        set DefaultForNewUser(value: boolean) {
+            this.Set('DefaultForNewUser', value);
+        }
+        /**
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
@@ -4387,7 +4424,8 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: DefaultForNewUser
         * * Display Name: Default For New User
         * * SQL Data Type: bit
-        * * Default Value: 0
+        * * Default Value: 1
+        * * Description: When set to 1, the entity will be included by default for a new user when they first access the application in question
         */
         get DefaultForNewUser(): boolean {  
             return this.Get('DefaultForNewUser');
@@ -5994,7 +6032,7 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: RecordID
         * * Display Name: Record
-        * * SQL Data Type: nvarchar(255)
+        * * SQL Data Type: nvarchar(750)
         */
         get RecordID(): string {  
             return this.Get('RecordID');
@@ -6007,6 +6045,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: User ID
         * * SQL Data Type: int
         * * Related Entity/Foreign Key: Users (vwUsers.ID)
+        * * Description: The user that made the change
         */
         get UserID(): number {  
             return this.Get('UserID');
@@ -6015,10 +6054,49 @@ import { RegisterClass } from "@memberjunction/global";
             this.Set('UserID', value);
         }
         /**
+        * * Field Name: Type
+        * * Display Name: Type
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Create
+        * * Description: Create, Update, or Delete
+        */
+        get Type(): string {  
+            return this.Get('Type');
+        }
+        set Type(value: string) {
+            this.Set('Type', value);
+        }
+        /**
+        * * Field Name: Source
+        * * Display Name: Source
+        * * SQL Data Type: nvarchar(20)
+        * * Description: Internal or External
+        */
+        get Source(): string | null {  
+            return this.Get('Source');
+        }
+        set Source(value: string | null) {
+            this.Set('Source', value);
+        }
+        /**
+        * * Field Name: IntegrationID
+        * * Display Name: Integration ID
+        * * SQL Data Type: int
+        * * Related Entity/Foreign Key: Integrations (vwIntegrations.ID)
+        * * Description: If Source=External, this field can optionally specify which integration created the change, if known
+        */
+        get IntegrationID(): number | null {  
+            return this.Get('IntegrationID');
+        }
+        set IntegrationID(value: number | null) {
+            this.Set('IntegrationID', value);
+        }
+        /**
         * * Field Name: ChangedAt
         * * Display Name: Changed At
         * * SQL Data Type: datetime
         * * Default Value: getdate()
+        * * Description: The date/time that the change occured.
         */
         get ChangedAt(): Date {  
             return this.Get('ChangedAt');
@@ -6030,6 +6108,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: ChangesJSON
         * * Display Name: Changes JSON
         * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON structure that describes what was changed in a structured format.
         */
         get ChangesJSON(): string {  
             return this.Get('ChangesJSON');
@@ -6041,6 +6120,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: ChangesDescription
         * * Display Name: Changes Description
         * * SQL Data Type: nvarchar(MAX)
+        * * Description: A generated, human-readable description of what was changed.
         */
         get ChangesDescription(): string {  
             return this.Get('ChangesDescription');
@@ -6052,6 +6132,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: FullRecordJSON
         * * Display Name: Full Record JSON
         * * SQL Data Type: nvarchar(MAX)
+        * * Description: A complete snapshot of the record AFTER the change was applied in a JSON format that can be parsed.
         */
         get FullRecordJSON(): string {  
             return this.Get('FullRecordJSON');
@@ -6061,18 +6142,30 @@ import { RegisterClass } from "@memberjunction/global";
         }
         /**
         * * Field Name: Status
-        * * SQL Data Type: nchar(15)
+        * * SQL Data Type: nvarchar(50)
         * * Default Value: Complete
         * * Value List Type: List
         * * Possible Values 
         *   * Pending
         *   * Complete
+        * * Description: For internal record changes generated within MJ, the status is immediately Complete. For external changes that are detected, the workflow starts off as Pending, then In Progress and finally either Complete or Error
         */
         get Status(): 'Pending' | 'Complete' {  
             return this.Get('Status');
         }
         set Status(value: 'Pending' | 'Complete') {
             this.Set('Status', value);
+        }
+        /**
+        * * Field Name: ErrorLog
+        * * Display Name: Error Log
+        * * SQL Data Type: nvarchar(MAX)
+        */
+        get ErrorLog(): string | null {  
+            return this.Get('ErrorLog');
+        }
+        set ErrorLog(value: string | null) {
+            this.Set('ErrorLog', value);
         }
         /**
         * * Field Name: Comments
@@ -6084,6 +6177,26 @@ import { RegisterClass } from "@memberjunction/global";
         set Comments(value: string | null) {
             this.Set('Comments', value);
         }
+        /**
+        * * Field Name: CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()
+        */
+        get CreatedAt(): Date {  
+            return this.Get('CreatedAt');
+        }
+        
+        /**
+        * * Field Name: UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()
+        */
+        get UpdatedAt(): Date {  
+            return this.Get('UpdatedAt');
+        }
+        
         /**
         * * Field Name: Entity
         * * Display Name: Entity
@@ -6100,6 +6213,15 @@ import { RegisterClass } from "@memberjunction/global";
         */
         get User(): string {  
             return this.Get('User');
+        }
+        
+        /**
+        * * Field Name: Integration
+        * * Display Name: Integration
+        * * SQL Data Type: nvarchar(100)
+        */
+        get Integration(): string | null {  
+            return this.Get('Integration');
         }
         
 
@@ -11591,6 +11713,17 @@ import { RegisterClass } from "@memberjunction/global";
             this.Set('Name', value);
         }
         /**
+        * * Field Name: UserQuestion
+        * * Display Name: User Question
+        * * SQL Data Type: nvarchar(MAX)
+        */
+        get UserQuestion(): string | null {  
+            return this.Get('UserQuestion');
+        }
+        set UserQuestion(value: string | null) {
+            this.Set('UserQuestion', value);
+        }
+        /**
         * * Field Name: Description
         * * Display Name: Description
         * * SQL Data Type: nvarchar(MAX)
@@ -11623,6 +11756,17 @@ import { RegisterClass } from "@memberjunction/global";
         }
         set SQL(value: string | null) {
             this.Set('SQL', value);
+        }
+        /**
+        * * Field Name: TechnicalDescription
+        * * Display Name: Technical Description
+        * * SQL Data Type: nvarchar(MAX)
+        */
+        get TechnicalDescription(): string | null {  
+            return this.Get('TechnicalDescription');
+        }
+        set TechnicalDescription(value: string | null) {
+            this.Set('TechnicalDescription', value);
         }
         /**
         * * Field Name: OriginalSQL
@@ -11669,12 +11813,25 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Quality Rank
         * * SQL Data Type: int
         * * Default Value: 0
+        * * Description: Value indicating the quality of the query, higher values mean a better quality
         */
         get QualityRank(): number | null {  
             return this.Get('QualityRank');
         }
         set QualityRank(value: number | null) {
             this.Set('QualityRank', value);
+        }
+        /**
+        * * Field Name: ExecutionCostRank
+        * * Display Name: Execution Cost Rank
+        * * SQL Data Type: int
+        * * Description: Higher numbers indicate more execution overhead/time required. Useful for planning which queries to use in various scenarios.
+        */
+        get ExecutionCostRank(): number | null {  
+            return this.Get('ExecutionCostRank');
+        }
+        set ExecutionCostRank(value: number | null) {
+            this.Set('ExecutionCostRank', value);
         }
         /**
         * * Field Name: CreatedAt

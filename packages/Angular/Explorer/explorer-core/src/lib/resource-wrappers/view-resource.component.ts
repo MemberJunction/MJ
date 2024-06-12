@@ -31,4 +31,7 @@ export class UserViewResource extends BaseResourceComponent {
         else
             return 'User Views [Error]';
     }
+    async GetResourceIconClass(data: ResourceData): Promise<string> {
+        return '';
+    }
 }
