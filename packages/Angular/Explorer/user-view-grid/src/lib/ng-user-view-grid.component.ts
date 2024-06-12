@@ -951,7 +951,7 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
 
     const saveResult = await list.Save();
     if(!saveResult){
-        console.error(`Failed to save list for Potential Duplicate Run`);
+        LogError(`Failed to save list for Potential Duplicate Run`, undefined, list.LatestResult);
         return;
     }
 
@@ -967,7 +967,12 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
       listDetail.NewRecord();
       listDetail.ListID = list.ID;
       listDetail.RecordID = idField.toString();
-      await listDetail.Save();
+      listDetail.ContextCurrentUser = md.CurrentUser;
+      const ldSaveResult: boolean = await listDetail.Save();
+      if(!ldSaveResult){
+        LogError(`Failed to save list detail for Potential Duplicate Run`, undefined, listDetail.LatestResult);
+        return;
+      }
     }
 
     this.closeCompareDialog('duplicate');

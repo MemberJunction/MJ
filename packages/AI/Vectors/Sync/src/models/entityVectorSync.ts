@@ -1,4 +1,4 @@
-import { BaseEntity, EntityField, LogError, LogStatus, Metadata, UserInfo,  } from "@memberjunction/core";
+import { BaseEntity, CompositeKey, EntityField, LogError, LogStatus, Metadata, UserInfo,  } from "@memberjunction/core";
 import { EmbedTextsResult, Embeddings, GetAIAPIKey} from '@memberjunction/ai';
 import { BaseResponse, VectorDBBase, VectorRecord } from '@memberjunction/ai-vectordb';
 import { MJGlobal } from '@memberjunction/global';
@@ -22,6 +22,7 @@ export class EntityVectorSyncer extends VectorBase {
             throw new Error('ContextUser is required to vectorize the entity');
         }
 
+        const startTime: number = new Date().getTime();
         super.CurrentUser = contextUser;
         const parser = EntityDocumentTemplateParser.CreateInstance();
         const entityDocument: EntityDocumentEntity = await this.GetEntityDocument(request.entityDocumentID);
@@ -37,24 +38,35 @@ export class EntityVectorSyncer extends VectorBase {
         let count = 0;
         for (const batch of chunks){
             const promises = [];
+            let templates: string[] = [];
             for(const record of batch){
                 // don't await here, fire off all the Parse requests within the batch at once in parallel, we will wait
                 // below for all of them to complete
-                const promise = parser.Parse(entityDocument.Template, request.entityID, record, contextUser);
-                promises.push(promise);
+                //const promise = parser.Parse(entityDocument.Template, request.entityID, record, contextUser);
+                //promises.push(promise);
+                let template: string = await parser.Parse(entityDocument.Template, request.entityID, record, contextUser);
+                templates.push(template);
             }
-            const templates: string[] = await Promise.all(promises);
+            LogStatus(`parsing batch ${count}: done`);
+            //const templates: string[] = await Promise.all(promises);
 
             const embeddings: EmbedTextsResult = await obj.embedding.EmbedTexts({texts: templates, model: null});
+            LogStatus(`embedding batch ${count}: done`);
+
             const vectorRecords: VectorRecord[] = embeddings.vectors.map((vector: number[], index: number) => {
-                const recordID = batch[index].PrimaryKeys.map((pk) => `${pk.Name}=${pk.Value}`).join("_");
+                const record: BaseEntity = batch[index]; 
+                const recordID = record.PrimaryKey.Values("|");
                 return {
+                    //The id breaks down to e.g. "Accounts_7_117"
                     id: `${entityDocument.Entity}_${entityDocument.ID}_${recordID}`,
                     values: vector,
                     metadata: {
                         EntityID: entityDocument.EntityID,
-                        PrimaryKeys: this.convertPrimaryKeysToList(batch[index].PrimaryKeys),
-                        Template: templates[index]
+                        EntityName: entityDocument.Entity,
+                        EntityDocumentID: entityDocument.ID,
+                        PrimaryKey: record.PrimaryKey.ToString(),
+                        Template: templates[index],
+                        Data: this.ConvertEntityFieldsToString(record)
                     }
                 };
             });
@@ -86,7 +98,7 @@ export class EntityVectorSyncer extends VectorBase {
                 }
             }
             else{
-                LogError(response.message);
+                LogError("Unable to successfully save records to vector database", undefined, response.message);
             }
 
             //add a delay to avoid rate limiting
@@ -94,6 +106,9 @@ export class EntityVectorSyncer extends VectorBase {
             count += 1;
             LogStatus(`Chunk ${count} of out ${chunks.length} processed`);
         }
+
+        const endTime: number = new Date().getTime();
+        LogStatus(`Finished vectorizing ${entityDocument.Entity} entity in ${endTime - startTime} ms`);
 
         return null;
     }
@@ -132,7 +147,6 @@ export class EntityVectorSyncer extends VectorBase {
             throw new Error(`Failed to save Entity Document for ${EntityID}`);
         }
     }
-
 
     protected async GetVectorDatabaseAndEmbeddingClassByEntityDocumentID(entityDocumentID: number, createDocumentIfNotFound: boolean = false): Promise<{embedding: Embeddings, vectorDB: VectorDBBase}> {
         let entityDocument: EntityDocumentEntity | null = await this.GetEntityDocument(entityDocumentID) || await this.GetFirstActiveEntityDocumentForEntity(entityDocumentID);
@@ -205,8 +219,7 @@ export class EntityVectorSyncer extends VectorBase {
         }
 
         return entityDocument;
-    }
-     
+    } 
 
     private async GetOrCreateVectorIndex(entityDocument: EntityDocumentEntity): Promise<VectorIndexEntity> {
         let vectorIndexEntity: VectorIndexEntity = await super.runViewForSingleValue("Vector Indexes", `VectorDatabaseID = ${entityDocument.VectorDatabaseID} AND EmbeddingModelID = ${entityDocument.AIModelID}`);
@@ -254,6 +267,15 @@ export class EntityVectorSyncer extends VectorBase {
         return primaryKeys.map((pk) => {
             return `${pk.Name}=${pk.Value}`;
         });
+    }
+
+    private ConvertEntityFieldsToString(entity: BaseEntity): string {
+        let obj = {};
+        for(const field of entity.Fields){
+            obj[field.Name] = field.Value;
+        }
+
+        return JSON.stringify(obj);
     }
 
     private delay = (delayInms) => {
