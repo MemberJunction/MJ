@@ -22,6 +22,6 @@
     "@memberjunction/core": "1.7.0",
     "@memberjunction/core-entities": "1.7.0",
     "@memberjunction/global": "1.7.0",
-    "@memberjunction/sqlserver-dataprovider": "1.6.2"
+    "@memberjunction/sqlserver-dataprovider": "1.7.0"
   }
 }
