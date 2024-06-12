@@ -1,6 +1,6 @@
 import { Component, OnInit } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router'
-import { ApplicationEntityInfo, Metadata, RunView, EntityRecordNameInput } from '@memberjunction/core';
+import { ApplicationEntityInfo, Metadata, RunView, EntityRecordNameInput, ApplicationInfo } from '@memberjunction/core';
 import { UserFavoriteEntity } from '@memberjunction/core-entities';
 import { SharedService } from '@memberjunction/ng-shared';
 
@@ -14,6 +14,7 @@ export class SingleApplicationComponent implements OnInit {
 
   }
   public appName: string = ''
+  public app: ApplicationInfo | undefined;
   public appDescription: string = ''
   public appEntities: ApplicationEntityInfo[] = [];
 
@@ -24,10 +25,10 @@ export class SingleApplicationComponent implements OnInit {
       if (appName) {
         this.appName = appName;
         const md = new Metadata()
-        const app = md.Applications.find(a => a.Name == appName)
-        if (app)  {
-          this.appDescription = app.Description
-          this.appEntities = app.ApplicationEntities 
+        this.app = md.Applications.find(a => a.Name == appName)
+        if (this.app)  {
+          this.appDescription = this.app.Description
+          this.appEntities = this.app.ApplicationEntities 
         }
       }
     });    

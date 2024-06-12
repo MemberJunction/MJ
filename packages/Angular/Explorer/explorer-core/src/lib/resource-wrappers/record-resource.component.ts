@@ -45,4 +45,18 @@ export class EntityRecordResource extends BaseResourceComponent {
                 return `New ${data.Configuration.Entity} Record`;
         }
     }
+
+    async GetResourceIconClass(data: ResourceData): Promise<string> {
+        if (!data.Configuration.Entity){
+            return ''
+        }
+        else {
+            const md = new Metadata();
+            const e = md.Entities.find(e => e.Name.trim().toLowerCase() === data.Configuration.Entity.trim().toLowerCase());
+            if (e)
+                return e?.Icon;
+            else
+                return '';
+        }
+    }
 }

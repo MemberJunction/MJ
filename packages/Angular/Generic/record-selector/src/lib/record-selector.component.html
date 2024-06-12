@@ -1,0 +1,34 @@
+<div mjFillContainer> 
+    <kendo-listbox
+        class="list-box"
+        #unselected
+        kendoListBoxDataBinding
+        [data]="UnselectedRecords"
+        [textField]="DisplayField"
+        [connectedWith]="selected"
+        [toolbar]="ToolbarSettings"
+        (dblclick)="onDblClick($event, 'unselected')"
+    >
+        <ng-template kendoListBoxItemTemplate let-dataItem>
+            @if (this.DisplayIconField) {
+                <span [ngClass]="dataItem[this.DisplayIconField] + ' item-icon'"></span>
+            }
+            <span>{{ dataItem[DisplayField] }}</span>
+        </ng-template>
+    </kendo-listbox>
+    <kendo-listbox 
+        class="list-box"
+        #selected 
+        [data]="SelectedRecords" 
+        [textField]="DisplayField"
+        [toolbar]="false"
+        (dblclick)="onDblClick($event, 'selected')"
+    >
+        <ng-template kendoListBoxItemTemplate let-dataItem>
+            @if (this.DisplayIconField) {
+                <span [ngClass]="dataItem[this.DisplayIconField] + ' item-icon'"></span>
+            }
+            <span>{{ dataItem[DisplayField] }}</span>
+        </ng-template>
+    </kendo-listbox>
+</div>

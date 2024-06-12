@@ -49,6 +49,8 @@ export class ApplicationEntityInfo extends BaseInfo {
 export class ApplicationInfo extends BaseInfo {
     Name: string = null
     Description: string = null
+    Icon: string = null
+    DefaultForNewUser: boolean = null
 
     private _ApplicationEntities: ApplicationEntityInfo[] = []
     public get ApplicationEntities(): ApplicationEntityInfo[] {
