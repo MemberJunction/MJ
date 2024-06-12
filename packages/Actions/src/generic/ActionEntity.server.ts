@@ -126,7 +126,6 @@ export class ActionEntityServerEntity extends ActionEntity {
                 const librariesToRemove = existingLibraries.filter(el => !codeLibraries.some(l => l.LibraryName.trim().toLowerCase() === el.Library.trim().toLowerCase()));
                 const librariesToUpdate = existingLibraries.filter(el => codeLibraries.some(l => l.LibraryName.trim().toLowerCase() === el.Library.trim().toLowerCase()));
                 const md = new Metadata();
-                //const promises = [];
                 const tg = await md.CreateTransactionGroup();
                 for (const lib of librariesToAdd) {
                     const libMetadata = md.Libraries.find(l => l.Name.trim().toLowerCase() === lib.LibraryName.trim().toLowerCase());
@@ -136,7 +135,7 @@ export class ActionEntityServerEntity extends ActionEntity {
                         newLib.LibraryID = libMetadata.ID;
                         newLib.ItemsUsed = lib.ItemsUsed.join(',');
                         newLib.TransactionGroup = tg;
-                        newLib.Save();  
+                        newLib.Save(); // no await, within a TG
                     }
                 }
 
@@ -145,28 +144,21 @@ export class ActionEntityServerEntity extends ActionEntity {
                     const newCode = codeLibraries.find(l => l.LibraryName.trim().toLowerCase() === lib.Library.trim().toLowerCase());
                     lib.ItemsUsed = newCode.ItemsUsed.join(',');
                     lib.TransactionGroup = tg;
-                    lib.Save();  
+                    lib.Save(); // no await, within a TG
                 }
 
                 // now remove the libraries that are no longer used
                 for (const lib of librariesToRemove) {
                     // each lib in this array iteration is already a BaseEntity derived object
                     lib.TransactionGroup = tg;
-                    lib.Delete();  
+                    lib.Delete(); // no await, within a TG
                 }
 
                 // now commit the transaction
-                if (!await tg.Submit()) {
-                    return false
-                    //throw new Error('Failed to update the libraries used by the Action.');
-                }
+                if (await tg.Submit()) 
+                    return true
                 else
-                    return true;
-
-
-                // // now wait for all the promises to complete
-                // const results = await Promise.all(promises);
-                // return results.some(r => r === false) ? false : true;
+                    return false;
             }
             else 
                 return true;
