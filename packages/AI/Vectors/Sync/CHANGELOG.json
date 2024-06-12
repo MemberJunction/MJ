@@ -2,6 +2,51 @@
   "name": "@memberjunction/ai-vector-sync",
   "entries": [
     {
+      "date": "Wed, 12 Jun 2024 20:13:29 GMT",
+      "version": "1.7.1",
+      "tag": "@memberjunction/ai-vector-sync_v1.7.1",
+      "comments": {
+        "patch": [
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ai-vector-sync",
+            "comment": "Bump @memberjunction/ai to v1.7.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ai-vector-sync",
+            "comment": "Bump @memberjunction/ai-vectordb to v1.7.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ai-vector-sync",
+            "comment": "Bump @memberjunction/ai-vectors to v1.7.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ai-vector-sync",
+            "comment": "Bump @memberjunction/aiengine to v1.7.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ai-vector-sync",
+            "comment": "Bump @memberjunction/core to v1.7.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ai-vector-sync",
+            "comment": "Bump @memberjunction/global to v1.7.1",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
       "date": "Wed, 12 Jun 2024 18:53:38 GMT",
       "version": "1.7.0",
       "tag": "@memberjunction/ai-vector-sync_v1.7.0",

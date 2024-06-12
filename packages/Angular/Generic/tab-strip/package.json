@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-tabstrip",
-  "version": "1.7.0",
+  "version": "1.7.1",
   "description": "MemberJunction: Very simple tab strip component used in the MJ Explorer app and reusable anywhere else in an Angular project.",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",
@@ -23,8 +23,8 @@
     "@angular/core": "18.0.2"
   },
   "dependencies": {
-    "@memberjunction/ng-container-directives": "1.7.0",
-    "@memberjunction/ng-shared": "1.7.0",
+    "@memberjunction/ng-container-directives": "1.7.1",
+    "@memberjunction/ng-shared": "1.7.1",
     "tslib": "^2.3.0"
   },
   "sideEffects": false
