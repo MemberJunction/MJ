@@ -558,6 +558,8 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
     public async Save(entity: BaseEntity, user: UserInfo, options: EntitySaveOptions) : Promise<{}> {
         const result = new BaseEntityResult();
         try {
+            entity.RegisterTransactionPreprocessing(); // as of the time of writing, this isn't technically needed because we are not doing any async preprocessing, but it is good to have it here for future use in case something is added with async between here and the TransactionItem being added.
+
             const vars = { input: {} };
             const type: string = entity.IsSaved ? "Update" : "Create";
 
@@ -625,6 +627,8 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                             inputType: mutationName + 'Input!'
                         }
                     ];
+
+                    entity.RaiseReadyForTransaction(); // let the entity know we're ready to be part of the transaction
 
                     // we are part of a transaction group, so just add our query to the list
                     // and when the transaction is committed, we will send all the queries at once
@@ -744,6 +748,8 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
     public async Delete(entity: BaseEntity, options: EntityDeleteOptions, user: UserInfo) : Promise<boolean> {
         const result = new BaseEntityResult();
         try {
+            entity.RegisterTransactionPreprocessing();
+            
             result.StartedAt = new Date();
             result.Type = 'delete';
             result.OriginalValues = entity.Fields.map(f => { return {FieldName: f.CodeName, Value: f.Value} });
@@ -786,6 +792,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
 
             if (entity.TransactionGroup) {
                 // we have a transaction group, need to play nice and be part of it
+                entity.RaiseReadyForTransaction();
                 return new Promise((resolve, reject) => {
                     // we are part of a transaction group, so just add our query to the list
                     // and when the transaction is committed, we will send all the queries at once
