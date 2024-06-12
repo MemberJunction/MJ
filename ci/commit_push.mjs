@@ -33,3 +33,14 @@ if (!pushResult.success) {
   console.error(JSON.stringify(pushResult));
   throw new Error('Pushing to origin/main has failed!');
 }
+
+if (version) {
+  const pushTagsResult = await gitAsync(['push', '--tags', '--verbose', 'origin', 'HEAD:main'], {
+    cwd,
+    verbose: true,
+  });
+  if (!pushTagsResult.success) {
+    console.error(JSON.stringify(tagResult));
+    throw new Error(`Pushing tag ${version} has failed!`);
+  }
+}
