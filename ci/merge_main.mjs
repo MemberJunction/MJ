@@ -16,7 +16,7 @@ if (!mergeResult.success) {
 
 console.log(`\nPushing to origin/next...`);
 
-const pushResult = await gitAsync(['push', '--no-verify', '--follow-tags', '--verbose', 'origin', 'HEAD:next'], {
+const pushResult = await gitAsync(['push', '--force', '--no-verify', '--follow-tags', '--verbose', 'origin', 'HEAD:next'], {
   cwd,
   verbose: true,
 });

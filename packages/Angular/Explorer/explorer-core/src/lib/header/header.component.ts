@@ -1,4 +1,5 @@
 import { Component, EventEmitter, Output, ViewChild, ElementRef, OnInit, Input } from '@angular/core';
+import { take, firstValueFrom } from 'rxjs';
 import { Router } from '@angular/router';
 
 import { MJAuthBase } from '@memberjunction/ng-auth-services';
@@ -90,16 +91,19 @@ export class HeaderComponent implements OnInit {
         MJGlobal.Instance.GetEventListener(true).subscribe(async (event) => {
             if (event.event === MJEventType.LoggedIn) {
                 await this.loadSearchableEntities();
-                
+
                 const md = new Metadata();
                 this.menuItems[0] = md.CurrentUser.FirstLast;
                 this.selectedMenuItem = this.menuItems[0];
 
-                if (this.isMicrosoft(event.args)){
-                    this.msftUserImageService.getPhoto(event.args.accessToken).subscribe((blob: Blob) => {
-                        this.userImageURL = URL.createObjectURL(blob);
-                        this.sharedService.CurrentUserImage = this.userImageURL;
-                    });
+                const claims$ = (await this.authBase.getUserClaims()).pipe(take(1));
+                const claims = await firstValueFrom(claims$);
+
+                if (this.isMicrosoft(claims)) {
+                  this.msftUserImageService.getPhoto(claims.accessToken).subscribe((blob: Blob) => {
+                    this.userImageURL = URL.createObjectURL(blob);
+                    this.sharedService.CurrentUserImage = this.userImageURL;
+                  });
                 }
             }
         });
@@ -121,7 +125,7 @@ export class HeaderComponent implements OnInit {
     }
 
     private isMicrosoft(claims: any): boolean {
-        return claims && claims.authority && (claims.authority.includes('microsoftonline.com') || 
+        return claims && claims.authority && (claims.authority.includes('microsoftonline.com') ||
                                         claims.authority.includes('microsoft.com'));
     }
 
