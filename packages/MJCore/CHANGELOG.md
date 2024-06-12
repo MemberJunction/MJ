@@ -1,8 +1,21 @@
 # Change Log - @memberjunction/core
 
-This log was last generated on Tue, 11 Jun 2024 06:50:06 GMT and should not be manually modified.
+This log was last generated on Wed, 12 Jun 2024 18:53:38 GMT and should not be manually modified.
 
 <!-- Start content -->
+
+## 1.7.0
+
+Wed, 12 Jun 2024 18:53:38 GMT
+
+### Minor changes
+
+- Bump @memberjunction/global to v1.7.0
+
+### Patches
+
+- Applying package updates [skip ci] (97354817+AN-BC@users.noreply.github.com)
+- Applying package updates [skip ci] (97354817+AN-BC@users.noreply.github.com)
 
 ## 1.6.1
 

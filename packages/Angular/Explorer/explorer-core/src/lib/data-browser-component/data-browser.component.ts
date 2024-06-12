@@ -71,18 +71,19 @@ export class DataBrowserComponent {
     // now we need to process the changes if the user hit save
     if (save) {
       // we need to basically make sure the User Applications entity for this user maps to the set of selected Applications in the order selected as well
+      const md = new Metadata();
       const rv = new RunView();
       const userApps = await rv.RunView<UserApplicationEntity>({
         EntityName: 'User Applications',
+        ExtraFilter: `UserID=${md.CurrentUser.ID}`,
         ResultType: 'entity_object',
-        OrderBy: 'Sequence'
-      })
+        OrderBy: 'Sequence',
+      });
       // userApps.results is the current DB state, we need to now compare it to the SelectedApplications array
       // and if there are changes either update sequence values or set IsActive=false for records that are not selected anyomre. We
       // don't ever actually delete existing UserApplication records becaue we want to retain the UserApplicationEntities in case the 
       // user selects the app again in the future
       const existingUserApps = userApps.Results;
-      const md = new Metadata();
       const userAppsToSave: UserApplicationEntity[] = [];
       // first we need to update the sequence values for the selected applications
       for (let index = 0; index < this.SelectedApplications.length; index++) {

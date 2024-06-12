@@ -2,6 +2,51 @@
   "name": "@memberjunction/ng-treelist",
   "entries": [
     {
+      "date": "Wed, 12 Jun 2024 18:53:39 GMT",
+      "version": "1.7.0",
+      "tag": "@memberjunction/ng-treelist_v1.7.0",
+      "comments": {
+        "minor": [
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-treelist",
+            "comment": "Bump @memberjunction/core-entities to v1.7.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-treelist",
+            "comment": "Bump @memberjunction/global to v1.7.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-treelist",
+            "comment": "Bump @memberjunction/core to v1.7.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-treelist",
+            "comment": "Bump @memberjunction/ng-container-directives to v1.7.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-treelist",
+            "comment": "Bump @memberjunction/ng-entity-form-dialog to v1.7.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-treelist",
+            "comment": "Bump @memberjunction/ng-shared to v1.7.0",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
       "date": "Tue, 11 Jun 2024 06:50:06 GMT",
       "version": "1.6.1",
       "tag": "@memberjunction/ng-treelist_v1.6.1",
