@@ -16,6 +16,17 @@
                             [EditMode]="this.EditMode">
                         </mj-form-section>
                     </mj-tab-body>
+
+                    <mj-tab Name="Timeline" 
+                        [Visible]="record.IsSaved"
+                        >
+                        Timeline
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-timeline
+                        [Groups]="timelineGroups">
+                        </mj-timeline>
+                    </mj-tab-body>
                     
                     <mj-tab Name="User Applications" 
                         [Visible]="record.IsSaved" 
@@ -451,6 +462,7 @@
                             [BottomMargin]="GridBottomMargin">
                         </mj-user-view-grid>
                     </mj-tab-body>
+
                 </mj-tabstrip>
     </form>
 </div>

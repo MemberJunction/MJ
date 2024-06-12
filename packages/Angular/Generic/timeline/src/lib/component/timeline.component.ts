@@ -4,8 +4,8 @@ import { BaseEntity, Metadata, RunView, RunViewParams } from '@memberjunction/co
 import { SharedService } from '@memberjunction/ng-shared'
 import { Router } from '@angular/router';
 
-import { SchedulerEvent } from '@progress/kendo-angular-scheduler';
-import { sampleData, displayDate } from './dummy-data';
+import { TimelineEvent } from "@progress/kendo-angular-layout";
+import { FloatingActionButtonTemplateDirective } from '@progress/kendo-angular-buttons';
 
 /**
  * 
@@ -113,9 +113,13 @@ export class TimelineComponent implements AfterViewInit {
     }
   }
 
-
-  public selectedDate: Date = new Date();
-  public events: SchedulerEvent[] = [];
+  /*
+  * events is the array of timeline events that gets updated on each call of LoadSingleGroup. 
+  * groupEvents is the array of total timeline events that will get called by the timeline component.
+  */
+  public events: TimelineEvent[] = [];
+  public groupEvents: TimelineEvent[]= [];
+  
 
   ngAfterViewInit(): void {
     if (this.AllowLoad)
@@ -129,35 +133,36 @@ export class TimelineComponent implements AfterViewInit {
   public Refresh() {
     if (this.Groups && this.Groups.length > 0) {
       this.Groups.forEach(g => this.LoadSingleGroup(g));
-
-      // now get the highest date from the events array and set that into the selectedDate
-      if (this.events.length > 0) {
-        this.selectedDate = this.events.reduce((a, b) => a.start > b.start ? a : b).start;
-      }
     }
   }
 
+  public SummaryFunction(record: BaseEntity): string {
+    let first_name = record.Get('Name');
+
+    return  first_name;
+  }
+
   protected LoadSingleGroup(group: TimelineGroup) {
+    group.SummaryMode = 'custom';
     this.events = group.EntityObjects.map(e => {
       let date = new Date(e.Get(group.DateFieldName));
-      let title = e.Get(group.TitleFieldName);
+      let title = group.TitleFieldName;
       let summary = "";
       if (group.SummaryMode == 'field') {
-        summary = e.Get(group.TitleFieldName);
-      } else if (group.SummaryMode == 'custom' && group.SummaryFunction) {
-        summary = group.SummaryFunction(e);
+        summary = e.Get(group.EntityName);
+      } else if (group.SummaryMode == 'custom') {
+        summary = this.SummaryFunction(e);
       }
       return {
-        id: e.Get("ID"),
-        title: title,
-        start: date,
-        end: date,
-        isAllDay: true,
         description: summary,
-        color: group.DisplayColor,
-        icon: group.DisplayIcon,
+        date: date,
+        title: title,
+        subtitle: date.toDateString(),
+        images: [],
+        actions: [],
       };
-    });
+    })
+    this.groupEvents = this.groupEvents.concat(this.events);
   }
   
 }

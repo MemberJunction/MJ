@@ -1,0 +1,14 @@
+.type1-class {
+    background-color: lightblue;
+    border-left: 5px solid blue;
+    padding: 10px;
+    margin: 10px 0;
+  }
+  
+  .type2-class {
+    background-color: lightgreen;
+    border-left: 5px solid green;
+    padding: 10px;
+    margin: 10px 0;
+  }
+  

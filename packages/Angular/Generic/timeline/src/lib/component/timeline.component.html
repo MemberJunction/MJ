@@ -1,11 +1,15 @@
 <div mjFillContainer class="wrapper"> 
-    <kendo-scheduler
-      [events]="events"
-      [selectedDate]="selectedDate"
-    >
-      <ng-template kendoSchedulerAllDayEventTemplate let-event="event">
-        <span style="color:yellow;">{{ event.title }}</span>
-      </ng-template>
-      <kendo-scheduler-week-view> </kendo-scheduler-week-view>
-  </kendo-scheduler>
+  <kendo-timeline
+    [events]="groupEvents"
+    [collapsibleEvents]="true"
+    [alterMode]="true"
+  >
+    <ng-template kendoTimelineEventTemplate let-event>
+      <div [ngClass]="{
+          'type1-class': event.title==='Created User', 
+          'type2-class': event.description==='Updated User'
+      }">
+      </div>
+    </ng-template>
+  </kendo-timeline>
 </div> 
