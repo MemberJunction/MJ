@@ -2,7 +2,7 @@
 * ALL ENTITIES - TypeGraphQL Type Class Definition - AUTO GENERATED FILE
 * Generated Entities and Resolvers for Server
 * 
-* GENERATED: 6/12/2024, 12:19:28 AM
+* GENERATED: 6/12/2024, 2:49:50 PM
 * 
 *   >>> DO NOT MODIFY THIS FILE!!!!!!!!!!!!
 *   >>> YOUR CHANGES WILL BE OVERWRITTEN
@@ -17466,7 +17466,8 @@ export class Account__client_crm_ {
     @MaxLength(16)
     ModifiedBy?: string;
           
-    @Field(() => Int) 
+    @Field() 
+    @MaxLength(8)
     VersionNumber: number;
           
     @Field({nullable: true}) 
@@ -18423,7 +18424,7 @@ export class CreateAccount__client_crmInput {
     @Field({ nullable: true })
     ModifiedOn?: Date;
 
-    @Field(() => Int)
+    @Field()
     VersionNumber: number;
 
     @Field(() => Float, { nullable: true })
@@ -19174,7 +19175,7 @@ export class UpdateAccount__client_crmInput {
     @Field({ nullable: true })
     ModifiedOn?: Date;
 
-    @Field(() => Int)
+    @Field()
     VersionNumber: number;
 
     @Field(() => Float, { nullable: true })
@@ -19607,7 +19608,8 @@ export class StringMap_ {
     @Field(() => Int, {nullable: true}) 
     DisplayOrder?: number;
           
-    @Field(() => Int) 
+    @Field() 
+    @MaxLength(8)
     VersionNumber: number;
           
     @Field() 
@@ -19639,7 +19641,7 @@ export class CreateStringMapInput {
     @Field(() => Int, { nullable: true })
     DisplayOrder?: number;
 
-    @Field(() => Int)
+    @Field()
     VersionNumber: number;
 }
     
@@ -19667,7 +19669,7 @@ export class UpdateStringMapInput {
     @Field(() => Int, { nullable: true })
     DisplayOrder?: number;
 
-    @Field(() => Int)
+    @Field()
     VersionNumber: number;
 
     @Field()
@@ -19871,7 +19873,8 @@ export class ProductPriceLevel_ {
     @Field(() => Float, {nullable: true}) 
     RoundingOptionAmount?: number;
           
-    @Field(() => Int) 
+    @Field() 
+    @MaxLength(8)
     VersionNumber: number;
           
     @Field({nullable: true}) 
@@ -20001,7 +20004,7 @@ export class CreateProductPriceLevelInput {
     @Field(() => Float, { nullable: true })
     RoundingOptionAmount?: number;
 
-    @Field(() => Int)
+    @Field()
     VersionNumber: number;
 
     @Field(() => Float, { nullable: true })
@@ -20104,7 +20107,7 @@ export class UpdateProductPriceLevelInput {
     @Field(() => Float, { nullable: true })
     RoundingOptionAmount?: number;
 
-    @Field(() => Int)
+    @Field()
     VersionNumber: number;
 
     @Field(() => Float, { nullable: true })
@@ -20416,7 +20419,8 @@ export class client_membership_ {
     @Field(() => Int, {nullable: true}) 
     UTCConversionTimeZoneCode?: number;
           
-    @Field(() => Int) 
+    @Field() 
+    @MaxLength(8)
     VersionNumber: number;
           
     @Field({nullable: true}) 
@@ -20622,7 +20626,7 @@ export class Createclient_membershipInput {
     @Field(() => Int, { nullable: true })
     UTCConversionTimeZoneCode?: number;
 
-    @Field(() => Int)
+    @Field()
     VersionNumber: number;
 
     @Field({ nullable: true })
@@ -20794,7 +20798,7 @@ export class Updateclient_membershipInput {
     @Field(() => Int, { nullable: true })
     UTCConversionTimeZoneCode?: number;
 
-    @Field(() => Int)
+    @Field()
     VersionNumber: number;
 
     @Field({ nullable: true })
@@ -21604,7 +21608,8 @@ export class Contact__client_crm_ {
     @MaxLength(510)
     ChildrensNames?: string;
           
-    @Field(() => Int) 
+    @Field() 
+    @MaxLength(8)
     VersionNumber: number;
           
     @Field({nullable: true}) 
@@ -23205,7 +23210,7 @@ export class CreateContact__client_crmInput {
     @Field({ nullable: true })
     ChildrensNames?: string;
 
-    @Field(() => Int)
+    @Field()
     VersionNumber: number;
 
     @Field({ nullable: true })
@@ -24553,7 +24558,7 @@ export class UpdateContact__client_crmInput {
     @Field({ nullable: true })
     ChildrensNames?: string;
 
-    @Field(() => Int)
+    @Field()
     VersionNumber: number;
 
     @Field({ nullable: true })
@@ -25584,7 +25589,8 @@ export class UoM_ {
     @Field(() => Boolean, {nullable: true}) 
     IsScheduleBaseUoM?: boolean;
           
-    @Field(() => Int) 
+    @Field() 
+    @MaxLength(8)
     VersionNumber: number;
           
     @Field(() => Int, {nullable: true}) 
@@ -25683,7 +25689,7 @@ export class CreateUoMInput {
     @Field(() => Boolean, { nullable: true })
     IsScheduleBaseUoM?: boolean;
 
-    @Field(() => Int)
+    @Field()
     VersionNumber: number;
 
     @Field(() => Int, { nullable: true })
@@ -25756,7 +25762,7 @@ export class UpdateUoMInput {
     @Field(() => Boolean, { nullable: true })
     IsScheduleBaseUoM?: boolean;
 
-    @Field(() => Int)
+    @Field()
     VersionNumber: number;
 
     @Field(() => Int, { nullable: true })
@@ -26204,7 +26210,8 @@ export class SalesOrder_ {
     @MaxLength(400)
     ShipTo_Name?: string;
           
-    @Field(() => Int) 
+    @Field() 
+    @MaxLength(8)
     VersionNumber: number;
           
     @Field({nullable: true}) 
@@ -26897,7 +26904,7 @@ export class CreateSalesOrderInput {
     @Field({ nullable: true })
     ShipTo_Name?: string;
 
-    @Field(() => Int)
+    @Field()
     VersionNumber: number;
 
     @Field({ nullable: true })
@@ -27399,7 +27406,7 @@ export class UpdateSalesOrderInput {
     @Field({ nullable: true })
     ShipTo_Name?: string;
 
-    @Field(() => Int)
+    @Field()
     VersionNumber: number;
 
     @Field({ nullable: true })
@@ -27994,7 +28001,8 @@ export class SalesOrderDetail_ {
     @MaxLength(300)
     ShipTo_ContactName?: string;
           
-    @Field(() => Int) 
+    @Field() 
+    @MaxLength(8)
     VersionNumber: number;
           
     @Field({nullable: true}) 
@@ -28255,7 +28263,7 @@ export class CreateSalesOrderDetailInput {
     @Field({ nullable: true })
     ShipTo_ContactName?: string;
 
-    @Field(() => Int)
+    @Field()
     VersionNumber: number;
 
     @Field(() => Int, { nullable: true })
@@ -28484,7 +28492,7 @@ export class UpdateSalesOrderDetailInput {
     @Field({ nullable: true })
     ShipTo_ContactName?: string;
 
-    @Field(() => Int)
+    @Field()
     VersionNumber: number;
 
     @Field(() => Int, { nullable: true })
@@ -28884,7 +28892,8 @@ export class Product_ {
     @Field(() => Int, {nullable: true}) 
     StatusCode?: number;
           
-    @Field(() => Int) 
+    @Field() 
+    @MaxLength(8)
     VersionNumber: number;
           
     @Field({nullable: true}) 
@@ -29430,7 +29439,7 @@ export class CreateProductInput {
     @Field(() => Int, { nullable: true })
     StatusCode?: number;
 
-    @Field(() => Int)
+    @Field()
     VersionNumber: number;
 
     @Field({ nullable: true })
@@ -29863,7 +29872,7 @@ export class UpdateProductInput {
     @Field(() => Int, { nullable: true })
     StatusCode?: number;
 
-    @Field(() => Int)
+    @Field()
     VersionNumber: number;
 
     @Field({ nullable: true })

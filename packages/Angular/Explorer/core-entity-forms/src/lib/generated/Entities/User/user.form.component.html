@@ -451,6 +451,21 @@
                             [BottomMargin]="GridBottomMargin">
                         </mj-user-view-grid>
                     </mj-tab-body>
+
+                    <mj-tab Name="Record Change Replay Runs" 
+                        [Visible]="record.IsSaved" 
+                        [Props]="{EntityRelationshipID: 294}">
+                        Record Change Replay Runs
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Record Change Replay Runs')"  
+                            [NewRecordValues]="NewRecordValues('Record Change Replay Runs')"
+                            [AllowLoad]="IsCurrentTab('Record Change Replay Runs')"  
+                            [EditMode]="GridEditMode()"  
+                            [BottomMargin]="GridBottomMargin">
+                        </mj-user-view-grid>
+                    </mj-tab-body>
                 </mj-tabstrip>
     </form>
 </div>
