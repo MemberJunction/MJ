@@ -177,3 +177,21 @@ export function CodeNameFromString(input: string): string {
     }
     return codeName;
 }
+
+/**
+ * Run concurrent promises with a maximum concurrency level
+ * @param concurrency - The number of concurrently running promises
+ * @param funcs - An array of functions that return promises
+ * @returns A promise that resolves to an array of the resolved values from the promises returned by funcs
+ */
+export function Concurrent<V>(concurrency: number, funcs: (() => Promise<V>)[]): Promise<V[]> {
+  return new Promise((resolve, reject) => {
+    let index = -1;
+    const p: Promise<V>[] = [];
+    for (let i = 0; i < Math.max(1, Math.min(concurrency, funcs.length)); i++) runPromise();
+    function runPromise() {
+      if (++index < funcs.length) (p[p.length] = funcs[index]()).then(runPromise).catch(reject);
+      else if (index === funcs.length) Promise.all(p).then(resolve).catch(reject);
+    }
+  });
+}

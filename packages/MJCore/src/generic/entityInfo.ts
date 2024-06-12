@@ -564,6 +564,8 @@ export class EntityInfo extends BaseInfo {
     UserFormGenerated: boolean = null
     EntityObjectSubclassName: string = null
     EntityObjectSubclassImport: string = null
+    PreferredCommunicationField: string = null
+    Icon: string = null
     CreatedAt: Date = null
     UpdatedAt: Date = null
 

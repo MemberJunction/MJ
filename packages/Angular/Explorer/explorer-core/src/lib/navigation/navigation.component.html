@@ -33,10 +33,10 @@
         @for(tab of tabs; track tab.id; let i = $index) {
           <mj-tab [TabCloseable]="true">
             @if(tab?.contentLoading) {
-              <span class="fa-regular fa-clock"></span>
+              <span class="fa-regular fa-clock tab-icon"></span>
             }
             @else if (tab?.icon) {
-              <span [class]="tab.icon"></span>
+              <span [class]="tab.icon + ' tab-icon'"></span>
             }
             {{ tab.labelLoading ? 'Loading...' : tab.label }}
           </mj-tab>

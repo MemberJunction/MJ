@@ -5,18 +5,27 @@
   "workspaces": [
     "packages/*",
     "packages/AI/*",
+    "packages/AI/Providers/*",
+    "packages/AI/Recommendations/*",
+    "packages/AI/Vectors/*",
     "packages/Communication/*",
+    "packages/Templates/*",
     "packages/Angular/*",
     "packages/Angular/Explorer/*",
     "packages/Angular/Generic/*",
     "packages/AngularElements/*"
   ],
   "scripts": {
-    "build": "turbo build --filter=\"@memberjunction*\"",
-    "watch": "turbo watch --filter=\"!mj_*\"",
+    "build": "npm run build:stream",
+    "build:stream": "turbo --log-order=stream build --filter=\"@memberjunction*\"",
+    "build:table": "turbo build --filter=\"@memberjunction*\"",
+    "watch": "turbo watch --filter=\"@memberjunction*\"",
     "start": "turbo start --filter=mj_explorer --filter=mj_api",
     "start:api": "turbo start --filter=mj_api",
     "start:explorer": "turbo start --filter=mj_explorer",
+    "deps:check": "syncpack list-mismatches",
+    "deps:fix": "syncpack fix-mismatches",
+    "deps:update": "syncpack update",
     "docs": "typedoc",
     "change": "beachball change",
     "checkchange": "beachball check --verbose",
@@ -28,9 +37,20 @@
   "dependencies": {
     "archiver": "^7.0.0"
   },
+  "packageManager": "npm@10.5.0",
   "devDependencies": {
+    "@typescript-eslint/eslint-plugin": "7.12.0",
+    "@typescript-eslint/parser": "7.12.0",
     "beachball": "^2.43.0",
-    "turbo": "^1.12.5",
+    "eslint": "8.56.0",
+    "eslint-config-prettier": "9.1.0",
+    "eslint-import-resolver-typescript": "^3.5.2",
+    "eslint-plugin-import": "^2.26.0",
+    "eslint-plugin-jsx-a11y": "^6.6.1",
+    "eslint-plugin-prettier": "5.1.3",
+    "prettier": "^3.3.1",
+    "syncpack": "^12.3.2",
+    "turbo": "2.0.3",
     "typedoc": "^0.25.12",
     "typedoc-plugin-missing-exports": "^2.2.0"
   }

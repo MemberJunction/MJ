@@ -1,33 +1,35 @@
 import { gitAsync } from 'beachball/lib/git/gitAsync.js';
-import { findProjectRoot, parseRemoteBranch } from 'workspace-tools';
+import { findProjectRoot } from 'workspace-tools';
 
-const branch = 'main';
+const version = process.env.VERSION;
+
 const message = 'Update distribution zip [skip ci]';
-const { remote, remoteBranch } = parseRemoteBranch(branch);
 const cwd = findProjectRoot(process.cwd());
 
 const commitResult = await gitAsync(['commit', '--all', '-m', message], {
   cwd,
   verbose: true,
 });
-if (commitResult.success) {
-  completed = true;
-} else if (pushResult.timedOut) {
-  throw new Error(`Committing has timed out!`);
-} else {
+if (!commitResult.success) {
+  console.error(JSON.stringify(commitResult));
   throw new Error(`Committing has failed!`);
 }
 
-console.log(`\nPushing to ${branch}...`);
+if (version) {
+  const tagResult = await gitAsync(['tag', version], { cwd, verbose: true });
+  if (!tagResult.success) {
+    console.error(JSON.stringify(tagResult));
+    throw new Error(`Tagging with ${version} has failed!`);
+  }
+}
 
-const pushResult = await gitAsync(['push', '--no-verify', '--follow-tags', '--verbose', remote, `HEAD:${remoteBranch}`], {
+console.log('\nPushing to origin/main...');
+
+const pushResult = await gitAsync(['push', '--no-verify', '--follow-tags', '--verbose', 'origin', 'HEAD:main'], {
   cwd,
   verbose: true,
 });
-if (pushResult.success) {
-  completed = true;
-} else if (pushResult.timedOut) {
-  throw new Error(`Pushing to ${branch} has timed out!`);
-} else {
-  throw new Error(`Pushing to ${branch} has failed!`);
+if (!pushResult.success) {
+  console.error(JSON.stringify(pushResult));
+  throw new Error('Pushing to origin/main has failed!');
 }

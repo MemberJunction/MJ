@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-data-context",
-  "version": "1.5.0",
+  "version": "1.6.1",
   "description": "MemberJunction: Angular component and pop-up window to display and edit the contents of a data context.",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",
@@ -15,21 +15,21 @@
   "author": "",
   "license": "ISC",
   "devDependencies": {
-    "@angular/compiler": "~17.2.2",
-    "@angular/compiler-cli": "~17.2.2"
+    "@angular/compiler": "18.0.2",
+    "@angular/compiler-cli": "18.0.2"
   },
   "peerDependencies": {
-    "@angular/common": "~17.2.2",
-    "@angular/core": "~17.2.2",
-    "@angular/forms": "~17.2.2",
-    "@angular/router": "~17.2.2",
-    "@progress/kendo-angular-grid": "~15.1.0",
-    "@progress/kendo-angular-indicators": "~15.1.0"
+    "@angular/common": "18.0.2",
+    "@angular/core": "18.0.2",
+    "@angular/forms": "18.0.2",
+    "@angular/router": "18.0.2",
+    "@progress/kendo-angular-grid": "16.2.0",
+    "@progress/kendo-angular-indicators": "16.2.0"
   },
   "dependencies": {
-    "@memberjunction/core": "~1.5.0",
-    "@memberjunction/global": "~1.5.0",
-    "@memberjunction/ng-compare-records": "~1.5.0",
+    "@memberjunction/core": "1.6.1",
+    "@memberjunction/global": "1.6.1",
+    "@memberjunction/ng-compare-records": "1.6.1",
     "tslib": "^2.3.0"
   },
   "sideEffects": false

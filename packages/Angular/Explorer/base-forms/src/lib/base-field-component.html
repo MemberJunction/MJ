@@ -1,5 +1,5 @@
-<!-- 
-    Using a blend of *ngIf and the new @switch control flow because of a bug in early Angular 17 where 
+<!--
+    Using a blend of *ngIf and the new @switch control flow because of a bug in early Angular 17 where
     the @if wrapping the @switch didn't fully remove elements when swtiching back and forth. In the future if Angular fixes the bug
     we can get rid of the *ngIf outer div blocks and instead use @if and contain the @switch within the same div block.
 -->
@@ -10,7 +10,7 @@
         @switch (LinkType) {
             @case ('None') {
                 @if (ExtendedType === 'Code') {
-                    <pre>{{record.Get(FieldName)}}</pre>
+                    <mj-code-editor [value]="record.Get(FieldName)" [readonly]="true" [languages]="languages" [language]="'JavaScript'"></mj-code-editor>
                 }
                 @else if (FieldInfo.Length === -1) {
                     <!-- this is a varchar(max) type of field -->
@@ -31,40 +31,40 @@
                 <span mjFieldLink [record]="record" [fieldName]="FieldName" >{{FormatValue(FieldName, 0)}}</span>
             }
         }
-    </div>         
+    </div>
     <div class="record-form-row" *ngIf="EditMode && !IsFieldReadOnly">
         @if (ShowLabel) {
             <label>{{DisplayName}}</label>
         }
         @if (FieldInfo && FieldInfo.RelatedEntity && FieldInfo.RelatedEntity.length > 0) {
             <!-- Foreign Key Link here -->
-             <mj-link-field [record]="record" [FieldName]="FieldName"></mj-link-field> 
+             <mj-link-field [record]="record" [FieldName]="FieldName"></mj-link-field>
         }
         @else {
             <!-- Not a foreign key -->
             @switch (Type) {
                 @case ('textbox') {
-                    <kendo-textbox [(ngModel)]="Value"  />   
+                    <kendo-textbox [(ngModel)]="Value"  />
                 }
                 @case ('textarea') {
                     <kendo-textarea [(ngModel)]="Value" mjFillContainer [fillWidth]="ShowLabel ? false : true" [fillHeight]="ShowLabel ? false : true" ></kendo-textarea>
                 }
                 @case ('numerictextbox') {
-                    <kendo-numerictextbox [(value)]="Value"  />   
+                    <kendo-numerictextbox [(value)]="Value"  />
                 }
                 @case ('datepicker') {
                     <kendo-datepicker [(value)]="Value"></kendo-datepicker>
                 }
                 @case ('checkbox') {
-                    <input type="checkbox" [(ngModel)]="Value" kendoCheckBox />   
+                    <input type="checkbox" [(ngModel)]="Value" kendoCheckBox />
                 }
                 @case ('dropdownlist') {
-                    <kendo-dropdownlist [data]="PossibleValues" [(ngModel)]="Value"></kendo-dropdownlist>   
+                    <kendo-dropdownlist [data]="PossibleValues" [(ngModel)]="Value"></kendo-dropdownlist>
                 }
                 @case ('combobox') {
                     <kendo-combobox [data]="PossibleValues" [allowCustom]="true" [(ngModel)]="Value"></kendo-combobox>
                 }
-            }    
+            }
         }
-    </div>         
+    </div>
 }

@@ -1,4 +1,4 @@
-import { BaseCommunicationProvider, Message, MessageResult } from "@memberjunction/communication-core";
+import { BaseCommunicationProvider, Message, MessageResult, ProcessedMessage } from "@memberjunction/communication-types";
 import { RegisterClass } from "@memberjunction/global";
 import sgMail from '@sendgrid/mail';
 import { __API_KEY } from "./config";
@@ -8,23 +8,32 @@ import { __API_KEY } from "./config";
  */
 @RegisterClass(BaseCommunicationProvider, 'SendGrid')
 export class SendGridProvider extends BaseCommunicationProvider {
-    public async SendSingleMessage(message: Message): Promise<MessageResult> {
+    public async SendSingleMessage(message: ProcessedMessage): Promise<MessageResult> {
         // hook up with sendgrid and send stuff
         sgMail.setApiKey(__API_KEY);
         const msg = {
             to: message.To,
-            from: 'amith@bluecypress.io',
-            subject: message.Subject,
-            text: message.Body,
-            html: message.Body
+            from: message.From,
+            subject: message.ProcessedSubject,
+            text: message.ProcessedBody,
+            html: message.ProcessedHTMLBody
         };
         try {
             const result = await sgMail.send(msg);
-            return {
-                Message: message,
-                Success: true,
-                Error: ''
-            };
+            if (result && result.length > 0 && result[0].statusCode >= 200 && result[0].statusCode < 300) {
+                return {
+                    Message: message,
+                    Success: true,
+                    Error: ''
+                };
+            }
+            else {
+                return {
+                    Message: message,
+                    Success: false,
+                    Error: result[0].toString()
+                };
+            }
         } catch (error) {
             return {
                 Message: message,

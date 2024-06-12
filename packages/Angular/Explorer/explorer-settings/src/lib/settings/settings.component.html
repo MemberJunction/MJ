@@ -10,7 +10,7 @@
 
     <!-- Display container -->
     <div class="display-container" mjFillContainer [fillWidth]="false">
-        <mj-join-grid
+        <!-- <mj-join-grid
             RowsEntityName="Entities"
             RowsEntityDisplayField="Name"
             RowsEntityDataSource="FullEntity"
@@ -29,9 +29,8 @@
             
             style="height: 750px; width: 800px;"
         >
-        <!-- [NewRecordDefaultValues]="{Status: 'Active'}" -->
 
-        </mj-join-grid>
+        </mj-join-grid> -->
         @switch (currentItem) {
             @case ('EntityPermissions') {
                 <mj-entity-permissions-selector-with-grid></mj-entity-permissions-selector-with-grid>

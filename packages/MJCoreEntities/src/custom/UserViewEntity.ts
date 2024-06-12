@@ -3,7 +3,7 @@ import { Metadata, BaseEntity, BaseInfo, EntityInfo, EntityFieldInfo,RunView, Us
 import { UserViewEntity } from "../generated/entity_subclasses";
 
 
-@RegisterClass(BaseEntity, 'User Views', 2) // 2 priority so this gets used ahead of the generated sub-class
+@RegisterClass(BaseEntity, 'User Views') 
 export class UserViewEntityExtended extends UserViewEntity  {
     private _ViewEntityInfo: EntityInfo = null
 
@@ -159,7 +159,7 @@ export class UserViewEntityExtended extends UserViewEntity  {
     }
 
     override NewRecord(): boolean {
-        const result = super.NewRecord()
+        const result = super.NewRecord();
         if (result) {
             if (this.ContextCurrentUser) {
                 this.UserID = this.ContextCurrentUser.ID;
@@ -180,7 +180,7 @@ export class UserViewEntityExtended extends UserViewEntity  {
             this.GridState = JSON.stringify({}); // blank object initially
             this.CustomFilterState = false;
             this.CustomWhereClause = false;
-            this.SmartFilterEnabled = false;
+            //this.SmartFilterEnabled = false;
         }
         return result
     }

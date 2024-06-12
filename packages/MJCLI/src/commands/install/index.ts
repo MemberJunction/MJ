@@ -132,8 +132,8 @@ CONFIG_FILE='config.json'
     // Process MJAPI
     //*******************************************************************
     this.log('\n\nBootstrapping MJAPI...');
-    this.log('   Running npm link for GeneratedEntities...');
-    execSync('npm link ../GeneratedEntities', { stdio: 'inherit', cwd: MJAPI_DIR });
+    this.log('   Running npm link for generated code...');
+    execSync('npm link ../GeneratedEntities ../GeneratedActions', { stdio: 'inherit', cwd: MJAPI_DIR });
     this.log('   Setting up MJAPI .env file...');
     const mjAPIENV = `#Database Setup
 DB_HOST='${this.userConfig.dbUrl}'
@@ -191,6 +191,7 @@ CONFIG_FILE='config.json'
       CLIENT_ID: this.userConfig.msalWebClientId,
       TENANT_ID: this.userConfig.msalTenantId,
       CLIENT_AUTHORITY: this.userConfig.msalTenantId ? `https://login.microsoftonline.com/${this.userConfig.msalTenantId}` : '',
+      AUTH_TYPE: this.userConfig.authType,
       AUTH0_DOMAIN: this.userConfig.auth0Domain,
       AUTH0_CLIENTID: this.userConfig.auth0ClientId,
     };
@@ -390,7 +391,7 @@ CONFIG_FILE='config.json'
    * @param {string} dirPath - The path to the directory containing environment files.
    * @param {object} config - The configuration object with values to update.
    */
-  async updateEnvironmentFiles(dirPath: string, config: Record<string, unknown>) {
+  async updateEnvironmentFiles(dirPath: string, config: Record<string, string | undefined>) {
     try {
       // Define the pattern for environment files.
       const envFilePattern = /environment.*\.ts$/;
@@ -411,9 +412,10 @@ CONFIG_FILE='config.json'
 
         // Replace the values in the file.
         let updatedData = data;
-        Object.keys(config).forEach((key) => {
-          const regex = new RegExp(`${key}:\\s*'.*?'`, 'g');
-          updatedData = updatedData.replace(regex, `${key}: '${config[key]}'`);
+        Object.entries(config).forEach(([key, value = '']) => {
+          const regex = new RegExp(`(["\']?${key}["\']?:\\s*["\'])([^"\']*)(["\'])`, 'g');
+          const escapedValue = value.replaceAll('$', () => '$$');
+          updatedData = updatedData.replace(regex, `$1${escapedValue}$3`);
         });
 
         // Write the updated data back to the file.

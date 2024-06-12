@@ -1,6 +1,6 @@
-const path = require('path');
+import path from 'node:path';
 
-module.exports = {
+const config = {
   entry: './src/index.ts',
   module: {
     rules: [
@@ -16,8 +16,10 @@ module.exports = {
   },
   output: {
     filename: 'MemberJunctionGraphQLDataProvider.js',
-    path: path.resolve(__dirname, 'dist-browser'),
+    path: path.resolve(import.meta.dirname, 'dist-browser'),
     library: 'MemberJunctionGraphQLDataProvider',
     libraryTarget: 'var',
   },
 };
+
+export default config;

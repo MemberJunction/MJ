@@ -548,6 +548,66 @@
                             [BottomMargin]="GridBottomMargin">
                         </mj-user-view-grid>
                     </mj-tab-body>
+
+                    <mj-tab Name="Template Params" 
+                        [Visible]="record.IsSaved" 
+                        [Props]="{EntityRelationshipID: 280}">
+                        Template Params
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Template Params')"  
+                            [NewRecordValues]="NewRecordValues('Template Params')"
+                            [AllowLoad]="IsCurrentTab('Template Params')"  
+                            [EditMode]="GridEditMode()"  
+                            [BottomMargin]="GridBottomMargin">
+                        </mj-user-view-grid>
+                    </mj-tab-body>
+
+                    <mj-tab Name="Recommendations" 
+                        [Visible]="record.IsSaved" 
+                        [Props]="{EntityRelationshipID: 284}">
+                        Recommendations
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Recommendations')"  
+                            [NewRecordValues]="NewRecordValues('Recommendations')"
+                            [AllowLoad]="IsCurrentTab('Recommendations')"  
+                            [EditMode]="GridEditMode()"  
+                            [BottomMargin]="GridBottomMargin">
+                        </mj-user-view-grid>
+                    </mj-tab-body>
+
+                    <mj-tab Name="Recommendation Items" 
+                        [Visible]="record.IsSaved" 
+                        [Props]="{EntityRelationshipID: 285}">
+                        Recommendation Items
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Recommendation Items')"  
+                            [NewRecordValues]="NewRecordValues('Recommendation Items')"
+                            [AllowLoad]="IsCurrentTab('Recommendation Items')"  
+                            [EditMode]="GridEditMode()"  
+                            [BottomMargin]="GridBottomMargin">
+                        </mj-user-view-grid>
+                    </mj-tab-body>
+
+                    <mj-tab Name="Entity Communication Message Types" 
+                        [Visible]="record.IsSaved" 
+                        [Props]="{EntityRelationshipID: 290}">
+                        Entity Communication Message Types
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Entity Communication Message Types')"  
+                            [NewRecordValues]="NewRecordValues('Entity Communication Message Types')"
+                            [AllowLoad]="IsCurrentTab('Entity Communication Message Types')"  
+                            [EditMode]="GridEditMode()"  
+                            [BottomMargin]="GridBottomMargin">
+                        </mj-user-view-grid>
+                    </mj-tab-body>
                 </mj-tabstrip>
             </kendo-splitter-pane>
         </kendo-splitter>

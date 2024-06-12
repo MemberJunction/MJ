@@ -2,7 +2,7 @@ import { QueueBase, TaskBase, TaskResult } from "../generic/QueueBase";
 import { RegisterClass } from '@memberjunction/global'
 import { AIEngine } from '@memberjunction/aiengine';
 
-@RegisterClass(QueueBase, 'AI Action', 1)
+@RegisterClass(QueueBase, 'AI Action')
 export class AIActionQueue extends QueueBase {
     protected async ProcessTask(task: TaskBase): Promise<TaskResult> {
         return this.ProcessGeneric(task, false)
@@ -10,14 +10,13 @@ export class AIActionQueue extends QueueBase {
 
     protected async ProcessGeneric(task: TaskBase, entityAIAction: boolean): Promise<TaskResult> {
         try {
-            await AIEngine.LoadAIMetadata(this._contextUser);
-            const ai = new AIEngine();
+            await AIEngine.Instance.Config(false, this._contextUser);
             let result: any = null;
 
             if (entityAIAction)
-                result = await ai.ExecuteEntityAIAction(task.Data);
+                result = await AIEngine.Instance.ExecuteEntityAIAction(task.Data);
             else
-                result = await ai.ExecuteAIAction(task.Data);
+                result = await AIEngine.Instance.ExecuteAIAction(task.Data);
 
             return {
                 success: result ? result.success : false,

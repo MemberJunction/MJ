@@ -1,6 +1,7 @@
 import { Component, OnInit } from '@angular/core';
 import { BaseResourceComponent, ResourceData } from '@memberjunction/ng-shared';
 import { RegisterClass } from '@memberjunction/global';
+import { Metadata } from '@memberjunction/core';
 
 export function LoadSearchResultsResource() {
     const test = new SearchResultsResource(); // this looks really dumb. Thing is, in production builds, tree shaking causes the class below to not be included in the bundle. This is a hack to force it to be included.
@@ -17,5 +18,18 @@ export class SearchResultsResource extends BaseResourceComponent implements OnIn
     }
     async GetResourceDisplayName(data: ResourceData): Promise<string> {
         return `Search (${data.Configuration.Entity}): ${data.Configuration.SearchInput}`;
+    }
+    async GetResourceIconClass(data: ResourceData): Promise<string> {
+        if (!data.Configuration.Entity){
+            return ''
+        }
+        else {
+            const md = new Metadata();
+            const e = md.Entities.find(e => e.Name.trim().toLowerCase() === data.Configuration.Entity.trim().toLowerCase());
+            if (e)
+                return e?.Icon;
+            else
+                return '';
+        }
     }
 }

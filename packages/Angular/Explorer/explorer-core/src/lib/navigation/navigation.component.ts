@@ -458,6 +458,8 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
       setTimeout(async () => {
         // non-blocking, load the resource names dynamically as this requires additional DB lookups
         newTab.label = await this.GetWorkspaceItemDisplayName(resourceData)
+        const resourceDynamicIcon = await this.GetWorkspaceItemIconClass(resourceData);
+        newTab.icon = resourceDynamicIcon ? resourceDynamicIcon : newTab.icon; 
         newTab.labelLoading = false;
 
         if (newTab === this.tabs[this.activeTabIndex - 1]) // subtract one since the activeTabIndex is relative to the full set of tabs and the this.tabs array doesn't include the HOME tab
@@ -577,6 +579,9 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
       setTimeout(async () => {
         // non-blocking this way
         newTab.label = await this.GetWorkspaceItemDisplayName(data) // do this after we fire up the loading so that we don't block anything
+        const resourceDynamicIcon = await this.GetWorkspaceItemIconClass(data);
+        newTab.icon = resourceDynamicIcon ? resourceDynamicIcon : newTab.icon; 
+
         this.setAppTitle(newTab.label);
         newTab.labelLoading = false;
         this.loader = false;
@@ -708,6 +713,16 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
       return `Workspace Item ${data.ID}`;
   }
 
+  public async GetWorkspaceItemIconClass(data: ResourceData): Promise<string> {
+    const resourceReg = MJGlobal.Instance.ClassFactory.GetRegistration(BaseResourceComponent, data.ResourceType);
+    if (resourceReg) {
+      const resource = <BaseResourceComponent>new resourceReg.SubClass();
+      return await resource.GetResourceIconClass(data);
+    }
+    else
+      return '';
+  }
+
   /**
    * Saves the workspace to the database.
    * @returns 
@@ -728,6 +743,11 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
     
     // we need to update the label in case the "Name" of the record changed, or if it was new and no longer is new
     tab.label = await this.GetWorkspaceItemDisplayName(tab.data); 
+
+    const resourceDynamicIcon = await this.GetWorkspaceItemIconClass(tab.data);
+    tab.icon = resourceDynamicIcon ? resourceDynamicIcon : tab.icon; 
+
+    
 
     // now check to see if the old id and the new ID are any different
     // check for tab names that start with New as well...

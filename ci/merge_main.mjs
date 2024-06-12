@@ -1,31 +1,26 @@
 import { gitFetch } from 'beachball/lib/git/fetch.js';
 import { gitAsync } from 'beachball/lib/git/gitAsync.js';
-import { findProjectRoot, parseRemoteBranch } from 'workspace-tools';
+import { findProjectRoot } from 'workspace-tools';
 
-const branch = 'main';
-const { remote, remoteBranch } = parseRemoteBranch(branch);
 const cwd = findProjectRoot(process.cwd());
 
-const fetchResult = gitFetch({ remote, branch: remoteBranch, cwd, verbose: true });
+const fetchResult = gitFetch({ remote: 'origin', branch: 'main', cwd, verbose: true });
 if (!fetchResult.success) {
-  throw new Error(`Fetching from ${branch} has failed!`);
+  throw new Error(`Fetching from origin/main has failed!`);
 }
 
-const mergeResult = await gitAsync(['merge', '-X', 'theirs', branch], { cwd, verbose: true });
+const mergeResult = await gitAsync(['merge', '-X', 'theirs', 'main'], { cwd, verbose: true });
 if (!mergeResult.success) {
-  throw new Error(`Merging with latest ${branch} has failed!`);
+  throw new Error(`Merging with latest origin/main has failed!`);
 }
 
-console.log(`\nPushing to ${branch}...`);
+console.log(`\nPushing to origin/next...`);
 
-const pushResult = await gitAsync(['push', '--no-verify', '--follow-tags', '--verbose', remote, `HEAD:${remoteBranch}`], {
+const pushResult = await gitAsync(['push', '--force', '--no-verify', '--follow-tags', '--verbose', 'origin', 'HEAD:next'], {
   cwd,
   verbose: true,
 });
-if (pushResult.success) {
-  completed = true;
-} else if (pushResult.timedOut) {
-  throw new Error(`Pushing to ${branch} has timed out!`);
-} else {
-  throw new Error(`Pushing to ${branch} has failed!`);
+if (!pushResult.success) {
+  console.error(JSON.stringify(pushResult));
+  throw new Error('Pushing to origin/next has failed!');
 }

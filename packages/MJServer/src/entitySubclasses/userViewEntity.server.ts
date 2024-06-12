@@ -6,7 +6,7 @@ import { AIEngine } from "@memberjunction/aiengine";
 import { LoadOpenAILLM } from "@memberjunction/ai-openai";
 LoadOpenAILLM(); // this is to prevent tree shaking since the openai package is not directly used and rather instantiated dynamically in the LoadOpenAILLM function. Since no static code path exists tree shaking can result in this class being optimized out
 
-@RegisterClass(BaseEntity, 'User Views', 3) // high priority to ensure this is used ahead of the UserViewEntityExtended in the @memberjunction/core-entities package (which has priority of 2)
+@RegisterClass(BaseEntity, 'User Views')  
 export class UserViewEntity_Server extends UserViewEntityExtended  {
     /**
      * This property is hard-coded to true in this class because we DO support smart filters in this class. If you want to disable smart filters for a specific view you can override this property in your subclass and set it to false.
@@ -28,7 +28,7 @@ export class UserViewEntity_Server extends UserViewEntityExtended  {
      * @returns 
      */
     protected async GetAIModel(): Promise<AIModelEntityExtended> {
-        await AIEngine.LoadAIMetadata(this.ContextCurrentUser); // most of the time this is already loaded, but just in case it isn't we will load it here
+        await AIEngine.Instance.Config(false, this.ContextCurrentUser); // most of the time this is already loaded, but just in case it isn't we will load it here
         const models = AIEngine.Models.filter(m => m.AIModelType.trim().toLowerCase() === 'llm' && 
                                                    m.Vendor.trim().toLowerCase() === this.AIVendorName.trim().toLowerCase())  
         // next, sort the models by the PowerRank field so that the highest power rank model is the first array element

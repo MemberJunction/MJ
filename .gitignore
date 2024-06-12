@@ -9,6 +9,7 @@
 # Node artifact files
 node_modules/
 dist/
+dist-browser/
 
 # Compiled Java class files
 *.class
@@ -86,3 +87,4 @@ packages/MJExplorer/kendo-ui-license.txt
 build.log.json
 
 packages/Templates-Old/.angular/
+packages/MJAPI/schema.graphql

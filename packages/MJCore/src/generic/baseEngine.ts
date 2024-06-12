@@ -36,10 +36,6 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> {
     private _loadingSubject: BehaviorSubject<boolean> = new BehaviorSubject<boolean>(false);
     private _contextUser: UserInfo;
 
-    constructor(instanceKey: string) {
-        super(instanceKey);
-    }
-
     /**
      * Configures the engine by loading metadata from the database.  
      */
@@ -110,5 +106,13 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> {
 
     public get ContextUser(): UserInfo {
         return this._contextUser;
+    }
+
+    /**
+     * Helper method for sub-classes to have a single line of code that will make sure the data is loaded before proceeding and will throw an error if not loaded.
+     */
+    protected TryThrowIfNotLoaded() {
+        if (!this.Loaded)
+            throw new Error("Data not loaded, call Config() first.");
     }
 }
