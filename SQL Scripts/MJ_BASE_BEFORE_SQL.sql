@@ -557,8 +557,8 @@ DROP PROCEDURE IF EXISTS [__mj].[spCreateRecordChange]
 GO
 CREATE PROCEDURE [__mj].[spCreateRecordChange]
     @EntityName nvarchar(100),
-    @RecordID NVARCHAR(255),
-	@UserID int,
+    @RecordID NVARCHAR(750),
+	  @UserID int,
     @ChangesJSON nvarchar(MAX),
     @ChangesDescription nvarchar(MAX),
     @FullRecordJSON nvarchar(MAX),
@@ -572,7 +572,7 @@ BEGIN
         (
             EntityID,
             RecordID,
-			UserID,
+			      UserID,
             ChangedAt,
             ChangesJSON,
             ChangesDescription,
@@ -584,7 +584,7 @@ BEGIN
         (
             (SELECT ID FROM __mj.Entity WHERE Name = @EntityName),
             @RecordID,
-			@UserID,
+			      @UserID,
             GETDATE(),
             @ChangesJSON,
             @ChangesDescription,
@@ -1467,3 +1467,29 @@ INNER JOIN
 	e.BaseTable = obj.name
 GO
 
+
+
+
+
+/************* EXTERNAL TRACK CHANGES STUFF HERE *********/
+DROP VIEW IF EXISTS __mj.vwEntitiesWithExternalChangeTracking 
+GO
+CREATE VIEW __mj.vwEntitiesWithExternalChangeTracking 
+AS
+SELECT 
+  e.* 
+FROM 
+  __mj.vwEntities e
+WHERE 
+  e.TrackRecordChanges=1 AND
+  EXISTS (
+		SELECT 
+			1 
+		FROM 
+			__mj.vwEntityFields ef 
+		WHERE 
+			ef.Name='UpdatedAt' AND ef.Type='datetime' AND ef.EntityID = e.ID
+		)
+GO
+
+GRANT SELECT ON __mj.vwEntitiesWithExternalChangeTracking TO cdp_Developer

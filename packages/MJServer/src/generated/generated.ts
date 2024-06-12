@@ -2,7 +2,7 @@
 * ALL ENTITIES - TypeGraphQL Type Class Definition - AUTO GENERATED FILE
 * Generated Entities and Resolvers for Server
 * 
-* GENERATED: 6/11/2024, 11:31:47 AM
+* GENERATED: 6/12/2024, 12:19:28 AM
 * 
 *   >>> DO NOT MODIFY THIS FILE!!!!!!!!!!!!
 *   >>> YOUR CHANGES WILL BE OVERWRITTEN
@@ -1504,6 +1504,9 @@ export class Integration_ {
     @Field(() => [mj_core_schema_server_object_types.CompanyIntegration_])
     CompanyIntegrationsArray: mj_core_schema_server_object_types.CompanyIntegration_[]; // Link to CompanyIntegrations
     
+    @Field(() => [mj_core_schema_server_object_types.RecordChange_])
+    RecordChangesArray: mj_core_schema_server_object_types.RecordChange_[]; // Link to RecordChanges
+    
 }
         
 //****************************************************************************
@@ -1612,6 +1615,14 @@ export class IntegrationResolver extends ResolverBase {
         this.CheckUserReadPermissions('Company Integrations', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwCompanyIntegrations] WHERE [IntegrationName]=${integration_.ID} ` + this.getRowLevelSecurityWhereClause('Company Integrations', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Company Integrations', await dataSource.query(sSQL));
+        return result;
+    }
+          
+    @FieldResolver(() => [mj_core_schema_server_object_types.RecordChange_])
+    async RecordChangesArray(@Root() integration_: Integration_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Record Changes', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwRecordChanges] WHERE [IntegrationID]=${integration_.ID} ` + this.getRowLevelSecurityWhereClause('Record Changes', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Record Changes', await dataSource.query(sSQL));
         return result;
     }
         
@@ -7144,31 +7155,53 @@ export class RecordChange_ {
     EntityID: number;
           
     @Field() 
-    @MaxLength(510)
+    @MaxLength(1500)
     RecordID: string;
           
-    @Field(() => Int) 
+    @Field(() => Int, {description: 'The user that made the change'}) 
     UserID: number;
           
-    @Field() 
+    @Field({description: 'Create, Update, or Delete'}) 
+    @MaxLength(40)
+    Type: string;
+          
+    @Field({nullable: true, description: 'Internal or External'}) 
+    @MaxLength(40)
+    Source?: string;
+          
+    @Field(() => Int, {nullable: true, description: 'If Source=External, this field can optionally specify which integration created the change, if known'}) 
+    IntegrationID?: number;
+          
+    @Field({description: 'The date/time that the change occured.'}) 
     @MaxLength(8)
     ChangedAt: Date;
           
-    @Field() 
+    @Field({description: 'JSON structure that describes what was changed in a structured format.'}) 
     ChangesJSON: string;
           
-    @Field() 
+    @Field({description: 'A generated, human-readable description of what was changed.'}) 
     ChangesDescription: string;
           
-    @Field() 
+    @Field({description: 'A complete snapshot of the record AFTER the change was applied in a JSON format that can be parsed.'}) 
     FullRecordJSON: string;
           
-    @Field() 
-    @MaxLength(30)
+    @Field({description: 'For internal record changes generated within MJ, the status is immediately Complete. For external changes that are detected, the workflow starts off as Pending, then In Progress and finally either Complete or Error'}) 
+    @MaxLength(100)
     Status: string;
           
     @Field({nullable: true}) 
+    ErrorLog?: string;
+          
+    @Field({nullable: true}) 
     Comments?: string;
+          
+    @Field() 
+    @MaxLength(8)
+    CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(8)
+    UpdatedAt: Date;
           
     @Field() 
     @MaxLength(510)
@@ -7177,6 +7210,10 @@ export class RecordChange_ {
     @Field() 
     @MaxLength(200)
     User: string;
+          
+    @Field({nullable: true}) 
+    @MaxLength(200)
+    Integration?: string;
         
 }
         
@@ -7195,6 +7232,15 @@ export class CreateRecordChangeInput {
     UserID: number;
 
     @Field()
+    Type: string;
+
+    @Field({ nullable: true })
+    Source?: string;
+
+    @Field(() => Int, { nullable: true })
+    IntegrationID?: number;
+
+    @Field()
     ChangedAt: Date;
 
     @Field()
@@ -7208,6 +7254,9 @@ export class CreateRecordChangeInput {
 
     @Field()
     Status: string;
+
+    @Field({ nullable: true })
+    ErrorLog?: string;
 
     @Field({ nullable: true })
     Comments?: string;

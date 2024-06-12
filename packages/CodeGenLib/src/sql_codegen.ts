@@ -781,12 +781,43 @@ END
 GO${permissions}
     `
     }
+
+
+    protected generateUpdatedAtTrigger(entity: EntityInfo): string {
+        const updatedAtField = entity.Fields.find(f => f.Name.toLowerCase().trim() === 'updatedat');
+        if (!updatedAtField)
+            return '';
+
+        const triggerStatement = `
+------------------------------------------------------------
+----- TRIGGER FOR UpdatedAt field for the ${entity.BaseTable} table
+------------------------------------------------------------
+CREATE OR ALTER TRIGGER trgUpdate${entity.ClassName}
+ON [${entity.SchemaName}].[${entity.BaseTable}]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [${entity.SchemaName}].[${entity.BaseTable}]
+    SET 
+        UpdatedAt = GETDATE()
+    FROM 
+        [${entity.SchemaName}].[${entity.BaseTable}] AS _organicTable
+    INNER JOIN 
+        INSERTED AS I ON 
+        ${entity.PrimaryKeys.map(k => `_organicTable.[${k.Name}] = I.[${k.Name}]`).join(' AND ')};
+END;
+GO`;
+        return triggerStatement;    
+    }
     
     protected generateSPUpdate(entity: EntityInfo): string {
         const spName: string = entity.spUpdate ? entity.spUpdate : `spUpdate${entity.ClassName}`;
         const efParamString: string = this.createEntityFieldsParamString(entity.Fields, true);
         const permissions: string = this.generateSPPermissions(entity, spName, SPType.Update);
-    
+        const hasUpdatedAtField: boolean = entity.Fields.find(f => f.Name.toLowerCase().trim() === 'updatedat') !== undefined;
+        const updatedAtTrigger: string = hasUpdatedAtField ? this.generateUpdatedAtTrigger(entity) : '';
         let selectInsertedRecord = `SELECT 
                                         * 
                                     FROM 
@@ -817,7 +848,10 @@ BEGIN
     -- return the updated record so the caller can see the updated values and any calculated fields
     ${selectInsertedRecord}
 END
-GO${permissions}
+GO
+${permissions}
+GO
+${updatedAtTrigger}
         `
     }
     
@@ -892,13 +926,15 @@ GO${permissions}
     
                 sOutput += `[${ef.Name}] = @${ef.CodeName}`; // always put field names in brackets for field names that have spaces or use reserved words. Also, we use CodeName for the param name, which is the field name unless it has spaces
             }
-            else if (ef.Name.trim().toLowerCase() === 'updatedat') {
-                if (!isFirst) 
-                    sOutput += ',\n        '
-                else
-                    isFirst = false;
-                sOutput += `[${ef.Name}] = GETDATE()`;
-            }
+            // AN - 11 JUNE 2024
+            // below is commented out because we now do this via TRIGGER - see calling code for this function for more info
+            // else if (ef.Name.trim().toLowerCase() === 'updatedat') {
+            //     if (!isFirst) 
+            //         sOutput += ',\n        '
+            //     else
+            //         isFirst = false;
+            //     sOutput += `[${ef.Name}] = GETDATE()`;
+            // }
         }
         return sOutput;
     }
