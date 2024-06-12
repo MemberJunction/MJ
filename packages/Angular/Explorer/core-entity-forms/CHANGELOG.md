@@ -1,8 +1,26 @@
 # Change Log - @memberjunction/ng-core-entity-forms
 
-This log was last generated on Tue, 11 Jun 2024 06:50:06 GMT and should not be manually modified.
+This log was last generated on Wed, 12 Jun 2024 18:53:39 GMT and should not be manually modified.
 
 <!-- Start content -->
+
+## 1.7.0
+
+Wed, 12 Jun 2024 18:53:39 GMT
+
+### Minor changes
+
+- Applying package updates [skip ci] (97354817+AN-BC@users.noreply.github.com)
+- Applying package updates [skip ci] (97354817+AN-BC@users.noreply.github.com)
+- Bump @memberjunction/core to v1.7.0
+- Bump @memberjunction/core-entities to v1.7.0
+- Bump @memberjunction/ng-explorer-core to v1.7.0
+- Bump @memberjunction/ng-base-forms to v1.7.0
+- Bump @memberjunction/ng-form-toolbar to v1.7.0
+- Bump @memberjunction/ng-tabstrip to v1.7.0
+- Bump @memberjunction/ng-container-directives to v1.7.0
+- Bump @memberjunction/ng-code-editor to v1.7.0
+- Bump @memberjunction/ng-timeline to v1.7.0
 
 ## 1.6.1
 
