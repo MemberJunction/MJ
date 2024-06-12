@@ -1467,3 +1467,29 @@ INNER JOIN
 	e.BaseTable = obj.name
 GO
 
+
+
+
+
+/************* EXTERNAL TRACK CHANGES STUFF HERE *********/
+DROP VIEW IF EXISTS __mj.vwEntitiesWithExternalChangeTracking 
+GO
+CREATE VIEW __mj.vwEntitiesWithExternalChangeTracking 
+AS
+SELECT 
+  e.* 
+FROM 
+  __mj.vwEntities e
+WHERE 
+  e.TrackRecordChanges=1 AND
+  EXISTS (
+		SELECT 
+			1 
+		FROM 
+			__mj.vwEntityFields ef 
+		WHERE 
+			ef.Name='UpdatedAt' AND ef.Type='datetime' AND ef.EntityID = e.ID
+		)
+GO
+
+GRANT SELECT ON __mj.vwEntitiesWithExternalChangeTracking TO cdp_Developer

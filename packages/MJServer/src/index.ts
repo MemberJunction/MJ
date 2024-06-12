@@ -5,7 +5,7 @@ dotenv.config();
 import { expressMiddleware } from '@apollo/server/express4';
 import { mergeSchemas } from '@graphql-tools/schema';
 import { Metadata } from '@memberjunction/core';
-import { setupSQLServerClient, SQLServerProviderConfigData } from '@memberjunction/sqlserver-dataprovider';
+import { setupSQLServerClient, SQLServerProviderConfigData, UserCache } from '@memberjunction/sqlserver-dataprovider';
 import { json } from 'body-parser';
 import cors from 'cors';
 import express from 'express';
@@ -29,6 +29,8 @@ LoadActionEntityServer(); // prevent tree shaking for this dynamic module
 
 import { LoadGeneratedActions } from '@memberjunction/core-actions';
 LoadGeneratedActions(); // prevent tree shaking for this dynamic module
+
+import { ExternalChangeDetectorEngine } from '@memberjunction/external-change-detection';
 
 const cacheRefreshInterval = configInfo.databaseSettings.metadataCacheRefreshInterval;
 
@@ -87,6 +89,16 @@ export const serve = async (resolverPaths: Array<string>) => {
   const config = new SQLServerProviderConfigData(dataSource, '', mj_core_schema, cacheRefreshInterval);
   await setupSQLServerClient(config); // datasource is already initialized, so we can setup the client right away
   const md = new Metadata();
+
+
+  /******TEST HARNESS FOR CHANGE DETECTION */
+  const cd = ExternalChangeDetectorEngine.Instance;
+  await cd.Config(false, UserCache.Users[0]);
+
+  console.log(cd.DetectChangesForAllEligibleEntities());
+
+
+
   console.log(`Data Source has been initialized. ${md?.Entities ? md.Entities.length : 0} entities loaded.`);
 
   setupComplete$.next(true);
