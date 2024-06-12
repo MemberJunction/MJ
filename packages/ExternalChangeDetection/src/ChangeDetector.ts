@@ -108,6 +108,9 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
                     item.Type = 'Update';
                     item.ChangedAt = row.UpdatedAt;
                     item.Changes = [];
+
+
+                    make sure to remove stuff in createResult...BaseEngine.
                     changes.push(item);
                 });
             }
