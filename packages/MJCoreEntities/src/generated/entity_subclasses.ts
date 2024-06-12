@@ -6158,12 +6158,13 @@ import { RegisterClass } from "@memberjunction/global";
         * * Possible Values 
         *   * Pending
         *   * Complete
+        *   * Error
         * * Description: For internal record changes generated within MJ, the status is immediately Complete. For external changes that are detected, the workflow starts off as Pending, then In Progress and finally either Complete or Error
         */
-        get Status(): 'Pending' | 'Complete' {  
+        get Status(): 'Pending' | 'Complete' | 'Error' {  
             return this.Get('Status');
         }
-        set Status(value: 'Pending' | 'Complete') {
+        set Status(value: 'Pending' | 'Complete' | 'Error') {
             this.Set('Status', value);
         }
         /**
