@@ -126,6 +126,11 @@ export class EntitySaveOptions {
      * If set to true, any Entity Actions associated with invocation types of Create or Update will be skipped during the save operation
      */
     SkipEntityActions?: boolean = false;
+    /**
+     * When set to true, the save operation will BYPASS Validate() and the actual process of saving changes to the database but WILL invoke any associated actions (AI Actions, Entity Actions, etc...)
+     * Subclasses can also override the Save() method to provide custom logic that will be invoked when ReplayOnly is set to true
+     */
+    ReplayOnly?: boolean = false;
 }
 
 /**
@@ -141,6 +146,12 @@ export class EntityDeleteOptions {
      * If set to true, any Entity Actions associated with invocation types of Delete will be skipped during the delete operation
      */
     SkipEntityActions?: boolean = false;
+
+    /**
+     * When set to true, the save operation will BYPASS Validate() and the actual process of deleting the record from the database but WILL invoke any associated actions (AI Actions, Entity Actions, etc...)
+     * Subclasses can also override the Delete() method to provide custom logic that will be invoked when ReplayOnly is set to true
+     */
+    ReplayOnly?: boolean = false;
 }
 
 export class EntityRecordNameInput  {

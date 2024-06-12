@@ -714,12 +714,18 @@ export abstract class BaseEntity {
             const type: EntityPermissionType = this.IsSaved ? EntityPermissionType.Update : EntityPermissionType.Create;            
             this.CheckPermissions(type, true) // this will throw an error and exit out if we don't have permission
     
-            if (_options.IgnoreDirtyState || this.Dirty) {
+            if (_options.IgnoreDirtyState || this.Dirty || _options.ReplayOnly) {
                 if (BaseEntity.Provider == null) {    
                     throw new Error('No provider set');
                 }
                 else  {
-                    const valResult = this.Validate();
+                    let valResult = new ValidationResult();
+                    if (_options.ReplayOnly) {
+                        valResult.Success = true; // bypassing validation since we are in replay only....
+                    }
+                    else {
+                        valResult = this.Validate();
+                    }
                     if (valResult.Success) {
                         const data = await BaseEntity.Provider.Save(this, this.ActiveUser, _options)
                         if (data) {
