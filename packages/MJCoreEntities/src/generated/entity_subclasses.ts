@@ -6058,24 +6058,34 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Type
         * * SQL Data Type: nvarchar(20)
         * * Default Value: Create
+        * * Value List Type: List
+        * * Possible Values 
+        *   * Create
+        *   * Update
+        *   * Delete
         * * Description: Create, Update, or Delete
         */
-        get Type(): string {  
+        get Type(): 'Create' | 'Update' | 'Delete' {  
             return this.Get('Type');
         }
-        set Type(value: string) {
+        set Type(value: 'Create' | 'Update' | 'Delete') {
             this.Set('Type', value);
         }
         /**
         * * Field Name: Source
         * * Display Name: Source
         * * SQL Data Type: nvarchar(20)
+        * * Default Value: Internal
+        * * Value List Type: List
+        * * Possible Values 
+        *   * Internal
+        *   * External
         * * Description: Internal or External
         */
-        get Source(): string | null {  
+        get Source(): 'Internal' | 'External' {  
             return this.Get('Source');
         }
-        set Source(value: string | null) {
+        set Source(value: 'Internal' | 'External') {
             this.Set('Source', value);
         }
         /**
@@ -20006,7 +20016,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: User
         * * Display Name: User
         * * SQL Data Type: nvarchar(100)
-        * * Default Value: null
         */
         get User(): string {  
             return this.Get('User');

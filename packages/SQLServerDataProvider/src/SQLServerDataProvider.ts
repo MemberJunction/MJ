@@ -1325,7 +1325,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
                                                                                @RecordID=${quotes}${recordID}${quotes}, 
                                                                                @UserID=${user.ID},
                                                                                @ChangesJSON='${changesJSON}', 
-                                                                               @ChangesDescription='${oldData && newData ? this.CreateUserDescription(changes) : !oldData ? 'Record Created' : 'Record Deleted'}', 
+                                                                               @ChangesDescription='${oldData && newData ? this.CreateUserDescriptionOfChanges(changes) : !oldData ? 'Record Created' : 'Record Deleted'}', 
                                                                                @FullRecordJSON='${fullRecordJSON}', 
                                                                                @Status='Complete', 
                                                                                @Comments=null`
@@ -1341,7 +1341,15 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
             return result;
         }
     }
-    protected CreateUserDescription(changesObject: any, maxValueLength: number = 200): string {
+
+    /**
+     * This method will create a human-readable string that describes the changes object that was created using the DiffObjects() method
+     * @param changesObject JavaScript object that has properties for each changed field that in turn have field, oldValue and newValue as sub-properties
+     * @param maxValueLength If not specified, default value of 200 characters applies where any values after the maxValueLength is cut off. The actual values are stored in the ChangesJSON and FullRecordJSON in the RecordChange table, this is only for the human-display
+     * @param cutOffText If specified, and if maxValueLength applies to any of the values being included in the description, this cutOffText param will be appended to the end of the cut off string to indicate to the human reader that the value is partial.
+     * @returns 
+     */
+    public CreateUserDescriptionOfChanges(changesObject: any, maxValueLength: number = 200, cutOffText: string = '...'): string {
         let sRet = '';
         let keys = Object.keys(changesObject);
         for (let i = 0; i < keys.length; i++) {
@@ -1350,11 +1358,11 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
                 sRet += '\n';
             }
             if (change.oldValue && change.newValue) // both old and new values set, show change
-                sRet += `${change.field} changed from ${this.trimString(change.oldValue, maxValueLength, '...')} to ${this.trimString(change.newValue, maxValueLength, '...')}`
+                sRet += `${change.field} changed from ${this.trimString(change.oldValue, maxValueLength, cutOffText)} to ${this.trimString(change.newValue, maxValueLength, cutOffText)}`
             else if (change.newValue) // old value was blank, new value isn't
-                sRet += `${change.field} set to ${this.trimString(change.newValue, maxValueLength, '...')}`
+                sRet += `${change.field} set to ${this.trimString(change.newValue, maxValueLength, cutOffText)}`
             else if (change.oldValue) // new value is blank, old value wasn't
-                sRet += `${change.field} cleared from ${this.trimString(change.oldValue, maxValueLength, '...')}`
+                sRet += `${change.field} cleared from ${this.trimString(change.oldValue, maxValueLength, cutOffText)}`
 
         }
         return sRet.replace(/'/g, "''")
@@ -1382,7 +1390,16 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
         }
         return sRet;
     }
-    protected DiffObjects(oldData: any, newData: any, entityInfo: EntityInfo, quoteToEscape: string): any {
+    
+    /**
+     * This method will create a changes object by comparing two javascript objects. Each property of the object will be named by the 
+     * field name in the newData/oldData and will have a sub-object with the following properties:
+     *  * field: the field name
+     *  * oldValue: the old value
+     *  * newValue: the new value
+     * This is used to generate the object that will be saved into the ChangesJSON field in the Record Changes entity.
+     */
+    public DiffObjects(oldData: any, newData: any, entityInfo: EntityInfo, quoteToEscape: string): any {
         if (!oldData || !newData)
             return null;
         else {

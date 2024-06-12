@@ -1492,4 +1492,4 @@ WHERE
 		)
 GO
 
-GRANT SELECT ON __mj.vwEntitiesWithExternalChangeTracking TO cdp_Developer
+GRANT SELECT ON __mj.vwEntitiesWithExternalChangeTracking TO cdp_Developer, cdp_Integration, cdp_UI

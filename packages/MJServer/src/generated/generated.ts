@@ -2,7 +2,7 @@
 * ALL ENTITIES - TypeGraphQL Type Class Definition - AUTO GENERATED FILE
 * Generated Entities and Resolvers for Server
 * 
-* GENERATED: 6/12/2024, 2:49:50 PM
+* GENERATED: 6/12/2024, 3:44:26 PM
 * 
 *   >>> DO NOT MODIFY THIS FILE!!!!!!!!!!!!
 *   >>> YOUR CHANGES WILL BE OVERWRITTEN
@@ -7176,9 +7176,9 @@ export class RecordChange_ {
     @MaxLength(40)
     Type: string;
           
-    @Field({nullable: true, description: 'Internal or External'}) 
+    @Field({description: 'Internal or External'}) 
     @MaxLength(40)
-    Source?: string;
+    Source: string;
           
     @Field(() => Int, {nullable: true, description: 'If Source=External, this field can optionally specify which integration created the change, if known'}) 
     IntegrationID?: number;
@@ -7248,8 +7248,8 @@ export class CreateRecordChangeInput {
     @Field()
     Type: string;
 
-    @Field({ nullable: true })
-    Source?: string;
+    @Field()
+    Source: string;
 
     @Field(() => Int, { nullable: true })
     IntegrationID?: number;
