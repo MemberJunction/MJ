@@ -200,8 +200,11 @@ export class ${serverGraphQLTypeName} {`;
             case 'smallmoney':
                 fieldInfo.IsFloat = true; // used by calling functions to determine if we need to import Float
                 return '() => Float'
+            case 'timestamp':
+            case 'rowversion':
+                return '';
             default:
-                return '() => Int';      
+                return '() => Int';
         }
     }
     
