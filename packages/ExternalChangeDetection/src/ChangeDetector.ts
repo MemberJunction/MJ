@@ -1,4 +1,4 @@
-import { BaseEngine, BaseEnginePropertyConfig, BaseEntity, CompositeKey, EntityInfo, LogError, LogStatus, Metadata, UserInfo } from "@memberjunction/core";
+import { BaseEngine, BaseEnginePropertyConfig, BaseEntity, CompositeKey, EntityInfo, KeyValuePair, LogError, LogStatus, Metadata, UserInfo } from "@memberjunction/core";
 import { RecordChangeEntity, RecordChangeReplayRunEntity } from "@memberjunction/core-entities";
 import { SQLServerDataProvider } from "@memberjunction/sqlserver-dataprovider";
 
@@ -98,7 +98,7 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
                     item.Type = 'Create';
                     item.ChangedAt = row.CreatedAt;
                     item.Changes = []; // not relevant because the row is now 
-                    item.LatestRecord = await this.GetLatestDatabaseRecord(md, item);
+
                     changes.push(item);
                 }
             }
@@ -115,11 +115,6 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
                     }));
                     item.Type = 'Update';
                     item.ChangedAt = row.UpdatedAt;
-
-                    // need to compare what is in the database with the last version we had in RecordChanges to populate this
-                    const changesResult = await this.DetermineRecordChanges(md, item);
-                    item.Changes = changesResult.changes;
-                    item.LatestRecord = changesResult.latestRecord;
 
                     // push the item but first make sure it is NOT already in the changes from the
                     // create detection, if it is, we do not push it into changes
@@ -146,6 +141,16 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
                 });
             }
 
+            await this.GetLatestDatabaseRecords(md, changes); // load everything from the database in one step
+
+            // now we have latest records, go back through and update the Changes field for the UPDATE types
+            for (const c of changes) {
+                if (c.Type === 'Update') {
+                    const changesResult = await this.DetermineRecordChanges(md, c);
+                    c.Changes = changesResult.changes;
+                }
+            }
+
             return { 
                 Success: true, 
                 Changes: changes 
@@ -167,8 +172,8 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
      */
     public async DetermineRecordChanges(md: Metadata, change: ChangeDetectionItem): Promise<{changes: FieldChange[], latestRecord: BaseEntity}> {
         try {
-            // Step 1 - load the current record
-            const record = await this.GetLatestDatabaseRecord(md, change);
+            // Step 1 - load the current record if needed, sometimes already loaded by here
+            const record = change.LatestRecord ? change.LatestRecord : await this.GetLatestDatabaseRecord(md, change);
             if (record) {
                 // now we have the version from the database that has been updated from an external source
                 // then we need to get the latest version from the vwRecordChanges table that matches this entity and RecordID
@@ -235,6 +240,73 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
             throw new Error(`Failed to load record: ${change.Entity.Name}: ${change.PrimaryKey}`);
     }
 
+    /**
+     * Get all of the latest database records together in grouped queries for each entity that has records we need instead 
+     * of one at a time like GetLatestDatabaseRecord does. This method will return true/false and will place the LatestRecord
+     * into each item in the changes array for you.
+     * @param md 
+     * @param changes 
+     * @returns 
+     */
+    protected async GetLatestDatabaseRecords(md: Metadata, changes: ChangeDetectionItem[]): Promise<boolean> {
+        try {
+            // Step 1 - group by entity and get a complete list of entities from the changes
+            const entities: {entity: EntityInfo, keys: CompositeKey[]}[] = [];
+            const provider = <SQLServerDataProvider>Metadata.Provider;
+            for (const c of changes) {
+                let e= entities.find(e => e.entity.ID === c.Entity.ID)
+                if (!e) {
+                    e = {
+                        entity: c.Entity,
+                        keys: [c.PrimaryKey]
+                    };
+                    entities.push(e);
+                }            
+                else {
+                    e.keys.push(c.PrimaryKey);
+                }
+            }    
+            
+            // now we have a distinct list of entities and all of the pkeys for each one, so we can run a single
+            // select statement for each entity
+            for (const e of entities) {
+                const sql = `SELECT * FROM [${e.entity.SchemaName}].[${e.entity.BaseView}]
+                            WHERE ${e.keys.map(k => `(${k.KeyValuePairs.map(kvp => {
+                                    const f = e.entity.Fields.find(f => kvp.FieldName.trim().toLowerCase() === f.Name);
+                                    const quotes = f?.NeedsQuotes ? "'" : "";
+                                    return `[${kvp.FieldName}]=${quotes}${kvp.Value}${quotes}`
+                                }).join(' AND ')})`).join(' OR ')} `
+                const result = await provider.ExecuteSQL(sql);
+                if (result) {
+                    // we have the rows from the result, now go back through each of the changes we have in the changes array
+                    // and associate the data with each one 
+                    for (const r of result) {
+                        const kvp: KeyValuePair[] = e.entity.PrimaryKeys.map(pk => {
+                            return {
+                                FieldName: pk.Name,
+                                Value: r[pk.Name]
+                            }
+                        })
+                        const changeItem = changes.find(ci => ci.Entity === e.entity && ci.PrimaryKey.EqualsKey(kvp))
+                        if (changeItem) {
+                            // found the match, update latest Record
+                            const record = await md.GetEntityObject(changeItem.Entity.Name, this.ContextUser);
+                            record.LoadFromData(r);
+                            changeItem.LatestRecord = record;
+                        }
+                    }
+                }
+            }
+
+            return true;
+        }
+        catch (e) {
+            LogError(e);
+            return false;
+        }
+    }
+
+
     protected getPrimaryKeyString(entity: EntityInfo, tablePrefix: string): string {
         return entity.PrimaryKeys.length === 1 ? 
         `${tablePrefix}.${entity.PrimaryKeys[0].Name}` : 
@@ -249,7 +321,7 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
                 ${entity.PrimaryKeys.map(pk => `ot.[${pk.Name}]` ).join(', ')}, ot.UpdatedAt
             FROM 
                 [${entity.SchemaName}].[${entity.BaseView}] ot
-            LEFT JOIN (
+            INNER JOIN (
                 SELECT 
                     RecordID, MAX(ChangedAt) AS last_change_time
                 FROM 
@@ -288,11 +360,14 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
             FROM 
                 __mj.vwRecordChanges rc
             LEFT JOIN 
-                [${entity.SchemaName}].[${entity.BaseView}] ot ON ${primaryKeyString} = rc.RecordID
+                [${entity.SchemaName}].[${entity.BaseView}] ot 
+                ON 
+                rc.RecordID = ${primaryKeyString}
             WHERE 
                 ${entity.PrimaryKeys.map(pk => `ot.[${pk.Name}] IS NULL`).join(' AND ')}
             AND 
-                rc.Type IN ('Create', 'Update');
+                rc.Type IN ('Create', 'Update') AND
+                rc.EntityID = ${entity.ID};
         `;
     }
     
