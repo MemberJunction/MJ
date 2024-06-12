@@ -1,6 +1,7 @@
 {
   "name": "@memberjunction/external-change-detection",
   "version": "1.7.1",
+  "repository": "github:MemberJunction/MJ",
   "description": "Library used by server side applications to determine if changes have been made to entities by external systems/integrations",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

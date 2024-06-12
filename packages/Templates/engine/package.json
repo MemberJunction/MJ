@@ -1,6 +1,7 @@
 {
   "name": "@memberjunction/templates",
   "version": "1.7.1",
+  "repository": "github:MemberJunction/MJ",
   "description": "MemberJunction Templating Engine and Utilities - Used for any application that requires templating utility functionality. NOTE: this package does use Angular Universal for compilation but is not marked with the usual ng prefix because it is a server-side library and not used within Angular apps.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

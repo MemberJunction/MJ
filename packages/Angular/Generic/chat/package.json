@@ -1,6 +1,7 @@
 {
   "name": "@memberjunction/ng-chat",
   "version": "1.7.1",
+  "repository": "github:MemberJunction/MJ",
   "description": "MemberJunction: Reusable Chat Component - can be used for AI or peer to peer chat applications.",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",

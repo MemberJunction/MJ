@@ -1,6 +1,7 @@
 {
   "name": "@memberjunction/global",
   "version": "1.7.1",
+  "repository": "github:MemberJunction/MJ",
   "description": "MemberJunction: Global Object - Needed for ALL other MJ components",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

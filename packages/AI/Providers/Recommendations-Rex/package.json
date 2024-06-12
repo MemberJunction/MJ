@@ -1,6 +1,7 @@
 {
   "name": "@memberjunction/ai-recommendations-rex",
   "version": "1.7.1",
+  "repository": "github:MemberJunction/MJ",
   "description": "MemberJunction Recommendations Provider for rasa.io Rex engine",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

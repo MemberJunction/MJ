@@ -1,6 +1,7 @@
 {
   "name": "@memberjunction/ng-auth-services",
   "version": "1.7.1",
+  "repository": "github:MemberJunction/MJ",
   "description": "MemberJunction Explorer: Authentication Services",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",

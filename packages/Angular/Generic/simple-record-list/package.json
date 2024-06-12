@@ -1,6 +1,7 @@
 {
   "name": "@memberjunction/ng-simple-record-list",
   "version": "1.7.1",
+  "repository": "github:MemberJunction/MJ",
   "description": "MemberJunction: Very simple and reusable Angular component for displaying, editing, creating and deleting records in any entity",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",

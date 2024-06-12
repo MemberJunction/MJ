@@ -1,6 +1,7 @@
 {
   "name": "@memberjunction/entity-communications-base",
   "version": "1.7.1",
+  "repository": "github:MemberJunction/MJ",
   "description": "MemberJunction: Base Types for Client/Server use with Entity Communications Engine",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

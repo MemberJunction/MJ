@@ -1,6 +1,7 @@
 {
   "name": "@memberjunction/core",
   "version": "1.7.1",
+  "repository": "github:MemberJunction/MJ",
   "description": "MemberJunction: Core Library including Metadata, Application, Entity Retrieval and Manipulation, and Utilities",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

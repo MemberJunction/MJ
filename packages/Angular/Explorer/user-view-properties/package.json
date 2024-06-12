@@ -1,6 +1,7 @@
 {
   "name": "@memberjunction/ng-user-view-properties",
   "version": "1.7.1",
+  "repository": "github:MemberJunction/MJ",
   "description": "MemberJunction: Angular UI Dialog Component to View/Edit User View Properties",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",

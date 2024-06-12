@@ -1,6 +1,7 @@
 {
   "name": "@memberjunction/communication-types",
   "version": "1.7.1",
+  "repository": "github:MemberJunction/MJ",
   "description": "MemberJunction: Communication Framework Library Generic Types",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

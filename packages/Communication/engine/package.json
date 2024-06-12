@@ -1,6 +1,7 @@
 {
   "name": "@memberjunction/communication-engine",
   "version": "1.7.1",
+  "repository": "github:MemberJunction/MJ",
   "description": "MemberJunction: Core Communication Framework Library",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

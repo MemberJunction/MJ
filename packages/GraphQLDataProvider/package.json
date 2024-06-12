@@ -1,6 +1,7 @@
 {
   "name": "@memberjunction/graphql-dataprovider",
   "version": "1.7.1",
+  "repository": "github:MemberJunction/MJ",
   "description": "MemberJunction: GraphQL Client Data Provider",
   "main": "dist/index.js",
   "browser": "dist-browser/index.js",

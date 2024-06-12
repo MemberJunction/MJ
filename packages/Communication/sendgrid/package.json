@@ -1,6 +1,7 @@
 {
   "name": "@memberjunction/communication-sendgrid",
   "version": "1.7.1",
+  "repository": "github:MemberJunction/MJ",
   "description": "MemberJunction: SendGrid Provider for the MJ Communication Framework",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

@@ -1,6 +1,7 @@
 {
   "name": "@memberjunction/doc-utils",
   "version": "1.7.1",
+  "repository": "github:MemberJunction/MJ",
   "description": "This library provides functionality for dynamically retreiving documentation from the official MemberJunction object model documentation site, parsing it, and caching elements in memory for performance. Use this whenever you need dynamic access to the MJ documentation to feed to AI models and for any other similar purpose.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

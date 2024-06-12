@@ -1,6 +1,7 @@
 {
   "name": "@memberjunction/storage",
   "version": "1.7.1",
+  "repository": "github:MemberJunction/MJ",
   "description": "This library provides a set of objects that handle the interface between the server-side API and various cloud storage providers.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

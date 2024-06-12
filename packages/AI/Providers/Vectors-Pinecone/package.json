@@ -1,6 +1,7 @@
 {
   "name": "@memberjunction/ai-vectors-pinecone",
   "version": "1.7.1",
+  "repository": "github:MemberJunction/MJ",
   "description": "MemberJunction: Pinecone Implementation for AI Vectors",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

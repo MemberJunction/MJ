@@ -1,6 +1,7 @@
 {
   "name": "@memberjunction/ai-openai",
   "version": "1.7.1",
+  "repository": "github:MemberJunction/MJ",
   "description": "MemberJunction Wrapper for OpenAI AI Models",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

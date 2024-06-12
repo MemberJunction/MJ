@@ -1,6 +1,7 @@
 {
   "name": "@memberjunction/data-context",
   "version": "1.7.1",
+  "repository": "github:MemberJunction/MJ",
   "description": "This library provides a set of objects that handle run-time loading of data contexts as well as types to be able to use across application tiers for interacting with data contexts.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

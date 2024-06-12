@@ -1,6 +1,7 @@
 {
   "name": "@memberjunction/ai-recommendations",
   "version": "1.7.1",
+  "repository": "github:MemberJunction/MJ",
   "description": "MemberJunction Recommendations Engine",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
