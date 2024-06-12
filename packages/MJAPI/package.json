@@ -30,7 +30,7 @@
     "@memberjunction/global": "1.7.0",
     "@memberjunction/server": "1.7.0",
     "@memberjunction/templates": "1.7.0",
-    "@memberjunction/sqlserver-dataprovider": "1.6.2",
+    "@memberjunction/sqlserver-dataprovider": "1.7.0",
     "@memberjunction/communication-sendgrid": "1.7.0",
     "axios": "^1.6.7",
     "class-validator": "^0.14.0",
