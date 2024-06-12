@@ -40,16 +40,11 @@ export class EntityVectorSyncer extends VectorBase {
             const promises = [];
             let templates: string[] = [];
             for(const record of batch){
-                // don't await here, fire off all the Parse requests within the batch at once in parallel, we will wait
-                // below for all of them to complete
-                //const promise = parser.Parse(entityDocument.Template, request.entityID, record, contextUser);
-                //promises.push(promise);
                 let template: string = await parser.Parse(entityDocument.Template, request.entityID, record, contextUser);
                 templates.push(template);
             }
             LogStatus(`parsing batch ${count}: done`);
-            //const templates: string[] = await Promise.all(promises);
-
+            
             const embeddings: EmbedTextsResult = await obj.embedding.EmbedTexts({texts: templates, model: null});
             LogStatus(`embedding batch ${count}: done`);
 
