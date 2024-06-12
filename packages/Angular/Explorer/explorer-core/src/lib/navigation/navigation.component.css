@@ -22,6 +22,10 @@
   box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.3);
 }
 
+.tab-icon {
+  margin-right: 5px;
+}
+
 .context-menu-item {
   padding: 8px 16px;
   cursor: pointer;

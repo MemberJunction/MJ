@@ -15,4 +15,7 @@ export class DashboardResource extends BaseResourceComponent {
     override async GetResourceDisplayName(data: ResourceData): Promise<string> {
         return data.Name ? data.Name : 'Dashboard ID: ' + data.ResourceRecordID;
     }
+    async GetResourceIconClass(data: ResourceData): Promise<string> {
+        return '';
+    }
 }

@@ -32,6 +32,7 @@
     "@memberjunction/global": "1.6.1",
     "@memberjunction/core": "1.6.1",
     "@memberjunction/ng-container-directives": "1.6.1",
+    "@memberjunction/ng-compare-records": "1.6.1",
     "@memberjunction/ng-shared": "1.6.1",
     "tslib": "^2.3.0"
   },
