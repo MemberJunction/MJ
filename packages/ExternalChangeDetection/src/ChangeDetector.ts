@@ -1,4 +1,4 @@
-import { BaseEngine, BaseEnginePropertyConfig, BaseEntity, CompositeKey, EntityField, EntityFieldTSType, EntityInfo, KeyValuePair, LogError, LogStatus, Metadata, UserInfo } from "@memberjunction/core";
+import { BaseEngine, BaseEnginePropertyConfig, BaseEntity, CompositeKey, EntityField, EntityFieldTSType, EntityInfo, KeyValuePair, LogError, LogStatus, Metadata, RunView, UserInfo } from "@memberjunction/core";
 import { RecordChangeEntity, RecordChangeReplayRunEntity } from "@memberjunction/core-entities";
 import { SQLServerDataProvider } from "@memberjunction/sqlserver-dataprovider";
 
@@ -471,16 +471,32 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
     }
 
     protected async StartRun(): Promise<RecordChangeReplayRunEntity> {
-        const md = new Metadata();
-        const run = await md.GetEntityObject<RecordChangeReplayRunEntity>("Record Change Replay Runs", this.ContextUser)
-        run.StartedAt = new Date();
-        run.UserID = this.ContextUser.ID;
-        run.Status = 'In Progress';
-        if (await run.Save()) {
-            return run;
+        // first make sure an existing run isn't in progress
+        const rv = new RunView();
+        const existingRun = await rv.RunView({
+            EntityName: "Record Change Replay Runs",
+            ExtraFilter: "Status NOT IN('Complete', 'Error')"
+        }, this.ContextUser);
+        if (existingRun && existingRun.Success) {
+            if (existingRun.Results.length > 0) 
+                throw new Error(`Existing Record Change Replay Run ${existingRun.Results[0].ID} is not complete or marked as error, cannot start a new run.`);
+            else {
+                const md = new Metadata();
+                const run = await md.GetEntityObject<RecordChangeReplayRunEntity>("Record Change Replay Runs", this.ContextUser)
+                run.StartedAt = new Date();
+                run.UserID = this.ContextUser.ID;
+                run.Status = 'In Progress';
+                if (await run.Save()) {
+                    return run;
+                }
+                else
+                    throw new Error("Failed to start run");
+            }
         }
-        else
-            throw new Error("Failed to start run");
+        else {
+            // failed to run the view
+            throw new Error("Failed to check for existing run: " + existingRun.ErrorMessage);
+        }
     }
 
     /**

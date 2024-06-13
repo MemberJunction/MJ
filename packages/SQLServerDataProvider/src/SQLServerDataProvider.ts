@@ -952,7 +952,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
         const sSimpleSQL: string = `EXEC [${entity.EntityInfo.SchemaName}].${spName} ${this.generateSPParams(entity, !bNewRecord)}`;
         const recordChangesEntityInfo = this.Entities.find(e => e.Name === 'Record Changes');
         let sSQL: string = '';
-        if (entity.EntityInfo.TrackRecordChanges) {
+        if (entity.EntityInfo.TrackRecordChanges && entity.EntityInfo.Name.trim().toLowerCase() !== 'record changes') { // don't track changes for the record changes entity
             let oldData = null;
 
             if (!bNewRecord) 
@@ -1509,7 +1509,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
         const sSimpleSQL: string = `EXEC [${entity.EntityInfo.SchemaName}].[${spName}] ${sParams}`;
         const recordChangesEntityInfo = this.Entities.find(e => e.Name === 'Record Changes');
 
-        if (entity.EntityInfo.TrackRecordChanges) {
+        if (entity.EntityInfo.TrackRecordChanges && entity.EntityInfo.Name.trim().toLowerCase() !== 'record changes') { // don't track changes for the record changes entity
             const oldData = entity.GetAll(true); // get all the OLD values
             const sTableDeclare: string = entity.PrimaryKeys.map((pk) => {
                 return `${pk.CodeName} ${pk.EntityFieldInfo.SQLFullType}`
