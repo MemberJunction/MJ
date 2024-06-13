@@ -1006,21 +1006,18 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
                 return []; 
     //            throw new Error(`Invocation Type ${invocationType} not found in metadata`);
             }
-    
-            const actions = engine.GetActionsByEntityNameAndInvocationType(entity.EntityInfo.Name, invocationType);
+
+            
+            const activeActions = engine.GetActionsByEntityNameAndInvocationType(entity.EntityInfo.Name, invocationType, 'Active');
             const results: ActionResult[] = [];
-            if (actions.length > 0) {
-                const activeActions = actions.filter(a => a.Status === 'Active');
-                // filter down to only the active actions and loop through however many of those we have
-                for (const a of activeActions) {
-                    const result = await engine.RunEntityAction({
-                        EntityAction: a,
-                        EntityObject: entity,
-                        InvocationType: invocationTypeEntity,
-                        ContextUser: user
-                    })    
-                    results.push(result);
-                }
+            for (const a of activeActions) {
+                const result = await engine.RunEntityAction({
+                    EntityAction: a,
+                    EntityObject: entity,
+                    InvocationType: invocationTypeEntity,
+                    ContextUser: user
+                })    
+                results.push(result);
             }
             return results;    
         }
@@ -1321,14 +1318,14 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
         if (changesKeys.length > 0 || oldData === null /*new record*/ || newData === null /*deleted record*/) {
             const changesJSON: string = changes !== null ? JSON.stringify(changes) : '';
             const quotes = wrapRecordIdInQuotes ? "'" : '';
-            const sSQL = `EXEC [${this.MJCoreSchemaName}].spCreateRecordChange @EntityName='${entityName}', 
-                                                                               @RecordID=${quotes}${recordID}${quotes}, 
-                                                                               @UserID=${user.ID},
-                                                                               @ChangesJSON='${changesJSON}', 
-                                                                               @ChangesDescription='${oldData && newData ? this.CreateUserDescriptionOfChanges(changes) : !oldData ? 'Record Created' : 'Record Deleted'}', 
-                                                                               @FullRecordJSON='${fullRecordJSON}', 
-                                                                               @Status='Complete', 
-                                                                               @Comments=null`
+            const sSQL = `EXEC [${this.MJCoreSchemaName}].spCreateRecordChange_Internal @EntityName='${entityName}', 
+                                                                                        @RecordID=${quotes}${recordID}${quotes}, 
+                                                                                        @UserID=${user.ID},
+                                                                                        @ChangesJSON='${changesJSON}', 
+                                                                                        @ChangesDescription='${oldData && newData ? this.CreateUserDescriptionOfChanges(changes) : !oldData ? 'Record Created' : 'Record Deleted'}', 
+                                                                                        @FullRecordJSON='${fullRecordJSON}', 
+                                                                                        @Status='Complete', 
+                                                                                        @Comments=null`
             return sSQL;                                    
         }
         else
@@ -1526,7 +1523,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
             const sIF: string = entity.PrimaryKeys.map((pk) => {
                 return `@${pk.CodeName} IS NOT NULL` 
             }).join(' AND ');
-            const sCombinedPrimaryKey: string = entity.PrimaryKeys.map((pk) => pk.Value).join(',');
+            const sCombinedPrimaryKey: string = entity.PrimaryKey.ToConcatenatedString(); 
             const sReturnList: string = entity.PrimaryKeys.map((pk) => {
                 return `@${pk.CodeName} AS [${pk.Name}]` 
             }).join(', ');

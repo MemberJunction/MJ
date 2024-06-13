@@ -308,11 +308,9 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
 
 
     protected getPrimaryKeyString(entity: EntityInfo, tablePrefix: string): string {
-        return entity.PrimaryKeys.length === 1 ? 
-        `${tablePrefix}.${entity.PrimaryKeys[0].Name}` : 
-        entity.PrimaryKeys.map(pk => `'${pk.Name}|' + CAST(${tablePrefix}.[${pk.Name}] AS NVARCHAR(MAX))`).join(` + '||' + `);
-
+        return entity.PrimaryKeys.map(pk => `'${pk.Name}${CompositeKey.DefaultValueDelimiter}' + CAST(${tablePrefix}.[${pk.Name}] AS NVARCHAR(MAX))`).join(` + '${CompositeKey.DefaultFieldDelimiter}' + `);
     }
+
     protected generateDetectUpdatesQuery(entity: EntityInfo): string {
         const primaryKeyString = this.getPrimaryKeyString(entity, 'ot')
 
@@ -327,7 +325,7 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
                 FROM 
                     __mj.vwRecordChanges
                 WHERE 
-                    Type IN ('Update', 'Create')
+                    Type IN ('Update', 'Create') AND EntityID = ${entity.ID}
                 GROUP BY 
                     RecordID
             ) rc ON ${primaryKeyString} = rc.RecordID
@@ -345,7 +343,11 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
             FROM 
                 [${entity.SchemaName}].[${entity.BaseView}] ot
             LEFT JOIN 
-                __mj.vwRecordChanges rc ON ${primaryKeyString} = rc.RecordID AND rc.Type = 'Create'
+                __mj.vwRecordChanges rc 
+                ON 
+                (${primaryKeyString} = rc.RecordID) AND 
+                rc.Type = 'Create' AND 
+                rc.EntityID = ${entity.ID} 
             WHERE 
                 rc.RecordID IS NULL;
         `;
@@ -367,7 +369,7 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
                 ${entity.PrimaryKeys.map(pk => `ot.[${pk.Name}] IS NULL`).join(' AND ')}
             AND 
                 rc.Type IN ('Create', 'Update') AND
-                rc.EntityID = ${entity.ID};
+                rc.EntityID = ${entity.ID} 
         `;
     }
     
@@ -500,7 +502,10 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
         try {
             rc.Status = code === 'error' ? 'Error' : 'Complete';
             rc.ErrorLog = errorMessage;
-            return await rc.Save();
+            if(await rc.Save())
+                return true;
+            else
+                return false;   
         }
         catch (e) {
             LogError(e);
@@ -516,7 +521,7 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
         try {
             const rc = await md.GetEntityObject<RecordChangeEntity>("Record Changes", this.ContextUser);    
             rc.EntityID = change.Entity.ID;
-            rc.RecordID = change.PrimaryKey.KeyValuePairs.length === 1 ? change.PrimaryKey.ToString() : change.PrimaryKey.ToURLSegment();
+            rc.RecordID = change.PrimaryKey.ToConcatenatedString();
             rc.Source = 'External';
             rc.Type = change.Type;
             rc.Status = 'Pending';

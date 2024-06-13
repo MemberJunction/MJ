@@ -551,11 +551,11 @@ GO
 
 
 ------------------------------------------------------------
------ CREATE PROCEDURE FOR RecordChange
+----- CREATE PROCEDURE FOR RecordChange for INTERNAL USE WITHIN DataProvider
 ------------------------------------------------------------
-DROP PROCEDURE IF EXISTS [__mj].[spCreateRecordChange]
+DROP PROCEDURE IF EXISTS [__mj].[spCreateRecordChange_Internal]
 GO
-CREATE PROCEDURE [__mj].[spCreateRecordChange]
+CREATE PROCEDURE [__mj].[spCreateRecordChange_Internal]
     @EntityName nvarchar(100),
     @RecordID NVARCHAR(750),
 	  @UserID int,
@@ -597,11 +597,10 @@ BEGIN
     SELECT * FROM [__mj].vwRecordChanges WHERE ID = SCOPE_IDENTITY()
 END
 
-
-
-
 GO 
+GRANT EXEC ON __mj.spCreateRecordChange_Internal TO cdp_Developer, cdp_Integration, cdp_UI
 
+GO
 
 
 

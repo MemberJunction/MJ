@@ -2,7 +2,7 @@
 * ALL ENTITIES - TypeGraphQL Type Class Definition - AUTO GENERATED FILE
 * Generated Entities and Resolvers for Server
 * 
-* GENERATED: 6/12/2024, 4:17:33 PM
+* GENERATED: 6/12/2024, 6:46:28 PM
 * 
 *   >>> DO NOT MODIFY THIS FILE!!!!!!!!!!!!
 *   >>> YOUR CHANGES WILL BE OVERWRITTEN
@@ -7279,6 +7279,61 @@ export class CreateRecordChangeInput {
     Comments?: string;
 }
     
+        
+//****************************************************************************
+// INPUT TYPE for Record Changes   
+//****************************************************************************
+@InputType()
+export class UpdateRecordChangeInput {
+    @Field(() => Int)
+    ID: number;
+
+    @Field(() => Int)
+    EntityID: number;
+
+    @Field()
+    RecordID: string;
+
+    @Field(() => Int)
+    UserID: number;
+
+    @Field()
+    Type: string;
+
+    @Field()
+    Source: string;
+
+    @Field(() => Int, { nullable: true })
+    IntegrationID?: number;
+
+    @Field()
+    ChangedAt: Date;
+
+    @Field()
+    ChangesJSON: string;
+
+    @Field()
+    ChangesDescription: string;
+
+    @Field()
+    FullRecordJSON: string;
+
+    @Field()
+    Status: string;
+
+    @Field(() => Int, { nullable: true })
+    ReplayRunID?: number;
+
+    @Field({ nullable: true })
+    ErrorLog?: string;
+
+    @Field({ nullable: true })
+    Comments?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
 //****************************************************************************
 // RESOLVER for Record Changes
 //****************************************************************************
@@ -7340,6 +7395,15 @@ export class RecordChangeResolver extends ResolverBase {
         return this.CreateRecord('Record Changes', input, dataSource, userPayload, pubSub)
     }
         
+    @Mutation(() => RecordChange_)
+    async UpdateRecordChange(
+        @Arg('input', () => UpdateRecordChangeInput) input: UpdateRecordChangeInput,
+        @Ctx() { dataSource, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.UpdateRecord('Record Changes', input, dataSource, userPayload, pubSub);
+    }
+    
 }
 
 //****************************************************************************
