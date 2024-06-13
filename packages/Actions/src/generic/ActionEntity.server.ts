@@ -5,6 +5,7 @@ import { AIEngine } from "@memberjunction/aiengine";
 
 import { ActionEngine, ActionLibrary, GeneratedCode } from "./ActionEngine";
 import { BaseLLM, ChatMessage, ChatParams, GetAIAPIKey } from "@memberjunction/ai";
+import { DocumentationEngine, LibraryEntityExtended, LibraryItem } from "@memberjunction/doc-utils";
 
 /**
  * Server-Only custom sub-class for Actions entity. This sub-class handles the process of auto-generation code for the Actions entity. 
@@ -80,6 +81,15 @@ export class ActionEntityServerEntity extends ActionEntity {
     public override async Save(options?: EntitySaveOptions): Promise<boolean> {
         // make sure the ActionEngine is configured
         await ActionEngine.Instance.Config(false, this.ContextCurrentUser);
+        await DocumentationEngine.Instance.Config(false, this.ContextCurrentUser);
+
+        console.log("printing libraries");
+        for(const library of DocumentationEngine.Instance.Libraries){
+            console.log(library.Name);
+            for(const item of library.Items){
+                console.log("item", item);
+            }
+        }
 
         let newCodeGenerated: boolean = false;
         let codeLibraries: ActionLibrary[] = [];
@@ -274,9 +284,13 @@ export class ActionEntityServerEntity extends ActionEntity {
     protected async ValidateCode(llm: BaseLLM, generatedCode: GeneratedCode, attemptsRemaining: number): Promise<GeneratedCode> {
         this.SendMessage(`Reviewing code...`);
         const model = await AIEngine.Instance.GetHighestPowerModel(this.AIVendorName, 'llm', this.ContextCurrentUser)
+        const promptMessage: string = this.GenerateValidateCodePrompt(generatedCode);
+        console.log(promptMessage); 
+        const libraries = this.GetLibraries();
+        console.log(libraries);
         const validatePrompt: ChatMessage = {
             role: 'system',
-            content: this.GenerateValidateCodePrompt(generatedCode)
+            content: promptMessage
         };
 
         let chatParams: ChatParams = new ChatParams();
@@ -382,6 +396,7 @@ Your response must be JSON and parsable into this type:
     }
     
     public GenerateContextInfo(): string {
+        const libraries = this.GetLibraries();
         return `
         <CODE_EXAMPLE>
 export class ${this.ProgrammaticName}Action extends BaseAction {
@@ -411,9 +426,7 @@ the parameter has a type of input/output, you will receive the value as an input
 The following libraries are available for use in your code. THEY ARE ALREADY IMPORTED. **DO NOT IMPORT THEM IN YOUR CODE**
 Use the code examples and reference information shown below, only use properties and methods shown in the documentation/examples.
 IMPORTANT: DO NOT GENERATE IMPORT STATEMENTS FOR THESE LIBRARIES, THEY ARE ALREADY IMPORTED FOR YOU!
-${
-    JSON.stringify(Metadata.Provider.Libraries)
-}
+${libraries}
 </AVAILABLE_LIBRARIES>
 
 <REFERENCE_TYPES>
@@ -593,6 +606,21 @@ export type RunViewParams = {
     ResultType?: 'simple' | 'entity_object' | 'count_only';
 } 
         `;
+    }
+
+    GetLibraries(): string[][] {
+        const libraries = DocumentationEngine.Instance.Libraries.map((library: LibraryEntityExtended) => {
+            return library.Items.map((item: LibraryItem) => {
+              return `
+              {
+                  "LibraryName": ${item.Name},
+                  "Content": ${item.HTMLContent}
+              }
+              `
+            }); 
+          });
+          console.log(libraries);
+          return libraries;
     }
 }
  
