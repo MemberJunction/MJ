@@ -792,7 +792,9 @@ GO${permissions}
 ------------------------------------------------------------
 ----- TRIGGER FOR UpdatedAt field for the ${entity.BaseTable} table
 ------------------------------------------------------------
-CREATE OR ALTER TRIGGER trgUpdate${entity.ClassName}
+DROP TRIGGER IF EXISTS [${entity.SchemaName}].trgUpdate${entity.ClassName}
+GO
+CREATE TRIGGER [${entity.SchemaName}].trgUpdate${entity.ClassName}
 ON [${entity.SchemaName}].[${entity.BaseTable}]
 AFTER UPDATE
 AS
