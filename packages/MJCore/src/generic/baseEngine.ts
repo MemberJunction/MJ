@@ -3,6 +3,8 @@ import { BehaviorSubject } from "rxjs";
 import { UserInfo } from "./securityInfo";
 import { RunView } from "../views/runView";
 import { LogError } from "./logging";
+import { Metadata } from "./metadata";
+import { ProviderType } from "./interfaces";
 
 /**
  * Property configuration for the BaseEngine class to automatically load/set properties on the class.
@@ -49,6 +51,8 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> {
      * @returns 
      */
     protected async Load(configs: BaseEnginePropertyConfig[], forceRefresh: boolean = false, contextUser?: UserInfo): Promise<void> {
+        if (Metadata.Provider.ProviderType === ProviderType.Database && !contextUser)
+            throw new Error('For server-side use of all engine classes, you must provide the contextUser parameter')
         if (this._loadingSubject.value) {
             return new Promise<void>((resolve) => {
                 const subscription = this._loadingSubject.subscribe((loading) => {
