@@ -1,4 +1,4 @@
-import { BaseEngine, BaseEnginePropertyConfig, BaseEntity, CompositeKey, EntityInfo, KeyValuePair, LogError, LogStatus, Metadata, UserInfo } from "@memberjunction/core";
+import { BaseEngine, BaseEnginePropertyConfig, BaseEntity, CompositeKey, EntityField, EntityFieldTSType, EntityInfo, KeyValuePair, LogError, LogStatus, Metadata, UserInfo } from "@memberjunction/core";
 import { RecordChangeEntity, RecordChangeReplayRunEntity } from "@memberjunction/core-entities";
 import { SQLServerDataProvider } from "@memberjunction/sqlserver-dataprovider";
 
@@ -96,8 +96,8 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
                         }
                     }));
                     item.Type = 'Create';
-                    item.ChangedAt = row.CreatedAt;
-                    item.Changes = []; // not relevant because the row is now 
+                    item.ChangedAt = row.CreatedAt >= row.UpdatedAt ? row.CreatedAt : row.UpdatedAt;
+                    item.Changes = []; // not relevant because the row is new 
 
                     changes.push(item);
                 }
@@ -185,11 +185,12 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
                     const changes: FieldChange[] = [];
                     for (const field of record.Fields) {
                         if (!field.IsPrimaryKey) {
-                            if (field.Value !== json[field.Name]) {
+                            const differResult = this.DoValuesDiffer(field, field.Value, json[field.Name])
+                            if (differResult.differ) {
                                 changes.push({
                                     FieldName: field.Name,
-                                    OldValue: json[field.Name],
-                                    NewValue: field.Value
+                                    NewValue: differResult.castValue1, // use the typecast values so they're the right types
+                                    OldValue: differResult.castValue2  // use the typecast values so they're the right types
                                 });
                             }
                         }
@@ -210,6 +211,38 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
         }
     }
 
+    protected DoValuesDiffer(field: EntityField, value1: any, value2: any): {differ: boolean, castValue1: any, castValue2: any} {
+        // type specific comparisons
+        // for each scenario, make sure both value1 and value 2 are of the type we care about, if they're not, create new variables 
+        // of those types and then do type specific comparisons for equality
+        switch (field.EntityFieldInfo.TSType) {
+            case EntityFieldTSType.Boolean:
+                // check to see if value1 and value2 are both boolean, if not, convert them to boolean
+                const v1 = typeof value1 === 'boolean' ? value1 : value1 === 'true' ? true : false;
+                const v2 = typeof value2 === 'boolean' ? value2 : value2 === 'true' ? true : false;
+                return {differ: v1 !== v2, castValue1: v1, castValue2: v2};
+            case EntityFieldTSType.Date:
+                // check to see if value1 and value2 are both dates, if not, convert them to dates
+                const d1 = value1 instanceof Date ? value1 : new Date(value1);
+                const d2 = value2 instanceof Date ? value2 : new Date(value2);
+                return {differ: d1.getTime() !== d2.getTime(), castValue1: d1, castValue2: d2};
+            case EntityFieldTSType.Number:
+                // check to see if value1 and value2 are both numbers, if not, convert them to numbers
+                const n1 = typeof value1 === 'number' ? value1 : parseFloat(value1);
+                const n2 = typeof value2 === 'number' ? value2 : parseFloat(value2);
+                return {differ: n1 !== n2, castValue1: n1, castValue2: n2};
+            case EntityFieldTSType.String:
+                // check to see if value1 and value2 are both strings, if not, convert them to strings
+                const s1 = typeof value1 === 'string' || !value1 ? value1 : value1.toString();
+                const s2 = typeof value2 === 'string' || !value2 ? value2 : value2.toString();
+                return {differ: s1 !== s2, castValue1: s1, castValue2: s2};
+            default:
+                // don't know the type, shouldn't get here, just do a basic TypeScript equality check
+                // with a single != instead of !== because we don't want to check type just value
+                return {differ: value1 != value2, castValue1: value1, castValue2: value2};
+        }
+    }
+
     protected async GetLatestRecordChangesDataForEntityRecord(change: ChangeDetectionItem) {
         const Provider = <SQLServerDataProvider>Metadata.Provider;
 
@@ -218,9 +251,7 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
                     FROM 
                         ${Provider.MJCoreSchemaName}.vwRecordChanges 
                     WHERE 
-                        RecordID = '${change.PrimaryKey.KeyValuePairs.length > 1 ? 
-                                    change.PrimaryKey.ToURLSegment() : 
-                                    change.PrimaryKey.ToString()}' 
+                        RecordID = '${change.PrimaryKey.ToConcatenatedString()}' 
                         AND EntityID = ${change.Entity.ID} 
                     ORDER BY 
                         ChangedAt DESC`;                
@@ -339,7 +370,7 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
     
         return `
             SELECT 
-                ${entity.PrimaryKeys.map(pk => `ot.[${pk.Name}]`).join(', ')}, ot.CreatedAt
+                ${entity.PrimaryKeys.map(pk => `ot.[${pk.Name}]`).join(', ')}, ot.CreatedAt, ot.UpdatedAt
             FROM 
                 [${entity.SchemaName}].[${entity.BaseView}] ot
             LEFT JOIN 
@@ -414,15 +445,24 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
      */
     public async ReplayChanges(changes: ChangeDetectionItem[]): Promise<boolean> {
         try {
-            const md = new Metadata();
-            const results = [];
-            const run = await this.StartRun();
-            for (const change of changes) {
-                const result = await this.ReplaySingleChange(md, run, change);
-                results.push({Success: result, change: change});
+            if (changes && changes.length > 0) {
+                const md = new Metadata();
+                const results = [];
+                const run = await this.StartRun();
+                for (const change of changes) {
+                    const result = await this.ReplaySingleChange(md, run, change);
+                    results.push({Success: result, change: change});
+                }
+                run.EndedAt = new Date();
+                run.Status = results.every(r => r.Success) ? 'Complete' : 'Error';
+                if (await run.Save()) {
+                    return results.every(r => r.Success);
+                }
+                else
+                    return false;    
             }
-
-            return results.every(r => r.Success);
+            else
+                return true; // no changes to process
         }
         catch (e) {
             LogError(e);
