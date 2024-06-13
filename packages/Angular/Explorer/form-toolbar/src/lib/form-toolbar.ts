@@ -46,6 +46,10 @@ export class FormToolbarComponent implements OnInit {
         return this.form.record.PrimaryKey;
     }
 
+    public get IsActionEntity(): boolean {
+        return this.form.record.EntityInfo.Name === "Actions";
+    }
+
     public constructor(private router: Router) {
     }
 
@@ -151,5 +155,9 @@ export class FormToolbarComponent implements OnInit {
         else {
             SharedService.Instance.CreateSimpleNotification('Error deleting record', 'error', 2000);
         }
+    }
+
+    public async RunAction(): Promise<void> {
+        console.log("clicked");
     }
 }
