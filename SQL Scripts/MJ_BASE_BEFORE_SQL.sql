@@ -1475,7 +1475,7 @@ DROP VIEW IF EXISTS __mj.vwEntitiesWithExternalChangeTracking
 GO
 CREATE VIEW __mj.vwEntitiesWithExternalChangeTracking 
 AS
-SELECT 
+SELECT   
   e.* 
 FROM 
   __mj.vwEntities e
@@ -1492,3 +1492,4 @@ WHERE
 GO
 
 GRANT SELECT ON __mj.vwEntitiesWithExternalChangeTracking TO cdp_Developer, cdp_Integration, cdp_UI
+GO
