@@ -9,13 +9,15 @@ import { BaseFormsModule } from '@memberjunction/ng-base-forms';
 import { FormToolbarModule } from '@memberjunction/ng-form-toolbar';
 import { UserViewGridModule } from '@memberjunction/ng-user-view-grid';
 import { LinkDirectivesModule } from '@memberjunction/ng-link-directives';
-import { CustomEntityFormComponent, LoadEntitiesFormComponent } from "./Entities/entities-form.component";
+import { EntityFormExtendedComponent, LoadEntitiesFormComponent } from "./Entities/entities-form.component";
 import { MJTabStripModule } from "@memberjunction/ng-tabstrip";
 import { ContainerDirectivesModule } from "@memberjunction/ng-container-directives";
+import { ActionTopComponentExtended, LoadActionExtendedTopComponent } from "./Actions/actions-top-area-extended";
 
 @NgModule({
     declarations: [
-        CustomEntityFormComponent
+        EntityFormExtendedComponent,
+        ActionTopComponentExtended
     ],
     imports: [
         CommonModule,
@@ -32,11 +34,13 @@ import { ContainerDirectivesModule } from "@memberjunction/ng-container-directiv
         ContainerDirectivesModule
     ],
     exports: [
-        CustomEntityFormComponent
+        EntityFormExtendedComponent,
+        ActionTopComponentExtended
     ]
 })
 export class MemberJunctionCoreEntityFormsModule { }
 
 export function LoadCoreCustomForms() {
     LoadEntitiesFormComponent()
+    LoadActionExtendedTopComponent();
 }

@@ -1,10 +1,9 @@
 import axios from 'axios';
 import { JSDOM } from 'jsdom';
 
-import { BaseEngine, BaseEnginePropertyConfig, LogError, UserInfo } from "@memberjunction/core";
+import { BaseEngine, BaseEnginePropertyConfig, LogError, UserInfo, BaseEntity } from "@memberjunction/core";
 import { LibraryEntity } from "@memberjunction/core-entities";
 import { RegisterClass } from '@memberjunction/global';
-import { BaseEntity } from 'typeorm';
 
 
 /**
