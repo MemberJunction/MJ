@@ -180,10 +180,19 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
     return this._isFavorite;
   }
 
+  private _userPermissions: {permission: EntityPermissionType, canDo: boolean}[] = [];
   public CheckUserPermission(type: EntityPermissionType): boolean {
     try {
-      if (this.record)
-        return (<BaseEntity>this.record).CheckPermissions(type, false);
+      if (this.record) {
+        const perm = this._userPermissions.find(x => x.permission === type);
+        if (perm)
+          return perm.canDo;
+        else {
+          const result = this.record.CheckPermissions(type, false);
+          this._userPermissions.push({permission: type, canDo: result});
+          return result;
+        }
+      }
       else
         return false;
     }

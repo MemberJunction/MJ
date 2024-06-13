@@ -810,20 +810,36 @@ export abstract class BaseEntity {
         // first check if the AllowCreateAPI/AllowUpdateAPI/AllowDeleteAPI settings are flipped on for the entity in question
         switch (type) {
             case EntityPermissionType.Create:
-                if (!this.EntityInfo.AllowCreateAPI)
-                    throw new Error(`Create API is disabled for ${this.EntityInfo.Name}`);
+                if (!this.EntityInfo.AllowCreateAPI) {
+                    if (throwError)
+                        throw new Error(`Create API is disabled for ${this.EntityInfo.Name}`);
+                    else
+                        return false;
+                }
                 break;
             case EntityPermissionType.Update:
-                if (!this.EntityInfo.AllowUpdateAPI)
-                    throw new Error(`Update API is disabled for ${this.EntityInfo.Name}`);
+                if (!this.EntityInfo.AllowUpdateAPI) {
+                    if (throwError)
+                        throw new Error(`Update API is disabled for ${this.EntityInfo.Name}`);
+                    else
+                        return false;
+                }
                 break;
             case EntityPermissionType.Delete:
-                if (!this.EntityInfo.AllowDeleteAPI)
-                    throw new Error(`Delete API is disabled for ${this.EntityInfo.Name}`);
+                if (!this.EntityInfo.AllowDeleteAPI) {
+                    if (throwError) 
+                        throw new Error(`Delete API is disabled for ${this.EntityInfo.Name}`);
+                    else
+                        return false;
+                }
                 break;
             case EntityPermissionType.Read:
-                if (!this.EntityInfo.IncludeInAPI)
-                    throw new Error(`API is disabled for ${this.EntityInfo.Name}`);
+                if (!this.EntityInfo.IncludeInAPI) {
+                    if (throwError)
+                        throw new Error(`API is disabled for ${this.EntityInfo.Name}`);
+                    else
+                        return false;
+                }
                 break;
         }
         
