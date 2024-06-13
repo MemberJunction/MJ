@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/core-actions",
-  "version": "1.7.0",
+  "version": "1.7.1",
   "description": "Library of generated and custom actions for the core MemberJunction framework. This library is maintained by MemberJunction and includes actions for use within the framework itself.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -19,9 +19,9 @@
     "typescript": "^5.4.5"
   },
   "dependencies": {
-    "@memberjunction/global": "1.7.0",
-    "@memberjunction/core": "1.7.0",
-    "@memberjunction/core-entities": "1.7.0",
-    "@memberjunction/actions": "1.7.0"
+    "@memberjunction/global": "1.7.1",
+    "@memberjunction/core": "1.7.1",
+    "@memberjunction/core-entities": "1.7.1",
+    "@memberjunction/actions": "1.7.1"
   }
 }

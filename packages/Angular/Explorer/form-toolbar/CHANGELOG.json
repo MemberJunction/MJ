@@ -2,6 +2,57 @@
   "name": "@memberjunction/ng-form-toolbar",
   "entries": [
     {
+      "date": "Wed, 12 Jun 2024 20:13:29 GMT",
+      "version": "1.7.1",
+      "tag": "@memberjunction/ng-form-toolbar_v1.7.1",
+      "comments": {
+        "patch": [
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-form-toolbar",
+            "comment": "Bump @memberjunction/global to v1.7.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-form-toolbar",
+            "comment": "Bump @memberjunction/core to v1.7.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-form-toolbar",
+            "comment": "Bump @memberjunction/ng-shared to v1.7.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-form-toolbar",
+            "comment": "Bump @memberjunction/ng-base-forms to v1.7.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-form-toolbar",
+            "comment": "Bump @memberjunction/ng-ask-skip to v1.7.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-form-toolbar",
+            "comment": "Bump @memberjunction/ng-record-changes to v1.7.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-form-toolbar",
+            "comment": "Bump @memberjunction/ng-container-directives to v1.7.1",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
       "date": "Wed, 12 Jun 2024 18:53:39 GMT",
       "version": "1.7.0",
       "tag": "@memberjunction/ng-form-toolbar_v1.7.0",
