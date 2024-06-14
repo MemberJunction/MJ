@@ -1,19 +1,37 @@
-import { Component, Input, AfterViewInit, ChangeDetectorRef } from '@angular/core';
+import { Component, Input, AfterViewInit, ChangeDetectorRef, ElementRef } from '@angular/core';
 
-import { BaseEntity, EntityInfo, Metadata, RunView, RunViewParams, ValidationErrorInfo } from '@memberjunction/core';
- 
+import { BaseEntity, EntityFieldInfo, EntityFieldTSType, EntityInfo, LogError, Metadata, RunView, RunViewParams, ValidationErrorInfo } from '@memberjunction/core';
+import { MJEvent, MJEventType, MJGlobal } from '@memberjunction/global';
+import { SharedService } from '@memberjunction/ng-shared';
+import { BaseFormComponentEvent, BaseFormComponentEventCodes, FormEditingCompleteEvent } from '@memberjunction/ng-base-types';
 
 export class JoinGridCell {
   index!: number;
   RowForeignKeyValue: any;
-  ColumnForeignKeyValue: any;
-  data: BaseEntity | undefined;
+  ColumnForeignKeyValue?: any;
+  /**
+   * Used when the ColumnsMode is set to Entity. This is the BaseEntity object that represents the data in the JoinEntity that links the Row and Column entities together.
+   */
+  data?: BaseEntity | undefined;
+  /**
+   * Used when the ColumnsMode is set to Fields. This is an array of values from the JoinEntity that are displayed as columns in the grid.
+   */
+  value?: any
 }
 export class JoinGridRow {
   FirstColValue: any;
   JoinExists: boolean = false;
   RowForeignKeyValue: any;
   ColumnData: JoinGridCell[] = []
+  GetColumnValue(colIndex: number): any {
+    return this.ColumnData && this.ColumnData.length > colIndex ? this.ColumnData[colIndex].value : undefined
+  }
+  constructor (data: any) {
+    this.FirstColValue = data.FirstColValue;
+    this.JoinExists = data.JoinExists;
+    this.RowForeignKeyValue = data.RowForeignKeyValue;
+    this.ColumnData = data.ColumnData;
+  }
 }
 
 @Component({
@@ -27,6 +45,15 @@ export class JoinGridComponent implements AfterViewInit {
    * where the RowsEntityDisplayField will be used in the first column of the grid.
    */
   @Input() RowsEntityName!: string
+  /**
+   * Optional: if provided, this value will be shown in the top-left corner of the grid instead of the RowsEntityName
+   */
+  @Input() RowsEntityDisplayName?: string
+
+  public get RowsEntityDisplayNameOrName(): string {
+    return this.RowsEntityDisplayName ? this.RowsEntityDisplayName : this.RowsEntityName;
+  }
+
   /**
    * Required: the field name in the RowsEntityName that will be shown in the first column in the grid
    */
@@ -123,6 +150,12 @@ export class JoinGridComponent implements AfterViewInit {
   @Input() JoinEntityDisplayColumns?: string[]
 
   /**
+   * When specified, this filter is used to further constrain the data in the JoinEntity. This is optional but is generally
+   * most useful when ColumnsMode is set to Fields and you want to filter the data in the JoinEntity based on some criteria.
+   */
+  @Input() JoinEntityExtraFilter?: string
+
+  /**
    * When this property is set to JoinRecordExists the grid will operate as follows:
    *  * When a user checks the checkbox in the grid, a record will be created in the JoinEntity with the Row and Column foreign keys.
    *  * When a user unchecks the checkbox in the grid, the record in the JoinEntity will be deleted.
@@ -143,12 +176,24 @@ export class JoinGridComponent implements AfterViewInit {
    */
   @Input() NewRecordDefaultValues?: { [key: string]: any }
 
-  ngAfterViewInit(): void {
-    // load up the grid
-    this.Refresh();
-  }
+  /**
+   * When set to true, the Save button is shown
+   */
+  @Input() ShowSaveButton: boolean = true
+  /**
+   * When set to true, the Cancel button is shown
+   */
+  @Input() ShowCancelButton: boolean = true;
 
-  constructor(private cdr: ChangeDetectorRef) { }
+  /**
+   * Change the value of this property to true or false when you want to enter or exit edit mode. Only use this when the grid
+   * is embedded in another form and you are not showing the built-in save/cancel buttons
+   */
+  @Input() EditMode: 'None' | 'Save' | 'Queue' = 'None';
+
+  constructor(private cdr: ChangeDetectorRef, private elementRef: ElementRef) { 
+
+  }
 
 
   /*The below members are public because the Angular template needs access to them, but by naming convention we prefix with an _ so that it is clear they are not to be used outside of the component */
@@ -160,6 +205,7 @@ export class JoinGridComponent implements AfterViewInit {
   protected _columnsEntityInfo: EntityInfo | null = null;
   protected _columnsEntityData: BaseEntity[] | undefined = undefined;
   protected _rowsEntityData: BaseEntity[] | undefined = undefined;
+  protected _joinEntityData: BaseEntity[] | undefined = undefined;
 
   /**
    * Saves all of the changes made in the grid. This includes adding new records, updating existing records, and deleting records.
@@ -170,33 +216,65 @@ export class JoinGridComponent implements AfterViewInit {
     // do it all in one transaction
     const md = new Metadata();
     const tg = await md.CreateTransactionGroup();
-    let validated = true;
-    const valErrors: ValidationErrorInfo[][] = [];
-    this._pendingDeletes.forEach(obj => {
-      obj.TransactionGroup = tg;
-      obj.Delete();
-    });
-    this._pendingInserts.forEach(obj => {
-      obj.TransactionGroup = tg;
-      const valResult = obj.Validate()
-      validated = validated && valResult.Success;
-      valErrors.push(valResult.Errors);
-      obj.Save();
-    });
-    if (validated) {
-      if (!await tg.Submit()) {
-        alert ('Error saving changes');
-        return false;
+
+    if (this.ColumnsMode === 'Entity') {
+      let validated = true;
+      const valErrors: ValidationErrorInfo[][] = [];
+      this._pendingDeletes.forEach(obj => {
+        obj.TransactionGroup = tg;
+        obj.Delete();
+      });
+      this._pendingInserts.forEach(obj => {
+        obj.TransactionGroup = tg;
+        const valResult = obj.Validate()
+        validated = validated && valResult.Success;
+        valErrors.push(valResult.Errors);
+        obj.Save();
+      });
+      if (validated) {
+        if (!await tg.Submit()) {
+          alert ('Error saving changes');
+          return false;
+        }
+        else {
+          await this.Refresh(); // refresh afterwards
+          return true;  
+        }  
       }
       else {
-        await this.Refresh(); // refresh afterwards
-        return true;  
+        alert ('Error validating changes, details in console');
+        console.log(valErrors);
+        return false;
       }  
     }
     else {
-      alert ('Error validating changes, details in console');
-      console.log(valErrors);
-      return false;
+      // in fields mode we use the _joinEntityData array to save the changes
+      let validated = true;
+      const valErrors: ValidationErrorInfo[][] = [];
+      this._joinEntityData?.forEach(obj => {
+        if (obj.Dirty) {
+          obj.TransactionGroup = tg;
+          const valResult = obj.Validate()
+          validated = validated && valResult.Success;
+          valErrors.push(valResult.Errors);
+          obj.Save();
+        }
+      });
+      if (validated) {
+        if (!await tg.Submit()) {
+          alert ('Error saving changes');
+          return false;
+        }
+        else {
+          await this.Refresh(); // refresh afterwards
+          return true;  
+        }  
+      }
+      else {
+        alert ('Error validating changes, details in console');
+        console.log(valErrors);
+        return false;
+      }
     }
   }
 
@@ -263,23 +341,29 @@ export class JoinGridComponent implements AfterViewInit {
 
     this._pendingDeletes = [];
     this._pendingInserts = [];
+    this._joinEntityData = undefined;
 
     // we are provided an array of Column and Row objects. We need to get the rows from the JoinEntity that link them up.
     const md = new Metadata();
+    if (this.ColumnsMode === 'Entity') {
+      this._columnsEntityInfo = md.EntityByName(this.ColumnsEntityName);
+      if (!this._columnsEntityInfo)
+        throw new Error('Invalid entity name provided for columns entity.');
+    }
     this._rowsEntityInfo = md.EntityByName(this.RowsEntityName);
-    this._columnsEntityInfo = md.EntityByName(this.ColumnsEntityName);
     if (!this._rowsEntityInfo) 
       throw new Error('Invalid entity name provided for rows entity.');
-    if (!this._columnsEntityInfo)
-      throw new Error('Invalid entity name provided for columns entity.');
 
     await this.PopulateRowsAndColsData();
 
     const rowQuotes = this._rowsEntityInfo.FirstPrimaryKey.NeedsQuotes ? "'" : "";
     let filter = `${this.JoinEntityRowForeignKey} IN (${this._rowsEntityData!.map(obj => `${rowQuotes}${obj.Get(this._rowsEntityInfo!.FirstPrimaryKey.Name)}${rowQuotes}`).join(',')})` 
-    if (this.ColumnsMode === 'Entity') {
+    if (this.ColumnsMode === 'Entity' && this._columnsEntityInfo) {
       const colQuotes = this._columnsEntityInfo.FirstPrimaryKey.NeedsQuotes ? "'" : "";
       filter += ` AND ${this.JoinEntityColumnForeignKey} IN (${this._columnsEntityData!.map(obj => `${colQuotes}${obj.Get(this._columnsEntityInfo!.FirstPrimaryKey.Name)}${colQuotes}`).join(',')})`;
+    }
+    if (this.JoinEntityExtraFilter) {
+      filter = `(${filter}) AND (${this.JoinEntityExtraFilter})`;
     }
     const rv = new RunView();
     const result = await rv.RunView(
@@ -290,7 +374,8 @@ export class JoinGridComponent implements AfterViewInit {
       });
     if (result && result.Success) {
       // we have the data, now we need to build the grid
-      this.PopulateGridData(result.Results);
+      this._joinEntityData = result.Results;
+      this.PopulateGridData();
     }
 
     this._IsLoading = false; // turn off the loading spinner
@@ -299,11 +384,14 @@ export class JoinGridComponent implements AfterViewInit {
 
   protected async PopulateRowsAndColsData() {
     const rv = new RunView();
-    if (this.ColumnsEntityDataSource === 'Array') {
-      this._columnsEntityData = this.ColumnsEntityArray;
-    }
-    else {
-      this._columnsEntityData = await this.RunColumnsOrRowsView(this.ColumnsEntityDataSource, this.ColumnsEntityName, this.ColumnsEntityViewName, this.ColumnsExtraFilter, this.ColumnsOrderBy);
+    if (this.ColumnsMode==='Entity') {
+      // only populate the columns if we are using the entity mode, otherwise the array from JoinGridDisplayColumns will be used
+      if (this.ColumnsEntityDataSource === 'Array') {
+        this._columnsEntityData = this.ColumnsEntityArray;
+      }
+      else {
+        this._columnsEntityData = await this.RunColumnsOrRowsView(this.ColumnsEntityDataSource, this.ColumnsEntityName, this.ColumnsEntityViewName, this.ColumnsExtraFilter, this.ColumnsOrderBy);
+      }  
     }
     if (this.RowsEntityDataSource === 'Array') {
       this._rowsEntityData = this.RowsEntityArray;
@@ -331,23 +419,26 @@ export class JoinGridComponent implements AfterViewInit {
     }
   }
 
-  protected async PopulateGridData(joinEntityData: BaseEntity[]) {
+  protected async PopulateGridData() {
     // we have the data, now we need to build the grid
     // we need to build the grid data
+    if (!this._joinEntityData)
+      throw new Error('_joinEntityData must be populated before calling PopulateGridData()')
+
     const gridData: any[] = [];
-    this._rowsEntityData!.forEach(row => {
-      let rowData: JoinGridRow = {
+    this._rowsEntityData!.forEach((row, rowIndex) => {
+      let rowData: JoinGridRow = new JoinGridRow({
         FirstColValue: row.Get(this.RowsEntityDisplayField),
         JoinExists: false,
         RowForeignKeyValue: row.Get(this._rowsEntityInfo!.FirstPrimaryKey.Name),
         ColumnData: [] // start off with an empty array
-      };
+      });
 
       // for the mode where we are using columns, do the following
       if (this.ColumnsMode === 'Entity') {
         for (let i = 0; i < this._columnsEntityData!.length; i++) {
           const column = this._columnsEntityData![i];
-          const join = joinEntityData.find(j => j.Get(this.JoinEntityRowForeignKey) === row.Get(this._rowsEntityInfo!.FirstPrimaryKey.Name) && 
+          const join = this._joinEntityData!.find(j => j.Get(this.JoinEntityRowForeignKey) === row.Get(this._rowsEntityInfo!.FirstPrimaryKey.Name) && 
                                                 j.Get(this.JoinEntityColumnForeignKey) === column.Get(this._columnsEntityInfo!.FirstPrimaryKey.Name));
           rowData.ColumnData.push({
             index: i,
@@ -358,8 +449,23 @@ export class JoinGridComponent implements AfterViewInit {
         }
       }
       else {
+        if (!this.JoinEntityDisplayColumns)
+          throw new Error('JoinEntityDisplayColumns is required when ColumnsMode is set to Fields');
+
         // we are display the values from the JoinEntity as columns from the JoinEntityDisplayColumns array
+        this.JoinEntityDisplayColumns.forEach((col, i) => {
+          const joinData = this._joinEntityData!.find(jed => jed.Get(this.JoinEntityRowForeignKey) === row.FirstPrimaryKey.Value)
+          // joinData being undefined/null is a valid condition just means no join data for the row specified
+          if (joinData) {
+            rowData.ColumnData.push({
+              index: i,
+              RowForeignKeyValue: rowData.RowForeignKeyValue,
+              value: joinData.Get(col)
+            });
+          }
+        });
       }
+
       gridData.push(rowData);
     });
     this._GridData = gridData;
@@ -413,6 +519,157 @@ export class JoinGridComponent implements AfterViewInit {
 
   public _IsColumnChecked(cell: JoinGridCell): boolean {
     return cell?.data !== undefined;
+  }
+
+  public async UpdateCellValueDirect(row: JoinGridRow, colIndex: number, newValue: string) {
+    // find the associated baseEntity object and update the value and then refresh the grid state from it
+    if (this.ColumnsMode !== 'Fields')
+      throw new Error("This method should only be called when ColumnsMode=Entity")
+
+    // we are good now, so now proceed to find the related object that ties to the rowForeignKey in
+    // the join entity data array
+    const joinData = this._joinEntityData!.find(jed => jed.Get(this.JoinEntityRowForeignKey) === row.RowForeignKeyValue)
+    if (!joinData)
+      LogError('Could not find join data for rowForeignKey ' + row.RowForeignKeyValue)
+    else {
+      const colName = this.JoinEntityDisplayColumns![colIndex];
+      joinData.Set(colName, newValue);
+      // also update the row's column array
+      row.ColumnData[colIndex].value = joinData.Get(colName);
+    }
+  }
+  public async UpdateCellValue(row: JoinGridRow, colIndex: number, event: Event) {
+    this.UpdateCellValueDirect(row, colIndex, (event.target as HTMLInputElement).value);
+  }
+
+  public async RemoveJoinEntityRecord(row: JoinGridRow, colIndex: number) {
+    // this method is called when the user wnats to remove a record that maps to the cell for the row specified and the colIndex
+    // only used when Mode = Fields
+    if (this.ColumnsMode !== 'Fields') 
+      throw new Error('This method should only be called when ColumnsMode=Entity')      
+
+    const joinData = this._joinEntityData!.find(jed => jed.Get(this.JoinEntityRowForeignKey) === row.RowForeignKeyValue)
+    if (!joinData)
+      LogError('Could not find join data for rowForeignKey ' + row.RowForeignKeyValue)
+    else {
+      this._pendingDeletes.push(joinData);
+      this._joinEntityData?.splice(this._joinEntityData.indexOf(joinData), 1);
+      this.PopulateGridData(); // refresh the grid's grid data array that is derived from all of the source data
+    }  
+  }
+
+  public async AddJoinEntityRecord(row: JoinGridRow, colIndex: number) {
+    // this method is called when the user wnats to create a new record that maps to the cell for the row specified and the colIndex
+    // only used when Mode = Fields
+    if (this.ColumnsMode !== 'Fields') 
+      throw new Error('This method should only be called when ColumnsMode=Entity')      
+
+    const md = new Metadata();
+    // first check to see if this is in the _pendingDeletes array, if so, we need to remove it from there
+    let newObj = this._pendingDeletes!.find(pd => pd.Get(this.JoinEntityRowForeignKey) === row.RowForeignKeyValue)
+    if (newObj) {
+      this._pendingDeletes.splice(this._pendingDeletes.indexOf(newObj), 1);
+    }
+    else {
+      newObj = await md.GetEntityObject(this.JoinEntityName);  
+      newObj.Set(this.JoinEntityRowForeignKey, row.RowForeignKeyValue);  
+    }
+
+    const keys = this.NewRecordDefaultValues ? Object.keys(this.NewRecordDefaultValues) : []
+    for (const k of keys) {
+      newObj.Set(k, this.NewRecordDefaultValues![k]);
+    }
+
+    this._joinEntityData?.push(newObj); // add to join data array
+    if (this.EditMode === 'Save') {
+      if (await newObj.Save()) {
+        // all good
+      }
+      else {
+        SharedService.Instance.CreateSimpleNotification('Error saving new ' + this.JoinEntityName + ' record','error', 2500)
+      }
+    }
+    this.PopulateGridData(); // refresh the grid's grid data array that is derived from all of the source data
+  }
+
+  protected async EditingComplete() {
+    // we've been told that editing is done. If we are in queue mode for editing, we do nothing because we've
+    // already submitted our pending changes via events (below) but if we're in save mode we save stuff now
+    if (this.EditMode === 'Save') {
+      await this.Save();
+    }
+  }
+
+  protected async RevertPendingChanges() {
+    // this method means we should revert back to the last saved state
+    // so just call Refresh
+    await this.Refresh();
+  }
+  
+  ngAfterViewInit(): void {
+    this.Refresh();
+
+    // setup event listener for MJGlobal because we might have a parent component that sends us messages
+    MJGlobal.Instance.GetEventListener(false).subscribe((e: MJEvent) => {
+      switch (e.event) {
+        case MJEventType.ComponentEvent:
+          const b = BaseFormComponentEventCodes; // having issues using the const vs the type if we refer to it below directly for comparison so assign the const to a local variable first
+          if (e.eventCode === b.BASE_CODE) {
+            // we have an event from a BaseFormComponent, now we need to determine if WE are a descendant of that component
+            const event: BaseFormComponentEvent = e.args as BaseFormComponentEvent;
+            if (SharedService.IsDescendant(event.elementRef, this.elementRef)) {
+              // we are a descendant of the component that sent the event, so we need to handle it
+              switch (event.subEventCode) {
+                case b.EDITING_COMPLETE:
+                  this.EditingComplete();
+                  break;
+                case b.REVERT_PENDING_CHANGES:
+                  this.RevertPendingChanges();
+                  break;
+                case b.POPULATE_PENDING_RECORDS:
+                  // provide all of our pending records back to the caller
+                  this._joinEntityData?.forEach((r: BaseEntity) => {
+                    // for anything that's changed, we need to add it to the pending records
+                    const editingEvent: FormEditingCompleteEvent = event as FormEditingCompleteEvent;
+                    if (r.Dirty) {
+                      editingEvent.pendingChanges.push({entityObject: r, action: 'save'});
+                    }
+                  });
+
+                  this._pendingDeletes.forEach((r: BaseEntity) => {
+                    const editingEvent: FormEditingCompleteEvent = event as FormEditingCompleteEvent;
+                    editingEvent.pendingChanges.push({entityObject: r, action: 'delete'});
+                  });
+                  break;
+              }
+            }
+           }
+          break;
+      }
+    });
+  }
+
+  /**
+   * Returns the EntityFieldInfo that matches the specific column name within the JoinEntity
+   * @param colName 
+   */
+  public GetJoinEntityField(colName: string): EntityFieldInfo {
+    const md = new Metadata();
+    const entity = md.EntityByName(this.JoinEntityName);
+    if (!entity)
+      throw new Error('Invalid entity name provided for JoinEntity');
+    const field = entity.Fields.find(f => f.Name === colName);
+    if (!field)
+      throw new Error('Invalid field name provided for JoinEntity');
+    return field;
+  }
+  
+  public GetJoinEntityFieldValues(colName: string): string[] {
+    return this.GetJoinEntityField(colName).EntityFieldValues.map(efv => efv.Value)
+  }
+
+  public get EntityFieldTSType() {
+    return EntityFieldTSType;
   }
 }
  

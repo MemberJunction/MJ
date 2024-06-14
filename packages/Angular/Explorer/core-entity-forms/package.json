@@ -33,6 +33,7 @@
     "@memberjunction/ng-container-directives": "1.7.1",
     "@memberjunction/ng-code-editor": "1.7.1",
     "@memberjunction/ng-timeline": "1.7.1",
+    "@memberjunction/ng-join-grid": "1.7.1",
     "@progress/kendo-angular-grid": "16.2.0",
     "@progress/kendo-angular-dropdowns": "16.2.0",
     "tslib": "^2.3.0"

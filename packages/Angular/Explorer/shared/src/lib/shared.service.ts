@@ -362,17 +362,3 @@ export const EventCodes = {
 } as const;
 
 export type EventCodes = typeof EventCodes[keyof typeof EventCodes];
-
-export const BaseFormComponentEventCodes = {
-  BASE_CODE: 'BaseFormComponent_Event',
-  EDITING_COMPLETE: 'EDITING_COMPLETE',
-  REVERT_PENDING_CHANGES: 'REVERT_PENDING_CHANGES',
-  POPULATE_PENDING_RECORDS: 'POPULATE_PENDING_RECORDS'
-} as const
-export type BaseFormComponentEventCodes = typeof BaseFormComponentEventCodes[keyof typeof BaseFormComponentEventCodes];
-
-export class BaseFormComponentEvent {
-  subEventCode!: string
-  elementRef: any
-  returnValue: any
-}
