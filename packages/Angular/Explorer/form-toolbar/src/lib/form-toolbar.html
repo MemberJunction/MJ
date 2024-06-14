@@ -24,13 +24,6 @@
                 </button> 
             }
         }
-
-        @if(IsActionEntity){
-            <button title="Run This Action" kendoButton (click)="RunAction()" title="Edit this Record">
-                <span class="fa-solid fa-play"></span>
-                <span class="button-text">Run</span>
-            </button> 
-        }
     }
     @else {
         <button kendoButton (mouseup)="saveExistingRecord($event)" title="Save Record">
