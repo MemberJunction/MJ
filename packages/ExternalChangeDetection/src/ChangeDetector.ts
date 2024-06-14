@@ -128,14 +128,11 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
                 deleteResult.forEach(row => {
                     const item = new ChangeDetectionItem();
                     item.Entity = entity;
-                    item.PrimaryKey = new CompositeKey(entity.PrimaryKeys.map(pk => { 
-                        return {
-                            FieldName: pk.Name, 
-                            Value: row.RecordID
-                        }
-                    }));
+                    const ck = new CompositeKey();
+                    ck.LoadFromConcatenatedString(row.RecordID); // this is a string like 'Field1Value|Field2Value' (no quotes)
+                    item.PrimaryKey = ck;
                     item.Type = 'Delete';
-                    item.ChangedAt = row.ChangeDate;
+                    item.ChangedAt = row.ChangedAt;
                     item.Changes = []; // not relevant because the row is now deleted
                     changes.push(item);
                 });
@@ -400,7 +397,14 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
                 ${entity.PrimaryKeys.map(pk => `ot.[${pk.Name}] IS NULL`).join(' AND ')}
                 AND 
                 rc.EntityID = ${entity.ID} 
-        `;
+                AND
+				NOT EXISTS 
+				(
+				    SELECT rc2.ID FROM __mj.vwRecordChanges rc2 WHERE 
+					rc2.RecordID = rc.RecordID AND rc2.EntityID=rc.EntityID AND rc2.Type='Delete'
+				) 
+
+        `; // last part of above query makes sure we don't include records already deleted in Record Changes
     }
     
 
