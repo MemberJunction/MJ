@@ -347,7 +347,7 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
 
         return `
             SELECT 
-                ${entity.PrimaryKeys.map(pk => `ot.[${pk.Name}]` ).join(', ')}, ot.UpdatedAt
+                ${entity.PrimaryKeys.map(pk => `ot.[${pk.Name}]` ).join(', ')}, ot.UpdatedAt, rc.last_change_time LatestRecordChangeAt
             FROM 
                 [${entity.SchemaName}].[${entity.BaseView}] ot
             INNER JOIN (
@@ -398,8 +398,7 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
                 rc.RecordID = ${primaryKeyString}
             WHERE 
                 ${entity.PrimaryKeys.map(pk => `ot.[${pk.Name}] IS NULL`).join(' AND ')}
-            AND 
-                rc.Type IN ('Create', 'Update') AND
+                AND 
                 rc.EntityID = ${entity.ID} 
         `;
     }
@@ -444,11 +443,12 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
      * @returns 
      */
     public async ReplayChanges(changes: ChangeDetectionItem[]): Promise<boolean> {
+        let run;
         try {
             if (changes && changes.length > 0) {
                 const md = new Metadata();
                 const results = [];
-                const run = await this.StartRun();
+                run = await this.StartRun();
                 for (const change of changes) {
                     const result = await this.ReplaySingleChange(md, run, change);
                     results.push({Success: result, change: change});
@@ -458,14 +458,28 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
                 if (await run.Save()) {
                     return results.every(r => r.Success);
                 }
-                else
-                    return false;    
+                else {
+                    throw new Error("Failed to save run");
+                }
             }
             else
                 return true; // no changes to process
         }
         catch (e) {
             LogError(e);
+            if (run) {
+                // attempt to mark the run as error
+                try {
+                    run.Status = 'Error';
+                    run.EndedAt = new Date();
+                    await run.Save();
+                }
+                catch (e) {
+                    LogError('Attempted to mark run as error failed, make sure you update the database for future runs to be allowed.')
+                    LogError(e);
+                    return false; // couldn't get it done
+                }
+            }
             return false;
         }
     }
@@ -516,7 +530,7 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
                     // for deletes we don't have this yet - it is not the normal load from DB since it wont be in the database at all
                     entityObject = await md.GetEntityObject(change.Entity.Name, this.ContextUser);
                     const latestRCData = await this.GetLatestRecordChangesDataForEntityRecord(change);
-                    if (latestRCData) {
+                    if (latestRCData && latestRCData.FullRecordJSON?.length > 0) {
                         const obj = JSON.parse(latestRCData.FullRecordJSON);
                         entityObject.LoadFromData(obj); // loaded up from the latest data in the Record Change table
                     }
@@ -581,7 +595,10 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
             rc.Source = 'External';
             rc.Type = change.Type;
             rc.Status = 'Pending';
-            rc.ChangedAt = change.ChangedAt;
+            if (change.ChangedAt)
+                rc.ChangedAt = change.ChangedAt;
+            else
+                rc.ChangedAt = new Date(); //default to now, for deleted records we don't know when delete happened.
             const changesObject = {};
             for (const field of change.Changes) {
                 changesObject[field.FieldName] = {
@@ -590,21 +607,36 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
                     newValue: field.NewValue
                 };
             }
-            rc.ChangesJSON = JSON.stringify(changesObject);
-            // get full json from the latest object
-            const obj = change.LatestRecord?.GetAll();
-            if (obj)
-                rc.FullRecordJSON = JSON.stringify(obj);
+            if (change.Type === 'Update') 
+                rc.ChangesJSON = JSON.stringify(changesObject);
+            else
+                rc.ChangesJSON = ''; // not null
+
+            if (change.Type !== 'Delete') {
+                const obj = change.LatestRecord?.GetAll();
+                if (obj)
+                    rc.FullRecordJSON = JSON.stringify(obj);    
+                else
+                    rc.FullRecordJSON = ''; // null not allowed
+            }
+            else
+                rc.FullRecordJSON = ''; // null not allowed
 
             const provider = <SQLServerDataProvider>Metadata.Provider;
-            rc.ChangesDescription = provider.CreateUserDescriptionOfChanges(changesObject);
+            if (change.Type === 'Update')
+                rc.ChangesDescription = provider.CreateUserDescriptionOfChanges(changesObject);
+            else if (change.Type === 'Create')
+                rc.ChangesDescription = 'New Record';
+            else
+                rc.ChangesDescription = 'Record Deleted';
+
             rc.ReplayRunID = run.ID;
             rc.UserID = this.ContextUser.ID;
             if (await rc.Save()) {
                 return rc;
             }
             else {
-                return null;
+                throw new Error("Failed to save Record Change record: " + rc.LatestResult?.Message);
             }
         }
         catch (e) {
