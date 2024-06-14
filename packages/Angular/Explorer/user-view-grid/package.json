@@ -33,6 +33,7 @@
     "@memberjunction/ng-compare-records": "1.7.1",
     "@memberjunction/ng-container-directives": "1.7.1",
     "@memberjunction/entity-communications-client": "1.7.1",
+    "@memberjunction/ng-base-types": "1.7.1",
     "@progress/kendo-angular-grid": "16.2.0",
     "@progress/kendo-angular-layout": "16.2.0",
     "@progress/kendo-angular-inputs": "16.2.0",

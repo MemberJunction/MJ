@@ -5,7 +5,7 @@ import { ActionTopComponent } from '../../generated/Entities/Action/sections/top
 
 @RegisterClass(BaseFormSectionComponent, 'Actions.top-area') // Tell MemberJunction about this class 
 @Component({
-    selector: 'gen-action-form-top-area',
+    selector: 'gen-action-extended-form-top-area',
     styleUrls: ['../../../shared/form-styles.css'],
     template: `<div *ngIf="this.record">
     <div class="record-form">

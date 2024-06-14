@@ -98,8 +98,10 @@ export class FormToolbarComponent implements OnInit {
 
             // Save the record
             const result = await this.form.SaveRecord(true);
-            if (!result)
-                alert(this.form.record.LatestResult.Message);
+            if (!result) {
+                const msg = this.form.record.LatestResult?.Message ? ': ' + this.form.record.LatestResult.Message : '';
+                SharedService.Instance.CreateSimpleNotification(`Error saving record${msg}`, 'error', 3000);
+            }
         } finally {
             // Re-enable the toolbar and remove the UX effect
             this._currentlyDisabled = false;

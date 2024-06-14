@@ -7,10 +7,11 @@ import { EntityInfo, ValidationResult, BaseEntity, EntityPermissionType,
          BaseEntityEvent,
          CompositeKey} from '@memberjunction/core';
 import { BaseRecordComponent } from './base-record-component';
-import { BaseFormComponentEvent, BaseFormComponentEventCodes, SharedService } from '@memberjunction/ng-shared';
+import { SharedService } from '@memberjunction/ng-shared';
 import { ActivatedRoute, Router } from '@angular/router';
 import { MJTabStripComponent, TabEvent } from '@memberjunction/ng-tabstrip';
 import { MJEventType, MJGlobal } from '@memberjunction/global';
+import { FormEditingCompleteEvent, PendingRecordItem, BaseFormComponentEventCodes } from '@memberjunction/ng-base-types';
 
 @Directive() // this isn't really a directive, BUT we are doing this to avoid Angular compile errors that require a decorator in order to implement the lifecycle interfaces
 export abstract class BaseFormComponent extends BaseRecordComponent implements AfterViewInit, OnInit, OnDestroy {
@@ -30,7 +31,7 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
   public showCreateDialog: boolean = false;
   private splitterLayoutChangeSubject = new Subject<void>();
 
-  private _pendingRecords: BaseEntity[] = [];
+  private _pendingRecords: PendingRecordItem[] = [];
   private _updatingBrowserUrl: boolean = false;
 
   private __debug: boolean = false;
@@ -128,7 +129,7 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
     }
   }
 
-  protected get PendingRecords(): BaseEntity[] {
+  protected get PendingRecords(): PendingRecordItem[] {
     return this._pendingRecords;
   }   
  
@@ -287,7 +288,7 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
     const results: ValidationResult[] = [];
     for (let i = 0; i < this._pendingRecords.length; i++) {
       const pendingRecord = this._pendingRecords[i];
-      results.push(pendingRecord.Validate());
+      results.push(pendingRecord.entityObject.Validate());
     }
     return results;
   }
@@ -306,15 +307,9 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
   }
 
   protected RaiseEvent(eventCode: BaseFormComponentEventCodes) {
-    const p: BaseEntity[] = [];
-
-    const event: BaseFormComponentEvent = {
-      subEventCode: eventCode,
-      elementRef: this.elementRef,
-      returnValue: {
-        pendingRecords: p
-      }
-    }
+    const event: FormEditingCompleteEvent = new FormEditingCompleteEvent(); 
+    event.elementRef = this.elementRef;
+    event.subEventCode = eventCode;
 
     MJGlobal.Instance.RaiseEvent({
       event: MJEventType.ComponentEvent,
@@ -323,7 +318,7 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
       args: event
     })
     
-    return event.returnValue; // if the recipients of the event provided any values, we have them now 
+    return event; // if the recipients of the event provided any values, we have them now 
   }
   public async SaveRecord(StopEditModeAfterSave: boolean): Promise<boolean> {
     try {
@@ -331,14 +326,14 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
         // atempt to blur the active element to force any pending changes to be committed
         (document.activeElement as HTMLElement).blur(); 
         // notify child components of this component that they must stop editing with an EDITING_COMPLETE message via MJ_global
-        this.RaiseEvent('EDITING_COMPLETE');
+        this.RaiseEvent(BaseFormComponentEventCodes.EDITING_COMPLETE);
       }
       catch (e2) {
         // ignore
       }
       
       if (this.record) {
-        await this.PopulatePendingRecords(); // do this before we validate as we must validate pending records too
+        this.PopulatePendingRecords(); // do this before we validate as we must validate pending records too
         const valResults = this.Validate();
         if (valResults.Success) {
           const result = await this.InternalSaveRecord();
@@ -386,10 +381,11 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
             if (pendingRecords && pendingRecords.length > 0) {
                 // we have pending records, so we need to revert them as well
                 pendingRecords.forEach(p => {
-                    p.Revert();
+                  if (p.action === 'save')  
+                    p.entityObject.Revert(); // only do this if we are saving the record, ignore deletes
                 });
             }
-            this.RaiseEvent('REVERT_PENDING_CHANGES');
+            this.RaiseEvent(BaseFormComponentEventCodes.REVERT_PENDING_CHANGES);
         }
 
         // if we get here we are good to go
@@ -401,24 +397,26 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
       this.PopulatePendingRecords();
       const pendingRecords = this.PendingRecords;
       if (pendingRecords && pendingRecords.length > 0) {
-          for (let i = 0; i < pendingRecords.length; i++) {
-              if (pendingRecords[i].Dirty)
-                  return true;
-          }
+        for (const p of pendingRecords) {
+          if (p.action==='delete')
+            return true;
+          else if (p.entityObject.Dirty)
+            return true;
+        }
       }
       return false;   
   }   
 
-  protected async PopulatePendingRecords(): Promise<void> {
+  protected PopulatePendingRecords() {
     // this method is called by the parent class at the right time to populate all of the pending records for a transaction
     // all we do is talk to all of our child compoennts and get their pending records and xfer them over to the PendingRecords array
     // the parent class will then take care of the rest...
 
     this._pendingRecords = []; // wipe out our array first
-    this.RaiseEvent('EDITING_COMPLETE'); // first tell the child components to finish up their editing
-    const result = this.RaiseEvent('POPULATE_PENDING_RECORDS');
-    if (result && result.pendingRecords) {
-      for (const p of result.pendingRecords) 
+    this.RaiseEvent(BaseFormComponentEventCodes.EDITING_COMPLETE); // first tell the child components to finish up their editing
+    const result = this.RaiseEvent(BaseFormComponentEventCodes.POPULATE_PENDING_RECORDS);
+    if (result && result.pendingChanges) {
+      for (const p of result.pendingChanges) 
         this.PendingRecords.push(p);
     }
   }
@@ -426,8 +424,7 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
 
   protected async InternalSaveRecord(): Promise<boolean> {
     if (this.record) {
-      // save the record, but first create a transaction group if we have any other stuf to submit
-        await this.PopulatePendingRecords();
+        // DONT POPULATE PENDING RECORDS AGAIN HERE AS IT WAS DONE before Validate() was called
         if (this._pendingRecords.length > 0) {
             // we need to create a transaction group
             const md = new Metadata();
@@ -436,12 +433,13 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
             this.record.Save(); // DO NOT USE await - trans group.submit() is where we await
 
             // now add to the rest of the pending records
-            for (let i = 0; i < this._pendingRecords.length; i++) {
-            const x = this._pendingRecords[i];
-            x.TransactionGroup = tg;
-            x.Save(); // DO NOT USE await - trans group.submit() is where we await
+            for (const x of this._pendingRecords) {
+              x.entityObject.TransactionGroup = tg;
+              if (x.action === 'save')
+                x.entityObject.Save(); // DO NOT AWAIT, part of a TG
+              else
+                x.entityObject.Delete(); // DO NOT AWAIT, part of a TG
             }
-
             // finally submit the TG
             return await tg.Submit();
         }
