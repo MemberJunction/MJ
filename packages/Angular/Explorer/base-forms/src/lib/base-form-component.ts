@@ -349,17 +349,18 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
               this.EditMode = false;
 
             this.sharedService.CreateSimpleNotification('Record saved succesfully', 'success', 2500)
-
             return true;
           }
-          else  
+          else{
             this.sharedService.CreateSimpleNotification('Error saving record', 'error', 5000)
+          }
         }
         else {
           this.sharedService.CreateSimpleNotification('Validation Errors\n' + valResults.Errors.map(x => x.Message).join('\n'), 'warning', 10000);
         }
       }
 
+      LogError("Could not save reocrd: Record not found");
       return false; // if we get here, we have failed/validation error/etc
     }
     catch (e) {

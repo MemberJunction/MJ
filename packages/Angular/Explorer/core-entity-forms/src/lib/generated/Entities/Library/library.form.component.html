@@ -31,6 +31,21 @@
                             [BottomMargin]="GridBottomMargin">
                         </mj-user-view-grid>
                     </mj-tab-body>
+
+                    <mj-tab Name="Library Items" 
+                        [Visible]="record.IsSaved" 
+                        [Props]="{EntityRelationshipID: 295}">
+                        Library Items
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Library Items')"  
+                            [NewRecordValues]="NewRecordValues('Library Items')"
+                            [AllowLoad]="IsCurrentTab('Library Items')"  
+                            [EditMode]="GridEditMode()"  
+                            [BottomMargin]="GridBottomMargin">
+                        </mj-user-view-grid>
+                    </mj-tab-body>
                 </mj-tabstrip>
     </form>
 </div>

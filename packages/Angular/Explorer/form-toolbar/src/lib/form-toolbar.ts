@@ -1,7 +1,7 @@
 import { Component, Input, OnInit } from '@angular/core';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { EventCodes, SharedService } from '@memberjunction/ng-shared';
-import { BaseEntity, CompositeKey, Metadata, RecordDependency } from '@memberjunction/core';
+import { BaseEntity, CompositeKey, LogError, Metadata, RecordDependency } from '@memberjunction/core';
 import { Router } from '@angular/router';
 import { MJEvent, MJEventType, MJGlobal } from '@memberjunction/global';
 
@@ -102,8 +102,11 @@ export class FormToolbarComponent implements OnInit {
 
             // Save the record
             const result = await this.form.SaveRecord(true);
-            if (!result)
+            if (!result){
+                LogError("Error saving record:", undefined, this.form.record.LatestResult);
                 alert(this.form.record.LatestResult.Message);
+            }
+
         } finally {
             // Re-enable the toolbar and remove the UX effect
             this._currentlyDisabled = false;
