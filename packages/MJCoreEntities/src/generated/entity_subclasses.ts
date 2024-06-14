@@ -17375,18 +17375,6 @@ import { RegisterClass } from "@memberjunction/global";
             this.Set('Status', value);
         }
         /**
-        * * Field Name: ExportedItems
-        * * Display Name: Exported Items
-        * * SQL Data Type: nvarchar(MAX)
-        * * Description: List of classes and functions exported by the library.
-        */
-        get ExportedItems(): string | null {  
-            return this.Get('ExportedItems');
-        }
-        set ExportedItems(value: string | null) {
-            this.Set('ExportedItems', value);
-        }
-        /**
         * * Field Name: TypeDefinitions
         * * Display Name: Type Definitions
         * * SQL Data Type: nvarchar(MAX)
@@ -17414,7 +17402,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -20020,6 +20007,133 @@ import { RegisterClass } from "@memberjunction/global";
         */
         get User(): string {  
             return this.Get('User');
+        }
+        
+
+    }
+        
+    /**
+     * Library Items - strongly typed entity sub-class
+     * * Schema: __mj
+     * * Base Table: LibraryItem
+     * * Base View: vwLibraryItems
+     * * @description Table to store individual library items
+     * * Primary Key: ID
+     * @extends {BaseEntity}
+     * @class
+     * @public
+     */
+    @RegisterClass(BaseEntity, 'Library Items')
+    export class LibraryItemEntity extends BaseEntity {
+        /**
+        * Loads the Library Items record from the database
+        * @param ID: number - primary key value to load the Library Items record.
+        * @param EntityRelationshipsToLoad - (optional) the relationships to load
+        * @returns {Promise<boolean>} - true if successful, false otherwise
+        * @public
+        * @async
+        * @memberof LibraryItemEntity
+        * @method
+        * @override
+        */      
+        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+        }
+            
+        /**
+        * Library Items - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
+        * @public
+        * @method
+        * @override
+        * @memberof LibraryItemEntity
+        * @throws {Error} - Delete is not allowed for Library Items, to enable it set AllowDeleteAPI to 1 in the database.
+        */
+        public async Delete(): Promise<boolean> {
+            throw new Error('Delete is not allowed for Library Items, to enable it set AllowDeleteAPI to 1 in the database.');
+        } 
+            
+            /**
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: int
+        * * Description: Primary key of the LibraryItem table.
+        */
+        get ID(): number {  
+            return this.Get('ID');
+        }
+        
+        /**
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(255)
+        */
+        get Name(): string {  
+            return this.Get('Name');
+        }
+        set Name(value: string) {
+            this.Set('Name', value);
+        }
+        /**
+        * * Field Name: LibraryID
+        * * Display Name: Library ID
+        * * SQL Data Type: int
+        * * Related Entity/Foreign Key: Libraries (vwLibraries.ID)
+        */
+        get LibraryID(): number {  
+            return this.Get('LibraryID');
+        }
+        set LibraryID(value: number) {
+            this.Set('LibraryID', value);
+        }
+        /**
+        * * Field Name: Type
+        * * Display Name: Type
+        * * SQL Data Type: nvarchar(50)
+        * * Value List Type: List
+        * * Possible Values 
+        *   * Class
+        *   * Interface
+        *   * Variable
+        *   * Type
+        *   * Module
+        *   * Function
+        * * Description: Type of the library item for example Class, Interface, etc.
+        */
+        get Type(): 'Class' | 'Interface' | 'Variable' | 'Type' | 'Module' | 'Function' {  
+            return this.Get('Type');
+        }
+        set Type(value: 'Class' | 'Interface' | 'Variable' | 'Type' | 'Module' | 'Function') {
+            this.Set('Type', value);
+        }
+        /**
+        * * Field Name: CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()
+        */
+        get CreatedAt(): Date {  
+            return this.Get('CreatedAt');
+        }
+        
+        /**
+        * * Field Name: UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()
+        */
+        get UpdatedAt(): Date {  
+            return this.Get('UpdatedAt');
+        }
+        
+        /**
+        * * Field Name: Library
+        * * Display Name: Library
+        * * SQL Data Type: nvarchar(255)
+        */
+        get Library(): string {  
+            return this.Get('Library');
         }
         
 

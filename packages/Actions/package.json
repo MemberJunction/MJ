@@ -23,6 +23,7 @@
     "@memberjunction/core": "1.7.1",
     "@memberjunction/core-entities": "1.7.1",
     "@memberjunction/ai": "1.7.1",
-    "@memberjunction/aiengine": "1.7.1"
+    "@memberjunction/aiengine": "1.7.1",
+    "@memberjunction/doc-utils": "1.7.1"
   }
 }

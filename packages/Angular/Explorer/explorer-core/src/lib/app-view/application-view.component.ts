@@ -78,7 +78,9 @@ export class ApplicationViewComponent extends BaseBrowserComponent implements On
                   OrderBy: 'Sequence'
                 })
                 if (userAppEntities && userAppEntities.Success) {
-                    this.SelectedAppEntities = this.AllAppEntities.filter(e => userAppEntities.Results.some(uae => uae.EntityID === e.ID))
+                    this.SelectedAppEntities = this.AllAppEntities.filter(e => userAppEntities.Results.some(uae => uae.EntityID === e.ID));
+                    this.SelectedAppEntities = this.sortAppEntites(this.SelectedAppEntities);
+                    
                     this.UnselectedAppEntities = this.AllAppEntities.filter(e => !this.SelectedAppEntities.some(sa => sa.ID === e.ID));
 
                     // special case - if we have NO user app entities and the application has entities that are marked as DefaultForNewUser=1 we will add them now
@@ -342,6 +344,18 @@ export class ApplicationViewComponent extends BaseBrowserComponent implements On
         event.preventDefault();
         // tell the router to go to /home
         this.router.navigate(['home']);
+    }
+
+    sortAppEntites(entities: EntityEntity[]): EntityEntity[] {
+        entities.sort(function(a, b){
+            const aName: string = a.Name.toLowerCase();
+            const bName: string = b.Name.toLowerCase();
+            if(aName < bName) { return -1; }
+            if(aName > bName) { return 1; }
+            return 0;
+        });
+
+        return entities;
     }
 } 
  
