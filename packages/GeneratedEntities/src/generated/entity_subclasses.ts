@@ -2,6 +2,225 @@ import { BaseEntity, KeyValuePair, EntitySaveOptions, CompositeKey } from "@memb
 import { RegisterClass } from "@memberjunction/global";
     
     /**
+     * Thread Details - strongly typed entity sub-class
+     * * Schema: dbo
+     * * Base Table: ThreadDetail
+     * * Base View: vwThreadDetails
+     * * Primary Key: ID
+     * @extends {BaseEntity}
+     * @class
+     * @public
+     */
+    @RegisterClass(BaseEntity, 'Thread Details')
+    export class ThreadDetailEntity extends BaseEntity {
+        /**
+        * Loads the Thread Details record from the database
+        * @param ID: number - primary key value to load the Thread Details record.
+        * @param EntityRelationshipsToLoad - (optional) the relationships to load
+        * @returns {Promise<boolean>} - true if successful, false otherwise
+        * @public
+        * @async
+        * @memberof ThreadDetailEntity
+        * @method
+        * @override
+        */      
+        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+        }
+            
+        /**
+        * Thread Details - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
+        * @public
+        * @method
+        * @override
+        * @memberof ThreadDetailEntity
+        * @throws {Error} - Delete is not allowed for Thread Details, to enable it set AllowDeleteAPI to 1 in the database.
+        */
+        public async Delete(): Promise<boolean> {
+            throw new Error('Delete is not allowed for Thread Details, to enable it set AllowDeleteAPI to 1 in the database.');
+        } 
+            
+            /**
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: int
+        */
+        get ID(): number {  
+            return this.Get('ID');
+        }
+        
+        /**
+        * * Field Name: ThreadID
+        * * Display Name: Thread ID
+        * * SQL Data Type: int
+        * * Related Entity/Foreign Key: Threads (vwThreads.ID)
+        */
+        get ThreadID(): number {  
+            return this.Get('ThreadID');
+        }
+        set ThreadID(value: number) {
+            this.Set('ThreadID', value);
+        }
+        /**
+        * * Field Name: UserID
+        * * Display Name: User ID
+        * * SQL Data Type: int
+        */
+        get UserID(): number | null {  
+            return this.Get('UserID');
+        }
+        set UserID(value: number | null) {
+            this.Set('UserID', value);
+        }
+        /**
+        * * Field Name: UserIP
+        * * Display Name: User IP
+        * * SQL Data Type: nvarchar(50)
+        */
+        get UserIP(): string | null {  
+            return this.Get('UserIP');
+        }
+        set UserIP(value: string | null) {
+            this.Set('UserIP', value);
+        }
+        /**
+        * * Field Name: Created
+        * * Display Name: Created
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()
+        */
+        get Created(): Date {  
+            return this.Get('Created');
+        }
+        set Created(value: Date) {
+            this.Set('Created', value);
+        }
+        /**
+        * * Field Name: Updated
+        * * Display Name: Updated
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()
+        */
+        get Updated(): Date {  
+            return this.Get('Updated');
+        }
+        set Updated(value: Date) {
+            this.Set('Updated', value);
+        }
+        /**
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: PENDING
+        */
+        get Status(): string {  
+            return this.Get('Status');
+        }
+        set Status(value: string) {
+            this.Set('Status', value);
+        }
+        /**
+        * * Field Name: StatusMessage
+        * * Display Name: Status Message
+        * * SQL Data Type: nvarchar(MAX)
+        */
+        get StatusMessage(): string | null {  
+            return this.Get('StatusMessage');
+        }
+        set StatusMessage(value: string | null) {
+            this.Set('StatusMessage', value);
+        }
+        /**
+        * * Field Name: Response
+        * * Display Name: Response
+        * * SQL Data Type: nvarchar(MAX)
+        */
+        get Response(): string | null {  
+            return this.Get('Response');
+        }
+        set Response(value: string | null) {
+            this.Set('Response', value);
+        }
+        /**
+        * * Field Name: Thread
+        * * Display Name: Thread
+        * * SQL Data Type: nvarchar(200)
+        * * Default Value: null
+        */
+        get Thread(): string {  
+            return this.Get('Thread');
+        }
+        
+
+    }
+        
+    /**
+     * Threads - strongly typed entity sub-class
+     * * Schema: dbo
+     * * Base Table: Thread
+     * * Base View: vwThreads
+     * * Primary Key: ID
+     * @extends {BaseEntity}
+     * @class
+     * @public
+     */
+    @RegisterClass(BaseEntity, 'Threads')
+    export class ThreadEntity extends BaseEntity {
+        /**
+        * Loads the Threads record from the database
+        * @param ID: number - primary key value to load the Threads record.
+        * @param EntityRelationshipsToLoad - (optional) the relationships to load
+        * @returns {Promise<boolean>} - true if successful, false otherwise
+        * @public
+        * @async
+        * @memberof ThreadEntity
+        * @method
+        * @override
+        */      
+        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+        }
+            
+        /**
+        * Threads - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
+        * @public
+        * @method
+        * @override
+        * @memberof ThreadEntity
+        * @throws {Error} - Delete is not allowed for Threads, to enable it set AllowDeleteAPI to 1 in the database.
+        */
+        public async Delete(): Promise<boolean> {
+            throw new Error('Delete is not allowed for Threads, to enable it set AllowDeleteAPI to 1 in the database.');
+        } 
+            
+            /**
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: int
+        */
+        get ID(): number {  
+            return this.Get('ID');
+        }
+        
+        /**
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(200)
+        */
+        get Name(): string {  
+            return this.Get('Name');
+        }
+        set Name(value: string) {
+            this.Set('Name', value);
+        }
+
+    }
+        
+    /**
      * Industries - strongly typed entity sub-class
      * * Schema: reference
      * * Base Table: Industry
