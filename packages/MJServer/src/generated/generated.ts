@@ -2,7 +2,7 @@
 * ALL ENTITIES - TypeGraphQL Type Class Definition - AUTO GENERATED FILE
 * Generated Entities and Resolvers for Server
 * 
-* GENERATED: 6/14/2024, 12:27:32 PM
+* GENERATED: 6/16/2024, 11:57:35 AM
 * 
 *   >>> DO NOT MODIFY THIS FILE!!!!!!!!!!!!
 *   >>> YOUR CHANGES WILL BE OVERWRITTEN
@@ -58,6 +58,14 @@ export class Company_ {
     @Field({nullable: true}) 
     @MaxLength(510)
     Domain?: string;
+          
+    @Field() 
+    @MaxLength(8)
+    __mj_CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(8)
+    __mj_UpdatedAt: Date;
         
     @Field(() => [mj_core_schema_server_object_types.Employee_])
     EmployeesArray: mj_core_schema_server_object_types.Employee_[]; // Link to Employees
@@ -89,6 +97,12 @@ export class CreateCompanyInput {
 
     @Field({ nullable: true })
     Domain?: string;
+
+    @Field()
+    __mj_CreatedAt: Date;
+
+    @Field()
+    __mj_UpdatedAt: Date;
 }
     
         
@@ -114,6 +128,12 @@ export class UpdateCompanyInput {
 
     @Field({ nullable: true })
     Domain?: string;
+
+    @Field()
+    __mj_CreatedAt: Date;
+
+    @Field()
+    __mj_UpdatedAt: Date;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -277,6 +297,14 @@ export class Employee_ {
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
+          
+    @Field() 
+    @MaxLength(8)
+    __mj_CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(8)
+    __mj_UpdatedAt: Date;
           
     @Field({nullable: true}) 
     @MaxLength(162)
@@ -804,6 +832,14 @@ export class EmployeeRole_ {
     UpdatedAt: Date;
           
     @Field() 
+    @MaxLength(8)
+    __mj_CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(8)
+    __mj_UpdatedAt: Date;
+          
+    @Field() 
     @MaxLength(100)
     Role: string;
         
@@ -822,6 +858,12 @@ export class UpdateEmployeeRoleInput {
 
     @Field(() => Int)
     RoleID: number;
+
+    @Field()
+    __mj_CreatedAt: Date;
+
+    @Field()
+    __mj_UpdatedAt: Date;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -913,6 +955,14 @@ export class EmployeeSkill_ {
     UpdatedAt: Date;
           
     @Field() 
+    @MaxLength(8)
+    __mj_CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(8)
+    __mj_UpdatedAt: Date;
+          
+    @Field() 
     @MaxLength(100)
     Skill: string;
         
@@ -931,6 +981,12 @@ export class UpdateEmployeeSkillInput {
 
     @Field(() => Int)
     SkillID: number;
+
+    @Field()
+    __mj_CreatedAt: Date;
+
+    @Field()
+    __mj_UpdatedAt: Date;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -2023,6 +2079,14 @@ export class EntityField_ {
     UpdatedAt: Date;
           
     @Field() 
+    @MaxLength(8)
+    __mj_CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(8)
+    __mj_UpdatedAt: Date;
+          
+    @Field() 
     @MaxLength(510)
     Entity: string;
           
@@ -2371,7 +2435,7 @@ export class Entity_ {
     @Field(() => Boolean) 
     VirtualEntity: boolean;
           
-    @Field(() => Boolean, {description: 'When set to 1, changes made via the MemberJunction architecture will result in tracking records being created in the RecordChange table'}) 
+    @Field(() => Boolean, {description: 'When set to 1, changes made via the MemberJunction architecture will result in tracking records being created in the RecordChange table. In addition, when turned on CodeGen will ensure that your table has two fields: __mj_CreatedAt and __mj_UpdatedAt which are special fields used in conjunction with the RecordChange table to track changes to rows in your entity.'}) 
     TrackRecordChanges: boolean;
           
     @Field(() => Boolean, {description: 'When set to 1, accessing a record by an end-user will result in an Audit Log record being created'}) 
@@ -2482,6 +2546,14 @@ export class Entity_ {
     @Field({nullable: true, description: 'Optional, specify an icon (CSS Class) for each entity for display in the UI'}) 
     @MaxLength(1000)
     Icon?: string;
+          
+    @Field() 
+    @MaxLength(8)
+    __mj_CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(8)
+    __mj_UpdatedAt: Date;
           
     @Field({nullable: true}) 
     CodeName?: string;
@@ -3300,6 +3372,14 @@ export class User_ {
     @MaxLength(8)
     UpdatedAt: Date;
           
+    @Field() 
+    @MaxLength(8)
+    __mj_CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(8)
+    __mj_UpdatedAt: Date;
+          
     @Field({nullable: true}) 
     @MaxLength(202)
     FirstLast?: string;
@@ -3894,6 +3974,14 @@ export class EntityRelationship_ {
     UpdatedAt: Date;
           
     @Field() 
+    @MaxLength(8)
+    __mj_CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(8)
+    __mj_UpdatedAt: Date;
+          
+    @Field() 
     @MaxLength(510)
     Entity: string;
           
@@ -4337,6 +4425,14 @@ export class UserView_ {
     @Field({nullable: true}) 
     @MaxLength(8)
     UpdatedAt?: Date;
+          
+    @Field() 
+    @MaxLength(8)
+    __mj_CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(8)
+    __mj_UpdatedAt: Date;
           
     @Field() 
     @MaxLength(200)
@@ -5081,6 +5177,14 @@ export class Application_ {
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
+          
+    @Field() 
+    @MaxLength(8)
+    __mj_CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(8)
+    __mj_UpdatedAt: Date;
         
     @Field(() => [mj_core_schema_server_object_types.ApplicationEntity_])
     ApplicationEntitiesArray: mj_core_schema_server_object_types.ApplicationEntity_[]; // Link to ApplicationEntities
@@ -5109,6 +5213,12 @@ export class CreateApplicationInput {
 
     @Field(() => Boolean)
     DefaultForNewUser: boolean;
+
+    @Field()
+    __mj_CreatedAt: Date;
+
+    @Field()
+    __mj_UpdatedAt: Date;
 }
     
         
@@ -5131,6 +5241,12 @@ export class UpdateApplicationInput {
 
     @Field(() => Boolean)
     DefaultForNewUser: boolean;
+
+    @Field()
+    __mj_CreatedAt: Date;
+
+    @Field()
+    __mj_UpdatedAt: Date;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -5465,6 +5581,14 @@ export class EntityPermission_ {
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
+          
+    @Field() 
+    @MaxLength(8)
+    __mj_CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(8)
+    __mj_UpdatedAt: Date;
           
     @Field() 
     @MaxLength(510)
@@ -8219,6 +8343,14 @@ export class EntityFieldValue_ {
     UpdatedAt: Date;
           
     @Field() 
+    @MaxLength(8)
+    __mj_CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(8)
+    __mj_UpdatedAt: Date;
+          
+    @Field() 
     @MaxLength(510)
     EntityField: string;
           
@@ -8957,6 +9089,14 @@ export class EntityAIAction_ {
           
     @Field({nullable: true}) 
     Comments?: string;
+          
+    @Field() 
+    @MaxLength(8)
+    __mj_CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(8)
+    __mj_UpdatedAt: Date;
           
     @Field() 
     @MaxLength(510)
@@ -13793,6 +13933,14 @@ export class EntityDocumentType_ {
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
+          
+    @Field() 
+    @MaxLength(8)
+    __mj_CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(8)
+    __mj_UpdatedAt: Date;
         
     @Field(() => [mj_core_schema_server_object_types.EntityDocument_])
     EntityDocumentsArray: mj_core_schema_server_object_types.EntityDocument_[]; // Link to EntityDocuments
@@ -13940,6 +14088,14 @@ export class EntityDocumentRun_ {
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
+          
+    @Field() 
+    @MaxLength(8)
+    __mj_CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(8)
+    __mj_UpdatedAt: Date;
           
     @Field() 
     @MaxLength(500)
@@ -14274,6 +14430,14 @@ export class EntityRecordDocument_ {
           
     @Field(() => Int) 
     EntityDocumentID: number;
+          
+    @Field() 
+    @MaxLength(8)
+    __mj_CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(8)
+    __mj_UpdatedAt: Date;
         
 }
         
@@ -14460,6 +14624,14 @@ export class EntityDocument_ {
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
+          
+    @Field() 
+    @MaxLength(8)
+    __mj_CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(8)
+    __mj_UpdatedAt: Date;
           
     @Field() 
     @MaxLength(510)
@@ -16703,6 +16875,14 @@ export class EntityDocumentSetting_ {
     UpdatedAt: Date;
           
     @Field() 
+    @MaxLength(8)
+    __mj_CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(8)
+    __mj_UpdatedAt: Date;
+          
+    @Field() 
     @MaxLength(500)
     EntityDocument: string;
         
@@ -16851,6 +17031,14 @@ export class EntitySetting_ {
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
+          
+    @Field() 
+    @MaxLength(8)
+    __mj_CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(8)
+    __mj_UpdatedAt: Date;
           
     @Field() 
     @MaxLength(510)
@@ -17427,6 +17615,14 @@ export class EntityBehavior_ {
     UpdatedAt: Date;
           
     @Field() 
+    @MaxLength(8)
+    __mj_CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(8)
+    __mj_UpdatedAt: Date;
+          
+    @Field() 
     @MaxLength(510)
     Entity: string;
         
@@ -17593,6 +17789,14 @@ export class EntityBehaviorType_ {
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
+          
+    @Field() 
+    @MaxLength(8)
+    __mj_CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(8)
+    __mj_UpdatedAt: Date;
         
     @Field(() => [mj_core_schema_server_object_types.EntityBehavior_])
     EntityBehaviorsArray: mj_core_schema_server_object_types.EntityBehavior_[]; // Link to EntityBehaviors
@@ -17899,6 +18103,14 @@ export class ActionCategory_ {
     @MaxLength(8)
     UpdatedAt: Date;
           
+    @Field() 
+    @MaxLength(8)
+    __mj_CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(8)
+    __mj_UpdatedAt: Date;
+          
     @Field({nullable: true}) 
     @MaxLength(510)
     Parent?: string;
@@ -17927,6 +18139,12 @@ export class CreateActionCategoryInput {
 
     @Field()
     Status: string;
+
+    @Field()
+    __mj_CreatedAt: Date;
+
+    @Field()
+    __mj_UpdatedAt: Date;
 }
     
         
@@ -17949,6 +18167,12 @@ export class UpdateActionCategoryInput {
 
     @Field()
     Status: string;
+
+    @Field()
+    __mj_CreatedAt: Date;
+
+    @Field()
+    __mj_UpdatedAt: Date;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -18073,6 +18297,14 @@ export class EntityAction_ {
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
+          
+    @Field() 
+    @MaxLength(8)
+    __mj_CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(8)
+    __mj_UpdatedAt: Date;
           
     @Field() 
     @MaxLength(510)
@@ -18246,6 +18478,14 @@ export class EntityActionInvocation_ {
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
+          
+    @Field() 
+    @MaxLength(8)
+    __mj_CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(8)
+    __mj_UpdatedAt: Date;
           
     @Field() 
     @MaxLength(510)
@@ -18540,6 +18780,14 @@ export class EntityActionInvocationType_ {
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
+          
+    @Field() 
+    @MaxLength(8)
+    __mj_CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(8)
+    __mj_UpdatedAt: Date;
         
     @Field(() => [mj_core_schema_server_object_types.EntityActionInvocation_])
     EntityActionInvocationsArray: mj_core_schema_server_object_types.EntityActionInvocation_[]; // Link to EntityActionInvocations
@@ -18728,6 +18976,14 @@ export class Action_ {
     @MaxLength(8)
     UpdatedAt: Date;
           
+    @Field() 
+    @MaxLength(8)
+    __mj_CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(8)
+    __mj_UpdatedAt: Date;
+          
     @Field({nullable: true}) 
     @MaxLength(510)
     Category?: string;
@@ -18802,6 +19058,12 @@ export class CreateActionInput {
 
     @Field()
     Status: string;
+
+    @Field()
+    __mj_CreatedAt: Date;
+
+    @Field()
+    __mj_UpdatedAt: Date;
 }
     
         
@@ -18851,6 +19113,12 @@ export class UpdateActionInput {
 
     @Field()
     Status: string;
+
+    @Field()
+    __mj_CreatedAt: Date;
+
+    @Field()
+    __mj_UpdatedAt: Date;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -19018,6 +19286,14 @@ export class EntityActionFilter_ {
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
+          
+    @Field() 
+    @MaxLength(8)
+    __mj_CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(8)
+    __mj_UpdatedAt: Date;
         
 }
         
@@ -19169,6 +19445,14 @@ export class ActionFilter_ {
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
+          
+    @Field() 
+    @MaxLength(8)
+    __mj_CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(8)
+    __mj_UpdatedAt: Date;
         
     @Field(() => [mj_core_schema_server_object_types.EntityActionFilter_])
     EntityActionFiltersArray: mj_core_schema_server_object_types.EntityActionFilter_[]; // Link to EntityActionFilters
@@ -19191,6 +19475,12 @@ export class CreateActionFilterInput {
 
     @Field({ nullable: true })
     CodeExplanation?: string;
+
+    @Field()
+    __mj_CreatedAt: Date;
+
+    @Field()
+    __mj_UpdatedAt: Date;
 }
     
         
@@ -19213,6 +19503,12 @@ export class UpdateActionFilterInput {
 
     @Field({ nullable: true })
     CodeExplanation?: string;
+
+    @Field()
+    __mj_CreatedAt: Date;
+
+    @Field()
+    __mj_UpdatedAt: Date;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -23050,6 +23346,14 @@ export class EntityCommunicationMessageType_ {
     UpdatedAt: Date;
           
     @Field() 
+    @MaxLength(8)
+    __mj_CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(8)
+    __mj_UpdatedAt: Date;
+          
+    @Field() 
     @MaxLength(510)
     Entity: string;
           
@@ -23204,6 +23508,14 @@ export class EntityCommunicationField_ {
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
+          
+    @Field() 
+    @MaxLength(8)
+    __mj_CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(8)
+    __mj_UpdatedAt: Date;
         
 }
         

@@ -147,7 +147,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: Thread
         * * Display Name: Thread
         * * SQL Data Type: nvarchar(200)
-        * * Default Value: null
         */
         get Thread(): string {  
             return this.Get('Thread');

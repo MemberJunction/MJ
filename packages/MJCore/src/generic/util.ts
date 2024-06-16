@@ -195,3 +195,74 @@ export function Concurrent<V>(concurrency: number, funcs: (() => Promise<V>)[]):
     }
   });
 }
+
+/**
+ * The DBMS may store the default value for a column with extra parens, for example ((1)) or (getdate()) or (('Pending')) or (('Active')) and in addition for unicode characters
+ * it may prefix the value with an N, for example N'Active'. This function will strip out the extra parens and the N prefix if it exists and return the actual default value
+ * @param storedDefaultValue - The default value as stored in the DBMS 
+ */
+export function ExtractActualDefaultValue(storedDefaultValue: string): string {
+    if (!storedDefaultValue || storedDefaultValue.trim().length === 0)
+        return storedDefaultValue;
+
+    const noParens = StripContainingParens(storedDefaultValue);
+    const unicodeStripped = StripUnicodePrefix(noParens);
+    const finalValue = StripSingleQuotes(unicodeStripped);
+
+    return finalValue;
+}
+
+
+/**
+ * Strips out the N prefix and single quotes from a string if they exist so that a value like
+ * N'Active' becomes Active
+ */
+export function StripUnicodePrefix(value: string): string {
+    if (!value){
+        return value;
+    }
+
+    value = value.trim(); // trim it first
+
+    // check to see if the first character is an N and if the character after
+    // that as well as the last character are single quotes, if so, strip all of those out
+    if (value && value.toUpperCase().startsWith('N') &&
+        value.length > 1 && value.charAt(1) === '\'' && 
+        value.charAt(value.length - 1) === '\'') {
+        return value.substring(2, value.length - 1); // strip out the N and the single quotes for example N'Active' becomes Active
+    }
+
+    return value;
+}
+
+/**
+ * Strips out single quotes from a string if they exist so that a value like
+ * 'Active' becomes Active
+ * @param value 
+ * @returns 
+ */
+export function StripSingleQuotes(value: string): string {
+    if (!value) return value;
+
+    const val = value.trim(); // trim it first
+
+    // now check for symmetrical single quotes and remove them
+    // this is for cases like 'Pending' or 'Active' which are stored in the DB as ('Pending') or ('Active')
+    return val.startsWith("'") && val.endsWith("'") ? val.substring(1, val.length - 1) : val;
+}
+
+
+/**
+ * Strips out any number of symmetric containing parens from a string, for example ((0)) becomes 0
+ * and ('Active') becomes 'Active'
+ * @param value 
+ * @returns 
+ */
+export function StripContainingParens(value: string): string {
+    if (value.startsWith('(') && value.endsWith(')')) {
+        // recursive call so if we have ((0)) we keep stripping parens until we get to inner value
+        // could be something like (getdate()) in which case we'll only strip the SYMMENTRIC parens
+        return StripContainingParens(value.substring(1, value.length - 1));
+    }
+    return value;
+}
