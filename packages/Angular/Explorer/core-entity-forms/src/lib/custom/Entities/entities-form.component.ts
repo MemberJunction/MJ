@@ -10,7 +10,7 @@ import { EntityFormComponent } from '../../generated/Entities/Entity/entity.form
     templateUrl: './entities-form.component.html',
     styleUrls: ['../../../shared/form-styles.css']
 })
-export class CustomEntityFormComponent extends EntityFormComponent {
+export class EntityFormExtendedComponent extends EntityFormComponent {
     public record!: EntityEntity;
 } 
  

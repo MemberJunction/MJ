@@ -4688,6 +4688,7 @@ import { RegisterClass } from "@memberjunction/global";
         
         /**
         * * Field Name: Entity
+        * * Display Name: Entity
         * * SQL Data Type: nvarchar(255)
         */
         get Entity(): string {  
@@ -6058,24 +6059,34 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Type
         * * SQL Data Type: nvarchar(20)
         * * Default Value: Create
+        * * Value List Type: List
+        * * Possible Values 
+        *   * Create
+        *   * Update
+        *   * Delete
         * * Description: Create, Update, or Delete
         */
-        get Type(): string {  
+        get Type(): 'Create' | 'Update' | 'Delete' {  
             return this.Get('Type');
         }
-        set Type(value: string) {
+        set Type(value: 'Create' | 'Update' | 'Delete') {
             this.Set('Type', value);
         }
         /**
         * * Field Name: Source
         * * Display Name: Source
         * * SQL Data Type: nvarchar(20)
+        * * Default Value: Internal
+        * * Value List Type: List
+        * * Possible Values 
+        *   * Internal
+        *   * External
         * * Description: Internal or External
         */
-        get Source(): string | null {  
+        get Source(): 'Internal' | 'External' {  
             return this.Get('Source');
         }
-        set Source(value: string | null) {
+        set Source(value: 'Internal' | 'External') {
             this.Set('Source', value);
         }
         /**
@@ -6148,13 +6159,26 @@ import { RegisterClass } from "@memberjunction/global";
         * * Possible Values 
         *   * Pending
         *   * Complete
+        *   * Error
         * * Description: For internal record changes generated within MJ, the status is immediately Complete. For external changes that are detected, the workflow starts off as Pending, then In Progress and finally either Complete or Error
         */
-        get Status(): 'Pending' | 'Complete' {  
+        get Status(): 'Pending' | 'Complete' | 'Error' {  
             return this.Get('Status');
         }
-        set Status(value: 'Pending' | 'Complete') {
+        set Status(value: 'Pending' | 'Complete' | 'Error') {
             this.Set('Status', value);
+        }
+        /**
+        * * Field Name: ReplayRunID
+        * * Display Name: Replay Run ID
+        * * SQL Data Type: int
+        * * Description: For external changes only, this run ID is the link to the replay run that the change record was part of
+        */
+        get ReplayRunID(): number | null {  
+            return this.Get('ReplayRunID');
+        }
+        set ReplayRunID(value: number | null) {
+            this.Set('ReplayRunID', value);
         }
         /**
         * * Field Name: ErrorLog
@@ -17352,18 +17376,6 @@ import { RegisterClass } from "@memberjunction/global";
             this.Set('Status', value);
         }
         /**
-        * * Field Name: ExportedItems
-        * * Display Name: Exported Items
-        * * SQL Data Type: nvarchar(MAX)
-        * * Description: List of classes and functions exported by the library.
-        */
-        get ExportedItems(): string | null {  
-            return this.Get('ExportedItems');
-        }
-        set ExportedItems(value: string | null) {
-            this.Set('ExportedItems', value);
-        }
-        /**
         * * Field Name: TypeDefinitions
         * * Display Name: Type Definitions
         * * SQL Data Type: nvarchar(MAX)
@@ -17391,7 +17403,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -19860,6 +19871,270 @@ import { RegisterClass } from "@memberjunction/global";
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
+        }
+        
+
+    }
+        
+    /**
+     * Record Change Replay Runs - strongly typed entity sub-class
+     * * Schema: __mj
+     * * Base Table: RecordChangeReplayRun
+     * * Base View: vwRecordChangeReplayRuns
+     * * @description Table to track the runs of replaying external record changes
+     * * Primary Key: ID
+     * @extends {BaseEntity}
+     * @class
+     * @public
+     */
+    @RegisterClass(BaseEntity, 'Record Change Replay Runs')
+    export class RecordChangeReplayRunEntity extends BaseEntity {
+        /**
+        * Loads the Record Change Replay Runs record from the database
+        * @param ID: number - primary key value to load the Record Change Replay Runs record.
+        * @param EntityRelationshipsToLoad - (optional) the relationships to load
+        * @returns {Promise<boolean>} - true if successful, false otherwise
+        * @public
+        * @async
+        * @memberof RecordChangeReplayRunEntity
+        * @method
+        * @override
+        */      
+        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+        }
+            
+        /**
+        * Record Change Replay Runs - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
+        * @public
+        * @method
+        * @override
+        * @memberof RecordChangeReplayRunEntity
+        * @throws {Error} - Delete is not allowed for Record Change Replay Runs, to enable it set AllowDeleteAPI to 1 in the database.
+        */
+        public async Delete(): Promise<boolean> {
+            throw new Error('Delete is not allowed for Record Change Replay Runs, to enable it set AllowDeleteAPI to 1 in the database.');
+        } 
+            
+            /**
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: int
+        */
+        get ID(): number {  
+            return this.Get('ID');
+        }
+        
+        /**
+        * * Field Name: StartedAt
+        * * Display Name: Started At
+        * * SQL Data Type: datetime
+        * * Description: Timestamp when the replay run started
+        */
+        get StartedAt(): Date {  
+            return this.Get('StartedAt');
+        }
+        set StartedAt(value: Date) {
+            this.Set('StartedAt', value);
+        }
+        /**
+        * * Field Name: EndedAt
+        * * Display Name: Ended At
+        * * SQL Data Type: datetime
+        * * Description: Timestamp when the replay run ended
+        */
+        get EndedAt(): Date | null {  
+            return this.Get('EndedAt');
+        }
+        set EndedAt(value: Date | null) {
+            this.Set('EndedAt', value);
+        }
+        /**
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(50)
+        * * Value List Type: List
+        * * Possible Values 
+        *   * Pending
+        *   * In Progress
+        *   * Complete
+        *   * Error
+        * * Description: Status of the replay run (Pending, In Progress, Complete, Error)
+        */
+        get Status(): 'Pending' | 'In Progress' | 'Complete' | 'Error' {  
+            return this.Get('Status');
+        }
+        set Status(value: 'Pending' | 'In Progress' | 'Complete' | 'Error') {
+            this.Set('Status', value);
+        }
+        /**
+        * * Field Name: UserID
+        * * Display Name: User ID
+        * * SQL Data Type: int
+        * * Related Entity/Foreign Key: Users (vwUsers.ID)
+        */
+        get UserID(): number {  
+            return this.Get('UserID');
+        }
+        set UserID(value: number) {
+            this.Set('UserID', value);
+        }
+        /**
+        * * Field Name: CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()
+        */
+        get CreatedAt(): Date {  
+            return this.Get('CreatedAt');
+        }
+        
+        /**
+        * * Field Name: UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()
+        */
+        get UpdatedAt(): Date {  
+            return this.Get('UpdatedAt');
+        }
+        
+        /**
+        * * Field Name: User
+        * * Display Name: User
+        * * SQL Data Type: nvarchar(100)
+        */
+        get User(): string {  
+            return this.Get('User');
+        }
+        
+
+    }
+        
+    /**
+     * Library Items - strongly typed entity sub-class
+     * * Schema: __mj
+     * * Base Table: LibraryItem
+     * * Base View: vwLibraryItems
+     * * @description Table to store individual library items
+     * * Primary Key: ID
+     * @extends {BaseEntity}
+     * @class
+     * @public
+     */
+    @RegisterClass(BaseEntity, 'Library Items')
+    export class LibraryItemEntity extends BaseEntity {
+        /**
+        * Loads the Library Items record from the database
+        * @param ID: number - primary key value to load the Library Items record.
+        * @param EntityRelationshipsToLoad - (optional) the relationships to load
+        * @returns {Promise<boolean>} - true if successful, false otherwise
+        * @public
+        * @async
+        * @memberof LibraryItemEntity
+        * @method
+        * @override
+        */      
+        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+        }
+            
+        /**
+        * Library Items - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
+        * @public
+        * @method
+        * @override
+        * @memberof LibraryItemEntity
+        * @throws {Error} - Delete is not allowed for Library Items, to enable it set AllowDeleteAPI to 1 in the database.
+        */
+        public async Delete(): Promise<boolean> {
+            throw new Error('Delete is not allowed for Library Items, to enable it set AllowDeleteAPI to 1 in the database.');
+        } 
+            
+            /**
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: int
+        * * Description: Primary key of the LibraryItem table.
+        */
+        get ID(): number {  
+            return this.Get('ID');
+        }
+        
+        /**
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(255)
+        */
+        get Name(): string {  
+            return this.Get('Name');
+        }
+        set Name(value: string) {
+            this.Set('Name', value);
+        }
+        /**
+        * * Field Name: LibraryID
+        * * Display Name: Library ID
+        * * SQL Data Type: int
+        * * Related Entity/Foreign Key: Libraries (vwLibraries.ID)
+        */
+        get LibraryID(): number {  
+            return this.Get('LibraryID');
+        }
+        set LibraryID(value: number) {
+            this.Set('LibraryID', value);
+        }
+        /**
+        * * Field Name: Type
+        * * Display Name: Type
+        * * SQL Data Type: nvarchar(50)
+        * * Value List Type: List
+        * * Possible Values 
+        *   * Class
+        *   * Interface
+        *   * Variable
+        *   * Type
+        *   * Module
+        *   * Function
+        * * Description: Type of the library item for example Class, Interface, etc.
+        */
+        get Type(): 'Class' | 'Interface' | 'Variable' | 'Type' | 'Module' | 'Function' {  
+            return this.Get('Type');
+        }
+        set Type(value: 'Class' | 'Interface' | 'Variable' | 'Type' | 'Module' | 'Function') {
+            this.Set('Type', value);
+        }
+        /**
+        * * Field Name: CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()
+        */
+        get CreatedAt(): Date {  
+            return this.Get('CreatedAt');
+        }
+        
+        /**
+        * * Field Name: UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()
+        */
+        get UpdatedAt(): Date {  
+            return this.Get('UpdatedAt');
+        }
+        
+        /**
+        * * Field Name: Library
+        * * Display Name: Library
+        * * SQL Data Type: nvarchar(255)
+        */
+        get Library(): string {  
+            return this.Get('Library');
         }
         
 

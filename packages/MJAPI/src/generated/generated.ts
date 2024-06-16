@@ -2,7 +2,7 @@
 * ALL ENTITIES - TypeGraphQL Type Class Definition - AUTO GENERATED FILE
 * Generated Entities and Resolvers for Server
 * 
-* GENERATED: 6/12/2024, 12:19:28 AM
+* GENERATED: 6/14/2024, 12:27:32 PM
 * 
 *   >>> DO NOT MODIFY THIS FILE!!!!!!!!!!!!
 *   >>> YOUR CHANGES WILL BE OVERWRITTEN
@@ -19,8 +19,311 @@ import { DataSource } from 'typeorm';
 
 import * as mj_core_schema_server_object_types from '@memberjunction/server'
 
-import { IndustryEntity, ContactRoleEntity, ContactLevelEntity, AccountEntity, ContactEntity, DealStageEntity, ActivityEntity, DealForecastCategoryEntity, DealEntity, DealTypeEntity, InvoiceEntity, ActivityAttachmentEntity, PaymentTermsTypeEntity, InvoiceStatusTypeEntity, SalesLineItemEntity, SalesTransactionEntity, CustomerAddress__client_financeEntity, Item__client_financeEntity, Customer__client_financeEntity, OrganizationLinkEntity, PersonLinkEntity, Account__client_crmEntity, StringMapEntity, ProductPriceLevelEntity, client_membershipEntity, Contact__client_crmEntity, UoMEntity, SalesOrderEntity, SalesOrderDetailEntity, ProductEntity, CustomerAddressEntity, SalesLineItem__client_membershipEntity, ItemEntity, CustomerEntity, SalesTransaction__client_membershipEntity } from 'mj_generatedentities';
+import { ThreadDetailEntity, ThreadEntity, IndustryEntity, ContactRoleEntity, ContactLevelEntity, AccountEntity, ContactEntity, DealStageEntity, ActivityEntity, DealForecastCategoryEntity, DealEntity, DealTypeEntity, InvoiceEntity, ActivityAttachmentEntity, PaymentTermsTypeEntity, InvoiceStatusTypeEntity, SalesLineItemEntity, SalesTransactionEntity, CustomerAddress__client_financeEntity, Item__client_financeEntity, Customer__client_financeEntity, OrganizationLinkEntity, PersonLinkEntity, Account__client_crmEntity, StringMapEntity, ProductPriceLevelEntity, client_membershipEntity, Contact__client_crmEntity, UoMEntity, SalesOrderEntity, SalesOrderDetailEntity, ProductEntity, CustomerAddressEntity, SalesLineItem__client_membershipEntity, ItemEntity, CustomerEntity, SalesTransaction__client_membershipEntity } from 'mj_generatedentities';
     
+
+//****************************************************************************
+// ENTITY CLASS for Thread Details
+//****************************************************************************
+@ObjectType()
+export class ThreadDetail_ {  
+    @Field(() => Int) 
+    ID: number;
+          
+    @Field(() => Int) 
+    ThreadID: number;
+          
+    @Field(() => Int, {nullable: true}) 
+    UserID?: number;
+          
+    @Field({nullable: true}) 
+    @MaxLength(100)
+    UserIP?: string;
+          
+    @Field() 
+    @MaxLength(8)
+    Created: Date;
+          
+    @Field() 
+    @MaxLength(8)
+    Updated: Date;
+          
+    @Field() 
+    @MaxLength(40)
+    Status: string;
+          
+    @Field({nullable: true}) 
+    StatusMessage?: string;
+          
+    @Field({nullable: true}) 
+    Response?: string;
+          
+    @Field() 
+    @MaxLength(400)
+    Thread: string;
+        
+}
+        
+//****************************************************************************
+// INPUT TYPE for Thread Details   
+//****************************************************************************
+@InputType()
+export class CreateThreadDetailInput {
+    @Field(() => Int)
+    ThreadID: number;
+
+    @Field(() => Int, { nullable: true })
+    UserID?: number;
+
+    @Field({ nullable: true })
+    UserIP?: string;
+
+    @Field()
+    Created: Date;
+
+    @Field()
+    Updated: Date;
+
+    @Field()
+    Status: string;
+
+    @Field({ nullable: true })
+    StatusMessage?: string;
+
+    @Field({ nullable: true })
+    Response?: string;
+}
+    
+        
+//****************************************************************************
+// INPUT TYPE for Thread Details   
+//****************************************************************************
+@InputType()
+export class UpdateThreadDetailInput {
+    @Field(() => Int)
+    ID: number;
+
+    @Field(() => Int)
+    ThreadID: number;
+
+    @Field(() => Int, { nullable: true })
+    UserID?: number;
+
+    @Field({ nullable: true })
+    UserIP?: string;
+
+    @Field()
+    Created: Date;
+
+    @Field()
+    Updated: Date;
+
+    @Field()
+    Status: string;
+
+    @Field({ nullable: true })
+    StatusMessage?: string;
+
+    @Field({ nullable: true })
+    Response?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
+//****************************************************************************
+// RESOLVER for Thread Details
+//****************************************************************************
+@ObjectType()
+export class RunThreadDetailViewResult {
+    @Field(() => [ThreadDetail_])
+    Results: ThreadDetail_[];
+
+    @Field(() => Int, {nullable: true})
+    UserViewRunID?: number;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(ThreadDetail_)
+export class ThreadDetailResolver extends ResolverBase {
+    @Query(() => RunThreadDetailViewResult)
+    async RunThreadDetailViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunThreadDetailViewResult)
+    async RunThreadDetailViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunThreadDetailViewResult)
+    async RunThreadDetailDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        input.EntityName = 'Thread Details';
+        return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
+    }
+    @Query(() => ThreadDetail_, { nullable: true })
+    async ThreadDetail(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ThreadDetail_ | null> {
+        this.CheckUserReadPermissions('Thread Details', userPayload);
+        const sSQL = `SELECT * FROM [dbo].[vwThreadDetails] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Thread Details', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Thread Details', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
+    }
+    
+    @Mutation(() => ThreadDetail_)
+    async CreateThreadDetail(
+        @Arg('input', () => CreateThreadDetailInput) input: CreateThreadDetailInput,
+        @Ctx() { dataSource, userPayload }: AppContext, 
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.CreateRecord('Thread Details', input, dataSource, userPayload, pubSub)
+    }
+        
+    @Mutation(() => ThreadDetail_)
+    async UpdateThreadDetail(
+        @Arg('input', () => UpdateThreadDetailInput) input: UpdateThreadDetailInput,
+        @Ctx() { dataSource, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.UpdateRecord('Thread Details', input, dataSource, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for Threads
+//****************************************************************************
+@ObjectType()
+export class Thread_ {  
+    @Field(() => Int) 
+    ID: number;
+          
+    @Field() 
+    @MaxLength(400)
+    Name: string;
+        
+    @Field(() => [ThreadDetail_])
+    ThreadDetailsArray: ThreadDetail_[]; // Link to ThreadDetails
+    
+}
+        
+//****************************************************************************
+// INPUT TYPE for Threads   
+//****************************************************************************
+@InputType()
+export class CreateThreadInput {
+    @Field()
+    Name: string;
+}
+    
+        
+//****************************************************************************
+// INPUT TYPE for Threads   
+//****************************************************************************
+@InputType()
+export class UpdateThreadInput {
+    @Field(() => Int)
+    ID: number;
+
+    @Field()
+    Name: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
+//****************************************************************************
+// RESOLVER for Threads
+//****************************************************************************
+@ObjectType()
+export class RunThreadViewResult {
+    @Field(() => [Thread_])
+    Results: Thread_[];
+
+    @Field(() => Int, {nullable: true})
+    UserViewRunID?: number;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(Thread_)
+export class ThreadResolver extends ResolverBase {
+    @Query(() => RunThreadViewResult)
+    async RunThreadViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunThreadViewResult)
+    async RunThreadViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunThreadViewResult)
+    async RunThreadDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        input.EntityName = 'Threads';
+        return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
+    }
+    @Query(() => Thread_, { nullable: true })
+    async Thread(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<Thread_ | null> {
+        this.CheckUserReadPermissions('Threads', userPayload);
+        const sSQL = `SELECT * FROM [dbo].[vwThreads] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Threads', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Threads', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
+    }
+      
+    @FieldResolver(() => [ThreadDetail_])
+    async ThreadDetailsArray(@Root() thread_: Thread_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Thread Details', userPayload);
+        const sSQL = `SELECT * FROM [dbo].[vwThreadDetails] WHERE [ThreadID]=${thread_.ID} ` + this.getRowLevelSecurityWhereClause('Thread Details', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Thread Details', await dataSource.query(sSQL));
+        return result;
+    }
+        
+    @Mutation(() => Thread_)
+    async CreateThread(
+        @Arg('input', () => CreateThreadInput) input: CreateThreadInput,
+        @Ctx() { dataSource, userPayload }: AppContext, 
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.CreateRecord('Threads', input, dataSource, userPayload, pubSub)
+    }
+        
+    @Mutation(() => Thread_)
+    async UpdateThread(
+        @Arg('input', () => UpdateThreadInput) input: UpdateThreadInput,
+        @Ctx() { dataSource, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.UpdateRecord('Threads', input, dataSource, userPayload, pubSub);
+    }
+    
+}
 
 //****************************************************************************
 // ENTITY CLASS for Industries
@@ -17466,7 +17769,8 @@ export class Account__client_crm_ {
     @MaxLength(16)
     ModifiedBy?: string;
           
-    @Field(() => Int) 
+    @Field() 
+    @MaxLength(8)
     VersionNumber: number;
           
     @Field({nullable: true}) 
@@ -18423,7 +18727,7 @@ export class CreateAccount__client_crmInput {
     @Field({ nullable: true })
     ModifiedOn?: Date;
 
-    @Field(() => Int)
+    @Field()
     VersionNumber: number;
 
     @Field(() => Float, { nullable: true })
@@ -19174,7 +19478,7 @@ export class UpdateAccount__client_crmInput {
     @Field({ nullable: true })
     ModifiedOn?: Date;
 
-    @Field(() => Int)
+    @Field()
     VersionNumber: number;
 
     @Field(() => Float, { nullable: true })
@@ -19607,7 +19911,8 @@ export class StringMap_ {
     @Field(() => Int, {nullable: true}) 
     DisplayOrder?: number;
           
-    @Field(() => Int) 
+    @Field() 
+    @MaxLength(8)
     VersionNumber: number;
           
     @Field() 
@@ -19639,7 +19944,7 @@ export class CreateStringMapInput {
     @Field(() => Int, { nullable: true })
     DisplayOrder?: number;
 
-    @Field(() => Int)
+    @Field()
     VersionNumber: number;
 }
     
@@ -19667,7 +19972,7 @@ export class UpdateStringMapInput {
     @Field(() => Int, { nullable: true })
     DisplayOrder?: number;
 
-    @Field(() => Int)
+    @Field()
     VersionNumber: number;
 
     @Field()
@@ -19871,7 +20176,8 @@ export class ProductPriceLevel_ {
     @Field(() => Float, {nullable: true}) 
     RoundingOptionAmount?: number;
           
-    @Field(() => Int) 
+    @Field() 
+    @MaxLength(8)
     VersionNumber: number;
           
     @Field({nullable: true}) 
@@ -20001,7 +20307,7 @@ export class CreateProductPriceLevelInput {
     @Field(() => Float, { nullable: true })
     RoundingOptionAmount?: number;
 
-    @Field(() => Int)
+    @Field()
     VersionNumber: number;
 
     @Field(() => Float, { nullable: true })
@@ -20104,7 +20410,7 @@ export class UpdateProductPriceLevelInput {
     @Field(() => Float, { nullable: true })
     RoundingOptionAmount?: number;
 
-    @Field(() => Int)
+    @Field()
     VersionNumber: number;
 
     @Field(() => Float, { nullable: true })
@@ -20416,7 +20722,8 @@ export class client_membership_ {
     @Field(() => Int, {nullable: true}) 
     UTCConversionTimeZoneCode?: number;
           
-    @Field(() => Int) 
+    @Field() 
+    @MaxLength(8)
     VersionNumber: number;
           
     @Field({nullable: true}) 
@@ -20622,7 +20929,7 @@ export class Createclient_membershipInput {
     @Field(() => Int, { nullable: true })
     UTCConversionTimeZoneCode?: number;
 
-    @Field(() => Int)
+    @Field()
     VersionNumber: number;
 
     @Field({ nullable: true })
@@ -20794,7 +21101,7 @@ export class Updateclient_membershipInput {
     @Field(() => Int, { nullable: true })
     UTCConversionTimeZoneCode?: number;
 
-    @Field(() => Int)
+    @Field()
     VersionNumber: number;
 
     @Field({ nullable: true })
@@ -21604,7 +21911,8 @@ export class Contact__client_crm_ {
     @MaxLength(510)
     ChildrensNames?: string;
           
-    @Field(() => Int) 
+    @Field() 
+    @MaxLength(8)
     VersionNumber: number;
           
     @Field({nullable: true}) 
@@ -23205,7 +23513,7 @@ export class CreateContact__client_crmInput {
     @Field({ nullable: true })
     ChildrensNames?: string;
 
-    @Field(() => Int)
+    @Field()
     VersionNumber: number;
 
     @Field({ nullable: true })
@@ -24553,7 +24861,7 @@ export class UpdateContact__client_crmInput {
     @Field({ nullable: true })
     ChildrensNames?: string;
 
-    @Field(() => Int)
+    @Field()
     VersionNumber: number;
 
     @Field({ nullable: true })
@@ -25584,7 +25892,8 @@ export class UoM_ {
     @Field(() => Boolean, {nullable: true}) 
     IsScheduleBaseUoM?: boolean;
           
-    @Field(() => Int) 
+    @Field() 
+    @MaxLength(8)
     VersionNumber: number;
           
     @Field(() => Int, {nullable: true}) 
@@ -25683,7 +25992,7 @@ export class CreateUoMInput {
     @Field(() => Boolean, { nullable: true })
     IsScheduleBaseUoM?: boolean;
 
-    @Field(() => Int)
+    @Field()
     VersionNumber: number;
 
     @Field(() => Int, { nullable: true })
@@ -25756,7 +26065,7 @@ export class UpdateUoMInput {
     @Field(() => Boolean, { nullable: true })
     IsScheduleBaseUoM?: boolean;
 
-    @Field(() => Int)
+    @Field()
     VersionNumber: number;
 
     @Field(() => Int, { nullable: true })
@@ -26204,7 +26513,8 @@ export class SalesOrder_ {
     @MaxLength(400)
     ShipTo_Name?: string;
           
-    @Field(() => Int) 
+    @Field() 
+    @MaxLength(8)
     VersionNumber: number;
           
     @Field({nullable: true}) 
@@ -26897,7 +27207,7 @@ export class CreateSalesOrderInput {
     @Field({ nullable: true })
     ShipTo_Name?: string;
 
-    @Field(() => Int)
+    @Field()
     VersionNumber: number;
 
     @Field({ nullable: true })
@@ -27399,7 +27709,7 @@ export class UpdateSalesOrderInput {
     @Field({ nullable: true })
     ShipTo_Name?: string;
 
-    @Field(() => Int)
+    @Field()
     VersionNumber: number;
 
     @Field({ nullable: true })
@@ -27994,7 +28304,8 @@ export class SalesOrderDetail_ {
     @MaxLength(300)
     ShipTo_ContactName?: string;
           
-    @Field(() => Int) 
+    @Field() 
+    @MaxLength(8)
     VersionNumber: number;
           
     @Field({nullable: true}) 
@@ -28255,7 +28566,7 @@ export class CreateSalesOrderDetailInput {
     @Field({ nullable: true })
     ShipTo_ContactName?: string;
 
-    @Field(() => Int)
+    @Field()
     VersionNumber: number;
 
     @Field(() => Int, { nullable: true })
@@ -28484,7 +28795,7 @@ export class UpdateSalesOrderDetailInput {
     @Field({ nullable: true })
     ShipTo_ContactName?: string;
 
-    @Field(() => Int)
+    @Field()
     VersionNumber: number;
 
     @Field(() => Int, { nullable: true })
@@ -28884,7 +29195,8 @@ export class Product_ {
     @Field(() => Int, {nullable: true}) 
     StatusCode?: number;
           
-    @Field(() => Int) 
+    @Field() 
+    @MaxLength(8)
     VersionNumber: number;
           
     @Field({nullable: true}) 
@@ -29430,7 +29742,7 @@ export class CreateProductInput {
     @Field(() => Int, { nullable: true })
     StatusCode?: number;
 
-    @Field(() => Int)
+    @Field()
     VersionNumber: number;
 
     @Field({ nullable: true })
@@ -29863,7 +30175,7 @@ export class UpdateProductInput {
     @Field(() => Int, { nullable: true })
     StatusCode?: number;
 
-    @Field(() => Int)
+    @Field()
     VersionNumber: number;
 
     @Field({ nullable: true })

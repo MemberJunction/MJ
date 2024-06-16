@@ -43,6 +43,9 @@
         @else {
             <!-- Not a foreign key -->
             @switch (Type) {
+                @case ('code') {
+                    <mj-code-editor [(ngModel)]="Value" [languages]="languages" [language]="'JavaScript'"></mj-code-editor>
+                }
                 @case ('textbox') {
                     <kendo-textbox [(ngModel)]="Value"  />
                 }

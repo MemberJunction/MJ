@@ -36,14 +36,14 @@ import { RecordChangeEntity } from '@memberjunction/core-entities';
             [record]="record"
             [ShowLabel]="true"
             FieldName="Type"
-            Type="textbox"
+            Type="dropdownlist"
             [EditMode]="EditMode"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
             FieldName="Source"
-            Type="textbox"
+            Type="dropdownlist"
             [EditMode]="EditMode"
         ></mj-form-field>
         <mj-form-field 
@@ -87,6 +87,13 @@ import { RecordChangeEntity } from '@memberjunction/core-entities';
             [ShowLabel]="true"
             FieldName="Status"
             Type="dropdownlist"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="ReplayRunID"
+            Type="numerictextbox"
             [EditMode]="EditMode"
         ></mj-form-field>
         <mj-form-field 

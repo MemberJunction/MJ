@@ -34,6 +34,7 @@
     "@memberjunction/ng-link-directives": "1.7.1",
     "@memberjunction/ng-container-directives": "1.7.1",
     "@memberjunction/ng-record-changes": "1.7.1",
+    "@memberjunction/ng-base-types": "1.7.1",
     "@progress/kendo-angular-buttons": "16.2.0",
     "@progress/kendo-angular-dropdowns": "16.2.0",
     "@progress/kendo-angular-inputs": "16.2.0",

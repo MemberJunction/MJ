@@ -17,8 +17,8 @@ import { DisplaySimpleNotificationRequestData, MJEvent, MJEventType, MJGlobal } 
 import { CompareRecordsComponent } from '@memberjunction/ng-compare-records';
 import { TextAreaComponent } from '@progress/kendo-angular-inputs';
 import { EntityFormDialogComponent } from '@memberjunction/ng-entity-form-dialog';
-import { BaseFormComponentEvent, BaseFormComponentEventCodes, SharedService } from '@memberjunction/ng-shared';
-
+import { SharedService } from '@memberjunction/ng-shared';
+import { BaseFormComponentEvent, BaseFormComponentEventCodes, FormEditingCompleteEvent, PendingRecordItem } from '@memberjunction/ng-base-types';
 import { EntityCommunicationsEngineClient } from '@memberjunction/entity-communications-client';
 import { CommunicationEngineBase, Message } from '@memberjunction/communication-types';
 import { TemplateEngineBase } from '@memberjunction/templates-base-types';
@@ -611,10 +611,9 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
                 case BaseFormComponentEventCodes.POPULATE_PENDING_RECORDS:
                   // provide all of our pending records back to the caller
                   this.PendingRecords.forEach((r: GridPendingRecordItem) => {
-                    const arr = event.returnValue?.pendingRecords;
-                    if (arr && typeof arr.push === 'function') {
-                      event.returnValue?.pendingRecords?.push(r.record);
-                    }
+                    const edEvent: FormEditingCompleteEvent = event as FormEditingCompleteEvent;
+                    const p: PendingRecordItem = {entityObject: r.record, action: 'save'};
+                    edEvent.pendingChanges.push(p);
                   });
                   break;
               }

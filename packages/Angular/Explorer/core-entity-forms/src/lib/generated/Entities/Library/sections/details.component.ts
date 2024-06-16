@@ -33,13 +33,6 @@ import { LibraryEntity } from '@memberjunction/core-entities';
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="ExportedItems"
-            Type="textarea"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
             FieldName="TypeDefinitions"
             Type="textarea"
             [EditMode]="EditMode"
