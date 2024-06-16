@@ -412,7 +412,32 @@ export class EntityFieldInfo extends BaseInfo {
     }
 
     get ReadOnly(): boolean {
-        return this.IsVirtual || !this.AllowUpdateAPI || this.IsPrimaryKey || this.Type.toLowerCase() === 'uniqueidentifier';
+        return this.IsVirtual || 
+               !this.AllowUpdateAPI || 
+               this.IsPrimaryKey || 
+               this.Type.toLowerCase() === 'uniqueidentifier' ||
+               this.IsSpecialDateField;
+    }
+
+    /**
+     * Helper method that returns true if the field is one of the special reserved MJ date fields for tracking CreatedAt and UpdatedAt timestamps. This is only used when the 
+     * entity has TrackRecordChanges=1
+     */
+    get IsSpecialDateField(): boolean {
+        return this.IsCreatedAtField || this.IsUpdatedAtField;
+    }
+
+    /**
+     * Returns true if the field is the CreatedAt field, a special field that is used to track the creation date of a record. This is only used when the entity has TrackRecordChanges=1
+     */
+    get IsCreatedAtField(): boolean {
+        return this.Name.trim().toLowerCase() === EntityInfo.CreatedAtFieldName.trim().toLowerCase();
+    }
+    /**
+     * Returns true if the field is the UpdatedAt field, a special field that is used to track the last update date of a record. This is only used when the entity has TrackRecordChanges=1
+     */
+    get IsUpdatedAtField(): boolean {
+        return this.Name.trim().toLowerCase() === EntityInfo.UpdatedAtFieldName.trim().toLowerCase();
     }
 
     /**
@@ -428,8 +453,7 @@ export class EntityFieldInfo extends BaseInfo {
     get SkipValidation(): boolean {
         const name: string = this.Name.toLowerCase().trim(); 
 
-        return name === 'createdat' || 
-               name === 'updatedat' || 
+        return this.IsSpecialDateField ||
                this.IsPrimaryKey ||
                this.Type.trim().toLowerCase() === 'uniqueidentifier' ||
                this.AutoIncrement === true ||
@@ -626,6 +650,24 @@ export class EntityInfo extends BaseInfo {
     get Settings(): EntitySettingInfo[] {
         return this._Settings;
     }
+
+
+    private static __createdAtFieldName = '__mj_CreatedAt';
+    private static __updatedAtFieldName = '__mj_UpdatedAt';
+    /**
+     * Returns the name of the special reserved field that is used to store the CreatedAt timestamp across all of MJ. This is only used when an entity has TrackRecordChanges turned on
+     */
+    public static get CreatedAtFieldName(): string {
+        return EntityInfo.__createdAtFieldName;
+    }
+    /**
+     * Returns the name of the special reserved field that is used to store the UpdatedAt timestamp across all of MJ. This is only used when an entity has TrackRecordChanges turned on
+     */
+    public static get UpdatedAtFieldName(): string {
+        return EntityInfo.__updatedAtFieldName;
+    }
+
+
 
     /**
      * @returns The BaseTable but with spaces inbetween capital letters

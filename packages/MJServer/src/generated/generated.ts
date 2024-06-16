@@ -2,7 +2,7 @@
 * ALL ENTITIES - TypeGraphQL Type Class Definition - AUTO GENERATED FILE
 * Generated Entities and Resolvers for Server
 * 
-* GENERATED: 6/16/2024, 11:57:35 AM
+* GENERATED: 6/16/2024, 3:12:00 PM
 * 
 *   >>> DO NOT MODIFY THIS FILE!!!!!!!!!!!!
 *   >>> YOUR CHANGES WILL BE OVERWRITTEN
@@ -46,14 +46,6 @@ export class Company_ {
     @Field({nullable: true}) 
     @MaxLength(1000)
     LogoURL?: string;
-          
-    @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
-          
-    @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
           
     @Field({nullable: true}) 
     @MaxLength(510)
@@ -289,14 +281,6 @@ export class Employee_ {
           
     @Field(() => Int, {nullable: true}) 
     SupervisorID?: number;
-          
-    @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
-          
-    @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
           
     @Field() 
     @MaxLength(8)
@@ -825,14 +809,6 @@ export class EmployeeRole_ {
           
     @Field() 
     @MaxLength(8)
-    CreatedAt: Date;
-          
-    @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
-          
-    @Field() 
-    @MaxLength(8)
     __mj_CreatedAt: Date;
           
     @Field() 
@@ -945,14 +921,6 @@ export class EmployeeSkill_ {
           
     @Field(() => Int) 
     SkillID: number;
-          
-    @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
-          
-    @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
           
     @Field() 
     @MaxLength(8)
@@ -2072,14 +2040,6 @@ export class EntityField_ {
           
     @Field() 
     @MaxLength(8)
-    CreatedAt: Date;
-          
-    @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
-          
-    @Field() 
-    @MaxLength(8)
     __mj_CreatedAt: Date;
           
     @Field() 
@@ -2530,14 +2490,6 @@ export class Entity_ {
     @Field({nullable: true}) 
     @MaxLength(510)
     EntityObjectSubclassImport?: string;
-          
-    @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
-          
-    @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
           
     @Field({nullable: true, description: 'Used to specify a field within the entity that in turn contains the field name that will be used for record-level communication preferences. For example in a hypothetical entity called Contacts, say there is a field called PreferredComm and that field had possible values of Email1, SMS, and Phone, and those value in turn corresponded to field names in the entity. Each record in the Contacts entity could have a specific preference for which field would be used for communication. The MJ Communication Framework will use this information when available, as a priority ahead of the data in the Entity Communication Fields entity which is entity-level and not record-level.'}) 
     @MaxLength(510)
@@ -3366,14 +3318,6 @@ export class User_ {
           
     @Field() 
     @MaxLength(8)
-    CreatedAt: Date;
-          
-    @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
-          
-    @Field() 
-    @MaxLength(8)
     __mj_CreatedAt: Date;
           
     @Field() 
@@ -3967,14 +3911,6 @@ export class EntityRelationship_ {
           
     @Field() 
     @MaxLength(8)
-    CreatedAt: Date;
-          
-    @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
-          
-    @Field() 
-    @MaxLength(8)
     __mj_CreatedAt: Date;
           
     @Field() 
@@ -4417,14 +4353,6 @@ export class UserView_ {
           
     @Field({nullable: true}) 
     SortState?: string;
-          
-    @Field({nullable: true}) 
-    @MaxLength(8)
-    CreatedAt?: Date;
-          
-    @Field({nullable: true}) 
-    @MaxLength(8)
-    UpdatedAt?: Date;
           
     @Field() 
     @MaxLength(8)
@@ -5172,14 +5100,6 @@ export class Application_ {
           
     @Field() 
     @MaxLength(8)
-    CreatedAt: Date;
-          
-    @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
-          
-    @Field() 
-    @MaxLength(8)
     __mj_CreatedAt: Date;
           
     @Field() 
@@ -5573,14 +5493,6 @@ export class EntityPermission_ {
           
     @Field(() => Int, {nullable: true}) 
     DeleteRLSFilterID?: number;
-          
-    @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
-          
-    @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
           
     @Field() 
     @MaxLength(8)
@@ -8336,14 +8248,6 @@ export class EntityFieldValue_ {
           
     @Field() 
     @MaxLength(8)
-    CreatedAt: Date;
-          
-    @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
-          
-    @Field() 
-    @MaxLength(8)
     __mj_CreatedAt: Date;
           
     @Field() 
@@ -8359,6 +8263,37 @@ export class EntityFieldValue_ {
     Entity: string;
         
 }
+        
+//****************************************************************************
+// INPUT TYPE for Entity Field Values   
+//****************************************************************************
+@InputType()
+export class UpdateEntityFieldValueInput {
+    @Field(() => Int)
+    ID: number;
+
+    @Field(() => Int)
+    EntityID: number;
+
+    @Field()
+    EntityFieldName: string;
+
+    @Field(() => Int)
+    Sequence: number;
+
+    @Field()
+    Value: string;
+
+    @Field({ nullable: true })
+    Code?: string;
+
+    @Field({ nullable: true })
+    Description?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
 //****************************************************************************
 // RESOLVER for Entity Field Values
 //****************************************************************************
@@ -8417,6 +8352,15 @@ export class EntityFieldValueResolver extends ResolverBase {
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityFieldValues]` + this.getRowLevelSecurityWhereClause('Entity Field Values', userPayload, EntityPermissionType.Read, ' WHERE');
         const result = this.ArrayMapFieldNamesToCodeNames('Entity Field Values', await dataSource.query(sSQL));
         return result;
+    }
+    
+    @Mutation(() => EntityFieldValue_)
+    async UpdateEntityFieldValue(
+        @Arg('input', () => UpdateEntityFieldValueInput) input: UpdateEntityFieldValueInput,
+        @Ctx() { dataSource, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.UpdateRecord('Entity Field Values', input, dataSource, userPayload, pubSub);
     }
     
 }
@@ -13928,14 +13872,6 @@ export class EntityDocumentType_ {
           
     @Field() 
     @MaxLength(8)
-    CreatedAt: Date;
-          
-    @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
-          
-    @Field() 
-    @MaxLength(8)
     __mj_CreatedAt: Date;
           
     @Field() 
@@ -14080,14 +14016,6 @@ export class EntityDocumentRun_ {
     @Field({description: 'Can be Pending, In Progress, Completed, or Failed'}) 
     @MaxLength(30)
     Status: string;
-          
-    @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
-          
-    @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
           
     @Field() 
     @MaxLength(8)
@@ -14420,14 +14348,6 @@ export class EntityRecordDocument_ {
     @MaxLength(8)
     EntityRecordUpdatedAt: Date;
           
-    @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
-          
-    @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
-          
     @Field(() => Int) 
     EntityDocumentID: number;
           
@@ -14616,14 +14536,6 @@ export class EntityDocument_ {
           
     @Field(() => Float, {description: 'Value between 0 and 1 that determines what is considered an absolute matching record. Value must be >= PotentialMatchThreshold. This is primarily used for duplicate detection but can be used for other applications as well where matching is relevant.'}) 
     AbsoluteMatchThreshold: number;
-          
-    @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
-          
-    @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
           
     @Field() 
     @MaxLength(8)
@@ -16868,14 +16780,6 @@ export class EntityDocumentSetting_ {
           
     @Field() 
     @MaxLength(8)
-    CreatedAt: Date;
-          
-    @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
-          
-    @Field() 
-    @MaxLength(8)
     __mj_CreatedAt: Date;
           
     @Field() 
@@ -17023,14 +16927,6 @@ export class EntitySetting_ {
           
     @Field({nullable: true}) 
     Comments?: string;
-          
-    @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
-          
-    @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
           
     @Field() 
     @MaxLength(8)
@@ -17608,14 +17504,6 @@ export class EntityBehavior_ {
           
     @Field() 
     @MaxLength(8)
-    CreatedAt: Date;
-          
-    @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
-          
-    @Field() 
-    @MaxLength(8)
     __mj_CreatedAt: Date;
           
     @Field() 
@@ -17781,14 +17669,6 @@ export class EntityBehaviorType_ {
           
     @Field({nullable: true}) 
     Description?: string;
-          
-    @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
-          
-    @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
           
     @Field() 
     @MaxLength(8)
@@ -18097,14 +17977,6 @@ export class ActionCategory_ {
           
     @Field() 
     @MaxLength(8)
-    CreatedAt: Date;
-          
-    @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
-          
-    @Field() 
-    @MaxLength(8)
     __mj_CreatedAt: Date;
           
     @Field() 
@@ -18292,14 +18164,6 @@ export class EntityAction_ {
           
     @Field() 
     @MaxLength(8)
-    CreatedAt: Date;
-          
-    @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
-          
-    @Field() 
-    @MaxLength(8)
     __mj_CreatedAt: Date;
           
     @Field() 
@@ -18470,14 +18334,6 @@ export class EntityActionInvocation_ {
     @Field({description: 'Status of the entity action invocation (Pending, Active, Disabled).'}) 
     @MaxLength(40)
     Status: string;
-          
-    @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
-          
-    @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
           
     @Field() 
     @MaxLength(8)
@@ -18775,14 +18631,6 @@ export class EntityActionInvocationType_ {
           
     @Field() 
     @MaxLength(8)
-    CreatedAt: Date;
-          
-    @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
-          
-    @Field() 
-    @MaxLength(8)
     __mj_CreatedAt: Date;
           
     @Field() 
@@ -18967,14 +18815,6 @@ export class Action_ {
     @Field({description: 'Status of the action (Pending, Active, Disabled).'}) 
     @MaxLength(40)
     Status: string;
-          
-    @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
-          
-    @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
           
     @Field() 
     @MaxLength(8)
@@ -19281,14 +19121,6 @@ export class EntityActionFilter_ {
           
     @Field() 
     @MaxLength(8)
-    CreatedAt: Date;
-          
-    @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
-          
-    @Field() 
-    @MaxLength(8)
     __mj_CreatedAt: Date;
           
     @Field() 
@@ -19437,14 +19269,6 @@ export class ActionFilter_ {
           
     @Field({nullable: true}) 
     CodeExplanation?: string;
-          
-    @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
-          
-    @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
           
     @Field() 
     @MaxLength(8)
@@ -23339,14 +23163,6 @@ export class EntityCommunicationMessageType_ {
           
     @Field() 
     @MaxLength(8)
-    CreatedAt: Date;
-          
-    @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
-          
-    @Field() 
-    @MaxLength(8)
     __mj_CreatedAt: Date;
           
     @Field() 
@@ -23500,14 +23316,6 @@ export class EntityCommunicationField_ {
           
     @Field(() => Int, {description: 'Priority of the field for the communication base message type'}) 
     Priority: number;
-          
-    @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
-          
-    @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
           
     @Field() 
     @MaxLength(8)
