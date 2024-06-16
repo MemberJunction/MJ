@@ -1,6 +1,6 @@
 import { DataSource } from "typeorm";
 import { configInfo, mj_core_schema } from './config';
-import { CodeNameFromString, ExtractActualDefaultValue, LogError, LogStatus, Metadata, SeverityType } from "@memberjunction/core";
+import { CodeNameFromString, EntityInfo, ExtractActualDefaultValue, LogError, LogStatus, Metadata, SeverityType } from "@memberjunction/core";
 import { logError, logMessage, logStatus } from "./logging";
 import { SQLUtilityBase } from "./sql";
 import { AdvancedGeneration, EntityDescriptionResult, EntityNameResult } from "./advanced_generation";
@@ -245,10 +245,10 @@ export class ManageMetadataBase {
       const startTime: Date = new Date();
 
       if (!skipCreatedAtUpdatedAtFieldValidation && !await this.ensureCreatedAtUpdatedAtFieldsExist(ds, excludeSchemas)) {
-         logError (`rror ensuring ${ManageMetadataBase.CreatedAtFieldName} and ${ManageMetadataBase.UpdatedAtFieldName} fields exist`);
+         logError (`rror ensuring ${EntityInfo.CreatedAtFieldName} and ${EntityInfo.UpdatedAtFieldName} fields exist`);
          bSuccess = false;
       }
-      logStatus(`   Ensured ${ManageMetadataBase.CreatedAtFieldName}/${ManageMetadataBase.UpdatedAtFieldName} fields exist in ${(new Date().getTime() - startTime.getTime()) / 1000} seconds`);
+      logStatus(`   Ensured ${EntityInfo.CreatedAtFieldName}/${EntityInfo.UpdatedAtFieldName} fields exist in ${(new Date().getTime() - startTime.getTime()) / 1000} seconds`);
 
       if (! await this.deleteUnneededEntityFields(ds, excludeSchemas)) {
          logError ('Error deleting unneeded entity fields');
@@ -297,23 +297,6 @@ export class ManageMetadataBase {
    }
 
 
-   private static __createdAtFieldName = '__mj_CreatedAt';
-   private static __updatedAtFieldName = '__mj_UpdatedAt';
-
-   /**
-    * Returns the special field name for the CreatedAt field in the metadata. This field is used to track when a record was created.
-    */
-   public static get CreatedAtFieldName(): string {
-      return ManageMetadataBase.__createdAtFieldName;
-   }
-
-   /**
-    * Returns the special field name for the UpdatedAt field in the metadata. This field is used to track when a record was last updated.
-    */
-   public static get UpdatedAtFieldName(): string {
-      return ManageMetadataBase.__updatedAtFieldName;
-   }
-
    /**
     * This method ensures that the __mj_CreatedAt and __mj_UpdatedAt fields exist in each entity that has TrackRecordChanges set to true. If the fields do not exist, they are created.
     * If the fields exist but have incorrect default values, the default values are updated. The default value that is to be used for these special fields is GETUTCDATE() which is the
@@ -335,15 +318,15 @@ export class ManageMetadataBase {
                                           WHERE 
                                              TABLE_SCHEMA='${e.SchemaName}' 
                                              AND TABLE_NAME = '${e.BaseTable}' 
-                                          AND COLUMN_NAME IN ('${ManageMetadataBase.__createdAtFieldName}','${ManageMetadataBase.UpdatedAtFieldName}')`
+                                          AND COLUMN_NAME IN ('${EntityInfo.CreatedAtFieldName}','${EntityInfo.UpdatedAtFieldName}')`
                const result = await ds.query(sqlCreatedUpdated);
                // result has both created at and updated at fields, so filter on the result for each and do what we need to based on that
-               const createdAt = result.find(r => r.COLUMN_NAME.trim().toLowerCase() === ManageMetadataBase.CreatedAtFieldName.trim().toLowerCase());
-               const updatedAt = result.find(r => r.COLUMN_NAME.trim().toLowerCase() === ManageMetadataBase.UpdatedAtFieldName.trim().toLowerCase());
+               const createdAt = result.find(r => r.COLUMN_NAME.trim().toLowerCase() === EntityInfo.CreatedAtFieldName.trim().toLowerCase());
+               const updatedAt = result.find(r => r.COLUMN_NAME.trim().toLowerCase() === EntityInfo.UpdatedAtFieldName.trim().toLowerCase());
 
                // now, if we have the fields, we need to check the default value and update if necessary
-               const fieldResult = await this.ensureSpecialDateFieldExistsAndHasCorrectDefaultValue(ds, e, ManageMetadataBase.CreatedAtFieldName, createdAt) &&
-                                   await this.ensureSpecialDateFieldExistsAndHasCorrectDefaultValue(ds, e, ManageMetadataBase.UpdatedAtFieldName, updatedAt);
+               const fieldResult = await this.ensureSpecialDateFieldExistsAndHasCorrectDefaultValue(ds, e, EntityInfo.CreatedAtFieldName, createdAt) &&
+                                   await this.ensureSpecialDateFieldExistsAndHasCorrectDefaultValue(ds, e, EntityInfo.UpdatedAtFieldName, updatedAt);
 
                overallResult = overallResult && fieldResult;
             }
@@ -510,7 +493,7 @@ export class ManageMetadataBase {
             for (const field of fields) {
                const sDisplayName = this.stripTrailingChars(this.convertCamelCaseToHaveSpaces(field.Name), 'ID', true).trim()
                if (sDisplayName.length > 0 && sDisplayName.toLowerCase().trim() !== field.Name.toLowerCase().trim()) {
-                  const sSQL = `UPDATE [${mj_core_schema()}].EntityField SET ${ManageMetadataBase.UpdatedAtFieldName}=GETUTCDATE(), DisplayName = '${sDisplayName}' WHERE ID = ${field.ID}`
+                  const sSQL = `UPDATE [${mj_core_schema()}].EntityField SET ${EntityInfo.UpdatedAtFieldName}=GETUTCDATE(), DisplayName = '${sDisplayName}' WHERE ID = ${field.ID}`
                   await ds.query(sSQL)
                }
             }
@@ -560,7 +543,7 @@ export class ManageMetadataBase {
       sf.AllowsNull,
       sf.DefaultValue,
       sf.AutoIncrement,
-      IIF(sf.IsVirtual = 1, 0, IIF(sf.FieldName = '${ManageMetadataBase.CreatedAtFieldName}' OR sf.FieldName = '${ManageMetadataBase.UpdatedAtFieldName}' OR sf.FieldName = 'ID', 0, 1)) AllowUpdateAPI,
+      IIF(sf.IsVirtual = 1, 0, IIF(sf.FieldName = '${EntityInfo.CreatedAtFieldName}' OR sf.FieldName = '${EntityInfo.UpdatedAtFieldName}' OR sf.FieldName = 'ID', 0, 1)) AllowUpdateAPI,
       sf.IsVirtual,
       re.ID RelatedEntityID,
       fk.referenced_column RelatedEntityFieldName,

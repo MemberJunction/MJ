@@ -344,7 +344,7 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
 
         return `
             SELECT 
-                ${entity.PrimaryKeys.map(pk => `ot.[${pk.Name}]` ).join(', ')}, ot.UpdatedAt, rc.last_change_time LatestRecordChangeAt
+                ${entity.PrimaryKeys.map(pk => `ot.[${pk.Name}]` ).join(', ')}, ot.${EntityInfo.UpdatedAtFieldName} AS UpdatedAt, rc.last_change_time LatestRecordChangeAt
             FROM 
                 [${entity.SchemaName}].[${entity.BaseView}] ot
             INNER JOIN (
@@ -358,7 +358,7 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
                     RecordID
             ) rc ON ${primaryKeyString} = rc.RecordID
             WHERE 
-                ot.UpdatedAt > COALESCE(rc.last_change_time, '1900-01-01');
+                ot.${EntityInfo.UpdatedAtFieldName} > COALESCE(rc.last_change_time, '1900-01-01');
         `;
     }
     
@@ -367,7 +367,7 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
     
         return `
             SELECT 
-                ${entity.PrimaryKeys.map(pk => `ot.[${pk.Name}]`).join(', ')}, ot.CreatedAt, ot.UpdatedAt
+                ${entity.PrimaryKeys.map(pk => `ot.[${pk.Name}]`).join(', ')}, ot.${EntityInfo.CreatedAtFieldName} AS CreatedAt, ot.${EntityInfo.UpdatedAtFieldName} AS UpdatedAt
             FROM 
                 [${entity.SchemaName}].[${entity.BaseView}] ot
             LEFT JOIN 
@@ -396,13 +396,13 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
             WHERE 
                 ${entity.PrimaryKeys.map(pk => `ot.[${pk.Name}] IS NULL`).join(' AND ')}
                 AND 
-                rc.EntityID = ${entity.ID} 
+                    rc.EntityID = ${entity.ID} 
                 AND
-				NOT EXISTS 
-				(
-				    SELECT rc2.ID FROM __mj.vwRecordChanges rc2 WHERE 
-					rc2.RecordID = rc.RecordID AND rc2.EntityID=rc.EntityID AND rc2.Type='Delete'
-				) 
+                    NOT EXISTS 
+                    (
+                        SELECT rc2.ID FROM __mj.vwRecordChanges rc2 WHERE 
+                        rc2.RecordID = rc.RecordID AND rc2.EntityID=rc.EntityID AND rc2.Type='Delete'
+                    ) 
 
         `; // last part of above query makes sure we don't include records already deleted in Record Changes
     }
@@ -601,8 +601,13 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
             rc.Status = 'Pending';
             if (change.ChangedAt)
                 rc.ChangedAt = change.ChangedAt;
-            else
-                rc.ChangedAt = new Date(); //default to now, for deleted records we don't know when delete happened.
+            else {
+                // we don't have a ChangedAt from the database, so we need to use the current date
+                // however, we want UTC date/time for now as that is what we use in the DB for all of
+                // these fields.
+                const d = new Date();
+                rc.ChangedAt = new Date(d.toISOString());
+            }
             const changesObject = {};
             for (const field of change.Changes) {
                 changesObject[field.FieldName] = {
