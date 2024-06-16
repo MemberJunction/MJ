@@ -1,6 +1,6 @@
 import { DataSource } from "typeorm";
 import { configInfo, mj_core_schema } from './config';
-import { LogError, LogStatus, Metadata, SeverityType } from "@memberjunction/core";
+import { CodeNameFromString, ExtractActualDefaultValue, LogError, LogStatus, Metadata, SeverityType } from "@memberjunction/core";
 import { logError, logMessage, logStatus } from "./logging";
 import { SQLUtilityBase } from "./sql";
 import { AdvancedGeneration, EntityDescriptionResult, EntityNameResult } from "./advanced_generation";
@@ -43,7 +43,7 @@ export class ManageMetadataBase {
          // failure for this entire function
       }         
    
-      if (! await this.manageEntityFields(ds, excludeSchemas)) {
+      if (! await this.manageEntityFields(ds, excludeSchemas, false)) {
          logError('Error managing entity fields');
          bSuccess = false;
       }
@@ -240,9 +240,16 @@ export class ManageMetadataBase {
     * @param excludeSchemas 
     * @returns 
     */
-   public async manageEntityFields(ds: DataSource, excludeSchemas: string[]): Promise<boolean> {
+   public async manageEntityFields(ds: DataSource, excludeSchemas: string[], skipCreatedAtUpdatedAtFieldValidation: boolean): Promise<boolean> {
       let bSuccess = true;
       const startTime: Date = new Date();
+
+      if (!skipCreatedAtUpdatedAtFieldValidation && !await this.ensureCreatedAtUpdatedAtFieldsExist(ds, excludeSchemas)) {
+         logError (`rror ensuring ${ManageMetadataBase.CreatedAtFieldName} and ${ManageMetadataBase.UpdatedAtFieldName} fields exist`);
+         bSuccess = false;
+      }
+      logStatus(`   Ensured ${ManageMetadataBase.CreatedAtFieldName}/${ManageMetadataBase.UpdatedAtFieldName} fields exist in ${(new Date().getTime() - startTime.getTime()) / 1000} seconds`);
+
       if (! await this.deleteUnneededEntityFields(ds, excludeSchemas)) {
          logError ('Error deleting unneeded entity fields');
          bSuccess = false;
@@ -288,6 +295,131 @@ export class ManageMetadataBase {
    
       return bSuccess;
    }
+
+
+   private static __createdAtFieldName = '__mj_CreatedAt';
+   private static __updatedAtFieldName = '__mj_UpdatedAt';
+
+   /**
+    * Returns the special field name for the CreatedAt field in the metadata. This field is used to track when a record was created.
+    */
+   public static get CreatedAtFieldName(): string {
+      return ManageMetadataBase.__createdAtFieldName;
+   }
+
+   /**
+    * Returns the special field name for the UpdatedAt field in the metadata. This field is used to track when a record was last updated.
+    */
+   public static get UpdatedAtFieldName(): string {
+      return ManageMetadataBase.__updatedAtFieldName;
+   }
+
+   /**
+    * This method ensures that the __mj_CreatedAt and __mj_UpdatedAt fields exist in each entity that has TrackRecordChanges set to true. If the fields do not exist, they are created.
+    * If the fields exist but have incorrect default values, the default values are updated. The default value that is to be used for these special fields is GETUTCDATE() which is the
+    * UTC date and time. This method is called as part of the manageEntityFields method and is not intended to be called directly.
+    * @param ds 
+    */
+   protected async ensureCreatedAtUpdatedAtFieldsExist(ds: DataSource, excludeSchemas: string[]): Promise<boolean> {
+      try {
+         const sqlEntities = `SELECT * FROM [${mj_core_schema()}].vwEntities WHERE TrackRecordChanges = 1 AND SchemaName NOT IN (${excludeSchemas.map(s => `'${s}'`).join(',')})`;
+         const entities = await ds.query(sqlEntities);
+         let overallResult = true;
+         if (entities.length > 0) {
+            // we have 1+ entities that need the special fields, so loop through them and ensure the fields exist
+            // validate that each entity has two specific fields, the first one is __mj_CreatedAt and the second one is __mj_UpdatedAt
+            // both are DATETIME fields, NOT NULL and both are fields that have a DEFAULT value of GETUTCDATE().
+            for (const e of entities) {
+               const sqlCreatedUpdated = `SELECT * 
+                                          FROM INFORMATION_SCHEMA.COLUMNS
+                                          WHERE 
+                                             TABLE_SCHEMA='${e.SchemaName}' 
+                                             AND TABLE_NAME = '${e.BaseTable}' 
+                                          AND COLUMN_NAME IN ('${ManageMetadataBase.__createdAtFieldName}','${ManageMetadataBase.UpdatedAtFieldName}')`
+               const result = await ds.query(sqlCreatedUpdated);
+               // result has both created at and updated at fields, so filter on the result for each and do what we need to based on that
+               const createdAt = result.find(r => r.COLUMN_NAME.trim().toLowerCase() === ManageMetadataBase.CreatedAtFieldName.trim().toLowerCase());
+               const updatedAt = result.find(r => r.COLUMN_NAME.trim().toLowerCase() === ManageMetadataBase.UpdatedAtFieldName.trim().toLowerCase());
+
+               // now, if we have the fields, we need to check the default value and update if necessary
+               const fieldResult = await this.ensureSpecialDateFieldExistsAndHasCorrectDefaultValue(ds, e, ManageMetadataBase.CreatedAtFieldName, createdAt) &&
+                                   await this.ensureSpecialDateFieldExistsAndHasCorrectDefaultValue(ds, e, ManageMetadataBase.UpdatedAtFieldName, updatedAt);
+
+               overallResult = overallResult && fieldResult;
+            }
+         }
+         return overallResult;
+      }
+      catch (e) {
+         logError(e);
+         return false;
+      }
+   }
+
+   /**
+    * This method handles the validation of the existence of the specified special date field and if it does exist it makes sure the default value is set correctly, if it doesn't exist 
+    * it makes sure that it is created. This method is called as part of the ensureCreatedAtUpdatedAtFieldsExist method and is not intended to be called directly.
+    * @param entity 
+    * @param fieldName 
+    * @param currentFieldData 
+    */
+   protected async ensureSpecialDateFieldExistsAndHasCorrectDefaultValue(ds: DataSource, entity: any, fieldName: string, currentFieldData: any): Promise<boolean> {
+      if (!currentFieldData) {
+         // field doesn't exist, let's create it
+         const sql = `ALTER TABLE [${entity.SchemaName}].[${entity.BaseTable}] ADD ${fieldName} DATETIME NOT NULL DEFAULT GETUTCDATE()`;
+         await ds.query(sql);
+      }
+      else {
+         // field does exist, let's first check the data type/nullability
+         if (currentFieldData.DATA_TYPE.trim().toLowerCase() !== 'datetime' || currentFieldData.IS_NULLABLE.trim().toLowerCase() !== 'no') {
+            // the column is the wrong type, so let's update it
+            const sql = `ALTER TABLE [${entity.SchemaName}].[${entity.BaseTable}] ALTER COLUMN ${fieldName} DATETIME NOT NULL`;
+            await ds.query(sql);
+         }
+
+         // now let's check the default value 
+         const defaultValue = currentFieldData.COLUMN_DEFAULT;
+         const realDefaultValue = ExtractActualDefaultValue(defaultValue);
+         if (realDefaultValue.trim().toLowerCase() !== 'getutcdate()') {
+            // default value is not correct, so let's update it
+            await this.dropExistingDefaultConstraint(ds, entity, fieldName);
+            const sqlAddDefaultConstraint = `ALTER TABLE [${entity.SchemaName}].[${entity.BaseTable}] ADD CONSTRAINT DF_${entity.SchemaName}_${CodeNameFromString(entity.BaseTable)}_${fieldName} DEFAULT GETUTCDATE() FOR [${fieldName}]`;
+            await ds.query(sqlAddDefaultConstraint);
+         }
+      }
+      // if we get here, we're good
+      return true;
+   }
+
+   /**
+    * Drops an existing default constraint from a given column within a given entity, if it exists
+    * @param ds 
+    * @param entity 
+    * @param fieldName 
+    */
+   protected async dropExistingDefaultConstraint(ds: DataSource, entity: any, fieldName: string) {
+      const sqlDropDefaultConstraint = `
+         DECLARE @constraintName NVARCHAR(255);
+
+         -- Get the default constraint name
+         SELECT @constraintName = d.name
+         FROM sys.tables t
+         JOIN sys.schemas s ON t.schema_id = s.schema_id
+         JOIN sys.columns c ON t.object_id = c.object_id
+         JOIN sys.default_constraints d ON c.default_object_id = d.object_id
+         WHERE s.name = '${entity.SchemaName}' 
+         AND t.name = '${entity.BaseTable}' 
+         AND c.name = '${fieldName}';
+
+         -- Drop the default constraint if it exists
+         IF @constraintName IS NOT NULL
+         BEGIN
+            EXEC('ALTER TABLE [${entity.SchemaName}].[${entity.BaseTable}] DROP CONSTRAINT ' + @constraintName);
+         END
+      `;
+      await ds.query(sqlDropDefaultConstraint);      
+   }
+
    
    /**
     * This method generates descriptions for entities in teh system where there is no existing description. This is an experimental feature and is done using AI. In order for it
@@ -378,7 +510,7 @@ export class ManageMetadataBase {
             for (const field of fields) {
                const sDisplayName = this.stripTrailingChars(this.convertCamelCaseToHaveSpaces(field.Name), 'ID', true).trim()
                if (sDisplayName.length > 0 && sDisplayName.toLowerCase().trim() !== field.Name.toLowerCase().trim()) {
-                  const sSQL = `UPDATE [${mj_core_schema()}].EntityField SET UpdatedAt=GETDATE(), DisplayName = '${sDisplayName}' WHERE ID = ${field.ID}`
+                  const sSQL = `UPDATE [${mj_core_schema()}].EntityField SET ${ManageMetadataBase.UpdatedAtFieldName}=GETUTCDATE(), DisplayName = '${sDisplayName}' WHERE ID = ${field.ID}`
                   await ds.query(sSQL)
                }
             }
@@ -428,7 +560,7 @@ export class ManageMetadataBase {
       sf.AllowsNull,
       sf.DefaultValue,
       sf.AutoIncrement,
-      IIF(sf.IsVirtual = 1, 0, IIF(sf.FieldName = 'CreatedAt' OR sf.FieldName = 'UpdatedAt' OR sf.FieldName = 'ID', 0, 1)) AllowUpdateAPI,
+      IIF(sf.IsVirtual = 1, 0, IIF(sf.FieldName = '${ManageMetadataBase.CreatedAtFieldName}' OR sf.FieldName = '${ManageMetadataBase.UpdatedAtFieldName}' OR sf.FieldName = 'ID', 0, 1)) AllowUpdateAPI,
       sf.IsVirtual,
       re.ID RelatedEntityID,
       fk.referenced_column RelatedEntityFieldName,
