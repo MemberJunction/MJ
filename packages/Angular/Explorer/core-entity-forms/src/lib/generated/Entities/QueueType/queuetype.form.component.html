@@ -17,19 +17,19 @@
                     </mj-tab-body>
                     
                     <mj-tab Name="Queues" 
-                    [Visible]="record.IsSaved" 
-                    [Props]="{EntityRelationshipID: 108}">
-                    <span class="fa-solid fa-folder-tree tab-header-icon"></span>Queues
-                </mj-tab>
-                <mj-tab-body>
-                    <mj-user-view-grid 
-                        [Params]="BuildRelationshipViewParamsByEntityName('Queues')"  
-                        [NewRecordValues]="NewRecordValues('Queues')"
-                        [AllowLoad]="IsCurrentTab('Queues')"  
-                        [EditMode]="GridEditMode()"  
-                        [BottomMargin]="GridBottomMargin">
-                    </mj-user-view-grid>
-                </mj-tab-body>
+                        [Visible]="record.IsSaved" 
+                        [Props]="{EntityRelationshipID: 108}">
+                        <span class="fa-solid fa-folder-tree tab-header-icon"></span>Queues
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Queues')"  
+                            [NewRecordValues]="NewRecordValues('Queues')"
+                            [AllowLoad]="IsCurrentTab('Queues')"  
+                            [EditMode]="GridEditMode()"  
+                            [BottomMargin]="GridBottomMargin">
+                        </mj-user-view-grid>
+                    </mj-tab-body>
                 </mj-tabstrip>
     </form>
 </div>

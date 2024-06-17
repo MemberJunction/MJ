@@ -463,19 +463,19 @@ export function Load${entity.ClassName}${this.stripWhiteSpace(section.Name)}Comp
             }
 
             const tabCode = `${index > 0 ? '\n' : ''}                    <mj-tab Name="${tabName}" 
-                    [Visible]="record.IsSaved" 
-                    [Props]="{EntityRelationshipID: ${relatedEntity.ID}}">
-                    ${icon}${tabName}
-                </mj-tab>
-                <mj-tab-body>
-                    <mj-user-view-grid 
-                        [Params]="BuildRelationshipViewParamsByEntityName('${relatedEntity.RelatedEntity}')"  
-                        [NewRecordValues]="NewRecordValues('${relatedEntity.RelatedEntity}')"
-                        [AllowLoad]="IsCurrentTab('${tabName}')"  
-                        [EditMode]="GridEditMode()"  
-                        [BottomMargin]="GridBottomMargin">
-                    </mj-user-view-grid>
-                </mj-tab-body>`
+                        [Visible]="record.IsSaved" 
+                        [Props]="{EntityRelationshipID: ${relatedEntity.ID}}">
+                        ${icon}${tabName}
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('${relatedEntity.RelatedEntity}')"  
+                            [NewRecordValues]="NewRecordValues('${relatedEntity.RelatedEntity}')"
+                            [AllowLoad]="IsCurrentTab('${tabName}')"  
+                            [EditMode]="GridEditMode()"  
+                            [BottomMargin]="GridBottomMargin">
+                        </mj-user-view-grid>
+                    </mj-tab-body>`
             tabs.push({
                 Type: GeneratedFormSectionType.Category,
                 IsRelatedEntity: true,

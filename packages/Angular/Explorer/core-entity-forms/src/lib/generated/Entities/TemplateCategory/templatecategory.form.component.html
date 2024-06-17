@@ -17,34 +17,34 @@
                     </mj-tab-body>
                     
                     <mj-tab Name="Templates" 
-                    [Visible]="record.IsSaved" 
-                    [Props]="{EntityRelationshipID: 278}">
-                    <span class="fa-regular fa-rectangle-list tab-header-icon"></span>Templates
-                </mj-tab>
-                <mj-tab-body>
-                    <mj-user-view-grid 
-                        [Params]="BuildRelationshipViewParamsByEntityName('Templates')"  
-                        [NewRecordValues]="NewRecordValues('Templates')"
-                        [AllowLoad]="IsCurrentTab('Templates')"  
-                        [EditMode]="GridEditMode()"  
-                        [BottomMargin]="GridBottomMargin">
-                    </mj-user-view-grid>
-                </mj-tab-body>
+                        [Visible]="record.IsSaved" 
+                        [Props]="{EntityRelationshipID: 278}">
+                        <span class="fa-regular fa-rectangle-list tab-header-icon"></span>Templates
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Templates')"  
+                            [NewRecordValues]="NewRecordValues('Templates')"
+                            [AllowLoad]="IsCurrentTab('Templates')"  
+                            [EditMode]="GridEditMode()"  
+                            [BottomMargin]="GridBottomMargin">
+                        </mj-user-view-grid>
+                    </mj-tab-body>
 
                     <mj-tab Name="Template Categories" 
-                    [Visible]="record.IsSaved" 
-                    [Props]="{EntityRelationshipID: 279}">
-                    Template Categories
-                </mj-tab>
-                <mj-tab-body>
-                    <mj-user-view-grid 
-                        [Params]="BuildRelationshipViewParamsByEntityName('Template Categories')"  
-                        [NewRecordValues]="NewRecordValues('Template Categories')"
-                        [AllowLoad]="IsCurrentTab('Template Categories')"  
-                        [EditMode]="GridEditMode()"  
-                        [BottomMargin]="GridBottomMargin">
-                    </mj-user-view-grid>
-                </mj-tab-body>
+                        [Visible]="record.IsSaved" 
+                        [Props]="{EntityRelationshipID: 279}">
+                        Template Categories
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Template Categories')"  
+                            [NewRecordValues]="NewRecordValues('Template Categories')"
+                            [AllowLoad]="IsCurrentTab('Template Categories')"  
+                            [EditMode]="GridEditMode()"  
+                            [BottomMargin]="GridBottomMargin">
+                        </mj-user-view-grid>
+                    </mj-tab-body>
                 </mj-tabstrip>
     </form>
 </div>

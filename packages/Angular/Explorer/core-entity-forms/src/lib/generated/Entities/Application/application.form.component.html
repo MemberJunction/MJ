@@ -17,49 +17,49 @@
                     </mj-tab-body>
                     
                     <mj-tab Name="Entities" 
-                    [Visible]="record.IsSaved" 
-                    [Props]="{EntityRelationshipID: 23}">
-                    Entities
-                </mj-tab>
-                <mj-tab-body>
-                    <mj-user-view-grid 
-                        [Params]="BuildRelationshipViewParamsByEntityName('Application Entities')"  
-                        [NewRecordValues]="NewRecordValues('Application Entities')"
-                        [AllowLoad]="IsCurrentTab('Entities')"  
-                        [EditMode]="GridEditMode()"  
-                        [BottomMargin]="GridBottomMargin">
-                    </mj-user-view-grid>
-                </mj-tab-body>
+                        [Visible]="record.IsSaved" 
+                        [Props]="{EntityRelationshipID: 23}">
+                        Entities
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Application Entities')"  
+                            [NewRecordValues]="NewRecordValues('Application Entities')"
+                            [AllowLoad]="IsCurrentTab('Entities')"  
+                            [EditMode]="GridEditMode()"  
+                            [BottomMargin]="GridBottomMargin">
+                        </mj-user-view-grid>
+                    </mj-tab-body>
 
                     <mj-tab Name="User Applications" 
-                    [Visible]="record.IsSaved" 
-                    [Props]="{EntityRelationshipID: 92}">
-                    User Applications
-                </mj-tab>
-                <mj-tab-body>
-                    <mj-user-view-grid 
-                        [Params]="BuildRelationshipViewParamsByEntityName('User Applications')"  
-                        [NewRecordValues]="NewRecordValues('User Applications')"
-                        [AllowLoad]="IsCurrentTab('User Applications')"  
-                        [EditMode]="GridEditMode()"  
-                        [BottomMargin]="GridBottomMargin">
-                    </mj-user-view-grid>
-                </mj-tab-body>
+                        [Visible]="record.IsSaved" 
+                        [Props]="{EntityRelationshipID: 92}">
+                        User Applications
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('User Applications')"  
+                            [NewRecordValues]="NewRecordValues('User Applications')"
+                            [AllowLoad]="IsCurrentTab('User Applications')"  
+                            [EditMode]="GridEditMode()"  
+                            [BottomMargin]="GridBottomMargin">
+                        </mj-user-view-grid>
+                    </mj-tab-body>
 
                     <mj-tab Name="Application Settings" 
-                    [Visible]="record.IsSaved" 
-                    [Props]="{EntityRelationshipID: 205}">
-                    Application Settings
-                </mj-tab>
-                <mj-tab-body>
-                    <mj-user-view-grid 
-                        [Params]="BuildRelationshipViewParamsByEntityName('Application Settings')"  
-                        [NewRecordValues]="NewRecordValues('Application Settings')"
-                        [AllowLoad]="IsCurrentTab('Application Settings')"  
-                        [EditMode]="GridEditMode()"  
-                        [BottomMargin]="GridBottomMargin">
-                    </mj-user-view-grid>
-                </mj-tab-body>
+                        [Visible]="record.IsSaved" 
+                        [Props]="{EntityRelationshipID: 205}">
+                        Application Settings
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Application Settings')"  
+                            [NewRecordValues]="NewRecordValues('Application Settings')"
+                            [AllowLoad]="IsCurrentTab('Application Settings')"  
+                            [EditMode]="GridEditMode()"  
+                            [BottomMargin]="GridBottomMargin">
+                        </mj-user-view-grid>
+                    </mj-tab-body>
                 </mj-tabstrip>
     </form>
 </div>

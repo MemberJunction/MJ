@@ -17,19 +17,19 @@
                     </mj-tab-body>
                     
                     <mj-tab Name="Entity Permissions" 
-                    [Visible]="record.IsSaved" 
-                    [Props]="{EntityRelationshipID: 96}">
-                    Entity Permissions
-                </mj-tab>
-                <mj-tab-body>
-                    <mj-user-view-grid 
-                        [Params]="BuildRelationshipViewParamsByEntityName('Entity Permissions')"  
-                        [NewRecordValues]="NewRecordValues('Entity Permissions')"
-                        [AllowLoad]="IsCurrentTab('Entity Permissions')"  
-                        [EditMode]="GridEditMode()"  
-                        [BottomMargin]="GridBottomMargin">
-                    </mj-user-view-grid>
-                </mj-tab-body>
+                        [Visible]="record.IsSaved" 
+                        [Props]="{EntityRelationshipID: 96}">
+                        Entity Permissions
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Entity Permissions')"  
+                            [NewRecordValues]="NewRecordValues('Entity Permissions')"
+                            [AllowLoad]="IsCurrentTab('Entity Permissions')"  
+                            [EditMode]="GridEditMode()"  
+                            [BottomMargin]="GridBottomMargin">
+                        </mj-user-view-grid>
+                    </mj-tab-body>
                 </mj-tabstrip>
     </form>
 </div>

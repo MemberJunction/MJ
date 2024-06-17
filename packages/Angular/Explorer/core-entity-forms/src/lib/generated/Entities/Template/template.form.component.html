@@ -17,34 +17,34 @@
                     </mj-tab-body>
                     
                     <mj-tab Name="Template Params" 
-                    [Visible]="record.IsSaved" 
-                    [Props]="{EntityRelationshipID: 281}">
-                    Template Params
-                </mj-tab>
-                <mj-tab-body>
-                    <mj-user-view-grid 
-                        [Params]="BuildRelationshipViewParamsByEntityName('Template Params')"  
-                        [NewRecordValues]="NewRecordValues('Template Params')"
-                        [AllowLoad]="IsCurrentTab('Template Params')"  
-                        [EditMode]="GridEditMode()"  
-                        [BottomMargin]="GridBottomMargin">
-                    </mj-user-view-grid>
-                </mj-tab-body>
+                        [Visible]="record.IsSaved" 
+                        [Props]="{EntityRelationshipID: 281}">
+                        Template Params
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Template Params')"  
+                            [NewRecordValues]="NewRecordValues('Template Params')"
+                            [AllowLoad]="IsCurrentTab('Template Params')"  
+                            [EditMode]="GridEditMode()"  
+                            [BottomMargin]="GridBottomMargin">
+                        </mj-user-view-grid>
+                    </mj-tab-body>
 
                     <mj-tab Name="Template Contents" 
-                    [Visible]="record.IsSaved" 
-                    [Props]="{EntityRelationshipID: 282}">
-                    Template Contents
-                </mj-tab>
-                <mj-tab-body>
-                    <mj-user-view-grid 
-                        [Params]="BuildRelationshipViewParamsByEntityName('Template Contents')"  
-                        [NewRecordValues]="NewRecordValues('Template Contents')"
-                        [AllowLoad]="IsCurrentTab('Template Contents')"  
-                        [EditMode]="GridEditMode()"  
-                        [BottomMargin]="GridBottomMargin">
-                    </mj-user-view-grid>
-                </mj-tab-body>
+                        [Visible]="record.IsSaved" 
+                        [Props]="{EntityRelationshipID: 282}">
+                        Template Contents
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Template Contents')"  
+                            [NewRecordValues]="NewRecordValues('Template Contents')"
+                            [AllowLoad]="IsCurrentTab('Template Contents')"  
+                            [EditMode]="GridEditMode()"  
+                            [BottomMargin]="GridBottomMargin">
+                        </mj-user-view-grid>
+                    </mj-tab-body>
                 </mj-tabstrip>
     </form>
 </div>

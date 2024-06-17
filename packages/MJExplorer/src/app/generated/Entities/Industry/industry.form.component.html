@@ -17,19 +17,19 @@
                     </mj-tab-body>
                     
                     <mj-tab Name="Accounts" 
-                    [Visible]="record.IsSaved" 
-                    [Props]="{EntityRelationshipID: 141}">
-                    Accounts
-                </mj-tab>
-                <mj-tab-body>
-                    <mj-user-view-grid 
-                        [Params]="BuildRelationshipViewParamsByEntityName('Accounts')"  
-                        [NewRecordValues]="NewRecordValues('Accounts')"
-                        [AllowLoad]="IsCurrentTab('Accounts')"  
-                        [EditMode]="GridEditMode()"  
-                        [BottomMargin]="GridBottomMargin">
-                    </mj-user-view-grid>
-                </mj-tab-body>
+                        [Visible]="record.IsSaved" 
+                        [Props]="{EntityRelationshipID: 141}">
+                        Accounts
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Accounts')"  
+                            [NewRecordValues]="NewRecordValues('Accounts')"
+                            [AllowLoad]="IsCurrentTab('Accounts')"  
+                            [EditMode]="GridEditMode()"  
+                            [BottomMargin]="GridBottomMargin">
+                        </mj-user-view-grid>
+                    </mj-tab-body>
                 </mj-tabstrip>
     </form>
 </div>

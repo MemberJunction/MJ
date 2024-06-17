@@ -17,34 +17,34 @@
                     </mj-tab-body>
                     
                     <mj-tab Name="Tags" 
-                    [Visible]="record.IsSaved" 
-                    [Props]="{EntityRelationshipID: 116}">
-                    Tags
-                </mj-tab>
-                <mj-tab-body>
-                    <mj-user-view-grid 
-                        [Params]="BuildRelationshipViewParamsByEntityName('Tags')"  
-                        [NewRecordValues]="NewRecordValues('Tags')"
-                        [AllowLoad]="IsCurrentTab('Tags')"  
-                        [EditMode]="GridEditMode()"  
-                        [BottomMargin]="GridBottomMargin">
-                    </mj-user-view-grid>
-                </mj-tab-body>
+                        [Visible]="record.IsSaved" 
+                        [Props]="{EntityRelationshipID: 116}">
+                        Tags
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Tags')"  
+                            [NewRecordValues]="NewRecordValues('Tags')"
+                            [AllowLoad]="IsCurrentTab('Tags')"  
+                            [EditMode]="GridEditMode()"  
+                            [BottomMargin]="GridBottomMargin">
+                        </mj-user-view-grid>
+                    </mj-tab-body>
 
                     <mj-tab Name="Tagged Items" 
-                    [Visible]="record.IsSaved" 
-                    [Props]="{EntityRelationshipID: 117}">
-                    Tagged Items
-                </mj-tab>
-                <mj-tab-body>
-                    <mj-user-view-grid 
-                        [Params]="BuildRelationshipViewParamsByEntityName('Tagged Items')"  
-                        [NewRecordValues]="NewRecordValues('Tagged Items')"
-                        [AllowLoad]="IsCurrentTab('Tagged Items')"  
-                        [EditMode]="GridEditMode()"  
-                        [BottomMargin]="GridBottomMargin">
-                    </mj-user-view-grid>
-                </mj-tab-body>
+                        [Visible]="record.IsSaved" 
+                        [Props]="{EntityRelationshipID: 117}">
+                        Tagged Items
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Tagged Items')"  
+                            [NewRecordValues]="NewRecordValues('Tagged Items')"
+                            [AllowLoad]="IsCurrentTab('Tagged Items')"  
+                            [EditMode]="GridEditMode()"  
+                            [BottomMargin]="GridBottomMargin">
+                        </mj-user-view-grid>
+                    </mj-tab-body>
                 </mj-tabstrip>
     </form>
 </div>

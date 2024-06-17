@@ -17,34 +17,34 @@
                     </mj-tab-body>
                     
                     <mj-tab Name="Employee Skills" 
-                    [Visible]="record.IsSaved" 
-                    [Props]="{EntityRelationshipID: 52}">
-                    Employee Skills
-                </mj-tab>
-                <mj-tab-body>
-                    <mj-user-view-grid 
-                        [Params]="BuildRelationshipViewParamsByEntityName('Employee Skills')"  
-                        [NewRecordValues]="NewRecordValues('Employee Skills')"
-                        [AllowLoad]="IsCurrentTab('Employee Skills')"  
-                        [EditMode]="GridEditMode()"  
-                        [BottomMargin]="GridBottomMargin">
-                    </mj-user-view-grid>
-                </mj-tab-body>
+                        [Visible]="record.IsSaved" 
+                        [Props]="{EntityRelationshipID: 52}">
+                        Employee Skills
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Employee Skills')"  
+                            [NewRecordValues]="NewRecordValues('Employee Skills')"
+                            [AllowLoad]="IsCurrentTab('Employee Skills')"  
+                            [EditMode]="GridEditMode()"  
+                            [BottomMargin]="GridBottomMargin">
+                        </mj-user-view-grid>
+                    </mj-tab-body>
 
                     <mj-tab Name="Skills" 
-                    [Visible]="record.IsSaved" 
-                    [Props]="{EntityRelationshipID: 129}">
-                    Skills
-                </mj-tab>
-                <mj-tab-body>
-                    <mj-user-view-grid 
-                        [Params]="BuildRelationshipViewParamsByEntityName('Skills')"  
-                        [NewRecordValues]="NewRecordValues('Skills')"
-                        [AllowLoad]="IsCurrentTab('Skills')"  
-                        [EditMode]="GridEditMode()"  
-                        [BottomMargin]="GridBottomMargin">
-                    </mj-user-view-grid>
-                </mj-tab-body>
+                        [Visible]="record.IsSaved" 
+                        [Props]="{EntityRelationshipID: 129}">
+                        Skills
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Skills')"  
+                            [NewRecordValues]="NewRecordValues('Skills')"
+                            [AllowLoad]="IsCurrentTab('Skills')"  
+                            [EditMode]="GridEditMode()"  
+                            [BottomMargin]="GridBottomMargin">
+                        </mj-user-view-grid>
+                    </mj-tab-body>
                 </mj-tabstrip>
     </form>
 </div>

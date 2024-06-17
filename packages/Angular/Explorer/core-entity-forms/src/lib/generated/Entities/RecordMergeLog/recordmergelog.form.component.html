@@ -17,34 +17,34 @@
                     </mj-tab-body>
                     
                     <mj-tab Name="Record Merge Deletion Logs" 
-                    [Visible]="record.IsSaved" 
-                    [Props]="{EntityRelationshipID: 128}">
-                    Record Merge Deletion Logs
-                </mj-tab>
-                <mj-tab-body>
-                    <mj-user-view-grid 
-                        [Params]="BuildRelationshipViewParamsByEntityName('Record Merge Deletion Logs')"  
-                        [NewRecordValues]="NewRecordValues('Record Merge Deletion Logs')"
-                        [AllowLoad]="IsCurrentTab('Record Merge Deletion Logs')"  
-                        [EditMode]="GridEditMode()"  
-                        [BottomMargin]="GridBottomMargin">
-                    </mj-user-view-grid>
-                </mj-tab-body>
+                        [Visible]="record.IsSaved" 
+                        [Props]="{EntityRelationshipID: 128}">
+                        Record Merge Deletion Logs
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Record Merge Deletion Logs')"  
+                            [NewRecordValues]="NewRecordValues('Record Merge Deletion Logs')"
+                            [AllowLoad]="IsCurrentTab('Record Merge Deletion Logs')"  
+                            [EditMode]="GridEditMode()"  
+                            [BottomMargin]="GridBottomMargin">
+                        </mj-user-view-grid>
+                    </mj-tab-body>
 
                     <mj-tab Name="Duplicate Run Detail Matches" 
-                    [Visible]="record.IsSaved" 
-                    [Props]="{EntityRelationshipID: 200}">
-                    Duplicate Run Detail Matches
-                </mj-tab>
-                <mj-tab-body>
-                    <mj-user-view-grid 
-                        [Params]="BuildRelationshipViewParamsByEntityName('Duplicate Run Detail Matches')"  
-                        [NewRecordValues]="NewRecordValues('Duplicate Run Detail Matches')"
-                        [AllowLoad]="IsCurrentTab('Duplicate Run Detail Matches')"  
-                        [EditMode]="GridEditMode()"  
-                        [BottomMargin]="GridBottomMargin">
-                    </mj-user-view-grid>
-                </mj-tab-body>
+                        [Visible]="record.IsSaved" 
+                        [Props]="{EntityRelationshipID: 200}">
+                        Duplicate Run Detail Matches
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Duplicate Run Detail Matches')"  
+                            [NewRecordValues]="NewRecordValues('Duplicate Run Detail Matches')"
+                            [AllowLoad]="IsCurrentTab('Duplicate Run Detail Matches')"  
+                            [EditMode]="GridEditMode()"  
+                            [BottomMargin]="GridBottomMargin">
+                        </mj-user-view-grid>
+                    </mj-tab-body>
                 </mj-tabstrip>
     </form>
 </div>

@@ -17,19 +17,19 @@
                     </mj-tab-body>
                     
                     <mj-tab Name="Entity Communication Fields" 
-                    [Visible]="record.IsSaved" 
-                    [Props]="{EntityRelationshipID: 292}">
-                    Entity Communication Fields
-                </mj-tab>
-                <mj-tab-body>
-                    <mj-user-view-grid 
-                        [Params]="BuildRelationshipViewParamsByEntityName('Entity Communication Fields')"  
-                        [NewRecordValues]="NewRecordValues('Entity Communication Fields')"
-                        [AllowLoad]="IsCurrentTab('Entity Communication Fields')"  
-                        [EditMode]="GridEditMode()"  
-                        [BottomMargin]="GridBottomMargin">
-                    </mj-user-view-grid>
-                </mj-tab-body>
+                        [Visible]="record.IsSaved" 
+                        [Props]="{EntityRelationshipID: 292}">
+                        Entity Communication Fields
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Entity Communication Fields')"  
+                            [NewRecordValues]="NewRecordValues('Entity Communication Fields')"
+                            [AllowLoad]="IsCurrentTab('Entity Communication Fields')"  
+                            [EditMode]="GridEditMode()"  
+                            [BottomMargin]="GridBottomMargin">
+                        </mj-user-view-grid>
+                    </mj-tab-body>
                 </mj-tabstrip>
     </form>
 </div>

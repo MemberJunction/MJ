@@ -17,34 +17,34 @@
                     </mj-tab-body>
                     
                     <mj-tab Name="AI Model Actions" 
-                    [Visible]="record.IsSaved" 
-                    [Props]="{EntityRelationshipID: 105}">
-                    AI Model Actions
-                </mj-tab>
-                <mj-tab-body>
-                    <mj-user-view-grid 
-                        [Params]="BuildRelationshipViewParamsByEntityName('AI Model Actions')"  
-                        [NewRecordValues]="NewRecordValues('AI Model Actions')"
-                        [AllowLoad]="IsCurrentTab('AI Model Actions')"  
-                        [EditMode]="GridEditMode()"  
-                        [BottomMargin]="GridBottomMargin">
-                    </mj-user-view-grid>
-                </mj-tab-body>
+                        [Visible]="record.IsSaved" 
+                        [Props]="{EntityRelationshipID: 105}">
+                        AI Model Actions
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('AI Model Actions')"  
+                            [NewRecordValues]="NewRecordValues('AI Model Actions')"
+                            [AllowLoad]="IsCurrentTab('AI Model Actions')"  
+                            [EditMode]="GridEditMode()"  
+                            [BottomMargin]="GridBottomMargin">
+                        </mj-user-view-grid>
+                    </mj-tab-body>
 
                     <mj-tab Name="Entity AI Actions" 
-                    [Visible]="record.IsSaved" 
-                    [Props]="{EntityRelationshipID: 106}">
-                    Entity AI Actions
-                </mj-tab>
-                <mj-tab-body>
-                    <mj-user-view-grid 
-                        [Params]="BuildRelationshipViewParamsByEntityName('Entity AI Actions')"  
-                        [NewRecordValues]="NewRecordValues('Entity AI Actions')"
-                        [AllowLoad]="IsCurrentTab('Entity AI Actions')"  
-                        [EditMode]="GridEditMode()"  
-                        [BottomMargin]="GridBottomMargin">
-                    </mj-user-view-grid>
-                </mj-tab-body>
+                        [Visible]="record.IsSaved" 
+                        [Props]="{EntityRelationshipID: 106}">
+                        Entity AI Actions
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Entity AI Actions')"  
+                            [NewRecordValues]="NewRecordValues('Entity AI Actions')"
+                            [AllowLoad]="IsCurrentTab('Entity AI Actions')"  
+                            [EditMode]="GridEditMode()"  
+                            [BottomMargin]="GridBottomMargin">
+                        </mj-user-view-grid>
+                    </mj-tab-body>
                 </mj-tabstrip>
     </form>
 </div>
