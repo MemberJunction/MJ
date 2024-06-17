@@ -66,10 +66,13 @@ export class EntityRelationshipInfo extends BaseInfo  {
     JoinEntityJoinField: string = null  
     JoinEntityInverseJoinField: string = null     
     DisplayInForm: boolean = null
+    DisplayLocation: 'After Field Tabs' | 'Before Field Tabs' = 'After Field Tabs'
     DisplayName: string = null
+    DisplayIconType: 'Related Entity Icon'| 'Custom' | 'None' = 'Related Entity Icon'
+    DisplayIcon: string = null
     DisplayUserViewGUID: string = null
-    CreatedAt: Date = null
-    UpdatedAt: Date = null
+    __mj_CreatedAt: Date = null
+    __mj_UpdatedAt: Date = null
 
     // virtual fields - returned by the database VIEW
     Entity: string = null 
@@ -120,8 +123,8 @@ export class EntityPermissionInfo extends BaseInfo{
     CreateRLSFilterID: number = null
     UpdateRLSFilterID: number = null
     DeleteRLSFilterID: number = null
-    CreatedAt: Date = null
-    UpdatedAt: Date = null
+    __mj_CreatedAt: Date = null
+    __mj_UpdatedAt: Date = null
 
     // virtual fields - returned by the database VIEW
     Entity: string = null
@@ -207,8 +210,8 @@ export class EntityFieldValueInfo extends BaseInfo {
     Value: string = null
     Code: string = null
     Description: string = null
-    CreatedAt: Date = null
-    UpdatedAt: Date = null
+    __mj_CreatedAt: Date = null
+    __mj_UpdatedAt: Date = null
 
     constructor (initData: any) {
         super();
@@ -278,8 +281,8 @@ export class EntityFieldInfo extends BaseInfo {
     RelatedEntityFieldName: string = null
     IncludeRelatedEntityNameFieldInBaseView: boolean = null
     RelatedEntityNameFieldMap: string = null
-    CreatedAt: Date = null
-    UpdatedAt: Date = null
+    __mj_CreatedAt: Date = null
+    __mj_UpdatedAt: Date = null
     
     // virtual fields - returned by the database VIEW
     Entity: string = null 
@@ -412,24 +415,48 @@ export class EntityFieldInfo extends BaseInfo {
     }
 
     get ReadOnly(): boolean {
-        return this.IsVirtual || !this.AllowUpdateAPI || this.IsPrimaryKey || this.Type.toLowerCase() === 'uniqueidentifier';
+        return this.IsVirtual || 
+               !this.AllowUpdateAPI || 
+               this.IsPrimaryKey || 
+               this.Type.toLowerCase() === 'uniqueidentifier' ||
+               this.IsSpecialDateField;
+    }
+
+    /**
+     * Helper method that returns true if the field is one of the special reserved MJ date fields for tracking CreatedAt and UpdatedAt timestamps. This is only used when the 
+     * entity has TrackRecordChanges=1
+     */
+    get IsSpecialDateField(): boolean {
+        return this.IsCreatedAtField || this.IsUpdatedAtField;
+    }
+
+    /**
+     * Returns true if the field is the CreatedAt field, a special field that is used to track the creation date of a record. This is only used when the entity has TrackRecordChanges=1
+     */
+    get IsCreatedAtField(): boolean {
+        return this.Name.trim().toLowerCase() === EntityInfo.CreatedAtFieldName.trim().toLowerCase();
+    }
+    /**
+     * Returns true if the field is the UpdatedAt field, a special field that is used to track the last update date of a record. This is only used when the entity has TrackRecordChanges=1
+     */
+    get IsUpdatedAtField(): boolean {
+        return this.Name.trim().toLowerCase() === EntityInfo.UpdatedAtFieldName.trim().toLowerCase();
     }
 
     /**
      * Returns true if the field is a "special" field (see list below) and is handled inside the DB layer and should be ignored in validation by the BaseEntity architecture
-     * Special fields are: CreatedAt, UpdatedAt, ID
      * Also, we skip validation if we have a field that is:
      *  - the primary key
      *  - a uniqueidentifier 
      *  - an autoincrement field
      *  - the field is virtual
      *  - the field is readonly
+     *  - the field is a special date field
      */
     get SkipValidation(): boolean {
         const name: string = this.Name.toLowerCase().trim(); 
 
-        return name === 'createdat' || 
-               name === 'updatedat' || 
+        return this.IsSpecialDateField ||
                this.IsPrimaryKey ||
                this.Type.trim().toLowerCase() === 'uniqueidentifier' ||
                this.AutoIncrement === true ||
@@ -489,8 +516,8 @@ export class EntityFieldInfo extends BaseInfo {
 export class EntityDocumentTypeInfo extends BaseInfo {
     Name: string = null
     Description: string = null  
-    CreatedAt: Date = null
-    UpdatedAt: Date = null
+    __mj_CreatedAt: Date = null
+    __mj_UpdatedAt: Date = null
 
     constructor (initData: any = null) {
         super()
@@ -507,8 +534,8 @@ export class EntitySettingInfo extends BaseInfo {
     Name: string = null
     Value: string = null
     Comments: string = null
-    CreatedAt: Date = null
-    UpdatedAt: Date = null
+    __mj_CreatedAt: Date = null
+    __mj_UpdatedAt: Date = null
 
     constructor (initData: any = null) {
         super()
@@ -566,8 +593,8 @@ export class EntityInfo extends BaseInfo {
     EntityObjectSubclassImport: string = null
     PreferredCommunicationField: string = null
     Icon: string = null
-    CreatedAt: Date = null
-    UpdatedAt: Date = null
+    __mj_CreatedAt: Date = null
+    __mj_UpdatedAt: Date = null
 
     // virtual fields - returned by the database VIEW
     /**
@@ -626,6 +653,24 @@ export class EntityInfo extends BaseInfo {
     get Settings(): EntitySettingInfo[] {
         return this._Settings;
     }
+
+
+    private static __createdAtFieldName = '__mj_CreatedAt';
+    private static __updatedAtFieldName = '__mj_UpdatedAt';
+    /**
+     * Returns the name of the special reserved field that is used to store the CreatedAt timestamp across all of MJ. This is only used when an entity has TrackRecordChanges turned on
+     */
+    public static get CreatedAtFieldName(): string {
+        return EntityInfo.__createdAtFieldName;
+    }
+    /**
+     * Returns the name of the special reserved field that is used to store the UpdatedAt timestamp across all of MJ. This is only used when an entity has TrackRecordChanges turned on
+     */
+    public static get UpdatedAtFieldName(): string {
+        return EntityInfo.__updatedAtFieldName;
+    }
+
+
 
     /**
      * @returns The BaseTable but with spaces inbetween capital letters

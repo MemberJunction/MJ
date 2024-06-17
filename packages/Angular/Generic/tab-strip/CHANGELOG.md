@@ -1,8 +1,26 @@
 # Change Log - @memberjunction/ng-tabstrip
 
-This log was last generated on Tue, 11 Jun 2024 06:50:06 GMT and should not be manually modified.
+This log was last generated on Wed, 12 Jun 2024 20:13:29 GMT and should not be manually modified.
 
 <!-- Start content -->
+
+## 1.7.1
+
+Wed, 12 Jun 2024 20:13:29 GMT
+
+### Patches
+
+- Bump @memberjunction/ng-container-directives to v1.7.1
+- Bump @memberjunction/ng-shared to v1.7.1
+
+## 1.7.0
+
+Wed, 12 Jun 2024 18:53:39 GMT
+
+### Minor changes
+
+- Bump @memberjunction/ng-container-directives to v1.7.0
+- Bump @memberjunction/ng-shared to v1.7.0
 
 ## 1.6.1
 

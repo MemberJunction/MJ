@@ -18,7 +18,7 @@
         },
         {
             "name": "skip_database_generation",
-            "value": false
+            "value": true
         }
     ],
     "logging": {
@@ -200,6 +200,15 @@
     "commands": [
         {
             "workingDirectory": "../MJCoreEntities",
+            "command": "npm",
+            "args": [
+                "run",
+                "build"
+            ],
+            "when": "after"
+        },
+        {
+            "workingDirectory": "../Angular/Explorer/core-entity-forms",
             "command": "npm",
             "args": [
                 "run",

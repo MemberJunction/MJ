@@ -1,4 +1,5 @@
 import { BaseEntity } from "./baseEntity";
+import { LogError } from "./logging";
 
 /**
  * Internal class used by TransactionGroupBase and sub-classes to manage individual transactions
@@ -53,6 +54,21 @@ export class TransactionResult {
     }
 }
 
+
+/**
+ * Used internally within the transaction group to manage the preprocessing of entities before a transaction is submitted
+ */
+export class TransactionPreprocessingItem {
+    entity: BaseEntity;
+    complete: boolean = false;
+    completionPromise: Promise<void>;
+
+    constructor(entity: BaseEntity, completionPromise: Promise<void>) {
+        this.entity = entity;
+        this.completionPromise = completionPromise;
+    }
+}
+
 /**
  * TransactionGroup is a class that handles the bundling of multiple transactions into a single request. The provider handles
  * the implementation details. If a transaction group is provided to the baseEntity object before either Save() or Delete() is called
@@ -75,6 +91,57 @@ export abstract class TransactionGroupBase {
         return this._pendingTransactions;
     }
 
+    private _preprocessingItems: TransactionPreprocessingItem[] = [];
+    /**
+     * If an entity object needs to conduct any type of asynchronous preprocessing before a transaction is submitted, it must notify its transaction group
+     * that it is doing so with this method. This causes the TransactionGroup to wait for all preprocessing to be completed before submitting the transaction.
+     * This method checks to see if an the entity has already been registered for preprocessing and if so, does nothing.
+     * @param entity 
+     */
+    public RegisterPreprocessing(entity: BaseEntity): void {
+        const existingEntry = this._preprocessingItems.find((i) => i.entity === entity);
+        if (!existingEntry) {
+            const preprocessingPromise = new Promise<void>((resolve) => {
+                entity.RegisterEventHandler((e) => {
+                    if (e.type === 'transaction_ready' && e.baseEntity === entity) {
+                        const found = this._preprocessingItems.find((i) => i.entity === entity);
+                        if (found) {
+                            found.complete = true;
+                            resolve();
+                        }
+                    }
+                });
+            });
+    
+            const newItem = new TransactionPreprocessingItem(entity, preprocessingPromise);
+            this._preprocessingItems.push(newItem);
+        }
+    }
+
+    /**
+     * Indicates whether all of the entities that have registered with this transaction group have completed their preprocessing
+     * @returns 
+     */
+    public PreprocessingComplete(): boolean {
+        if (this._preprocessingItems.length === 0)
+            return true;
+        else
+            return this._preprocessingItems.every((i) => i.complete);
+    }
+
+    /**
+     * Waits for all preprocessing to be complete.
+     */
+    protected async waitForPreprocessing(): Promise<void> {
+        try {
+            await Promise.all(this._preprocessingItems.map(item => item.completionPromise));
+            this._preprocessingItems = []; // clear out the preprocessing items
+        }
+        catch (e) {
+            LogError(`Error during preprocessing TransactionGroupBase. Error: ${e.message}`)
+        }
+    }
+
     /**
      * This is used by the BaseEntity/Provider objects to manage transactions on your behalf. Do not directly interact with this method. Instead use the TransactionGroup property on
      * the @BaseEntity class to make an entity object part of a transaction group.
@@ -93,6 +160,9 @@ export abstract class TransactionGroupBase {
      */
     public async Submit(): Promise<boolean> {
         try {
+            // Wait for all preprocessing to be complete
+            await this.waitForPreprocessing();
+
             if (this._pendingTransactions.length > 0) {
                 // subclass handles the actual submit implementation whatever that does
                 let results: TransactionResult[] = await this.HandleSubmit(this._pendingTransactions);

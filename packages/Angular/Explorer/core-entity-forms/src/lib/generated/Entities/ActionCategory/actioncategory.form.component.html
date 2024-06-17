@@ -1,10 +1,9 @@
 <div class="record-form-container" mjFillContainer [bottomMargin]="20" [rightMargin]="5">
     <form *ngIf="record" class="record-form"  #form="ngForm" mjFillContainer>
         <mj-form-toolbar [form]="this"></mj-form-toolbar>
-                <div #topArea class="record-form-group">
-                    
-                </div>
+
                 <mj-tabstrip (TabSelected)="onTabSelect($event.index)" mjFillContainer>
+                    
                     <mj-tab Name="Details">
                         Details
                     </mj-tab>
@@ -35,7 +34,7 @@
                     <mj-tab Name="Actions" 
                         [Visible]="record.IsSaved" 
                         [Props]="{EntityRelationshipID: 246}">
-                        Actions
+                        <span class="fa-solid fa-bolt tab-header-icon"></span>Actions
                     </mj-tab>
                     <mj-tab-body>
                         <mj-user-view-grid 

@@ -952,7 +952,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
         const sSimpleSQL: string = `EXEC [${entity.EntityInfo.SchemaName}].${spName} ${this.generateSPParams(entity, !bNewRecord)}`;
         const recordChangesEntityInfo = this.Entities.find(e => e.Name === 'Record Changes');
         let sSQL: string = '';
-        if (entity.EntityInfo.TrackRecordChanges) {
+        if (entity.EntityInfo.TrackRecordChanges && entity.EntityInfo.Name.trim().toLowerCase() !== 'record changes') { // don't track changes for the record changes entity
             let oldData = null;
 
             if (!bNewRecord) 
@@ -994,23 +994,22 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
 
     protected async HandleEntityActions(entity: BaseEntity, baseType: 'save' | 'delete' | 'validate', before: boolean, user: UserInfo): Promise<ActionResult[]> {
         // use the EntityActionEngine for this
-        const engine = EntityActionEngine.Instance;
-        await engine.Config(false, user);
-        const newRecord = entity.IsSaved ? false : true;
-        const baseTypeType = baseType === 'save' ? (newRecord ? 'Create' : 'Update') : 'Delete';
-        const invocationType = baseType === 'validate' ? 'Validate' : (before ? 'Before' + baseTypeType : 'After' + baseTypeType);
-        const invocationTypeEntity = engine.InvocationTypes.find((i) => i.Name === invocationType);
-        if (!invocationTypeEntity) {
-            LogError(`Invocation Type ${invocationType} not found in metadata`);
-            return; 
-//            throw new Error(`Invocation Type ${invocationType} not found in metadata`);
-        }
+        try {
+            const engine = EntityActionEngine.Instance;
+            await engine.Config(false, user);
+            const newRecord = entity.IsSaved ? false : true;
+            const baseTypeType = baseType === 'save' ? (newRecord ? 'Create' : 'Update') : 'Delete';
+            const invocationType = baseType === 'validate' ? 'Validate' : (before ? 'Before' + baseTypeType : 'After' + baseTypeType);
+            const invocationTypeEntity = engine.InvocationTypes.find((i) => i.Name === invocationType);
+            if (!invocationTypeEntity) {
+                LogError(`Invocation Type ${invocationType} not found in metadata`);
+                return []; 
+    //            throw new Error(`Invocation Type ${invocationType} not found in metadata`);
+            }
 
-        const actions = engine.GetActionsByEntityNameAndInvocationType(entity.EntityInfo.Name, invocationType);
-        const results: ActionResult[] = [];
-        if (actions.length > 0) {
-            const activeActions = actions.filter(a => a.Status === 'Active');
-            // filter down to only the active actions and loop through however many of those we have
+            
+            const activeActions = engine.GetActionsByEntityNameAndInvocationType(entity.EntityInfo.Name, invocationType, 'Active');
+            const results: ActionResult[] = [];
             for (const a of activeActions) {
                 const result = await engine.RunEntityAction({
                     EntityAction: a,
@@ -1020,8 +1019,12 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
                 })    
                 results.push(result);
             }
+            return results;    
         }
-        return results;
+        catch (e) {
+            LogError(e);
+            return [];
+        }
     }
 
     /**
@@ -1034,47 +1037,54 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
      * @param user 
      */
     protected async HandleEntityAIActions(entity: BaseEntity, baseType: 'save' | 'delete', before: boolean, user: UserInfo) {
-        // TEMP while we don't support delete
-        if (baseType === 'delete')
-            return;
+        try {
+            // TEMP while we don't support delete
+            if (baseType === 'delete')
+                return;
 
-        // Make sure AI Metadata is loaded here...
-        await AIEngine.Instance.Config(false, user);
-        
-        const actions = this.GetEntityAIActions(entity.EntityInfo, before); // get the actions we need to do for this entity
-        if (actions && actions.length > 0) {
-            const ai = AIEngine.Instance;
-            for (let i = 0; i < actions.length; i++) {
-                const a = actions[i];
-                if (a.TriggerEvent === 'before save' && before || 
-                    a.TriggerEvent === 'after save' && !before) {
-                    const p: EntityAIActionParams = {
-                        entityAIActionId: a.ID,
-                        entityRecord: entity,
-                        actionId: a.AIActionID,
-                        modelId: a.AIModelID
-                    }
-                    if (before) {
-                        // do it with await so we're blocking, as it needs to complete before the record save continues
-                        await ai.ExecuteEntityAIAction(p)
-                    }
-                    else {
-                        // just add a task and move on, we are doing 'after save' so we don't wait
-                        try {
-                            QueueManager.AddTask('Entity AI Action', p, null, user);
+            // Make sure AI Metadata is loaded here...
+            await AIEngine.Instance.Config(false, user);
+            
+            const actions = this.GetEntityAIActions(entity.EntityInfo, before); // get the actions we need to do for this entity
+            if (actions && actions.length > 0) {
+                const ai = AIEngine.Instance;
+                for (let i = 0; i < actions.length; i++) {
+                    const a = actions[i];
+                    if (a.TriggerEvent === 'before save' && before || 
+                        a.TriggerEvent === 'after save' && !before) {
+                        const p: EntityAIActionParams = {
+                            entityAIActionId: a.ID,
+                            entityRecord: entity,
+                            actionId: a.AIActionID,
+                            modelId: a.AIModelID
                         }
-                        catch (e) {
-                            LogError(e.message);
+                        if (before) {
+                            // do it with await so we're blocking, as it needs to complete before the record save continues
+                            await ai.ExecuteEntityAIAction(p)
                         }
-                    }        
+                        else {
+                            // just add a task and move on, we are doing 'after save' so we don't wait
+                            try {
+                                QueueManager.AddTask('Entity AI Action', p, null, user);
+                            }
+                            catch (e) {
+                                LogError(e.message);
+                            }
+                        }        
+                    }
                 }
-            }
+            }            
+        }
+        catch (e) {
+            LogError(e);
         }
     }
 
     public async Save(entity: BaseEntity, user: UserInfo, options: EntitySaveOptions) : Promise<{}> {
         const entityResult = new BaseEntityResult();
         try {
+            entity.RegisterTransactionPreprocessing();
+            
             const bNewRecord = !entity.IsSaved;
             if (!options)
                 options = new EntitySaveOptions();
@@ -1132,6 +1142,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
 
                     if (entity.TransactionGroup && !bReplay /*we never participate in a transaction if we're in replay mode*/) {
                         // we have a transaction group, need to play nice and be part of it
+                        entity.RaiseReadyForTransaction(); // let the entity know we're ready to be part of the transaction
                         return new Promise((resolve, reject) => {
                             // we are part of a transaction group, so just add our query to the list
                             // and when the transaction is committed, we will send all the queries at once
@@ -1146,11 +1157,11 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
                                     // these are fired off but are NOT part of the transaction group, so if they fail,
                                     // the transaction group will still commit, but the AI action will not be executed
                                     if (options.SkipEntityAIActions !== true /*options set, but not set to skip entity AI actions*/ ) 
-                                        this.HandleEntityAIActions(entity, 'save', false, user);
+                                        this.HandleEntityAIActions(entity, 'save', false, user); // NO AWAIT INTENTIONALLY
 
                                     // Same approach to Entity Actions as Entity AI Actions
                                     if (options.SkipEntityActions !== true) 
-                                        this.HandleEntityActions(entity, 'save', false, user);
+                                        this.HandleEntityActions(entity, 'save', false, user); // NO AWAIT INTENTIONALLY
 
                                     entityResult.Success = true;
                                     resolve (results[0])
@@ -1185,7 +1196,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
 
                             // Entity Actions - fired off async, NO await on purpose
                             if (options.SkipEntityActions !== true) 
-                                this.HandleEntityActions(entity, 'save', false, user);
+                                this.HandleEntityActions(entity, 'save', false, user); // NO AWAIT INTENTIONALLY
                                 
                             entityResult.Success = true;
                             return result[0]; 
@@ -1307,14 +1318,14 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
         if (changesKeys.length > 0 || oldData === null /*new record*/ || newData === null /*deleted record*/) {
             const changesJSON: string = changes !== null ? JSON.stringify(changes) : '';
             const quotes = wrapRecordIdInQuotes ? "'" : '';
-            const sSQL = `EXEC [${this.MJCoreSchemaName}].spCreateRecordChange @EntityName='${entityName}', 
-                                                                               @RecordID=${quotes}${recordID}${quotes}, 
-                                                                               @UserID=${user.ID},
-                                                                               @ChangesJSON='${changesJSON}', 
-                                                                               @ChangesDescription='${oldData && newData ? this.CreateUserDescription(changes) : !oldData ? 'Record Created' : 'Record Deleted'}', 
-                                                                               @FullRecordJSON='${fullRecordJSON}', 
-                                                                               @Status='Complete', 
-                                                                               @Comments=null`
+            const sSQL = `EXEC [${this.MJCoreSchemaName}].spCreateRecordChange_Internal @EntityName='${entityName}', 
+                                                                                        @RecordID=${quotes}${recordID}${quotes}, 
+                                                                                        @UserID=${user.ID},
+                                                                                        @ChangesJSON='${changesJSON}', 
+                                                                                        @ChangesDescription='${oldData && newData ? this.CreateUserDescriptionOfChanges(changes) : !oldData ? 'Record Created' : 'Record Deleted'}', 
+                                                                                        @FullRecordJSON='${fullRecordJSON}', 
+                                                                                        @Status='Complete', 
+                                                                                        @Comments=null`
             return sSQL;                                    
         }
         else
@@ -1327,7 +1338,15 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
             return result;
         }
     }
-    protected CreateUserDescription(changesObject: any, maxValueLength: number = 200): string {
+
+    /**
+     * This method will create a human-readable string that describes the changes object that was created using the DiffObjects() method
+     * @param changesObject JavaScript object that has properties for each changed field that in turn have field, oldValue and newValue as sub-properties
+     * @param maxValueLength If not specified, default value of 200 characters applies where any values after the maxValueLength is cut off. The actual values are stored in the ChangesJSON and FullRecordJSON in the RecordChange table, this is only for the human-display
+     * @param cutOffText If specified, and if maxValueLength applies to any of the values being included in the description, this cutOffText param will be appended to the end of the cut off string to indicate to the human reader that the value is partial.
+     * @returns 
+     */
+    public CreateUserDescriptionOfChanges(changesObject: any, maxValueLength: number = 200, cutOffText: string = '...'): string {
         let sRet = '';
         let keys = Object.keys(changesObject);
         for (let i = 0; i < keys.length; i++) {
@@ -1336,11 +1355,11 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
                 sRet += '\n';
             }
             if (change.oldValue && change.newValue) // both old and new values set, show change
-                sRet += `${change.field} changed from ${this.trimString(change.oldValue, maxValueLength, '...')} to ${this.trimString(change.newValue, maxValueLength, '...')}`
+                sRet += `${change.field} changed from ${this.trimString(change.oldValue, maxValueLength, cutOffText)} to ${this.trimString(change.newValue, maxValueLength, cutOffText)}`
             else if (change.newValue) // old value was blank, new value isn't
-                sRet += `${change.field} set to ${this.trimString(change.newValue, maxValueLength, '...')}`
+                sRet += `${change.field} set to ${this.trimString(change.newValue, maxValueLength, cutOffText)}`
             else if (change.oldValue) // new value is blank, old value wasn't
-                sRet += `${change.field} cleared from ${this.trimString(change.oldValue, maxValueLength, '...')}`
+                sRet += `${change.field} cleared from ${this.trimString(change.oldValue, maxValueLength, cutOffText)}`
 
         }
         return sRet.replace(/'/g, "''")
@@ -1368,7 +1387,16 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
         }
         return sRet;
     }
-    protected DiffObjects(oldData: any, newData: any, entityInfo: EntityInfo, quoteToEscape: string): any {
+    
+    /**
+     * This method will create a changes object by comparing two javascript objects. Each property of the object will be named by the 
+     * field name in the newData/oldData and will have a sub-object with the following properties:
+     *  * field: the field name
+     *  * oldValue: the old value
+     *  * newValue: the new value
+     * This is used to generate the object that will be saved into the ChangesJSON field in the Record Changes entity.
+     */
+    public DiffObjects(oldData: any, newData: any, entityInfo: EntityInfo, quoteToEscape: string): any {
         if (!oldData || !newData)
             return null;
         else {
@@ -1481,7 +1509,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
         const sSimpleSQL: string = `EXEC [${entity.EntityInfo.SchemaName}].[${spName}] ${sParams}`;
         const recordChangesEntityInfo = this.Entities.find(e => e.Name === 'Record Changes');
 
-        if (entity.EntityInfo.TrackRecordChanges) {
+        if (entity.EntityInfo.TrackRecordChanges && entity.EntityInfo.Name.trim().toLowerCase() !== 'record changes') { // don't track changes for the record changes entity
             const oldData = entity.GetAll(true); // get all the OLD values
             const sTableDeclare: string = entity.PrimaryKeys.map((pk) => {
                 return `${pk.CodeName} ${pk.EntityFieldInfo.SQLFullType}`
@@ -1495,7 +1523,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
             const sIF: string = entity.PrimaryKeys.map((pk) => {
                 return `@${pk.CodeName} IS NOT NULL` 
             }).join(' AND ');
-            const sCombinedPrimaryKey: string = entity.PrimaryKeys.map((pk) => pk.Value).join(',');
+            const sCombinedPrimaryKey: string = entity.PrimaryKey.ToConcatenatedString(); 
             const sReturnList: string = entity.PrimaryKeys.map((pk) => {
                 return `@${pk.CodeName} AS [${pk.Name}]` 
             }).join(', ');
@@ -1535,6 +1563,8 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
     public async Delete(entity: BaseEntity, options: EntityDeleteOptions, user: UserInfo) : Promise<boolean> {
         const result = new BaseEntityResult();
         try {
+            entity.RegisterTransactionPreprocessing();
+            
             if (!options)
                 options = new EntityDeleteOptions();
 
@@ -1565,6 +1595,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
        
             if (entity.TransactionGroup && !bReplay) {
                 // we have a transaction group, need to play nice and be part of it
+                entity.RaiseReadyForTransaction();
                 return new Promise((resolve, reject) => {
                     // we are part of a transaction group, so just add our query to the list
                     // and when the transaction is committed, we will send all the queries at once

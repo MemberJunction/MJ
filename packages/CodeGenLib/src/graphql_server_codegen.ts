@@ -163,6 +163,8 @@ export class ${serverGraphQLTypeName} {`;
         
     protected generateServerField(fieldInfo: EntityFieldInfo): string {
         const fieldString: string = this.getTypeGraphQLFieldString(fieldInfo);
+        // use a special codename for graphql because if we start with __mj we will replace with _mj_ as we can't start with __ it has meaning in graphql
+        const codeName: string = fieldInfo.CodeName.startsWith('__mj') ? '_mj_' + fieldInfo.CodeName.substring(4) : fieldInfo.CodeName;
         let fieldOptions:  string = '';
         if (fieldInfo.AllowsNull)
             fieldOptions += 'nullable: true';
@@ -171,7 +173,7 @@ export class ${serverGraphQLTypeName} {`;
     
         return `  
     @Field(${fieldString}${fieldOptions.length > 0 ? (fieldString == '' ?  '' : ', ') + `{${fieldOptions}}` : ''}) ${fieldInfo.Length > 0 && fieldString == '' /*string*/ ? '\n    @MaxLength(' + fieldInfo.Length + ')' : ''}
-    ${fieldInfo.CodeName}${fieldInfo.AllowsNull ? '?' : ''}: ${TypeScriptTypeFromSQLType(fieldInfo.Type)};
+    ${codeName}${fieldInfo.AllowsNull ? '?' : ''}: ${TypeScriptTypeFromSQLType(fieldInfo.Type)};
         `         
     }
         
@@ -200,8 +202,11 @@ export class ${serverGraphQLTypeName} {`;
             case 'smallmoney':
                 fieldInfo.IsFloat = true; // used by calling functions to determine if we need to import Float
                 return '() => Float'
+            case 'timestamp':
+            case 'rowversion':
+                return '';
             default:
-                return '() => Int';      
+                return '() => Int';
         }
     }
     
@@ -378,14 +383,17 @@ export class ${classPrefix}${entity.BaseTableCodeName}Input {`
         for (let i = 0; i < entity.Fields.length; i++) {
             const f = entity.Fields[i];
             const sTypeGraphQLString: string = this.getTypeGraphQLFieldString(f);
+            // use a special codename for graphql because if we start with __mj we will replace with _mj_ as we can't start with __ it has meaning in graphql
+            const codeName: string = f.CodeName.startsWith('__mj') ? '_mj_' + f.CodeName.substring(4) : f.CodeName;
+
             const sNull: string = f.AllowsNull ? '{ nullable: true }' : '';
             const sFullTypeGraphQLString: string = sTypeGraphQLString + (sNull === '' || sTypeGraphQLString === '' ? '' : ', ') + sNull;
             // always include ID becuase it is used for UPDATES
             const includePrimaryKey = isUpdate || (!f.AutoIncrement && f.Type !=='uniqueidentifier') // include primary key for updates and also for creates if it is not an autoincrement field or a uniqueidentifier
-            if ( (includePrimaryKey && f.IsPrimaryKey) || (!f.IsPrimaryKey && !f.IsVirtual && f.AllowUpdateAPI && f.Type.trim().toLowerCase() !== 'uniqueidentifier') ) {
+            if ( (includePrimaryKey && f.IsPrimaryKey) || (!f.ReadOnly) ) {
                 sRet += `
     @Field(${sFullTypeGraphQLString})
-    ${f.CodeName}${f.AllowsNull ? '?' : ''}: ${TypeScriptTypeFromSQLType(f.Type)};
+    ${codeName}${f.AllowsNull ? '?' : ''}: ${TypeScriptTypeFromSQLType(f.Type)};
 `
             }
         }

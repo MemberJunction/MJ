@@ -1,8 +1,38 @@
 # Change Log - @memberjunction/ai-vector-sync
 
-This log was last generated on Tue, 11 Jun 2024 06:50:06 GMT and should not be manually modified.
+This log was last generated on Wed, 12 Jun 2024 20:13:29 GMT and should not be manually modified.
 
 <!-- Start content -->
+
+## 1.7.1
+
+Wed, 12 Jun 2024 20:13:29 GMT
+
+### Patches
+
+- Bump @memberjunction/ai to v1.7.1
+- Bump @memberjunction/ai-vectordb to v1.7.1
+- Bump @memberjunction/ai-vectors to v1.7.1
+- Bump @memberjunction/aiengine to v1.7.1
+- Bump @memberjunction/core to v1.7.1
+- Bump @memberjunction/global to v1.7.1
+
+## 1.7.0
+
+Wed, 12 Jun 2024 18:53:38 GMT
+
+### Minor changes
+
+- Bump @memberjunction/ai to v1.7.0
+- Bump @memberjunction/ai-vectordb to v1.7.0
+- Bump @memberjunction/ai-vectors to v1.7.0
+- Bump @memberjunction/aiengine to v1.7.0
+- Bump @memberjunction/core to v1.7.0
+- Bump @memberjunction/global to v1.7.0
+
+### Patches
+
+- Applying package updates [skip ci] (craig.adam@bluecypress.io)
 
 ## 1.6.1
 

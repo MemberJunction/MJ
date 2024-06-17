@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/templates-base-types",
-  "version": "1.6.1",
+  "version": "1.7.1",
   "description": "MemberJunction Templating Base Types for Client/Server Use",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -18,8 +18,8 @@
     "typescript": "^5.4.5"
   },
   "dependencies": {
-    "@memberjunction/core": "1.6.1",
-    "@memberjunction/core-entities": "1.6.1",
-    "@memberjunction/global": "1.6.1"
+    "@memberjunction/core": "1.7.1",
+    "@memberjunction/core-entities": "1.7.1",
+    "@memberjunction/global": "1.7.1"
   }
 }

@@ -551,11 +551,11 @@ GO
 
 
 ------------------------------------------------------------
------ CREATE PROCEDURE FOR RecordChange
+----- CREATE PROCEDURE FOR RecordChange for INTERNAL USE WITHIN DataProvider
 ------------------------------------------------------------
-DROP PROCEDURE IF EXISTS [__mj].[spCreateRecordChange]
+DROP PROCEDURE IF EXISTS [__mj].[spCreateRecordChange_Internal]
 GO
-CREATE PROCEDURE [__mj].[spCreateRecordChange]
+CREATE PROCEDURE [__mj].[spCreateRecordChange_Internal]
     @EntityName nvarchar(100),
     @RecordID NVARCHAR(750),
 	  @UserID int,
@@ -597,11 +597,10 @@ BEGIN
     SELECT * FROM [__mj].vwRecordChanges WHERE ID = SCOPE_IDENTITY()
 END
 
-
-
-
 GO 
+GRANT EXEC ON __mj.spCreateRecordChange_Internal TO cdp_Developer, cdp_Integration, cdp_UI
 
+GO
 
 
 
@@ -972,7 +971,7 @@ WHERE
 SELECT * INTO #actual_spDeleteUnneededEntityFields FROM vwSQLColumnsAndEntityFields   
 
 -- first update the entity UpdatedAt so that our metadata timestamps are right
-UPDATE __mj.Entity SET UpdatedAt=GETDATE() WHERE ID IN
+UPDATE __mj.Entity SET __mj_UpdatedAt=GETDATE() WHERE ID IN
 (
 	SELECT 
 	  ef.EntityID 
@@ -1073,7 +1072,7 @@ BEGIN
 									ELSE 0 
 								END 
 						END,
-        UpdatedAt = GETDATE()
+        __mj_UpdatedAt = GETDATE()
     FROM
         [__mj].EntityField ef
     INNER JOIN
@@ -1195,7 +1194,7 @@ SET
 				IIF(ef.Type ='nchar', 75,
 					150)))
 		), 
-	UpdatedAt = GETDATE()
+	__mj_UpdatedAt = GETDATE()
 FROM 
 	__mj.EntityField ef
 INNER JOIN
@@ -1476,20 +1475,111 @@ DROP VIEW IF EXISTS __mj.vwEntitiesWithExternalChangeTracking
 GO
 CREATE VIEW __mj.vwEntitiesWithExternalChangeTracking 
 AS
-SELECT 
+SELECT   
   e.* 
 FROM 
   __mj.vwEntities e
 WHERE 
-  e.TrackRecordChanges=1 AND
-  EXISTS (
-		SELECT 
-			1 
-		FROM 
-			__mj.vwEntityFields ef 
-		WHERE 
-			ef.Name='UpdatedAt' AND ef.Type='datetime' AND ef.EntityID = e.ID
-		)
+  e.TrackRecordChanges=1
+  AND
+    EXISTS (
+		  SELECT 
+			  1 
+		  FROM 
+			  __mj.vwEntityFields ef 
+		  WHERE 
+			  ef.Name='__mj_UpdatedAt' AND ef.Type='datetime' AND ef.EntityID = e.ID
+		  )
+  AND
+    EXISTS (
+		  SELECT 
+			  1 
+		  FROM 
+			  __mj.vwEntityFields ef 
+		  WHERE 
+			  ef.Name='__mj_CreatedAt' AND ef.Type='datetime' AND ef.EntityID = e.ID
+		  )
 GO
 
-GRANT SELECT ON __mj.vwEntitiesWithExternalChangeTracking TO cdp_Developer
+GRANT SELECT ON __mj.vwEntitiesWithExternalChangeTracking TO cdp_Developer, cdp_Integration, cdp_UI
+GO
+
+
+
+
+/****
+ Utility SPROC for migrating CreatedAt/UpdatedAt columns to the new __mj_CreatedAt and __mj_UpdatedAt columns
+ !!!USE WITH CAUTION!!!!
+***/
+DROP PROC IF EXISTS __mj.CAREFUL_MoveDatesToNewSpecialFields_Then_Drop_Old_CreatedAt_And_UpdatedAt_Columns
+GO
+CREATE PROCEDURE __mj.CAREFUL_MoveDatesToNewSpecialFields_Then_Drop_Old_CreatedAt_And_UpdatedAt_Columns
+    @SchemaName NVARCHAR(255),
+    @TableName NVARCHAR(255)
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    DECLARE @sql NVARCHAR(MAX);
+    DECLARE @constraintName NVARCHAR(255);
+
+    BEGIN TRY
+        -- Construct the SQL command for updating the columns
+        SET @sql = 'UPDATE [' + @SchemaName + '].[' + @TableName + '] SET __mj_CreatedAt = CreatedAt, __mj_UpdatedAt = UpdatedAt;';
+        EXEC sp_executesql @sql;
+
+        -- Drop default constraint on CreatedAt
+        SELECT @constraintName = d.name
+        FROM sys.tables t
+        JOIN sys.schemas s ON t.schema_id = s.schema_id
+        JOIN sys.columns c ON t.object_id = c.object_id
+        JOIN sys.default_constraints d ON c.default_object_id = d.object_id
+        WHERE s.name = @SchemaName 
+        AND t.name = @TableName 
+        AND c.name = 'CreatedAt';
+        
+        IF @constraintName IS NOT NULL
+        BEGIN
+            SET @sql = 'ALTER TABLE [' + @SchemaName + '].[' + @TableName + '] DROP CONSTRAINT ' + @constraintName + ';';
+            EXEC sp_executesql @sql;
+        END
+
+        -- Drop default constraint on UpdatedAt
+        SELECT @constraintName = d.name
+        FROM sys.tables t
+        JOIN sys.schemas s ON t.schema_id = s.schema_id
+        JOIN sys.columns c ON t.object_id = c.object_id
+        JOIN sys.default_constraints d ON c.default_object_id = d.object_id
+        WHERE s.name = @SchemaName 
+        AND t.name = @TableName 
+        AND c.name = 'UpdatedAt';
+        
+        IF @constraintName IS NOT NULL
+        BEGIN
+            SET @sql = 'ALTER TABLE [' + @SchemaName + '].[' + @TableName + '] DROP CONSTRAINT ' + @constraintName + ';';
+            EXEC sp_executesql @sql;
+        END
+
+        -- Construct the SQL command for dropping the old columns
+        SET @sql = 'ALTER TABLE [' + @SchemaName + '].[' + @TableName + '] DROP COLUMN CreatedAt, UpdatedAt;';
+        EXEC sp_executesql @sql;
+
+        PRINT 'Finished Updating ' + @SchemaName + '.' + @TableName + ' below is the new data for that table'
+
+        SET @sql = 'SELECT * FROM [' + @SchemaName + '].[' + @TableName + '];';
+        EXEC sp_executesql @sql;
+    END TRY
+    BEGIN CATCH
+        -- Error handling
+        DECLARE @ErrorMessage NVARCHAR(4000);
+        DECLARE @ErrorSeverity INT;
+        DECLARE @ErrorState INT;
+
+        SELECT 
+            @ErrorMessage = ERROR_MESSAGE(),
+            @ErrorSeverity = ERROR_SEVERITY(),
+            @ErrorState = ERROR_STATE();
+
+        RAISERROR (@ErrorMessage, @ErrorSeverity, @ErrorState);
+    END CATCH
+END

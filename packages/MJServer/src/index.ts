@@ -92,11 +92,16 @@ export const serve = async (resolverPaths: Array<string>) => {
 
 
   /******TEST HARNESS FOR CHANGE DETECTION */
-  const cd = ExternalChangeDetectorEngine.Instance;
-  await cd.Config(false, UserCache.Users[0]);
+  // const cd = ExternalChangeDetectorEngine.Instance;
+  // await cd.Config(false, UserCache.Users[0]);
 
-  // don't wait for this, just run it and show in console whenever done.
-  cd.DetectChangesForAllEligibleEntities().then(result => console.log(result));
+  // // don't wait for this, just run it and show in console whenever done.
+  // cd.DetectChangesForAllEligibleEntities().then(result => {
+  //   console.log(result)
+  //   cd.ReplayChanges(result.Changes).then(replayResult => {
+  //     console.log(replayResult)
+  //   });
+  // });
 
   console.log(`Data Source has been initialized. ${md?.Entities ? md.Entities.length : 0} entities loaded.`);
 

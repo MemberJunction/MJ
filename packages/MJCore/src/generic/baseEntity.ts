@@ -314,7 +314,10 @@ export class BaseEntityResult {
  * Event type that is used to raise events and provided structured callbacks for any caller that is interested in registering for events.
  */
 export class BaseEntityEvent {
-    type: 'new_record' | 'save' | 'delete' | 'other';
+    /**
+     * The type of event that is being raised. transaction_ready is used to indicate that a transaction is ready to be submitted for execution. The TransactionGroup class uses this to know that all async preprocessing is done and it can now submit the transaction.
+     */
+    type: 'new_record' | 'save' | 'delete' | 'transaction_ready' | 'other';
     payload: any;
     baseEntity: BaseEntity;
 }
@@ -349,9 +352,29 @@ export abstract class BaseEntity {
     }
 
     /**
+     * If the entity object has a TransactionGroup associated with it, the TransactionGroup will be notified that we are doing some transaction pre-processing so that the TransactionGroup can
+     * properly wait for those pre-processing steps to complete before submitting the transaction. This method should generally NOT be called by anyone other than a provider that is handling 
+     * the tier-specific processing for the entity object.
+     */
+    public RegisterTransactionPreprocessing() {
+        if (this.TransactionGroup) {
+            this.TransactionGroup.RegisterPreprocessing(this);
+        }
+    }
+
+    /**
+     * Raises the transaction_ready event. This is used to indicate that the entity object is ready to be submitted for transaction processing. This is used by the TransactionGroup class to know when all async preprocessing is 
+     * done and it can submit the transaction. This is an internal method and shouldn't be used by sub-classes or external callers in most cases. It is primarily used by Provider classes who are handling the tier-specific processing
+     * for the entity object.
+     */
+    public RaiseReadyForTransaction() {
+        this.RaiseEvent('transaction_ready', null);
+    }
+
+    /**
      * Used for raising events within the BaseEntity and can be used by sub-classes to raise events that are specific to the entity.
      */
-    protected RaiseEvent(type: 'new_record' | 'save' | 'delete' | 'other', payload: any) {
+    protected RaiseEvent(type: 'new_record' | 'save' | 'delete' | 'transaction_ready' | 'other', payload: any) {
         this._eventSubject.next({type: type, payload: payload, baseEntity: this});
     }
 
@@ -787,20 +810,36 @@ export abstract class BaseEntity {
         // first check if the AllowCreateAPI/AllowUpdateAPI/AllowDeleteAPI settings are flipped on for the entity in question
         switch (type) {
             case EntityPermissionType.Create:
-                if (!this.EntityInfo.AllowCreateAPI)
-                    throw new Error(`Create API is disabled for ${this.EntityInfo.Name}`);
+                if (!this.EntityInfo.AllowCreateAPI) {
+                    if (throwError)
+                        throw new Error(`Create API is disabled for ${this.EntityInfo.Name}`);
+                    else
+                        return false;
+                }
                 break;
             case EntityPermissionType.Update:
-                if (!this.EntityInfo.AllowUpdateAPI)
-                    throw new Error(`Update API is disabled for ${this.EntityInfo.Name}`);
+                if (!this.EntityInfo.AllowUpdateAPI) {
+                    if (throwError)
+                        throw new Error(`Update API is disabled for ${this.EntityInfo.Name}`);
+                    else
+                        return false;
+                }
                 break;
             case EntityPermissionType.Delete:
-                if (!this.EntityInfo.AllowDeleteAPI)
-                    throw new Error(`Delete API is disabled for ${this.EntityInfo.Name}`);
+                if (!this.EntityInfo.AllowDeleteAPI) {
+                    if (throwError) 
+                        throw new Error(`Delete API is disabled for ${this.EntityInfo.Name}`);
+                    else
+                        return false;
+                }
                 break;
             case EntityPermissionType.Read:
-                if (!this.EntityInfo.IncludeInAPI)
-                    throw new Error(`API is disabled for ${this.EntityInfo.Name}`);
+                if (!this.EntityInfo.IncludeInAPI) {
+                    if (throwError)
+                        throw new Error(`API is disabled for ${this.EntityInfo.Name}`);
+                    else
+                        return false;
+                }
                 break;
         }
         

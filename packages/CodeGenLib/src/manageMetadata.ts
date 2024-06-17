@@ -1,7 +1,7 @@
 import { DataSource } from "typeorm";
 import { configInfo, mj_core_schema } from './config';
-import { LogError, LogStatus, Metadata, SeverityType } from "@memberjunction/core";
-import { logError, logMessage, logStatus } from "./logging";
+import { CodeNameFromString, EntityInfo, ExtractActualDefaultValue, LogError, LogStatus, Metadata, SeverityType } from "@memberjunction/core";
+import { logError, logMessage, logStatus, logWarning } from "./logging";
 import { SQLUtilityBase } from "./sql";
 import { AdvancedGeneration, EntityDescriptionResult, EntityNameResult } from "./advanced_generation";
 import { MJGlobal, RegisterClass } from "@memberjunction/global";
@@ -43,7 +43,7 @@ export class ManageMetadataBase {
          // failure for this entire function
       }         
    
-      if (! await this.manageEntityFields(ds, excludeSchemas)) {
+      if (! await this.manageEntityFields(ds, excludeSchemas, false)) {
          logError('Error managing entity fields');
          bSuccess = false;
       }
@@ -201,6 +201,15 @@ export class ManageMetadataBase {
                              EntityID NOT IN (SELECT ID FROM ${mj_core_schema()}.Entity WHERE SchemaName IN (${excludeSchemas.map(s => `'${s}'`).join(',')}))
                        ORDER BY RelatedEntityID`;
          const entityFields = await ds.query(sSQL);
+
+         // Get the relationship counts for each entity
+         const sSQLRelationshipCount = `SELECT EntityID, COUNT(*) AS Count FROM ${mj_core_schema()}.EntityRelationship GROUP BY EntityID`;
+         const relationshipCounts = await ds.query(sSQLRelationshipCount);
+         const relationshipCountMap = new Map<number, number>();
+         for (const rc of relationshipCounts) {
+            relationshipCountMap.set(rc.EntityID, rc.Count);
+         }
+
          // now loop through all of our fkey fields
          for (const f of entityFields) {
             // for each field determine if an existing relationship exists, if not, create it
@@ -209,8 +218,12 @@ export class ManageMetadataBase {
             if (relationships && relationships.length === 0) {
                // no relationship exists, so create it
                const e = md.Entities.find(e => e.ID === f.EntityID)
-               const sSQLInsert = `INSERT INTO ${mj_core_schema()}.EntityRelationship (EntityID, RelatedEntityID, RelatedEntityJoinField, Type, BundleInAPI, DisplayInForm, DisplayName) 
-                                       VALUES (${f.RelatedEntityID}, ${f.EntityID}, '${f.Name}', 'One To Many', 1, 1, '${e.Name}')`;
+               // calculate the sequence by getting the count of existing relationships for the entity and adding 1 and then increment the count for future inserts in this loop
+               const sequence = relationshipCountMap.get(f.EntityID) + 1;
+               const sSQLInsert = `INSERT INTO ${mj_core_schema()}.EntityRelationship (EntityID, RelatedEntityID, RelatedEntityJoinField, Type, BundleInAPI, DisplayInForm, DisplayName, Sequence) 
+                                       VALUES (${f.RelatedEntityID}, ${f.EntityID}, '${f.Name}', 'One To Many', 1, 1, '${e.Name}', ${sequence})`;
+               // now update the map for the relationship count
+               relationshipCountMap.set(f.EntityID, sequence);                                       
                await ds.query(sSQLInsert);
             }
          }
@@ -231,7 +244,7 @@ export class ManageMetadataBase {
     * @returns 
     */
    protected async manageManyToManyEntityRelationships(ds: DataSource, excludeSchemas: string[]): Promise<boolean> {
-      return true; // not implemented for now
+      return true; // not implemented for now, require the admin to manually create these relationships
    }
    
    /**
@@ -240,14 +253,22 @@ export class ManageMetadataBase {
     * @param excludeSchemas 
     * @returns 
     */
-   public async manageEntityFields(ds: DataSource, excludeSchemas: string[]): Promise<boolean> {
+   public async manageEntityFields(ds: DataSource, excludeSchemas: string[], skipCreatedAtUpdatedAtFieldValidation: boolean): Promise<boolean> {
       let bSuccess = true;
       const startTime: Date = new Date();
+
+      if (!skipCreatedAtUpdatedAtFieldValidation && !await this.ensureCreatedAtUpdatedAtFieldsExist(ds, excludeSchemas)) {
+         logError (`Error ensuring ${EntityInfo.CreatedAtFieldName} and ${EntityInfo.UpdatedAtFieldName} fields exist`);
+         bSuccess = false;
+      }
+      logStatus(`   Ensured ${EntityInfo.CreatedAtFieldName}/${EntityInfo.UpdatedAtFieldName} fields exist in ${(new Date().getTime() - startTime.getTime()) / 1000} seconds`);
+
+      const step1StartTime: Date = new Date();
       if (! await this.deleteUnneededEntityFields(ds, excludeSchemas)) {
          logError ('Error deleting unneeded entity fields');
          bSuccess = false;
       }
-      logStatus(`   Deleted unneeded entity fields in ${(new Date().getTime() - startTime.getTime()) / 1000} seconds`);
+      logStatus(`   Deleted unneeded entity fields in ${(new Date().getTime() - step1StartTime.getTime()) / 1000} seconds`);
    
       const step2StartTime: Date = new Date();
       if (! await this.updateExistingEntityFieldsFromSchema(ds, excludeSchemas)) {
@@ -288,6 +309,114 @@ export class ManageMetadataBase {
    
       return bSuccess;
    }
+
+
+   /**
+    * This method ensures that the __mj_CreatedAt and __mj_UpdatedAt fields exist in each entity that has TrackRecordChanges set to true. If the fields do not exist, they are created.
+    * If the fields exist but have incorrect default values, the default values are updated. The default value that is to be used for these special fields is GETUTCDATE() which is the
+    * UTC date and time. This method is called as part of the manageEntityFields method and is not intended to be called directly.
+    * @param ds 
+    */
+   protected async ensureCreatedAtUpdatedAtFieldsExist(ds: DataSource, excludeSchemas: string[]): Promise<boolean> {
+      try {
+         const sqlEntities = `SELECT * FROM [${mj_core_schema()}].vwEntities WHERE TrackRecordChanges = 1 AND SchemaName NOT IN (${excludeSchemas.map(s => `'${s}'`).join(',')})`;
+         const entities = await ds.query(sqlEntities);
+         let overallResult = true;
+         if (entities.length > 0) {
+            // we have 1+ entities that need the special fields, so loop through them and ensure the fields exist
+            // validate that each entity has two specific fields, the first one is __mj_CreatedAt and the second one is __mj_UpdatedAt
+            // both are DATETIME fields, NOT NULL and both are fields that have a DEFAULT value of GETUTCDATE().
+            for (const e of entities) {
+               const sqlCreatedUpdated = `SELECT * 
+                                          FROM INFORMATION_SCHEMA.COLUMNS
+                                          WHERE 
+                                             TABLE_SCHEMA='${e.SchemaName}' 
+                                             AND TABLE_NAME = '${e.BaseTable}' 
+                                          AND COLUMN_NAME IN ('${EntityInfo.CreatedAtFieldName}','${EntityInfo.UpdatedAtFieldName}')`
+               const result = await ds.query(sqlCreatedUpdated);
+               // result has both created at and updated at fields, so filter on the result for each and do what we need to based on that
+               const createdAt = result.find(r => r.COLUMN_NAME.trim().toLowerCase() === EntityInfo.CreatedAtFieldName.trim().toLowerCase());
+               const updatedAt = result.find(r => r.COLUMN_NAME.trim().toLowerCase() === EntityInfo.UpdatedAtFieldName.trim().toLowerCase());
+
+               // now, if we have the fields, we need to check the default value and update if necessary
+               const fieldResult = await this.ensureSpecialDateFieldExistsAndHasCorrectDefaultValue(ds, e, EntityInfo.CreatedAtFieldName, createdAt) &&
+                                   await this.ensureSpecialDateFieldExistsAndHasCorrectDefaultValue(ds, e, EntityInfo.UpdatedAtFieldName, updatedAt);
+
+               overallResult = overallResult && fieldResult;
+            }
+         }
+         return overallResult;
+      }
+      catch (e) {
+         logError(e);
+         return false;
+      }
+   }
+
+   /**
+    * This method handles the validation of the existence of the specified special date field and if it does exist it makes sure the default value is set correctly, if it doesn't exist 
+    * it makes sure that it is created. This method is called as part of the ensureCreatedAtUpdatedAtFieldsExist method and is not intended to be called directly.
+    * @param entity 
+    * @param fieldName 
+    * @param currentFieldData 
+    */
+   protected async ensureSpecialDateFieldExistsAndHasCorrectDefaultValue(ds: DataSource, entity: any, fieldName: string, currentFieldData: any): Promise<boolean> {
+      if (!currentFieldData) {
+         // field doesn't exist, let's create it
+         const sql = `ALTER TABLE [${entity.SchemaName}].[${entity.BaseTable}] ADD ${fieldName} DATETIME NOT NULL DEFAULT GETUTCDATE()`;
+         await ds.query(sql);
+      }
+      else {
+         // field does exist, let's first check the data type/nullability
+         if (currentFieldData.DATA_TYPE.trim().toLowerCase() !== 'datetime' || currentFieldData.IS_NULLABLE.trim().toLowerCase() !== 'no') {
+            // the column is the wrong type, so let's update it
+            const sql = `ALTER TABLE [${entity.SchemaName}].[${entity.BaseTable}] ALTER COLUMN ${fieldName} DATETIME NOT NULL`;
+            await ds.query(sql);
+         }
+
+         // now let's check the default value 
+         const defaultValue = currentFieldData.COLUMN_DEFAULT;
+         const realDefaultValue = ExtractActualDefaultValue(defaultValue);
+         if (realDefaultValue.trim().toLowerCase() !== 'getutcdate()') {
+            // default value is not correct, so let's update it
+            await this.dropExistingDefaultConstraint(ds, entity, fieldName);
+            const sqlAddDefaultConstraint = `ALTER TABLE [${entity.SchemaName}].[${entity.BaseTable}] ADD CONSTRAINT DF_${entity.SchemaName}_${CodeNameFromString(entity.BaseTable)}_${fieldName} DEFAULT GETUTCDATE() FOR [${fieldName}]`;
+            await ds.query(sqlAddDefaultConstraint);
+         }
+      }
+      // if we get here, we're good
+      return true;
+   }
+
+   /**
+    * Drops an existing default constraint from a given column within a given entity, if it exists
+    * @param ds 
+    * @param entity 
+    * @param fieldName 
+    */
+   protected async dropExistingDefaultConstraint(ds: DataSource, entity: any, fieldName: string) {
+      const sqlDropDefaultConstraint = `
+         DECLARE @constraintName NVARCHAR(255);
+
+         -- Get the default constraint name
+         SELECT @constraintName = d.name
+         FROM sys.tables t
+         JOIN sys.schemas s ON t.schema_id = s.schema_id
+         JOIN sys.columns c ON t.object_id = c.object_id
+         JOIN sys.default_constraints d ON c.default_object_id = d.object_id
+         WHERE s.name = '${entity.SchemaName}' 
+         AND t.name = '${entity.BaseTable}' 
+         AND c.name = '${fieldName}';
+
+         -- Drop the default constraint if it exists
+         IF @constraintName IS NOT NULL
+         BEGIN
+            EXEC('ALTER TABLE [${entity.SchemaName}].[${entity.BaseTable}] DROP CONSTRAINT ' + @constraintName);
+         END
+      `;
+      await ds.query(sqlDropDefaultConstraint);      
+   }
+
    
    /**
     * This method generates descriptions for entities in teh system where there is no existing description. This is an experimental feature and is done using AI. In order for it
@@ -378,7 +507,7 @@ export class ManageMetadataBase {
             for (const field of fields) {
                const sDisplayName = this.stripTrailingChars(this.convertCamelCaseToHaveSpaces(field.Name), 'ID', true).trim()
                if (sDisplayName.length > 0 && sDisplayName.toLowerCase().trim() !== field.Name.toLowerCase().trim()) {
-                  const sSQL = `UPDATE [${mj_core_schema()}].EntityField SET UpdatedAt=GETDATE(), DisplayName = '${sDisplayName}' WHERE ID = ${field.ID}`
+                  const sSQL = `UPDATE [${mj_core_schema()}].EntityField SET ${EntityInfo.UpdatedAtFieldName}=GETUTCDATE(), DisplayName = '${sDisplayName}' WHERE ID = ${field.ID}`
                   await ds.query(sSQL)
                }
             }
@@ -428,7 +557,7 @@ export class ManageMetadataBase {
       sf.AllowsNull,
       sf.DefaultValue,
       sf.AutoIncrement,
-      IIF(sf.IsVirtual = 1, 0, IIF(sf.FieldName = 'CreatedAt' OR sf.FieldName = 'UpdatedAt' OR sf.FieldName = 'ID', 0, 1)) AllowUpdateAPI,
+      IIF(sf.IsVirtual = 1, 0, IIF(sf.FieldName = '${EntityInfo.CreatedAtFieldName}' OR sf.FieldName = '${EntityInfo.UpdatedAtFieldName}' OR sf.FieldName = 'ID', 0, 1)) AllowUpdateAPI,
       sf.IsVirtual,
       re.ID RelatedEntityID,
       fk.referenced_column RelatedEntityFieldName,
@@ -497,6 +626,19 @@ export class ManageMetadataBase {
                                        n.Sequence <= configInfo.newEntityDefaults?.IncludeFirstNFieldsAsDefaultInView ||
                                        n.IsNameField ? true : false);
       const escapedDescription = n.Description ? `'${n.Description.replace(/'/g, "''")}'` : 'NULL';
+      let fieldDisplayName;
+      switch (n.FieldName.trim().toLowerCase()) {
+         case "__mj_createdat":
+            fieldDisplayName = "Created At";
+            break;
+         case "__mj_updatedat":
+            fieldDisplayName = "Updated At";
+            break;
+         default:
+            fieldDisplayName = this.convertCamelCaseToHaveSpaces(n.FieldName).trim();
+            break;
+      }
+      
       return `
       INSERT INTO [${mj_core_schema()}].EntityField
       (
@@ -528,7 +670,7 @@ export class ManageMetadataBase {
          ${n.EntityID},
          ${n.Sequence},
          '${n.FieldName}',
-         '${this.convertCamelCaseToHaveSpaces(n.FieldName).trim()}',
+         '${fieldDisplayName}',
          ${escapedDescription},
          '${n.Type}',
          ${n.Length},
@@ -668,7 +810,7 @@ export class ManageMetadataBase {
          // now, for each of the constraints we get back here, loop through and evaluate if they're simple and if they're simple, parse and sync with entity field values for that field
          for (const r of result) {
             if (r.ConstraintDefinition && r.ConstraintDefinition.length > 0) {
-               const parsedValues = this.parseCheckConstraintValues(r.ConstraintDefinition, r.ColumnName);
+               const parsedValues = this.parseCheckConstraintValues(r.ConstraintDefinition, r.ColumnName, r.EntityName);
                if (parsedValues) {
                   // flip the order of parsedValues because they come out in reverse order from SQL Server
                   parsedValues.reverse();
@@ -745,15 +887,15 @@ export class ManageMetadataBase {
       }
    }
    
-   protected parseCheckConstraintValues(constraintDefinition: string, fieldName: string): string[] | null {
+   protected parseCheckConstraintValues(constraintDefinition: string, fieldName: string, entityName: string): string[] | null {
       // This regex checks for the overall structure including field name and 'OR' sequences
       // an example of a valid constraint definition would be: ([FieldName]='Value1' OR [FieldName]='Value2' OR [FieldName]='Value3')
       // like: ([AutoRunIntervalUnits]='Years' OR [AutoRunIntervalUnits]='Months' OR [AutoRunIntervalUnits]='Weeks' OR [AutoRunIntervalUnits]='Days' OR [AutoRunIntervalUnits]='Hours' OR [AutoRunIntervalUnits]='Minutes')
       // Note: Assuming fieldName does not contain regex special characters; otherwise, it needs to be escaped as well.
       const structureRegex = new RegExp(`^\\(\\[${fieldName}\\]='[^']+'(?: OR \\[${fieldName}\\]='[^']+?')+\\)$`);
       if (!structureRegex.test(constraintDefinition)) {
-          console.log('Constraint does not match the simple OR condition pattern or field name does not match.');
-          return null;
+         logWarning(`      [${entityName}].[${fieldName}] constraint does not match the simple OR condition pattern or field name does not match: ${constraintDefinition}`);
+         return null;
       }
    
       // Regular expression to match the values within the single quotes specifically for the field
