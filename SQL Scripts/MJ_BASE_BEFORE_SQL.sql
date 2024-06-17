@@ -1488,7 +1488,7 @@ WHERE
 		  FROM 
 			  __mj.vwEntityFields ef 
 		  WHERE 
-			  ef.Name='__mj_UpdatedAt' AND ef.Type='datetime' AND ef.EntityID = e.ID
+			  ef.Name='__mj_UpdatedAt' AND ef.Type='datetimeoffset' AND ef.EntityID = e.ID
 		  )
   AND
     EXISTS (
@@ -1497,7 +1497,7 @@ WHERE
 		  FROM 
 			  __mj.vwEntityFields ef 
 		  WHERE 
-			  ef.Name='__mj_CreatedAt' AND ef.Type='datetime' AND ef.EntityID = e.ID
+			  ef.Name='__mj_CreatedAt' AND ef.Type='datetimeoffset' AND ef.EntityID = e.ID
 		  )
 GO
 
