@@ -10,12 +10,14 @@ export class UserResolver extends UserResolverBase {
 
   @Query(() => User_)
   async UserByID(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource }: AppContext) {
-    return super.safeFirstArrayElement(await this.findBy(dataSource, 'Users', { ID }));
+    const retVal = super.safeFirstArrayElement(await this.findBy(dataSource, 'Users', { ID }));
+    return this.MapFieldNamesToCodeNames('Users', retVal);
   }
 
   @Query(() => User_)
   async UserByEmployeeID(@Arg('EmployeeID', () => Int) EmployeeID: number, @Ctx() { dataSource }: AppContext) {
-    return super.safeFirstArrayElement(await this.findBy(dataSource, 'Users', { EmployeeID }));
+    const retVal = super.safeFirstArrayElement(await this.findBy(dataSource, 'Users', { EmployeeID }));
+    return this.MapFieldNamesToCodeNames('Users', retVal);
   }
 
   @Query(() => User_)
@@ -23,7 +25,7 @@ export class UserResolver extends UserResolverBase {
     // const searchEmail = userEmailMap[Email] ?? Email;
     const searchEmail = Email;
     const returnVal = super.safeFirstArrayElement(await this.findBy(dataSource, 'Users', { Email: searchEmail }));
-    return returnVal;
+    return this.MapFieldNamesToCodeNames('Users', returnVal);
   }
 }
 export default UserResolver;

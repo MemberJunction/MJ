@@ -18,8 +18,8 @@ export class UserInfo extends BaseInfo {
     EmployeeID: number = null
     LinkedEntityID: number = null
     LinkedEntityRecordID: number = null
-    CreatedAt: Date = null
-    UpdatedAt: Date = null
+    __mj_CreatedAt: Date = null
+    __mj_UpdatedAt: Date = null
 
     // virtual fields - returned by the database VIEW
     FirstLast: string = null
@@ -65,8 +65,8 @@ export class UserInfo extends BaseInfo {
 export class UserRoleInfo extends BaseInfo {
     UserID: number = null
     RoleName: string = null
-    CreatedAt: Date = null
-    UpdatedAt: Date = null
+    __mj_CreatedAt: Date = null
+    __mj_UpdatedAt: Date = null
 
     // virtual fields - returned by the database VIEW
     User: string = null
@@ -95,8 +95,8 @@ export class RoleInfo extends BaseInfo {
     Description: string = null
     AzureID: string = null
     SQLName: string = null
-    CreatedAt: Date = null
-    UpdatedAt: Date = null
+    __mj_CreatedAt: Date = null
+    __mj_UpdatedAt: Date = null
 
     constructor (initData: any) {
         super();
@@ -156,8 +156,8 @@ export class AuthorizationInfo extends BaseInfo {
     UseAuditLog: boolean = null
 
     Description: string = null
-    CreatedAt: Date = null
-    UpdatedAt: Date = null
+    __mj_CreatedAt: Date = null
+    __mj_UpdatedAt: Date = null
 
     // virtual fields from base view
     Parent: string
@@ -239,8 +239,8 @@ export class AuthorizationRoleInfo extends BaseInfo {
     AuthorizationName: string = null
     RoleName: string = null
     Type: string = null
-    CreatedAt: Date = null
-    UpdatedAt: Date = null
+    __mj_CreatedAt: Date = null
+    __mj_UpdatedAt: Date = null
 
     // virtual fields from base view
     Authorization: string
@@ -317,8 +317,8 @@ export class AuditLogTypeInfo extends BaseInfo {
     Name: string = null
     Description: string = null
     AuthorizationName: string = null
-    CreatedAt: Date = null
-    UpdatedAt: Date = null
+    __mj_CreatedAt: Date = null
+    __mj_UpdatedAt: Date = null
 
     // virtual fields from base view
     Parent: string

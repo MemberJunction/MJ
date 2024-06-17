@@ -2,7 +2,7 @@
 * ALL ENTITIES - TypeGraphQL Type Class Definition - AUTO GENERATED FILE
 * Generated Entities and Resolvers for Server
 * 
-* GENERATED: 6/16/2024, 3:34:25 PM
+* GENERATED: 6/16/2024, 10:09:32 PM
 * 
 *   >>> DO NOT MODIFY THIS FILE!!!!!!!!!!!!
 *   >>> YOUR CHANGES WILL BE OVERWRITTEN
@@ -89,12 +89,6 @@ export class CreateCompanyInput {
 
     @Field({ nullable: true })
     Domain?: string;
-
-    @Field()
-    _mj__CreatedAt: Date;
-
-    @Field()
-    _mj__UpdatedAt: Date;
 }
     
         
@@ -120,12 +114,6 @@ export class UpdateCompanyInput {
 
     @Field({ nullable: true })
     Domain?: string;
-
-    @Field()
-    _mj__CreatedAt: Date;
-
-    @Field()
-    _mj__UpdatedAt: Date;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -835,12 +823,6 @@ export class UpdateEmployeeRoleInput {
     @Field(() => Int)
     RoleID: number;
 
-    @Field()
-    _mj__CreatedAt: Date;
-
-    @Field()
-    _mj__UpdatedAt: Date;
-
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
 }
@@ -950,12 +932,6 @@ export class UpdateEmployeeSkillInput {
     @Field(() => Int)
     SkillID: number;
 
-    @Field()
-    _mj__CreatedAt: Date;
-
-    @Field()
-    _mj__UpdatedAt: Date;
-
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
 }
@@ -1048,11 +1024,11 @@ export class Role_ {
           
     @Field() 
     @MaxLength(8)
-    CreatedAt: Date;
+    _mj__CreatedAt: Date;
           
     @Field() 
     @MaxLength(8)
-    UpdatedAt: Date;
+    _mj__UpdatedAt: Date;
         
     @Field(() => [mj_core_schema_server_object_types.EmployeeRole_])
     EmployeeRolesArray: mj_core_schema_server_object_types.EmployeeRole_[]; // Link to EmployeeRoles
@@ -5133,12 +5109,6 @@ export class CreateApplicationInput {
 
     @Field(() => Boolean)
     DefaultForNewUser: boolean;
-
-    @Field()
-    _mj__CreatedAt: Date;
-
-    @Field()
-    _mj__UpdatedAt: Date;
 }
     
         
@@ -5161,12 +5131,6 @@ export class UpdateApplicationInput {
 
     @Field(() => Boolean)
     DefaultForNewUser: boolean;
-
-    @Field()
-    _mj__CreatedAt: Date;
-
-    @Field()
-    _mj__UpdatedAt: Date;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -5305,11 +5269,11 @@ export class ApplicationEntity_ {
           
     @Field() 
     @MaxLength(8)
-    CreatedAt: Date;
+    _mj__CreatedAt: Date;
           
     @Field() 
     @MaxLength(8)
-    UpdatedAt: Date;
+    _mj__UpdatedAt: Date;
           
     @Field() 
     @MaxLength(100)
@@ -7459,11 +7423,11 @@ export class UserRole_ {
           
     @Field() 
     @MaxLength(8)
-    CreatedAt: Date;
+    _mj__CreatedAt: Date;
           
     @Field() 
     @MaxLength(8)
-    UpdatedAt: Date;
+    _mj__UpdatedAt: Date;
           
     @Field() 
     @MaxLength(200)
@@ -7580,11 +7544,11 @@ export class RowLevelSecurityFilter_ {
           
     @Field() 
     @MaxLength(8)
-    CreatedAt: Date;
+    _mj__CreatedAt: Date;
           
     @Field() 
     @MaxLength(8)
-    UpdatedAt: Date;
+    _mj__UpdatedAt: Date;
         
     @Field(() => [mj_core_schema_server_object_types.EntityPermission_])
     EntityPermissionsArray: mj_core_schema_server_object_types.EntityPermission_[]; // Link to EntityPermissions
@@ -7879,11 +7843,11 @@ export class Authorization_ {
           
     @Field() 
     @MaxLength(8)
-    CreatedAt: Date;
+    _mj__CreatedAt: Date;
           
     @Field() 
     @MaxLength(8)
-    UpdatedAt: Date;
+    _mj__UpdatedAt: Date;
           
     @Field({nullable: true}) 
     @MaxLength(200)
@@ -8122,11 +8086,11 @@ export class AuditLogType_ {
           
     @Field() 
     @MaxLength(8)
-    CreatedAt: Date;
+    _mj__CreatedAt: Date;
           
     @Field() 
     @MaxLength(8)
-    UpdatedAt: Date;
+    _mj__UpdatedAt: Date;
           
     @Field({nullable: true}) 
     @MaxLength(100)
@@ -10834,11 +10798,11 @@ export class ResourceType_ {
           
     @Field() 
     @MaxLength(8)
-    CreatedAt: Date;
+    _mj__CreatedAt: Date;
           
     @Field() 
     @MaxLength(8)
-    UpdatedAt: Date;
+    _mj__UpdatedAt: Date;
           
     @Field({nullable: true}) 
     @MaxLength(510)
@@ -12965,11 +12929,11 @@ export class QueryField_ {
           
     @Field() 
     @MaxLength(8)
-    CreatedAt: Date;
+    _mj__CreatedAt: Date;
           
     @Field() 
     @MaxLength(8)
-    UpdatedAt: Date;
+    _mj__UpdatedAt: Date;
           
     @Field() 
     @MaxLength(510)
@@ -13162,16 +13126,16 @@ export class QueryCategory_ {
     @Field({nullable: true}) 
     Description?: string;
           
-    @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
-          
-    @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
-          
     @Field(() => Int) 
     UserID: number;
+          
+    @Field() 
+    @MaxLength(8)
+    _mj__CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(8)
+    _mj__UpdatedAt: Date;
           
     @Field({nullable: true}) 
     @MaxLength(100)
@@ -13371,11 +13335,11 @@ export class Query_ {
           
     @Field() 
     @MaxLength(8)
-    CreatedAt: Date;
+    _mj__CreatedAt: Date;
           
     @Field() 
     @MaxLength(8)
-    UpdatedAt: Date;
+    _mj__UpdatedAt: Date;
           
     @Field({nullable: true}) 
     @MaxLength(100)
@@ -13590,11 +13554,11 @@ export class QueryPermission_ {
           
     @Field() 
     @MaxLength(8)
-    CreatedAt: Date;
+    _mj__CreatedAt: Date;
           
     @Field() 
     @MaxLength(8)
-    UpdatedAt: Date;
+    _mj__UpdatedAt: Date;
         
 }
         
@@ -17824,11 +17788,11 @@ export class ApplicationSetting_ {
           
     @Field() 
     @MaxLength(8)
-    CreatedAt: Date;
+    _mj__CreatedAt: Date;
           
     @Field() 
     @MaxLength(8)
-    UpdatedAt: Date;
+    _mj__UpdatedAt: Date;
         
 }
         
@@ -18011,12 +17975,6 @@ export class CreateActionCategoryInput {
 
     @Field()
     Status: string;
-
-    @Field()
-    _mj__CreatedAt: Date;
-
-    @Field()
-    _mj__UpdatedAt: Date;
 }
     
         
@@ -18039,12 +17997,6 @@ export class UpdateActionCategoryInput {
 
     @Field()
     Status: string;
-
-    @Field()
-    _mj__CreatedAt: Date;
-
-    @Field()
-    _mj__UpdatedAt: Date;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -18898,12 +18850,6 @@ export class CreateActionInput {
 
     @Field()
     Status: string;
-
-    @Field()
-    _mj__CreatedAt: Date;
-
-    @Field()
-    _mj__UpdatedAt: Date;
 }
     
         
@@ -18953,12 +18899,6 @@ export class UpdateActionInput {
 
     @Field()
     Status: string;
-
-    @Field()
-    _mj__CreatedAt: Date;
-
-    @Field()
-    _mj__UpdatedAt: Date;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -19299,12 +19239,6 @@ export class CreateActionFilterInput {
 
     @Field({ nullable: true })
     CodeExplanation?: string;
-
-    @Field()
-    _mj__CreatedAt: Date;
-
-    @Field()
-    _mj__UpdatedAt: Date;
 }
     
         
@@ -19327,12 +19261,6 @@ export class UpdateActionFilterInput {
 
     @Field({ nullable: true })
     CodeExplanation?: string;
-
-    @Field()
-    _mj__CreatedAt: Date;
-
-    @Field()
-    _mj__UpdatedAt: Date;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -20427,11 +20355,11 @@ export class Library_ {
           
     @Field() 
     @MaxLength(8)
-    CreatedAt: Date;
+    _mj__CreatedAt: Date;
           
     @Field() 
     @MaxLength(8)
-    UpdatedAt: Date;
+    _mj__UpdatedAt: Date;
         
     @Field(() => [mj_core_schema_server_object_types.ActionLibrary_])
     ActionLibrariesArray: mj_core_schema_server_object_types.ActionLibrary_[]; // Link to ActionLibraries

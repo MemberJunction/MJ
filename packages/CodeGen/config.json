@@ -208,6 +208,15 @@
             "when": "after"
         },
         {
+            "workingDirectory": "../Angular/Explorer/core-entity-forms",
+            "command": "npm",
+            "args": [
+                "run",
+                "build"
+            ],
+            "when": "after"
+        },
+        {
             "workingDirectory": "../CoreActions",
             "command": "npm",
             "args": [

@@ -24,10 +24,16 @@ export class ResolverBase {
       const entityInfo = md.Entities.find((e) => e.Name === entityName);
       if (!entityInfo) 
         throw new Error(`Entity ${entityName} not found in metadata`);
-      const fields = entityInfo.Fields.filter((f) => f.Name !== f.CodeName);
+      const fields = entityInfo.Fields.filter((f) => f.Name !== f.CodeName || f.Name.startsWith('__mj_'));
       fields.forEach((f) => {
         if (dataObject.hasOwnProperty(f.Name)) {
-          dataObject[f.CodeName] = dataObject[f.Name];
+          if (f.CodeName.startsWith('__mj_')) { // GraphQL doesn't allow us to pass back fields with __ so we are mapping our special field cases that start with __mj_ to _mj__ for transport - they are converted back on the other side automatically
+            const newCodeName = `_mj__${f.CodeName.substring(5)}`;
+            dataObject[newCodeName] = dataObject[f.Name];
+          } 
+          else {
+            dataObject[f.CodeName] = dataObject[f.Name];
+          }
           delete dataObject[f.Name];
         }
       });  
@@ -205,14 +211,12 @@ export class ResolverBase {
         // figure out the result type from the input string (if provided)
         let rt: 'simple' | 'entity_object' | 'count_only' = 'simple';
         switch (resultType?.trim().toLowerCase()) {
-          case 'entity_object':
-            rt = 'entity_object';
-            break;
           case 'count_only':
             rt = 'count_only';
             break;
+          case 'entity_object':
           default:
-            rt = 'simple';
+            rt = 'simple'; // use simple as the default AND for entity_object becuase on teh server we don't really pass back a true entity_object anyway, just passing back the simple object anyway
             break;
         }
 
@@ -236,9 +240,25 @@ export class ResolverBase {
           },
           user
         );
+        // go through the result and convert all fields that start with __mj_*** to _mj__*** for GraphQL transport
+        if (result && result.Success) {
+          for (const r of result.Results) {
+            const keys = Object.keys(r);
+            keys.forEach((k) => {
+              if (k.trim().toLowerCase().startsWith('__mj_')) {
+                r[`_mj__${k.substring(5)}`] = r[k];
+                delete r[k];
+              }
+            });
+          
+          }
+        }
         return result;
-      } else return null;
-    } catch (err) {
+      } 
+      else 
+        return null;
+    } 
+    catch (err) {
       console.log(err);
       throw err;
     }
@@ -385,7 +405,7 @@ export class ResolverBase {
         if (await entityObject.Save()) {
             // save worked, fire the AfterCreate event and then return all the data
             await this.AfterCreate(dataSource, input); // fire event
-            return entityObject.GetAll();
+            return this.MapFieldNamesToCodeNames(entityName, entityObject.GetAll());
         }
         else 
             // save failed, return null
@@ -458,7 +478,7 @@ export class ResolverBase {
         if (await entityObject.Save()) {
           // save worked, fire afterevent and return all the data
           await this.AfterUpdate(dataSource, input); // fire event
-          return entityObject.GetAll();
+          return this.MapFieldNamesToCodeNames(entityName, entityObject.GetAll());
         }
         else {
           throw new GraphQLError(entityObject.LatestResult?.Message ?? 'Unknown error', {
@@ -499,6 +519,10 @@ export class ResolverBase {
             val = (val === null || val === undefined || val === 'false' || val === '0' || parseInt(val) === 0) ? false : true;
             break;
           case EntityFieldTSType.Date:
+            // first, if val is a string and it is actually a number (milliseconds since epoch), convert it to a number. 
+            if (val !== null && val !== undefined && val.toString().trim() !== '' && !isNaN(val)) 
+              val = parseInt(val);
+
             val = val !== null && val !== undefined ? new Date(val) : null;
             break;
           default:
@@ -516,7 +540,24 @@ export class ResolverBase {
     const dbDifferences = [];
     Object.keys(clientOldValues).forEach((key) => {
       const f = entityObject.EntityInfo.Fields.find((f) => f.CodeName === key);
-      if (clientOldValues[key] !== dbValues[key] && f && f.AllowUpdateAPI && !f.IsPrimaryKey ) {
+      let different = false;
+      switch (typeof clientOldValues[key]) {
+        case 'number':
+          different = clientOldValues[key] !== dbValues[key];
+          break;
+        case 'boolean':
+          different = clientOldValues[key] !== dbValues[key];
+          break;
+        case 'object':
+          if (clientOldValues[key] instanceof Date) {
+            different = clientOldValues[key].getTime() !== dbValues[key].getTime();
+          }
+          break;
+        default:
+          different = clientOldValues[key] !== dbValues[key];
+          break;
+      }
+      if (different && f && !f.ReadOnly ) {
         // only include updateable fields
         dbDifferences.push({
           FieldName: key,
