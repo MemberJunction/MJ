@@ -2,7 +2,7 @@
 * ALL ENTITIES - TypeGraphQL Type Class Definition - AUTO GENERATED FILE
 * Generated Entities and Resolvers for Server
 * 
-* GENERATED: 6/14/2024, 12:27:32 PM
+* GENERATED: 6/17/2024, 6:22:07 AM
 * 
 *   >>> DO NOT MODIFY THIS FILE!!!!!!!!!!!!
 *   >>> YOUR CHANGES WILL BE OVERWRITTEN
@@ -47,17 +47,17 @@ export class Company_ {
     @MaxLength(1000)
     LogoURL?: string;
           
-    @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
-          
-    @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
-          
     @Field({nullable: true}) 
     @MaxLength(510)
     Domain?: string;
+          
+    @Field() 
+    @MaxLength(8)
+    _mj__CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(8)
+    _mj__UpdatedAt: Date;
         
     @Field(() => [mj_core_schema_server_object_types.Employee_])
     EmployeesArray: mj_core_schema_server_object_types.Employee_[]; // Link to Employees
@@ -272,11 +272,11 @@ export class Employee_ {
           
     @Field() 
     @MaxLength(8)
-    CreatedAt: Date;
+    _mj__CreatedAt: Date;
           
     @Field() 
     @MaxLength(8)
-    UpdatedAt: Date;
+    _mj__UpdatedAt: Date;
           
     @Field({nullable: true}) 
     @MaxLength(162)
@@ -797,11 +797,11 @@ export class EmployeeRole_ {
           
     @Field() 
     @MaxLength(8)
-    CreatedAt: Date;
+    _mj__CreatedAt: Date;
           
     @Field() 
     @MaxLength(8)
-    UpdatedAt: Date;
+    _mj__UpdatedAt: Date;
           
     @Field() 
     @MaxLength(100)
@@ -906,11 +906,11 @@ export class EmployeeSkill_ {
           
     @Field() 
     @MaxLength(8)
-    CreatedAt: Date;
+    _mj__CreatedAt: Date;
           
     @Field() 
     @MaxLength(8)
-    UpdatedAt: Date;
+    _mj__UpdatedAt: Date;
           
     @Field() 
     @MaxLength(100)
@@ -1024,11 +1024,11 @@ export class Role_ {
           
     @Field() 
     @MaxLength(8)
-    CreatedAt: Date;
+    _mj__CreatedAt: Date;
           
     @Field() 
     @MaxLength(8)
-    UpdatedAt: Date;
+    _mj__UpdatedAt: Date;
         
     @Field(() => [mj_core_schema_server_object_types.EmployeeRole_])
     EmployeeRolesArray: mj_core_schema_server_object_types.EmployeeRole_[]; // Link to EmployeeRoles
@@ -2016,11 +2016,11 @@ export class EntityField_ {
           
     @Field() 
     @MaxLength(8)
-    CreatedAt: Date;
+    _mj__CreatedAt: Date;
           
     @Field() 
     @MaxLength(8)
-    UpdatedAt: Date;
+    _mj__UpdatedAt: Date;
           
     @Field() 
     @MaxLength(510)
@@ -2371,7 +2371,7 @@ export class Entity_ {
     @Field(() => Boolean) 
     VirtualEntity: boolean;
           
-    @Field(() => Boolean, {description: 'When set to 1, changes made via the MemberJunction architecture will result in tracking records being created in the RecordChange table'}) 
+    @Field(() => Boolean, {description: 'When set to 1, changes made via the MemberJunction architecture will result in tracking records being created in the RecordChange table. In addition, when turned on CodeGen will ensure that your table has two fields: __mj_CreatedAt and __mj_UpdatedAt which are special fields used in conjunction with the RecordChange table to track changes to rows in your entity.'}) 
     TrackRecordChanges: boolean;
           
     @Field(() => Boolean, {description: 'When set to 1, accessing a record by an end-user will result in an Audit Log record being created'}) 
@@ -2467,14 +2467,6 @@ export class Entity_ {
     @MaxLength(510)
     EntityObjectSubclassImport?: string;
           
-    @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
-          
-    @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
-          
     @Field({nullable: true, description: 'Used to specify a field within the entity that in turn contains the field name that will be used for record-level communication preferences. For example in a hypothetical entity called Contacts, say there is a field called PreferredComm and that field had possible values of Email1, SMS, and Phone, and those value in turn corresponded to field names in the entity. Each record in the Contacts entity could have a specific preference for which field would be used for communication. The MJ Communication Framework will use this information when available, as a priority ahead of the data in the Entity Communication Fields entity which is entity-level and not record-level.'}) 
     @MaxLength(510)
     PreferredCommunicationField?: string;
@@ -2482,6 +2474,14 @@ export class Entity_ {
     @Field({nullable: true, description: 'Optional, specify an icon (CSS Class) for each entity for display in the UI'}) 
     @MaxLength(1000)
     Icon?: string;
+          
+    @Field() 
+    @MaxLength(8)
+    _mj__CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(8)
+    _mj__UpdatedAt: Date;
           
     @Field({nullable: true}) 
     CodeName?: string;
@@ -3294,11 +3294,11 @@ export class User_ {
           
     @Field() 
     @MaxLength(8)
-    CreatedAt: Date;
+    _mj__CreatedAt: Date;
           
     @Field() 
     @MaxLength(8)
-    UpdatedAt: Date;
+    _mj__UpdatedAt: Date;
           
     @Field({nullable: true}) 
     @MaxLength(202)
@@ -3874,12 +3874,24 @@ export class EntityRelationship_ {
     @MaxLength(510)
     JoinEntityInverseJoinField?: string;
           
-    @Field(() => Boolean) 
+    @Field(() => Boolean, {description: 'When unchecked the relationship will NOT be displayed on the generated form'}) 
     DisplayInForm: boolean;
           
-    @Field({nullable: true}) 
+    @Field() 
+    @MaxLength(100)
+    DisplayLocation: string;
+          
+    @Field({nullable: true, description: 'Optional, when specified this value overrides the related entity name for the label on the tab'}) 
     @MaxLength(510)
     DisplayName?: string;
+          
+    @Field({description: 'When Related Entity Icon - uses the icon from the related entity, if one exists. When Custom, uses the value in the DisplayIcon field in this record, and when None, no icon is displayed'}) 
+    @MaxLength(100)
+    DisplayIconType: string;
+          
+    @Field({nullable: true, description: 'If specified, the icon '}) 
+    @MaxLength(510)
+    DisplayIcon?: string;
           
     @Field({nullable: true}) 
     @MaxLength(16)
@@ -3887,11 +3899,11 @@ export class EntityRelationship_ {
           
     @Field() 
     @MaxLength(8)
-    CreatedAt: Date;
+    _mj__CreatedAt: Date;
           
     @Field() 
     @MaxLength(8)
-    UpdatedAt: Date;
+    _mj__UpdatedAt: Date;
           
     @Field() 
     @MaxLength(510)
@@ -3976,8 +3988,17 @@ export class CreateEntityRelationshipInput {
     @Field(() => Boolean)
     DisplayInForm: boolean;
 
+    @Field()
+    DisplayLocation: string;
+
     @Field({ nullable: true })
     DisplayName?: string;
+
+    @Field()
+    DisplayIconType: string;
+
+    @Field({ nullable: true })
+    DisplayIcon?: string;
 }
     
         
@@ -4025,8 +4046,17 @@ export class UpdateEntityRelationshipInput {
     @Field(() => Boolean)
     DisplayInForm: boolean;
 
+    @Field()
+    DisplayLocation: string;
+
     @Field({ nullable: true })
     DisplayName?: string;
+
+    @Field()
+    DisplayIconType: string;
+
+    @Field({ nullable: true })
+    DisplayIcon?: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -4330,13 +4360,13 @@ export class UserView_ {
     @Field({nullable: true}) 
     SortState?: string;
           
-    @Field({nullable: true}) 
+    @Field() 
     @MaxLength(8)
-    CreatedAt?: Date;
+    _mj__CreatedAt: Date;
           
-    @Field({nullable: true}) 
+    @Field() 
     @MaxLength(8)
-    UpdatedAt?: Date;
+    _mj__UpdatedAt: Date;
           
     @Field() 
     @MaxLength(200)
@@ -5076,11 +5106,11 @@ export class Application_ {
           
     @Field() 
     @MaxLength(8)
-    CreatedAt: Date;
+    _mj__CreatedAt: Date;
           
     @Field() 
     @MaxLength(8)
-    UpdatedAt: Date;
+    _mj__UpdatedAt: Date;
         
     @Field(() => [mj_core_schema_server_object_types.ApplicationEntity_])
     ApplicationEntitiesArray: mj_core_schema_server_object_types.ApplicationEntity_[]; // Link to ApplicationEntities
@@ -5269,11 +5299,11 @@ export class ApplicationEntity_ {
           
     @Field() 
     @MaxLength(8)
-    CreatedAt: Date;
+    _mj__CreatedAt: Date;
           
     @Field() 
     @MaxLength(8)
-    UpdatedAt: Date;
+    _mj__UpdatedAt: Date;
           
     @Field() 
     @MaxLength(100)
@@ -5460,11 +5490,11 @@ export class EntityPermission_ {
           
     @Field() 
     @MaxLength(8)
-    CreatedAt: Date;
+    _mj__CreatedAt: Date;
           
     @Field() 
     @MaxLength(8)
-    UpdatedAt: Date;
+    _mj__UpdatedAt: Date;
           
     @Field() 
     @MaxLength(510)
@@ -7423,11 +7453,11 @@ export class UserRole_ {
           
     @Field() 
     @MaxLength(8)
-    CreatedAt: Date;
+    _mj__CreatedAt: Date;
           
     @Field() 
     @MaxLength(8)
-    UpdatedAt: Date;
+    _mj__UpdatedAt: Date;
           
     @Field() 
     @MaxLength(200)
@@ -7544,11 +7574,11 @@ export class RowLevelSecurityFilter_ {
           
     @Field() 
     @MaxLength(8)
-    CreatedAt: Date;
+    _mj__CreatedAt: Date;
           
     @Field() 
     @MaxLength(8)
-    UpdatedAt: Date;
+    _mj__UpdatedAt: Date;
         
     @Field(() => [mj_core_schema_server_object_types.EntityPermission_])
     EntityPermissionsArray: mj_core_schema_server_object_types.EntityPermission_[]; // Link to EntityPermissions
@@ -7843,11 +7873,11 @@ export class Authorization_ {
           
     @Field() 
     @MaxLength(8)
-    CreatedAt: Date;
+    _mj__CreatedAt: Date;
           
     @Field() 
     @MaxLength(8)
-    UpdatedAt: Date;
+    _mj__UpdatedAt: Date;
           
     @Field({nullable: true}) 
     @MaxLength(200)
@@ -8086,11 +8116,11 @@ export class AuditLogType_ {
           
     @Field() 
     @MaxLength(8)
-    CreatedAt: Date;
+    _mj__CreatedAt: Date;
           
     @Field() 
     @MaxLength(8)
-    UpdatedAt: Date;
+    _mj__UpdatedAt: Date;
           
     @Field({nullable: true}) 
     @MaxLength(100)
@@ -8212,11 +8242,11 @@ export class EntityFieldValue_ {
           
     @Field() 
     @MaxLength(8)
-    CreatedAt: Date;
+    _mj__CreatedAt: Date;
           
     @Field() 
     @MaxLength(8)
-    UpdatedAt: Date;
+    _mj__UpdatedAt: Date;
           
     @Field() 
     @MaxLength(510)
@@ -8227,6 +8257,37 @@ export class EntityFieldValue_ {
     Entity: string;
         
 }
+        
+//****************************************************************************
+// INPUT TYPE for Entity Field Values   
+//****************************************************************************
+@InputType()
+export class UpdateEntityFieldValueInput {
+    @Field(() => Int)
+    ID: number;
+
+    @Field(() => Int)
+    EntityID: number;
+
+    @Field()
+    EntityFieldName: string;
+
+    @Field(() => Int)
+    Sequence: number;
+
+    @Field()
+    Value: string;
+
+    @Field({ nullable: true })
+    Code?: string;
+
+    @Field({ nullable: true })
+    Description?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
 //****************************************************************************
 // RESOLVER for Entity Field Values
 //****************************************************************************
@@ -8285,6 +8346,15 @@ export class EntityFieldValueResolver extends ResolverBase {
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityFieldValues]` + this.getRowLevelSecurityWhereClause('Entity Field Values', userPayload, EntityPermissionType.Read, ' WHERE');
         const result = this.ArrayMapFieldNamesToCodeNames('Entity Field Values', await dataSource.query(sSQL));
         return result;
+    }
+    
+    @Mutation(() => EntityFieldValue_)
+    async UpdateEntityFieldValue(
+        @Arg('input', () => UpdateEntityFieldValueInput) input: UpdateEntityFieldValueInput,
+        @Ctx() { dataSource, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.UpdateRecord('Entity Field Values', input, dataSource, userPayload, pubSub);
     }
     
 }
@@ -8957,6 +9027,14 @@ export class EntityAIAction_ {
           
     @Field({nullable: true}) 
     Comments?: string;
+          
+    @Field() 
+    @MaxLength(8)
+    _mj__CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(8)
+    _mj__UpdatedAt: Date;
           
     @Field() 
     @MaxLength(510)
@@ -10750,11 +10828,11 @@ export class ResourceType_ {
           
     @Field() 
     @MaxLength(8)
-    CreatedAt: Date;
+    _mj__CreatedAt: Date;
           
     @Field() 
     @MaxLength(8)
-    UpdatedAt: Date;
+    _mj__UpdatedAt: Date;
           
     @Field({nullable: true}) 
     @MaxLength(510)
@@ -12881,11 +12959,11 @@ export class QueryField_ {
           
     @Field() 
     @MaxLength(8)
-    CreatedAt: Date;
+    _mj__CreatedAt: Date;
           
     @Field() 
     @MaxLength(8)
-    UpdatedAt: Date;
+    _mj__UpdatedAt: Date;
           
     @Field() 
     @MaxLength(510)
@@ -13078,16 +13156,16 @@ export class QueryCategory_ {
     @Field({nullable: true}) 
     Description?: string;
           
-    @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
-          
-    @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
-          
     @Field(() => Int) 
     UserID: number;
+          
+    @Field() 
+    @MaxLength(8)
+    _mj__CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(8)
+    _mj__UpdatedAt: Date;
           
     @Field({nullable: true}) 
     @MaxLength(100)
@@ -13287,11 +13365,11 @@ export class Query_ {
           
     @Field() 
     @MaxLength(8)
-    CreatedAt: Date;
+    _mj__CreatedAt: Date;
           
     @Field() 
     @MaxLength(8)
-    UpdatedAt: Date;
+    _mj__UpdatedAt: Date;
           
     @Field({nullable: true}) 
     @MaxLength(100)
@@ -13506,11 +13584,11 @@ export class QueryPermission_ {
           
     @Field() 
     @MaxLength(8)
-    CreatedAt: Date;
+    _mj__CreatedAt: Date;
           
     @Field() 
     @MaxLength(8)
-    UpdatedAt: Date;
+    _mj__UpdatedAt: Date;
         
 }
         
@@ -13788,11 +13866,11 @@ export class EntityDocumentType_ {
           
     @Field() 
     @MaxLength(8)
-    CreatedAt: Date;
+    _mj__CreatedAt: Date;
           
     @Field() 
     @MaxLength(8)
-    UpdatedAt: Date;
+    _mj__UpdatedAt: Date;
         
     @Field(() => [mj_core_schema_server_object_types.EntityDocument_])
     EntityDocumentsArray: mj_core_schema_server_object_types.EntityDocument_[]; // Link to EntityDocuments
@@ -13935,11 +14013,11 @@ export class EntityDocumentRun_ {
           
     @Field() 
     @MaxLength(8)
-    CreatedAt: Date;
+    _mj__CreatedAt: Date;
           
     @Field() 
     @MaxLength(8)
-    UpdatedAt: Date;
+    _mj__UpdatedAt: Date;
           
     @Field() 
     @MaxLength(500)
@@ -14264,16 +14342,16 @@ export class EntityRecordDocument_ {
     @MaxLength(8)
     EntityRecordUpdatedAt: Date;
           
-    @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
-          
-    @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
-          
     @Field(() => Int) 
     EntityDocumentID: number;
+          
+    @Field() 
+    @MaxLength(8)
+    _mj__CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(8)
+    _mj__UpdatedAt: Date;
         
 }
         
@@ -14455,11 +14533,11 @@ export class EntityDocument_ {
           
     @Field() 
     @MaxLength(8)
-    CreatedAt: Date;
+    _mj__CreatedAt: Date;
           
     @Field() 
     @MaxLength(8)
-    UpdatedAt: Date;
+    _mj__UpdatedAt: Date;
           
     @Field() 
     @MaxLength(510)
@@ -16696,11 +16774,11 @@ export class EntityDocumentSetting_ {
           
     @Field() 
     @MaxLength(8)
-    CreatedAt: Date;
+    _mj__CreatedAt: Date;
           
     @Field() 
     @MaxLength(8)
-    UpdatedAt: Date;
+    _mj__UpdatedAt: Date;
           
     @Field() 
     @MaxLength(500)
@@ -16846,11 +16924,11 @@ export class EntitySetting_ {
           
     @Field() 
     @MaxLength(8)
-    CreatedAt: Date;
+    _mj__CreatedAt: Date;
           
     @Field() 
     @MaxLength(8)
-    UpdatedAt: Date;
+    _mj__UpdatedAt: Date;
           
     @Field() 
     @MaxLength(510)
@@ -17420,11 +17498,11 @@ export class EntityBehavior_ {
           
     @Field() 
     @MaxLength(8)
-    CreatedAt: Date;
+    _mj__CreatedAt: Date;
           
     @Field() 
     @MaxLength(8)
-    UpdatedAt: Date;
+    _mj__UpdatedAt: Date;
           
     @Field() 
     @MaxLength(510)
@@ -17588,11 +17666,11 @@ export class EntityBehaviorType_ {
           
     @Field() 
     @MaxLength(8)
-    CreatedAt: Date;
+    _mj__CreatedAt: Date;
           
     @Field() 
     @MaxLength(8)
-    UpdatedAt: Date;
+    _mj__UpdatedAt: Date;
         
     @Field(() => [mj_core_schema_server_object_types.EntityBehavior_])
     EntityBehaviorsArray: mj_core_schema_server_object_types.EntityBehavior_[]; // Link to EntityBehaviors
@@ -17740,11 +17818,11 @@ export class ApplicationSetting_ {
           
     @Field() 
     @MaxLength(8)
-    CreatedAt: Date;
+    _mj__CreatedAt: Date;
           
     @Field() 
     @MaxLength(8)
-    UpdatedAt: Date;
+    _mj__UpdatedAt: Date;
         
 }
         
@@ -17893,11 +17971,11 @@ export class ActionCategory_ {
           
     @Field() 
     @MaxLength(8)
-    CreatedAt: Date;
+    _mj__CreatedAt: Date;
           
     @Field() 
     @MaxLength(8)
-    UpdatedAt: Date;
+    _mj__UpdatedAt: Date;
           
     @Field({nullable: true}) 
     @MaxLength(510)
@@ -18068,11 +18146,11 @@ export class EntityAction_ {
           
     @Field() 
     @MaxLength(8)
-    CreatedAt: Date;
+    _mj__CreatedAt: Date;
           
     @Field() 
     @MaxLength(8)
-    UpdatedAt: Date;
+    _mj__UpdatedAt: Date;
           
     @Field() 
     @MaxLength(510)
@@ -18241,11 +18319,11 @@ export class EntityActionInvocation_ {
           
     @Field() 
     @MaxLength(8)
-    CreatedAt: Date;
+    _mj__CreatedAt: Date;
           
     @Field() 
     @MaxLength(8)
-    UpdatedAt: Date;
+    _mj__UpdatedAt: Date;
           
     @Field() 
     @MaxLength(510)
@@ -18535,11 +18613,11 @@ export class EntityActionInvocationType_ {
           
     @Field() 
     @MaxLength(8)
-    CreatedAt: Date;
+    _mj__CreatedAt: Date;
           
     @Field() 
     @MaxLength(8)
-    UpdatedAt: Date;
+    _mj__UpdatedAt: Date;
         
     @Field(() => [mj_core_schema_server_object_types.EntityActionInvocation_])
     EntityActionInvocationsArray: mj_core_schema_server_object_types.EntityActionInvocation_[]; // Link to EntityActionInvocations
@@ -18722,11 +18800,11 @@ export class Action_ {
           
     @Field() 
     @MaxLength(8)
-    CreatedAt: Date;
+    _mj__CreatedAt: Date;
           
     @Field() 
     @MaxLength(8)
-    UpdatedAt: Date;
+    _mj__UpdatedAt: Date;
           
     @Field({nullable: true}) 
     @MaxLength(510)
@@ -18736,8 +18814,11 @@ export class Action_ {
     @MaxLength(200)
     CodeApprovedByUser?: string;
         
-    @Field(() => [mj_core_schema_server_object_types.ActionAuthorization_])
-    ActionAuthorizationsArray: mj_core_schema_server_object_types.ActionAuthorization_[]; // Link to ActionAuthorizations
+    @Field(() => [mj_core_schema_server_object_types.ActionParam_])
+    ActionParamsArray: mj_core_schema_server_object_types.ActionParam_[]; // Link to ActionParams
+    
+    @Field(() => [mj_core_schema_server_object_types.ActionLibrary_])
+    ActionLibrariesArray: mj_core_schema_server_object_types.ActionLibrary_[]; // Link to ActionLibraries
     
     @Field(() => [mj_core_schema_server_object_types.ActionResultCode_])
     ActionResultCodesArray: mj_core_schema_server_object_types.ActionResultCode_[]; // Link to ActionResultCodes
@@ -18751,11 +18832,8 @@ export class Action_ {
     @Field(() => [mj_core_schema_server_object_types.ActionExecutionLog_])
     ActionExecutionLogsArray: mj_core_schema_server_object_types.ActionExecutionLog_[]; // Link to ActionExecutionLogs
     
-    @Field(() => [mj_core_schema_server_object_types.ActionParam_])
-    ActionParamsArray: mj_core_schema_server_object_types.ActionParam_[]; // Link to ActionParams
-    
-    @Field(() => [mj_core_schema_server_object_types.ActionLibrary_])
-    ActionLibrariesArray: mj_core_schema_server_object_types.ActionLibrary_[]; // Link to ActionLibraries
+    @Field(() => [mj_core_schema_server_object_types.ActionAuthorization_])
+    ActionAuthorizationsArray: mj_core_schema_server_object_types.ActionAuthorization_[]; // Link to ActionAuthorizations
     
 }
         
@@ -18908,11 +18986,19 @@ export class ActionResolver extends ResolverBase {
         return result;
     }
       
-    @FieldResolver(() => [mj_core_schema_server_object_types.ActionAuthorization_])
-    async ActionAuthorizationsArray(@Root() action_: Action_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('Action Authorizations', userPayload);
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionAuthorizations] WHERE [ActionID]=${action_.ID} ` + this.getRowLevelSecurityWhereClause('Action Authorizations', userPayload, EntityPermissionType.Read, 'AND');
-        const result = this.ArrayMapFieldNamesToCodeNames('Action Authorizations', await dataSource.query(sSQL));
+    @FieldResolver(() => [mj_core_schema_server_object_types.ActionParam_])
+    async ActionParamsArray(@Root() action_: Action_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Action Params', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionParams] WHERE [ActionID]=${action_.ID} ` + this.getRowLevelSecurityWhereClause('Action Params', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Action Params', await dataSource.query(sSQL));
+        return result;
+    }
+          
+    @FieldResolver(() => [mj_core_schema_server_object_types.ActionLibrary_])
+    async ActionLibrariesArray(@Root() action_: Action_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Action Libraries', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionLibraries] WHERE [ActionID]=${action_.ID} ` + this.getRowLevelSecurityWhereClause('Action Libraries', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Action Libraries', await dataSource.query(sSQL));
         return result;
     }
           
@@ -18948,19 +19034,11 @@ export class ActionResolver extends ResolverBase {
         return result;
     }
           
-    @FieldResolver(() => [mj_core_schema_server_object_types.ActionParam_])
-    async ActionParamsArray(@Root() action_: Action_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('Action Params', userPayload);
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionParams] WHERE [ActionID]=${action_.ID} ` + this.getRowLevelSecurityWhereClause('Action Params', userPayload, EntityPermissionType.Read, 'AND');
-        const result = this.ArrayMapFieldNamesToCodeNames('Action Params', await dataSource.query(sSQL));
-        return result;
-    }
-          
-    @FieldResolver(() => [mj_core_schema_server_object_types.ActionLibrary_])
-    async ActionLibrariesArray(@Root() action_: Action_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('Action Libraries', userPayload);
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionLibraries] WHERE [ActionID]=${action_.ID} ` + this.getRowLevelSecurityWhereClause('Action Libraries', userPayload, EntityPermissionType.Read, 'AND');
-        const result = this.ArrayMapFieldNamesToCodeNames('Action Libraries', await dataSource.query(sSQL));
+    @FieldResolver(() => [mj_core_schema_server_object_types.ActionAuthorization_])
+    async ActionAuthorizationsArray(@Root() action_: Action_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Action Authorizations', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionAuthorizations] WHERE [ActionID]=${action_.ID} ` + this.getRowLevelSecurityWhereClause('Action Authorizations', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Action Authorizations', await dataSource.query(sSQL));
         return result;
     }
         
@@ -19013,11 +19091,11 @@ export class EntityActionFilter_ {
           
     @Field() 
     @MaxLength(8)
-    CreatedAt: Date;
+    _mj__CreatedAt: Date;
           
     @Field() 
     @MaxLength(8)
-    UpdatedAt: Date;
+    _mj__UpdatedAt: Date;
         
 }
         
@@ -19164,11 +19242,11 @@ export class ActionFilter_ {
           
     @Field() 
     @MaxLength(8)
-    CreatedAt: Date;
+    _mj__CreatedAt: Date;
           
     @Field() 
     @MaxLength(8)
-    UpdatedAt: Date;
+    _mj__UpdatedAt: Date;
         
     @Field(() => [mj_core_schema_server_object_types.EntityActionFilter_])
     EntityActionFiltersArray: mj_core_schema_server_object_types.EntityActionFilter_[]; // Link to EntityActionFilters
@@ -20307,11 +20385,11 @@ export class Library_ {
           
     @Field() 
     @MaxLength(8)
-    CreatedAt: Date;
+    _mj__CreatedAt: Date;
           
     @Field() 
     @MaxLength(8)
-    UpdatedAt: Date;
+    _mj__UpdatedAt: Date;
         
     @Field(() => [mj_core_schema_server_object_types.ActionLibrary_])
     ActionLibrariesArray: mj_core_schema_server_object_types.ActionLibrary_[]; // Link to ActionLibraries
@@ -23043,11 +23121,11 @@ export class EntityCommunicationMessageType_ {
           
     @Field() 
     @MaxLength(8)
-    CreatedAt: Date;
+    _mj__CreatedAt: Date;
           
     @Field() 
     @MaxLength(8)
-    UpdatedAt: Date;
+    _mj__UpdatedAt: Date;
           
     @Field() 
     @MaxLength(510)
@@ -23199,11 +23277,11 @@ export class EntityCommunicationField_ {
           
     @Field() 
     @MaxLength(8)
-    CreatedAt: Date;
+    _mj__CreatedAt: Date;
           
     @Field() 
     @MaxLength(8)
-    UpdatedAt: Date;
+    _mj__UpdatedAt: Date;
         
 }
         

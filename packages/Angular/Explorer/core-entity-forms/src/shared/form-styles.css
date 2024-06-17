@@ -8,6 +8,10 @@ a {
   font-weight: bolder;
 }
 
+.tab-header-icon {
+  margin-right: 5px;
+}
+
 .record-form {
   display: block;
   flex-direction: column;
