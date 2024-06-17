@@ -3169,6 +3169,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Display In Form
         * * SQL Data Type: bit
         * * Default Value: 1
+        * * Description: When unchecked the relationship will NOT be displayed on the generated form
         */
         get DisplayInForm(): boolean {  
             return this.Get('DisplayInForm');
@@ -3177,15 +3178,62 @@ import { RegisterClass } from "@memberjunction/global";
             this.Set('DisplayInForm', value);
         }
         /**
+        * * Field Name: DisplayLocation
+        * * Display Name: Display Location
+        * * SQL Data Type: nvarchar(50)
+        * * Default Value: After Field Tabs
+        * * Value List Type: List
+        * * Possible Values 
+        *   * After Field Tabs
+        *   * Before Field Tabs
+        */
+        get DisplayLocation(): 'After Field Tabs' | 'Before Field Tabs' {  
+            return this.Get('DisplayLocation');
+        }
+        set DisplayLocation(value: 'After Field Tabs' | 'Before Field Tabs') {
+            this.Set('DisplayLocation', value);
+        }
+        /**
         * * Field Name: DisplayName
         * * Display Name: Display Name
         * * SQL Data Type: nvarchar(255)
+        * * Description: Optional, when specified this value overrides the related entity name for the label on the tab
         */
         get DisplayName(): string | null {  
             return this.Get('DisplayName');
         }
         set DisplayName(value: string | null) {
             this.Set('DisplayName', value);
+        }
+        /**
+        * * Field Name: DisplayIconType
+        * * Display Name: Display Icon Type
+        * * SQL Data Type: nvarchar(50)
+        * * Default Value: Related Entity Icon
+        * * Value List Type: List
+        * * Possible Values 
+        *   * Related Entity Icon
+        *   * Custom
+        *   * None
+        * * Description: When Related Entity Icon - uses the icon from the related entity, if one exists. When Custom, uses the value in the DisplayIcon field in this record, and when None, no icon is displayed
+        */
+        get DisplayIconType(): 'Related Entity Icon' | 'Custom' | 'None' {  
+            return this.Get('DisplayIconType');
+        }
+        set DisplayIconType(value: 'Related Entity Icon' | 'Custom' | 'None') {
+            this.Set('DisplayIconType', value);
+        }
+        /**
+        * * Field Name: DisplayIcon
+        * * Display Name: Display Icon
+        * * SQL Data Type: nvarchar(255)
+        * * Description: If specified, the icon 
+        */
+        get DisplayIcon(): string | null {  
+            return this.Get('DisplayIcon');
+        }
+        set DisplayIcon(value: string | null) {
+            this.Set('DisplayIcon', value);
         }
         /**
         * * Field Name: DisplayUserViewGUID
@@ -3201,6 +3249,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_CreatedAt
         * * Display Name: __mj _Created At
         * * SQL Data Type: datetime
+        * * Default Value: getutcdate()
         */
         get __mj_CreatedAt(): Date {  
             return this.Get('__mj_CreatedAt');
@@ -3210,6 +3259,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_UpdatedAt
         * * Display Name: __mj _Updated At
         * * SQL Data Type: datetime
+        * * Default Value: getutcdate()
         */
         get __mj_UpdatedAt(): Date {  
             return this.Get('__mj_UpdatedAt');
@@ -3218,7 +3268,6 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: Entity
         * * SQL Data Type: nvarchar(255)
-        * * Default Value: getutcdate()
         */
         get Entity(): string {  
             return this.Get('Entity');
@@ -3228,7 +3277,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: EntityBaseTable
         * * Display Name: Entity Base Table
         * * SQL Data Type: nvarchar(255)
-        * * Default Value: getutcdate()
         */
         get EntityBaseTable(): string {  
             return this.Get('EntityBaseTable');

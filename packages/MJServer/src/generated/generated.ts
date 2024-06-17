@@ -2,7 +2,7 @@
 * ALL ENTITIES - TypeGraphQL Type Class Definition - AUTO GENERATED FILE
 * Generated Entities and Resolvers for Server
 * 
-* GENERATED: 6/16/2024, 10:09:32 PM
+* GENERATED: 6/17/2024, 6:22:07 AM
 * 
 *   >>> DO NOT MODIFY THIS FILE!!!!!!!!!!!!
 *   >>> YOUR CHANGES WILL BE OVERWRITTEN
@@ -3874,12 +3874,24 @@ export class EntityRelationship_ {
     @MaxLength(510)
     JoinEntityInverseJoinField?: string;
           
-    @Field(() => Boolean) 
+    @Field(() => Boolean, {description: 'When unchecked the relationship will NOT be displayed on the generated form'}) 
     DisplayInForm: boolean;
           
-    @Field({nullable: true}) 
+    @Field() 
+    @MaxLength(100)
+    DisplayLocation: string;
+          
+    @Field({nullable: true, description: 'Optional, when specified this value overrides the related entity name for the label on the tab'}) 
     @MaxLength(510)
     DisplayName?: string;
+          
+    @Field({description: 'When Related Entity Icon - uses the icon from the related entity, if one exists. When Custom, uses the value in the DisplayIcon field in this record, and when None, no icon is displayed'}) 
+    @MaxLength(100)
+    DisplayIconType: string;
+          
+    @Field({nullable: true, description: 'If specified, the icon '}) 
+    @MaxLength(510)
+    DisplayIcon?: string;
           
     @Field({nullable: true}) 
     @MaxLength(16)
@@ -3976,8 +3988,17 @@ export class CreateEntityRelationshipInput {
     @Field(() => Boolean)
     DisplayInForm: boolean;
 
+    @Field()
+    DisplayLocation: string;
+
     @Field({ nullable: true })
     DisplayName?: string;
+
+    @Field()
+    DisplayIconType: string;
+
+    @Field({ nullable: true })
+    DisplayIcon?: string;
 }
     
         
@@ -4025,8 +4046,17 @@ export class UpdateEntityRelationshipInput {
     @Field(() => Boolean)
     DisplayInForm: boolean;
 
+    @Field()
+    DisplayLocation: string;
+
     @Field({ nullable: true })
     DisplayName?: string;
+
+    @Field()
+    DisplayIconType: string;
+
+    @Field({ nullable: true })
+    DisplayIcon?: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -18784,8 +18814,11 @@ export class Action_ {
     @MaxLength(200)
     CodeApprovedByUser?: string;
         
-    @Field(() => [mj_core_schema_server_object_types.ActionAuthorization_])
-    ActionAuthorizationsArray: mj_core_schema_server_object_types.ActionAuthorization_[]; // Link to ActionAuthorizations
+    @Field(() => [mj_core_schema_server_object_types.ActionParam_])
+    ActionParamsArray: mj_core_schema_server_object_types.ActionParam_[]; // Link to ActionParams
+    
+    @Field(() => [mj_core_schema_server_object_types.ActionLibrary_])
+    ActionLibrariesArray: mj_core_schema_server_object_types.ActionLibrary_[]; // Link to ActionLibraries
     
     @Field(() => [mj_core_schema_server_object_types.ActionResultCode_])
     ActionResultCodesArray: mj_core_schema_server_object_types.ActionResultCode_[]; // Link to ActionResultCodes
@@ -18799,11 +18832,8 @@ export class Action_ {
     @Field(() => [mj_core_schema_server_object_types.ActionExecutionLog_])
     ActionExecutionLogsArray: mj_core_schema_server_object_types.ActionExecutionLog_[]; // Link to ActionExecutionLogs
     
-    @Field(() => [mj_core_schema_server_object_types.ActionParam_])
-    ActionParamsArray: mj_core_schema_server_object_types.ActionParam_[]; // Link to ActionParams
-    
-    @Field(() => [mj_core_schema_server_object_types.ActionLibrary_])
-    ActionLibrariesArray: mj_core_schema_server_object_types.ActionLibrary_[]; // Link to ActionLibraries
+    @Field(() => [mj_core_schema_server_object_types.ActionAuthorization_])
+    ActionAuthorizationsArray: mj_core_schema_server_object_types.ActionAuthorization_[]; // Link to ActionAuthorizations
     
 }
         
@@ -18956,11 +18986,19 @@ export class ActionResolver extends ResolverBase {
         return result;
     }
       
-    @FieldResolver(() => [mj_core_schema_server_object_types.ActionAuthorization_])
-    async ActionAuthorizationsArray(@Root() action_: Action_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('Action Authorizations', userPayload);
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionAuthorizations] WHERE [ActionID]=${action_.ID} ` + this.getRowLevelSecurityWhereClause('Action Authorizations', userPayload, EntityPermissionType.Read, 'AND');
-        const result = this.ArrayMapFieldNamesToCodeNames('Action Authorizations', await dataSource.query(sSQL));
+    @FieldResolver(() => [mj_core_schema_server_object_types.ActionParam_])
+    async ActionParamsArray(@Root() action_: Action_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Action Params', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionParams] WHERE [ActionID]=${action_.ID} ` + this.getRowLevelSecurityWhereClause('Action Params', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Action Params', await dataSource.query(sSQL));
+        return result;
+    }
+          
+    @FieldResolver(() => [mj_core_schema_server_object_types.ActionLibrary_])
+    async ActionLibrariesArray(@Root() action_: Action_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Action Libraries', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionLibraries] WHERE [ActionID]=${action_.ID} ` + this.getRowLevelSecurityWhereClause('Action Libraries', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Action Libraries', await dataSource.query(sSQL));
         return result;
     }
           
@@ -18996,19 +19034,11 @@ export class ActionResolver extends ResolverBase {
         return result;
     }
           
-    @FieldResolver(() => [mj_core_schema_server_object_types.ActionParam_])
-    async ActionParamsArray(@Root() action_: Action_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('Action Params', userPayload);
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionParams] WHERE [ActionID]=${action_.ID} ` + this.getRowLevelSecurityWhereClause('Action Params', userPayload, EntityPermissionType.Read, 'AND');
-        const result = this.ArrayMapFieldNamesToCodeNames('Action Params', await dataSource.query(sSQL));
-        return result;
-    }
-          
-    @FieldResolver(() => [mj_core_schema_server_object_types.ActionLibrary_])
-    async ActionLibrariesArray(@Root() action_: Action_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('Action Libraries', userPayload);
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionLibraries] WHERE [ActionID]=${action_.ID} ` + this.getRowLevelSecurityWhereClause('Action Libraries', userPayload, EntityPermissionType.Read, 'AND');
-        const result = this.ArrayMapFieldNamesToCodeNames('Action Libraries', await dataSource.query(sSQL));
+    @FieldResolver(() => [mj_core_schema_server_object_types.ActionAuthorization_])
+    async ActionAuthorizationsArray(@Root() action_: Action_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Action Authorizations', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionAuthorizations] WHERE [ActionID]=${action_.ID} ` + this.getRowLevelSecurityWhereClause('Action Authorizations', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Action Authorizations', await dataSource.query(sSQL));
         return result;
     }
         

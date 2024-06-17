@@ -9,6 +9,7 @@
             </kendo-splitter-pane>
             <kendo-splitter-pane>
                 <mj-tabstrip (TabSelected)="onTabSelect($event.index)" mjFillContainer>
+                    
                     <mj-tab Name="Details">
                         Details
                     </mj-tab>
@@ -33,16 +34,31 @@
                         </mj-form-section>
                     </mj-tab-body>
                     
-                    <mj-tab Name="Authorizations" 
+                    <mj-tab Name="Params" 
                         [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: 250}">
-                        Authorizations
+                        [Props]="{EntityRelationshipID: 259}">
+                        Params
                     </mj-tab>
                     <mj-tab-body>
                         <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Action Authorizations')"  
-                            [NewRecordValues]="NewRecordValues('Action Authorizations')"
-                            [AllowLoad]="IsCurrentTab('Authorizations')"  
+                            [Params]="BuildRelationshipViewParamsByEntityName('Action Params')"  
+                            [NewRecordValues]="NewRecordValues('Action Params')"
+                            [AllowLoad]="IsCurrentTab('Params')"  
+                            [EditMode]="GridEditMode()"  
+                            [BottomMargin]="GridBottomMargin">
+                        </mj-user-view-grid>
+                    </mj-tab-body>
+
+                    <mj-tab Name="Libraries" 
+                        [Visible]="record.IsSaved" 
+                        [Props]="{EntityRelationshipID: 260}">
+                        <span class="fa-solid fa-book tab-header-icon"></span>Libraries
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Action Libraries')"  
+                            [NewRecordValues]="NewRecordValues('Action Libraries')"
+                            [AllowLoad]="IsCurrentTab('Libraries')"  
                             [EditMode]="GridEditMode()"  
                             [BottomMargin]="GridBottomMargin">
                         </mj-user-view-grid>
@@ -108,31 +124,16 @@
                         </mj-user-view-grid>
                     </mj-tab-body>
 
-                    <mj-tab Name="Params" 
+                    <mj-tab Name="Authorizations" 
                         [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: 259}">
-                        Params
+                        [Props]="{EntityRelationshipID: 250}">
+                        Authorizations
                     </mj-tab>
                     <mj-tab-body>
                         <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Action Params')"  
-                            [NewRecordValues]="NewRecordValues('Action Params')"
-                            [AllowLoad]="IsCurrentTab('Params')"  
-                            [EditMode]="GridEditMode()"  
-                            [BottomMargin]="GridBottomMargin">
-                        </mj-user-view-grid>
-                    </mj-tab-body>
-
-                    <mj-tab Name="Libraries" 
-                        [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: 260}">
-                        Libraries
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Action Libraries')"  
-                            [NewRecordValues]="NewRecordValues('Action Libraries')"
-                            [AllowLoad]="IsCurrentTab('Libraries')"  
+                            [Params]="BuildRelationshipViewParamsByEntityName('Action Authorizations')"  
+                            [NewRecordValues]="NewRecordValues('Action Authorizations')"
+                            [AllowLoad]="IsCurrentTab('Authorizations')"  
                             [EditMode]="GridEditMode()"  
                             [BottomMargin]="GridBottomMargin">
                         </mj-user-view-grid>

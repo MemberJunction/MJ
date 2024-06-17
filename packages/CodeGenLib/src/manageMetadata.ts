@@ -1,7 +1,7 @@
 import { DataSource } from "typeorm";
 import { configInfo, mj_core_schema } from './config';
 import { CodeNameFromString, EntityInfo, ExtractActualDefaultValue, LogError, LogStatus, Metadata, SeverityType } from "@memberjunction/core";
-import { logError, logMessage, logStatus } from "./logging";
+import { logError, logMessage, logStatus, logWarning } from "./logging";
 import { SQLUtilityBase } from "./sql";
 import { AdvancedGeneration, EntityDescriptionResult, EntityNameResult } from "./advanced_generation";
 import { MJGlobal, RegisterClass } from "@memberjunction/global";
@@ -201,6 +201,15 @@ export class ManageMetadataBase {
                              EntityID NOT IN (SELECT ID FROM ${mj_core_schema()}.Entity WHERE SchemaName IN (${excludeSchemas.map(s => `'${s}'`).join(',')}))
                        ORDER BY RelatedEntityID`;
          const entityFields = await ds.query(sSQL);
+
+         // Get the relationship counts for each entity
+         const sSQLRelationshipCount = `SELECT EntityID, COUNT(*) AS Count FROM ${mj_core_schema()}.EntityRelationship GROUP BY EntityID`;
+         const relationshipCounts = await ds.query(sSQLRelationshipCount);
+         const relationshipCountMap = new Map<number, number>();
+         for (const rc of relationshipCounts) {
+            relationshipCountMap.set(rc.EntityID, rc.Count);
+         }
+
          // now loop through all of our fkey fields
          for (const f of entityFields) {
             // for each field determine if an existing relationship exists, if not, create it
@@ -209,8 +218,12 @@ export class ManageMetadataBase {
             if (relationships && relationships.length === 0) {
                // no relationship exists, so create it
                const e = md.Entities.find(e => e.ID === f.EntityID)
-               const sSQLInsert = `INSERT INTO ${mj_core_schema()}.EntityRelationship (EntityID, RelatedEntityID, RelatedEntityJoinField, Type, BundleInAPI, DisplayInForm, DisplayName) 
-                                       VALUES (${f.RelatedEntityID}, ${f.EntityID}, '${f.Name}', 'One To Many', 1, 1, '${e.Name}')`;
+               // calculate the sequence by getting the count of existing relationships for the entity and adding 1 and then increment the count for future inserts in this loop
+               const sequence = relationshipCountMap.get(f.EntityID) + 1;
+               const sSQLInsert = `INSERT INTO ${mj_core_schema()}.EntityRelationship (EntityID, RelatedEntityID, RelatedEntityJoinField, Type, BundleInAPI, DisplayInForm, DisplayName, Sequence) 
+                                       VALUES (${f.RelatedEntityID}, ${f.EntityID}, '${f.Name}', 'One To Many', 1, 1, '${e.Name}', ${sequence})`;
+               // now update the map for the relationship count
+               relationshipCountMap.set(f.EntityID, sequence);                                       
                await ds.query(sSQLInsert);
             }
          }
@@ -231,7 +244,7 @@ export class ManageMetadataBase {
     * @returns 
     */
    protected async manageManyToManyEntityRelationships(ds: DataSource, excludeSchemas: string[]): Promise<boolean> {
-      return true; // not implemented for now
+      return true; // not implemented for now, require the admin to manually create these relationships
    }
    
    /**
@@ -245,16 +258,17 @@ export class ManageMetadataBase {
       const startTime: Date = new Date();
 
       if (!skipCreatedAtUpdatedAtFieldValidation && !await this.ensureCreatedAtUpdatedAtFieldsExist(ds, excludeSchemas)) {
-         logError (`rror ensuring ${EntityInfo.CreatedAtFieldName} and ${EntityInfo.UpdatedAtFieldName} fields exist`);
+         logError (`Error ensuring ${EntityInfo.CreatedAtFieldName} and ${EntityInfo.UpdatedAtFieldName} fields exist`);
          bSuccess = false;
       }
       logStatus(`   Ensured ${EntityInfo.CreatedAtFieldName}/${EntityInfo.UpdatedAtFieldName} fields exist in ${(new Date().getTime() - startTime.getTime()) / 1000} seconds`);
 
+      const step1StartTime: Date = new Date();
       if (! await this.deleteUnneededEntityFields(ds, excludeSchemas)) {
          logError ('Error deleting unneeded entity fields');
          bSuccess = false;
       }
-      logStatus(`   Deleted unneeded entity fields in ${(new Date().getTime() - startTime.getTime()) / 1000} seconds`);
+      logStatus(`   Deleted unneeded entity fields in ${(new Date().getTime() - step1StartTime.getTime()) / 1000} seconds`);
    
       const step2StartTime: Date = new Date();
       if (! await this.updateExistingEntityFieldsFromSchema(ds, excludeSchemas)) {
@@ -796,7 +810,7 @@ export class ManageMetadataBase {
          // now, for each of the constraints we get back here, loop through and evaluate if they're simple and if they're simple, parse and sync with entity field values for that field
          for (const r of result) {
             if (r.ConstraintDefinition && r.ConstraintDefinition.length > 0) {
-               const parsedValues = this.parseCheckConstraintValues(r.ConstraintDefinition, r.ColumnName);
+               const parsedValues = this.parseCheckConstraintValues(r.ConstraintDefinition, r.ColumnName, r.EntityName);
                if (parsedValues) {
                   // flip the order of parsedValues because they come out in reverse order from SQL Server
                   parsedValues.reverse();
@@ -873,15 +887,15 @@ export class ManageMetadataBase {
       }
    }
    
-   protected parseCheckConstraintValues(constraintDefinition: string, fieldName: string): string[] | null {
+   protected parseCheckConstraintValues(constraintDefinition: string, fieldName: string, entityName: string): string[] | null {
       // This regex checks for the overall structure including field name and 'OR' sequences
       // an example of a valid constraint definition would be: ([FieldName]='Value1' OR [FieldName]='Value2' OR [FieldName]='Value3')
       // like: ([AutoRunIntervalUnits]='Years' OR [AutoRunIntervalUnits]='Months' OR [AutoRunIntervalUnits]='Weeks' OR [AutoRunIntervalUnits]='Days' OR [AutoRunIntervalUnits]='Hours' OR [AutoRunIntervalUnits]='Minutes')
       // Note: Assuming fieldName does not contain regex special characters; otherwise, it needs to be escaped as well.
       const structureRegex = new RegExp(`^\\(\\[${fieldName}\\]='[^']+'(?: OR \\[${fieldName}\\]='[^']+?')+\\)$`);
       if (!structureRegex.test(constraintDefinition)) {
-          console.log('Constraint does not match the simple OR condition pattern or field name does not match.');
-          return null;
+         logWarning(`      [${entityName}].[${fieldName}] constraint does not match the simple OR condition pattern or field name does not match: ${constraintDefinition}`);
+         return null;
       }
    
       // Regular expression to match the values within the single quotes specifically for the field
