@@ -1,15 +1,8 @@
 <div mjFillContainer class="wrapper"> 
   <kendo-timeline
-    [events]="groupEvents"
+    [events]="timelineGroupEvents"
     [collapsibleEvents]="true"
     [alterMode]="true"
   >
-    <ng-template kendoTimelineEventTemplate let-event>
-      <div [ngClass]="{
-          'type1-class': event.title==='Created User', 
-          'type2-class': event.description==='Updated User'
-      }">
-      </div>
-    </ng-template>
   </kendo-timeline>
 </div> 

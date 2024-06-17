@@ -53,7 +53,7 @@ export class TimelineGroup {
    * When SummaryMode is set to 'custom', this function will be used to generate the summary for the record. The function should take a single parameter, the BaseEntity object and will return a string.
    * The string returned can be plain text or HTML and will be displayed in the timeline.
    */
-  SummaryFunction?: ((record: BaseEntity) => string) | undefined;
+  SummaryFunction?: ((record: any) => string) | undefined;
 
   /**
    * Creates a new instance of the TimelineGroup class using the information from the RunViewParams provided.
@@ -115,10 +115,10 @@ export class TimelineComponent implements AfterViewInit {
 
   /*
   * events is the array of timeline events that gets updated on each call of LoadSingleGroup. 
-  * groupEvents is the array of total timeline events that will get called by the timeline component.
+  * timelineGroupEvents is the array of total timeline events that will get called used by the timeline component.
   */
   public events: TimelineEvent[] = [];
-  public groupEvents: TimelineEvent[]= [];
+  public timelineGroupEvents: TimelineEvent[]= [];
   
 
   ngAfterViewInit(): void {
@@ -136,22 +136,15 @@ export class TimelineComponent implements AfterViewInit {
     }
   }
 
-  public SummaryFunction(record: BaseEntity): string {
-    let first_name = record.Get('Name');
-
-    return  first_name;
-  }
-
   protected LoadSingleGroup(group: TimelineGroup) {
-    group.SummaryMode = 'custom';
     this.events = group.EntityObjects.map(e => {
       let date = new Date(e.Get(group.DateFieldName));
       let title = group.TitleFieldName;
       let summary = "";
       if (group.SummaryMode == 'field') {
-        summary = e.Get(group.EntityName);
+        summary = group.TitleFieldName;
       } else if (group.SummaryMode == 'custom') {
-        summary = this.SummaryFunction(e);
+        summary = group.SummaryFunction ? group.SummaryFunction(e) : "";
       }
       return {
         description: summary,
@@ -162,7 +155,7 @@ export class TimelineComponent implements AfterViewInit {
         actions: [],
       };
     })
-    this.groupEvents = this.groupEvents.concat(this.events);
+    this.timelineGroupEvents = this.timelineGroupEvents.concat(this.events);
   }
   
 }

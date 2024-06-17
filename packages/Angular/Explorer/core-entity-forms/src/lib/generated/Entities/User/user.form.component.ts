@@ -25,24 +25,33 @@ export class UserFormComponent extends BaseFormComponent {
             this.timelineGroups = [{
                 EntityName: 'Users',
                 EntityObjects: users.Results,
-                DateFieldName: 'CreatedAt',
+                DateFieldName: '__mj_CreatedAt',
                 TitleFieldName: "Created User",
                 DisplayIconMode: "standard",
                 DisplayColorMode: "auto",
-                SummaryMode: "none"
+                SummaryMode: "custom", 
+                SummaryFunction: this.SummaryFunction
             },
             {
                 EntityName: 'Users',
                 EntityObjects: users.Results,
-                DateFieldName: 'UpdatedAt',
+                DateFieldName: '__mj_UpdatedAt',
                 TitleFieldName: "Updated User",
                 DisplayIconMode: "standard",
                 DisplayColorMode: "auto",
-                SummaryMode: "none"
+                SummaryMode: "custom", 
+                SummaryFunction: this.SummaryFunction
             }];
         ;
         }
     }
+
+    public SummaryFunction(record: UserEntity): string {
+        let first_name = record.Get('Name');
+    
+        return  first_name;
+    }
+
 } 
 
 export function LoadUserFormComponent() {
