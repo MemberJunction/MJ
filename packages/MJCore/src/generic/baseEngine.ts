@@ -4,26 +4,45 @@ import { UserInfo } from "./securityInfo";
 import { RunView } from "../views/runView";
 import { LogError } from "./logging";
 import { Metadata } from "./metadata";
-import { ProviderType } from "./interfaces";
+import { DatasetItemFilterType, ProviderType } from "./interfaces";
+import { BaseInfo } from "./baseInfo";
 
 /**
  * Property configuration for the BaseEngine class to automatically load/set properties on the class.
  */
-export interface BaseEnginePropertyConfig {
+export class BaseEnginePropertyConfig extends BaseInfo {
+    /**
+     * The type of item to load, either 'entity' or 'dataset', defaults to 'entity'
+     */
+    Type: 'entity' | 'dataset' = 'entity';
     /**
      * The name of the property in the class instance
      */
     PropertyName: string;
     /**
-     * The entity name to load from the database
+     * The entity name to load from the database, required if Type is 'entity'
      */
-    EntityName: string;
+    EntityName?: string;
     /**
-     * Optional, filters to apply to the data load
+     * The dataset name to load from the database, required if Type is 'dataset'
+     */
+    DatasetName?: string;
+    /**
+     * Optional, filters to apply to the data load, applies only when type is 'entity'. Use DatasetItemFilters for dataset filters.
      */
     Filter?: string;
     /**
-     * Optional, order by clause to apply to the data load
+     * Optional, filters to apply to each item in a dataset, only applies when type is 'dataset' and is optional in those cases.
+     */
+    DatasetItemFilters?: DatasetItemFilterType[];
+    /**
+     * Optional, only used if Type is 'dataset', specifies how to handle the results of the dataset load. Defaults to 'single_property' if not specified. When set to 'single_property', the entire dataset is set to the property specified by PropertyName. 
+     * When set to 'individual_properties', each item in the dataset is set to a property on the object with the name of the item's key plus the item's Code name. 
+     * For example, if the item's key is 'Demo' and the item's Code name is 'FirstItem', the property set on the object would be 'Demo_FirstItem'.
+     */
+    DatasetResultHandling: 'single_property' | 'individual_properties' = 'single_property';
+    /**
+     * Optional, order by clause to apply to the data load, only applies when type is 'entity'
      */
     OrderBy?: string;
     /**
@@ -34,6 +53,11 @@ export interface BaseEnginePropertyConfig {
      * Optional, whether to add the result to the object, defaults to true if not specified
      */
     AddToObject?: boolean;  
+
+    constructor(init?: Partial<BaseEnginePropertyConfig>) {
+        super();
+        this.copyInitData(init);
+    }
 }
  
 
@@ -48,7 +72,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> {
     private _contextUser: UserInfo;
     private _metadataConfigs: BaseEnginePropertyConfig[] = [];
     private _dynamicConfigs: Map<string, BaseEnginePropertyConfig> = new Map();
-    private _dataMap: Map<string, { entityName: string, data: any[] }> = new Map();
+    private _dataMap: Map<string, { entityName?: string, datasetName?: string, data: any[] }> = new Map();
     private _expirationTimers: Map<string, number> = new Map();
 
     /**
@@ -94,11 +118,21 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> {
     }
 
     /**
+     * Utility method to upgrade an object to a BaseEnginePropertyConfig object.
+     * @param obj 
+     * @returns 
+     */
+    protected UpgradeObjectToConfig(obj: any): BaseEnginePropertyConfig {
+        return new BaseEnginePropertyConfig(obj);
+    }
+
+    /**
      * Loads the specified metadata configurations.
      * @param configs - The metadata configurations to load
      * @param contextUser - The context user information
      */
     protected async LoadConfigs(configs: BaseEnginePropertyConfig[], contextUser: UserInfo): Promise<void> {
+        this._metadataConfigs = configs.map(c => this.UpgradeObjectToConfig(c));
         await Promise.all(configs.map(config => this.LoadSingleConfig(config, contextUser)));
     }
 
@@ -108,6 +142,18 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> {
      * @param contextUser - The context user information
      */
     protected async LoadSingleConfig(config: BaseEnginePropertyConfig, contextUser: UserInfo): Promise<void> {
+        if (config.Type === 'dataset') 
+            return await this.LoadSingleDatasetConfig(config, contextUser);
+        else
+            return await this.LoadSingleEntityConfig(config, contextUser);
+    }    
+
+    /**
+     * Handles the process of loading a single config of type 'entity'.
+     * @param config 
+     * @param contextUser 
+     */
+    protected async LoadSingleEntityConfig(config: BaseEnginePropertyConfig, contextUser: UserInfo): Promise<void> {
         const rv = new RunView();
         const result = await rv.RunView({
             EntityName: config.EntityName,
@@ -126,7 +172,35 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> {
                 this.SetExpirationTimer(config.PropertyName, config.Expiration);
             }
         }
-    }    
+    }
+
+    /**
+     * Handles the process of loading a single config of type 'dataset'.
+     * @param config 
+     * @param contextUser 
+     */
+    protected async LoadSingleDatasetConfig(config: BaseEnginePropertyConfig, contextUser: UserInfo): Promise<void> {
+        const md = new Metadata();
+        const result = await md.GetAndCacheDatasetByName(config.DatasetName, config.DatasetItemFilters)
+        if (result.Success) {
+            if (config.AddToObject !== false) {
+                if (config.DatasetResultHandling === 'single_property') {
+                    (this as any)[config.PropertyName] = result.Results;
+                }
+                else {
+                    // explode out the items within the DS into individual properties
+                    for (const item of result.Results) {
+                        (this as any)[`${config.PropertyName}_${item.Code}`] = item.Results;
+                    }
+                }
+            }
+            this._dataMap.set(config.PropertyName, { datasetName: config.DatasetName, data: result.Results });
+
+            if (config.Expiration) {
+                this.SetExpirationTimer(config.PropertyName, config.Expiration);
+            }
+        }
+    }
 
     /**
      * Sets an expiration timer for a metadata property.
@@ -147,8 +221,9 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> {
      * @param contextUser - The context user information
      */
     public async AddDynamicConfig(config: BaseEnginePropertyConfig, contextUser?: UserInfo): Promise<void> {
-        this._dynamicConfigs.set(config.PropertyName, config);
-        await this.LoadSingleConfig(config, contextUser || this._contextUser);
+        const c = this.UpgradeObjectToConfig(config);
+        this._dynamicConfigs.set(c.PropertyName, c);
+        await this.LoadSingleConfig(c, contextUser || this._contextUser);
     }
 
     /**
