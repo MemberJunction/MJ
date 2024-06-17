@@ -56,7 +56,9 @@ export class BaseEnginePropertyConfig extends BaseInfo {
 
     constructor(init?: Partial<BaseEnginePropertyConfig>) {
         super();
-        this.copyInitData(init);
+        // now copy the values from init to this object
+        if (init)
+            Object.assign(this, init);
     }
 }
  
@@ -87,7 +89,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> {
      * @param contextUser 
      * @returns 
      */
-    protected async Load(configs: BaseEnginePropertyConfig[], forceRefresh: boolean = false, contextUser?: UserInfo): Promise<void> {
+    protected async Load(configs: Partial<BaseEnginePropertyConfig>[], forceRefresh: boolean = false, contextUser?: UserInfo): Promise<void> {
         if (Metadata.Provider.ProviderType === ProviderType.Database && !contextUser)
             throw new Error('For server-side use of all engine classes, you must provide the contextUser parameter')
         if (this._loadingSubject.value) {
@@ -123,7 +125,11 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> {
      * @returns 
      */
     protected UpgradeObjectToConfig(obj: any): BaseEnginePropertyConfig {
-        return new BaseEnginePropertyConfig(obj);
+        // if obj is not already an instance of BaseEnginePropertyConfig, create one
+        if (obj instanceof BaseEnginePropertyConfig)
+            return obj;
+        else
+            return new BaseEnginePropertyConfig(obj);
     }
 
     /**
@@ -131,9 +137,9 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> {
      * @param configs - The metadata configurations to load
      * @param contextUser - The context user information
      */
-    protected async LoadConfigs(configs: BaseEnginePropertyConfig[], contextUser: UserInfo): Promise<void> {
+    protected async LoadConfigs(configs: Partial<BaseEnginePropertyConfig>[], contextUser: UserInfo): Promise<void> {
         this._metadataConfigs = configs.map(c => this.UpgradeObjectToConfig(c));
-        await Promise.all(configs.map(config => this.LoadSingleConfig(config, contextUser)));
+        await Promise.all(this._metadataConfigs.map(c => this.LoadSingleConfig(c, contextUser)));
     }
 
     /**

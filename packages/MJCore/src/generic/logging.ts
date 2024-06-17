@@ -72,14 +72,18 @@ export function FormatConsoleMessage(message: string, serverity: SeverityType): 
         case 'Trace':
         case 'Debug':
         case 'Info':
-            return `${colors.fg.white}${message}${colors.reset}`;
+            return FormatConsoleMessageInternal(ConsoleColor.white, message);
         case 'Warning':
-            return `${colors.fg.yellow}${message}${colors.reset}`;
+            return FormatConsoleMessageInternal(ConsoleColor.yellow, message);
         case 'Critical':
-            return `${colors.fg.red}${message}${colors.reset}`;
+            return FormatConsoleMessageInternal(ConsoleColor.red, message);
         default:
             return message;
     }
+}
+
+function FormatConsoleMessageInternal(color: ConsoleColor, message: string) {
+    return `\r\x1b[${getAnsiColorCode(ConsoleColor.white)}m${message}\x1b[0m`;
 }
 
 export function FormatFileMessage(message: string, serverity: SeverityType): string {
@@ -109,37 +113,64 @@ export const SeverityType = {
  
 export type SeverityType = typeof SeverityType[keyof typeof SeverityType];
 
-export const colors = {
-    reset: "\x1b[0m",
-    bright: "\x1b[1m",
-    dim: "\x1b[2m",
-    underscore: "\x1b[4m",
-    blink: "\x1b[5m",
-    reverse: "\x1b[7m",
-    hidden: "\x1b[8m",
-    
-    fg: {
-        black: "\x1b[30m",
-        red: "\x1b[31m",
-        green: "\x1b[32m",
-        yellow: "\x1b[33m",
-        blue: "\x1b[34m",
-        magenta: "\x1b[35m",
-        cyan: "\x1b[36m",
-        white: "\x1b[37m",
-        gray: "\x1b[90m",
-        crimson: "\x1b[38m" // Scarlet
-    },
-    bg: {
-        black: "\x1b[40m",
-        red: "\x1b[41m",
-        green: "\x1b[42m",
-        yellow: "\x1b[43m",
-        blue: "\x1b[44m",
-        magenta: "\x1b[45m",
-        cyan: "\x1b[46m",
-        white: "\x1b[47m",
-        gray: "\x1b[100m",
-        crimson: "\x1b[48m"
+/**
+ * Enum of console colors that can be used to update the console line color.
+ */
+export const ConsoleColor = {
+    black: 'black',
+    red: 'red',
+    green: 'green',
+    yellow: 'yellow',
+    blue: 'blue',
+    magenta: 'magenta',
+    cyan: 'cyan',
+    white: 'white',
+    gray: 'gray',
+    crimson: 'crimson',
+} as const;
+type ConsoleColor = typeof ConsoleColor[keyof typeof ConsoleColor];
+
+ 
+/**
+ * Helper function to get the ANSI color code for the given console color.
+ * @param color 
+ */
+export function getAnsiColorCode(color: ConsoleColor): number {
+    switch (color) {
+        case ConsoleColor.black: return 30;
+        case ConsoleColor.red: return 31;
+        case ConsoleColor.green: return 32;
+        case ConsoleColor.yellow: return 33;
+        case ConsoleColor.blue: return 34;
+        case ConsoleColor.magenta: return 35;
+        case ConsoleColor.cyan: return 36;
+        case ConsoleColor.white: return 37;
+        case ConsoleColor.gray: return 90;
+        case ConsoleColor.crimson: return 38;
+        default: return 37;
     }
-};
+}
+
+/**
+ * Utility function that udpates the current console line with the provided message and color.
+ * @param message
+ * @param color 
+ */
+export function UpdateCurrentConsoleLine(message: string, color: ConsoleColor = ConsoleColor.white) {
+    if (runningOnNode()) {
+        // Running in Node.js environment
+        //console.log(`\r\x1b[${getAnsiColorCode(color)}m${message}\x1b[0m`);
+        //process.stdout.write(`\r\x1b[${getAnsiColorCode(color)}m${message}\x1b[0m`);
+//        console.log(`\x1b[2K\r\x1b[${getAnsiColorCode(color)}m${message}\x1b[0m`);
+        console.log(`\x1b[${getAnsiColorCode(color)}m${message}\x1b[0m`);
+    } 
+    else {
+        // Running in browser environment
+        console.log(`\r%c${message}`, `color: ${color}`);
+    }    
+}
+
+export function UpdateCurrentConsoleProgress(message: string, current: number, total: number, color: ConsoleColor = ConsoleColor.white) {
+    // show the message, current count of total count, and % complete formated as 0.0%
+    UpdateCurrentConsoleLine(`${message} ${current} of ${total} (${(current/total*100).toFixed(1)}%)`, color);
+}

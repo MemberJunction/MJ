@@ -1,4 +1,4 @@
-import { BaseEngine, BaseEnginePropertyConfig, BaseEntity, CompositeKey, EntityField, EntityFieldTSType, EntityInfo, KeyValuePair, LogError, LogStatus, Metadata, RunView, UserInfo } from "@memberjunction/core";
+import { BaseEngine, BaseEnginePropertyConfig, BaseEntity, CompositeKey, ConsoleColor, EntityField, EntityFieldTSType, EntityInfo, KeyValuePair, LogError, LogStatus, Metadata, RunView, UpdateCurrentConsoleProgress, UserInfo } from "@memberjunction/core";
 import { RecordChangeEntity, RecordChangeReplayRunEntity } from "@memberjunction/core-entities";
 import { SQLServerDataProvider } from "@memberjunction/sqlserver-dataprovider";
 
@@ -25,6 +25,9 @@ export class ChangeDetectionItem {
      * Populated for Create and Update types only. This is the latest version of the record from the organic database table
      */
     public LatestRecord?: BaseEntity;
+
+    public LegacyKey?: boolean = false; // if true, this means that the key was a single value and not a concatenated key
+    public LegacyKeyValue?: string; // if LegacyKey is true, this will be the single value of the key
 }
 
 /**
@@ -44,7 +47,7 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
     public async Config(forceRefresh?: boolean, contextUser?: UserInfo) {
         const provider: SQLServerDataProvider = <SQLServerDataProvider>Metadata.Provider;
 
-        const c: BaseEnginePropertyConfig[] = [
+        const c = [
             {
                 EntityName: "Entities",
                 PropertyName: "_EligibleEntities",
@@ -129,7 +132,19 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
                     const item = new ChangeDetectionItem();
                     item.Entity = entity;
                     const ck = new CompositeKey();
-                    ck.LoadFromConcatenatedString(row.RecordID); // this is a string like 'Field1Value|Field2Value' (no quotes)
+                    // row.RecordID should have a format of Field1|Value1||Field2|Value2, however in some cases there is legacy
+                    // data in the RecordChange table that just has a single value in it and in that case assuming that the entity
+                    // in question has a single-valued primary key, we can just use that value as the key, so we need to test for that
+                    // first and if we find that the RecordID is just a single value, we can use that as the key
+                    if (row.RecordID.indexOf(CompositeKey.DefaultValueDelimiter) === -1) {
+                        // there is no field delimiter, so we can assume this is a single value
+                        ck.LoadFromSingleKeyValuePair(entity.PrimaryKeys[0].Name, row.RecordID); // this is a string like 'Field1Value' (no quotes
+                        item.LegacyKey = true;
+                        item.LegacyKeyValue = row.RecordID;
+                    }
+                    else
+                        ck.LoadFromConcatenatedString(row.RecordID); // this is a string like 'Field1Value|Field2Value' (no quotes)
+
                     item.PrimaryKey = ck;
                     item.Type = 'Delete';
                     item.ChangedAt = row.ChangedAt;
@@ -175,7 +190,7 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
                 // now we have the version from the database that has been updated from an external source
                 // then we need to get the latest version from the vwRecordChanges table that matches this entity and RecordID
                 const result = await this.GetLatestRecordChangesDataForEntityRecord(change);
-                if (result) {
+                if (result && result.FullRecordJSON && result.FullRecordJSON.length > 0) {
                     // we have our row, so get the JSON, parse it and we'll have the differences
                     const json = JSON.parse(result.FullRecordJSON);
                     // now go through each field in the record object and compare it with the json
@@ -195,7 +210,7 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
                     return {changes, latestRecord: record};
                 }
                 else {
-                    LogStatus(`WARNING: No record found in vwRecordChanges for ${change.Entity.Name}: ${change.PrimaryKey}`);
+                    LogStatus(`      WARNING: No record found, or no FullRecordJSON found, in vwRecordChanges for ${change.Entity.Name}: ${change.PrimaryKey.ToConcatenatedString()}`);
                     return {changes: [], latestRecord: record};
                 }
             }
@@ -386,7 +401,7 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
     
         return `
             SELECT 
-                rc.RecordID, rc.ChangedAt
+                rc.RecordID, MAX(rc.ChangedAt) ChangedAt
             FROM 
                 __mj.vwRecordChanges rc
             LEFT JOIN 
@@ -403,7 +418,8 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
                         SELECT rc2.ID FROM __mj.vwRecordChanges rc2 WHERE 
                         rc2.RecordID = rc.RecordID AND rc2.EntityID=rc.EntityID AND rc2.Type='Delete'
                     ) 
-
+            GROUP BY 
+                rc.RecordID
         `; // last part of above query makes sure we don't include records already deleted in Record Changes
     }
     
@@ -419,11 +435,15 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
             result.Success = true;
             result.Changes = [];
 
-            for (const entity of entities) {
+            LogStatus(`Detecting changes for ${entities.length} entities`)
+            for (let i = 0; i < entities.length; i++) {
+                const entity = entities[i];
+                UpdateCurrentConsoleProgress(`   Detecting changes for ${entity.Name}`, i, entities.length, ConsoleColor.gray);
                 const entityResult = await this.DetectChangesForEntity(entity);
                 result.Changes = result.Changes.concat(entityResult.Changes);
                 result.Success = result.Success && entityResult.Success;
             }
+            UpdateCurrentConsoleProgress(`   Detecting changes for ${entities.length} entities`, entities.length, entities.length, ConsoleColor.green);
 
             return result;
         }
@@ -453,7 +473,9 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
                 const md = new Metadata();
                 const results = [];
                 run = await this.StartRun();
+                LogStatus(`Replaying ${changes.length} changes`);
                 for (const change of changes) {
+                    UpdateCurrentConsoleProgress(`   Replaying ${change.Entity.Name} ${change.Type} ${change.PrimaryKey.ToConcatenatedString()}`, changes.indexOf(change), changes.length, ConsoleColor.gray);
                     const result = await this.ReplaySingleChange(md, run, change);
                     results.push({Success: result, change: change});
                 }
@@ -595,7 +617,12 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
         try {
             const rc = await md.GetEntityObject<RecordChangeEntity>("Record Changes", this.ContextUser);    
             rc.EntityID = change.Entity.ID;
-            rc.RecordID = change.PrimaryKey.ToConcatenatedString();
+
+            if (change.LegacyKey)
+                rc.RecordID = change.LegacyKeyValue; // need to match legacy key otherwise the other RC records will keep coming back up in detect changes runs in the future
+            else
+                rc.RecordID = change.PrimaryKey.ToConcatenatedString();
+
             rc.Source = 'External';
             rc.Type = change.Type;
             rc.Status = 'Pending';
