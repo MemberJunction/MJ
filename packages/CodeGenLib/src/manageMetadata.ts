@@ -612,6 +612,19 @@ export class ManageMetadataBase {
                                        n.Sequence <= configInfo.newEntityDefaults?.IncludeFirstNFieldsAsDefaultInView ||
                                        n.IsNameField ? true : false);
       const escapedDescription = n.Description ? `'${n.Description.replace(/'/g, "''")}'` : 'NULL';
+      let fieldDisplayName;
+      switch (n.FieldName.trim().toLowerCase()) {
+         case "__mj_createdat":
+            fieldDisplayName = "Created At";
+            break;
+         case "__mj_updatedat":
+            fieldDisplayName = "Updated At";
+            break;
+         default:
+            fieldDisplayName = this.convertCamelCaseToHaveSpaces(n.FieldName).trim();
+            break;
+      }
+      
       return `
       INSERT INTO [${mj_core_schema()}].EntityField
       (
@@ -643,7 +656,7 @@ export class ManageMetadataBase {
          ${n.EntityID},
          ${n.Sequence},
          '${n.FieldName}',
-         '${this.convertCamelCaseToHaveSpaces(n.FieldName).trim()}',
+         '${fieldDisplayName}',
          ${escapedDescription},
          '${n.Type}',
          ${n.Length},

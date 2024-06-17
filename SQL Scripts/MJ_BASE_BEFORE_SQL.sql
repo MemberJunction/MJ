@@ -1506,6 +1506,7 @@ GO
 
 
 
+
 /****
  Utility SPROC for migrating CreatedAt/UpdatedAt columns to the new __mj_CreatedAt and __mj_UpdatedAt columns
  !!!USE WITH CAUTION!!!!
