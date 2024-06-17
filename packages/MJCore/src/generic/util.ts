@@ -74,7 +74,9 @@ function FormatValueInternal(sqlType: string,
                                                     minimumFractionDigits: decimals, 
                                                     maximumFractionDigits: decimals}).format(value);
         case 'date':
+        case 'time':
         case 'datetime':
+        case 'datetime2':
         case 'datetimeoffset':
           let date = new Date(value);
           return new Intl.DateTimeFormat().format(date);
