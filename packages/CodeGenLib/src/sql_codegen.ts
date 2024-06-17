@@ -784,7 +784,7 @@ GO${permissions}
 
 
     protected generateUpdatedAtTrigger(entity: EntityInfo): string {
-        const updatedAtField = entity.Fields.find(f => f.Name.toLowerCase().trim() === EntityInfo.UpdatedAtFieldName);
+        const updatedAtField = entity.Fields.find(f => f.Name.toLowerCase().trim() === EntityInfo.UpdatedAtFieldName.toLowerCase().trim());
         if (!updatedAtField)
             return '';
 
