@@ -1,10 +1,9 @@
 <div class="record-form-container" mjFillContainer [bottomMargin]="20" [rightMargin]="5">
     <form *ngIf="record" class="record-form"  #form="ngForm" mjFillContainer>
         <mj-form-toolbar [form]="this"></mj-form-toolbar>
-                <div #topArea class="record-form-group">
-                    
-                </div>
+
                 <mj-tabstrip (TabSelected)="onTabSelect($event.index)" mjFillContainer>
+                    
                     <mj-tab Name="Details">
                         Details
                     </mj-tab>
@@ -18,124 +17,124 @@
                     </mj-tab-body>
                     
                     <mj-tab Name="Lists" 
-                        [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: 54}">
-                        Lists
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Lists')"  
-                            [NewRecordValues]="NewRecordValues('Lists')"
-                            [AllowLoad]="IsCurrentTab('Lists')"  
-                            [EditMode]="GridEditMode()"  
-                            [BottomMargin]="GridBottomMargin">
-                        </mj-user-view-grid>
-                    </mj-tab-body>
+                    [Visible]="record.IsSaved" 
+                    [Props]="{EntityRelationshipID: 54}">
+                    Lists
+                </mj-tab>
+                <mj-tab-body>
+                    <mj-user-view-grid 
+                        [Params]="BuildRelationshipViewParamsByEntityName('Lists')"  
+                        [NewRecordValues]="NewRecordValues('Lists')"
+                        [AllowLoad]="IsCurrentTab('Lists')"  
+                        [EditMode]="GridEditMode()"  
+                        [BottomMargin]="GridBottomMargin">
+                    </mj-user-view-grid>
+                </mj-tab-body>
 
                     <mj-tab Name="Employee Company Integrations" 
-                        [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: 55}">
-                        Employee Company Integrations
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Employee Company Integrations')"  
-                            [NewRecordValues]="NewRecordValues('Employee Company Integrations')"
-                            [AllowLoad]="IsCurrentTab('Employee Company Integrations')"  
-                            [EditMode]="GridEditMode()"  
-                            [BottomMargin]="GridBottomMargin">
-                        </mj-user-view-grid>
-                    </mj-tab-body>
+                    [Visible]="record.IsSaved" 
+                    [Props]="{EntityRelationshipID: 55}">
+                    Employee Company Integrations
+                </mj-tab>
+                <mj-tab-body>
+                    <mj-user-view-grid 
+                        [Params]="BuildRelationshipViewParamsByEntityName('Employee Company Integrations')"  
+                        [NewRecordValues]="NewRecordValues('Employee Company Integrations')"
+                        [AllowLoad]="IsCurrentTab('Employee Company Integrations')"  
+                        [EditMode]="GridEditMode()"  
+                        [BottomMargin]="GridBottomMargin">
+                    </mj-user-view-grid>
+                </mj-tab-body>
 
                     <mj-tab Name="Company Integration Runs" 
-                        [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: 56}">
-                        Company Integration Runs
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Company Integration Runs')"  
-                            [NewRecordValues]="NewRecordValues('Company Integration Runs')"
-                            [AllowLoad]="IsCurrentTab('Company Integration Runs')"  
-                            [EditMode]="GridEditMode()"  
-                            [BottomMargin]="GridBottomMargin">
-                        </mj-user-view-grid>
-                    </mj-tab-body>
+                    [Visible]="record.IsSaved" 
+                    [Props]="{EntityRelationshipID: 56}">
+                    Company Integration Runs
+                </mj-tab>
+                <mj-tab-body>
+                    <mj-user-view-grid 
+                        [Params]="BuildRelationshipViewParamsByEntityName('Company Integration Runs')"  
+                        [NewRecordValues]="NewRecordValues('Company Integration Runs')"
+                        [AllowLoad]="IsCurrentTab('Company Integration Runs')"  
+                        [EditMode]="GridEditMode()"  
+                        [BottomMargin]="GridBottomMargin">
+                    </mj-user-view-grid>
+                </mj-tab-body>
 
                     <mj-tab Name="Company Integration Record Maps" 
-                        [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: 124}">
-                        Company Integration Record Maps
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Company Integration Record Maps')"  
-                            [NewRecordValues]="NewRecordValues('Company Integration Record Maps')"
-                            [AllowLoad]="IsCurrentTab('Company Integration Record Maps')"  
-                            [EditMode]="GridEditMode()"  
-                            [BottomMargin]="GridBottomMargin">
-                        </mj-user-view-grid>
-                    </mj-tab-body>
+                    [Visible]="record.IsSaved" 
+                    [Props]="{EntityRelationshipID: 124}">
+                    Company Integration Record Maps
+                </mj-tab>
+                <mj-tab-body>
+                    <mj-user-view-grid 
+                        [Params]="BuildRelationshipViewParamsByEntityName('Company Integration Record Maps')"  
+                        [NewRecordValues]="NewRecordValues('Company Integration Record Maps')"
+                        [AllowLoad]="IsCurrentTab('Company Integration Record Maps')"  
+                        [EditMode]="GridEditMode()"  
+                        [BottomMargin]="GridBottomMargin">
+                    </mj-user-view-grid>
+                </mj-tab-body>
 
                     <mj-tab Name="Activities" 
-                        [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: 158}">
-                        Activities
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Activities')"  
-                            [NewRecordValues]="NewRecordValues('Activities')"
-                            [AllowLoad]="IsCurrentTab('Activities')"  
-                            [EditMode]="GridEditMode()"  
-                            [BottomMargin]="GridBottomMargin">
-                        </mj-user-view-grid>
-                    </mj-tab-body>
+                    [Visible]="record.IsSaved" 
+                    [Props]="{EntityRelationshipID: 158}">
+                    Activities
+                </mj-tab>
+                <mj-tab-body>
+                    <mj-user-view-grid 
+                        [Params]="BuildRelationshipViewParamsByEntityName('Activities')"  
+                        [NewRecordValues]="NewRecordValues('Activities')"
+                        [AllowLoad]="IsCurrentTab('Activities')"  
+                        [EditMode]="GridEditMode()"  
+                        [BottomMargin]="GridBottomMargin">
+                    </mj-user-view-grid>
+                </mj-tab-body>
 
                     <mj-tab Name="Deals" 
-                        [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: 159}">
-                        Deals
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Deals')"  
-                            [NewRecordValues]="NewRecordValues('Deals')"
-                            [AllowLoad]="IsCurrentTab('Deals')"  
-                            [EditMode]="GridEditMode()"  
-                            [BottomMargin]="GridBottomMargin">
-                        </mj-user-view-grid>
-                    </mj-tab-body>
+                    [Visible]="record.IsSaved" 
+                    [Props]="{EntityRelationshipID: 159}">
+                    Deals
+                </mj-tab>
+                <mj-tab-body>
+                    <mj-user-view-grid 
+                        [Params]="BuildRelationshipViewParamsByEntityName('Deals')"  
+                        [NewRecordValues]="NewRecordValues('Deals')"
+                        [AllowLoad]="IsCurrentTab('Deals')"  
+                        [EditMode]="GridEditMode()"  
+                        [BottomMargin]="GridBottomMargin">
+                    </mj-user-view-grid>
+                </mj-tab-body>
 
                     <mj-tab Name="Invoices" 
-                        [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: 160}">
-                        Invoices
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Invoices')"  
-                            [NewRecordValues]="NewRecordValues('Invoices')"
-                            [AllowLoad]="IsCurrentTab('Invoices')"  
-                            [EditMode]="GridEditMode()"  
-                            [BottomMargin]="GridBottomMargin">
-                        </mj-user-view-grid>
-                    </mj-tab-body>
+                    [Visible]="record.IsSaved" 
+                    [Props]="{EntityRelationshipID: 160}">
+                    Invoices
+                </mj-tab>
+                <mj-tab-body>
+                    <mj-user-view-grid 
+                        [Params]="BuildRelationshipViewParamsByEntityName('Invoices')"  
+                        [NewRecordValues]="NewRecordValues('Invoices')"
+                        [AllowLoad]="IsCurrentTab('Invoices')"  
+                        [EditMode]="GridEditMode()"  
+                        [BottomMargin]="GridBottomMargin">
+                    </mj-user-view-grid>
+                </mj-tab-body>
 
                     <mj-tab Name="Payment Terms Types" 
-                        [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: 161}">
-                        Payment Terms Types
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Payment Terms Types')"  
-                            [NewRecordValues]="NewRecordValues('Payment Terms Types')"
-                            [AllowLoad]="IsCurrentTab('Payment Terms Types')"  
-                            [EditMode]="GridEditMode()"  
-                            [BottomMargin]="GridBottomMargin">
-                        </mj-user-view-grid>
-                    </mj-tab-body>
+                    [Visible]="record.IsSaved" 
+                    [Props]="{EntityRelationshipID: 161}">
+                    Payment Terms Types
+                </mj-tab>
+                <mj-tab-body>
+                    <mj-user-view-grid 
+                        [Params]="BuildRelationshipViewParamsByEntityName('Payment Terms Types')"  
+                        [NewRecordValues]="NewRecordValues('Payment Terms Types')"
+                        [AllowLoad]="IsCurrentTab('Payment Terms Types')"  
+                        [EditMode]="GridEditMode()"  
+                        [BottomMargin]="GridBottomMargin">
+                    </mj-user-view-grid>
+                </mj-tab-body>
                 </mj-tabstrip>
     </form>
 </div>

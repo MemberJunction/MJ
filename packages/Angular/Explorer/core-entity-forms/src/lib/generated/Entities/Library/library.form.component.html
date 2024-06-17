@@ -1,10 +1,9 @@
 <div class="record-form-container" mjFillContainer [bottomMargin]="20" [rightMargin]="5">
     <form *ngIf="record" class="record-form"  #form="ngForm" mjFillContainer>
         <mj-form-toolbar [form]="this"></mj-form-toolbar>
-                <div #topArea class="record-form-group">
-                    
-                </div>
+
                 <mj-tabstrip (TabSelected)="onTabSelect($event.index)" mjFillContainer>
+                    
                     <mj-tab Name="Details">
                         Details
                     </mj-tab>
@@ -17,35 +16,35 @@
                         </mj-form-section>
                     </mj-tab-body>
                     
-                    <mj-tab Name="Action Libraries" 
-                        [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: 261}">
-                        Action Libraries
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Action Libraries')"  
-                            [NewRecordValues]="NewRecordValues('Action Libraries')"
-                            [AllowLoad]="IsCurrentTab('Action Libraries')"  
-                            [EditMode]="GridEditMode()"  
-                            [BottomMargin]="GridBottomMargin">
-                        </mj-user-view-grid>
-                    </mj-tab-body>
+                    <mj-tab Name="Actions" 
+                    [Visible]="record.IsSaved" 
+                    [Props]="{EntityRelationshipID: 261}">
+                    <span class="fa-solid fa-bolt tab-header-icon"></span>Actions
+                </mj-tab>
+                <mj-tab-body>
+                    <mj-user-view-grid 
+                        [Params]="BuildRelationshipViewParamsByEntityName('Action Libraries')"  
+                        [NewRecordValues]="NewRecordValues('Action Libraries')"
+                        [AllowLoad]="IsCurrentTab('Actions')"  
+                        [EditMode]="GridEditMode()"  
+                        [BottomMargin]="GridBottomMargin">
+                    </mj-user-view-grid>
+                </mj-tab-body>
 
-                    <mj-tab Name="Library Items" 
-                        [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: 295}">
-                        Library Items
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Library Items')"  
-                            [NewRecordValues]="NewRecordValues('Library Items')"
-                            [AllowLoad]="IsCurrentTab('Library Items')"  
-                            [EditMode]="GridEditMode()"  
-                            [BottomMargin]="GridBottomMargin">
-                        </mj-user-view-grid>
-                    </mj-tab-body>
+                    <mj-tab Name="Items" 
+                    [Visible]="record.IsSaved" 
+                    [Props]="{EntityRelationshipID: 295}">
+                    Items
+                </mj-tab>
+                <mj-tab-body>
+                    <mj-user-view-grid 
+                        [Params]="BuildRelationshipViewParamsByEntityName('Library Items')"  
+                        [NewRecordValues]="NewRecordValues('Library Items')"
+                        [AllowLoad]="IsCurrentTab('Items')"  
+                        [EditMode]="GridEditMode()"  
+                        [BottomMargin]="GridBottomMargin">
+                    </mj-user-view-grid>
+                </mj-tab-body>
                 </mj-tabstrip>
     </form>
 </div>

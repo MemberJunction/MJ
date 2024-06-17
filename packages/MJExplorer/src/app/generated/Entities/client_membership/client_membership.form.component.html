@@ -1,10 +1,9 @@
 <div class="record-form-container" mjFillContainer [bottomMargin]="20" [rightMargin]="5">
     <form *ngIf="record" class="record-form"  #form="ngForm" mjFillContainer>
         <mj-form-toolbar [form]="this"></mj-form-toolbar>
-                <div #topArea class="record-form-group">
-                    
-                </div>
+
                 <mj-tabstrip (TabSelected)="onTabSelect($event.index)" mjFillContainer>
+                    
                     <mj-tab Name="Details">
                         Details
                     </mj-tab>
@@ -18,34 +17,34 @@
                     </mj-tab-body>
                     
                     <mj-tab Name="Sales Orders" 
-                        [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: 217}">
-                        Sales Orders
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Sales Orders')"  
-                            [NewRecordValues]="NewRecordValues('Sales Orders')"
-                            [AllowLoad]="IsCurrentTab('Sales Orders')"  
-                            [EditMode]="GridEditMode()"  
-                            [BottomMargin]="GridBottomMargin">
-                        </mj-user-view-grid>
-                    </mj-tab-body>
+                    [Visible]="record.IsSaved" 
+                    [Props]="{EntityRelationshipID: 217}">
+                    Sales Orders
+                </mj-tab>
+                <mj-tab-body>
+                    <mj-user-view-grid 
+                        [Params]="BuildRelationshipViewParamsByEntityName('Sales Orders')"  
+                        [NewRecordValues]="NewRecordValues('Sales Orders')"
+                        [AllowLoad]="IsCurrentTab('Sales Orders')"  
+                        [EditMode]="GridEditMode()"  
+                        [BottomMargin]="GridBottomMargin">
+                    </mj-user-view-grid>
+                </mj-tab-body>
 
                     <mj-tab Name="Contacts__client_crm" 
-                        [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: 218}">
-                        Contacts__client_crm
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Contacts__client_crm')"  
-                            [NewRecordValues]="NewRecordValues('Contacts__client_crm')"
-                            [AllowLoad]="IsCurrentTab('Contacts__client_crm')"  
-                            [EditMode]="GridEditMode()"  
-                            [BottomMargin]="GridBottomMargin">
-                        </mj-user-view-grid>
-                    </mj-tab-body>
+                    [Visible]="record.IsSaved" 
+                    [Props]="{EntityRelationshipID: 218}">
+                    Contacts__client_crm
+                </mj-tab>
+                <mj-tab-body>
+                    <mj-user-view-grid 
+                        [Params]="BuildRelationshipViewParamsByEntityName('Contacts__client_crm')"  
+                        [NewRecordValues]="NewRecordValues('Contacts__client_crm')"
+                        [AllowLoad]="IsCurrentTab('Contacts__client_crm')"  
+                        [EditMode]="GridEditMode()"  
+                        [BottomMargin]="GridBottomMargin">
+                    </mj-user-view-grid>
+                </mj-tab-body>
                 </mj-tabstrip>
     </form>
 </div>

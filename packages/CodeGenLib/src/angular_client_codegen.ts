@@ -1,4 +1,4 @@
-import { EntityInfo, EntityFieldInfo, GeneratedFormSectionType, EntityFieldTSType, EntityFieldValueListType } from '@memberjunction/core';
+import { EntityInfo, EntityFieldInfo, GeneratedFormSectionType, EntityFieldTSType, EntityFieldValueListType, Metadata } from '@memberjunction/core';
 import { logError, logStatus } from './logging';
 import fs from 'fs';
 import path from 'path';
@@ -8,13 +8,15 @@ import { RegisterClass } from '@memberjunction/global';
 export class AngularFormSectionInfo {
     Type: GeneratedFormSectionType
     Name: string
-    ClassName: string
-    FileName: string
-    ComponentCode: string
     TabCode: string
-    Fields: EntityFieldInfo[]
-    FileNameWithoutExtension: string
-    EntityClassName: string
+    ClassName?: string
+    FileName?: string
+    ComponentCode?: string
+    Fields?: EntityFieldInfo[]
+    FileNameWithoutExtension?: string
+    EntityClassName?: string
+    IsRelatedEntity?: boolean = false
+    RelatedEntityDisplayLocation?: 'Before Field Tabs' | 'After Field Tabs' = 'After Field Tabs'
 }
 
 /**
@@ -437,30 +439,54 @@ export function Load${entity.ClassName}${this.stripWhiteSpace(section.Name)}Comp
           return html;
       }
       
-      protected generateRelatedEntityTabs(entity: EntityInfo, startIndex: number): string[] {
-          const tabs: string[] = [];
-          let index = startIndex;
-          for (const relatedEntity of entity.RelatedEntities) {
-              const tabName: string = relatedEntity.DisplayName ? relatedEntity.DisplayName : relatedEntity.RelatedEntity
-                  tabs.push(`${index > 0 ? '\n' : ''}                    <mj-tab Name="${tabName}" 
-                        [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: ${relatedEntity.ID}}">
-                        ${tabName}
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('${relatedEntity.RelatedEntity}')"  
-                            [NewRecordValues]="NewRecordValues('${relatedEntity.RelatedEntity}')"
-                            [AllowLoad]="IsCurrentTab('${tabName}')"  
-                            [EditMode]="GridEditMode()"  
-                            [BottomMargin]="GridBottomMargin">
-                        </mj-user-view-grid>
-                    </mj-tab-body>`)
-      
-              index++;
-          }
-      
-          return tabs;
+      protected generateRelatedEntityTabs(entity: EntityInfo, startIndex: number): AngularFormSectionInfo[] {
+        const md = new Metadata();
+        const tabs: AngularFormSectionInfo[] = [];
+        const sortedRelatedEntities = entity.RelatedEntities.filter(re => re.DisplayInForm).sort((a, b) => a.Sequence - b.Sequence); // only show related entities that are marked to display in the form and sort by sequence
+        let index = startIndex;
+        for (const relatedEntity of sortedRelatedEntities) {
+            const tabName: string = relatedEntity.DisplayName ? relatedEntity.DisplayName : relatedEntity.RelatedEntity
+            let icon: string = '';
+            switch (relatedEntity.DisplayIconType) {
+                case 'Custom':
+                    if (relatedEntity.DisplayIcon && relatedEntity.DisplayIcon.length > 0)
+                        icon = `<span class="${relatedEntity.DisplayIcon} tab-header-icon"></span>`;
+                    break;
+                case 'Related Entity Icon':
+                    const re: EntityInfo = md.Entities.find(e => e.ID === relatedEntity.RelatedEntityID)
+                    if (re && re.Icon && re.Icon.length > 0)
+                        icon = `<span class="${re.Icon} tab-header-icon"></span>`;
+                    break;
+                default:
+                    // none
+                    break;
+            }
+
+            const tabCode = `${index > 0 ? '\n' : ''}                    <mj-tab Name="${tabName}" 
+                    [Visible]="record.IsSaved" 
+                    [Props]="{EntityRelationshipID: ${relatedEntity.ID}}">
+                    ${icon}${tabName}
+                </mj-tab>
+                <mj-tab-body>
+                    <mj-user-view-grid 
+                        [Params]="BuildRelationshipViewParamsByEntityName('${relatedEntity.RelatedEntity}')"  
+                        [NewRecordValues]="NewRecordValues('${relatedEntity.RelatedEntity}')"
+                        [AllowLoad]="IsCurrentTab('${tabName}')"  
+                        [EditMode]="GridEditMode()"  
+                        [BottomMargin]="GridBottomMargin">
+                    </mj-user-view-grid>
+                </mj-tab-body>`
+            tabs.push({
+                Type: GeneratedFormSectionType.Category,
+                IsRelatedEntity: true,
+                RelatedEntityDisplayLocation: relatedEntity.DisplayLocation,
+                Name: tabName,
+                TabCode: tabCode
+            })
+            index++;
+        }
+
+        return tabs;
       }
       
       protected stripWhiteSpace(s: string): string {
@@ -479,7 +505,7 @@ export function Load${entity.ClassName}${this.stripWhiteSpace(section.Name)}Comp
       }
       
       
-      protected generateSingleEntityHTMLWithSplitterForAngular(topArea, additionalSections, relatedEntitySections): string {
+      protected generateSingleEntityHTMLWithSplitterForAngular(topArea, additionalSections: AngularFormSectionInfo[], relatedEntitySections: AngularFormSectionInfo[]): string {
           const htmlCode: string =  `<div class="record-form-container" mjFillContainer [bottomMargin]="20" [rightMargin]="5">
     <form *ngIf="record" class="record-form"  #form="ngForm" mjFillContainer>
         <mj-form-toolbar [form]="this"></mj-form-toolbar>
@@ -498,18 +524,27 @@ ${this.innerTabStripHTML(additionalSections, relatedEntitySections)}
       }
       
       protected innerTopAreaHTML(topArea: string): string {
+        if (topArea.trim().length === 0)
+            return '';
+        else
       return `                <div #topArea class="record-form-group">
                     ${topArea}
                 </div>`
       }
-      protected innerTabStripHTML(additionalSections, relatedEntitySections): string {
+      protected innerTabStripHTML(additionalSections: AngularFormSectionInfo[], relatedEntitySections: AngularFormSectionInfo[]): string {
+        // come up with the overall order by looking for the tabs that have DisplayLocation === 'Before Field Tabs' and put those, in sequence order
+        // ahead of the additionalSections, then do the additionalSections, and then do the relatedEntitySections
+        const relatedEntityBeforeFieldTabs = relatedEntitySections.filter(s => s.RelatedEntityDisplayLocation === 'Before Field Tabs');
+        const relatedEntityAfterFieldTabs = relatedEntitySections.filter(s => s.RelatedEntityDisplayLocation === 'After Field Tabs');
+
       return `                <mj-tabstrip (TabSelected)="onTabSelect($event.index)" mjFillContainer>
+                    ${relatedEntityBeforeFieldTabs ? relatedEntityBeforeFieldTabs.map(s => s.TabCode).join('\n') : ''}
                     ${additionalSections ? additionalSections.filter(s => s.Type !== GeneratedFormSectionType.Top).map(s => s.TabCode).join('\n               ') : ''}
-                    ${relatedEntitySections ? relatedEntitySections.join('\n') : ''}
+                    ${relatedEntityAfterFieldTabs ? relatedEntityAfterFieldTabs.map(s => s.TabCode).join('\n') : ''}
                 </mj-tabstrip>`
       }
       
-      protected generateSingleEntityHTMLWithOUTSplitterForAngular(topArea, additionalSections, relatedEntitySections): string {
+      protected generateSingleEntityHTMLWithOUTSplitterForAngular(topArea, additionalSections: AngularFormSectionInfo[], relatedEntitySections: AngularFormSectionInfo[]): string {
           const htmlCode: string =  `<div class="record-form-container" mjFillContainer [bottomMargin]="20" [rightMargin]="5">
     <form *ngIf="record" class="record-form"  #form="ngForm" mjFillContainer>
         <mj-form-toolbar [form]="this"></mj-form-toolbar>

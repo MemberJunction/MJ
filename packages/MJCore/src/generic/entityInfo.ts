@@ -66,10 +66,13 @@ export class EntityRelationshipInfo extends BaseInfo  {
     JoinEntityJoinField: string = null  
     JoinEntityInverseJoinField: string = null     
     DisplayInForm: boolean = null
+    DisplayLocation: 'After Field Tabs' | 'Before Field Tabs' = 'After Field Tabs'
     DisplayName: string = null
+    DisplayIconType: 'Related Entity Icon'| 'Custom' | 'None' = 'Related Entity Icon'
+    DisplayIcon: string = null
     DisplayUserViewGUID: string = null
-    CreatedAt: Date = null
-    UpdatedAt: Date = null
+    __mj_CreatedAt: Date = null
+    __mj_UpdatedAt: Date = null
 
     // virtual fields - returned by the database VIEW
     Entity: string = null 
@@ -120,8 +123,8 @@ export class EntityPermissionInfo extends BaseInfo{
     CreateRLSFilterID: number = null
     UpdateRLSFilterID: number = null
     DeleteRLSFilterID: number = null
-    CreatedAt: Date = null
-    UpdatedAt: Date = null
+    __mj_CreatedAt: Date = null
+    __mj_UpdatedAt: Date = null
 
     // virtual fields - returned by the database VIEW
     Entity: string = null
@@ -207,8 +210,8 @@ export class EntityFieldValueInfo extends BaseInfo {
     Value: string = null
     Code: string = null
     Description: string = null
-    CreatedAt: Date = null
-    UpdatedAt: Date = null
+    __mj_CreatedAt: Date = null
+    __mj_UpdatedAt: Date = null
 
     constructor (initData: any) {
         super();
@@ -278,8 +281,8 @@ export class EntityFieldInfo extends BaseInfo {
     RelatedEntityFieldName: string = null
     IncludeRelatedEntityNameFieldInBaseView: boolean = null
     RelatedEntityNameFieldMap: string = null
-    CreatedAt: Date = null
-    UpdatedAt: Date = null
+    __mj_CreatedAt: Date = null
+    __mj_UpdatedAt: Date = null
     
     // virtual fields - returned by the database VIEW
     Entity: string = null 
@@ -442,13 +445,13 @@ export class EntityFieldInfo extends BaseInfo {
 
     /**
      * Returns true if the field is a "special" field (see list below) and is handled inside the DB layer and should be ignored in validation by the BaseEntity architecture
-     * Special fields are: CreatedAt, UpdatedAt, ID
      * Also, we skip validation if we have a field that is:
      *  - the primary key
      *  - a uniqueidentifier 
      *  - an autoincrement field
      *  - the field is virtual
      *  - the field is readonly
+     *  - the field is a special date field
      */
     get SkipValidation(): boolean {
         const name: string = this.Name.toLowerCase().trim(); 
@@ -513,8 +516,8 @@ export class EntityFieldInfo extends BaseInfo {
 export class EntityDocumentTypeInfo extends BaseInfo {
     Name: string = null
     Description: string = null  
-    CreatedAt: Date = null
-    UpdatedAt: Date = null
+    __mj_CreatedAt: Date = null
+    __mj_UpdatedAt: Date = null
 
     constructor (initData: any = null) {
         super()
@@ -531,8 +534,8 @@ export class EntitySettingInfo extends BaseInfo {
     Name: string = null
     Value: string = null
     Comments: string = null
-    CreatedAt: Date = null
-    UpdatedAt: Date = null
+    __mj_CreatedAt: Date = null
+    __mj_UpdatedAt: Date = null
 
     constructor (initData: any = null) {
         super()
@@ -590,8 +593,8 @@ export class EntityInfo extends BaseInfo {
     EntityObjectSubclassImport: string = null
     PreferredCommunicationField: string = null
     Icon: string = null
-    CreatedAt: Date = null
-    UpdatedAt: Date = null
+    __mj_CreatedAt: Date = null
+    __mj_UpdatedAt: Date = null
 
     // virtual fields - returned by the database VIEW
     /**
