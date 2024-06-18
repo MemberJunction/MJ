@@ -1,4 +1,4 @@
-import { BaseEngine, BaseEnginePropertyConfig, BaseEntity, CompositeKey, ConsoleColor, EntityField, EntityFieldTSType, EntityInfo, KeyValuePair, LogError, LogStatus, Metadata, RunView, UpdateCurrentConsoleProgress, UserInfo } from "@memberjunction/core";
+import { BaseEngine, BaseEnginePropertyConfig, BaseEntity, CompositeKey, ConsoleColor, EntityField, EntityFieldTSType, EntityInfo, KeyValuePair, LogError, LogStatus, Metadata, RunView, UpdateCurrentConsoleLine, UpdateCurrentConsoleProgress, UserInfo } from "@memberjunction/core";
 import { RecordChangeEntity, RecordChangeReplayRunEntity } from "@memberjunction/core-entities";
 import { SQLServerDataProvider } from "@memberjunction/sqlserver-dataprovider";
 
@@ -61,12 +61,36 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
         return super.getInstance<ExternalChangeDetectorEngine>();
     }
 
+
+    private _IneligibleEntities: string[] = [];// ['Entities', 'Entity Fields', 'Entity Field Values', 'Entity Relationships', 'Record Changes']; // default ineligible entities --- turned off for now
+    /**
+     * A list of entities that will automatically be excluded from all calls to this class. This array is used as a "safety"
+     * mechanism to prevent the system from trying to replay changes to these entities which wouldn't negatively affect system integrity
+     * but could cause performance issues. If you want to add/remove entities to this list, you can do so by manipulating this array.
+     * 
+     * If you want to run Change Detection and/or replay changes for entities in this array, you will need to remove them
+     * in your code before calling the methods in this class. While executing methods on this class with these default 
+     * ineligible entities will not cause any issues, they may take a long time to run and utilize a significant amount
+     * of resources. 
+     */
+    public get IneligibleEntities(): string[] {
+        return this._IneligibleEntities;
+    }
+
+
     private _EligibleEntities: EntityInfo[];
     /**
-     * A list of the entities that are eligible for external change detection
+     * A list of the entities that are eligible for external change detection. This is determined by using the underlying 
+     * database view vwEntitiesWithExternalChangeTracking which is a view that is maintained by the MJ system and is used to
+     * find a list of entities that have the required characteristics that support external change detection. These characteristics
+     * include:
+     *  * The entity has the TrackRecordChanges property set to 1
+     *  * The entity has the special UpdatedAt/CreatedAt fields (which are called __mj_UpdatedAt and __mj_CreatedAt in the database). These fields are AUTOMATICALLY added to an entity that has TrackRecordChanges set to 1 by the MJ CodeGen tool.
+     *  * The entity is not in the IneligibleEntities list. See info on the IneligibleEntities property for more information on excluded entities.
      */
     public get EligibleEntities(): EntityInfo[] {
-        return this._EligibleEntities;
+        const netEligible = this._EligibleEntities.filter(e => !this.IneligibleEntities.map(i => i.toLowerCase().trim()).includes(e.Name.toLowerCase().trim()));
+        return netEligible;
     }
 
     /**
@@ -75,6 +99,14 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
      */
     public async DetectChangesForEntity(entity: EntityInfo): Promise<ChangeDetectionResult> {
         try {
+            // check to make sure that the entity is in the eligible list
+            if (!entity) {
+                throw new Error("entity parameter is required");
+            }
+            else if (!this.EligibleEntities.find(e => e.ID === entity.ID)) {
+                throw new Error(`Entity ${entity.Name} is not eligible for external change detection. Refer to the documentation on the EligibleEntities and IneligibleEntities properties for more information.`);
+            }
+
             const md = new Metadata();
 
             const sqlCreates = this.generateDetectCreationsQuery(entity);
@@ -432,19 +464,34 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
      */
     public async DetectChangesForEntities(entities: EntityInfo[]): Promise<ChangeDetectionResult>  {
         try {
+            if (!entities)
+                throw new Error("entities parameter is required");
+            else if (entities.length === 0)
+                throw new Error("entities parameter must have at least one entity in it");
+
             const result: ChangeDetectionResult = new ChangeDetectionResult();
             result.Success = true;
             result.Changes = [];
 
+            const promises = [];
+            // fire them all off in parallel
             LogStatus(`Detecting changes for ${entities.length} entities`)
-            for (let i = 0; i < entities.length; i++) {
-                const entity = entities[i];
-                UpdateCurrentConsoleProgress(`   Detecting changes for ${entity.Name}`, i, entities.length, ConsoleColor.gray);
-                const entityResult = await this.DetectChangesForEntity(entity);
-                result.Changes = result.Changes.concat(entityResult.Changes);
-                result.Success = result.Success && entityResult.Success;
-            }
-            UpdateCurrentConsoleProgress(`   Detecting changes for ${entities.length} entities`, entities.length, entities.length, ConsoleColor.green);
+            let numFinished: number = 0;
+            entities.forEach((e) => {
+                UpdateCurrentConsoleLine(`   Starting change detection changes for ${e.Name}`, ConsoleColor.gray);
+                const p = this.DetectChangesForEntity(e); // no await
+                promises.push(p);
+                p.then(entityResult => {
+                    UpdateCurrentConsoleProgress(`   Finished change detection changes for ${e.Name}`, ++numFinished, entities.length, entityResult.Success ? ConsoleColor.cyan : ConsoleColor.crimson);
+                    result.Changes = result.Changes.concat(entityResult.Changes);
+                    result.Success = result.Success && entityResult.Success;    
+                });
+            });
+
+            // now wait for all of the promises to finish
+            await Promise.all(promises);
+
+            UpdateCurrentConsoleProgress(`   Finished detecting changes for ${entities.length} entities`, entities.length, entities.length, result.Success ? ConsoleColor.green : ConsoleColor.red);
 
             return result;
         }
@@ -458,28 +505,55 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
         }
     }
 
+    /**
+     * This method will detect changes for all eligible entities as defined by the EligibleEntities property
+     */
     public async DetectChangesForAllEligibleEntities(): Promise<ChangeDetectionResult> {
         return await this.DetectChangesForEntities(this.EligibleEntities);
     }
 
     /**
      * This method will replay all of the items in the changes array
-     * @param changes 
-     * @returns 
+     * @param changes Array of changes to replay.
+     * @param batchSize Optional, defines the # of concurrent changes to replay at once. If you want to replay changes serially, set this to 1
+     * @returns {Promise<boolean>} - Returns true if all changes are successfully replayed, otherwise false.
      */
-    public async ReplayChanges(changes: ChangeDetectionItem[]): Promise<boolean> {
-        let run;
+    public async ReplayChanges(changes: ChangeDetectionItem[], batchSize: number = 20): Promise<boolean> {
+        let run; // delcare outside of try block so we have access to it in the catch block
         try {
             if (changes && changes.length > 0) {
                 const md = new Metadata();
                 const results = [];
                 run = await this.StartRun();
                 LogStatus(`Replaying ${changes.length} changes`);
-                for (const change of changes) {
-                    UpdateCurrentConsoleProgress(`   Replaying ${change.Entity.Name} ${change.Type} ${change.PrimaryKey.ToConcatenatedString()}`, changes.indexOf(change), changes.length, ConsoleColor.gray);
-                    const result = await this.ReplaySingleChange(md, run, change);
-                    results.push({Success: result, change: change});
+
+                let numProcessed = 0;
+                for (let i = 0; i < changes.length; i += batchSize) {
+                    const batch = changes.slice(i, i + batchSize);
+            
+                    // Process the current batch
+                    const batchPromises = batch.map(async (change) => {
+                        UpdateCurrentConsoleProgress(
+                            `   Replaying ${change.Entity.Name} ${change.Type} ${change.PrimaryKey.ToConcatenatedString()}`,
+                            ++numProcessed,
+                            changes.length,
+                            ConsoleColor.gray
+                        );
+                        const result = await this.ReplaySingleChange(md, run, change);
+                        return { Success: result, change: change };
+                    });
+            
+                    // Wait for all promises in the current batch to complete
+                    const batchResults = await Promise.all(batchPromises);
+                    results.push(...batchResults);
                 }
+
+                // for (const change of changes) {
+                //     UpdateCurrentConsoleProgress(`   Replaying ${change.Entity.Name} ${change.Type} ${change.PrimaryKey.ToConcatenatedString()}`, changes.indexOf(change), changes.length, ConsoleColor.gray);
+                //     const result = await this.ReplaySingleChange(md, run, change);
+                //     results.push({Success: result, change: change});
+                // }
+
                 run.EndedAt = new Date();
                 run.Status = results.every(r => r.Success) ? 'Complete' : 'Error';
                 if (await run.Save()) {
@@ -499,11 +573,11 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
                 try {
                     run.Status = 'Error';
                     run.EndedAt = new Date();
-                    await run.Save();
+                    await run.Save(); // dont' care about return value here, we've already tried to save it and the return value will be false anyway and message is the original root cause of the first exception
                 }
-                catch (e) {
-                    LogError('Attempted to mark run as error failed, make sure you update the database for future runs to be allowed.')
-                    LogError(e);
+                catch (innerError) {
+                    LogError('Attempted to mark run as error failed, make sure you update the database for future runs to be allowed.');
+                    LogError(innerError);
                     return false; // couldn't get it done
                 }
             }
@@ -511,6 +585,9 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
         }
     }
 
+    /**
+     * Method creates a new Record Change Replay Run and returns the object for the run
+     */
     protected async StartRun(): Promise<RecordChangeReplayRunEntity> {
         // first make sure an existing run isn't in progress
         const rv = new RunView();
