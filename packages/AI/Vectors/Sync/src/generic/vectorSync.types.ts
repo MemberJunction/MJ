@@ -1,16 +1,21 @@
+export type BatchVectorSyncRequest = {
+  entities: Array<{ entityID: number; entityDocumentID: number }>;
+  batchSize: number;
+};
+
 export type VectorSyncRequest = {
-    entityID: number;
-    entityDocumentID?: number;
-    /**
-     * The number of records to be vectorized and inserted
-     * into the vector database at a time
-     */
-    batchCount?: number;
-    options?: any;
-}
+  entityID: number;
+  entityDocumentID?: number;
+  /**
+   * The number of records to be vectorized and inserted
+   * into the vector database at a time
+   */
+  batchCount?: number;
+  options?: any;
+};
 
 export type vectorSyncResponse = {
-    success: boolean;
-    status: string;
-    errorMessage: string;
-}
+  success: boolean;
+  status: string;
+  errorMessage: string;
+};

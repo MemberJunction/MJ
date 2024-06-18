@@ -41,15 +41,15 @@ export class EntityDocumentCache {
 
     public GetDocumentByName(EntityDocumentName: string): EntityDocumentEntity | null {
         const toLower = EntityDocumentName.trim().toLowerCase();
-        let docuement: EntityDocumentEntity = Object.values(this._cache).find((ed: EntityDocumentEntity) => {
+        let document: EntityDocumentEntity = Object.values(this._cache).find((ed: EntityDocumentEntity) => {
             ed.Name.trim().toLowerCase() === toLower;
         });
 
-        if (!docuement) {
+        if (!document) {
             LogStatus(`EntityDocumentCache.GetDocumentByName: Cache miss for EntityDocumentName: ${EntityDocumentName}`);
         }
 
-        return docuement || null;
+        return document || null;
     }
 
     public SetCurrentUser(user: UserInfo) {
