@@ -18,7 +18,7 @@
         },
         {
             "name": "skip_database_generation",
-            "value": true
+            "value": false
         }
     ],
     "logging": {
@@ -33,7 +33,7 @@
         "AllowAllRowsAPI": false,
         "AllowCreateAPI": true,
         "AllowUpdateAPI": true,
-        "AllowDeleteAPI": false,
+        "AllowDeleteAPI": true,
         "AllowUserSearchAPI": false,
         "CascadeDeletes": false,
         "UserViewMaxRows": 1000,
