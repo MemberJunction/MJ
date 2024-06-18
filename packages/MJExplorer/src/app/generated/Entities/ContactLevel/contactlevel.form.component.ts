@@ -3,6 +3,8 @@ import { ContactLevelEntity } from 'mj_generatedentities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { LoadContactLevelDetailsComponent } from "./sections/details.component"
+import { UserViewGridComponent } from "@memberjunction/ng-user-view-grid"
+
 @RegisterClass(BaseFormComponent, 'Contact Levels') // Tell MemberJunction about this class
 @Component({
     selector: 'gen-contactlevel-form',

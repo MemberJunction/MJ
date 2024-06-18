@@ -1,7 +1,7 @@
 import env from 'env-var';
 import fs from 'fs';
 import path from 'path';
-import { logStatus } from './logging';
+import { logStatus } from '../Misc/logging';
 
 export const dbHost = env.get('DB_HOST').required().asString();
 export const dbPort = env.get('DB_PORT').default('1433').asPortNumber();

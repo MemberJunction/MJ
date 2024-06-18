@@ -3,6 +3,8 @@ import { EntityRelationshipDisplayComponentEntity } from '@memberjunction/core-e
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { LoadEntityRelationshipDisplayComponentDetailsComponent } from "./sections/details.component"
+import { UserViewGridComponent } from "@memberjunction/ng-user-view-grid"
+
 @RegisterClass(BaseFormComponent, 'Entity Relationship Display Components') // Tell MemberJunction about this class
 @Component({
     selector: 'gen-entityrelationshipdisplaycomponent-form',

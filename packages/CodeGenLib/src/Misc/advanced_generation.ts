@@ -1,5 +1,5 @@
 import { BaseLLM, GetAIAPIKey } from "@memberjunction/ai";
-import { AdvancedGenerationFeature, configInfo } from "./config";
+import { AdvancedGenerationFeature, configInfo } from "../Config/config";
 import { MJGlobal, RegisterClass } from "@memberjunction/global";
 import { LogError } from "@memberjunction/core";
 

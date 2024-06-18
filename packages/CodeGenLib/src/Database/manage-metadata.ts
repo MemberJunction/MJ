@@ -1,9 +1,9 @@
 import { DataSource } from "typeorm";
-import { configInfo, mj_core_schema } from './config';
+import { configInfo, mj_core_schema } from '../Config/config';
 import { CodeNameFromString, EntityInfo, ExtractActualDefaultValue, LogError, LogStatus, Metadata, SeverityType } from "@memberjunction/core";
-import { logError, logMessage, logStatus, logWarning } from "./logging";
+import { logError, logMessage, logStatus, logWarning } from "../Misc/logging";
 import { SQLUtilityBase } from "./sql";
-import { AdvancedGeneration, EntityDescriptionResult, EntityNameResult } from "./advanced_generation";
+import { AdvancedGeneration, EntityDescriptionResult, EntityNameResult } from "../Misc/advanced_generation";
 import { MJGlobal, RegisterClass } from "@memberjunction/global";
 
 

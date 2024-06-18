@@ -1,15 +1,15 @@
 import { EntityInfo, EntityFieldInfo, EntityPermissionInfo, Metadata } from '@memberjunction/core';
-import { logError, logStatus } from './logging';
+import { logError, logStatus } from '../Misc/logging';
 import * as fs from 'fs';
 import path from 'path';
 
 import { SQLUtilityBase } from './sql';
 import { DataSource } from 'typeorm';
-import { configInfo, customSqlScripts, dbDatabase } from './config';
-import { ManageMetadataBase } from './manageMetadata';
+import { configInfo, customSqlScripts, dbDatabase } from '../Config/config';
+import { ManageMetadataBase } from './manage-metadata';
 
 import { UserCache } from '@memberjunction/sqlserver-dataprovider';
-import { combineFiles } from './util';
+import { combineFiles } from '../Misc/util';
 import { EntityEntity } from '@memberjunction/core-entities';
 import { MJGlobal, RegisterClass } from '@memberjunction/global';
 

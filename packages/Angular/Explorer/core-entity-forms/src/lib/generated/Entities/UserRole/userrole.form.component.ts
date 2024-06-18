@@ -3,6 +3,7 @@ import { UserRoleEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { LoadUserRoleDetailsComponent } from "./sections/details.component"
+
 @RegisterClass(BaseFormComponent, 'User Roles') // Tell MemberJunction about this class
 @Component({
     selector: 'gen-userrole-form',

@@ -1,9 +1,10 @@
-import { EntityInfo, EntityFieldInfo, GeneratedFormSectionType, EntityFieldTSType, EntityFieldValueListType, Metadata } from '@memberjunction/core';
-import { logError, logStatus } from './logging';
+import { EntityInfo, EntityFieldInfo, GeneratedFormSectionType, EntityFieldTSType, EntityFieldValueListType, Metadata, UserInfo } from '@memberjunction/core';
+import { logError, logStatus } from '../Misc/logging';
 import fs from 'fs';
 import path from 'path';
-import { mjCoreSchema, outputOptionValue } from './config';
+import { mjCoreSchema, outputOptionValue } from '../Config/config';
 import { RegisterClass } from '@memberjunction/global';
+import { GenerationResult, RelatedEntityDisplayComponentGeneratorBase } from './related-entity-components';
 
 export class AngularFormSectionInfo {
     Type: GeneratedFormSectionType
@@ -17,6 +18,7 @@ export class AngularFormSectionInfo {
     EntityClassName?: string
     IsRelatedEntity?: boolean = false
     RelatedEntityDisplayLocation?: 'Before Field Tabs' | 'After Field Tabs' = 'After Field Tabs'
+    GeneratedOutput?: GenerationResult
 }
 
 /**
@@ -24,12 +26,16 @@ export class AngularFormSectionInfo {
  */
 @RegisterClass(AngularClientGeneratorBase)
 export class AngularClientGeneratorBase {
-    public generateAngularCode(entities: EntityInfo[], directory: string, modulePrefix: string): boolean {
+    public async generateAngularCode(entities: EntityInfo[], directory: string, modulePrefix: string, contextUser: UserInfo): Promise<boolean> {
         try {
           const entityPath = path.join(directory, 'Entities');
           //const classMapEntries: string[] = [];
           const componentImports: string[] = [];
-          const componentNames: string[] = [];
+          const relatedEntityModuleImports: {library: string, modules: string[]}[] = [];
+          const componentNames: {
+                                    componentName: string, 
+                                    relatedEntityItemsRequired: {itemClassName: string, moduleClassName: string}[] 
+                                }[] = [];
           const sections: AngularFormSectionInfo[] = [];
       
           if (!fs.existsSync(entityPath))
@@ -43,27 +49,50 @@ export class AngularClientGeneratorBase {
                   if (!fs.existsSync(thisEntityPath))
                       fs.mkdirSync(thisEntityPath, { recursive: true }); // create the directory if it doesn't exist
       
-                  const { htmlCode, sections: entitySections } = this.generateSingleEntityHTMLForAngular(entity)
-                  const tsCode = this.generateSingleEntityTypeScriptForAngular(entity, entitySections)
+                  const { htmlCode, additionalSections, relatedEntitySections } = await this.generateSingleEntityHTMLForAngular(entity, contextUser)
+                  const tsCode = this.generateSingleEntityTypeScriptForAngular(entity, additionalSections, relatedEntitySections)
       
                   fs.writeFileSync(path.join(thisEntityPath, `${entity.ClassName.toLowerCase()}.form.component.ts`), tsCode);
                   fs.writeFileSync(path.join(thisEntityPath, `${entity.ClassName.toLowerCase()}.form.component.html`), htmlCode);
       
-      
-                  if (entitySections.length > 0) {
+                  if (additionalSections.length > 0) {
                       const sectionPath = path.join(thisEntityPath, 'sections');
                       if (!fs.existsSync(sectionPath))
                           fs.mkdirSync(sectionPath, { recursive: true }); // create the directory if it doesn't exist
       
-                      for (let j:number = 0; j < entitySections.length; ++j) {
-                          fs.writeFileSync(path.join(sectionPath, `${entitySections[j].FileName}`), entitySections[j].ComponentCode);
-                          sections.push(entitySections[j]); // add the entity's secitons one by one to the master/global list of sections
+                      for (let j:number = 0; j < additionalSections.length; ++j) {
+                          fs.writeFileSync(path.join(sectionPath, `${additionalSections[j].FileName}`), additionalSections[j].ComponentCode);
+                          sections.push(additionalSections[j]); // add the entity's secitons one by one to the master/global list of sections
                       }
                   }
       
                   const componentName: string = `${entity.ClassName}FormComponent`;
                   componentImports.push (`import { ${componentName}, Load${componentName} } from "./Entities/${entity.ClassName}/${entity.ClassName.toLowerCase()}.form.component";`);
-                  componentNames.push(componentName);
+                  const currentComponentDistinctRelatedEntityClassNames: {itemClassName: string, moduleClassName: string}[] = [];
+                  relatedEntitySections.forEach(s => s.GeneratedOutput.Component.ImportItems.forEach(i => {
+                    if (!currentComponentDistinctRelatedEntityClassNames.find(ii => ii.itemClassName === i.ClassName))
+                        currentComponentDistinctRelatedEntityClassNames.push({itemClassName: i.ClassName, moduleClassName: i.ModuleName});
+                  }))
+
+                  componentNames.push({
+                    componentName: componentName, 
+                    relatedEntityItemsRequired: currentComponentDistinctRelatedEntityClassNames,
+                  });
+
+                  // go through all related entities used by this component and add them to the relatedEntityModuleImports array, but distinct for the library and the module names within the library
+                  relatedEntitySections.forEach(s => {
+                    let match = relatedEntityModuleImports.find(m => m.library === s.GeneratedOutput.Component.ImportPath)
+                      if (!match) {
+                        match = {library: s.GeneratedOutput.Component.ImportPath, modules: []};
+                        relatedEntityModuleImports.push(match);
+                      }
+                      s.GeneratedOutput.Component.ImportItems.forEach(i => {
+                        if (!match.modules.includes(i.ModuleName))
+                            match.modules.push(i.ModuleName);
+                      });
+                  });
+
+                  // now the imports are good
               }
               else {
                   logStatus(`   Entity ${entity.Name} does not have a primary key or is not included in the API, skipping code generation for this entity`);
@@ -72,7 +101,7 @@ export class AngularClientGeneratorBase {
       
           const maxComponentsPerModule = outputOptionValue('Angular', 'maxComponentsPerModule', 25);
       
-          const moduleCode = this.generateAngularModule(componentImports, componentNames, sections, modulePrefix, maxComponentsPerModule);
+          const moduleCode = this.generateAngularModule(componentImports, componentNames, relatedEntityModuleImports, sections, modulePrefix, maxComponentsPerModule);
           fs.writeFileSync(path.join(directory, 'generated-forms.module.ts'), moduleCode);
       
           return true;
@@ -84,7 +113,12 @@ export class AngularClientGeneratorBase {
       }
        
       
-      protected generateAngularModule(componentImports: string[], componentNames: string[], sections: AngularFormSectionInfo[], modulePrefix: string, maxComponentsPerModule: number = 25): string {
+      protected generateAngularModule(componentImports: string[], 
+                                      componentNames: {componentName: string, relatedEntityItemsRequired: {itemClassName: string, moduleClassName: string}[]}[], 
+                                      relatedEntityModuleImports: {library: string, modules: string[]}[], 
+                                      sections: AngularFormSectionInfo[], 
+                                      modulePrefix: string, 
+                                      maxComponentsPerModule: number = 25): string {
           // this function will generate the overall code for the module file.
           // there is one master angular module called GeneratedFormsModule, and this module will include all of the sub-modules
           // the reason we do this is because of limits in the size of the types you can create in TypeScript and if we have a very large 
@@ -124,7 +158,11 @@ import { DropDownListModule } from '@progress/kendo-angular-dropdowns';
 // Import Generated Components
 ${componentImports.join('\n')}
 ${sections.map(s => `import { ${s.ClassName}, Load${s.ClassName} } from "./Entities/${s.EntityClassName}/sections/${s.FileNameWithoutExtension}"`).join('\n')}
-    
+${
+    relatedEntityModuleImports.filter(remi => remi.library.trim().toLowerCase() !== '@memberjunction/ng-user-view-grid' )
+                                 .map(remi => `import { ${remi.modules.map(m => m).join(', ')} from "${remi.library}"`)
+                                .join('\n')
+}   
 ${moduleCode}
     
 export function Load${modulePrefix}GeneratedForms() {
@@ -133,18 +171,22 @@ export function Load${modulePrefix}GeneratedForms() {
     // code do NOTHING - the point is to prevent the code from being eliminated during tree shaking
     // since it is dynamically instantiated on demand, and the Angular compiler has no way to know that,
     // in production builds tree shaking will eliminate the code unless we do this
-    ${componentNames.map(c => `Load${c}();`).join('\n    ')}
+    ${componentNames.map(c => `Load${c.componentName}();`).join('\n    ')}
     ${sections.map(s => `Load${s.ClassName}();`).join('\n    ')}
 }
     `
       }
       
-      protected generateAngularModuleCode(componentNames: string[], sections: AngularFormSectionInfo[], maxComponentsPerModule: number, modulePrefix: string): string {
+      protected generateAngularModuleCode(componentNames: {componentName: string, relatedEntityItemsRequired: {itemClassName: string, moduleClassName: string}[]}[], 
+                                          sections: AngularFormSectionInfo[], 
+                                          maxComponentsPerModule: number, 
+                                          modulePrefix: string): string {
           // this function breaks up the componentNames and sections up, we only want to have a max of maxComponentsPerModule components per module (of components and/or sections, doesn't matter)
           // so, we break up the list of components into sub-modules, and then generate the code for each sub-module
           
           // iterate through the componentNames first, then after we've exhausted those, then iterate through the sections
-          const combinedArray: string[] = componentNames.concat(sections.map(s => s.ClassName));
+          const simpleComponentNames = componentNames.map(c => c.componentName);
+          const combinedArray: string[] = simpleComponentNames.concat(sections.map(s => s.ClassName));
           const subModules: string[] = [];
           let currentComponentCount: number = 0;
           const subModuleStarter: string =   `
@@ -154,16 +196,23 @@ declarations: [
         let currentSubModuleCode: string = subModuleStarter;
     
         // loop through the combined array which is the combination of the componentNames and the sections
+        let currentSubModuleAdditionalModulesToImport: string[] = [];
         for (let i: number = 0; i < combinedArray.length; ++i) {
             currentSubModuleCode += (currentComponentCount === 0 ? '' : ',\n') +  '    ' + combinedArray[i]; // prepend a comma if this isn't the first component in the module
-            if ( 
-                (currentComponentCount === maxComponentsPerModule - 1) || 
-                (i === combinedArray.length - 1) 
-                ) {
+            // lookup the componentName and see if we have any relatedEntityItemsRequired, if so, add them to the currentSubModuleAdditionalModulesToImport array
+            const relatedEntityItemsRequired = componentNames.find(c => c.componentName === combinedArray[i])?.relatedEntityItemsRequired;
+            if (relatedEntityItemsRequired && relatedEntityItemsRequired.length > 0) {
+                relatedEntityItemsRequired.forEach(r => {
+                    if (!currentSubModuleAdditionalModulesToImport.includes(r.moduleClassName))
+                        currentSubModuleAdditionalModulesToImport.push(r.moduleClassName);
+                });
+            }
+            if ((currentComponentCount === maxComponentsPerModule - 1) || (i === combinedArray.length - 1)) {
                 // we have reached the max number of components for this module, so generate the module code and reset the counters
-                currentSubModuleCode += this.generateSubModuleEnding(subModules.length);
+                currentSubModuleCode += this.generateSubModuleEnding(subModules.length, currentSubModuleAdditionalModulesToImport);
                 subModules.push(currentSubModuleCode);
-                currentSubModuleCode = subModuleStarter;
+                currentSubModuleCode = subModuleStarter; // reset
+                currentSubModuleAdditionalModulesToImport = []; // reset
                 currentComponentCount = 0;
             }
             else    
@@ -196,7 +245,7 @@ export class ${modulePrefix}GeneratedFormsModule { }`;
         return this.subModule_BaseName;
       }
 
-      protected generateSubModuleEnding(moduleNumber: number): string {
+      protected generateSubModuleEnding(moduleNumber: number, additionalModulesToImport: string[]): string {
       return `],
 imports: [
     CommonModule,
@@ -212,7 +261,7 @@ imports: [
     MJTabStripModule,
     ContainerDirectivesModule,
     DropDownListModule,
-    ComboBoxModule
+    ComboBoxModule${additionalModulesToImport.length > 0 ? ',\n    ' + additionalModulesToImport.join(',\n    ') : ''}
 ],
 exports: [
 ]
@@ -222,15 +271,48 @@ export class ${this.SubModuleBaseName}${moduleNumber} { }
       }
       
       
-      protected generateSingleEntityTypeScriptForAngular(entity: EntityInfo, sections: AngularFormSectionInfo[]): string {
-          const entityObjectClass: string = entity.ClassName
-          const sectionImports: string = sections.length > 0 ? sections.map(s => `import { Load${s.ClassName} } from "./sections/${s.FileNameWithoutExtension}"`).join('\n') : '';
-      
-          return `import { Component } from '@angular/core';
+      protected generateSingleEntityTypeScriptForAngular(entity: EntityInfo, additionalSections: AngularFormSectionInfo[], relatedEntitySections: AngularFormSectionInfo[]): string {
+        const entityObjectClass: string = entity.ClassName
+        const sectionImports: string = additionalSections.length > 0 ? additionalSections.map(s => `import { Load${s.ClassName} } from "./sections/${s.FileNameWithoutExtension}"`).join('\n') : '';
+
+        // next, build a list of distinct imports at the library level and for components within the library
+        const libs: {lib: string, items: string[]}[] = relatedEntitySections.length > 0 ? relatedEntitySections.filter(s => s.GeneratedOutput && s.GeneratedOutput.Component && s.GeneratedOutput.Component.ImportPath)
+                                                                                                                  .map(s => {
+                                                                                                                                return {
+                                                                                                                                    lib: s.GeneratedOutput.Component.ImportPath, 
+                                                                                                                                    items: []
+                                                                                                                                }
+                                                                                                                            }
+                                                                                                                        ) : [];
+        const distinctLibs: {lib: string, items: string[]}[] = [];
+        libs.forEach(l => {
+            if (!distinctLibs.find(ll => ll.lib === l.lib))
+                distinctLibs.push(l);
+        });
+        // now we have a list of distinct libraries, next we go through all the ITEMS and add them to the appropriate library but make sure to keep those items distinct too
+        relatedEntitySections.filter(s => s.GeneratedOutput && s.GeneratedOutput.Component && s.GeneratedOutput.Component.ImportItems)
+                            .forEach(s => {
+                                const lib = distinctLibs.find(l => l.lib === s.GeneratedOutput.Component.ImportPath);
+                                if (lib) {
+                                    s.GeneratedOutput.Component.ImportItems.forEach(i => {
+                                        if (!lib.items.includes(i.ClassName))
+                                            lib.items.push(i.ClassName);
+                                    });
+                                }
+                            });
+
+        // nowe our libs array is good to go, we can generate the import statements for the libraries and the items within the libraries
+        const generationImports: string = distinctLibs.map(l => `import { ${l.items.join(", ")} } from "${l.lib}"`).join('\n');
+        const generationInjectedCode: string = relatedEntitySections.length > 0 ? 
+                                                        relatedEntitySections.filter(s => s.GeneratedOutput && s.GeneratedOutput.CodeOutput?.length > 0)
+                                                                                .map(s => s.GeneratedOutput.CodeOutput.split("\n").map(l => `    ${l}`).join("\n")).join('\n') : '';
+
+        return `import { Component } from '@angular/core';
 import { ${entityObjectClass}Entity } from '${entity.SchemaName === mjCoreSchema ? '@memberjunction/core-entities' : 'mj_generatedentities'}';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
-${sectionImports}
+${sectionImports}${generationImports.length > 0 ? '\n' + generationImports : ''}
+
 @RegisterClass(BaseFormComponent, '${entity.Name}') // Tell MemberJunction about this class
 @Component({
     selector: 'gen-${entity.ClassName.toLowerCase()}-form',
@@ -238,11 +320,11 @@ ${sectionImports}
     styleUrls: ['../../../../shared/form-styles.css']
 })
 export class ${entity.ClassName}FormComponent extends BaseFormComponent {
-    public record!: ${entityObjectClass}Entity;
+    public record!: ${entityObjectClass}Entity;${generationInjectedCode.length > 0 ? '\n' + generationInjectedCode : ''}
 } 
 
 export function Load${entity.ClassName}FormComponent() {
-    ${sections.map(s => `Load${s.ClassName}();`).join('\n    ')}
+    ${additionalSections.map(s => `Load${s.ClassName}();`).join('\n    ')}
 }
 `
       }
@@ -439,7 +521,7 @@ export function Load${entity.ClassName}${this.stripWhiteSpace(section.Name)}Comp
           return html;
       }
       
-      protected generateRelatedEntityTabs(entity: EntityInfo, startIndex: number): AngularFormSectionInfo[] {
+      protected async generateRelatedEntityTabs(entity: EntityInfo, startIndex: number, contextUser: UserInfo): Promise<AngularFormSectionInfo[]> {
         const md = new Metadata();
         const tabs: AngularFormSectionInfo[] = [];
         const sortedRelatedEntities = entity.RelatedEntities.filter(re => re.DisplayInForm).sort((a, b) => a.Sequence - b.Sequence); // only show related entities that are marked to display in the form and sort by sequence
@@ -462,26 +544,31 @@ export function Load${entity.ClassName}${this.stripWhiteSpace(section.Name)}Comp
                     break;
             }
 
+            const component = await RelatedEntityDisplayComponentGeneratorBase.GetComponent(relatedEntity, contextUser);
+            const generateResults = await component.Generate({
+                Entity: entity,
+                RelationshipInfo: relatedEntity,
+                TabName: tabName
+            });
+            // now for each newline add a series of tabs to map to the indentation we need for pretty formatting
+            const componentCodeWithTabs = generateResults.TemplateOutput.split('\n').map(l => `                        ${l}`).join('\n')
+
             const tabCode = `${index > 0 ? '\n' : ''}                    <mj-tab Name="${tabName}" 
                         [Visible]="record.IsSaved" 
                         [Props]="{EntityRelationshipID: ${relatedEntity.ID}}">
                         ${icon}${tabName}
                     </mj-tab>
                     <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('${relatedEntity.RelatedEntity}')"  
-                            [NewRecordValues]="NewRecordValues('${relatedEntity.RelatedEntity}')"
-                            [AllowLoad]="IsCurrentTab('${tabName}')"  
-                            [EditMode]="GridEditMode()"  
-                            [BottomMargin]="GridBottomMargin">
-                        </mj-user-view-grid>
+${componentCodeWithTabs}                    
                     </mj-tab-body>`
+
             tabs.push({
                 Type: GeneratedFormSectionType.Category,
                 IsRelatedEntity: true,
                 RelatedEntityDisplayLocation: relatedEntity.DisplayLocation,
                 Name: tabName,
-                TabCode: tabCode
+                TabCode: tabCode,
+                GeneratedOutput: generateResults,
             })
             index++;
         }
@@ -493,15 +580,17 @@ export function Load${entity.ClassName}${this.stripWhiteSpace(section.Name)}Comp
           return s.replace(/\s/g, '');
       }
       
-      protected generateSingleEntityHTMLForAngular(entity: EntityInfo): {htmlCode: string, sections: AngularFormSectionInfo[]} {
+      protected async generateSingleEntityHTMLForAngular(entity: EntityInfo, contextUser: UserInfo): Promise<{htmlCode: string, 
+                                                                                                              additionalSections: AngularFormSectionInfo[], 
+                                                                                                              relatedEntitySections: AngularFormSectionInfo[]}> {
           const topArea = this.generateTopAreaHTMLForAngular(entity);
           const additionalSections = this.generateAngularAdditionalSections(entity, 0);
           // calc ending index for additional sections so we can pass taht into the related entity tabs because they need to start incrementally up from there...
           const endingIndex = additionalSections && additionalSections.length ? (topArea && topArea.length > 0 ? additionalSections.length - 1 : additionalSections.length) : 0;
-          const relatedEntitySections = this.generateRelatedEntityTabs(entity, endingIndex);
+          const relatedEntitySections = await this.generateRelatedEntityTabs(entity, endingIndex, contextUser);
           const htmlCode = topArea.length > 0 ? this.generateSingleEntityHTMLWithSplitterForAngular(topArea, additionalSections, relatedEntitySections) : 
                                                 this.generateSingleEntityHTMLWithOUTSplitterForAngular(topArea, additionalSections, relatedEntitySections);
-          return {htmlCode, sections: additionalSections};
+          return {htmlCode, additionalSections, relatedEntitySections};
       }
       
       

@@ -297,7 +297,7 @@ import { EntityCommunicationFieldDetailsComponent, LoadEntityCommunicationFieldD
 import { RecordChangeReplayRunDetailsComponent, LoadRecordChangeReplayRunDetailsComponent } from "./Entities/RecordChangeReplayRun/sections/details.component"
 import { LibraryItemDetailsComponent, LoadLibraryItemDetailsComponent } from "./Entities/LibraryItem/sections/details.component"
 import { EntityRelationshipDisplayComponentDetailsComponent, LoadEntityRelationshipDisplayComponentDetailsComponent } from "./Entities/EntityRelationshipDisplayComponent/sections/details.component"
-    
+   
 
 @NgModule({
 declarations: [
@@ -335,7 +335,8 @@ imports: [
     MJTabStripModule,
     ContainerDirectivesModule,
     DropDownListModule,
-    ComboBoxModule
+    ComboBoxModule,
+    UserViewGridModule
 ],
 exports: [
 ]
@@ -380,7 +381,8 @@ imports: [
     MJTabStripModule,
     ContainerDirectivesModule,
     DropDownListModule,
-    ComboBoxModule
+    ComboBoxModule,
+    UserViewGridModule
 ],
 exports: [
 ]
@@ -425,7 +427,8 @@ imports: [
     MJTabStripModule,
     ContainerDirectivesModule,
     DropDownListModule,
-    ComboBoxModule
+    ComboBoxModule,
+    UserViewGridModule
 ],
 exports: [
 ]
@@ -470,7 +473,8 @@ imports: [
     MJTabStripModule,
     ContainerDirectivesModule,
     DropDownListModule,
-    ComboBoxModule
+    ComboBoxModule,
+    UserViewGridModule
 ],
 exports: [
 ]
@@ -515,7 +519,8 @@ imports: [
     MJTabStripModule,
     ContainerDirectivesModule,
     DropDownListModule,
-    ComboBoxModule
+    ComboBoxModule,
+    UserViewGridModule
 ],
 exports: [
 ]
@@ -560,7 +565,8 @@ imports: [
     MJTabStripModule,
     ContainerDirectivesModule,
     DropDownListModule,
-    ComboBoxModule
+    ComboBoxModule,
+    UserViewGridModule
 ],
 exports: [
 ]
@@ -605,7 +611,8 @@ imports: [
     MJTabStripModule,
     ContainerDirectivesModule,
     DropDownListModule,
-    ComboBoxModule
+    ComboBoxModule,
+    UserViewGridModule
 ],
 exports: [
 ]
