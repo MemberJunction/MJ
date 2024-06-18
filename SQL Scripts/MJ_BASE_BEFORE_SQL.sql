@@ -1479,7 +1479,8 @@ SELECT
   e.* 
 FROM 
   __mj.vwEntities e
-WHERE 
+WHERE
+  e.Name NOT IN ('Entities', 'Entity Fields', 'Entity Field Values', 'Entity Permissions', 'Record Changes') AND -- hardcode exclusion of entities that are updated by CodeGen in bulk
   e.TrackRecordChanges=1
   AND
     EXISTS (
@@ -1488,7 +1489,7 @@ WHERE
 		  FROM 
 			  __mj.vwEntityFields ef 
 		  WHERE 
-			  ef.Name='__mj_UpdatedAt' AND ef.Type='datetime' AND ef.EntityID = e.ID
+			  ef.Name='__mj_UpdatedAt' AND ef.Type='datetimeoffset' AND ef.EntityID = e.ID
 		  )
   AND
     EXISTS (
@@ -1497,7 +1498,7 @@ WHERE
 		  FROM 
 			  __mj.vwEntityFields ef 
 		  WHERE 
-			  ef.Name='__mj_CreatedAt' AND ef.Type='datetime' AND ef.EntityID = e.ID
+			  ef.Name='__mj_CreatedAt' AND ef.Type='datetimeoffset' AND ef.EntityID = e.ID
 		  )
 GO
 

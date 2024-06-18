@@ -363,29 +363,52 @@ export class ManageMetadataBase {
    protected async ensureSpecialDateFieldExistsAndHasCorrectDefaultValue(ds: DataSource, entity: any, fieldName: string, currentFieldData: any): Promise<boolean> {
       if (!currentFieldData) {
          // field doesn't exist, let's create it
-         const sql = `ALTER TABLE [${entity.SchemaName}].[${entity.BaseTable}] ADD ${fieldName} DATETIME NOT NULL DEFAULT GETUTCDATE()`;
+         const sql = `ALTER TABLE [${entity.SchemaName}].[${entity.BaseTable}] ADD ${fieldName} DATETIMEOFFSET NOT NULL DEFAULT GETUTCDATE()`;
          await ds.query(sql);
       }
       else {
          // field does exist, let's first check the data type/nullability
-         if (currentFieldData.DATA_TYPE.trim().toLowerCase() !== 'datetime' || currentFieldData.IS_NULLABLE.trim().toLowerCase() !== 'no') {
-            // the column is the wrong type, so let's update it
-            const sql = `ALTER TABLE [${entity.SchemaName}].[${entity.BaseTable}] ALTER COLUMN ${fieldName} DATETIME NOT NULL`;
-            await ds.query(sql);
-         }
-
-         // now let's check the default value 
-         const defaultValue = currentFieldData.COLUMN_DEFAULT;
-         const realDefaultValue = ExtractActualDefaultValue(defaultValue);
-         if (realDefaultValue.trim().toLowerCase() !== 'getutcdate()') {
-            // default value is not correct, so let's update it
+         if (currentFieldData.DATA_TYPE.trim().toLowerCase() !== 'datetimeoffset' || currentFieldData.IS_NULLABLE.trim().toLowerCase() !== 'no') {
+            // the column is the wrong type, so let's update it, first removing the default constraint, then 
+            // modifying the column, and finally adding the default constraint back in.
             await this.dropExistingDefaultConstraint(ds, entity, fieldName);
-            const sqlAddDefaultConstraint = `ALTER TABLE [${entity.SchemaName}].[${entity.BaseTable}] ADD CONSTRAINT DF_${entity.SchemaName}_${CodeNameFromString(entity.BaseTable)}_${fieldName} DEFAULT GETUTCDATE() FOR [${fieldName}]`;
-            await ds.query(sqlAddDefaultConstraint);
+
+            const sql = `ALTER TABLE [${entity.SchemaName}].[${entity.BaseTable}] ALTER COLUMN ${fieldName} DATETIMEOFFSET NOT NULL`;
+            await ds.query(sql);
+
+            await this.createDefaultConstraintForSpecialDateField(ds, entity, fieldName);
+         }
+         else {
+            // if we get here that means the column is the correct type and nullability, so now let's check the default value  
+            const defaultValue = currentFieldData.COLUMN_DEFAULT;
+            const realDefaultValue = ExtractActualDefaultValue(defaultValue);
+            if (realDefaultValue.trim().toLowerCase() !== 'getutcdate()') {
+               await this.dropAndCreateDefaultConstraintForSpecialDateField(ds, entity, fieldName);
+            }
          }
       }
       // if we get here, we're good
       return true;
+   }
+
+   /**
+    * Creates the default constraint for a special date field. This method is called as part of the ensureSpecialDateFieldExistsAndHasCorrectDefaultValue method and is not intended to be called directly.
+    */
+   protected async createDefaultConstraintForSpecialDateField(ds: DataSource, entity: any, fieldName: string) {
+      const sqlAddDefaultConstraint = `ALTER TABLE [${entity.SchemaName}].[${entity.BaseTable}] ADD CONSTRAINT DF_${entity.SchemaName}_${CodeNameFromString(entity.BaseTable)}_${fieldName} DEFAULT GETUTCDATE() FOR [${fieldName}]`;
+      await ds.query(sqlAddDefaultConstraint);
+   }
+
+   /**
+    * Drops and recreates the default constraint for a special date field. This method is called as part of the ensureSpecialDateFieldExistsAndHasCorrectDefaultValue method and is not intended to be called directly.
+    * @param ds 
+    * @param entity 
+    * @param fieldName 
+    */
+   protected async dropAndCreateDefaultConstraintForSpecialDateField(ds: DataSource, entity: any, fieldName: string) {
+      // default value is not correct, so let's update it
+      await this.dropExistingDefaultConstraint(ds, entity, fieldName);
+      await this.createDefaultConstraintForSpecialDateField(ds, entity, fieldName);
    }
 
    /**

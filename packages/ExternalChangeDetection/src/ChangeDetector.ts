@@ -240,8 +240,8 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
                 return {differ: d1.getTime() !== d2.getTime(), castValue1: d1, castValue2: d2};
             case EntityFieldTSType.Number:
                 // check to see if value1 and value2 are both numbers, if not, convert them to numbers
-                const n1 = typeof value1 === 'number' ? value1 : parseFloat(value1);
-                const n2 = typeof value2 === 'number' ? value2 : parseFloat(value2);
+                const n1 = value1 ? typeof value1 === 'number' ? value1 : parseFloat(value1) : value1;
+                const n2 = value2 ? typeof value2 === 'number' ? value2 : parseFloat(value2) : value2;
                 return {differ: n1 !== n2, castValue1: n1, castValue2: n2};
             case EntityFieldTSType.String:
                 // check to see if value1 and value2 are both strings, if not, convert them to strings
@@ -265,6 +265,7 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
                     WHERE 
                         RecordID = '${change.PrimaryKey.ToConcatenatedString()}' 
                         AND EntityID = ${change.Entity.ID} 
+                        AND Status <> 'Pending'
                     ORDER BY 
                         ChangedAt DESC`;                
         const result = await Provider.ExecuteSQL(sql);
@@ -373,8 +374,8 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
                     RecordID
             ) rc ON ${primaryKeyString} = rc.RecordID
             WHERE 
-                ot.${EntityInfo.UpdatedAtFieldName} > COALESCE(rc.last_change_time, '1900-01-01');
-        `;
+                FORMAT(ot.${EntityInfo.UpdatedAtFieldName}, 'yyyy-MM-dd HH:mm:ss.fff') > COALESCE(FORMAT(rc.last_change_time, 'yyyy-MM-dd HH:mm:ss.fff'), '1900-01-01 00:00:00.000');`;
+                // use up to 3 digits of precision because when we get the values back into JavaScript objects, Date objects only have 3 digits of precision
     }
     
     protected generateDetectCreationsQuery(entity: EntityInfo): string {

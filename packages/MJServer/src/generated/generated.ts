@@ -2,7 +2,7 @@
 * ALL ENTITIES - TypeGraphQL Type Class Definition - AUTO GENERATED FILE
 * Generated Entities and Resolvers for Server
 * 
-* GENERATED: 6/17/2024, 6:22:07 AM
+* GENERATED: 6/17/2024, 6:43:56 PM
 * 
 *   >>> DO NOT MODIFY THIS FILE!!!!!!!!!!!!
 *   >>> YOUR CHANGES WILL BE OVERWRITTEN
@@ -52,11 +52,11 @@ export class Company_ {
     Domain?: string;
           
     @Field() 
-    @MaxLength(8)
+    @MaxLength(10)
     _mj__CreatedAt: Date;
           
     @Field() 
-    @MaxLength(8)
+    @MaxLength(10)
     _mj__UpdatedAt: Date;
         
     @Field(() => [mj_core_schema_server_object_types.Employee_])
@@ -271,11 +271,11 @@ export class Employee_ {
     SupervisorID?: number;
           
     @Field() 
-    @MaxLength(8)
+    @MaxLength(10)
     _mj__CreatedAt: Date;
           
     @Field() 
-    @MaxLength(8)
+    @MaxLength(10)
     _mj__UpdatedAt: Date;
           
     @Field({nullable: true}) 
@@ -796,11 +796,11 @@ export class EmployeeRole_ {
     RoleID: number;
           
     @Field() 
-    @MaxLength(8)
+    @MaxLength(10)
     _mj__CreatedAt: Date;
           
     @Field() 
-    @MaxLength(8)
+    @MaxLength(10)
     _mj__UpdatedAt: Date;
           
     @Field() 
@@ -905,11 +905,11 @@ export class EmployeeSkill_ {
     SkillID: number;
           
     @Field() 
-    @MaxLength(8)
+    @MaxLength(10)
     _mj__CreatedAt: Date;
           
     @Field() 
-    @MaxLength(8)
+    @MaxLength(10)
     _mj__UpdatedAt: Date;
           
     @Field() 
@@ -1023,11 +1023,11 @@ export class Role_ {
     SQLName?: string;
           
     @Field() 
-    @MaxLength(8)
+    @MaxLength(10)
     _mj__CreatedAt: Date;
           
     @Field() 
-    @MaxLength(8)
+    @MaxLength(10)
     _mj__UpdatedAt: Date;
         
     @Field(() => [mj_core_schema_server_object_types.EmployeeRole_])
@@ -2015,11 +2015,11 @@ export class EntityField_ {
     RelatedEntityNameFieldMap?: string;
           
     @Field() 
-    @MaxLength(8)
+    @MaxLength(10)
     _mj__CreatedAt: Date;
           
     @Field() 
-    @MaxLength(8)
+    @MaxLength(10)
     _mj__UpdatedAt: Date;
           
     @Field() 
@@ -2476,11 +2476,11 @@ export class Entity_ {
     Icon?: string;
           
     @Field() 
-    @MaxLength(8)
+    @MaxLength(10)
     _mj__CreatedAt: Date;
           
     @Field() 
-    @MaxLength(8)
+    @MaxLength(10)
     _mj__UpdatedAt: Date;
           
     @Field({nullable: true}) 
@@ -3293,11 +3293,11 @@ export class User_ {
     LinkedEntityRecordID?: number;
           
     @Field() 
-    @MaxLength(8)
+    @MaxLength(10)
     _mj__CreatedAt: Date;
           
     @Field() 
-    @MaxLength(8)
+    @MaxLength(10)
     _mj__UpdatedAt: Date;
           
     @Field({nullable: true}) 
@@ -3898,11 +3898,11 @@ export class EntityRelationship_ {
     DisplayUserViewGUID?: string;
           
     @Field() 
-    @MaxLength(8)
+    @MaxLength(10)
     _mj__CreatedAt: Date;
           
     @Field() 
-    @MaxLength(8)
+    @MaxLength(10)
     _mj__UpdatedAt: Date;
           
     @Field() 
@@ -4361,11 +4361,11 @@ export class UserView_ {
     SortState?: string;
           
     @Field() 
-    @MaxLength(8)
+    @MaxLength(10)
     _mj__CreatedAt: Date;
           
     @Field() 
-    @MaxLength(8)
+    @MaxLength(10)
     _mj__UpdatedAt: Date;
           
     @Field() 
@@ -5105,11 +5105,11 @@ export class Application_ {
     DefaultForNewUser: boolean;
           
     @Field() 
-    @MaxLength(8)
+    @MaxLength(10)
     _mj__CreatedAt: Date;
           
     @Field() 
-    @MaxLength(8)
+    @MaxLength(10)
     _mj__UpdatedAt: Date;
         
     @Field(() => [mj_core_schema_server_object_types.ApplicationEntity_])
@@ -5298,11 +5298,11 @@ export class ApplicationEntity_ {
     DefaultForNewUser: boolean;
           
     @Field() 
-    @MaxLength(8)
+    @MaxLength(10)
     _mj__CreatedAt: Date;
           
     @Field() 
-    @MaxLength(8)
+    @MaxLength(10)
     _mj__UpdatedAt: Date;
           
     @Field() 
@@ -5489,11 +5489,11 @@ export class EntityPermission_ {
     DeleteRLSFilterID?: number;
           
     @Field() 
-    @MaxLength(8)
+    @MaxLength(10)
     _mj__CreatedAt: Date;
           
     @Field() 
-    @MaxLength(8)
+    @MaxLength(10)
     _mj__UpdatedAt: Date;
           
     @Field() 
@@ -7214,7 +7214,7 @@ export class RecordChange_ {
     IntegrationID?: number;
           
     @Field({description: 'The date/time that the change occured.'}) 
-    @MaxLength(8)
+    @MaxLength(10)
     ChangedAt: Date;
           
     @Field({description: 'JSON structure that describes what was changed in a structured format.'}) 
@@ -7240,11 +7240,11 @@ export class RecordChange_ {
     Comments?: string;
           
     @Field() 
-    @MaxLength(8)
+    @MaxLength(10)
     CreatedAt: Date;
           
     @Field() 
-    @MaxLength(8)
+    @MaxLength(10)
     UpdatedAt: Date;
           
     @Field() 
@@ -7452,11 +7452,11 @@ export class UserRole_ {
     RoleName: string;
           
     @Field() 
-    @MaxLength(8)
+    @MaxLength(10)
     _mj__CreatedAt: Date;
           
     @Field() 
-    @MaxLength(8)
+    @MaxLength(10)
     _mj__UpdatedAt: Date;
           
     @Field() 
@@ -7573,11 +7573,11 @@ export class RowLevelSecurityFilter_ {
     FilterText?: string;
           
     @Field() 
-    @MaxLength(8)
+    @MaxLength(10)
     _mj__CreatedAt: Date;
           
     @Field() 
-    @MaxLength(8)
+    @MaxLength(10)
     _mj__UpdatedAt: Date;
         
     @Field(() => [mj_core_schema_server_object_types.EntityPermission_])
@@ -7872,11 +7872,11 @@ export class Authorization_ {
     Description?: string;
           
     @Field() 
-    @MaxLength(8)
+    @MaxLength(10)
     _mj__CreatedAt: Date;
           
     @Field() 
-    @MaxLength(8)
+    @MaxLength(10)
     _mj__UpdatedAt: Date;
           
     @Field({nullable: true}) 
@@ -8115,11 +8115,11 @@ export class AuditLogType_ {
     AuthorizationName?: string;
           
     @Field() 
-    @MaxLength(8)
+    @MaxLength(10)
     _mj__CreatedAt: Date;
           
     @Field() 
-    @MaxLength(8)
+    @MaxLength(10)
     _mj__UpdatedAt: Date;
           
     @Field({nullable: true}) 
@@ -8241,11 +8241,11 @@ export class EntityFieldValue_ {
     Description?: string;
           
     @Field() 
-    @MaxLength(8)
+    @MaxLength(10)
     _mj__CreatedAt: Date;
           
     @Field() 
-    @MaxLength(8)
+    @MaxLength(10)
     _mj__UpdatedAt: Date;
           
     @Field() 
@@ -9029,11 +9029,11 @@ export class EntityAIAction_ {
     Comments?: string;
           
     @Field() 
-    @MaxLength(8)
+    @MaxLength(10)
     _mj__CreatedAt: Date;
           
     @Field() 
-    @MaxLength(8)
+    @MaxLength(10)
     _mj__UpdatedAt: Date;
           
     @Field() 
@@ -10827,11 +10827,11 @@ export class ResourceType_ {
     EntityID?: number;
           
     @Field() 
-    @MaxLength(8)
+    @MaxLength(10)
     _mj__CreatedAt: Date;
           
     @Field() 
-    @MaxLength(8)
+    @MaxLength(10)
     _mj__UpdatedAt: Date;
           
     @Field({nullable: true}) 
@@ -12958,11 +12958,11 @@ export class QueryField_ {
     SummaryDescription?: string;
           
     @Field() 
-    @MaxLength(8)
+    @MaxLength(10)
     _mj__CreatedAt: Date;
           
     @Field() 
-    @MaxLength(8)
+    @MaxLength(10)
     _mj__UpdatedAt: Date;
           
     @Field() 
@@ -13160,11 +13160,11 @@ export class QueryCategory_ {
     UserID: number;
           
     @Field() 
-    @MaxLength(8)
+    @MaxLength(10)
     _mj__CreatedAt: Date;
           
     @Field() 
-    @MaxLength(8)
+    @MaxLength(10)
     _mj__UpdatedAt: Date;
           
     @Field({nullable: true}) 
@@ -13364,11 +13364,11 @@ export class Query_ {
     ExecutionCostRank?: number;
           
     @Field() 
-    @MaxLength(8)
+    @MaxLength(10)
     _mj__CreatedAt: Date;
           
     @Field() 
-    @MaxLength(8)
+    @MaxLength(10)
     _mj__UpdatedAt: Date;
           
     @Field({nullable: true}) 
@@ -13583,11 +13583,11 @@ export class QueryPermission_ {
     RoleName: string;
           
     @Field() 
-    @MaxLength(8)
+    @MaxLength(10)
     _mj__CreatedAt: Date;
           
     @Field() 
-    @MaxLength(8)
+    @MaxLength(10)
     _mj__UpdatedAt: Date;
         
 }
@@ -13865,11 +13865,11 @@ export class EntityDocumentType_ {
     Description?: string;
           
     @Field() 
-    @MaxLength(8)
+    @MaxLength(10)
     _mj__CreatedAt: Date;
           
     @Field() 
-    @MaxLength(8)
+    @MaxLength(10)
     _mj__UpdatedAt: Date;
         
     @Field(() => [mj_core_schema_server_object_types.EntityDocument_])
@@ -14012,11 +14012,11 @@ export class EntityDocumentRun_ {
     Status: string;
           
     @Field() 
-    @MaxLength(8)
+    @MaxLength(10)
     _mj__CreatedAt: Date;
           
     @Field() 
-    @MaxLength(8)
+    @MaxLength(10)
     _mj__UpdatedAt: Date;
           
     @Field() 
@@ -14346,11 +14346,11 @@ export class EntityRecordDocument_ {
     EntityDocumentID: number;
           
     @Field() 
-    @MaxLength(8)
+    @MaxLength(10)
     _mj__CreatedAt: Date;
           
     @Field() 
-    @MaxLength(8)
+    @MaxLength(10)
     _mj__UpdatedAt: Date;
         
 }
@@ -14532,11 +14532,11 @@ export class EntityDocument_ {
     AbsoluteMatchThreshold: number;
           
     @Field() 
-    @MaxLength(8)
+    @MaxLength(10)
     _mj__CreatedAt: Date;
           
     @Field() 
-    @MaxLength(8)
+    @MaxLength(10)
     _mj__UpdatedAt: Date;
           
     @Field() 
@@ -16773,11 +16773,11 @@ export class EntityDocumentSetting_ {
     Comments?: string;
           
     @Field() 
-    @MaxLength(8)
+    @MaxLength(10)
     _mj__CreatedAt: Date;
           
     @Field() 
-    @MaxLength(8)
+    @MaxLength(10)
     _mj__UpdatedAt: Date;
           
     @Field() 
@@ -16923,11 +16923,11 @@ export class EntitySetting_ {
     Comments?: string;
           
     @Field() 
-    @MaxLength(8)
+    @MaxLength(10)
     _mj__CreatedAt: Date;
           
     @Field() 
-    @MaxLength(8)
+    @MaxLength(10)
     _mj__UpdatedAt: Date;
           
     @Field() 
@@ -17497,11 +17497,11 @@ export class EntityBehavior_ {
     CodeGenerated: boolean;
           
     @Field() 
-    @MaxLength(8)
+    @MaxLength(10)
     _mj__CreatedAt: Date;
           
     @Field() 
-    @MaxLength(8)
+    @MaxLength(10)
     _mj__UpdatedAt: Date;
           
     @Field() 
@@ -17665,11 +17665,11 @@ export class EntityBehaviorType_ {
     Description?: string;
           
     @Field() 
-    @MaxLength(8)
+    @MaxLength(10)
     _mj__CreatedAt: Date;
           
     @Field() 
-    @MaxLength(8)
+    @MaxLength(10)
     _mj__UpdatedAt: Date;
         
     @Field(() => [mj_core_schema_server_object_types.EntityBehavior_])
@@ -17817,11 +17817,11 @@ export class ApplicationSetting_ {
     Comments?: string;
           
     @Field() 
-    @MaxLength(8)
+    @MaxLength(10)
     _mj__CreatedAt: Date;
           
     @Field() 
-    @MaxLength(8)
+    @MaxLength(10)
     _mj__UpdatedAt: Date;
         
 }
@@ -17970,11 +17970,11 @@ export class ActionCategory_ {
     Status: string;
           
     @Field() 
-    @MaxLength(8)
+    @MaxLength(10)
     _mj__CreatedAt: Date;
           
     @Field() 
-    @MaxLength(8)
+    @MaxLength(10)
     _mj__UpdatedAt: Date;
           
     @Field({nullable: true}) 
@@ -18145,11 +18145,11 @@ export class EntityAction_ {
     Status: string;
           
     @Field() 
-    @MaxLength(8)
+    @MaxLength(10)
     _mj__CreatedAt: Date;
           
     @Field() 
-    @MaxLength(8)
+    @MaxLength(10)
     _mj__UpdatedAt: Date;
           
     @Field() 
@@ -18318,11 +18318,11 @@ export class EntityActionInvocation_ {
     Status: string;
           
     @Field() 
-    @MaxLength(8)
+    @MaxLength(10)
     _mj__CreatedAt: Date;
           
     @Field() 
-    @MaxLength(8)
+    @MaxLength(10)
     _mj__UpdatedAt: Date;
           
     @Field() 
@@ -18612,11 +18612,11 @@ export class EntityActionInvocationType_ {
     DisplaySequence: number;
           
     @Field() 
-    @MaxLength(8)
+    @MaxLength(10)
     _mj__CreatedAt: Date;
           
     @Field() 
-    @MaxLength(8)
+    @MaxLength(10)
     _mj__UpdatedAt: Date;
         
     @Field(() => [mj_core_schema_server_object_types.EntityActionInvocation_])
@@ -18799,11 +18799,11 @@ export class Action_ {
     Status: string;
           
     @Field() 
-    @MaxLength(8)
+    @MaxLength(10)
     _mj__CreatedAt: Date;
           
     @Field() 
-    @MaxLength(8)
+    @MaxLength(10)
     _mj__UpdatedAt: Date;
           
     @Field({nullable: true}) 
@@ -19090,11 +19090,11 @@ export class EntityActionFilter_ {
     Status: string;
           
     @Field() 
-    @MaxLength(8)
+    @MaxLength(10)
     _mj__CreatedAt: Date;
           
     @Field() 
-    @MaxLength(8)
+    @MaxLength(10)
     _mj__UpdatedAt: Date;
         
 }
@@ -19241,11 +19241,11 @@ export class ActionFilter_ {
     CodeExplanation?: string;
           
     @Field() 
-    @MaxLength(8)
+    @MaxLength(10)
     _mj__CreatedAt: Date;
           
     @Field() 
-    @MaxLength(8)
+    @MaxLength(10)
     _mj__UpdatedAt: Date;
         
     @Field(() => [mj_core_schema_server_object_types.EntityActionFilter_])
@@ -20384,11 +20384,11 @@ export class Library_ {
     SampleCode?: string;
           
     @Field() 
-    @MaxLength(8)
+    @MaxLength(10)
     _mj__CreatedAt: Date;
           
     @Field() 
-    @MaxLength(8)
+    @MaxLength(10)
     _mj__UpdatedAt: Date;
         
     @Field(() => [mj_core_schema_server_object_types.ActionLibrary_])
@@ -23120,11 +23120,11 @@ export class EntityCommunicationMessageType_ {
     IsActive: boolean;
           
     @Field() 
-    @MaxLength(8)
+    @MaxLength(10)
     _mj__CreatedAt: Date;
           
     @Field() 
-    @MaxLength(8)
+    @MaxLength(10)
     _mj__UpdatedAt: Date;
           
     @Field() 
@@ -23276,11 +23276,11 @@ export class EntityCommunicationField_ {
     Priority: number;
           
     @Field() 
-    @MaxLength(8)
+    @MaxLength(10)
     _mj__CreatedAt: Date;
           
     @Field() 
-    @MaxLength(8)
+    @MaxLength(10)
     _mj__UpdatedAt: Date;
         
 }

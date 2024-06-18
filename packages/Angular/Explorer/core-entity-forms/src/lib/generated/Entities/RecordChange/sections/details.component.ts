@@ -95,6 +95,7 @@ import { RecordChangeEntity } from '@memberjunction/core-entities';
             FieldName="ReplayRunID"
             Type="numerictextbox"
             [EditMode]="EditMode"
+            LinkType="Record"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
