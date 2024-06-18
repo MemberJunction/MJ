@@ -1,3 +1,5 @@
+![](https://memberjunction.com/wp-content/uploads/2022/05/Member-Junction-WEB.jpg)
+
 # MemberJunction (MJ)
 
 Welcome to MemberJunction! MemberJunction (MJ), an open-source Common Data Platform (CDP) designed to simplify and unify data ingestion from a wide array of sources and types into a singular data repository. Our platform is equipped with a rich metadata layer, enhancing data utility for analytics, reporting, and a variety of AI applications. MJ also features the MemberJunction Explorer, an advanced tool for power users to navigate, browse, and search their unified data. Additionally, we offer an optional AI agent named "Skip" that elevates MJ's capabilities (Note: "Skip" is not open-source and requires a license). 
