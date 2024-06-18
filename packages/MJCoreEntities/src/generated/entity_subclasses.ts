@@ -2024,9 +2024,23 @@ import { RegisterClass } from "@memberjunction/global";
             this.Set('RelatedEntityNameFieldMap', value);
         }
         /**
+        * * Field Name: RelatedEntityDisplayType
+        * * Display Name: Related Entity Display Type
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Search
+        * * Description: Controls the generated form in the MJ Explorer UI - defaults to a search box, other option is a drop down. Possible values are Search and Dropdown
+        */
+        get RelatedEntityDisplayType(): string {  
+            return this.Get('RelatedEntityDisplayType');
+        }
+        set RelatedEntityDisplayType(value: string) {
+            this.Set('RelatedEntityDisplayType', value);
+        }
+        /**
         * * Field Name: __mj_CreatedAt
         * * Display Name: __mj _Created At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_CreatedAt(): Date {  
             return this.Get('__mj_CreatedAt');
@@ -2036,6 +2050,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_UpdatedAt
         * * Display Name: __mj _Updated At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_UpdatedAt(): Date {  
             return this.Get('__mj_UpdatedAt');
@@ -2044,7 +2059,6 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: Entity
         * * SQL Data Type: nvarchar(255)
-        * * Default Value: getutcdate()
         */
         get Entity(): string {  
             return this.Get('Entity');
@@ -2054,7 +2068,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: SchemaName
         * * Display Name: Schema Name
         * * SQL Data Type: nvarchar(255)
-        * * Default Value: getutcdate()
         */
         get SchemaName(): string {  
             return this.Get('SchemaName');
@@ -3245,6 +3258,31 @@ import { RegisterClass } from "@memberjunction/global";
             return this.Get('DisplayUserViewGUID');
         }
         
+        /**
+        * * Field Name: DisplayComponentID
+        * * Display Name: Display Component ID
+        * * SQL Data Type: int
+        * * Related Entity/Foreign Key: Entity Relationship Display Components (vwEntityRelationshipDisplayComponents.ID)
+        * * Description: If specified, this component will be used for displaying the relationship within the parent entity's form
+        */
+        get DisplayComponentID(): number | null {  
+            return this.Get('DisplayComponentID');
+        }
+        set DisplayComponentID(value: number | null) {
+            this.Set('DisplayComponentID', value);
+        }
+        /**
+        * * Field Name: DisplayComponentConfiguration
+        * * Display Name: Display Component Configuration
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: If DisplayComponentID is specified, this field can optionally be used to track component-specific and relationship-specific configuration details that will be used by CodeGen to provide to the display component selected.
+        */
+        get DisplayComponentConfiguration(): string | null {  
+            return this.Get('DisplayComponentConfiguration');
+        }
+        set DisplayComponentConfiguration(value: string | null) {
+            this.Set('DisplayComponentConfiguration', value);
+        }
         /**
         * * Field Name: __mj_CreatedAt
         * * Display Name: __mj _Created At
@@ -6266,7 +6304,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: Entity
         * * Display Name: Entity
         * * SQL Data Type: nvarchar(255)
-        * * Default Value: null
         */
         get Entity(): string {  
             return this.Get('Entity');
@@ -6276,7 +6313,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: User
         * * Display Name: User
         * * SQL Data Type: nvarchar(100)
-        * * Default Value: null
         */
         get User(): string {  
             return this.Get('User');
@@ -6286,7 +6322,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: Integration
         * * Display Name: Integration
         * * SQL Data Type: nvarchar(100)
-        * * Default Value: null
         */
         get Integration(): string | null {  
             return this.Get('Integration');
@@ -20155,6 +20190,119 @@ import { RegisterClass } from "@memberjunction/global";
         */
         get Library(): string {  
             return this.Get('Library');
+        }
+        
+
+    }
+        
+    /**
+     * Entity Relationship Display Components - strongly typed entity sub-class
+     * * Schema: __mj
+     * * Base Table: EntityRelationshipDisplayComponent
+     * * Base View: vwEntityRelationshipDisplayComponents
+     * * @description This table stores a list of components that are available for displaying relationships in the MJ Explorer UI
+     * * Primary Key: ID
+     * @extends {BaseEntity}
+     * @class
+     * @public
+     */
+    @RegisterClass(BaseEntity, 'Entity Relationship Display Components')
+    export class EntityRelationshipDisplayComponentEntity extends BaseEntity {
+        /**
+        * Loads the Entity Relationship Display Components record from the database
+        * @param ID: number - primary key value to load the Entity Relationship Display Components record.
+        * @param EntityRelationshipsToLoad - (optional) the relationships to load
+        * @returns {Promise<boolean>} - true if successful, false otherwise
+        * @public
+        * @async
+        * @memberof EntityRelationshipDisplayComponentEntity
+        * @method
+        * @override
+        */      
+        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+        }
+            
+        /**
+        * Entity Relationship Display Components - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
+        * @public
+        * @method
+        * @override
+        * @memberof EntityRelationshipDisplayComponentEntity
+        * @throws {Error} - Delete is not allowed for Entity Relationship Display Components, to enable it set AllowDeleteAPI to 1 in the database.
+        */
+        public async Delete(): Promise<boolean> {
+            throw new Error('Delete is not allowed for Entity Relationship Display Components, to enable it set AllowDeleteAPI to 1 in the database.');
+        } 
+            
+            /**
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: int
+        */
+        get ID(): number {  
+            return this.Get('ID');
+        }
+        
+        /**
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(255)
+        */
+        get Name(): string {  
+            return this.Get('Name');
+        }
+        set Name(value: string) {
+            this.Set('Name', value);
+        }
+        /**
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        */
+        get Description(): string | null {  
+            return this.Get('Description');
+        }
+        set Description(value: string | null) {
+            this.Set('Description', value);
+        }
+        /**
+        * * Field Name: RelationshipType
+        * * Display Name: Relationship Type
+        * * SQL Data Type: nvarchar(20)
+        * * Value List Type: List
+        * * Possible Values 
+        *   * One to Many
+        *   * Many to Many
+        *   * Both
+        * * Description: The type of relationship the component displays. Valid values are "One to Many", "Many to Many", or "Both".
+        */
+        get RelationshipType(): 'One to Many' | 'Many to Many' | 'Both' {  
+            return this.Get('RelationshipType');
+        }
+        set RelationshipType(value: 'One to Many' | 'Many to Many' | 'Both') {
+            this.Set('RelationshipType', value);
+        }
+        /**
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
+        */
+        get __mj_CreatedAt(): Date {  
+            return this.Get('__mj_CreatedAt');
+        }
+        
+        /**
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
+        */
+        get __mj_UpdatedAt(): Date {  
+            return this.Get('__mj_UpdatedAt');
         }
         
 
