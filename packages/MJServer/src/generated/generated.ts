@@ -2,7 +2,7 @@
 * ALL ENTITIES - TypeGraphQL Type Class Definition - AUTO GENERATED FILE
 * Generated Entities and Resolvers for Server
 * 
-* GENERATED: 6/17/2024, 6:43:56 PM
+* GENERATED: 6/18/2024, 7:47:25 AM
 * 
 *   >>> DO NOT MODIFY THIS FILE!!!!!!!!!!!!
 *   >>> YOUR CHANGES WILL BE OVERWRITTEN
@@ -20,7 +20,7 @@ import { mj_core_schema } from '../config';
 
 import * as mj_core_schema_server_object_types from '@memberjunction/server'
 
-import { CompanyEntity, EmployeeEntity, UserFavoriteEntity, EmployeeCompanyIntegrationEntity, EmployeeRoleEntity, EmployeeSkillEntity, RoleEntity, SkillEntity, IntegrationURLFormatEntity, IntegrationEntity, CompanyIntegrationEntity, EntityFieldEntity, EntityEntity, UserEntity, EntityRelationshipEntity, UserRecordLogEntity, UserViewEntity, CompanyIntegrationRunEntity, CompanyIntegrationRunDetailEntity, ErrorLogEntity, ApplicationEntity, ApplicationEntityEntity, EntityPermissionEntity, UserApplicationEntityEntity, UserApplicationEntity, CompanyIntegrationRunAPILogEntity, ListEntity, ListDetailEntity, UserViewRunEntity, UserViewRunDetailEntity, WorkflowRunEntity, WorkflowEntity, WorkflowEngineEntity, RecordChangeEntity, UserRoleEntity, RowLevelSecurityFilterEntity, AuditLogEntity, AuthorizationEntity, AuthorizationRoleEntity, AuditLogTypeEntity, EntityFieldValueEntity, AIModelEntity, AIActionEntity, AIModelActionEntity, EntityAIActionEntity, AIModelTypeEntity, QueueTypeEntity, QueueEntity, QueueTaskEntity, DashboardEntity, OutputTriggerTypeEntity, OutputFormatTypeEntity, OutputDeliveryTypeEntity, ReportEntity, ReportSnapshotEntity, ResourceTypeEntity, TagEntity, TaggedItemEntity, WorkspaceEntity, WorkspaceItemEntity, DatasetEntity, DatasetItemEntity, ConversationDetailEntity, ConversationEntity, UserNotificationEntity, SchemaInfoEntity, CompanyIntegrationRecordMapEntity, RecordMergeLogEntity, RecordMergeDeletionLogEntity, QueryFieldEntity, QueryCategoryEntity, QueryEntity, QueryPermissionEntity, VectorIndexEntity, EntityDocumentTypeEntity, EntityDocumentRunEntity, VectorDatabaseEntity, EntityRecordDocumentEntity, EntityDocumentEntity, DataContextItemEntity, DataContextEntity, UserViewCategoryEntity, DashboardCategoryEntity, ReportCategoryEntity, FileStorageProviderEntity, FileEntity, FileCategoryEntity, FileEntityRecordLinkEntity, VersionInstallationEntity, DuplicateRunDetailMatchEntity, EntityDocumentSettingEntity, EntitySettingEntity, DuplicateRunEntity, DuplicateRunDetailEntity, EntityBehaviorEntity, EntityBehaviorTypeEntity, ApplicationSettingEntity, ActionCategoryEntity, EntityActionEntity, EntityActionInvocationEntity, ActionAuthorizationEntity, EntityActionInvocationTypeEntity, ActionEntity, EntityActionFilterEntity, ActionFilterEntity, ActionContextTypeEntity, ActionResultCodeEntity, ActionContextEntity, ActionExecutionLogEntity, ActionParamEntity, ActionLibraryEntity, LibraryEntity, ListCategoryEntity, CommunicationProviderEntity, CommunicationRunEntity, CommunicationProviderMessageTypeEntity, CommunicationLogEntity, CommunicationBaseMessageTypeEntity, TemplateEntity, TemplateCategoryEntity, TemplateContentEntity, TemplateParamEntity, TemplateContentTypeEntity, RecommendationEntity, RecommendationProviderEntity, RecommendationRunEntity, RecommendationItemEntity, EntityCommunicationMessageTypeEntity, EntityCommunicationFieldEntity, RecordChangeReplayRunEntity, LibraryItemEntity } from '@memberjunction/core-entities';
+import { CompanyEntity, EmployeeEntity, UserFavoriteEntity, EmployeeCompanyIntegrationEntity, EmployeeRoleEntity, EmployeeSkillEntity, RoleEntity, SkillEntity, IntegrationURLFormatEntity, IntegrationEntity, CompanyIntegrationEntity, EntityFieldEntity, EntityEntity, UserEntity, EntityRelationshipEntity, UserRecordLogEntity, UserViewEntity, CompanyIntegrationRunEntity, CompanyIntegrationRunDetailEntity, ErrorLogEntity, ApplicationEntity, ApplicationEntityEntity, EntityPermissionEntity, UserApplicationEntityEntity, UserApplicationEntity, CompanyIntegrationRunAPILogEntity, ListEntity, ListDetailEntity, UserViewRunEntity, UserViewRunDetailEntity, WorkflowRunEntity, WorkflowEntity, WorkflowEngineEntity, RecordChangeEntity, UserRoleEntity, RowLevelSecurityFilterEntity, AuditLogEntity, AuthorizationEntity, AuthorizationRoleEntity, AuditLogTypeEntity, EntityFieldValueEntity, AIModelEntity, AIActionEntity, AIModelActionEntity, EntityAIActionEntity, AIModelTypeEntity, QueueTypeEntity, QueueEntity, QueueTaskEntity, DashboardEntity, OutputTriggerTypeEntity, OutputFormatTypeEntity, OutputDeliveryTypeEntity, ReportEntity, ReportSnapshotEntity, ResourceTypeEntity, TagEntity, TaggedItemEntity, WorkspaceEntity, WorkspaceItemEntity, DatasetEntity, DatasetItemEntity, ConversationDetailEntity, ConversationEntity, UserNotificationEntity, SchemaInfoEntity, CompanyIntegrationRecordMapEntity, RecordMergeLogEntity, RecordMergeDeletionLogEntity, QueryFieldEntity, QueryCategoryEntity, QueryEntity, QueryPermissionEntity, VectorIndexEntity, EntityDocumentTypeEntity, EntityDocumentRunEntity, VectorDatabaseEntity, EntityRecordDocumentEntity, EntityDocumentEntity, DataContextItemEntity, DataContextEntity, UserViewCategoryEntity, DashboardCategoryEntity, ReportCategoryEntity, FileStorageProviderEntity, FileEntity, FileCategoryEntity, FileEntityRecordLinkEntity, VersionInstallationEntity, DuplicateRunDetailMatchEntity, EntityDocumentSettingEntity, EntitySettingEntity, DuplicateRunEntity, DuplicateRunDetailEntity, EntityBehaviorEntity, EntityBehaviorTypeEntity, ApplicationSettingEntity, ActionCategoryEntity, EntityActionEntity, EntityActionInvocationEntity, ActionAuthorizationEntity, EntityActionInvocationTypeEntity, ActionEntity, EntityActionFilterEntity, ActionFilterEntity, ActionContextTypeEntity, ActionResultCodeEntity, ActionContextEntity, ActionExecutionLogEntity, ActionParamEntity, ActionLibraryEntity, LibraryEntity, ListCategoryEntity, CommunicationProviderEntity, CommunicationRunEntity, CommunicationProviderMessageTypeEntity, CommunicationLogEntity, CommunicationBaseMessageTypeEntity, TemplateEntity, TemplateCategoryEntity, TemplateContentEntity, TemplateParamEntity, TemplateContentTypeEntity, RecommendationEntity, RecommendationProviderEntity, RecommendationRunEntity, RecommendationItemEntity, EntityCommunicationMessageTypeEntity, EntityCommunicationFieldEntity, RecordChangeReplayRunEntity, LibraryItemEntity, EntityRelationshipDisplayComponentEntity } from '@memberjunction/core-entities';
     
 
 //****************************************************************************
@@ -2014,6 +2014,10 @@ export class EntityField_ {
     @MaxLength(510)
     RelatedEntityNameFieldMap?: string;
           
+    @Field({description: 'Controls the generated form in the MJ Explorer UI - defaults to a search box, other option is a drop down. Possible values are Search and Dropdown'}) 
+    @MaxLength(40)
+    RelatedEntityDisplayType: string;
+          
     @Field() 
     @MaxLength(10)
     _mj__CreatedAt: Date;
@@ -2147,6 +2151,9 @@ export class CreateEntityFieldInput {
 
     @Field({ nullable: true })
     RelatedEntityNameFieldMap?: string;
+
+    @Field()
+    RelatedEntityDisplayType: string;
 }
     
         
@@ -2229,6 +2236,9 @@ export class UpdateEntityFieldInput {
 
     @Field({ nullable: true })
     RelatedEntityNameFieldMap?: string;
+
+    @Field()
+    RelatedEntityDisplayType: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -3897,6 +3907,12 @@ export class EntityRelationship_ {
     @MaxLength(16)
     DisplayUserViewGUID?: string;
           
+    @Field(() => Int, {nullable: true, description: 'If specified, this component will be used for displaying the relationship within the parent entity\'s form'}) 
+    DisplayComponentID?: number;
+          
+    @Field({nullable: true, description: 'If DisplayComponentID is specified, this field can optionally be used to track component-specific and relationship-specific configuration details that will be used by CodeGen to provide to the display component selected.'}) 
+    DisplayComponentConfiguration?: string;
+          
     @Field() 
     @MaxLength(10)
     _mj__CreatedAt: Date;
@@ -3999,6 +4015,12 @@ export class CreateEntityRelationshipInput {
 
     @Field({ nullable: true })
     DisplayIcon?: string;
+
+    @Field(() => Int, { nullable: true })
+    DisplayComponentID?: number;
+
+    @Field({ nullable: true })
+    DisplayComponentConfiguration?: string;
 }
     
         
@@ -4057,6 +4079,12 @@ export class UpdateEntityRelationshipInput {
 
     @Field({ nullable: true })
     DisplayIcon?: string;
+
+    @Field(() => Int, { nullable: true })
+    DisplayComponentID?: number;
+
+    @Field({ nullable: true })
+    DisplayComponentConfiguration?: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -23429,6 +23457,9 @@ export class RecordChangeReplayRun_ {
     @MaxLength(200)
     User: string;
         
+    @Field(() => [mj_core_schema_server_object_types.RecordChange_])
+    RecordChangesArray: mj_core_schema_server_object_types.RecordChange_[]; // Link to RecordChanges
+    
 }
         
 //****************************************************************************
@@ -23525,7 +23556,15 @@ export class RecordChangeReplayRunResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Record Change Replay Runs', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-    
+      
+    @FieldResolver(() => [mj_core_schema_server_object_types.RecordChange_])
+    async RecordChangesArray(@Root() recordchangereplayrun_: RecordChangeReplayRun_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Record Changes', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwRecordChanges] WHERE [ReplayRunID]=${recordchangereplayrun_.ID} ` + this.getRowLevelSecurityWhereClause('Record Changes', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Record Changes', await dataSource.query(sSQL));
+        return result;
+    }
+        
     @Mutation(() => RecordChangeReplayRun_)
     async CreateRecordChangeReplayRun(
         @Arg('input', () => CreateRecordChangeReplayRunInput) input: CreateRecordChangeReplayRunInput,
@@ -23684,6 +23723,155 @@ export class LibraryItemResolver extends ResolverBase {
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.UpdateRecord('Library Items', input, dataSource, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for Entity Relationship Display Components
+//****************************************************************************
+@ObjectType({ description: 'This table stores a list of components that are available for displaying relationships in the MJ Explorer UI' })
+export class EntityRelationshipDisplayComponent_ {  
+    @Field(() => Int) 
+    ID: number;
+          
+    @Field() 
+    @MaxLength(510)
+    Name: string;
+          
+    @Field({nullable: true}) 
+    Description?: string;
+          
+    @Field({description: 'The type of relationship the component displays. Valid values are "One to Many", "Many to Many", or "Both".'}) 
+    @MaxLength(40)
+    RelationshipType: string;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
+        
+    @Field(() => [mj_core_schema_server_object_types.EntityRelationship_])
+    EntityRelationshipsArray: mj_core_schema_server_object_types.EntityRelationship_[]; // Link to EntityRelationships
+    
+}
+        
+//****************************************************************************
+// INPUT TYPE for Entity Relationship Display Components   
+//****************************************************************************
+@InputType()
+export class CreateEntityRelationshipDisplayComponentInput {
+    @Field()
+    Name: string;
+
+    @Field({ nullable: true })
+    Description?: string;
+
+    @Field()
+    RelationshipType: string;
+}
+    
+        
+//****************************************************************************
+// INPUT TYPE for Entity Relationship Display Components   
+//****************************************************************************
+@InputType()
+export class UpdateEntityRelationshipDisplayComponentInput {
+    @Field(() => Int)
+    ID: number;
+
+    @Field()
+    Name: string;
+
+    @Field({ nullable: true })
+    Description?: string;
+
+    @Field()
+    RelationshipType: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
+//****************************************************************************
+// RESOLVER for Entity Relationship Display Components
+//****************************************************************************
+@ObjectType()
+export class RunEntityRelationshipDisplayComponentViewResult {
+    @Field(() => [EntityRelationshipDisplayComponent_])
+    Results: EntityRelationshipDisplayComponent_[];
+
+    @Field(() => Int, {nullable: true})
+    UserViewRunID?: number;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(EntityRelationshipDisplayComponent_)
+export class EntityRelationshipDisplayComponentResolver extends ResolverBase {
+    @Query(() => RunEntityRelationshipDisplayComponentViewResult)
+    async RunEntityRelationshipDisplayComponentViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunEntityRelationshipDisplayComponentViewResult)
+    async RunEntityRelationshipDisplayComponentViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunEntityRelationshipDisplayComponentViewResult)
+    async RunEntityRelationshipDisplayComponentDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        input.EntityName = 'Entity Relationship Display Components';
+        return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
+    }
+    @Query(() => EntityRelationshipDisplayComponent_, { nullable: true })
+    async EntityRelationshipDisplayComponent(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<EntityRelationshipDisplayComponent_ | null> {
+        this.CheckUserReadPermissions('Entity Relationship Display Components', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityRelationshipDisplayComponents] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Entity Relationship Display Components', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Entity Relationship Display Components', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
+    }
+      
+    @FieldResolver(() => [mj_core_schema_server_object_types.EntityRelationship_])
+    async EntityRelationshipsArray(@Root() entityrelationshipdisplaycomponent_: EntityRelationshipDisplayComponent_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Entity Relationships', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityRelationships] WHERE [DisplayComponentID]=${entityrelationshipdisplaycomponent_.ID} ` + this.getRowLevelSecurityWhereClause('Entity Relationships', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Entity Relationships', await dataSource.query(sSQL));
+        return result;
+    }
+        
+    @Mutation(() => EntityRelationshipDisplayComponent_)
+    async CreateEntityRelationshipDisplayComponent(
+        @Arg('input', () => CreateEntityRelationshipDisplayComponentInput) input: CreateEntityRelationshipDisplayComponentInput,
+        @Ctx() { dataSource, userPayload }: AppContext, 
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.CreateRecord('Entity Relationship Display Components', input, dataSource, userPayload, pubSub)
+    }
+        
+    @Mutation(() => EntityRelationshipDisplayComponent_)
+    async UpdateEntityRelationshipDisplayComponent(
+        @Arg('input', () => UpdateEntityRelationshipDisplayComponentInput) input: UpdateEntityRelationshipDisplayComponentInput,
+        @Ctx() { dataSource, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.UpdateRecord('Entity Relationship Display Components', input, dataSource, userPayload, pubSub);
     }
     
 }

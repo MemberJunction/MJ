@@ -219,7 +219,8 @@ export class ManageMetadataBase {
                // no relationship exists, so create it
                const e = md.Entities.find(e => e.ID === f.EntityID)
                // calculate the sequence by getting the count of existing relationships for the entity and adding 1 and then increment the count for future inserts in this loop
-               const sequence = relationshipCountMap.get(f.EntityID) + 1;
+               const relCount = relationshipCountMap.get(f.EntityID) ? relationshipCountMap.get(f.EntityID) : 0;
+               const sequence = relCount + 1;
                const sSQLInsert = `INSERT INTO ${mj_core_schema()}.EntityRelationship (EntityID, RelatedEntityID, RelatedEntityJoinField, Type, BundleInAPI, DisplayInForm, DisplayName, Sequence) 
                                        VALUES (${f.RelatedEntityID}, ${f.EntityID}, '${f.Name}', 'One To Many', 1, 1, '${e.Name}', ${sequence})`;
                // now update the map for the relationship count
