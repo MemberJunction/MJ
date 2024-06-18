@@ -15,6 +15,15 @@
                             [EditMode]="this.EditMode">
                         </mj-form-section>
                     </mj-tab-body>
+
+                    <mj-tab Name="Timeline">
+                        Timeline
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-timeline 
+                            [events]="timelineGroupEvents" 
+                            [collapsibleEvents]="true">
+                    </mj-tab-body>
                     
                     <mj-tab Name="Activities" 
                         [Visible]="record.IsSaved" 
