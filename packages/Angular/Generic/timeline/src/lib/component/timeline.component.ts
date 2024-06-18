@@ -4,7 +4,7 @@ import { BaseEntity, Metadata, RunView, RunViewParams } from '@memberjunction/co
 import { SharedService } from '@memberjunction/ng-shared'
 import { Router } from '@angular/router';
 
-import { TimelineEvent } from "@progress/kendo-angular-layout";
+import { Orientation, TimelineEvent } from "@progress/kendo-angular-layout";
 import { FloatingActionButtonTemplateDirective } from '@progress/kendo-angular-buttons';
 
 /**
@@ -43,6 +43,10 @@ export class TimelineGroup {
    * Only used if DisplayColorMode is set to manual, the color to use for the items in this group. Any valid color string that can be set into the element style via CSS is valid here.
    */
   DisplayColor?: string;
+  /**
+   * Orientation of the timeline items, can be either vertical or horizontal. Defaults to vertical.
+   */
+  DisplayOrientation!: Orientation
 
   /**
    * When set to field, the SummaryFieldName will be used to display detailed information about the record in the timeline. If set to custom, you need to provide
@@ -119,6 +123,7 @@ export class TimelineComponent implements AfterViewInit {
   */
   public events: TimelineEvent[] = [];
   public timelineGroupEvents: TimelineEvent[]= [];
+  public DisplayOrientation!: Orientation;
   
 
   ngAfterViewInit(): void {
@@ -132,10 +137,15 @@ export class TimelineComponent implements AfterViewInit {
    */
   public Refresh() {
     if (this.Groups && this.Groups.length > 0) {
+      this.DisplayOrientation = this.Groups[0].DisplayOrientation;
       this.Groups.forEach(g => this.LoadSingleGroup(g));
     }
   }
 
+  /**
+   * This method loads the data for a single group and adds it to the timelineGroupEvents array.
+   * @param group 
+   */
   protected LoadSingleGroup(group: TimelineGroup) {
     this.events = group.EntityObjects.map(e => {
       let date = new Date(e.Get(group.DateFieldName));

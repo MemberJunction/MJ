@@ -13,45 +13,6 @@ import { RunView } from '@memberjunction/core';
 })
 export class UserFormComponent extends BaseFormComponent {
     public record!: UserEntity;
-    public timelineGroups: TimelineGroup[] = [];
-
-    async ngOnInit() {
-        const rv = new RunView();
-        const users = await rv.RunView({ 
-            EntityName: 'Users', 
-            ResultType: 'entity_object' }
-        );
-        if (users && users.Success) {
-            this.timelineGroups = [{
-                EntityName: 'Users',
-                EntityObjects: users.Results,
-                DateFieldName: '__mj_CreatedAt',
-                TitleFieldName: "Created User",
-                DisplayIconMode: "standard",
-                DisplayColorMode: "auto",
-                SummaryMode: "custom", 
-                SummaryFunction: this.SummaryFunction
-            },
-            {
-                EntityName: 'Users',
-                EntityObjects: users.Results,
-                DateFieldName: '__mj_UpdatedAt',
-                TitleFieldName: "Updated User",
-                DisplayIconMode: "standard",
-                DisplayColorMode: "auto",
-                SummaryMode: "custom", 
-                SummaryFunction: this.SummaryFunction
-            }];
-        ;
-        }
-    }
-
-    public SummaryFunction(record: UserEntity): string {
-        let first_name = record.Get('Name');
-    
-        return  first_name;
-    }
-
 } 
 
 export function LoadUserFormComponent() {

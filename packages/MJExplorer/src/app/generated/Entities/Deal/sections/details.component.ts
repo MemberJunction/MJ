@@ -3,6 +3,7 @@ import { RegisterClass } from '@memberjunction/global';
 import { BaseFormSectionComponent } from '@memberjunction/ng-base-forms';
 import { DealEntity } from 'mj_generatedentities';
 import { RunView } from '@memberjunction/core';
+import { TimelineGroup } from '@memberjunction/ng-timeline';
 
 @RegisterClass(BaseFormSectionComponent, 'Deals.details') // Tell MemberJunction about this class 
 @Component({
@@ -242,36 +243,6 @@ import { RunView } from '@memberjunction/core';
 export class DealDetailsComponent extends BaseFormSectionComponent {
     @Input() override record!: DealEntity;
     @Input() override EditMode: boolean = false;
-    public timelineGroups: TimelineGroup[] = [];
-
-    async ngOnInit() {
-        const rv = new RunView();
-        const users = await rv.RunView({ 
-            EntityName: 'Users', 
-            ResultType: 'entity_object' }
-        );
-        if (users && users.Success) {
-            this.timelineGroups = [{
-                EntityName: 'Deals',
-                EntityObjects: users.Results,
-                DateFieldName: '__mj_CreatedAt',
-                TitleFieldName: "Created User",
-                DisplayIconMode: "standard",
-                DisplayColorMode: "auto",
-                SummaryMode: "custom", 
-            },
-            {
-                EntityName: 'Deals',
-                EntityObjects: users.Results,
-                DateFieldName: '__mj_UpdatedAt',
-                TitleFieldName: "Updated User",
-                DisplayIconMode: "standard",
-                DisplayColorMode: "auto",
-                SummaryMode: "custom", 
-            }];
-        ;
-        }
-    }
 }
 
 export function LoadDealDetailsComponent() {

@@ -16,6 +16,7 @@ import { UserViewGridModule } from '@memberjunction/ng-user-view-grid';
 import { LinkDirectivesModule } from '@memberjunction/ng-link-directives';
 import { MJTabStripModule } from "@memberjunction/ng-tabstrip";
 import { ContainerDirectivesModule } from "@memberjunction/ng-container-directives";
+import { TimelineModule } from '@memberjunction/ng-timeline';
 
 // Kendo Imports
 import { InputsModule } from '@progress/kendo-angular-inputs';
@@ -138,7 +139,8 @@ imports: [
     MJTabStripModule,
     ContainerDirectivesModule,
     DropDownListModule,
-    ComboBoxModule
+    ComboBoxModule,
+    TimelineModule
 ],
 exports: [
 ]
@@ -183,7 +185,8 @@ imports: [
     MJTabStripModule,
     ContainerDirectivesModule,
     DropDownListModule,
-    ComboBoxModule
+    ComboBoxModule,
+    TimelineModule
 ],
 exports: [
 ]
@@ -228,7 +231,8 @@ imports: [
     MJTabStripModule,
     ContainerDirectivesModule,
     DropDownListModule,
-    ComboBoxModule
+    ComboBoxModule,
+    TimelineModule
 ],
 exports: [
 ]
@@ -267,7 +271,8 @@ imports: [
     MJTabStripModule,
     ContainerDirectivesModule,
     DropDownListModule,
-    ComboBoxModule
+    ComboBoxModule,
+    TimelineModule
 ],
 exports: [
 ]

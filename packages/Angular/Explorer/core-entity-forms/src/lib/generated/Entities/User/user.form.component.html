@@ -15,18 +15,6 @@
                             [EditMode]="this.EditMode">
                         </mj-form-section>
                     </mj-tab-body>
-                 
-                    <mj-tab Name="Timeline" 
-                        [Visible]="record.IsSaved"
-                        >
-                        Timeline
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-timeline
-                        [Groups]="timelineGroups">
-                        </mj-timeline>
-                    </mj-tab-body>
-                    
                     <mj-tab Name="User Applications" 
                         [Visible]="record.IsSaved" 
                         [Props]="{EntityRelationshipID: 26}">
