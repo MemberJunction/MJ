@@ -559,6 +559,7 @@ CREATE PROCEDURE [__mj].[spCreateRecordChange_Internal]
     @EntityName nvarchar(100),
     @RecordID NVARCHAR(750),
 	  @UserID int,
+    @Type nvarchar(20),
     @ChangesJSON nvarchar(MAX),
     @ChangesDescription nvarchar(MAX),
     @FullRecordJSON nvarchar(MAX),
@@ -573,6 +574,7 @@ BEGIN
             EntityID,
             RecordID,
 			      UserID,
+            Type,
             ChangedAt,
             ChangesJSON,
             ChangesDescription,
@@ -585,7 +587,8 @@ BEGIN
             (SELECT ID FROM __mj.Entity WHERE Name = @EntityName),
             @RecordID,
 			      @UserID,
-            GETDATE(),
+            @Type,
+            GETUTCDATE(),
             @ChangesJSON,
             @ChangesDescription,
             @FullRecordJSON,
@@ -971,7 +974,7 @@ WHERE
 SELECT * INTO #actual_spDeleteUnneededEntityFields FROM vwSQLColumnsAndEntityFields   
 
 -- first update the entity UpdatedAt so that our metadata timestamps are right
-UPDATE __mj.Entity SET __mj_UpdatedAt=GETDATE() WHERE ID IN
+UPDATE __mj.Entity SET __mj_UpdatedAt=GETUTCDATE() WHERE ID IN
 (
 	SELECT 
 	  ef.EntityID 
@@ -1072,7 +1075,7 @@ BEGIN
 									ELSE 0 
 								END 
 						END,
-        __mj_UpdatedAt = GETDATE()
+        __mj_UpdatedAt = GETUTCDATE()
     FROM
         [__mj].EntityField ef
     INNER JOIN
@@ -1194,7 +1197,7 @@ SET
 				IIF(ef.Type ='nchar', 75,
 					150)))
 		), 
-	__mj_UpdatedAt = GETDATE()
+	__mj_UpdatedAt = GETUTCDATE()
 FROM 
 	__mj.EntityField ef
 INNER JOIN
@@ -1479,7 +1482,7 @@ SELECT
   e.* 
 FROM 
   __mj.vwEntities e
-WHERE 
+WHERE
   e.TrackRecordChanges=1
   AND
     EXISTS (
@@ -1488,7 +1491,7 @@ WHERE
 		  FROM 
 			  __mj.vwEntityFields ef 
 		  WHERE 
-			  ef.Name='__mj_UpdatedAt' AND ef.Type='datetime' AND ef.EntityID = e.ID
+			  ef.Name='__mj_UpdatedAt' AND ef.Type='datetimeoffset' AND ef.EntityID = e.ID
 		  )
   AND
     EXISTS (
@@ -1497,7 +1500,7 @@ WHERE
 		  FROM 
 			  __mj.vwEntityFields ef 
 		  WHERE 
-			  ef.Name='__mj_CreatedAt' AND ef.Type='datetime' AND ef.EntityID = e.ID
+			  ef.Name='__mj_CreatedAt' AND ef.Type='datetimeoffset' AND ef.EntityID = e.ID
 		  )
 GO
 

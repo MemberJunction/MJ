@@ -662,7 +662,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
 
     public async GetRecordChanges(entityName: string, compositeKey: CompositeKey): Promise<RecordChange[]> {
         try {
-            const sSQL = `SELECT * FROM [${this.MJCoreSchemaName}].vwRecordChanges WHERE Entity='${entityName}' AND RecordID='${compositeKey.Values()}' ORDER BY ChangedAt DESC`
+            const sSQL = `SELECT * FROM [${this.MJCoreSchemaName}].vwRecordChanges WHERE Entity='${entityName}' AND RecordID='${compositeKey.ToConcatenatedString()}' ORDER BY ChangedAt DESC`
             return this.ExecuteSQL(sSQL)                                      
         }
         catch (e) {
@@ -954,6 +954,9 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
         let sSQL: string = '';
         if (entity.EntityInfo.TrackRecordChanges && entity.EntityInfo.Name.trim().toLowerCase() !== 'record changes') { // don't track changes for the record changes entity
             let oldData = null;
+            // use SQL Server CONCAT function to combine all of the primary key values and then combine them together
+            // using the default field delimiter and default value delimiter as defined in the CompositeKey class
+            const concatPKIDString = `CONCAT(${entity.EntityInfo.PrimaryKeys.map(pk => `'${pk.CodeName}','${CompositeKey.DefaultValueDelimiter}',${pk.Name}`).join(`,'${CompositeKey.DefaultFieldDelimiter}',`)})`;
 
             if (!bNewRecord) 
                 oldData = entity.GetAll(true); // get all the OLD values, only do for existing records, for new records, not relevant
@@ -966,8 +969,8 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
                     INSERT INTO @ResultTable
                     ${sSimpleSQL}
 
-                    DECLARE @ID NVARCHAR(255)
-                    SELECT @ID = ${entity.FirstPrimaryKey.Name} FROM @ResultTable
+                    DECLARE @ID NVARCHAR(MAX) 
+                    SELECT @ID = ${concatPKIDString} FROM @ResultTable
                     IF @ID IS NOT NULL 
                     BEGIN
                         DECLARE @ResultChangesTable TABLE (
@@ -975,10 +978,10 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
                         )                              
 
                         INSERT INTO @ResultChangesTable
-                        ${this.GetLogRecordChangeSQL(entity.GetAll(false), oldData, entity.EntityInfo.Name, '@ID', entity.EntityInfo, user, false)}
+                        ${this.GetLogRecordChangeSQL(entity.GetAll(false), oldData, entity.EntityInfo.Name, '@ID', entity.EntityInfo, bNewRecord ? 'Create' : 'Update', user, false)}
                     END
 
-                    SELECT * FROM @ResultTable`
+                    SELECT * FROM @ResultTable` // NOTE - in the above, we call the T-SQL variable @ID for simplicity just as a variable name, even though for each entity the pkey could be something else. Entity pkeys are not always a field called ID could be something else including composite keys.
         }  
         else {
             // not doing track changes for this entity, keep it simple
@@ -1311,7 +1314,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
         return (paramValue === null || paramValue === undefined) ? "NULL" : quoteString + pVal + quoteString
     }
     
-    protected GetLogRecordChangeSQL(newData: any, oldData: any, entityName: string, recordID: any, entityInfo: EntityInfo, user: UserInfo, wrapRecordIdInQuotes: boolean) {
+    protected GetLogRecordChangeSQL(newData: any, oldData: any, entityName: string, recordID: any, entityInfo: EntityInfo, type: 'Create' | 'Update' | 'Delete', user: UserInfo, wrapRecordIdInQuotes: boolean) {
         const fullRecordJSON: string = JSON.stringify(this.escapeQuotesInProperties(newData ? newData : oldData, "'")); // stringify old data if we don't have new - means we are DELETING A RECORD
         const changes: any = this.DiffObjects(oldData, newData, entityInfo, "'");
         const changesKeys = changes ? Object.keys(changes) : [];
@@ -1321,6 +1324,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
             const sSQL = `EXEC [${this.MJCoreSchemaName}].spCreateRecordChange_Internal @EntityName='${entityName}', 
                                                                                         @RecordID=${quotes}${recordID}${quotes}, 
                                                                                         @UserID=${user.ID},
+                                                                                        @Type='${type}',
                                                                                         @ChangesJSON='${changesJSON}', 
                                                                                         @ChangesDescription='${oldData && newData ? this.CreateUserDescriptionOfChanges(changes) : !oldData ? 'Record Created' : 'Record Deleted'}', 
                                                                                         @FullRecordJSON='${fullRecordJSON}', 
@@ -1331,8 +1335,8 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
         else
             return null;
     }
-    protected async LogRecordChange(newData: any, oldData: any, entityName: string, recordID: any, entityInfo: EntityInfo, user: UserInfo) {
-        const sSQL = this.GetLogRecordChangeSQL(newData, oldData, entityName, recordID, entityInfo, user, true);
+    protected async LogRecordChange(newData: any, oldData: any, entityName: string, recordID: any, entityInfo: EntityInfo, type: 'Create' | 'Update' | 'Delete', user: UserInfo) {
+        const sSQL = this.GetLogRecordChangeSQL(newData, oldData, entityName, recordID, entityInfo, type, user, true);
         if (sSQL) {
             const result = await this.ExecuteSQL(sSQL);
             return result;
@@ -1547,7 +1551,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
                         )                              
 
                         INSERT INTO @ResultChangesTable
-                        ${this.GetLogRecordChangeSQL(null /*pass in null for new data for deleted records*/, oldData, entity.EntityInfo.Name, sCombinedPrimaryKey, entity.EntityInfo, user, true)}
+                        ${this.GetLogRecordChangeSQL(null /*pass in null for new data for deleted records*/, oldData, entity.EntityInfo.Name, sCombinedPrimaryKey, entity.EntityInfo, 'Delete', user, true)}
                     END
 
                     SELECT ${sReturnList}`;
