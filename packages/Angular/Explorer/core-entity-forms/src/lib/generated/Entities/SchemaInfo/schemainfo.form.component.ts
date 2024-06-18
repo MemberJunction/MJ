@@ -3,6 +3,7 @@ import { SchemaInfoEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { LoadSchemaInfoDetailsComponent } from "./sections/details.component"
+
 @RegisterClass(BaseFormComponent, 'Schema Info') // Tell MemberJunction about this class
 @Component({
     selector: 'gen-schemainfo-form',

@@ -1,8 +1,8 @@
 import { EntityInfo, EntityFieldInfo } from '@memberjunction/core';
-import { logStatus } from './logging';
+import { logStatus } from '../Misc/logging';
 import fs from 'fs';
 import path from 'path';
-import { configInfo } from './config';
+import { configInfo } from '../Config/config';
 import { RegisterClass } from '@memberjunction/global';
 
 

@@ -3,6 +3,7 @@ import { UserNotificationEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { LoadUserNotificationDetailsComponent } from "./sections/details.component"
+
 @RegisterClass(BaseFormComponent, 'User Notifications') // Tell MemberJunction about this class
 @Component({
     selector: 'gen-usernotification-form',

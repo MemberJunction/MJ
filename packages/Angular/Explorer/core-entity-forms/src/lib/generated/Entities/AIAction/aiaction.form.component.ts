@@ -3,6 +3,8 @@ import { AIActionEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { LoadAIActionDetailsComponent } from "./sections/details.component"
+import { UserViewGridComponent } from "@memberjunction/ng-user-view-grid"
+
 @RegisterClass(BaseFormComponent, 'AI Actions') // Tell MemberJunction about this class
 @Component({
     selector: 'gen-aiaction-form',

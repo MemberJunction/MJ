@@ -26,7 +26,7 @@
           >
           <ng-template kendoGridToolbarTemplate>
             @if(!anyModeEnabled){
-                @if(ShowCreateNewRecordButton && UserCanCreateNewRecord) {
+                @if(EntityInfo && ShowCreateNewRecordButton && UserCanCreateNewRecord) {
                     <button kendoButton (click)="doCreateNewRecord()" >
                         <span class="fa-regular fa-plus"></span>
                         New {{entityRecord?.EntityInfo?.Name}}

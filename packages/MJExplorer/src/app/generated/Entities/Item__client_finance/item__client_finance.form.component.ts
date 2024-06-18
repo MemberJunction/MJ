@@ -3,6 +3,7 @@ import { Item__client_financeEntity } from 'mj_generatedentities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { LoadItem__client_financeDetailsComponent } from "./sections/details.component"
+
 @RegisterClass(BaseFormComponent, 'Items__client_finance') // Tell MemberJunction about this class
 @Component({
     selector: 'gen-item__client_finance-form',

@@ -3,6 +3,8 @@ import { Account__client_crmEntity } from 'mj_generatedentities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { LoadAccount__client_crmDetailsComponent } from "./sections/details.component"
+import { UserViewGridComponent } from "@memberjunction/ng-user-view-grid"
+
 @RegisterClass(BaseFormComponent, 'Accounts__client_crm') // Tell MemberJunction about this class
 @Component({
     selector: 'gen-account__client_crm-form',

@@ -3,6 +3,7 @@ import { RecommendationItemEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { LoadRecommendationItemDetailsComponent } from "./sections/details.component"
+
 @RegisterClass(BaseFormComponent, 'Recommendation Items') // Tell MemberJunction about this class
 @Component({
     selector: 'gen-recommendationitem-form',

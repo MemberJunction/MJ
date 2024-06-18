@@ -3,6 +3,8 @@ import { EntityFieldEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { LoadEntityFieldDetailsComponent } from "./sections/details.component"
+import { UserViewGridComponent } from "@memberjunction/ng-user-view-grid"
+
 @RegisterClass(BaseFormComponent, 'Entity Fields') // Tell MemberJunction about this class
 @Component({
     selector: 'gen-entityfield-form',

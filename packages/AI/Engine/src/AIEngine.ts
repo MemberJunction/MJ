@@ -27,7 +27,6 @@ export class AIEngine extends BaseEngine<AIEngine> {
     private _actions: AIActionEntity[] = [];
     private _entityActions: EntityAIActionEntity[] = [];
     private _modelActions: AIModelActionEntity[] = [];
-    private _metadataLoaded: boolean = false;
 
     public async Config(forceRefresh?: boolean, contextUser?: UserInfo) {
         const params = [

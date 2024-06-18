@@ -1,4 +1,4 @@
-import { CommandInfo } from './config';
+import { CommandInfo } from '../Config/config';
 import { spawn, ChildProcess } from 'child_process';
 import { logError, logStatus } from './logging';
 import path from 'path';

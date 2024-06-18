@@ -1,4 +1,4 @@
-import { configInfo, currentWorkingDirectory } from "./config";
+import { configInfo, currentWorkingDirectory } from "../Config/config";
 import { LogError, LogStatus, SeverityType, FormatFileMessage, FormatConsoleMessage } from '@memberjunction/core'
 import { MJGlobal, RegisterClass } from "@memberjunction/global";
 import path from 'path';

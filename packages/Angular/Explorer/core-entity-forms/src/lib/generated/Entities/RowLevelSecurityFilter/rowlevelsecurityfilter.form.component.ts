@@ -3,6 +3,8 @@ import { RowLevelSecurityFilterEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { LoadRowLevelSecurityFilterDetailsComponent } from "./sections/details.component"
+import { UserViewGridComponent } from "@memberjunction/ng-user-view-grid"
+
 @RegisterClass(BaseFormComponent, 'Row Level Security Filters') // Tell MemberJunction about this class
 @Component({
     selector: 'gen-rowlevelsecurityfilter-form',

@@ -1,10 +1,10 @@
-import { logError } from "./logging";
+import { logError } from "../Misc/logging";
 import fs from 'fs';
 import path from 'path';
 import { EntityInfo, Metadata } from "@memberjunction/core";
 import { DataSource } from "typeorm";
-import { outputDir } from "./config";
-import { ManageMetadataBase } from "./manageMetadata";
+import { outputDir } from "../Config/config";
+import { ManageMetadataBase } from "../Database/manage-metadata";
 import { RegisterClass } from "@memberjunction/global";
 
 

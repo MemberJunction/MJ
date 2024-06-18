@@ -61,7 +61,7 @@ export class EntityActionEngine extends BaseEngine<EntityActionEngine> {
      * @param contextUser If you are running the action on the server side you must pass this in, but it is not required in an environment where a user is authenticated directly, e.g. a browser or other client. 
      */
     public async Config(forceRefresh: boolean = false, contextUser?: UserInfo): Promise<void> {
-        const configs: BaseEnginePropertyConfig[] = [
+        const configs: Partial<BaseEnginePropertyConfig>[] = [
             {
                 EntityName: 'Entity Action Invocation Types',
                 PropertyName: '_EntityActionInvocationTypes'
