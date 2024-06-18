@@ -1479,7 +1479,8 @@ SELECT
   e.* 
 FROM 
   __mj.vwEntities e
-WHERE 
+WHERE
+  e.Name NOT IN ('Entities', 'Entity Fields', 'Entity Field Values', 'Entity Permissions', 'Record Changes') AND -- hardcode exclusion of entities that are updated by CodeGen in bulk
   e.TrackRecordChanges=1
   AND
     EXISTS (
