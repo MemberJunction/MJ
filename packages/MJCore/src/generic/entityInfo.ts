@@ -72,6 +72,7 @@ export class EntityRelationshipInfo extends BaseInfo  {
     DisplayIcon: string = null
     DisplayUserViewGUID: string = null
     DisplayComponentID: number = null
+    DisplayComponentConfiguration: string = null
     __mj_CreatedAt: Date = null
     __mj_UpdatedAt: Date = null
 

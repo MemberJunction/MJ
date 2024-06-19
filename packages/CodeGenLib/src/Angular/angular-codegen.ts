@@ -160,7 +160,7 @@ ${componentImports.join('\n')}
 ${sections.map(s => `import { ${s.ClassName}, Load${s.ClassName} } from "./Entities/${s.EntityClassName}/sections/${s.FileNameWithoutExtension}"`).join('\n')}
 ${
     relatedEntityModuleImports.filter(remi => remi.library.trim().toLowerCase() !== '@memberjunction/ng-user-view-grid' )
-                                 .map(remi => `import { ${remi.modules.map(m => m).join(', ')} from "${remi.library}"`)
+                                 .map(remi => `import { ${remi.modules.map(m => m).join(', ')} } from "${remi.library}"`)
                                 .join('\n')
 }   
 ${moduleCode}

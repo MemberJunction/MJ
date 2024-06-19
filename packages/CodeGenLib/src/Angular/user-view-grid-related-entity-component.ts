@@ -1,5 +1,5 @@
 import { RegisterClass } from "@memberjunction/global";
-import { AngularComponentInfo, GenerationInput, GenerationResult, RelatedEntityDisplayComponentGeneratorBase } from "./related-entity-components";
+import { AngularComponentInfo, ComponentConfigBase, GenerationInput, GenerationResult, RelatedEntityDisplayComponentGeneratorBase } from "./related-entity-components";
 
 /**
  * Implementation of the UserViewGridRelatedEntityGenerator class that generates the Angular component for a related entity in a UserViewGrid display component
@@ -32,5 +32,9 @@ export class UserViewGridRelatedEntityGenerator extends RelatedEntityDisplayComp
             CodeOutput: null,
             Component: this
         }
+    }
+
+    public get ConfigType(): typeof ComponentConfigBase {
+        return null;
     }
 }

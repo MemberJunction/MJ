@@ -34,6 +34,7 @@
     "@progress/kendo-angular-dialog": "16.2.0",
     "@progress/kendo-angular-layout": "16.2.0",
     "@progress/kendo-angular-grid": "16.2.0",
+    "@progress/kendo-angular-inputs": "16.2.0",
     "@progress/kendo-angular-indicators": "16.2.0",
     "tslib": "^2.3.0"
   },

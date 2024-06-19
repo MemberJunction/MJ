@@ -67,6 +67,14 @@ export class GenerationInput {
 
 
 /**
+ * Base class that all sub-classes of RelatedEntityDisplayComponentConfigBase use to define a derived class that will defined the shape
+ * of their configuration object.
+ */
+export class ComponentConfigBase {
+
+}
+
+/**
  * Base Class that is responsible for generating the Angular template code for the related entity display component.
  * 
  * The built-in functionality within the {@link BaseFormComponent} can be used in the Angular template without any changes since the generated code will be injected
@@ -133,4 +141,6 @@ export abstract class RelatedEntityDisplayComponentGeneratorBase {
     }
 
     private static _componentInstanceMap: Map<string, RelatedEntityDisplayComponentGeneratorBase> = new Map<string, RelatedEntityDisplayComponentGeneratorBase>();
+
+    public abstract get ConfigType(): ComponentConfigBase;
 }
