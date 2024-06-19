@@ -13,6 +13,7 @@ button.cellButton {
     margin-top: 5px;
     width: 30px;
     margin-bottom: 5px;
+    float: right;
 }
 
 table th {
@@ -34,14 +35,17 @@ table th, table td {
 }
 
 td.column-cell {
-    display: flex;
-    align-items: center;
+    margin: 0;
+    /* display: flex; */
+    /* align-items: center; */
+    text-align: left;
 }
 
 /* Specific styles for the first column */
 table th:first-child, table td:first-child {
     min-width: 150px; /* Set width for the first column */
     text-align: left;
+    vertical-align: middle;
 }
 
 .checkbox-column {

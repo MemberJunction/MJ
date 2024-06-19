@@ -8,6 +8,8 @@ import { DialogsModule } from "@progress/kendo-angular-dialog";
 import { ButtonsModule } from '@progress/kendo-angular-buttons'; 
 import { DropDownsModule } from '@progress/kendo-angular-dropdowns';
 import { IndicatorsModule } from '@progress/kendo-angular-indicators';
+import { InputsModule } from '@progress/kendo-angular-inputs';
+
 
 // LOCAL
 import { JoinGridComponent } from './join-grid/join-grid.component';
@@ -23,6 +25,7 @@ import { ContainerDirectivesModule } from '@memberjunction/ng-container-directiv
     FormsModule,
     DialogsModule,
     GridModule,
+    InputsModule,
     ButtonsModule,
     DropDownsModule,
     DialogsModule,

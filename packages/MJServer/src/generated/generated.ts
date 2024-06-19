@@ -2,7 +2,7 @@
 * ALL ENTITIES - TypeGraphQL Type Class Definition - AUTO GENERATED FILE
 * Generated Entities and Resolvers for Server
 * 
-* GENERATED: 6/18/2024, 6:06:16 PM
+* GENERATED: 6/18/2024, 9:30:18 PM
 * 
 *   >>> DO NOT MODIFY THIS FILE!!!!!!!!!!!!
 *   >>> YOUR CHANGES WILL BE OVERWRITTEN
@@ -21250,6 +21250,12 @@ export class CommunicationProviderMessageTypeResolver extends ResolverBase {
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.UpdateRecord('Communication Provider Message Types', input, dataSource, userPayload, pubSub);
+    }
+    
+    @Mutation(() => CommunicationProviderMessageType_)
+    async DeleteCommunicationProviderMessageType(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Communication Provider Message Types', key, options, dataSource, userPayload, pubSub);
     }
     
 }

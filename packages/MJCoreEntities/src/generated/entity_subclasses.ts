@@ -17936,19 +17936,7 @@ import { RegisterClass } from "@memberjunction/global";
             compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
-            
-        /**
-        * Communication Provider Message Types - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
-        * @public
-        * @method
-        * @override
-        * @memberof CommunicationProviderMessageTypeEntity
-        * @throws {Error} - Delete is not allowed for Communication Provider Message Types, to enable it set AllowDeleteAPI to 1 in the database.
-        */
-        public async Delete(): Promise<boolean> {
-            throw new Error('Delete is not allowed for Communication Provider Message Types, to enable it set AllowDeleteAPI to 1 in the database.');
-        } 
-            
+        
             /**
         * * Field Name: ID
         * * Display Name: ID
