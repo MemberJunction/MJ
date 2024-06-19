@@ -20296,3 +20296,128 @@ import { RegisterClass } from "@memberjunction/global";
 
     }
         
+    /**
+     * Entity Action Params - strongly typed entity sub-class
+     * * Schema: __mj
+     * * Base Table: EntityActionParam
+     * * Base View: vwEntityActionParams
+     * * @description Stores paramater mappings to enable Entity Actions to automatically invoke Actions
+     * * Primary Key: ID
+     * @extends {BaseEntity}
+     * @class
+     * @public
+     */
+    @RegisterClass(BaseEntity, 'Entity Action Params')
+    export class EntityActionParamEntity extends BaseEntity {
+        /**
+        * Loads the Entity Action Params record from the database
+        * @param ID: number - primary key value to load the Entity Action Params record.
+        * @param EntityRelationshipsToLoad - (optional) the relationships to load
+        * @returns {Promise<boolean>} - true if successful, false otherwise
+        * @public
+        * @async
+        * @memberof EntityActionParamEntity
+        * @method
+        * @override
+        */      
+        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+        }
+        
+            /**
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: int
+        */
+        get ID(): number {  
+            return this.Get('ID');
+        }
+        
+        /**
+        * * Field Name: ActionParamID
+        * * Display Name: Action Param ID
+        * * SQL Data Type: int
+        * * Related Entity/Foreign Key: Action Params (vwActionParams.ID)
+        */
+        get ActionParamID(): number {  
+            return this.Get('ActionParamID');
+        }
+        set ActionParamID(value: number) {
+            this.Set('ActionParamID', value);
+        }
+        /**
+        * * Field Name: ValueType
+        * * Display Name: Value Type
+        * * SQL Data Type: nvarchar(20)
+        * * Value List Type: List
+        * * Possible Values 
+        *   * Static
+        *   * Entity Object
+        *   * Script
+        * * Description: Type of the value, which can be Static, Entity Object, or Script.
+        */
+        get ValueType(): 'Static' | 'Entity Object' | 'Script' {  
+            return this.Get('ValueType');
+        }
+        set ValueType(value: 'Static' | 'Entity Object' | 'Script') {
+            this.Set('ValueType', value);
+        }
+        /**
+        * * Field Name: Value
+        * * Display Name: Value
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Value of the parameter, used only when ValueType is Static or Script. When value is Script, any valid JavaScript code can be provided. The script will have access to an object called EntityActionContext. This object will have a property called EntityObject on it that will contain the BaseEntity derived sub-class with the current data for the entity object this action is operating against. The script must provide the parameter value to the EntityActionContext.result property. This scripting capabilty is designed for very small and simple code, for anything of meaningful complexity, create a sub-class instead.
+        */
+        get Value(): string | null {  
+            return this.Get('Value');
+        }
+        set Value(value: string | null) {
+            this.Set('Value', value);
+        }
+        /**
+        * * Field Name: Comments
+        * * Display Name: Comments
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Additional comments regarding the parameter.
+        */
+        get Comments(): string | null {  
+            return this.Get('Comments');
+        }
+        set Comments(value: string | null) {
+            this.Set('Comments', value);
+        }
+        /**
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
+        */
+        get __mj_CreatedAt(): Date {  
+            return this.Get('__mj_CreatedAt');
+        }
+        
+        /**
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
+        */
+        get __mj_UpdatedAt(): Date {  
+            return this.Get('__mj_UpdatedAt');
+        }
+        
+        /**
+        * * Field Name: ActionParam
+        * * Display Name: Action Param
+        * * SQL Data Type: nvarchar(255)
+        * * Default Value: null
+        */
+        get ActionParam(): string {  
+            return this.Get('ActionParam');
+        }
+        
+
+    }
+        
