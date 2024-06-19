@@ -167,25 +167,78 @@ export class FieldValueCollection {
         });
     }
 
-    ToURLSegment(segment?: string): string {
+    /**
+     * Utility to generate a string representation of the key value pairs in the format "Field1|Value1||Field2|Value2" etc.
+     * The field delimiter defaults to '||' and the value delimiter defaults to '|'
+     * @param fieldDelimiter 
+     * @param valueDelimiter 
+     * @returns 
+     */
+    ToConcatenatedString(fieldDelimiter: string = '||', valueDelimiter: string = '|'): string {
         return this.KeyValuePairs.map((pk) => {
-            return `${pk.FieldName}|${pk.Value}`;
-        }).join(segment || "||");
+            return `${pk.FieldName}${valueDelimiter}${pk.Value}`;
+        }).join(fieldDelimiter);
     }
 
-    private readonly _field_delimiter = '||'
-    private readonly _value_delimiter = '|';
-
     /**
-     * Parses a provided routeSegment using the provided delimiter and loads the key value pairs from it
+     * Utility to load the object from a string representation of the key value pairs in the format "Field1|Value1||Field2|Value2" etc.
+     * The delimiters between the fields default to '||' and the values default to '|', but can be anything desired.
+     * @param concatenatedString 
+     * @param fieldDelimiter 
+     * @param valueDelimiter 
      */
-    LoadFromURLSegment(entity: EntityInfo, routeSegment: string): void {
-        if (!routeSegment.includes('|')) {
-          // If not, return a single element array with a default field name
-          this.KeyValuePairs = [{ FieldName: entity.FirstPrimaryKey.Name, Value: routeSegment }];
+    LoadFromConcatenatedString(concatenatedString: string, fieldDelimiter: string = '||', valueDelimiter: string = '|'): void {
+        if (concatenatedString.includes(valueDelimiter)) {
+            const parts = concatenatedString.split(fieldDelimiter);
+            const pkVals: KeyValuePair[] = [];
+            for (let p of parts) {
+              const kv = p.split(valueDelimiter);
+              pkVals.push({ FieldName: kv[0], Value: kv[1] });
+            }
+  
+            this.KeyValuePairs = pkVals;  
         }
         else {
-            this.SimpleLoadFromURLSegment(routeSegment);
+            // do nothing
+        }        
+    }
+
+    /**
+     * For URL segments, we use | and || as the standard delimiters for field and value respectively in order to avoid
+     * conflicts with the standard URL delimiters like = and &. This method converts the key value pairs to a URL segment
+     * @param segment 
+     * @returns 
+     */
+    ToURLSegment(segment?: string): string {
+        return this.ToConcatenatedString(segment || CompositeKey.DefaultFieldDelimiter, CompositeKey.DefaultValueDelimiter);
+    }
+
+    private static readonly _field_delimiter = '||'
+    private static readonly _value_delimiter = '|';
+    /**
+     * Default delimiter for separating fields in a string that represents a key value pair within the composite key
+     */
+    public static get DefaultFieldDelimiter(): string {
+        return this._field_delimiter;
+    }
+    /**
+     * Default delimiter for separating values from field names in a string that represents a key value pair within the composite key
+     */
+    public static get DefaultValueDelimiter(): string {
+        return this._value_delimiter;
+    }
+
+    /**
+     * Parses a provided url segment using the provided delimiter and loads the key value pairs from it. If the segment just contains a single
+     * value and no delimiter, it will assume the field name is the primary key field name of the entity and load that way.
+     */
+    LoadFromURLSegment(entity: EntityInfo, urlSegment: string): void {
+        if (!urlSegment.includes('|')) {
+          // If not, return a single element array with a default field name
+          this.KeyValuePairs = [{ FieldName: entity.FirstPrimaryKey.Name, Value: urlSegment }];
+        }
+        else {
+            this.SimpleLoadFromURLSegment(urlSegment);
         }
     }
 
@@ -195,8 +248,8 @@ export class FieldValueCollection {
      * @param delimiter 
      */
     SimpleLoadFromURLSegment(urlSegment: string): void {
-        if (urlSegment.includes(this._value_delimiter)) {
-            const parts = urlSegment.split(this._field_delimiter);
+        if (urlSegment.includes(CompositeKey.DefaultValueDelimiter)) {
+            const parts = urlSegment.split(CompositeKey.DefaultFieldDelimiter);
             const pkVals: KeyValuePair[] = [];
             for (let p of parts) {
               const kv = p.split('|');

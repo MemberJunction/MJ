@@ -3,6 +3,7 @@ import { DashboardEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { LoadDashboardDetailsComponent } from "./sections/details.component"
+
 @RegisterClass(BaseFormComponent, 'Dashboards') // Tell MemberJunction about this class
 @Component({
     selector: 'gen-dashboard-form',

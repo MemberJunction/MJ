@@ -33,7 +33,7 @@
         "AllowAllRowsAPI": false,
         "AllowCreateAPI": true,
         "AllowUpdateAPI": true,
-        "AllowDeleteAPI": false,
+        "AllowDeleteAPI": true,
         "AllowUserSearchAPI": false,
         "CascadeDeletes": false,
         "UserViewMaxRows": 1000,
@@ -200,6 +200,15 @@
     "commands": [
         {
             "workingDirectory": "../MJCoreEntities",
+            "command": "npm",
+            "args": [
+                "run",
+                "build"
+            ],
+            "when": "after"
+        },
+        {
+            "workingDirectory": "../Angular/Explorer/core-entity-forms",
             "command": "npm",
             "args": [
                 "run",

@@ -3,6 +3,8 @@ import { FileCategoryEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { LoadFileCategoryDetailsComponent } from "./sections/details.component"
+import { UserViewGridComponent } from "@memberjunction/ng-user-view-grid"
+
 @RegisterClass(BaseFormComponent, 'File Categories') // Tell MemberJunction about this class
 @Component({
     selector: 'gen-filecategory-form',

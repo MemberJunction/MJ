@@ -9,6 +9,7 @@
             </kendo-splitter-pane>
             <kendo-splitter-pane>
                 <mj-tabstrip (TabSelected)="onTabSelect($event.index)" mjFillContainer>
+                    
                     <mj-tab Name="Details">
                         Details
                     </mj-tab>
@@ -81,7 +82,7 @@
                             [AllowLoad]="IsCurrentTab('Fields')"  
                             [EditMode]="GridEditMode()"  
                             [BottomMargin]="GridBottomMargin">
-                        </mj-user-view-grid>
+                        </mj-user-view-grid>                    
                     </mj-tab-body>
 
                     <mj-tab Name="Permissions" 
@@ -96,7 +97,7 @@
                             [AllowLoad]="IsCurrentTab('Permissions')"  
                             [EditMode]="GridEditMode()"  
                             [BottomMargin]="GridBottomMargin">
-                        </mj-user-view-grid>
+                        </mj-user-view-grid>                    
                     </mj-tab-body>
 
                     <mj-tab Name="Relationships" 
@@ -111,7 +112,7 @@
                             [AllowLoad]="IsCurrentTab('Relationships')"  
                             [EditMode]="GridEditMode()"  
                             [BottomMargin]="GridBottomMargin">
-                        </mj-user-view-grid>
+                        </mj-user-view-grid>                    
                     </mj-tab-body>
 
                     <mj-tab Name="AI Actions" 
@@ -126,7 +127,7 @@
                             [AllowLoad]="IsCurrentTab('AI Actions')"  
                             [EditMode]="GridEditMode()"  
                             [BottomMargin]="GridBottomMargin">
-                        </mj-user-view-grid>
+                        </mj-user-view-grid>                    
                     </mj-tab-body>
 
                     <mj-tab Name="User Record Logs" 
@@ -141,7 +142,7 @@
                             [AllowLoad]="IsCurrentTab('User Record Logs')"  
                             [EditMode]="GridEditMode()"  
                             [BottomMargin]="GridBottomMargin">
-                        </mj-user-view-grid>
+                        </mj-user-view-grid>                    
                     </mj-tab-body>
 
                     <mj-tab Name="Integration URL Formats" 
@@ -156,13 +157,13 @@
                             [AllowLoad]="IsCurrentTab('Integration URL Formats')"  
                             [EditMode]="GridEditMode()"  
                             [BottomMargin]="GridBottomMargin">
-                        </mj-user-view-grid>
+                        </mj-user-view-grid>                    
                     </mj-tab-body>
 
                     <mj-tab Name="Entities" 
                         [Visible]="record.IsSaved" 
                         [Props]="{EntityRelationshipID: 59}">
-                        Entities
+                        <span class="fa-solid fa-database tab-header-icon"></span>Entities
                     </mj-tab>
                     <mj-tab-body>
                         <mj-user-view-grid 
@@ -171,7 +172,7 @@
                             [AllowLoad]="IsCurrentTab('Entities')"  
                             [EditMode]="GridEditMode()"  
                             [BottomMargin]="GridBottomMargin">
-                        </mj-user-view-grid>
+                        </mj-user-view-grid>                    
                     </mj-tab-body>
 
                     <mj-tab Name="User Favorites" 
@@ -186,7 +187,7 @@
                             [AllowLoad]="IsCurrentTab('User Favorites')"  
                             [EditMode]="GridEditMode()"  
                             [BottomMargin]="GridBottomMargin">
-                        </mj-user-view-grid>
+                        </mj-user-view-grid>                    
                     </mj-tab-body>
 
                     <mj-tab Name="Company Integration Run Details" 
@@ -201,7 +202,7 @@
                             [AllowLoad]="IsCurrentTab('Company Integration Run Details')"  
                             [EditMode]="GridEditMode()"  
                             [BottomMargin]="GridBottomMargin">
-                        </mj-user-view-grid>
+                        </mj-user-view-grid>                    
                     </mj-tab-body>
 
                     <mj-tab Name="Application Entities" 
@@ -216,7 +217,7 @@
                             [AllowLoad]="IsCurrentTab('Application Entities')"  
                             [EditMode]="GridEditMode()"  
                             [BottomMargin]="GridBottomMargin">
-                        </mj-user-view-grid>
+                        </mj-user-view-grid>                    
                     </mj-tab-body>
 
                     <mj-tab Name="User Application Entities" 
@@ -231,7 +232,7 @@
                             [AllowLoad]="IsCurrentTab('User Application Entities')"  
                             [EditMode]="GridEditMode()"  
                             [BottomMargin]="GridBottomMargin">
-                        </mj-user-view-grid>
+                        </mj-user-view-grid>                    
                     </mj-tab-body>
 
                     <mj-tab Name="Lists" 
@@ -246,7 +247,7 @@
                             [AllowLoad]="IsCurrentTab('Lists')"  
                             [EditMode]="GridEditMode()"  
                             [BottomMargin]="GridBottomMargin">
-                        </mj-user-view-grid>
+                        </mj-user-view-grid>                    
                     </mj-tab-body>
 
                     <mj-tab Name="User Views" 
@@ -261,7 +262,7 @@
                             [AllowLoad]="IsCurrentTab('User Views')"  
                             [EditMode]="GridEditMode()"  
                             [BottomMargin]="GridBottomMargin">
-                        </mj-user-view-grid>
+                        </mj-user-view-grid>                    
                     </mj-tab-body>
 
                     <mj-tab Name="Record Changes" 
@@ -276,13 +277,13 @@
                             [AllowLoad]="IsCurrentTab('Record Changes')"  
                             [EditMode]="GridEditMode()"  
                             [BottomMargin]="GridBottomMargin">
-                        </mj-user-view-grid>
+                        </mj-user-view-grid>                    
                     </mj-tab-body>
 
                     <mj-tab Name="Audit Logs" 
                         [Visible]="record.IsSaved" 
                         [Props]="{EntityRelationshipID: 67}">
-                        Audit Logs
+                        <span class="fa-solid fa-fingerprint tab-header-icon"></span>Audit Logs
                     </mj-tab>
                     <mj-tab-body>
                         <mj-user-view-grid 
@@ -291,7 +292,7 @@
                             [AllowLoad]="IsCurrentTab('Audit Logs')"  
                             [EditMode]="GridEditMode()"  
                             [BottomMargin]="GridBottomMargin">
-                        </mj-user-view-grid>
+                        </mj-user-view-grid>                    
                     </mj-tab-body>
 
                     <mj-tab Name="Resource Types" 
@@ -306,7 +307,7 @@
                             [AllowLoad]="IsCurrentTab('Resource Types')"  
                             [EditMode]="GridEditMode()"  
                             [BottomMargin]="GridBottomMargin">
-                        </mj-user-view-grid>
+                        </mj-user-view-grid>                    
                     </mj-tab-body>
 
                     <mj-tab Name="Tagged Items" 
@@ -321,7 +322,7 @@
                             [AllowLoad]="IsCurrentTab('Tagged Items')"  
                             [EditMode]="GridEditMode()"  
                             [BottomMargin]="GridBottomMargin">
-                        </mj-user-view-grid>
+                        </mj-user-view-grid>                    
                     </mj-tab-body>
 
                     <mj-tab Name="Dataset Items" 
@@ -336,7 +337,7 @@
                             [AllowLoad]="IsCurrentTab('Dataset Items')"  
                             [EditMode]="GridEditMode()"  
                             [BottomMargin]="GridBottomMargin">
-                        </mj-user-view-grid>
+                        </mj-user-view-grid>                    
                     </mj-tab-body>
 
                     <mj-tab Name="Company Integration Record Maps" 
@@ -351,7 +352,7 @@
                             [AllowLoad]="IsCurrentTab('Company Integration Record Maps')"  
                             [EditMode]="GridEditMode()"  
                             [BottomMargin]="GridBottomMargin">
-                        </mj-user-view-grid>
+                        </mj-user-view-grid>                    
                     </mj-tab-body>
 
                     <mj-tab Name="Record Merge Logs" 
@@ -366,7 +367,7 @@
                             [AllowLoad]="IsCurrentTab('Record Merge Logs')"  
                             [EditMode]="GridEditMode()"  
                             [BottomMargin]="GridBottomMargin">
-                        </mj-user-view-grid>
+                        </mj-user-view-grid>                    
                     </mj-tab-body>
 
                     <mj-tab Name="Query Fields" 
@@ -381,13 +382,13 @@
                             [AllowLoad]="IsCurrentTab('Query Fields')"  
                             [EditMode]="GridEditMode()"  
                             [BottomMargin]="GridBottomMargin">
-                        </mj-user-view-grid>
+                        </mj-user-view-grid>                    
                     </mj-tab-body>
 
                     <mj-tab Name="Conversations" 
                         [Visible]="record.IsSaved" 
                         [Props]="{EntityRelationshipID: 140}">
-                        Conversations
+                        <span class="fa-regular fa-comments tab-header-icon"></span>Conversations
                     </mj-tab>
                     <mj-tab-body>
                         <mj-user-view-grid 
@@ -396,7 +397,7 @@
                             [AllowLoad]="IsCurrentTab('Conversations')"  
                             [EditMode]="GridEditMode()"  
                             [BottomMargin]="GridBottomMargin">
-                        </mj-user-view-grid>
+                        </mj-user-view-grid>                    
                     </mj-tab-body>
 
                     <mj-tab Name="Entity Documents" 
@@ -411,7 +412,7 @@
                             [AllowLoad]="IsCurrentTab('Entity Documents')"  
                             [EditMode]="GridEditMode()"  
                             [BottomMargin]="GridBottomMargin">
-                        </mj-user-view-grid>
+                        </mj-user-view-grid>                    
                     </mj-tab-body>
 
                     <mj-tab Name="Data Context Items" 
@@ -426,13 +427,13 @@
                             [AllowLoad]="IsCurrentTab('Data Context Items')"  
                             [EditMode]="GridEditMode()"  
                             [BottomMargin]="GridBottomMargin">
-                        </mj-user-view-grid>
+                        </mj-user-view-grid>                    
                     </mj-tab-body>
 
                     <mj-tab Name="Users" 
                         [Visible]="record.IsSaved" 
                         [Props]="{EntityRelationshipID: 181}">
-                        Users
+                        <span class="fa-solid fa-user tab-header-icon"></span>Users
                     </mj-tab>
                     <mj-tab-body>
                         <mj-user-view-grid 
@@ -441,7 +442,7 @@
                             [AllowLoad]="IsCurrentTab('Users')"  
                             [EditMode]="GridEditMode()"  
                             [BottomMargin]="GridBottomMargin">
-                        </mj-user-view-grid>
+                        </mj-user-view-grid>                    
                     </mj-tab-body>
 
                     <mj-tab Name="Entity Record Documents" 
@@ -456,7 +457,7 @@
                             [AllowLoad]="IsCurrentTab('Entity Record Documents')"  
                             [EditMode]="GridEditMode()"  
                             [BottomMargin]="GridBottomMargin">
-                        </mj-user-view-grid>
+                        </mj-user-view-grid>                    
                     </mj-tab-body>
 
                     <mj-tab Name="File Entity Record Links" 
@@ -471,7 +472,7 @@
                             [AllowLoad]="IsCurrentTab('File Entity Record Links')"  
                             [EditMode]="GridEditMode()"  
                             [BottomMargin]="GridBottomMargin">
-                        </mj-user-view-grid>
+                        </mj-user-view-grid>                    
                     </mj-tab-body>
 
                     <mj-tab Name="User View Categories" 
@@ -486,7 +487,7 @@
                             [AllowLoad]="IsCurrentTab('User View Categories')"  
                             [EditMode]="GridEditMode()"  
                             [BottomMargin]="GridBottomMargin">
-                        </mj-user-view-grid>
+                        </mj-user-view-grid>                    
                     </mj-tab-body>
 
                     <mj-tab Name="Entity Settings" 
@@ -501,7 +502,7 @@
                             [AllowLoad]="IsCurrentTab('Entity Settings')"  
                             [EditMode]="GridEditMode()"  
                             [BottomMargin]="GridBottomMargin">
-                        </mj-user-view-grid>
+                        </mj-user-view-grid>                    
                     </mj-tab-body>
 
                     <mj-tab Name="Duplicate Runs" 
@@ -516,7 +517,7 @@
                             [AllowLoad]="IsCurrentTab('Duplicate Runs')"  
                             [EditMode]="GridEditMode()"  
                             [BottomMargin]="GridBottomMargin">
-                        </mj-user-view-grid>
+                        </mj-user-view-grid>                    
                     </mj-tab-body>
 
                     <mj-tab Name="Entity Behaviors" 
@@ -531,7 +532,7 @@
                             [AllowLoad]="IsCurrentTab('Entity Behaviors')"  
                             [EditMode]="GridEditMode()"  
                             [BottomMargin]="GridBottomMargin">
-                        </mj-user-view-grid>
+                        </mj-user-view-grid>                    
                     </mj-tab-body>
 
                     <mj-tab Name="Entity Actions" 
@@ -546,7 +547,7 @@
                             [AllowLoad]="IsCurrentTab('Entity Actions')"  
                             [EditMode]="GridEditMode()"  
                             [BottomMargin]="GridBottomMargin">
-                        </mj-user-view-grid>
+                        </mj-user-view-grid>                    
                     </mj-tab-body>
 
                     <mj-tab Name="Template Params" 
@@ -561,13 +562,13 @@
                             [AllowLoad]="IsCurrentTab('Template Params')"  
                             [EditMode]="GridEditMode()"  
                             [BottomMargin]="GridBottomMargin">
-                        </mj-user-view-grid>
+                        </mj-user-view-grid>                    
                     </mj-tab-body>
 
                     <mj-tab Name="Recommendations" 
                         [Visible]="record.IsSaved" 
                         [Props]="{EntityRelationshipID: 284}">
-                        Recommendations
+                        <span class="fa-solid fa-circle-nodes tab-header-icon"></span>Recommendations
                     </mj-tab>
                     <mj-tab-body>
                         <mj-user-view-grid 
@@ -576,7 +577,7 @@
                             [AllowLoad]="IsCurrentTab('Recommendations')"  
                             [EditMode]="GridEditMode()"  
                             [BottomMargin]="GridBottomMargin">
-                        </mj-user-view-grid>
+                        </mj-user-view-grid>                    
                     </mj-tab-body>
 
                     <mj-tab Name="Recommendation Items" 
@@ -591,7 +592,7 @@
                             [AllowLoad]="IsCurrentTab('Recommendation Items')"  
                             [EditMode]="GridEditMode()"  
                             [BottomMargin]="GridBottomMargin">
-                        </mj-user-view-grid>
+                        </mj-user-view-grid>                    
                     </mj-tab-body>
 
                     <mj-tab Name="Entity Communication Message Types" 
@@ -606,7 +607,7 @@
                             [AllowLoad]="IsCurrentTab('Entity Communication Message Types')"  
                             [EditMode]="GridEditMode()"  
                             [BottomMargin]="GridBottomMargin">
-                        </mj-user-view-grid>
+                        </mj-user-view-grid>                    
                     </mj-tab-body>
                 </mj-tabstrip>
             </kendo-splitter-pane>

@@ -3,6 +3,8 @@ import { SalesTransaction__client_membershipEntity } from 'mj_generatedentities'
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { LoadSalesTransaction__client_membershipDetailsComponent } from "./sections/details.component"
+import { UserViewGridComponent } from "@memberjunction/ng-user-view-grid"
+
 @RegisterClass(BaseFormComponent, 'Sales Transactions__client_membership') // Tell MemberJunction about this class
 @Component({
     selector: 'gen-salestransaction__client_membership-form',

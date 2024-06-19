@@ -2,29 +2,29 @@
     overflow: auto;
 }
 
-/* Style for the whole table */
-table {
-    margin-left: 5px;
-    margin-top: 5px;
-    border-collapse: collapse; /* Ensures border collapse for a cleaner look */
-}
-
 button {
     margin-left: 5px;
     margin-top: 5px;
     width: 125px;
 }
  
+button.cellButton {
+    margin-left: 5px;
+    margin-top: 5px;
+    width: 30px;
+    margin-bottom: 5px;
+    float: right;
+}
+
 table th {
     background-color: #f2f2f2; /* Light gray background for headers */
     color: black; /* Black text color for headers */
     font-weight: bold; /* Bold font weight for headers */
-    cursor: pointer;
 }
-
+/* 
 .permission-left-col {
     cursor: pointer;
-}
+} */
 
 /* Style for all table cells */
 table th, table td {
@@ -34,14 +34,21 @@ table th, table td {
     padding: 0 8px; /* Add some padding inside cells */
 }
 
+td.column-cell {
+    margin: 0;
+    /* display: flex; */
+    /* align-items: center; */
+    text-align: left;
+}
+
 /* Specific styles for the first column */
 table th:first-child, table td:first-child {
     min-width: 150px; /* Set width for the first column */
     text-align: left;
+    vertical-align: middle;
 }
 
-/* Specific styles for the "Can" columns */
-table th:not(:first-child), table td:not(:first-child) {
+.checkbox-column {
     width: 100px; /* Set width for "Can" columns */
 }
 

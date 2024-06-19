@@ -1,10 +1,9 @@
 <div class="record-form-container" mjFillContainer [bottomMargin]="20" [rightMargin]="5">
     <form *ngIf="record" class="record-form"  #form="ngForm" mjFillContainer>
         <mj-form-toolbar [form]="this"></mj-form-toolbar>
-                <div #topArea class="record-form-group">
-                    
-                </div>
+
                 <mj-tabstrip (TabSelected)="onTabSelect($event.index)" mjFillContainer>
+                    
                     <mj-tab Name="Details">
                         Details
                     </mj-tab>
@@ -20,7 +19,7 @@
                     <mj-tab Name="Direct Reports" 
                         [Visible]="record.IsSaved" 
                         [Props]="{EntityRelationshipID: 36}">
-                        Direct Reports
+                        <span class="fa-solid fa-users tab-header-icon"></span>Direct Reports
                     </mj-tab>
                     <mj-tab-body>
                         <mj-user-view-grid 
@@ -29,7 +28,7 @@
                             [AllowLoad]="IsCurrentTab('Direct Reports')"  
                             [EditMode]="GridEditMode()"  
                             [BottomMargin]="GridBottomMargin">
-                        </mj-user-view-grid>
+                        </mj-user-view-grid>                    
                     </mj-tab-body>
 
                     <mj-tab Name="Employee Company Integrations" 
@@ -44,7 +43,7 @@
                             [AllowLoad]="IsCurrentTab('Employee Company Integrations')"  
                             [EditMode]="GridEditMode()"  
                             [BottomMargin]="GridBottomMargin">
-                        </mj-user-view-grid>
+                        </mj-user-view-grid>                    
                     </mj-tab-body>
 
                     <mj-tab Name="Employee Roles" 
@@ -59,7 +58,7 @@
                             [AllowLoad]="IsCurrentTab('Employee Roles')"  
                             [EditMode]="GridEditMode()"  
                             [BottomMargin]="GridBottomMargin">
-                        </mj-user-view-grid>
+                        </mj-user-view-grid>                    
                     </mj-tab-body>
 
                     <mj-tab Name="Employee Skills" 
@@ -74,7 +73,7 @@
                             [AllowLoad]="IsCurrentTab('Employee Skills')"  
                             [EditMode]="GridEditMode()"  
                             [BottomMargin]="GridBottomMargin">
-                        </mj-user-view-grid>
+                        </mj-user-view-grid>                    
                     </mj-tab-body>
 
                     <mj-tab Name="Activities" 
@@ -89,7 +88,7 @@
                             [AllowLoad]="IsCurrentTab('Activities')"  
                             [EditMode]="GridEditMode()"  
                             [BottomMargin]="GridBottomMargin">
-                        </mj-user-view-grid>
+                        </mj-user-view-grid>                    
                     </mj-tab-body>
 
                     <mj-tab Name="Deals" 
@@ -104,13 +103,13 @@
                             [AllowLoad]="IsCurrentTab('Deals')"  
                             [EditMode]="GridEditMode()"  
                             [BottomMargin]="GridBottomMargin">
-                        </mj-user-view-grid>
+                        </mj-user-view-grid>                    
                     </mj-tab-body>
 
                     <mj-tab Name="Users" 
                         [Visible]="record.IsSaved" 
                         [Props]="{EntityRelationshipID: 194}">
-                        Users
+                        <span class="fa-solid fa-user tab-header-icon"></span>Users
                     </mj-tab>
                     <mj-tab-body>
                         <mj-user-view-grid 
@@ -119,7 +118,7 @@
                             [AllowLoad]="IsCurrentTab('Users')"  
                             [EditMode]="GridEditMode()"  
                             [BottomMargin]="GridBottomMargin">
-                        </mj-user-view-grid>
+                        </mj-user-view-grid>                    
                     </mj-tab-body>
                 </mj-tabstrip>
     </form>

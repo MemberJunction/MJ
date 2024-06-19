@@ -1,10 +1,9 @@
 <div class="record-form-container" mjFillContainer [bottomMargin]="20" [rightMargin]="5">
     <form *ngIf="record" class="record-form"  #form="ngForm" mjFillContainer>
         <mj-form-toolbar [form]="this"></mj-form-toolbar>
-                <div #topArea class="record-form-group">
-                    
-                </div>
+
                 <mj-tabstrip (TabSelected)="onTabSelect($event.index)" mjFillContainer>
+                    
                     <mj-tab Name="Details">
                         Details
                     </mj-tab>
@@ -29,7 +28,7 @@
                             [AllowLoad]="IsCurrentTab('Products')"  
                             [EditMode]="GridEditMode()"  
                             [BottomMargin]="GridBottomMargin">
-                        </mj-user-view-grid>
+                        </mj-user-view-grid>                    
                     </mj-tab-body>
 
                     <mj-tab Name="Sales Order Details" 
@@ -44,7 +43,7 @@
                             [AllowLoad]="IsCurrentTab('Sales Order Details')"  
                             [EditMode]="GridEditMode()"  
                             [BottomMargin]="GridBottomMargin">
-                        </mj-user-view-grid>
+                        </mj-user-view-grid>                    
                     </mj-tab-body>
 
                     <mj-tab Name="Product Price Levels" 
@@ -59,7 +58,7 @@
                             [AllowLoad]="IsCurrentTab('Product Price Levels')"  
                             [EditMode]="GridEditMode()"  
                             [BottomMargin]="GridBottomMargin">
-                        </mj-user-view-grid>
+                        </mj-user-view-grid>                    
                     </mj-tab-body>
 
                     <mj-tab Name="Uo Ms" 
@@ -74,7 +73,7 @@
                             [AllowLoad]="IsCurrentTab('Uo Ms')"  
                             [EditMode]="GridEditMode()"  
                             [BottomMargin]="GridBottomMargin">
-                        </mj-user-view-grid>
+                        </mj-user-view-grid>                    
                     </mj-tab-body>
                 </mj-tabstrip>
     </form>

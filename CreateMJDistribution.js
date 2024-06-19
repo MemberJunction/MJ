@@ -42,7 +42,7 @@ async function handleCodeGenDirectory(dir, normalizedDir, archive) {
         (!item.workingDirectory.trim().toLowerCase().includes('../mjcoreentities') &&
           !item.workingDirectory.trim().toLowerCase().includes('../coreactions') &&
           !item.workingDirectory.trim().toLowerCase().includes('../mjserver') &&
-          !item.workingDirectory.trim().toLowerCase().includes('../angular/core-entity-forms'))
+          !item.workingDirectory.trim().toLowerCase().includes('../angular/explorer/core-entity-forms'))
     ); // remove this as we don't want people using MJ to ever generate this stuff.
   }
   if (configJson.customSQLScripts) {

@@ -1,10 +1,9 @@
 <div class="record-form-container" mjFillContainer [bottomMargin]="20" [rightMargin]="5">
     <form *ngIf="record" class="record-form"  #form="ngForm" mjFillContainer>
         <mj-form-toolbar [form]="this"></mj-form-toolbar>
-                <div #topArea class="record-form-group">
-                    
-                </div>
+
                 <mj-tabstrip (TabSelected)="onTabSelect($event.index)" mjFillContainer>
+                    
                     <mj-tab Name="Details">
                         Details
                     </mj-tab>
@@ -29,7 +28,7 @@
                             [AllowLoad]="IsCurrentTab('Customer Addresses')"  
                             [EditMode]="GridEditMode()"  
                             [BottomMargin]="GridBottomMargin">
-                        </mj-user-view-grid>
+                        </mj-user-view-grid>                    
                     </mj-tab-body>
 
                     <mj-tab Name="Customer Addresses" 
@@ -44,7 +43,7 @@
                             [AllowLoad]="IsCurrentTab('Customer Addresses')"  
                             [EditMode]="GridEditMode()"  
                             [BottomMargin]="GridBottomMargin">
-                        </mj-user-view-grid>
+                        </mj-user-view-grid>                    
                     </mj-tab-body>
 
                     <mj-tab Name="MemberShips" 
@@ -59,7 +58,7 @@
                             [AllowLoad]="IsCurrentTab('MemberShips')"  
                             [EditMode]="GridEditMode()"  
                             [BottomMargin]="GridBottomMargin">
-                        </mj-user-view-grid>
+                        </mj-user-view-grid>                    
                     </mj-tab-body>
 
                     <mj-tab Name="Organization Links" 
@@ -74,7 +73,7 @@
                             [AllowLoad]="IsCurrentTab('Organization Links')"  
                             [EditMode]="GridEditMode()"  
                             [BottomMargin]="GridBottomMargin">
-                        </mj-user-view-grid>
+                        </mj-user-view-grid>                    
                     </mj-tab-body>
 
                     <mj-tab Name="GP Membership Sales Transactions" 
@@ -89,7 +88,7 @@
                             [AllowLoad]="IsCurrentTab('GP Membership Sales Transactions')"  
                             [EditMode]="GridEditMode()"  
                             [BottomMargin]="GridBottomMargin">
-                        </mj-user-view-grid>
+                        </mj-user-view-grid>                    
                     </mj-tab-body>
 
                     <mj-tab Name="GP General Sales Transactions" 
@@ -104,7 +103,7 @@
                             [AllowLoad]="IsCurrentTab('GP General Sales Transactions')"  
                             [EditMode]="GridEditMode()"  
                             [BottomMargin]="GridBottomMargin">
-                        </mj-user-view-grid>
+                        </mj-user-view-grid>                    
                     </mj-tab-body>
                 </mj-tabstrip>
     </form>

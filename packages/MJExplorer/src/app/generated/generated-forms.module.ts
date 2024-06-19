@@ -26,6 +26,8 @@ import { ComboBoxModule } from '@progress/kendo-angular-dropdowns';
 import { DropDownListModule } from '@progress/kendo-angular-dropdowns';
 
 // Import Generated Components
+import { ThreadDetailFormComponent, LoadThreadDetailFormComponent } from "./Entities/ThreadDetail/threaddetail.form.component";
+import { ThreadFormComponent, LoadThreadFormComponent } from "./Entities/Thread/thread.form.component";
 import { IndustryFormComponent, LoadIndustryFormComponent } from "./Entities/Industry/industry.form.component";
 import { ContactRoleFormComponent, LoadContactRoleFormComponent } from "./Entities/ContactRole/contactrole.form.component";
 import { ContactLevelFormComponent, LoadContactLevelFormComponent } from "./Entities/ContactLevel/contactlevel.form.component";
@@ -61,6 +63,8 @@ import { SalesLineItem__client_membershipFormComponent, LoadSalesLineItem__clien
 import { ItemFormComponent, LoadItemFormComponent } from "./Entities/Item/item.form.component";
 import { CustomerFormComponent, LoadCustomerFormComponent } from "./Entities/Customer/customer.form.component";
 import { SalesTransaction__client_membershipFormComponent, LoadSalesTransaction__client_membershipFormComponent } from "./Entities/SalesTransaction__client_membership/salestransaction__client_membership.form.component";
+import { ThreadDetailDetailsComponent, LoadThreadDetailDetailsComponent } from "./Entities/ThreadDetail/sections/details.component"
+import { ThreadDetailsComponent, LoadThreadDetailsComponent } from "./Entities/Thread/sections/details.component"
 import { IndustryDetailsComponent, LoadIndustryDetailsComponent } from "./Entities/Industry/sections/details.component"
 import { ContactRoleDetailsComponent, LoadContactRoleDetailsComponent } from "./Entities/ContactRole/sections/details.component"
 import { ContactLevelDetailsComponent, LoadContactLevelDetailsComponent } from "./Entities/ContactLevel/sections/details.component"
@@ -96,10 +100,12 @@ import { SalesLineItem__client_membershipDetailsComponent, LoadSalesLineItem__cl
 import { ItemDetailsComponent, LoadItemDetailsComponent } from "./Entities/Item/sections/details.component"
 import { CustomerDetailsComponent, LoadCustomerDetailsComponent } from "./Entities/Customer/sections/details.component"
 import { SalesTransaction__client_membershipDetailsComponent, LoadSalesTransaction__client_membershipDetailsComponent } from "./Entities/SalesTransaction__client_membership/sections/details.component"
-    
+   
 
 @NgModule({
 declarations: [
+    ThreadDetailFormComponent,
+    ThreadFormComponent,
     IndustryFormComponent,
     ContactRoleFormComponent,
     ContactLevelFormComponent,
@@ -117,9 +123,7 @@ declarations: [
     SalesLineItemFormComponent,
     SalesTransactionFormComponent,
     CustomerAddress__client_financeFormComponent,
-    Item__client_financeFormComponent,
-    Customer__client_financeFormComponent,
-    OrganizationLinkFormComponent],
+    Item__client_financeFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -134,7 +138,8 @@ imports: [
     MJTabStripModule,
     ContainerDirectivesModule,
     DropDownListModule,
-    ComboBoxModule
+    ComboBoxModule,
+    UserViewGridModule
 ],
 exports: [
 ]
@@ -145,6 +150,8 @@ export class GeneratedForms_SubModule_0 { }
 
 @NgModule({
 declarations: [
+    Customer__client_financeFormComponent,
+    OrganizationLinkFormComponent,
     PersonLinkFormComponent,
     Account__client_crmFormComponent,
     StringMapFormComponent,
@@ -160,11 +167,9 @@ declarations: [
     ItemFormComponent,
     CustomerFormComponent,
     SalesTransaction__client_membershipFormComponent,
-    IndustryDetailsComponent,
-    ContactRoleDetailsComponent,
-    ContactLevelDetailsComponent,
-    AccountDetailsComponent,
-    ContactDetailsComponent],
+    ThreadDetailDetailsComponent,
+    ThreadDetailsComponent,
+    IndustryDetailsComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -179,7 +184,8 @@ imports: [
     MJTabStripModule,
     ContainerDirectivesModule,
     DropDownListModule,
-    ComboBoxModule
+    ComboBoxModule,
+    UserViewGridModule
 ],
 exports: [
 ]
@@ -190,6 +196,10 @@ export class GeneratedForms_SubModule_1 { }
 
 @NgModule({
 declarations: [
+    ContactRoleDetailsComponent,
+    ContactLevelDetailsComponent,
+    AccountDetailsComponent,
+    ContactDetailsComponent,
     DealStageDetailsComponent,
     ActivityDetailsComponent,
     DealForecastCategoryDetailsComponent,
@@ -205,11 +215,7 @@ declarations: [
     Item__client_financeDetailsComponent,
     Customer__client_financeDetailsComponent,
     OrganizationLinkDetailsComponent,
-    PersonLinkDetailsComponent,
-    Account__client_crmDetailsComponent,
-    StringMapDetailsComponent,
-    ProductPriceLevelDetailsComponent,
-    client_membershipDetailsComponent],
+    PersonLinkDetailsComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -235,6 +241,10 @@ export class GeneratedForms_SubModule_2 { }
 
 @NgModule({
 declarations: [
+    Account__client_crmDetailsComponent,
+    StringMapDetailsComponent,
+    ProductPriceLevelDetailsComponent,
+    client_membershipDetailsComponent,
     Contact__client_crmDetailsComponent,
     UoMDetailsComponent,
     SalesOrderDetailsComponent,
@@ -286,6 +296,8 @@ export function LoadGeneratedForms() {
     // code do NOTHING - the point is to prevent the code from being eliminated during tree shaking
     // since it is dynamically instantiated on demand, and the Angular compiler has no way to know that,
     // in production builds tree shaking will eliminate the code unless we do this
+    LoadThreadDetailFormComponent();
+    LoadThreadFormComponent();
     LoadIndustryFormComponent();
     LoadContactRoleFormComponent();
     LoadContactLevelFormComponent();
@@ -321,6 +333,8 @@ export function LoadGeneratedForms() {
     LoadItemFormComponent();
     LoadCustomerFormComponent();
     LoadSalesTransaction__client_membershipFormComponent();
+    LoadThreadDetailDetailsComponent();
+    LoadThreadDetailsComponent();
     LoadIndustryDetailsComponent();
     LoadContactRoleDetailsComponent();
     LoadContactLevelDetailsComponent();

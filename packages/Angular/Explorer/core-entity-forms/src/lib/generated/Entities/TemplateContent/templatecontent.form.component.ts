@@ -3,6 +3,7 @@ import { TemplateContentEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { LoadTemplateContentDetailsComponent } from "./sections/details.component"
+
 @RegisterClass(BaseFormComponent, 'Template Contents') // Tell MemberJunction about this class
 @Component({
     selector: 'gen-templatecontent-form',

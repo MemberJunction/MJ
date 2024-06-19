@@ -61,7 +61,7 @@ export class EntityActionEngine extends BaseEngine<EntityActionEngine> {
      * @param contextUser If you are running the action on the server side you must pass this in, but it is not required in an environment where a user is authenticated directly, e.g. a browser or other client. 
      */
     public async Config(forceRefresh: boolean = false, contextUser?: UserInfo): Promise<void> {
-        const configs: BaseEnginePropertyConfig[] = [
+        const configs: Partial<BaseEnginePropertyConfig>[] = [
             {
                 EntityName: 'Entity Action Invocation Types',
                 PropertyName: '_EntityActionInvocationTypes'
@@ -113,10 +113,11 @@ export class EntityActionEngine extends BaseEngine<EntityActionEngine> {
     /**
      * Helper method to get the EntityActionEntityServer object for a given entity name
      * @param entityName 
+     * @param status Optional, if provided will filter the results based on the status
      * @returns 
      */
-    public GetActionsByEntityName(entityName: string): EntityActionEntityServer[] {
-        return this._EntityActions.filter(e => e.Entity.trim().toLowerCase() === entityName.trim().toLowerCase());
+    public GetActionsByEntityName(entityName: string, status?: 'Active' | 'Pending' | 'Disabled'): EntityActionEntityServer[] {
+        return this._EntityActions.filter(e => (!status || e.Status === status) && e.Entity.trim().toLowerCase() === entityName.trim().toLowerCase());
     }
 
     /**
@@ -132,13 +133,14 @@ export class EntityActionEngine extends BaseEngine<EntityActionEngine> {
      * Helper method to get the EntityActionEntityServer object for a given entity name and invocation type
      * @param entityName 
      * @param invocationType 
+     * @param status Optional, if provided will filter the results based on the status
      * @returns 
      */
-    public GetActionsByEntityNameAndInvocationType(entityName: string, invocationType: string): EntityActionEntityServer[] {
-        const entityActions = this.GetActionsByEntityName(entityName);
+    public GetActionsByEntityNameAndInvocationType(entityName: string, invocationType: string, status?: 'Active' | 'Pending' | 'Disabled'): EntityActionEntityServer[] {
+        const entityActions = this.GetActionsByEntityName(entityName, status);
         // now extract the ones that have the right invocation type
         return entityActions.filter(e => { 
-            const invocations = e.Invocations.find(i => i.InvocationType.trim().toLowerCase() === invocationType.trim().toLowerCase())
+            const invocations = e.Invocations.find(i => (!status || i.Status === status) && i.InvocationType.trim().toLowerCase() === invocationType.trim().toLowerCase())
             return invocations ? true : false;
         });
     }

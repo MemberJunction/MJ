@@ -129,7 +129,11 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
     protected async GetCurrentUser(): Promise<UserInfo> {
         const d = await GraphQLDataProvider.ExecuteGQL(this._currentUserQuery, null);
         if (d) {
-            return new UserInfo(this, {...d.CurrentUser, UserRoles: d.CurrentUser.UserRolesArray}) // need to pass in the UserRoles as a separate property that is what is expected here
+            // convert the user and the user roles _mj__*** fields back to __mj_***
+            const u = this.ConvertBackToMJFields(d.CurrentUser);
+            const roles = u.UserRolesArray.map(r => this.ConvertBackToMJFields(r));
+            u.UserRolesArray = roles;
+            return new UserInfo(this, {...u, UserRoles: roles}) // need to pass in the UserRoles as a separate property that is what is expected here
         }
     }
 
@@ -281,17 +285,15 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                     // so that the caller gets back what they expect
                     const results = viewData[qName].Results;
                     if (results && results.length > 0) {
-                        const fields = e.Fields.filter(f => f.CodeName !== f.Name);
-                        if (fields.length > 0) {
-                            results.forEach(r => {
-                                fields.forEach(f => {
-                                    if (r[f.CodeName] !== undefined) {
-                                        r[f.Name] = r[f.CodeName];
-                                        // delete r[f.CodeName];  // Leave the CodeName in the results, it is useful to have both
-                                    }
-                                })
+                        const codeNameDiffFields = e.Fields.filter(f => f.CodeName !== f.Name && f.CodeName !== undefined);
+                        results.forEach(r => {
+                            // for _mj__ results, we need to convert them back to the Name
+                            this.ConvertBackToMJFields(r);
+                            codeNameDiffFields.forEach(f => {
+                                r[f.Name] = r[f.CodeName];
+                                // delete r[f.CodeName];  // Leave the CodeName in the results, it is useful to have both
                             })
-                        }
+                        })
                     }
                     return viewData[qName];
                 }
@@ -338,7 +340,12 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             }
 
             // now add any other fields that were passed in
-            params.Fields.forEach(f => fieldList.push(f));
+            params.Fields.forEach(f => {
+                if (f.trim().toLowerCase().startsWith('__mj_'))
+                    fieldList.push(f.replace('__mj_', '_mj__'));
+                else
+                    fieldList.push(f)
+            });
         }
         else {
             // no fields were passed in. So, let's check to see if we are running an dynamic view. 
@@ -347,8 +354,12 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             if (dynamicView) {
                 // include all fields since no fields were passed in                
                 e.Fields.forEach(f => {
-                    if (!f.IsBinaryFieldType)
-                        fieldList.push(f.CodeName)
+                    if (!f.IsBinaryFieldType) {
+                        if (f.CodeName.trim().toLowerCase().startsWith('__mj_'))
+                            fieldList.push(f.CodeName.replace('__mj_', '_mj__'));
+                        else
+                            fieldList.push(f.CodeName)
+                    }
                 }); 
             }
             else {
@@ -364,8 +375,12 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                     
                 // Now: include the fields that are part of the view definition
                 v.Columns.forEach(c => {
-                    if (c.hidden === false && !fieldList.find(item => item.trim().toLowerCase() === c.EntityField?.Name.trim().toLowerCase())) // don't include hidden fields and don't include the pkey field again
-                        fieldList.push(c.EntityField.CodeName)
+                    if (c.hidden === false && !fieldList.find(item => item.trim().toLowerCase() === c.EntityField?.Name.trim().toLowerCase())) { // don't include hidden fields and don't include the pkey field again
+                        if (c.EntityField.CodeName.trim().toLowerCase().startsWith('__mj_'))
+                            fieldList.push(c.EntityField.CodeName.replace('__mj_', '_mj__'));
+                        else
+                            fieldList.push(c.EntityField.CodeName)
+                    }
                 });
             }
         }
@@ -579,7 +594,13 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             // only pass along writable fields, AND the PKEY value if this is an update
             const filteredFields = entity.Fields.filter(f => f.SQLType.trim().toLowerCase() !== 'uniqueidentifier' && (f.ReadOnly === false || (f.IsPrimaryKey && entity.IsSaved) ));
             const inner = `                ${mutationName}(input: $input) {
-                ${entity.Fields.map(f => f.CodeName).join("\n                    ")}
+                ${entity.Fields.map(f => {
+                    if (f.Name.trim().toLowerCase().startsWith('__mj_'))
+                        return f.CodeName.replace('__mj_', '_mj__');
+                    else
+                        return f.CodeName
+
+                }).join("\n                    ")}
             }`
             const outer = gql`mutation ${type}${entity.EntityInfo.ClassName} ($input: ${mutationName}Input!) {
                 ${inner}
@@ -643,7 +664,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                             // got our data, send it back to the caller, which is the entity object
                             // and that object needs to update itself from this data.
                             result.Success = true;
-                            resolve (results)
+                            resolve (this.ConvertBackToMJFields(results));
                         }
                         else {
                             // the transaction failed, nothing to update, but we need to call Reject so the 
@@ -661,7 +682,8 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 if (d && d[type + entity.EntityInfo.ClassName]) {
                     result.Success = true;
                     result.EndedAt = new Date();
-                    return  d[type + entity.EntityInfo.ClassName];
+                    const ret = this.ConvertBackToMJFields(d[type + entity.EntityInfo.ClassName]);
+                    return ret;
                 }
                 else
                     throw new Error(`Save failed for ${entity.EntityInfo.ClassName}`);
@@ -710,7 +732,15 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
 
             const query = gql`query Single${entity.EntityInfo.ClassName}${rel.length > 0 ? 'Full' : ''} (${pkeyOuterParamString}) {
                 ${entity.EntityInfo.ClassName}(${pkeyInnerParamString}) {
-                    ${entity.Fields.filter(f => !f.EntityFieldInfo.IsBinaryFieldType).map(f => f.CodeName).join("\n                    ")}
+                    ${entity.Fields.filter(f => !f.EntityFieldInfo.IsBinaryFieldType).map(f => {
+                        if (f.EntityFieldInfo.Name.trim().toLowerCase().startsWith('__mj_')) {
+                            // fields that start with __mj_ need to be converted to _mj__ for the GraphQL query
+                            return f.CodeName.replace('__mj_', '_mj__');
+                        }
+                        else {
+                            return f.CodeName;
+                        }
+                    }).join("\n                    ")}
                     ${rel}
                 }
             }
@@ -718,7 +748,8 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
 
             const d = await GraphQLDataProvider.ExecuteGQL(query, vars)
             if (d && d[entity.EntityInfo.ClassName]) {
-                return  d[entity.EntityInfo.ClassName];
+                // the resulting object has all the values in it, but we need to convert any elements that start with _mj__ back to __mj_
+                return this.ConvertBackToMJFields(d[entity.EntityInfo.ClassName]);
             }
             else
                 return null;
@@ -727,6 +758,24 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             LogError(e);
             return null;
         }
+    }
+
+    /**
+     * This method will convert back any fields that start with _mj__ back to __mj_ so that the entity object can properly update itself with the data that was returned from the server
+     * @param ret 
+     * @returns 
+     */
+    protected ConvertBackToMJFields(ret: any): any {
+        const keys = Object.keys(ret);
+        keys.forEach(k => {
+            if (k.trim().toLowerCase().startsWith('_mj__')) {
+                const newKey = k.replace('_mj__', '__mj_');
+                ret[newKey] = ret[k];
+                delete ret[k]; // DO remove the old key as it has no purpose anymore as it was just for transport since GraphQL wont allow fields that start with __
+            }
+        });
+
+        return ret; // clean object to pass back here
     }
 
     protected getRelatedEntityString(entityInfo: EntityInfo, EntityRelationshipsToLoad: string[]): string {
@@ -1095,37 +1144,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             }
         });
     }
-
-    // private _allLatestMetadataUpdatesQuery = gql`query mdUpdates {
-    //     AllLatestMetadataUpdates {
-    //         ID
-    //         Type
-    //         UpdatedAt
-    //     }    
-    // }
-    // `
-
-    // private _innerAllEntitiesQueryString = `AllEntities {
-    //         ${this.entityInfoString()}
-    //     }`
-
-    // private _innerAllEntityFieldsQueryString = `AllEntityFields {
-    //         ${this.entityFieldInfoString()}
-    //     }`
-    // private _innerAllEntityRelationshipsQueryString = `AllEntityRelationships {
-    //         ${this.entityRelationshipInfoString()}
-    //     }`
-    // private _innerAllEntityPermissionsQueryString = `AllEntityPermissions {
-    //         ${this.entityPermissionInfoString()}
-    //     }`
-
-    // private _innerAllApplicationsQueryString = `AllApplications {
-    //     ${this.applicationInfoString()}
-    //     ApplicationEntities {
-    //         ${this.applicationEntityInfoString()}
-    //     }
-    // }
-    // `
+ 
     private _innerCurrentUserQueryString = `CurrentUser {
         ${this.userInfoString()}
         UserRolesArray {
@@ -1133,112 +1152,33 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         }
     }
     `
-
-    // private _allApplicationsQuery = gql`
-    //     ${this._innerAllApplicationsQueryString}
-    // `
-    // private _innerAllRolesQueryString = `AllRoles {
-    //     ${this.roleInfoString()}
-    // }
-    // `
-    // private _innerAllRowLevelSecurityFiltersQueryString = `AllRowLevelSecurityFilters {
-    //     ${this.rowLevelSecurityFilterInfoString()}
-    // }
-    // `
-
-    // private _innerAllAuditLogTypesQueryString = `AllAuditLogTypes {
-    //     ${this.auditLogTypeInfoString()}
-    // }
-    // `
-
-    // private _innerAllAuthorizationsQueryString = `AllAuthorizations {
-    //     ${this.authorizationInfoString()}
-    // }
-    // `
-
-    // private _innerAllQueriesQueryString = `AllQueries {
-    //     ${this.queryInfoString()}
-    // }
-    // `
-
-    // private _innerAllQueryCategoriesQueryString = `AllQueryCategories {
-    //     ${this.queryCategoryInfoString()}
-    // }
-    // `
-
-    // private _allMetaDataQuery = gql`query AllApplicationsAndEntities {
-    //     ${this._innerAllApplicationsQueryString}
-    //     ${this._innerAllEntitiesQueryString}    
-    //     ${this._innerAllEntityFieldsQueryString}    
-    //     ${this._innerAllEntityPermissionsQueryString}    
-    //     ${this._innerAllEntityRelationshipsQueryString}    
-    //     ${this._innerCurrentUserQueryString}    
-    //     ${this._innerAllRolesQueryString}    
-    //     ${this._innerAllRowLevelSecurityFiltersQueryString}
-    //     ${this._innerAllAuditLogTypesQueryString}
-    //     ${this._innerAllAuthorizationsQueryString}
-    //     ${this._innerAllQueriesQueryString}
-    //     ${this._innerAllQueryCategoriesQueryString}
-    // }`
+ 
 
     private _currentUserQuery = gql`query CurrentUserAndRoles {
         ${this._innerCurrentUserQueryString}    
     }`
 
 
-
-    // private roleInfoString(): string {
-    //     return this.infoString(new RoleInfo(null))
-    // }
+ 
     private userInfoString(): string {
         return this.infoString(new UserInfo(null, null))
     }
     private userRoleInfoString(): string {
         return this.infoString(new UserRoleInfo(null))
-    }
-    // private rowLevelSecurityFilterInfoString(): string {
-    //     return this.infoString(new RowLevelSecurityFilterInfo(null))
-    // }
-    // private auditLogTypeInfoString(): string {
-    //     return this.infoString(new AuditLogTypeInfo(null))
-    // }
-    // private authorizationInfoString(): string {
-    //     return this.infoString(new AuthorizationInfo(null))
-    // }
-    // private queryInfoString(): string {
-    //     return this.infoString(new QueryInfo(null))
-    // }
-    // private queryCategoryInfoString(): string {
-    //     return this.infoString(new QueryCategoryInfo(null))
-    // }
-    // private applicationInfoString(): string {
-    //     return this.infoString(new ApplicationInfo(null, null))
-    // }
-    // private applicationEntityInfoString(): string {
-    //     return this.infoString(new ApplicationEntityInfo(null))
-    // }
-    // private entityInfoString(): string {
-    //     return this.infoString(new EntityInfo(null))
-    // }
-    // private entityFieldInfoString(): string {
-    //     return this.infoString(new EntityFieldInfo(null))
-    // }
-    // private entityRelationshipInfoString(): string {
-    //     return this.infoString(new EntityRelationshipInfo(null))
-    // }
-    // private entityPermissionInfoString(): string {
-    //     return this.infoString(new EntityPermissionInfo(null))
-    // }
+    } 
     private infoString(object: any): string {
         let sOutput: string = '';
         const keys = Object.keys(object)
-        for (let i = 0; i < keys.length; i++) {
-            if (keys[i].substring(0,1) !=   '_')
-                sOutput += keys[i] + '\n            '
+        for (const k of keys) {
+            if (k.startsWith('__mj_')) {
+                sOutput += k.replace('__mj_', '_mj__') + '\n            '
+            }
+            else if (!k.startsWith('_')) {
+                sOutput += k + '\n            '
+            }
         }
         return sOutput
     }
-
 
     
     private _localStorageProvider: ILocalStorageProvider;

@@ -2,7 +2,7 @@
 * ALL ENTITIES - TypeGraphQL Type Class Definition - AUTO GENERATED FILE
 * Generated Entities and Resolvers for Server
 * 
-* GENERATED: 6/12/2024, 12:19:28 AM
+* GENERATED: 6/19/2024, 9:50:27 AM
 * 
 *   >>> DO NOT MODIFY THIS FILE!!!!!!!!!!!!
 *   >>> YOUR CHANGES WILL BE OVERWRITTEN
@@ -20,7 +20,7 @@ import { mj_core_schema } from '../config';
 
 import * as mj_core_schema_server_object_types from '@memberjunction/server'
 
-import { CompanyEntity, EmployeeEntity, UserFavoriteEntity, EmployeeCompanyIntegrationEntity, EmployeeRoleEntity, EmployeeSkillEntity, RoleEntity, SkillEntity, IntegrationURLFormatEntity, IntegrationEntity, CompanyIntegrationEntity, EntityFieldEntity, EntityEntity, UserEntity, EntityRelationshipEntity, UserRecordLogEntity, UserViewEntity, CompanyIntegrationRunEntity, CompanyIntegrationRunDetailEntity, ErrorLogEntity, ApplicationEntity, ApplicationEntityEntity, EntityPermissionEntity, UserApplicationEntityEntity, UserApplicationEntity, CompanyIntegrationRunAPILogEntity, ListEntity, ListDetailEntity, UserViewRunEntity, UserViewRunDetailEntity, WorkflowRunEntity, WorkflowEntity, WorkflowEngineEntity, RecordChangeEntity, UserRoleEntity, RowLevelSecurityFilterEntity, AuditLogEntity, AuthorizationEntity, AuthorizationRoleEntity, AuditLogTypeEntity, EntityFieldValueEntity, AIModelEntity, AIActionEntity, AIModelActionEntity, EntityAIActionEntity, AIModelTypeEntity, QueueTypeEntity, QueueEntity, QueueTaskEntity, DashboardEntity, OutputTriggerTypeEntity, OutputFormatTypeEntity, OutputDeliveryTypeEntity, ReportEntity, ReportSnapshotEntity, ResourceTypeEntity, TagEntity, TaggedItemEntity, WorkspaceEntity, WorkspaceItemEntity, DatasetEntity, DatasetItemEntity, ConversationDetailEntity, ConversationEntity, UserNotificationEntity, SchemaInfoEntity, CompanyIntegrationRecordMapEntity, RecordMergeLogEntity, RecordMergeDeletionLogEntity, QueryFieldEntity, QueryCategoryEntity, QueryEntity, QueryPermissionEntity, VectorIndexEntity, EntityDocumentTypeEntity, EntityDocumentRunEntity, VectorDatabaseEntity, EntityRecordDocumentEntity, EntityDocumentEntity, DataContextItemEntity, DataContextEntity, UserViewCategoryEntity, DashboardCategoryEntity, ReportCategoryEntity, FileStorageProviderEntity, FileEntity, FileCategoryEntity, FileEntityRecordLinkEntity, VersionInstallationEntity, DuplicateRunDetailMatchEntity, EntityDocumentSettingEntity, EntitySettingEntity, DuplicateRunEntity, DuplicateRunDetailEntity, EntityBehaviorEntity, EntityBehaviorTypeEntity, ApplicationSettingEntity, ActionCategoryEntity, EntityActionEntity, EntityActionInvocationEntity, ActionAuthorizationEntity, EntityActionInvocationTypeEntity, ActionEntity, EntityActionFilterEntity, ActionFilterEntity, ActionContextTypeEntity, ActionResultCodeEntity, ActionContextEntity, ActionExecutionLogEntity, ActionParamEntity, ActionLibraryEntity, LibraryEntity, ListCategoryEntity, CommunicationProviderEntity, CommunicationRunEntity, CommunicationProviderMessageTypeEntity, CommunicationLogEntity, CommunicationBaseMessageTypeEntity, TemplateEntity, TemplateCategoryEntity, TemplateContentEntity, TemplateParamEntity, TemplateContentTypeEntity, RecommendationEntity, RecommendationProviderEntity, RecommendationRunEntity, RecommendationItemEntity, EntityCommunicationMessageTypeEntity, EntityCommunicationFieldEntity } from '@memberjunction/core-entities';
+import { CompanyEntity, EmployeeEntity, UserFavoriteEntity, EmployeeCompanyIntegrationEntity, EmployeeRoleEntity, EmployeeSkillEntity, RoleEntity, SkillEntity, IntegrationURLFormatEntity, IntegrationEntity, CompanyIntegrationEntity, EntityFieldEntity, EntityEntity, UserEntity, EntityRelationshipEntity, UserRecordLogEntity, UserViewEntity, CompanyIntegrationRunEntity, CompanyIntegrationRunDetailEntity, ErrorLogEntity, ApplicationEntity, ApplicationEntityEntity, EntityPermissionEntity, UserApplicationEntityEntity, UserApplicationEntity, CompanyIntegrationRunAPILogEntity, ListEntity, ListDetailEntity, UserViewRunEntity, UserViewRunDetailEntity, WorkflowRunEntity, WorkflowEntity, WorkflowEngineEntity, RecordChangeEntity, UserRoleEntity, RowLevelSecurityFilterEntity, AuditLogEntity, AuthorizationEntity, AuthorizationRoleEntity, AuditLogTypeEntity, EntityFieldValueEntity, AIModelEntity, AIActionEntity, AIModelActionEntity, EntityAIActionEntity, AIModelTypeEntity, QueueTypeEntity, QueueEntity, QueueTaskEntity, DashboardEntity, OutputTriggerTypeEntity, OutputFormatTypeEntity, OutputDeliveryTypeEntity, ReportEntity, ReportSnapshotEntity, ResourceTypeEntity, TagEntity, TaggedItemEntity, WorkspaceEntity, WorkspaceItemEntity, DatasetEntity, DatasetItemEntity, ConversationDetailEntity, ConversationEntity, UserNotificationEntity, SchemaInfoEntity, CompanyIntegrationRecordMapEntity, RecordMergeLogEntity, RecordMergeDeletionLogEntity, QueryFieldEntity, QueryCategoryEntity, QueryEntity, QueryPermissionEntity, VectorIndexEntity, EntityDocumentTypeEntity, EntityDocumentRunEntity, VectorDatabaseEntity, EntityRecordDocumentEntity, EntityDocumentEntity, DataContextItemEntity, DataContextEntity, UserViewCategoryEntity, DashboardCategoryEntity, ReportCategoryEntity, FileStorageProviderEntity, FileEntity, FileCategoryEntity, FileEntityRecordLinkEntity, VersionInstallationEntity, DuplicateRunDetailMatchEntity, EntityDocumentSettingEntity, EntitySettingEntity, DuplicateRunEntity, DuplicateRunDetailEntity, EntityBehaviorEntity, EntityBehaviorTypeEntity, ApplicationSettingEntity, ActionCategoryEntity, EntityActionEntity, EntityActionInvocationEntity, ActionAuthorizationEntity, EntityActionInvocationTypeEntity, ActionEntity, EntityActionFilterEntity, ActionFilterEntity, ActionContextTypeEntity, ActionResultCodeEntity, ActionContextEntity, ActionExecutionLogEntity, ActionParamEntity, ActionLibraryEntity, LibraryEntity, ListCategoryEntity, CommunicationProviderEntity, CommunicationRunEntity, CommunicationProviderMessageTypeEntity, CommunicationLogEntity, CommunicationBaseMessageTypeEntity, TemplateEntity, TemplateCategoryEntity, TemplateContentEntity, TemplateParamEntity, TemplateContentTypeEntity, RecommendationEntity, RecommendationProviderEntity, RecommendationRunEntity, RecommendationItemEntity, EntityCommunicationMessageTypeEntity, EntityCommunicationFieldEntity, RecordChangeReplayRunEntity, LibraryItemEntity, EntityRelationshipDisplayComponentEntity, EntityActionParamEntity } from '@memberjunction/core-entities';
     
 
 //****************************************************************************
@@ -47,17 +47,17 @@ export class Company_ {
     @MaxLength(1000)
     LogoURL?: string;
           
-    @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
-          
-    @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
-          
     @Field({nullable: true}) 
     @MaxLength(510)
     Domain?: string;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
         
     @Field(() => [mj_core_schema_server_object_types.Employee_])
     EmployeesArray: mj_core_schema_server_object_types.Employee_[]; // Link to Employees
@@ -271,12 +271,12 @@ export class Employee_ {
     SupervisorID?: number;
           
     @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
           
     @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
           
     @Field({nullable: true}) 
     @MaxLength(162)
@@ -796,12 +796,12 @@ export class EmployeeRole_ {
     RoleID: number;
           
     @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
           
     @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
           
     @Field() 
     @MaxLength(100)
@@ -905,12 +905,12 @@ export class EmployeeSkill_ {
     SkillID: number;
           
     @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
           
     @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
           
     @Field() 
     @MaxLength(100)
@@ -1023,12 +1023,12 @@ export class Role_ {
     SQLName?: string;
           
     @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
           
     @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
         
     @Field(() => [mj_core_schema_server_object_types.EmployeeRole_])
     EmployeeRolesArray: mj_core_schema_server_object_types.EmployeeRole_[]; // Link to EmployeeRoles
@@ -2014,13 +2014,17 @@ export class EntityField_ {
     @MaxLength(510)
     RelatedEntityNameFieldMap?: string;
           
-    @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
+    @Field({description: 'Controls the generated form in the MJ Explorer UI - defaults to a search box, other option is a drop down. Possible values are Search and Dropdown'}) 
+    @MaxLength(40)
+    RelatedEntityDisplayType: string;
           
     @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
           
     @Field() 
     @MaxLength(510)
@@ -2147,6 +2151,9 @@ export class CreateEntityFieldInput {
 
     @Field({ nullable: true })
     RelatedEntityNameFieldMap?: string;
+
+    @Field()
+    RelatedEntityDisplayType: string;
 }
     
         
@@ -2229,6 +2236,9 @@ export class UpdateEntityFieldInput {
 
     @Field({ nullable: true })
     RelatedEntityNameFieldMap?: string;
+
+    @Field()
+    RelatedEntityDisplayType: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -2371,7 +2381,7 @@ export class Entity_ {
     @Field(() => Boolean) 
     VirtualEntity: boolean;
           
-    @Field(() => Boolean, {description: 'When set to 1, changes made via the MemberJunction architecture will result in tracking records being created in the RecordChange table'}) 
+    @Field(() => Boolean, {description: 'When set to 1, changes made via the MemberJunction architecture will result in tracking records being created in the RecordChange table. In addition, when turned on CodeGen will ensure that your table has two fields: __mj_CreatedAt and __mj_UpdatedAt which are special fields used in conjunction with the RecordChange table to track changes to rows in your entity.'}) 
     TrackRecordChanges: boolean;
           
     @Field(() => Boolean, {description: 'When set to 1, accessing a record by an end-user will result in an Audit Log record being created'}) 
@@ -2467,14 +2477,6 @@ export class Entity_ {
     @MaxLength(510)
     EntityObjectSubclassImport?: string;
           
-    @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
-          
-    @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
-          
     @Field({nullable: true, description: 'Used to specify a field within the entity that in turn contains the field name that will be used for record-level communication preferences. For example in a hypothetical entity called Contacts, say there is a field called PreferredComm and that field had possible values of Email1, SMS, and Phone, and those value in turn corresponded to field names in the entity. Each record in the Contacts entity could have a specific preference for which field would be used for communication. The MJ Communication Framework will use this information when available, as a priority ahead of the data in the Entity Communication Fields entity which is entity-level and not record-level.'}) 
     @MaxLength(510)
     PreferredCommunicationField?: string;
@@ -2482,6 +2484,14 @@ export class Entity_ {
     @Field({nullable: true, description: 'Optional, specify an icon (CSS Class) for each entity for display in the UI'}) 
     @MaxLength(1000)
     Icon?: string;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
           
     @Field({nullable: true}) 
     CodeName?: string;
@@ -3293,12 +3303,12 @@ export class User_ {
     LinkedEntityRecordID?: number;
           
     @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
           
     @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
           
     @Field({nullable: true}) 
     @MaxLength(202)
@@ -3410,6 +3420,9 @@ export class User_ {
     
     @Field(() => [mj_core_schema_server_object_types.RecommendationRun_])
     RecommendationRunsArray: mj_core_schema_server_object_types.RecommendationRun_[]; // Link to RecommendationRuns
+    
+    @Field(() => [mj_core_schema_server_object_types.RecordChangeReplayRun_])
+    RecordChangeReplayRunsArray: mj_core_schema_server_object_types.RecordChangeReplayRun_[]; // Link to RecordChangeReplayRuns
     
 }
         
@@ -3789,6 +3802,14 @@ export class UserResolverBase extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Recommendation Runs', await dataSource.query(sSQL));
         return result;
     }
+          
+    @FieldResolver(() => [mj_core_schema_server_object_types.RecordChangeReplayRun_])
+    async RecordChangeReplayRunsArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Record Change Replay Runs', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwRecordChangeReplayRuns] WHERE [UserID]=${user_.ID} ` + this.getRowLevelSecurityWhereClause('Record Change Replay Runs', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Record Change Replay Runs', await dataSource.query(sSQL));
+        return result;
+    }
         
     @Mutation(() => User_)
     async CreateUser(
@@ -3863,24 +3884,42 @@ export class EntityRelationship_ {
     @MaxLength(510)
     JoinEntityInverseJoinField?: string;
           
-    @Field(() => Boolean) 
+    @Field(() => Boolean, {description: 'When unchecked the relationship will NOT be displayed on the generated form'}) 
     DisplayInForm: boolean;
           
-    @Field({nullable: true}) 
+    @Field() 
+    @MaxLength(100)
+    DisplayLocation: string;
+          
+    @Field({nullable: true, description: 'Optional, when specified this value overrides the related entity name for the label on the tab'}) 
     @MaxLength(510)
     DisplayName?: string;
+          
+    @Field({description: 'When Related Entity Icon - uses the icon from the related entity, if one exists. When Custom, uses the value in the DisplayIcon field in this record, and when None, no icon is displayed'}) 
+    @MaxLength(100)
+    DisplayIconType: string;
+          
+    @Field({nullable: true, description: 'If specified, the icon '}) 
+    @MaxLength(510)
+    DisplayIcon?: string;
           
     @Field({nullable: true}) 
     @MaxLength(16)
     DisplayUserViewGUID?: string;
           
-    @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
+    @Field(() => Int, {nullable: true, description: 'If specified, this component will be used for displaying the relationship within the parent entity\'s form'}) 
+    DisplayComponentID?: number;
+          
+    @Field({nullable: true, description: 'If DisplayComponentID is specified, this field can optionally be used to track component-specific and relationship-specific configuration details that will be used by CodeGen to provide to the display component selected.'}) 
+    DisplayComponentConfiguration?: string;
           
     @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
           
     @Field() 
     @MaxLength(510)
@@ -3965,8 +4004,23 @@ export class CreateEntityRelationshipInput {
     @Field(() => Boolean)
     DisplayInForm: boolean;
 
+    @Field()
+    DisplayLocation: string;
+
     @Field({ nullable: true })
     DisplayName?: string;
+
+    @Field()
+    DisplayIconType: string;
+
+    @Field({ nullable: true })
+    DisplayIcon?: string;
+
+    @Field(() => Int, { nullable: true })
+    DisplayComponentID?: number;
+
+    @Field({ nullable: true })
+    DisplayComponentConfiguration?: string;
 }
     
         
@@ -4014,8 +4068,23 @@ export class UpdateEntityRelationshipInput {
     @Field(() => Boolean)
     DisplayInForm: boolean;
 
+    @Field()
+    DisplayLocation: string;
+
     @Field({ nullable: true })
     DisplayName?: string;
+
+    @Field()
+    DisplayIconType: string;
+
+    @Field({ nullable: true })
+    DisplayIcon?: string;
+
+    @Field(() => Int, { nullable: true })
+    DisplayComponentID?: number;
+
+    @Field({ nullable: true })
+    DisplayComponentConfiguration?: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -4319,13 +4388,13 @@ export class UserView_ {
     @Field({nullable: true}) 
     SortState?: string;
           
-    @Field({nullable: true}) 
-    @MaxLength(8)
-    CreatedAt?: Date;
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
           
-    @Field({nullable: true}) 
-    @MaxLength(8)
-    UpdatedAt?: Date;
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
           
     @Field() 
     @MaxLength(200)
@@ -5064,12 +5133,12 @@ export class Application_ {
     DefaultForNewUser: boolean;
           
     @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
           
     @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
         
     @Field(() => [mj_core_schema_server_object_types.ApplicationEntity_])
     ApplicationEntitiesArray: mj_core_schema_server_object_types.ApplicationEntity_[]; // Link to ApplicationEntities
@@ -5257,12 +5326,12 @@ export class ApplicationEntity_ {
     DefaultForNewUser: boolean;
           
     @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
           
     @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
           
     @Field() 
     @MaxLength(100)
@@ -5448,12 +5517,12 @@ export class EntityPermission_ {
     DeleteRLSFilterID?: number;
           
     @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
           
     @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
           
     @Field() 
     @MaxLength(510)
@@ -7165,15 +7234,15 @@ export class RecordChange_ {
     @MaxLength(40)
     Type: string;
           
-    @Field({nullable: true, description: 'Internal or External'}) 
+    @Field({description: 'Internal or External'}) 
     @MaxLength(40)
-    Source?: string;
+    Source: string;
           
     @Field(() => Int, {nullable: true, description: 'If Source=External, this field can optionally specify which integration created the change, if known'}) 
     IntegrationID?: number;
           
     @Field({description: 'The date/time that the change occured.'}) 
-    @MaxLength(8)
+    @MaxLength(10)
     ChangedAt: Date;
           
     @Field({description: 'JSON structure that describes what was changed in a structured format.'}) 
@@ -7189,6 +7258,9 @@ export class RecordChange_ {
     @MaxLength(100)
     Status: string;
           
+    @Field(() => Int, {nullable: true, description: 'For external changes only, this run ID is the link to the replay run that the change record was part of'}) 
+    ReplayRunID?: number;
+          
     @Field({nullable: true}) 
     ErrorLog?: string;
           
@@ -7196,11 +7268,11 @@ export class RecordChange_ {
     Comments?: string;
           
     @Field() 
-    @MaxLength(8)
+    @MaxLength(10)
     CreatedAt: Date;
           
     @Field() 
-    @MaxLength(8)
+    @MaxLength(10)
     UpdatedAt: Date;
           
     @Field() 
@@ -7234,8 +7306,8 @@ export class CreateRecordChangeInput {
     @Field()
     Type: string;
 
-    @Field({ nullable: true })
-    Source?: string;
+    @Field()
+    Source: string;
 
     @Field(() => Int, { nullable: true })
     IntegrationID?: number;
@@ -7255,11 +7327,69 @@ export class CreateRecordChangeInput {
     @Field()
     Status: string;
 
+    @Field(() => Int, { nullable: true })
+    ReplayRunID?: number;
+
     @Field({ nullable: true })
     ErrorLog?: string;
 
     @Field({ nullable: true })
     Comments?: string;
+}
+    
+        
+//****************************************************************************
+// INPUT TYPE for Record Changes   
+//****************************************************************************
+@InputType()
+export class UpdateRecordChangeInput {
+    @Field(() => Int)
+    ID: number;
+
+    @Field(() => Int)
+    EntityID: number;
+
+    @Field()
+    RecordID: string;
+
+    @Field(() => Int)
+    UserID: number;
+
+    @Field()
+    Type: string;
+
+    @Field()
+    Source: string;
+
+    @Field(() => Int, { nullable: true })
+    IntegrationID?: number;
+
+    @Field()
+    ChangedAt: Date;
+
+    @Field()
+    ChangesJSON: string;
+
+    @Field()
+    ChangesDescription: string;
+
+    @Field()
+    FullRecordJSON: string;
+
+    @Field()
+    Status: string;
+
+    @Field(() => Int, { nullable: true })
+    ReplayRunID?: number;
+
+    @Field({ nullable: true })
+    ErrorLog?: string;
+
+    @Field({ nullable: true })
+    Comments?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
 }
     
 //****************************************************************************
@@ -7323,6 +7453,15 @@ export class RecordChangeResolver extends ResolverBase {
         return this.CreateRecord('Record Changes', input, dataSource, userPayload, pubSub)
     }
         
+    @Mutation(() => RecordChange_)
+    async UpdateRecordChange(
+        @Arg('input', () => UpdateRecordChangeInput) input: UpdateRecordChangeInput,
+        @Ctx() { dataSource, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.UpdateRecord('Record Changes', input, dataSource, userPayload, pubSub);
+    }
+    
 }
 
 //****************************************************************************
@@ -7341,12 +7480,12 @@ export class UserRole_ {
     RoleName: string;
           
     @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
           
     @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
           
     @Field() 
     @MaxLength(200)
@@ -7462,12 +7601,12 @@ export class RowLevelSecurityFilter_ {
     FilterText?: string;
           
     @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
           
     @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
         
     @Field(() => [mj_core_schema_server_object_types.EntityPermission_])
     EntityPermissionsArray: mj_core_schema_server_object_types.EntityPermission_[]; // Link to EntityPermissions
@@ -7761,12 +7900,12 @@ export class Authorization_ {
     Description?: string;
           
     @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
           
     @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
           
     @Field({nullable: true}) 
     @MaxLength(200)
@@ -8004,12 +8143,12 @@ export class AuditLogType_ {
     AuthorizationName?: string;
           
     @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
           
     @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
           
     @Field({nullable: true}) 
     @MaxLength(100)
@@ -8130,12 +8269,12 @@ export class EntityFieldValue_ {
     Description?: string;
           
     @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
           
     @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
           
     @Field() 
     @MaxLength(510)
@@ -8146,6 +8285,37 @@ export class EntityFieldValue_ {
     Entity: string;
         
 }
+        
+//****************************************************************************
+// INPUT TYPE for Entity Field Values   
+//****************************************************************************
+@InputType()
+export class UpdateEntityFieldValueInput {
+    @Field(() => Int)
+    ID: number;
+
+    @Field(() => Int)
+    EntityID: number;
+
+    @Field()
+    EntityFieldName: string;
+
+    @Field(() => Int)
+    Sequence: number;
+
+    @Field()
+    Value: string;
+
+    @Field({ nullable: true })
+    Code?: string;
+
+    @Field({ nullable: true })
+    Description?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
 //****************************************************************************
 // RESOLVER for Entity Field Values
 //****************************************************************************
@@ -8204,6 +8374,15 @@ export class EntityFieldValueResolver extends ResolverBase {
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityFieldValues]` + this.getRowLevelSecurityWhereClause('Entity Field Values', userPayload, EntityPermissionType.Read, ' WHERE');
         const result = this.ArrayMapFieldNamesToCodeNames('Entity Field Values', await dataSource.query(sSQL));
         return result;
+    }
+    
+    @Mutation(() => EntityFieldValue_)
+    async UpdateEntityFieldValue(
+        @Arg('input', () => UpdateEntityFieldValueInput) input: UpdateEntityFieldValueInput,
+        @Ctx() { dataSource, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.UpdateRecord('Entity Field Values', input, dataSource, userPayload, pubSub);
     }
     
 }
@@ -8876,6 +9055,14 @@ export class EntityAIAction_ {
           
     @Field({nullable: true}) 
     Comments?: string;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
           
     @Field() 
     @MaxLength(510)
@@ -10668,12 +10855,12 @@ export class ResourceType_ {
     EntityID?: number;
           
     @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
           
     @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
           
     @Field({nullable: true}) 
     @MaxLength(510)
@@ -12799,12 +12986,12 @@ export class QueryField_ {
     SummaryDescription?: string;
           
     @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
           
     @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
           
     @Field() 
     @MaxLength(510)
@@ -12997,16 +13184,16 @@ export class QueryCategory_ {
     @Field({nullable: true}) 
     Description?: string;
           
-    @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
-          
-    @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
-          
     @Field(() => Int) 
     UserID: number;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
           
     @Field({nullable: true}) 
     @MaxLength(100)
@@ -13205,12 +13392,12 @@ export class Query_ {
     ExecutionCostRank?: number;
           
     @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
           
     @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
           
     @Field({nullable: true}) 
     @MaxLength(100)
@@ -13424,12 +13611,12 @@ export class QueryPermission_ {
     RoleName: string;
           
     @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
           
     @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
         
 }
         
@@ -13706,12 +13893,12 @@ export class EntityDocumentType_ {
     Description?: string;
           
     @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
           
     @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
         
     @Field(() => [mj_core_schema_server_object_types.EntityDocument_])
     EntityDocumentsArray: mj_core_schema_server_object_types.EntityDocument_[]; // Link to EntityDocuments
@@ -13853,12 +14040,12 @@ export class EntityDocumentRun_ {
     Status: string;
           
     @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
           
     @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
           
     @Field() 
     @MaxLength(500)
@@ -14183,16 +14370,16 @@ export class EntityRecordDocument_ {
     @MaxLength(8)
     EntityRecordUpdatedAt: Date;
           
-    @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
-          
-    @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
-          
     @Field(() => Int) 
     EntityDocumentID: number;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
         
 }
         
@@ -14373,12 +14560,12 @@ export class EntityDocument_ {
     AbsoluteMatchThreshold: number;
           
     @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
           
     @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
           
     @Field() 
     @MaxLength(510)
@@ -16614,12 +16801,12 @@ export class EntityDocumentSetting_ {
     Comments?: string;
           
     @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
           
     @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
           
     @Field() 
     @MaxLength(500)
@@ -16764,12 +16951,12 @@ export class EntitySetting_ {
     Comments?: string;
           
     @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
           
     @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
           
     @Field() 
     @MaxLength(510)
@@ -17338,12 +17525,12 @@ export class EntityBehavior_ {
     CodeGenerated: boolean;
           
     @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
           
     @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
           
     @Field() 
     @MaxLength(510)
@@ -17506,12 +17693,12 @@ export class EntityBehaviorType_ {
     Description?: string;
           
     @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
           
     @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
         
     @Field(() => [mj_core_schema_server_object_types.EntityBehavior_])
     EntityBehaviorsArray: mj_core_schema_server_object_types.EntityBehavior_[]; // Link to EntityBehaviors
@@ -17658,12 +17845,12 @@ export class ApplicationSetting_ {
     Comments?: string;
           
     @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
           
     @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
         
 }
         
@@ -17811,12 +17998,12 @@ export class ActionCategory_ {
     Status: string;
           
     @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
           
     @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
           
     @Field({nullable: true}) 
     @MaxLength(510)
@@ -17986,12 +18173,12 @@ export class EntityAction_ {
     Status: string;
           
     @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
           
     @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
           
     @Field() 
     @MaxLength(510)
@@ -18159,12 +18346,12 @@ export class EntityActionInvocation_ {
     Status: string;
           
     @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
           
     @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
           
     @Field() 
     @MaxLength(510)
@@ -18453,12 +18640,12 @@ export class EntityActionInvocationType_ {
     DisplaySequence: number;
           
     @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
           
     @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
         
     @Field(() => [mj_core_schema_server_object_types.EntityActionInvocation_])
     EntityActionInvocationsArray: mj_core_schema_server_object_types.EntityActionInvocation_[]; // Link to EntityActionInvocations
@@ -18640,12 +18827,12 @@ export class Action_ {
     Status: string;
           
     @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
           
     @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
           
     @Field({nullable: true}) 
     @MaxLength(510)
@@ -18655,8 +18842,11 @@ export class Action_ {
     @MaxLength(200)
     CodeApprovedByUser?: string;
         
-    @Field(() => [mj_core_schema_server_object_types.ActionAuthorization_])
-    ActionAuthorizationsArray: mj_core_schema_server_object_types.ActionAuthorization_[]; // Link to ActionAuthorizations
+    @Field(() => [mj_core_schema_server_object_types.ActionParam_])
+    ActionParamsArray: mj_core_schema_server_object_types.ActionParam_[]; // Link to ActionParams
+    
+    @Field(() => [mj_core_schema_server_object_types.ActionLibrary_])
+    ActionLibrariesArray: mj_core_schema_server_object_types.ActionLibrary_[]; // Link to ActionLibraries
     
     @Field(() => [mj_core_schema_server_object_types.ActionResultCode_])
     ActionResultCodesArray: mj_core_schema_server_object_types.ActionResultCode_[]; // Link to ActionResultCodes
@@ -18670,11 +18860,8 @@ export class Action_ {
     @Field(() => [mj_core_schema_server_object_types.ActionExecutionLog_])
     ActionExecutionLogsArray: mj_core_schema_server_object_types.ActionExecutionLog_[]; // Link to ActionExecutionLogs
     
-    @Field(() => [mj_core_schema_server_object_types.ActionParam_])
-    ActionParamsArray: mj_core_schema_server_object_types.ActionParam_[]; // Link to ActionParams
-    
-    @Field(() => [mj_core_schema_server_object_types.ActionLibrary_])
-    ActionLibrariesArray: mj_core_schema_server_object_types.ActionLibrary_[]; // Link to ActionLibraries
+    @Field(() => [mj_core_schema_server_object_types.ActionAuthorization_])
+    ActionAuthorizationsArray: mj_core_schema_server_object_types.ActionAuthorization_[]; // Link to ActionAuthorizations
     
 }
         
@@ -18827,11 +19014,19 @@ export class ActionResolver extends ResolverBase {
         return result;
     }
       
-    @FieldResolver(() => [mj_core_schema_server_object_types.ActionAuthorization_])
-    async ActionAuthorizationsArray(@Root() action_: Action_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('Action Authorizations', userPayload);
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionAuthorizations] WHERE [ActionID]=${action_.ID} ` + this.getRowLevelSecurityWhereClause('Action Authorizations', userPayload, EntityPermissionType.Read, 'AND');
-        const result = this.ArrayMapFieldNamesToCodeNames('Action Authorizations', await dataSource.query(sSQL));
+    @FieldResolver(() => [mj_core_schema_server_object_types.ActionParam_])
+    async ActionParamsArray(@Root() action_: Action_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Action Params', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionParams] WHERE [ActionID]=${action_.ID} ` + this.getRowLevelSecurityWhereClause('Action Params', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Action Params', await dataSource.query(sSQL));
+        return result;
+    }
+          
+    @FieldResolver(() => [mj_core_schema_server_object_types.ActionLibrary_])
+    async ActionLibrariesArray(@Root() action_: Action_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Action Libraries', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionLibraries] WHERE [ActionID]=${action_.ID} ` + this.getRowLevelSecurityWhereClause('Action Libraries', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Action Libraries', await dataSource.query(sSQL));
         return result;
     }
           
@@ -18867,19 +19062,11 @@ export class ActionResolver extends ResolverBase {
         return result;
     }
           
-    @FieldResolver(() => [mj_core_schema_server_object_types.ActionParam_])
-    async ActionParamsArray(@Root() action_: Action_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('Action Params', userPayload);
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionParams] WHERE [ActionID]=${action_.ID} ` + this.getRowLevelSecurityWhereClause('Action Params', userPayload, EntityPermissionType.Read, 'AND');
-        const result = this.ArrayMapFieldNamesToCodeNames('Action Params', await dataSource.query(sSQL));
-        return result;
-    }
-          
-    @FieldResolver(() => [mj_core_schema_server_object_types.ActionLibrary_])
-    async ActionLibrariesArray(@Root() action_: Action_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('Action Libraries', userPayload);
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionLibraries] WHERE [ActionID]=${action_.ID} ` + this.getRowLevelSecurityWhereClause('Action Libraries', userPayload, EntityPermissionType.Read, 'AND');
-        const result = this.ArrayMapFieldNamesToCodeNames('Action Libraries', await dataSource.query(sSQL));
+    @FieldResolver(() => [mj_core_schema_server_object_types.ActionAuthorization_])
+    async ActionAuthorizationsArray(@Root() action_: Action_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Action Authorizations', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionAuthorizations] WHERE [ActionID]=${action_.ID} ` + this.getRowLevelSecurityWhereClause('Action Authorizations', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Action Authorizations', await dataSource.query(sSQL));
         return result;
     }
         
@@ -18931,12 +19118,12 @@ export class EntityActionFilter_ {
     Status: string;
           
     @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
           
     @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
         
 }
         
@@ -19082,12 +19269,12 @@ export class ActionFilter_ {
     CodeExplanation?: string;
           
     @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
           
     @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
         
     @Field(() => [mj_core_schema_server_object_types.EntityActionFilter_])
     EntityActionFiltersArray: mj_core_schema_server_object_types.EntityActionFilter_[]; // Link to EntityActionFilters
@@ -19902,6 +20089,9 @@ export class ActionParam_ {
     @MaxLength(850)
     Action: string;
         
+    @Field(() => [mj_core_schema_server_object_types.EntityActionParam_])
+    EntityActionParamsArray: mj_core_schema_server_object_types.EntityActionParam_[]; // Link to EntityActionParams
+    
 }
         
 //****************************************************************************
@@ -20022,7 +20212,15 @@ export class ActionParamResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Action Params', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-    
+      
+    @FieldResolver(() => [mj_core_schema_server_object_types.EntityActionParam_])
+    async EntityActionParamsArray(@Root() actionparam_: ActionParam_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Entity Action Params', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityActionParams] WHERE [ActionParamID]=${actionparam_.ID} ` + this.getRowLevelSecurityWhereClause('Entity Action Params', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Entity Action Params', await dataSource.query(sSQL));
+        return result;
+    }
+        
     @Mutation(() => ActionParam_)
     async CreateActionParam(
         @Arg('input', () => CreateActionParamInput) input: CreateActionParamInput,
@@ -20218,9 +20416,6 @@ export class Library_ {
     @MaxLength(40)
     Status: string;
           
-    @Field({nullable: true, description: 'List of classes and functions exported by the library.'}) 
-    ExportedItems?: string;
-          
     @Field({nullable: true, description: 'Code showing the types and functions defined in the library to be used for reference by humans and AI'}) 
     TypeDefinitions?: string;
           
@@ -20228,15 +20423,18 @@ export class Library_ {
     SampleCode?: string;
           
     @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
           
     @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
         
     @Field(() => [mj_core_schema_server_object_types.ActionLibrary_])
     ActionLibrariesArray: mj_core_schema_server_object_types.ActionLibrary_[]; // Link to ActionLibraries
+    
+    @Field(() => [mj_core_schema_server_object_types.LibraryItem_])
+    LibraryItemsArray: mj_core_schema_server_object_types.LibraryItem_[]; // Link to LibraryItems
     
 }
         
@@ -20253,9 +20451,6 @@ export class CreateLibraryInput {
 
     @Field()
     Status: string;
-
-    @Field({ nullable: true })
-    ExportedItems?: string;
 
     @Field({ nullable: true })
     TypeDefinitions?: string;
@@ -20281,9 +20476,6 @@ export class UpdateLibraryInput {
 
     @Field()
     Status: string;
-
-    @Field({ nullable: true })
-    ExportedItems?: string;
 
     @Field({ nullable: true })
     TypeDefinitions?: string;
@@ -20352,6 +20544,14 @@ export class LibraryResolver extends ResolverBase {
         this.CheckUserReadPermissions('Action Libraries', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionLibraries] WHERE [LibraryID]=${library_.ID} ` + this.getRowLevelSecurityWhereClause('Action Libraries', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Action Libraries', await dataSource.query(sSQL));
+        return result;
+    }
+          
+    @FieldResolver(() => [mj_core_schema_server_object_types.LibraryItem_])
+    async LibraryItemsArray(@Root() library_: Library_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Library Items', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwLibraryItems] WHERE [LibraryID]=${library_.ID} ` + this.getRowLevelSecurityWhereClause('Library Items', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Library Items', await dataSource.query(sSQL));
         return result;
     }
         
@@ -21061,6 +21261,12 @@ export class CommunicationProviderMessageTypeResolver extends ResolverBase {
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.UpdateRecord('Communication Provider Message Types', input, dataSource, userPayload, pubSub);
+    }
+    
+    @Mutation(() => CommunicationProviderMessageType_)
+    async DeleteCommunicationProviderMessageType(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Communication Provider Message Types', key, options, dataSource, userPayload, pubSub);
     }
     
 }
@@ -22959,12 +23165,12 @@ export class EntityCommunicationMessageType_ {
     IsActive: boolean;
           
     @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
           
     @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
           
     @Field() 
     @MaxLength(510)
@@ -23115,12 +23321,12 @@ export class EntityCommunicationField_ {
     Priority: number;
           
     @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
           
     @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
         
 }
         
@@ -23229,6 +23435,616 @@ export class EntityCommunicationFieldResolver extends ResolverBase {
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.UpdateRecord('Entity Communication Fields', input, dataSource, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for Record Change Replay Runs
+//****************************************************************************
+@ObjectType({ description: 'Table to track the runs of replaying external record changes' })
+export class RecordChangeReplayRun_ {  
+    @Field(() => Int) 
+    ID: number;
+          
+    @Field({description: 'Timestamp when the replay run started'}) 
+    @MaxLength(8)
+    StartedAt: Date;
+          
+    @Field({nullable: true, description: 'Timestamp when the replay run ended'}) 
+    @MaxLength(8)
+    EndedAt?: Date;
+          
+    @Field({description: 'Status of the replay run (Pending, In Progress, Complete, Error)'}) 
+    @MaxLength(100)
+    Status: string;
+          
+    @Field(() => Int) 
+    UserID: number;
+          
+    @Field() 
+    @MaxLength(8)
+    CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(8)
+    UpdatedAt: Date;
+          
+    @Field() 
+    @MaxLength(200)
+    User: string;
+        
+    @Field(() => [mj_core_schema_server_object_types.RecordChange_])
+    RecordChangesArray: mj_core_schema_server_object_types.RecordChange_[]; // Link to RecordChanges
+    
+}
+        
+//****************************************************************************
+// INPUT TYPE for Record Change Replay Runs   
+//****************************************************************************
+@InputType()
+export class CreateRecordChangeReplayRunInput {
+    @Field()
+    StartedAt: Date;
+
+    @Field({ nullable: true })
+    EndedAt?: Date;
+
+    @Field()
+    Status: string;
+
+    @Field(() => Int)
+    UserID: number;
+}
+    
+        
+//****************************************************************************
+// INPUT TYPE for Record Change Replay Runs   
+//****************************************************************************
+@InputType()
+export class UpdateRecordChangeReplayRunInput {
+    @Field(() => Int)
+    ID: number;
+
+    @Field()
+    StartedAt: Date;
+
+    @Field({ nullable: true })
+    EndedAt?: Date;
+
+    @Field()
+    Status: string;
+
+    @Field(() => Int)
+    UserID: number;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
+//****************************************************************************
+// RESOLVER for Record Change Replay Runs
+//****************************************************************************
+@ObjectType()
+export class RunRecordChangeReplayRunViewResult {
+    @Field(() => [RecordChangeReplayRun_])
+    Results: RecordChangeReplayRun_[];
+
+    @Field(() => Int, {nullable: true})
+    UserViewRunID?: number;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(RecordChangeReplayRun_)
+export class RecordChangeReplayRunResolver extends ResolverBase {
+    @Query(() => RunRecordChangeReplayRunViewResult)
+    async RunRecordChangeReplayRunViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunRecordChangeReplayRunViewResult)
+    async RunRecordChangeReplayRunViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunRecordChangeReplayRunViewResult)
+    async RunRecordChangeReplayRunDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        input.EntityName = 'Record Change Replay Runs';
+        return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
+    }
+    @Query(() => RecordChangeReplayRun_, { nullable: true })
+    async RecordChangeReplayRun(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<RecordChangeReplayRun_ | null> {
+        this.CheckUserReadPermissions('Record Change Replay Runs', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwRecordChangeReplayRuns] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Record Change Replay Runs', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Record Change Replay Runs', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
+    }
+      
+    @FieldResolver(() => [mj_core_schema_server_object_types.RecordChange_])
+    async RecordChangesArray(@Root() recordchangereplayrun_: RecordChangeReplayRun_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Record Changes', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwRecordChanges] WHERE [ReplayRunID]=${recordchangereplayrun_.ID} ` + this.getRowLevelSecurityWhereClause('Record Changes', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Record Changes', await dataSource.query(sSQL));
+        return result;
+    }
+        
+    @Mutation(() => RecordChangeReplayRun_)
+    async CreateRecordChangeReplayRun(
+        @Arg('input', () => CreateRecordChangeReplayRunInput) input: CreateRecordChangeReplayRunInput,
+        @Ctx() { dataSource, userPayload }: AppContext, 
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.CreateRecord('Record Change Replay Runs', input, dataSource, userPayload, pubSub)
+    }
+        
+    @Mutation(() => RecordChangeReplayRun_)
+    async UpdateRecordChangeReplayRun(
+        @Arg('input', () => UpdateRecordChangeReplayRunInput) input: UpdateRecordChangeReplayRunInput,
+        @Ctx() { dataSource, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.UpdateRecord('Record Change Replay Runs', input, dataSource, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for Library Items
+//****************************************************************************
+@ObjectType({ description: 'Table to store individual library items' })
+export class LibraryItem_ {  
+    @Field(() => Int, {description: 'Primary key of the LibraryItem table.'}) 
+    ID: number;
+          
+    @Field() 
+    @MaxLength(510)
+    Name: string;
+          
+    @Field(() => Int) 
+    LibraryID: number;
+          
+    @Field({description: 'Type of the library item for example Class, Interface, etc.'}) 
+    @MaxLength(100)
+    Type: string;
+          
+    @Field() 
+    @MaxLength(8)
+    CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(8)
+    UpdatedAt: Date;
+          
+    @Field() 
+    @MaxLength(510)
+    Library: string;
+        
+}
+        
+//****************************************************************************
+// INPUT TYPE for Library Items   
+//****************************************************************************
+@InputType()
+export class CreateLibraryItemInput {
+    @Field()
+    Name: string;
+
+    @Field(() => Int)
+    LibraryID: number;
+
+    @Field()
+    Type: string;
+}
+    
+        
+//****************************************************************************
+// INPUT TYPE for Library Items   
+//****************************************************************************
+@InputType()
+export class UpdateLibraryItemInput {
+    @Field(() => Int)
+    ID: number;
+
+    @Field()
+    Name: string;
+
+    @Field(() => Int)
+    LibraryID: number;
+
+    @Field()
+    Type: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
+//****************************************************************************
+// RESOLVER for Library Items
+//****************************************************************************
+@ObjectType()
+export class RunLibraryItemViewResult {
+    @Field(() => [LibraryItem_])
+    Results: LibraryItem_[];
+
+    @Field(() => Int, {nullable: true})
+    UserViewRunID?: number;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(LibraryItem_)
+export class LibraryItemResolver extends ResolverBase {
+    @Query(() => RunLibraryItemViewResult)
+    async RunLibraryItemViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunLibraryItemViewResult)
+    async RunLibraryItemViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunLibraryItemViewResult)
+    async RunLibraryItemDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        input.EntityName = 'Library Items';
+        return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
+    }
+    @Query(() => LibraryItem_, { nullable: true })
+    async LibraryItem(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<LibraryItem_ | null> {
+        this.CheckUserReadPermissions('Library Items', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwLibraryItems] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Library Items', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Library Items', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
+    }
+    
+    @Mutation(() => LibraryItem_)
+    async CreateLibraryItem(
+        @Arg('input', () => CreateLibraryItemInput) input: CreateLibraryItemInput,
+        @Ctx() { dataSource, userPayload }: AppContext, 
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.CreateRecord('Library Items', input, dataSource, userPayload, pubSub)
+    }
+        
+    @Mutation(() => LibraryItem_)
+    async UpdateLibraryItem(
+        @Arg('input', () => UpdateLibraryItemInput) input: UpdateLibraryItemInput,
+        @Ctx() { dataSource, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.UpdateRecord('Library Items', input, dataSource, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for Entity Relationship Display Components
+//****************************************************************************
+@ObjectType({ description: 'This table stores a list of components that are available for displaying relationships in the MJ Explorer UI' })
+export class EntityRelationshipDisplayComponent_ {  
+    @Field(() => Int) 
+    ID: number;
+          
+    @Field() 
+    @MaxLength(510)
+    Name: string;
+          
+    @Field({nullable: true}) 
+    Description?: string;
+          
+    @Field({description: 'The type of relationship the component displays. Valid values are "One to Many", "Many to Many", or "Both".'}) 
+    @MaxLength(40)
+    RelationshipType: string;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
+        
+    @Field(() => [mj_core_schema_server_object_types.EntityRelationship_])
+    EntityRelationshipsArray: mj_core_schema_server_object_types.EntityRelationship_[]; // Link to EntityRelationships
+    
+}
+        
+//****************************************************************************
+// INPUT TYPE for Entity Relationship Display Components   
+//****************************************************************************
+@InputType()
+export class CreateEntityRelationshipDisplayComponentInput {
+    @Field()
+    Name: string;
+
+    @Field({ nullable: true })
+    Description?: string;
+
+    @Field()
+    RelationshipType: string;
+}
+    
+        
+//****************************************************************************
+// INPUT TYPE for Entity Relationship Display Components   
+//****************************************************************************
+@InputType()
+export class UpdateEntityRelationshipDisplayComponentInput {
+    @Field(() => Int)
+    ID: number;
+
+    @Field()
+    Name: string;
+
+    @Field({ nullable: true })
+    Description?: string;
+
+    @Field()
+    RelationshipType: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
+//****************************************************************************
+// RESOLVER for Entity Relationship Display Components
+//****************************************************************************
+@ObjectType()
+export class RunEntityRelationshipDisplayComponentViewResult {
+    @Field(() => [EntityRelationshipDisplayComponent_])
+    Results: EntityRelationshipDisplayComponent_[];
+
+    @Field(() => Int, {nullable: true})
+    UserViewRunID?: number;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(EntityRelationshipDisplayComponent_)
+export class EntityRelationshipDisplayComponentResolver extends ResolverBase {
+    @Query(() => RunEntityRelationshipDisplayComponentViewResult)
+    async RunEntityRelationshipDisplayComponentViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunEntityRelationshipDisplayComponentViewResult)
+    async RunEntityRelationshipDisplayComponentViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunEntityRelationshipDisplayComponentViewResult)
+    async RunEntityRelationshipDisplayComponentDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        input.EntityName = 'Entity Relationship Display Components';
+        return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
+    }
+    @Query(() => EntityRelationshipDisplayComponent_, { nullable: true })
+    async EntityRelationshipDisplayComponent(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<EntityRelationshipDisplayComponent_ | null> {
+        this.CheckUserReadPermissions('Entity Relationship Display Components', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityRelationshipDisplayComponents] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Entity Relationship Display Components', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Entity Relationship Display Components', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
+    }
+      
+    @FieldResolver(() => [mj_core_schema_server_object_types.EntityRelationship_])
+    async EntityRelationshipsArray(@Root() entityrelationshipdisplaycomponent_: EntityRelationshipDisplayComponent_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Entity Relationships', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityRelationships] WHERE [DisplayComponentID]=${entityrelationshipdisplaycomponent_.ID} ` + this.getRowLevelSecurityWhereClause('Entity Relationships', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Entity Relationships', await dataSource.query(sSQL));
+        return result;
+    }
+        
+    @Mutation(() => EntityRelationshipDisplayComponent_)
+    async CreateEntityRelationshipDisplayComponent(
+        @Arg('input', () => CreateEntityRelationshipDisplayComponentInput) input: CreateEntityRelationshipDisplayComponentInput,
+        @Ctx() { dataSource, userPayload }: AppContext, 
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.CreateRecord('Entity Relationship Display Components', input, dataSource, userPayload, pubSub)
+    }
+        
+    @Mutation(() => EntityRelationshipDisplayComponent_)
+    async UpdateEntityRelationshipDisplayComponent(
+        @Arg('input', () => UpdateEntityRelationshipDisplayComponentInput) input: UpdateEntityRelationshipDisplayComponentInput,
+        @Ctx() { dataSource, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.UpdateRecord('Entity Relationship Display Components', input, dataSource, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for Entity Action Params
+//****************************************************************************
+@ObjectType({ description: 'Stores paramater mappings to enable Entity Actions to automatically invoke Actions' })
+export class EntityActionParam_ {  
+    @Field(() => Int) 
+    ID: number;
+          
+    @Field(() => Int) 
+    ActionParamID: number;
+          
+    @Field({description: 'Type of the value, which can be Static, Entity Object, or Script.'}) 
+    @MaxLength(40)
+    ValueType: string;
+          
+    @Field({nullable: true, description: 'Value of the parameter, used only when ValueType is Static or Script. When value is Script, any valid JavaScript code can be provided. The script will have access to an object called EntityActionContext. This object will have a property called EntityObject on it that will contain the BaseEntity derived sub-class with the current data for the entity object this action is operating against. The script must provide the parameter value to the EntityActionContext.result property. This scripting capabilty is designed for very small and simple code, for anything of meaningful complexity, create a sub-class instead.'}) 
+    Value?: string;
+          
+    @Field({nullable: true, description: 'Additional comments regarding the parameter.'}) 
+    Comments?: string;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
+          
+    @Field() 
+    @MaxLength(510)
+    ActionParam: string;
+        
+}
+        
+//****************************************************************************
+// INPUT TYPE for Entity Action Params   
+//****************************************************************************
+@InputType()
+export class CreateEntityActionParamInput {
+    @Field(() => Int)
+    ActionParamID: number;
+
+    @Field()
+    ValueType: string;
+
+    @Field({ nullable: true })
+    Value?: string;
+
+    @Field({ nullable: true })
+    Comments?: string;
+}
+    
+        
+//****************************************************************************
+// INPUT TYPE for Entity Action Params   
+//****************************************************************************
+@InputType()
+export class UpdateEntityActionParamInput {
+    @Field(() => Int)
+    ID: number;
+
+    @Field(() => Int)
+    ActionParamID: number;
+
+    @Field()
+    ValueType: string;
+
+    @Field({ nullable: true })
+    Value?: string;
+
+    @Field({ nullable: true })
+    Comments?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
+//****************************************************************************
+// RESOLVER for Entity Action Params
+//****************************************************************************
+@ObjectType()
+export class RunEntityActionParamViewResult {
+    @Field(() => [EntityActionParam_])
+    Results: EntityActionParam_[];
+
+    @Field(() => Int, {nullable: true})
+    UserViewRunID?: number;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(EntityActionParam_)
+export class EntityActionParamResolver extends ResolverBase {
+    @Query(() => RunEntityActionParamViewResult)
+    async RunEntityActionParamViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunEntityActionParamViewResult)
+    async RunEntityActionParamViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunEntityActionParamViewResult)
+    async RunEntityActionParamDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        input.EntityName = 'Entity Action Params';
+        return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
+    }
+    @Query(() => EntityActionParam_, { nullable: true })
+    async EntityActionParam(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<EntityActionParam_ | null> {
+        this.CheckUserReadPermissions('Entity Action Params', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityActionParams] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Entity Action Params', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Entity Action Params', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
+    }
+    
+    @Mutation(() => EntityActionParam_)
+    async CreateEntityActionParam(
+        @Arg('input', () => CreateEntityActionParamInput) input: CreateEntityActionParamInput,
+        @Ctx() { dataSource, userPayload }: AppContext, 
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.CreateRecord('Entity Action Params', input, dataSource, userPayload, pubSub)
+    }
+        
+    @Mutation(() => EntityActionParam_)
+    async UpdateEntityActionParam(
+        @Arg('input', () => UpdateEntityActionParamInput) input: UpdateEntityActionParamInput,
+        @Ctx() { dataSource, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.UpdateRecord('Entity Action Params', input, dataSource, userPayload, pubSub);
+    }
+    
+    @Mutation(() => EntityActionParam_)
+    async DeleteEntityActionParam(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Entity Action Params', key, options, dataSource, userPayload, pubSub);
     }
     
 }

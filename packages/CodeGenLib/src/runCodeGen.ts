@@ -1,17 +1,17 @@
 import { GraphQLServerGeneratorBase } from './graphql_server_codegen';
-import { SQLCodeGenBase } from './sql_codegen';
+import { SQLCodeGenBase } from './Database/sql_codegen';
 import { EntitySubClassGeneratorBase } from './entity_subclasses_codegen';
 import { UserCache, setupSQLServerClient } from '@memberjunction/sqlserver-dataprovider'
-import AppDataSource from "./db"
-import { ManageMetadataBase } from './manageMetadata';
-import { outputDir, commands, mj_core_schema, mjCoreSchema, configInfo, getSettingValue } from './config';
-import { logError, logMessage, logStatus, logWarning } from './logging';
+import AppDataSource from "./Config/db-connection"
+import { ManageMetadataBase } from './Database/manage-metadata';
+import { outputDir, commands, mj_core_schema, mjCoreSchema, configInfo, getSettingValue } from './Config/config';
+import { logError, logMessage, logStatus, logWarning } from './Misc/logging';
 import * as MJ from '@memberjunction/core'
-import { RunCommandsBase } from './runCommand';
-import { DBSchemaGeneratorBase } from './dbSchema';
-import { AngularClientGeneratorBase } from './angular_client_codegen';
+import { RunCommandsBase } from './Misc/runCommand';
+import { DBSchemaGeneratorBase } from './Database/dbSchema';
+import { AngularClientGeneratorBase } from './Angular/angular-codegen';
 import { SQLServerProviderConfigData } from '@memberjunction/sqlserver-dataprovider';
-import { CreateNewUserBase } from './createNewUser';
+import { CreateNewUserBase } from './Misc/createNewUser';
 import { MJGlobal, RegisterClass } from '@memberjunction/global';
 import { ActionSubClassGeneratorBase } from './action_subclasses_codegen';
 import { ActionEngine } from '@memberjunction/actions';
@@ -192,7 +192,7 @@ export class RunCodeGenBase {
                 // generate the Angular client code
                 logStatus('Generating Angular CORE Entities Code...')
                 const angularGenerator = MJGlobal.Instance.ClassFactory.CreateInstance<AngularClientGeneratorBase>(AngularClientGeneratorBase);
-                if (! angularGenerator.generateAngularCode(coreEntities, angularCoreEntitiesOutputDir, 'Core'))  
+                if (! await angularGenerator.generateAngularCode(coreEntities, angularCoreEntitiesOutputDir, 'Core', currentUser))  
                     logError('Error generating Angular CORE Entities code');
             }
     
@@ -201,7 +201,7 @@ export class RunCodeGenBase {
                 // generate the Angular client code
                 logStatus('Generating Angular Code...')
                 const angularGenerator = MJGlobal.Instance.ClassFactory.CreateInstance<AngularClientGeneratorBase>(AngularClientGeneratorBase);
-                if (! angularGenerator.generateAngularCode(nonCoreEntities, angularOutputDir, ''))
+                if (! await angularGenerator.generateAngularCode(nonCoreEntities, angularOutputDir, '', currentUser))
                     logError('Error generating Angular code');
             }
             else

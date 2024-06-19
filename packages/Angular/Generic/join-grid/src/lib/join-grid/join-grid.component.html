@@ -2,17 +2,21 @@
     @if (_IsLoading) {
         <div><kendo-loader></kendo-loader></div>
     }
-    <button [disabled]="NumDirtyRecords === 0" kendoButton (click)="Save()">Save</button>
-    <button [disabled]="NumDirtyRecords === 0" kendoButton (click)="CancelEdit()">Cancel</button>
+    @if (ShowSaveButton) {
+        <button [disabled]="NumDirtyRecords === 0" kendoButton (click)="Save()">Save</button>
+    }
+    @if (ShowCancelButton) {
+        <button [disabled]="NumDirtyRecords === 0" kendoButton (click)="CancelEdit()">Cancel</button>
+    }
     @if (!_IsLoading) {
         <table class="grid">
             <thead>
                 <tr>
                     <!-- First column is the name of the Rows Entity -->
-                    <th>{{RowsEntityName}}</th>
+                    <th>{{RowsEntityDisplayNameOrName}}</th>
                     @if (ColumnsMode === 'Entity') {
                         @for (colRecord of this._columnsEntityData; track colRecord) {
-                            <th>{{colRecord.Get(this.ColumnsEntityDisplayField)}}</th>
+                            <th class="checkbox-column">{{colRecord.Get(this.ColumnsEntityDisplayField)}}</th>
                         }
                     }
                     @else {
@@ -28,21 +32,56 @@
                     <tr [ngClass]="IsRecordReallyDirty(row) ? 'dirty-row' : ''">
                         <td class="first-column">
                             <span>{{row.FirstColValue}}</span>
+                            @if (EditMode !== 'None'){
+                                @if (!row.JoinExists) {
+                                    <button kendoButton class="cellButton" (click)="AddJoinEntityRecord(row)"><span class="fa-solid fa-plus"></span></button>
+                                }
+                                @else {
+                                    <button kendoButton class="cellButton" (click)="RemoveJoinEntityRecord(row)"><span class="fa-solid fa-minus"></span></button>
+                                }    
+                            }
                         </td>
                         @if (ColumnsMode === 'Fields') {
-                            <td *ngFor="let colName of JoinEntityDisplayColumns">
-                                <input type="checkbox" kendoCheckBox>
+                            <td class="column-cell" *ngFor="let colName of JoinEntityDisplayColumns; let i = index">
+                                @if (EditMode !== 'None') {
+                                    @if (row.JoinExists) {
+                                        @if (GetJoinEntityField(colName).ValueListType === "None") {
+                                            @if (GetJoinEntityField(colName).TSType === EntityFieldTSType.Boolean) {
+                                                <input type="checkbox" [checked]="row.GetColumnValue(i)" (change)="UpdateCellValue(row, i, $event)" />
+                                            }
+                                            @else {
+                                                <kendo-textbox [value]="row.GetColumnValue(i)" (change)="UpdateCellValue(row, i, $event)" /> 
+                                            }
+                                        }
+                                        @else {
+                                            <kendo-dropdownlist
+                                                [data]="GetJoinEntityFieldValues(colName)"
+                                                [value]="row.GetColumnValue(i)"
+                                                (selectionChange)="UpdateCellValueDirect(row, i, $event)"
+                                            >
+                                            </kendo-dropdownlist>
+                                        }
+                                    }
+                                }
+                                @else {
+                                    {{row.GetColumnValue(i)}}
+                                }
                             </td>
                         }
                         @else {
                             @for (cell of row.ColumnData; track cell) {
                                 <!-- loop through all the columns and display a checkbox and check it if we have a match in the current row -->
-                                <td (click)="_FlipRecord($event, row, cell)"
+                                <td class="checkbox-column" (click)="_FlipRecord($event, row, cell)"
                                     [ngClass]="IsCellReallyDirty(cell) ? 'dirty-cell' : ''">
-                                    <input   type="checkbox" 
-                                             kendoCheckBox 
-                                             [checked]="_IsColumnChecked(cell)"  
-                                             (click)="_FlipRecord($event, row, cell, true)">
+                                    @if (EditMode !== 'None') {
+                                        <input   type="checkbox" 
+                                        kendoCheckBox 
+                                        [checked]="_IsColumnChecked(cell)"  
+                                        (click)="_FlipRecord($event, row, cell, true)">
+                                    }
+                                    @else {
+                                        {{cell.value ? '✓' : ''}}
+                                    }
                                 </td>
                             }
                         }
