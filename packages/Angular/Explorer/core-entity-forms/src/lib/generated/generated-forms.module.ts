@@ -158,6 +158,7 @@ import { EntityCommunicationFieldFormComponent, LoadEntityCommunicationFieldForm
 import { RecordChangeReplayRunFormComponent, LoadRecordChangeReplayRunFormComponent } from "./Entities/RecordChangeReplayRun/recordchangereplayrun.form.component";
 import { LibraryItemFormComponent, LoadLibraryItemFormComponent } from "./Entities/LibraryItem/libraryitem.form.component";
 import { EntityRelationshipDisplayComponentFormComponent, LoadEntityRelationshipDisplayComponentFormComponent } from "./Entities/EntityRelationshipDisplayComponent/entityrelationshipdisplaycomponent.form.component";
+import { EntityActionParamFormComponent, LoadEntityActionParamFormComponent } from "./Entities/EntityActionParam/entityactionparam.form.component";
 import { CompanyDetailsComponent, LoadCompanyDetailsComponent } from "./Entities/Company/sections/details.component"
 import { EmployeeDetailsComponent, LoadEmployeeDetailsComponent } from "./Entities/Employee/sections/details.component"
 import { UserFavoriteDetailsComponent, LoadUserFavoriteDetailsComponent } from "./Entities/UserFavorite/sections/details.component"
@@ -297,6 +298,7 @@ import { EntityCommunicationFieldDetailsComponent, LoadEntityCommunicationFieldD
 import { RecordChangeReplayRunDetailsComponent, LoadRecordChangeReplayRunDetailsComponent } from "./Entities/RecordChangeReplayRun/sections/details.component"
 import { LibraryItemDetailsComponent, LoadLibraryItemDetailsComponent } from "./Entities/LibraryItem/sections/details.component"
 import { EntityRelationshipDisplayComponentDetailsComponent, LoadEntityRelationshipDisplayComponentDetailsComponent } from "./Entities/EntityRelationshipDisplayComponent/sections/details.component"
+import { EntityActionParamDetailsComponent, LoadEntityActionParamDetailsComponent } from "./Entities/EntityActionParam/sections/details.component"
 import { JoinGridModule } from "@memberjunction/ng-join-grid"   
 
 @NgModule({
@@ -590,14 +592,14 @@ declarations: [
     RecordChangeReplayRunFormComponent,
     LibraryItemFormComponent,
     EntityRelationshipDisplayComponentFormComponent,
+    EntityActionParamFormComponent,
     CompanyDetailsComponent,
     EmployeeDetailsComponent,
     UserFavoriteDetailsComponent,
     EmployeeCompanyIntegrationDetailsComponent,
     EmployeeRoleDetailsComponent,
     EmployeeSkillDetailsComponent,
-    RoleDetailsComponent,
-    SkillDetailsComponent],
+    RoleDetailsComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -624,6 +626,7 @@ export class GeneratedForms_SubModule_6 { }
 
 @NgModule({
 declarations: [
+    SkillDetailsComponent,
     IntegrationURLFormatDetailsComponent,
     IntegrationDetailsComponent,
     CompanyIntegrationDetailsComponent,
@@ -642,8 +645,7 @@ declarations: [
     CompanyIntegrationRunDetailDetailsComponent,
     ErrorLogDetailsComponent,
     ApplicationDetailsComponent,
-    ApplicationEntityDetailsComponent,
-    EntityPermissionDetailsComponent],
+    ApplicationEntityDetailsComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -669,6 +671,7 @@ export class GeneratedForms_SubModule_7 { }
 
 @NgModule({
 declarations: [
+    EntityPermissionDetailsComponent,
     UserApplicationEntityDetailsComponent,
     UserApplicationDetailsComponent,
     CompanyIntegrationRunAPILogDetailsComponent,
@@ -687,8 +690,7 @@ declarations: [
     AuthorizationRoleDetailsComponent,
     AuditLogTypeDetailsComponent,
     EntityFieldValueDetailsComponent,
-    AIModelDetailsComponent,
-    AIActionDetailsComponent],
+    AIModelDetailsComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -714,6 +716,7 @@ export class GeneratedForms_SubModule_8 { }
 
 @NgModule({
 declarations: [
+    AIActionDetailsComponent,
     AIModelActionDetailsComponent,
     EntityAIActionDetailsComponent,
     AIModelTypeDetailsComponent,
@@ -732,8 +735,7 @@ declarations: [
     WorkspaceDetailsComponent,
     WorkspaceItemDetailsComponent,
     DatasetDetailsComponent,
-    DatasetItemDetailsComponent,
-    ConversationDetailDetailsComponent],
+    DatasetItemDetailsComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -759,6 +761,7 @@ export class GeneratedForms_SubModule_9 { }
 
 @NgModule({
 declarations: [
+    ConversationDetailDetailsComponent,
     ConversationDetailsComponent,
     UserNotificationDetailsComponent,
     SchemaInfoDetailsComponent,
@@ -777,8 +780,7 @@ declarations: [
     EntityDocumentDetailsComponent,
     DataContextItemDetailsComponent,
     DataContextDetailsComponent,
-    UserViewCategoryDetailsComponent,
-    DashboardCategoryDetailsComponent],
+    UserViewCategoryDetailsComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -804,6 +806,7 @@ export class GeneratedForms_SubModule_10 { }
 
 @NgModule({
 declarations: [
+    DashboardCategoryDetailsComponent,
     ReportCategoryDetailsComponent,
     FileStorageProviderDetailsComponent,
     FileDetailsComponent,
@@ -822,8 +825,7 @@ declarations: [
     EntityActionDetailsComponent,
     EntityActionInvocationDetailsComponent,
     ActionAuthorizationDetailsComponent,
-    EntityActionInvocationTypeDetailsComponent,
-    ActionDetailsComponent],
+    EntityActionInvocationTypeDetailsComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -849,6 +851,7 @@ export class GeneratedForms_SubModule_11 { }
 
 @NgModule({
 declarations: [
+    ActionDetailsComponent,
     ActionTopComponent,
     ActionCodeComponent,
     EntityActionFilterDetailsComponent,
@@ -867,8 +870,7 @@ declarations: [
     CommunicationLogDetailsComponent,
     CommunicationBaseMessageTypeDetailsComponent,
     TemplateDetailsComponent,
-    TemplateCategoryDetailsComponent,
-    TemplateContentDetailsComponent],
+    TemplateCategoryDetailsComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -894,6 +896,7 @@ export class GeneratedForms_SubModule_12 { }
 
 @NgModule({
 declarations: [
+    TemplateContentDetailsComponent,
     TemplateParamDetailsComponent,
     TemplateContentTypeDetailsComponent,
     RecommendationDetailsComponent,
@@ -904,7 +907,8 @@ declarations: [
     EntityCommunicationFieldDetailsComponent,
     RecordChangeReplayRunDetailsComponent,
     LibraryItemDetailsComponent,
-    EntityRelationshipDisplayComponentDetailsComponent],
+    EntityRelationshipDisplayComponentDetailsComponent,
+    EntityActionParamDetailsComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -1088,6 +1092,7 @@ export function LoadCoreGeneratedForms() {
     LoadRecordChangeReplayRunFormComponent();
     LoadLibraryItemFormComponent();
     LoadEntityRelationshipDisplayComponentFormComponent();
+    LoadEntityActionParamFormComponent();
     LoadCompanyDetailsComponent();
     LoadEmployeeDetailsComponent();
     LoadUserFavoriteDetailsComponent();
@@ -1227,5 +1232,6 @@ export function LoadCoreGeneratedForms() {
     LoadRecordChangeReplayRunDetailsComponent();
     LoadLibraryItemDetailsComponent();
     LoadEntityRelationshipDisplayComponentDetailsComponent();
+    LoadEntityActionParamDetailsComponent();
 }
     
