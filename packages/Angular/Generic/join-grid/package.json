@@ -30,6 +30,7 @@
     "@memberjunction/core": "1.7.1",
     "@memberjunction/ng-base-types": "1.7.1",
     "@memberjunction/ng-container-directives": "1.7.1",
+    "@memberjunction/ng-shared": "1.7.1",
     "@progress/kendo-angular-buttons": "16.2.0",
     "@progress/kendo-angular-dialog": "16.2.0",
     "@progress/kendo-angular-layout": "16.2.0",
