@@ -2,6 +2,77 @@
   "name": "@memberjunction/ng-join-grid",
   "entries": [
     {
+      "date": "Wed, 19 Jun 2024 16:32:44 GMT",
+      "version": "1.8.0",
+      "tag": "@memberjunction/ng-join-grid_v1.8.0",
+      "comments": {
+        "patch": [
+          {
+            "author": "97354817+AN-BC@users.noreply.github.com",
+            "package": "@memberjunction/ng-join-grid",
+            "commit": "f7ada2f4e5115a78caf44a82402b81fa1f027807",
+            "comment": "Applying package updates [skip ci]"
+          },
+          {
+            "author": "craig.adam@bluecypress.io",
+            "package": "@memberjunction/ng-join-grid",
+            "commit": "1d1800db0422091fcf1896bf820becb02c305937",
+            "comment": "Applying package updates [skip ci]"
+          },
+          {
+            "author": "craig.adam@bluecypress.io",
+            "package": "@memberjunction/ng-join-grid",
+            "commit": "884bcdf18002ceeba047f8a8a2cd8cf0146c7c6c",
+            "comment": "Applying package updates [skip ci]"
+          }
+        ],
+        "minor": [
+          {
+            "author": "97354817+AN-BC@users.noreply.github.com",
+            "package": "@memberjunction/ng-join-grid",
+            "commit": "f6ebf268643072af1d8e1798045676d55112cc68",
+            "comment": "Applying package updates [skip ci]"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-join-grid",
+            "comment": "Bump @memberjunction/core-entities to v1.8.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-join-grid",
+            "comment": "Bump @memberjunction/global to v1.8.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-join-grid",
+            "comment": "Bump @memberjunction/core to v1.8.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-join-grid",
+            "comment": "Bump @memberjunction/ng-base-types to v1.8.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-join-grid",
+            "comment": "Bump @memberjunction/ng-container-directives to v1.8.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-join-grid",
+            "comment": "Bump @memberjunction/ng-shared to v1.8.0",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
       "date": "Wed, 12 Jun 2024 20:13:29 GMT",
       "version": "1.7.1",
       "tag": "@memberjunction/ng-join-grid_v1.7.1",
