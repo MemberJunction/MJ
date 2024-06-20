@@ -108,8 +108,8 @@ export class RowLevelSecurityFilterInfo extends BaseInfo {
     Name: string = null
     Description: string = null
     FilterText: string = null
-    CreatedAt: Date = null
-    UpdatedAt: Date = null
+    __mj_CreatedAt: Date = null
+    __mj_UpdatedAt: Date = null
 
     constructor (initData: any) {
         super();

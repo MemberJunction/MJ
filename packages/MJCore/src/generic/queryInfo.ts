@@ -14,8 +14,8 @@ export class QueryInfo extends BaseInfo {
     public Feedback: string = null
     public Status: 'Pending' | 'In-Review' | 'Approved' | 'Rejected' | 'Obsolete' = null
     public QualityRank: number = null
-    CreatedAt: Date = null
-    UpdatedAt: Date = null
+    __mj_CreatedAt: Date = null
+    __mj_UpdatedAt: Date = null
 
     // virtual fields - returned by the database VIEW
     Category: string = null
@@ -58,8 +58,8 @@ export class QueryCategoryInfo extends BaseInfo {
     public Name: string = null
     public ParentID: number = null
     public Description: string = null
-    CreatedAt: Date = null
-    UpdatedAt: Date = null
+    __mj_CreatedAt: Date = null
+    __mj_UpdatedAt: Date = null
 
     // virtual fields - returned by the database VIEW
     Parent: string = null
@@ -99,8 +99,8 @@ export class QueryFieldInfo extends BaseInfo {
     ComputationDescription: string = null
     IsSummary: boolean = null
     SummaryDescription: string = null
-    CreatedAt: Date = null
-    UpdatedAt: Date = null
+    __mj_CreatedAt: Date = null
+    __mj_UpdatedAt: Date = null
 
     // virtual fields - returned by the database VIEW
     SourceEntity: string = null

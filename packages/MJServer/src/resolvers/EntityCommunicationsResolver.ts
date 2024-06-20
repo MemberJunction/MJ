@@ -29,10 +29,10 @@ export class CommunicationProviderMessageType {
     AdditionalAttributes: string;
 
     @Field()
-    CreatedAt: Date;
+    _mj_CreatedAt: Date;
 
     @Field()
-    UpdatedAt: Date;
+    _mj_UpdatedAt: Date;
 
     @Field()
     CommunicationProvider?: string;
@@ -71,10 +71,10 @@ export class TemplateInputType {
     IsActive: boolean;
 
     @Field()
-    CreatedAt: Date;
+    _mj_CreatedAt: Date;
 
     @Field()
-    UpdatedAt: Date;
+    _mj_UpdatedAt: Date;
 
     @Field({ nullable: true})
     Category?: string;
