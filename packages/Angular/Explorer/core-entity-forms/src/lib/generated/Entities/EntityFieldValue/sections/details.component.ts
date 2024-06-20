@@ -16,6 +16,7 @@ import { EntityFieldValueEntity } from '@memberjunction/core-entities';
             Type="numerictextbox"
             [EditMode]="EditMode"
             LinkType="Record"
+            LinkComponentType="Search"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -24,6 +25,7 @@ import { EntityFieldValueEntity } from '@memberjunction/core-entities';
             Type="textarea"
             [EditMode]="EditMode"
             LinkType="Record"
+            LinkComponentType="Search"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"

@@ -16,6 +16,7 @@ import { AuditLogTypeEntity } from '@memberjunction/core-entities';
             Type="numerictextbox"
             [EditMode]="EditMode"
             LinkType="Record"
+            LinkComponentType="Dropdown"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -38,6 +39,7 @@ import { AuditLogTypeEntity } from '@memberjunction/core-entities';
             Type="textbox"
             [EditMode]="EditMode"
             LinkType="Record"
+            LinkComponentType="Dropdown"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"

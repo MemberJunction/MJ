@@ -16,6 +16,7 @@ import { EntityRelationshipEntity } from '@memberjunction/core-entities';
             Type="numerictextbox"
             [EditMode]="EditMode"
             LinkType="Record"
+            LinkComponentType="Search"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -31,6 +32,7 @@ import { EntityRelationshipEntity } from '@memberjunction/core-entities';
             Type="numerictextbox"
             [EditMode]="EditMode"
             LinkType="Record"
+            LinkComponentType="Search"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -130,6 +132,7 @@ import { EntityRelationshipEntity } from '@memberjunction/core-entities';
             Type="textbox"
             [EditMode]="EditMode"
             LinkType="Record"
+            LinkComponentType="Search"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -138,6 +141,7 @@ import { EntityRelationshipEntity } from '@memberjunction/core-entities';
             Type="numerictextbox"
             [EditMode]="EditMode"
             LinkType="Record"
+            LinkComponentType="Search"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"

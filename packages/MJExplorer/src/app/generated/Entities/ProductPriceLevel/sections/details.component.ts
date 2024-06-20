@@ -142,6 +142,7 @@ import { ProductPriceLevelEntity } from 'mj_generatedentities';
             Type="textbox"
             [EditMode]="EditMode"
             LinkType="Record"
+            LinkComponentType="Search"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -164,6 +165,7 @@ import { ProductPriceLevelEntity } from 'mj_generatedentities';
             Type="textbox"
             [EditMode]="EditMode"
             LinkType="Record"
+            LinkComponentType="Search"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"

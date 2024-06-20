@@ -30,6 +30,7 @@ import { AIModelEntity } from '@memberjunction/core-entities';
             Type="numerictextbox"
             [EditMode]="EditMode"
             LinkType="Record"
+            LinkComponentType="Search"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
