@@ -1,4 +1,4 @@
-import { EntityInfo, EntityRelationshipInfo, UserInfo } from "@memberjunction/core";
+import { EntityFieldInfo, EntityInfo, EntityRelationshipInfo, Metadata, UserInfo } from "@memberjunction/core";
 import { TypeTablesCache } from "@memberjunction/core-entities";
 import { MJGlobal } from "@memberjunction/global";
 
@@ -108,6 +108,35 @@ export abstract class RelatedEntityDisplayComponentGeneratorBase {
      * @param relatedEntity The entity that is the related entity
      */
     public abstract Generate(input: GenerationInput): Promise<GenerationResult>;
+
+
+
+    /**
+     * Helper method that will return the name of the foreign key in the specified entity
+     * that links to the related entity
+     */
+    protected GetForeignKeyName(entityName: string, relatedEntityName: string): string {
+        const f = this.GetForeignKey(entityName, relatedEntityName);
+        return f.Name;
+    }
+    /**
+     * Helper method that will return the EntityFieldInfo object for the foreign key in the specified entity
+     * that links to the related entity
+     */
+    protected GetForeignKey(entityName: string, relatedEntityName: string): EntityFieldInfo {
+        // find a foreign key field that links the entity to the related entity
+        const md = new Metadata();
+        const e = md.EntityByName(entityName);
+        if (!e)
+            throw new Error("Could not find entity " + entityName);
+
+        // now find the field in e that matches the related entity
+        const field = e.Fields.find(f => f.RelatedEntity === relatedEntityName);
+        if (!field)
+            throw new Error("Could not find a foreign key field in entity " + entityName + " that links to " + relatedEntityName);
+
+        return field;
+    }
 
     /**
      * Use this method to dynamically instantiate the correct RelatedEntityDisplayComponentGeneratorBase subclass based on the relationshipInfo provided

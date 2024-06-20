@@ -144,11 +144,12 @@ export function CleanJavaScript(javaScriptCode: string): string {
  * @param jsonString 
  * @returns 
  */
-export function SafeJSONParse<T>(jsonString: string): T {
+export function SafeJSONParse<T>(jsonString: string, logErrors: boolean = false): T {
     try {
         return <T>JSON.parse(jsonString);
     } catch (e) {
-        console.error("Error parsing JSON string:", e);
+        if (logErrors)
+            console.error("Error parsing JSON string:", e);
         return null;
     }
 }

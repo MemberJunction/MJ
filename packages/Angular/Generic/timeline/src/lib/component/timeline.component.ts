@@ -1,11 +1,8 @@
-import { Component, OnInit, Input, EventEmitter, Output, AfterViewInit } from '@angular/core';
+import { Component, Input, AfterViewInit } from '@angular/core';
 
-import { BaseEntity, Metadata, RunView, RunViewParams } from '@memberjunction/core';
-import { SharedService } from '@memberjunction/ng-shared'
-import { Router } from '@angular/router';
+import { BaseEntity, RunView, RunViewParams } from '@memberjunction/core';
 
-import { SchedulerEvent } from '@progress/kendo-angular-scheduler';
-import { sampleData, displayDate } from './dummy-data';
+import { Orientation, TimelineEvent } from "@progress/kendo-angular-layout";
 
 /**
  * 
@@ -15,6 +12,14 @@ export class TimelineGroup {
    * Entity name for the type of records to be displayed in this group
    */
   EntityName!: string;
+  /**
+   * Specifies if the data will come from a provided array of BaseEntity objects - the EntityObjects array, or alternatively, from this object running its own view against the provided EntityName, optionally with a provided Filter (or without).
+   */
+  DataSourceType: 'array' | 'entity' = 'entity';
+  /**
+   * An optional filter that will be applied to the entity specified to reduce the number of records displayed
+   */
+  Filter?: string
   /**
    * The actual data you want displayed in this group. This is an array of BaseEntity objects that will be displayed in the timeline. You can populate this array from a view or any other source.
    */
@@ -53,7 +58,7 @@ export class TimelineGroup {
    * When SummaryMode is set to 'custom', this function will be used to generate the summary for the record. The function should take a single parameter, the BaseEntity object and will return a string.
    * The string returned can be plain text or HTML and will be displayed in the timeline.
    */
-  SummaryFunction?: ((record: BaseEntity) => string) | undefined;
+  SummaryFunction?: ((record: any) => string) | undefined;
 
   /**
    * Creates a new instance of the TimelineGroup class using the information from the RunViewParams provided.
@@ -85,6 +90,8 @@ export class TimelineGroup {
 export class TimelineComponent implements AfterViewInit { 
   private _groups: TimelineGroup[] = [];
 
+  @Input() DisplayOrientation: 'horizontal' | 'vertical' = 'horizontal';
+
   /**
    * Provide an array of one or more TimelineGroup objects to display the data in the timeline. Each group will be displayed in a different color and icon.
    */
@@ -113,9 +120,11 @@ export class TimelineComponent implements AfterViewInit {
     }
   }
 
-
-  public selectedDate: Date = new Date();
-  public events: SchedulerEvent[] = [];
+  /*
+  * events is the array of timeline events that gets updated on each call of LoadSingleGroup. 
+  * timelineGroupEvents is the array of total timeline events that will get called used by the timeline component.
+  */
+  public events: TimelineEvent[] = [];
 
   ngAfterViewInit(): void {
     if (this.AllowLoad)
@@ -129,35 +138,31 @@ export class TimelineComponent implements AfterViewInit {
   public Refresh() {
     if (this.Groups && this.Groups.length > 0) {
       this.Groups.forEach(g => this.LoadSingleGroup(g));
-
-      // now get the highest date from the events array and set that into the selectedDate
-      if (this.events.length > 0) {
-        this.selectedDate = this.events.reduce((a, b) => a.start > b.start ? a : b).start;
-      }
     }
   }
 
+  /**
+   * This method loads the data for a single group and adds it to the timelineGroupEvents array.
+   * @param group 
+   */
   protected LoadSingleGroup(group: TimelineGroup) {
     this.events = group.EntityObjects.map(e => {
       let date = new Date(e.Get(group.DateFieldName));
-      let title = e.Get(group.TitleFieldName);
+      let title = group.TitleFieldName;
       let summary = "";
       if (group.SummaryMode == 'field') {
-        summary = e.Get(group.TitleFieldName);
-      } else if (group.SummaryMode == 'custom' && group.SummaryFunction) {
-        summary = group.SummaryFunction(e);
+        summary = group.TitleFieldName;
+      } else if (group.SummaryMode == 'custom') {
+        summary = group.SummaryFunction ? group.SummaryFunction(e) : "";
       }
       return {
-        id: e.Get("ID"),
-        title: title,
-        start: date,
-        end: date,
-        isAllDay: true,
         description: summary,
-        color: group.DisplayColor,
-        icon: group.DisplayIcon,
+        date: date,
+        title: title,
+        subtitle: date.toDateString(),
+        images: [],
+        actions: [],
       };
-    });
+    })
   }
-  
 }

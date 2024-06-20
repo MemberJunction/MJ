@@ -20806,12 +20806,13 @@ import { RegisterClass } from "@memberjunction/global";
         *   * Static
         *   * Entity Object
         *   * Script
+        *   * Entity Field
         * * Description: Type of the value, which can be Static, Entity Object, or Script.
         */
-        get ValueType(): 'Static' | 'Entity Object' | 'Script' {  
+        get ValueType(): 'Static' | 'Entity Object' | 'Script' | 'Entity Field' {  
             return this.Get('ValueType');
         }
-        set ValueType(value: 'Static' | 'Entity Object' | 'Script') {
+        set ValueType(value: 'Static' | 'Entity Object' | 'Script' | 'Entity Field') {
             this.Set('ValueType', value);
         }
         /**
