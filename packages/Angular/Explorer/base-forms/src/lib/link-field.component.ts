@@ -1,4 +1,4 @@
-import { AfterViewInit, Component, ElementRef, Input, ViewChild, ChangeDetectorRef } from "@angular/core";
+import { AfterViewInit, Component, ElementRef, Input, ViewChild, ChangeDetectorRef, OnChanges, SimpleChanges } from "@angular/core";
 import { BaseRecordComponent } from "./base-record-component";
 import { BaseEntity, CompositeKey, EntityFieldInfo, EntityInfo, Metadata, RunView } from "@memberjunction/core";
 import { debounceTime, fromEvent } from 'rxjs';
@@ -58,10 +58,9 @@ export class MJLinkField extends BaseRecordComponent implements AfterViewInit {
     public showMatchingRecords: boolean = false;
     public dropDownColumns: EntityFieldInfo[] = [];
 
-    @ViewChild('inputBox', { static: true }) inputBox!: ElementRef;
+    @ViewChild('inputBox', { static: false }) inputBox!: ElementRef;
 
-
-    async ngAfterViewInit() {
+    private async initComponent() {
         if (!this.record)
             throw new Error('record property is required');
         if (!this.FieldName)
@@ -77,28 +76,34 @@ export class MJLinkField extends BaseRecordComponent implements AfterViewInit {
         if (this.LinkComponentType === 'Search') {
             await this.AttemptToLinkValue();
 
-            fromEvent(this.inputBox.nativeElement, 'input')
-                .pipe(debounceTime(300))
-                .subscribe(() => {
-                    if (!this.RecordLinked) {
-                        this.showMatchingRecords = true;
-                        this.fetchMatchingRecords(this.inputBox.nativeElement.value);
+            if (this.inputBox) {
+                fromEvent(this.inputBox.nativeElement, 'input')
+                    .pipe(debounceTime(300))
+                    .subscribe(() => {
+                        if (!this.RecordLinked) {
+                            this.showMatchingRecords = true;
+                            this.fetchMatchingRecords(this.inputBox.nativeElement.value);
+                        }
+                    });
+        
+                fromEvent<KeyboardEvent>(this.inputBox.nativeElement, 'keydown').subscribe((event: KeyboardEvent) => {
+                    if (this.RecordLinked && !['Backspace', 'Delete'].includes(event.key)) {
+                        event.preventDefault();
+                    } else if (['Backspace', 'Delete'].includes(event.key)) {
+                        this.RecordName = '';
+                        this.Value = null;
+                        this.RecordLinked = false;
                     }
-                });
-    
-            fromEvent<KeyboardEvent>(this.inputBox.nativeElement, 'keydown').subscribe((event: KeyboardEvent) => {
-                if (this.RecordLinked && !['Backspace', 'Delete'].includes(event.key)) {
-                    event.preventDefault();
-                } else if (['Backspace', 'Delete'].includes(event.key)) {
-                    this.RecordName = '';
-                    this.Value = null;
-                    this.RecordLinked = false;
-                }
-            });    
+                });    
+            }
         }
         else {
             await this.populateDropdownList()
         }
+    }
+
+    async ngAfterViewInit() {
+        await this.initComponent();
     }
 
     protected async AttemptToLinkValue() {
