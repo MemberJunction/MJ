@@ -20,11 +20,6 @@ export class EntityActionInvocationParams {
     public InvocationType: EntityActionInvocationTypeEntity;
 
     /**
-     * Parameters for the entity/action invocation. 
-     */
-
-    public Params: EntityActionInvocationParams[];
-    /**
      * The user context for the invocation.  
      */
     public ContextUser?: UserInfo;
