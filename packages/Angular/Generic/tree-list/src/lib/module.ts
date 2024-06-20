@@ -5,7 +5,6 @@ import { CommonModule } from '@angular/common';
 import { ButtonsModule } from '@progress/kendo-angular-buttons'; 
 import { IndicatorsModule } from '@progress/kendo-angular-indicators';
 import { LayoutModule } from '@progress/kendo-angular-layout';
-import { TreeListModule  } from "@progress/kendo-angular-treelist";
 
 // MJ
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
@@ -24,8 +23,7 @@ import { TreelistComponent } from './component/treelist.component';
     ButtonsModule,
     EntityFormDialogModule,
     IndicatorsModule,
-    LayoutModule,
-    TreeListModule
+    LayoutModule
   ],
   exports: [
     TreelistComponent

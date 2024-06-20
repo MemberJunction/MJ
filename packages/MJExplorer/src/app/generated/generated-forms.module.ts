@@ -140,7 +140,8 @@ imports: [
     ContainerDirectivesModule,
     DropDownListModule,
     ComboBoxModule,
-    UserViewGridModule
+    UserViewGridModule,
+    TimelineModule
 ],
 exports: [
 ]
@@ -186,7 +187,8 @@ imports: [
     ContainerDirectivesModule,
     DropDownListModule,
     ComboBoxModule,
-    UserViewGridModule
+    UserViewGridModule,
+    TimelineModule
 ],
 exports: [
 ]
