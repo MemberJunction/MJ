@@ -2,7 +2,7 @@
 * ALL ENTITIES - TypeGraphQL Type Class Definition - AUTO GENERATED FILE
 * Generated Entities and Resolvers for Server
 * 
-* GENERATED: 6/20/2024, 2:37:58 PM
+* GENERATED: 6/20/2024, 3:35:35 PM
 * 
 *   >>> DO NOT MODIFY THIS FILE!!!!!!!!!!!!
 *   >>> YOUR CHANGES WILL BE OVERWRITTEN
@@ -5031,10 +5031,6 @@ export class ErrorLog_ {
           
     @Field({nullable: true}) 
     Message?: string;
-          
-    @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
           
     @Field({nullable: true}) 
     @MaxLength(100)
@@ -10857,10 +10853,6 @@ export class ReportSnapshot_ {
           
     @Field() 
     ResultSet: string;
-          
-    @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
           
     @Field(() => Int, {nullable: true}) 
     UserID?: number;
@@ -19795,6 +19787,9 @@ export class ActionResultCode_ {
     @MaxLength(510)
     ResultCode: string;
           
+    @Field(() => Boolean, {description: 'Indicates if the result code is a success or not. It is possible an action might have more than one failure condition/result code and same for success conditions.'}) 
+    IsSuccess: boolean;
+          
     @Field({nullable: true, description: 'Description of the result code.'}) 
     Description?: string;
           
@@ -19823,6 +19818,9 @@ export class CreateActionResultCodeInput {
     @Field()
     ResultCode: string;
 
+    @Field(() => Boolean)
+    IsSuccess: boolean;
+
     @Field({ nullable: true })
     Description?: string;
 }
@@ -19841,6 +19839,9 @@ export class UpdateActionResultCodeInput {
 
     @Field()
     ResultCode: string;
+
+    @Field(() => Boolean)
+    IsSuccess: boolean;
 
     @Field({ nullable: true })
     Description?: string;
