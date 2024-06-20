@@ -2,7 +2,7 @@
 * ALL ENTITIES - TypeGraphQL Type Class Definition - AUTO GENERATED FILE
 * Generated Entities and Resolvers for Server
 * 
-* GENERATED: 6/19/2024, 9:21:02 PM
+* GENERATED: 6/20/2024, 9:07:57 AM
 * 
 *   >>> DO NOT MODIFY THIS FILE!!!!!!!!!!!!
 *   >>> YOUR CHANGES WILL BE OVERWRITTEN
@@ -527,12 +527,12 @@ export class UserFavorite_ {
     RecordID: string;
           
     @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
           
     @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
           
     @Field() 
     @MaxLength(510)
@@ -683,14 +683,6 @@ export class EmployeeCompanyIntegration_ {
           
     @Field(() => Boolean) 
     IsActive: boolean;
-          
-    @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
-          
-    @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
           
     @Field() 
     @MaxLength(10)
@@ -1240,14 +1232,6 @@ export class Skill_ {
     ParentID?: number;
           
     @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
-          
-    @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
-          
-    @Field() 
     @MaxLength(10)
     _mj__CreatedAt: Date;
           
@@ -1362,6 +1346,14 @@ export class IntegrationURLFormat_ {
     @Field() 
     @MaxLength(1000)
     URLFormat: string;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
           
     @Field(() => Int) 
     IntegrationID: number;
@@ -1505,14 +1497,6 @@ export class Integration_ {
           
     @Field(() => Int) 
     BatchRequestWaitTime: number;
-          
-    @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
-          
-    @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
           
     @Field() 
     @MaxLength(10)
@@ -1696,14 +1680,6 @@ export class CompanyIntegration_ {
     @MaxLength(510)
     APIKey?: string;
           
-    @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
-          
-    @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
-          
     @Field({nullable: true}) 
     @MaxLength(200)
     ExternalSystemID?: string;
@@ -1722,6 +1698,14 @@ export class CompanyIntegration_ {
     @Field({nullable: true}) 
     @MaxLength(510)
     CustomAttribute1?: string;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
           
     @Field(() => Int) 
     CompanyID: number;
@@ -4230,6 +4214,14 @@ export class UserRecordLog_ {
     TotalCount: number;
           
     @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
+          
+    @Field() 
     @MaxLength(510)
     Entity: string;
           
@@ -4882,6 +4874,14 @@ export class CompanyIntegrationRunDetail_ {
           
     @Field(() => Boolean) 
     IsSuccess: boolean;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
           
     @Field() 
     @MaxLength(510)
@@ -5773,6 +5773,14 @@ export class UserApplicationEntity_ {
     Sequence: number;
           
     @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
+          
+    @Field() 
     @MaxLength(100)
     Application: string;
           
@@ -6229,14 +6237,6 @@ export class List_ {
           
     @Field(() => Int, {nullable: true}) 
     CompanyIntegrationID?: number;
-          
-    @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
-          
-    @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
           
     @Field(() => Int, {nullable: true}) 
     CategoryID?: number;
@@ -6738,6 +6738,14 @@ export class UserViewRunDetail_ {
     @MaxLength(510)
     RecordID: string;
           
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
+          
     @Field(() => Int) 
     UserViewID: number;
           
@@ -6881,6 +6889,14 @@ export class WorkflowRun_ {
     Results?: string;
           
     @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
+          
+    @Field() 
     @MaxLength(200)
     Workflow: string;
           
@@ -7010,14 +7026,6 @@ export class Workflow_ {
     @MaxLength(200)
     ExternalSystemRecordID: string;
           
-    @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
-          
-    @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
-          
     @Field(() => Boolean, {description: 'If set to 1, the workflow will be run automatically on the interval specified by the AutoRunIntervalType and AutoRunInterval fields'}) 
     AutoRunEnabled: boolean;
           
@@ -7031,6 +7039,14 @@ export class Workflow_ {
     @Field({nullable: true, description: 'If specified, this subclass key, via the ClassFactory, will be instantiated, to execute this workflow. If not specified the WorkflowBase class will be used by default.'}) 
     @MaxLength(400)
     SubclassName?: string;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
           
     @Field(() => Int, {nullable: true}) 
     AutoRunIntervalMinutes?: number;
@@ -7183,14 +7199,6 @@ export class WorkflowEngine_ {
     @Field() 
     @MaxLength(200)
     DriverClass: string;
-          
-    @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
-          
-    @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
           
     @Field() 
     @MaxLength(10)
@@ -7807,14 +7815,6 @@ export class AuditLog_ {
     RecordID?: string;
           
     @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
-          
-    @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
-          
-    @Field() 
     @MaxLength(10)
     _mj__CreatedAt: Date;
           
@@ -8144,14 +8144,6 @@ export class AuthorizationRole_ {
     @Field() 
     @MaxLength(20)
     Type: string;
-          
-    @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
-          
-    @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
           
     @Field() 
     @MaxLength(10)
@@ -8532,14 +8524,6 @@ export class AIModel_ {
     PowerRank?: number;
           
     @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
-          
-    @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
-          
-    @Field() 
     @MaxLength(10)
     _mj__CreatedAt: Date;
           
@@ -8792,14 +8776,6 @@ export class AIAction_ {
     IsActive: boolean;
           
     @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
-          
-    @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
-          
-    @Field() 
     @MaxLength(10)
     _mj__CreatedAt: Date;
           
@@ -8986,14 +8962,6 @@ export class AIModelAction_ {
           
     @Field(() => Boolean) 
     IsActive: boolean;
-          
-    @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
-          
-    @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
           
     @Field() 
     @MaxLength(10)
@@ -9707,14 +9675,6 @@ export class Queue_ {
     @Field() 
     @MaxLength(8)
     LastHeartbeat: Date;
-          
-    @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
-          
-    @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
           
     @Field() 
     @MaxLength(10)
@@ -10625,14 +10585,6 @@ export class Report_ {
     OutputWorkflowID?: number;
           
     @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
-          
-    @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
-          
-    @Field() 
     @MaxLength(10)
     _mj__CreatedAt: Date;
           
@@ -11359,14 +11311,6 @@ export class Workspace_ {
     UserID: number;
           
     @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
-          
-    @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
-          
-    @Field() 
     @MaxLength(10)
     _mj__CreatedAt: Date;
           
@@ -11536,14 +11480,6 @@ export class WorkspaceItem_ {
           
     @Field({nullable: true}) 
     Configuration?: string;
-          
-    @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
-          
-    @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
           
     @Field() 
     @MaxLength(10)
@@ -11718,14 +11654,6 @@ export class Dataset_ {
     Description?: string;
           
     @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
-          
-    @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
-          
-    @Field() 
     @MaxLength(10)
     _mj__CreatedAt: Date;
           
@@ -11832,14 +11760,6 @@ export class DatasetItem_ {
     Description?: string;
           
     @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
-          
-    @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
-          
-    @Field() 
     @MaxLength(10)
     _mj__CreatedAt: Date;
           
@@ -11933,14 +11853,6 @@ export class ConversationDetail_ {
           
     @Field(() => Boolean) 
     HiddenToUser: boolean;
-          
-    @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
-          
-    @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
           
     @Field() 
     @MaxLength(10)
@@ -12138,14 +12050,6 @@ export class Conversation_ {
           
     @Field(() => Int, {nullable: true}) 
     DataContextID?: number;
-          
-    @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
-          
-    @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
           
     @Field() 
     @MaxLength(10)
@@ -12373,14 +12277,6 @@ export class UserNotification_ {
     ReadAt?: Date;
           
     @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
-          
-    @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
-          
-    @Field() 
     @MaxLength(10)
     _mj__CreatedAt: Date;
           
@@ -12561,14 +12457,6 @@ export class SchemaInfo_ {
     Comments?: string;
           
     @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
-          
-    @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
-          
-    @Field() 
     @MaxLength(10)
     _mj__CreatedAt: Date;
           
@@ -12714,14 +12602,6 @@ export class CompanyIntegrationRecordMap_ {
     @Field() 
     @MaxLength(510)
     EntityRecordID: string;
-          
-    @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
-          
-    @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
           
     @Field() 
     @MaxLength(10)
@@ -12894,14 +12774,6 @@ export class RecordMergeLog_ {
           
     @Field({nullable: true}) 
     Comments?: string;
-          
-    @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
-          
-    @Field({nullable: true}) 
-    @MaxLength(8)
-    UpdatedAt?: Date;
           
     @Field() 
     @MaxLength(10)
@@ -13115,14 +12987,6 @@ export class RecordMergeDeletionLog_ {
           
     @Field({nullable: true}) 
     ProcessingLog?: string;
-          
-    @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
-          
-    @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
           
     @Field() 
     @MaxLength(10)
@@ -14057,14 +13921,6 @@ export class VectorIndex_ {
     EmbeddingModelID: number;
           
     @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
-          
-    @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
-          
-    @Field() 
     @MaxLength(10)
     _mj__CreatedAt: Date;
           
@@ -14510,14 +14366,6 @@ export class VectorDatabase_ {
     @Field({nullable: true}) 
     @MaxLength(200)
     ClassKey?: string;
-          
-    @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
-          
-    @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
           
     @Field() 
     @MaxLength(10)
@@ -15111,14 +14959,6 @@ export class DataContextItem_ {
     LastRefreshedAt?: Date;
           
     @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
-          
-    @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
-          
-    @Field() 
     @MaxLength(10)
     _mj__CreatedAt: Date;
           
@@ -15318,14 +15158,6 @@ export class DataContext_ {
     LastRefreshedAt?: Date;
           
     @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
-          
-    @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
-          
-    @Field() 
     @MaxLength(10)
     _mj__CreatedAt: Date;
           
@@ -15499,14 +15331,6 @@ export class UserViewCategory_ {
           
     @Field(() => Int, {nullable: true}) 
     ParentID?: number;
-          
-    @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
-          
-    @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
           
     @Field(() => Int) 
     EntityID: number;
@@ -15699,14 +15523,6 @@ export class DashboardCategory_ {
     @Field(() => Int, {nullable: true}) 
     ParentID?: number;
           
-    @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
-          
-    @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
-          
     @Field(() => Int) 
     UserID: number;
           
@@ -15888,14 +15704,6 @@ export class ReportCategory_ {
           
     @Field(() => Int, {nullable: true}) 
     ParentID?: number;
-          
-    @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
-          
-    @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
           
     @Field(() => Int) 
     UserID: number;
@@ -16091,14 +15899,6 @@ export class FileStorageProvider_ {
     IsActive: boolean;
           
     @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
-          
-    @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
-          
-    @Field() 
     @MaxLength(10)
     _mj__CreatedAt: Date;
           
@@ -16278,14 +16078,6 @@ export class File_ {
     @Field({description: 'Pending, Uploading, Uploaded, Deleting, Deleted'}) 
     @MaxLength(40)
     Status: string;
-          
-    @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
-          
-    @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
           
     @Field() 
     @MaxLength(10)
@@ -16474,14 +16266,6 @@ export class FileCategory_ {
     ParentID?: number;
           
     @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
-          
-    @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
-          
-    @Field() 
     @MaxLength(10)
     _mj__CreatedAt: Date;
           
@@ -16651,14 +16435,6 @@ export class FileEntityRecordLink_ {
     RecordID: string;
           
     @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
-          
-    @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
-          
-    @Field() 
     @MaxLength(10)
     _mj__CreatedAt: Date;
           
@@ -16821,12 +16597,12 @@ export class VersionInstallation_ {
     Comments?: string;
           
     @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
           
     @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
           
     @Field({nullable: true}) 
     @MaxLength(604)
@@ -17017,14 +16793,6 @@ export class DuplicateRunDetailMatch_ {
           
     @Field(() => Int, {nullable: true}) 
     RecordMergeLogID?: number;
-          
-    @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
-          
-    @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
           
     @Field() 
     @MaxLength(10)
@@ -17530,14 +17298,6 @@ export class DuplicateRun_ {
     SourceListID: number;
           
     @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
-          
-    @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
-          
-    @Field() 
     @MaxLength(10)
     _mj__CreatedAt: Date;
           
@@ -17756,14 +17516,6 @@ export class DuplicateRunDetail_ {
           
     @Field({nullable: true}) 
     MergeErrorMessage?: string;
-          
-    @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
-          
-    @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
           
     @Field() 
     @MaxLength(10)
@@ -18928,14 +18680,6 @@ export class ActionAuthorization_ {
     Comments?: string;
           
     @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
-          
-    @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
-          
-    @Field() 
     @MaxLength(10)
     _mj__CreatedAt: Date;
           
@@ -19869,14 +19613,6 @@ export class ActionContextType_ {
     Description?: string;
           
     @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
-          
-    @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
-          
-    @Field() 
     @MaxLength(10)
     _mj__CreatedAt: Date;
           
@@ -20025,14 +19761,6 @@ export class ActionResultCode_ {
     Description?: string;
           
     @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
-          
-    @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
-          
-    @Field() 
     @MaxLength(10)
     _mj__CreatedAt: Date;
           
@@ -20178,14 +19906,6 @@ export class ActionContext_ {
     @Field({description: 'Status of the action context (Pending, Active, Disabled).'}) 
     @MaxLength(40)
     Status: string;
-          
-    @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
-          
-    @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
           
     @Field() 
     @MaxLength(10)
@@ -20351,14 +20071,6 @@ export class ActionExecutionLog_ {
           
     @Field(() => Int, {nullable: true, description: 'Number of days to retain the log; NULL for indefinite retention.'}) 
     RetentionPeriod?: number;
-          
-    @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
-          
-    @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
           
     @Field() 
     @MaxLength(10)
@@ -20553,14 +20265,6 @@ export class ActionParam_ {
     IsRequired: boolean;
           
     @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
-          
-    @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
-          
-    @Field() 
     @MaxLength(10)
     _mj__CreatedAt: Date;
           
@@ -20746,14 +20450,6 @@ export class ActionLibrary_ {
           
     @Field({nullable: true, description: 'List of classes and functions used by the action from the library.'}) 
     ItemsUsed?: string;
-          
-    @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
-          
-    @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
           
     @Field() 
     @MaxLength(10)
@@ -21084,14 +20780,6 @@ export class ListCategory_ {
     @Field(() => Int, {nullable: true}) 
     ParentID?: number;
           
-    @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
-          
-    @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
-          
     @Field(() => Int) 
     UserID: number;
           
@@ -21244,14 +20932,6 @@ export class CommunicationProvider_ {
           
     @Field(() => Boolean, {description: 'Indicates if the provider supports receiving messages.'}) 
     SupportsReceiving: boolean;
-          
-    @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
-          
-    @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
           
     @Field() 
     @MaxLength(10)
@@ -21440,14 +21120,6 @@ export class CommunicationRun_ {
     ErrorMessage?: string;
           
     @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
-          
-    @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
-          
-    @Field() 
     @MaxLength(10)
     _mj__CreatedAt: Date;
           
@@ -21629,14 +21301,6 @@ export class CommunicationProviderMessageType_ {
           
     @Field({nullable: true, description: 'Additional attributes specific to the provider message type.'}) 
     AdditionalAttributes?: string;
-          
-    @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
-          
-    @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
           
     @Field() 
     @MaxLength(10)
@@ -21830,14 +21494,6 @@ export class CommunicationLog_ {
     ErrorMessage?: string;
           
     @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
-          
-    @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
-          
-    @Field() 
     @MaxLength(10)
     _mj__CreatedAt: Date;
           
@@ -22017,14 +21673,6 @@ export class CommunicationBaseMessageType_ {
           
     @Field(() => Int, {nullable: true, description: 'The maximum size in bytes for the message.'}) 
     MaxBytes?: number;
-          
-    @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
-          
-    @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
           
     @Field() 
     @MaxLength(10)
@@ -22213,14 +21861,6 @@ export class Template_ {
           
     @Field(() => Boolean, {description: 'If set to 0, the template will be disabled regardless of the values in ActiveAt/DisabledAt. '}) 
     IsActive: boolean;
-          
-    @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
-          
-    @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
           
     @Field() 
     @MaxLength(10)
@@ -22423,14 +22063,6 @@ export class TemplateCategory_ {
     UserID: number;
           
     @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
-          
-    @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
-          
-    @Field() 
     @MaxLength(10)
     _mj__CreatedAt: Date;
           
@@ -22609,14 +22241,6 @@ export class TemplateContent_ {
     IsActive: boolean;
           
     @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
-          
-    @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
-          
-    @Field() 
     @MaxLength(10)
     _mj__CreatedAt: Date;
           
@@ -22791,14 +22415,6 @@ export class TemplateParam_ {
     RecordID?: string;
           
     @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
-          
-    @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
-          
-    @Field() 
     @MaxLength(10)
     _mj__CreatedAt: Date;
           
@@ -22971,14 +22587,6 @@ export class TemplateContentType_ {
     Description?: string;
           
     @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
-          
-    @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
-          
-    @Field() 
     @MaxLength(10)
     _mj__CreatedAt: Date;
           
@@ -23118,14 +22726,6 @@ export class Recommendation_ {
           
     @Field({description: 'The record ID of the source entity'}) 
     SourceEntityRecordID: string;
-          
-    @Field({nullable: true}) 
-    @MaxLength(8)
-    CreatedAt?: Date;
-          
-    @Field({nullable: true}) 
-    @MaxLength(8)
-    UpdatedAt?: Date;
           
     @Field() 
     @MaxLength(10)
@@ -23275,14 +22875,6 @@ export class RecommendationProvider_ {
           
     @Field({nullable: true}) 
     Description?: string;
-          
-    @Field({nullable: true}) 
-    @MaxLength(8)
-    CreatedAt?: Date;
-          
-    @Field({nullable: true}) 
-    @MaxLength(8)
-    UpdatedAt?: Date;
           
     @Field() 
     @MaxLength(10)
@@ -23436,14 +23028,6 @@ export class RecommendationRun_ {
           
     @Field(() => Int) 
     RunByUserID: number;
-          
-    @Field({nullable: true}) 
-    @MaxLength(8)
-    CreatedAt?: Date;
-          
-    @Field({nullable: true}) 
-    @MaxLength(8)
-    UpdatedAt?: Date;
           
     @Field() 
     @MaxLength(10)
@@ -23620,14 +23204,6 @@ export class RecommendationItem_ {
           
     @Field(() => Float, {nullable: true, description: 'A value between 0 and 1 indicating the probability of the match, higher numbers indicating a more certain match/recommendation.'}) 
     MatchProbability?: number;
-          
-    @Field({nullable: true}) 
-    @MaxLength(8)
-    CreatedAt?: Date;
-          
-    @Field({nullable: true}) 
-    @MaxLength(8)
-    UpdatedAt?: Date;
           
     @Field() 
     @MaxLength(10)
@@ -24074,14 +23650,6 @@ export class RecordChangeReplayRun_ {
     UserID: number;
           
     @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
-          
-    @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
-          
-    @Field() 
     @MaxLength(10)
     _mj__CreatedAt: Date;
           
@@ -24239,14 +23807,6 @@ export class LibraryItem_ {
     @Field({description: 'Type of the library item for example Class, Interface, etc.'}) 
     @MaxLength(100)
     Type: string;
-          
-    @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
-          
-    @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
           
     @Field() 
     @MaxLength(10)
