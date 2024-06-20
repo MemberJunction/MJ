@@ -4360,20 +4360,9 @@ import { RegisterClass } from "@memberjunction/global";
             this.Set('Message', value);
         }
         /**
-        * * Field Name: CreatedAt
-        * * Display Name: Created At
-        * * SQL Data Type: datetime
-        * * Default Value: getdate()
-        */
-        get CreatedAt(): Date {  
-            return this.Get('CreatedAt');
-        }
-        
-        /**
         * * Field Name: CreatedBy
         * * Display Name: Created By
         * * SQL Data Type: nvarchar(50)
-        * * Default Value: suser_name()
         */
         get CreatedBy(): string | null {  
             return this.Get('CreatedBy');
@@ -4384,6 +4373,7 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: Status
         * * SQL Data Type: nvarchar(10)
+        * * Default Value: suser_name()
         */
         get Status(): string | null {  
             return this.Get('Status');
@@ -4415,7 +4405,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetimeoffset
-        * * Default Value: getutcdate()
         */
         get __mj_CreatedAt(): Date {  
             return this.Get('__mj_CreatedAt');
@@ -9748,16 +9737,6 @@ import { RegisterClass } from "@memberjunction/global";
             this.Set('ResultSet', value);
         }
         /**
-        * * Field Name: CreatedAt
-        * * Display Name: Created At
-        * * SQL Data Type: datetime
-        * * Default Value: getdate()
-        */
-        get CreatedAt(): Date {  
-            return this.Get('CreatedAt');
-        }
-        
-        /**
         * * Field Name: UserID
         * * Display Name: User ID
         * * SQL Data Type: int
@@ -9773,7 +9752,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetimeoffset
-        * * Default Value: getutcdate()
         */
         get __mj_CreatedAt(): Date {  
             return this.Get('__mj_CreatedAt');
@@ -9793,6 +9771,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: Report
         * * Display Name: Report
         * * SQL Data Type: nvarchar(255)
+        * * Default Value: getutcdate()
         */
         get Report(): string {  
             return this.Get('Report');
@@ -17185,6 +17164,19 @@ import { RegisterClass } from "@memberjunction/global";
             this.Set('ResultCode', value);
         }
         /**
+        * * Field Name: IsSuccess
+        * * Display Name: Is Success
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Indicates if the result code is a success or not. It is possible an action might have more than one failure condition/result code and same for success conditions.
+        */
+        get IsSuccess(): boolean {  
+            return this.Get('IsSuccess');
+        }
+        set IsSuccess(value: boolean) {
+            this.Set('IsSuccess', value);
+        }
+        /**
         * * Field Name: Description
         * * Display Name: Description
         * * SQL Data Type: nvarchar(MAX)
@@ -17200,6 +17192,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_CreatedAt(): Date {  
             return this.Get('__mj_CreatedAt');
@@ -17209,6 +17202,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_UpdatedAt(): Date {  
             return this.Get('__mj_UpdatedAt');
@@ -17218,7 +17212,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: Action
         * * Display Name: Action
         * * SQL Data Type: nvarchar(425)
-        * * Default Value: getutcdate()
         */
         get Action(): string {  
             return this.Get('Action');
