@@ -2,7 +2,7 @@
 * ALL ENTITIES - TypeGraphQL Type Class Definition - AUTO GENERATED FILE
 * Generated Entities and Resolvers for Server
 * 
-* GENERATED: 6/19/2024, 11:24:48 AM
+* GENERATED: 6/19/2024, 9:21:02 PM
 * 
 *   >>> DO NOT MODIFY THIS FILE!!!!!!!!!!!!
 *   >>> YOUR CHANGES WILL BE OVERWRITTEN
@@ -691,6 +691,14 @@ export class EmployeeCompanyIntegration_ {
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
         
 }
         
@@ -1239,6 +1247,14 @@ export class Skill_ {
     @MaxLength(8)
     UpdatedAt: Date;
           
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
+          
     @Field({nullable: true}) 
     @MaxLength(100)
     Parent?: string;
@@ -1497,6 +1513,14 @@ export class Integration_ {
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
         
     @Field(() => [mj_core_schema_server_object_types.IntegrationURLFormat_])
     IntegrationURLFormatsArray: mj_core_schema_server_object_types.IntegrationURLFormat_[]; // Link to IntegrationURLFormats
@@ -4691,6 +4715,14 @@ export class CompanyIntegrationRun_ {
     Comments?: string;
           
     @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
+          
+    @Field() 
     @MaxLength(200)
     RunByUser: string;
         
@@ -5008,6 +5040,14 @@ export class ErrorLog_ {
           
     @Field({nullable: true}) 
     Details?: string;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
         
 }
         
@@ -5882,6 +5922,14 @@ export class UserApplication_ {
     IsActive: boolean;
           
     @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
+          
+    @Field() 
     @MaxLength(200)
     User: string;
           
@@ -6050,6 +6098,14 @@ export class CompanyIntegrationRunAPILog_ {
           
     @Field({nullable: true}) 
     Parameters?: string;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
         
 }
         
@@ -6184,6 +6240,14 @@ export class List_ {
           
     @Field(() => Int, {nullable: true}) 
     CategoryID?: number;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
           
     @Field() 
     @MaxLength(510)
@@ -6375,6 +6439,14 @@ export class ListDetail_ {
     Sequence: number;
           
     @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
+          
+    @Field() 
     @MaxLength(200)
     List: string;
         
@@ -6512,6 +6584,14 @@ export class UserViewRun_ {
           
     @Field(() => Int) 
     RunByUserID: number;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
           
     @Field() 
     @MaxLength(200)
@@ -7111,6 +7191,14 @@ export class WorkflowEngine_ {
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
         
     @Field(() => [mj_core_schema_server_object_types.Workflow_])
     WorkflowsArray: mj_core_schema_server_object_types.Workflow_[]; // Link to Workflows
@@ -7727,6 +7815,14 @@ export class AuditLog_ {
     UpdatedAt: Date;
           
     @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
+          
+    @Field() 
     @MaxLength(200)
     User: string;
           
@@ -8056,6 +8152,14 @@ export class AuthorizationRole_ {
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
         
 }
 //****************************************************************************
@@ -8436,6 +8540,14 @@ export class AIModel_ {
     UpdatedAt: Date;
           
     @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
+          
+    @Field() 
     @MaxLength(100)
     AIModelType: string;
         
@@ -8687,6 +8799,14 @@ export class AIAction_ {
     @MaxLength(8)
     UpdatedAt: Date;
           
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
+          
     @Field({nullable: true}) 
     @MaxLength(100)
     DefaultModel?: string;
@@ -8874,6 +8994,14 @@ export class AIModelAction_ {
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
           
     @Field() 
     @MaxLength(100)
@@ -9273,6 +9401,14 @@ export class AIModelType_ {
           
     @Field({nullable: true}) 
     Description?: string;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
         
     @Field(() => [mj_core_schema_server_object_types.AIModel_])
     AIModelsArray: mj_core_schema_server_object_types.AIModel_[]; // Link to AIModels
@@ -9429,6 +9565,14 @@ export class QueueType_ {
           
     @Field(() => Boolean) 
     IsActive: boolean;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
         
     @Field(() => [mj_core_schema_server_object_types.Queue_])
     QueuesArray: mj_core_schema_server_object_types.Queue_[]; // Link to Queues
@@ -9571,6 +9715,14 @@ export class Queue_ {
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
           
     @Field() 
     @MaxLength(100)
@@ -9815,6 +9967,14 @@ export class QueueTask_ {
     Comments?: string;
           
     @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
+          
+    @Field() 
     @MaxLength(100)
     Queue: string;
         
@@ -9989,6 +10149,14 @@ export class Dashboard_ {
     @Field(() => Int, {nullable: true}) 
     UserID?: number;
           
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
+          
     @Field({nullable: true}) 
     @MaxLength(200)
     Category?: string;
@@ -10140,6 +10308,14 @@ export class OutputTriggerType_ {
           
     @Field({nullable: true}) 
     Description?: string;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
         
     @Field(() => [mj_core_schema_server_object_types.Report_])
     ReportsArray: mj_core_schema_server_object_types.Report_[]; // Link to Reports
@@ -10224,6 +10400,14 @@ export class OutputFormatType_ {
           
     @Field({nullable: true}) 
     DisplayFormat?: string;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
         
     @Field(() => [mj_core_schema_server_object_types.Report_])
     ReportsArray: mj_core_schema_server_object_types.Report_[]; // Link to Reports
@@ -10305,6 +10489,14 @@ export class OutputDeliveryType_ {
           
     @Field({nullable: true}) 
     Description?: string;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
         
     @Field(() => [mj_core_schema_server_object_types.Report_])
     ReportsArray: mj_core_schema_server_object_types.Report_[]; // Link to Reports
@@ -10439,6 +10631,14 @@ export class Report_ {
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
           
     @Field({nullable: true}) 
     @MaxLength(200)
@@ -10704,6 +10904,14 @@ export class ReportSnapshot_ {
     UserID?: number;
           
     @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
+          
+    @Field() 
     @MaxLength(510)
     Report: string;
           
@@ -10954,6 +11162,14 @@ export class Tag_ {
     @Field(() => Int, {nullable: true}) 
     ParentID?: number;
           
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
+          
     @Field({nullable: true}) 
     @MaxLength(510)
     Parent?: string;
@@ -11054,6 +11270,14 @@ export class TaggedItem_ {
     RecordID: string;
           
     @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
+          
+    @Field() 
     @MaxLength(510)
     Tag: string;
           
@@ -11141,6 +11365,14 @@ export class Workspace_ {
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
           
     @Field() 
     @MaxLength(200)
@@ -11314,6 +11546,14 @@ export class WorkspaceItem_ {
     UpdatedAt: Date;
           
     @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
+          
+    @Field() 
     @MaxLength(510)
     WorkSpace: string;
           
@@ -11484,6 +11724,14 @@ export class Dataset_ {
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
         
     @Field(() => [mj_core_schema_server_object_types.DatasetItem_])
     DatasetItemsArray: mj_core_schema_server_object_types.DatasetItem_[]; // Link to DatasetItems
@@ -11592,6 +11840,14 @@ export class DatasetItem_ {
     UpdatedAt: Date;
           
     @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
+          
+    @Field() 
     @MaxLength(510)
     Entity: string;
         
@@ -11685,6 +11941,14 @@ export class ConversationDetail_ {
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
           
     @Field({nullable: true}) 
     @MaxLength(200)
@@ -11882,6 +12146,14 @@ export class Conversation_ {
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
           
     @Field() 
     @MaxLength(200)
@@ -12109,6 +12381,14 @@ export class UserNotification_ {
     UpdatedAt: Date;
           
     @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
+          
+    @Field() 
     @MaxLength(200)
     User: string;
         
@@ -12287,6 +12567,14 @@ export class SchemaInfo_ {
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
         
 }
         
@@ -12434,6 +12722,14 @@ export class CompanyIntegrationRecordMap_ {
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
           
     @Field() 
     @MaxLength(510)
@@ -12606,6 +12902,14 @@ export class RecordMergeLog_ {
     @Field({nullable: true}) 
     @MaxLength(8)
     UpdatedAt?: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
           
     @Field() 
     @MaxLength(510)
@@ -12819,6 +13123,14 @@ export class RecordMergeDeletionLog_ {
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
         
 }
         
@@ -13753,6 +14065,14 @@ export class VectorIndex_ {
     UpdatedAt: Date;
           
     @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
+          
+    @Field() 
     @MaxLength(200)
     VectorDatabase: string;
           
@@ -14198,6 +14518,14 @@ export class VectorDatabase_ {
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
         
     @Field(() => [mj_core_schema_server_object_types.VectorIndex_])
     VectorIndexesArray: mj_core_schema_server_object_types.VectorIndex_[]; // Link to VectorIndexes
@@ -14791,6 +15119,14 @@ export class DataContextItem_ {
     UpdatedAt: Date;
           
     @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
+          
+    @Field() 
     @MaxLength(510)
     DataContext: string;
           
@@ -14990,6 +15326,14 @@ export class DataContext_ {
     UpdatedAt: Date;
           
     @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
+          
+    @Field() 
     @MaxLength(200)
     User: string;
         
@@ -15169,6 +15513,14 @@ export class UserViewCategory_ {
           
     @Field(() => Int) 
     UserID: number;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
           
     @Field({nullable: true}) 
     @MaxLength(200)
@@ -15358,6 +15710,14 @@ export class DashboardCategory_ {
     @Field(() => Int) 
     UserID: number;
           
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
+          
     @Field({nullable: true}) 
     @MaxLength(200)
     Parent?: string;
@@ -15539,6 +15899,14 @@ export class ReportCategory_ {
           
     @Field(() => Int) 
     UserID: number;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
           
     @Field({nullable: true}) 
     @MaxLength(200)
@@ -15729,6 +16097,14 @@ export class FileStorageProvider_ {
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
         
     @Field(() => [mj_core_schema_server_object_types.File_])
     FilesArray: mj_core_schema_server_object_types.File_[]; // Link to Files
@@ -15910,6 +16286,14 @@ export class File_ {
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
           
     @Field() 
     @MaxLength(100)
@@ -16097,6 +16481,14 @@ export class FileCategory_ {
     @MaxLength(8)
     UpdatedAt: Date;
           
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
+          
     @Field({nullable: true}) 
     @MaxLength(510)
     Parent?: string;
@@ -16265,6 +16657,14 @@ export class FileEntityRecordLink_ {
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
           
     @Field() 
     @MaxLength(1000)
@@ -16625,6 +17025,14 @@ export class DuplicateRunDetailMatch_ {
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
         
 }
         
@@ -17130,6 +17538,14 @@ export class DuplicateRun_ {
     UpdatedAt: Date;
           
     @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
+          
+    @Field() 
     @MaxLength(510)
     Entity: string;
           
@@ -17348,6 +17764,14 @@ export class DuplicateRunDetail_ {
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
         
     @Field(() => [mj_core_schema_server_object_types.DuplicateRunDetailMatch_])
     DuplicateRunDetailMatchesArray: mj_core_schema_server_object_types.DuplicateRunDetailMatch_[]; // Link to DuplicateRunDetailMatches
@@ -18512,6 +18936,14 @@ export class ActionAuthorization_ {
     UpdatedAt: Date;
           
     @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
+          
+    @Field() 
     @MaxLength(850)
     Action: string;
         
@@ -19443,6 +19875,14 @@ export class ActionContextType_ {
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
         
     @Field(() => [mj_core_schema_server_object_types.ActionContext_])
     ActionContextsArray: mj_core_schema_server_object_types.ActionContext_[]; // Link to ActionContexts
@@ -19593,6 +20033,14 @@ export class ActionResultCode_ {
     UpdatedAt: Date;
           
     @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
+          
+    @Field() 
     @MaxLength(850)
     Action: string;
         
@@ -19738,6 +20186,14 @@ export class ActionContext_ {
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
           
     @Field() 
     @MaxLength(850)
@@ -19903,6 +20359,14 @@ export class ActionExecutionLog_ {
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
           
     @Field() 
     @MaxLength(850)
@@ -20097,12 +20561,19 @@ export class ActionParam_ {
     UpdatedAt: Date;
           
     @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
+          
+    @Field() 
     @MaxLength(850)
     Action: string;
         
     @Field(() => [mj_core_schema_server_object_types.EntityActionParam_])
     EntityActionParamsArray: mj_core_schema_server_object_types.EntityActionParam_[]; // Link to EntityActionParams
-    
     
 }
         
@@ -20283,6 +20754,14 @@ export class ActionLibrary_ {
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
           
     @Field() 
     @MaxLength(850)
@@ -20615,6 +21094,14 @@ export class ListCategory_ {
           
     @Field(() => Int) 
     UserID: number;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
         
 }
         
@@ -20765,6 +21252,14 @@ export class CommunicationProvider_ {
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
         
     @Field(() => [mj_core_schema_server_object_types.CommunicationProviderMessageType_])
     CommunicationProviderMessageTypesArray: mj_core_schema_server_object_types.CommunicationProviderMessageType_[]; // Link to CommunicationProviderMessageTypes
@@ -20953,6 +21448,14 @@ export class CommunicationRun_ {
     UpdatedAt: Date;
           
     @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
+          
+    @Field() 
     @MaxLength(200)
     User: string;
         
@@ -21134,6 +21637,14 @@ export class CommunicationProviderMessageType_ {
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
           
     @Field() 
     @MaxLength(510)
@@ -21327,6 +21838,14 @@ export class CommunicationLog_ {
     UpdatedAt: Date;
           
     @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
+          
+    @Field() 
     @MaxLength(510)
     CommunicationProvider: string;
           
@@ -21506,6 +22025,14 @@ export class CommunicationBaseMessageType_ {
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
         
     @Field(() => [mj_core_schema_server_object_types.CommunicationProviderMessageType_])
     CommunicationProviderMessageTypesArray: mj_core_schema_server_object_types.CommunicationProviderMessageType_[]; // Link to CommunicationProviderMessageTypes
@@ -21694,6 +22221,14 @@ export class Template_ {
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
           
     @Field({nullable: true}) 
     @MaxLength(510)
@@ -21895,6 +22430,14 @@ export class TemplateCategory_ {
     @MaxLength(8)
     UpdatedAt: Date;
           
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
+          
     @Field({nullable: true}) 
     @MaxLength(510)
     Parent?: string;
@@ -22074,6 +22617,14 @@ export class TemplateContent_ {
     UpdatedAt: Date;
           
     @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
+          
+    @Field() 
     @MaxLength(510)
     Template: string;
           
@@ -22248,6 +22799,14 @@ export class TemplateParam_ {
     UpdatedAt: Date;
           
     @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
+          
+    @Field() 
     @MaxLength(510)
     Template: string;
           
@@ -22418,6 +22977,14 @@ export class TemplateContentType_ {
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
         
     @Field(() => [mj_core_schema_server_object_types.TemplateContent_])
     TemplateContentsArray: mj_core_schema_server_object_types.TemplateContent_[]; // Link to TemplateContents
@@ -22559,6 +23126,14 @@ export class Recommendation_ {
     @Field({nullable: true}) 
     @MaxLength(8)
     UpdatedAt?: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
           
     @Field() 
     @MaxLength(510)
@@ -22708,6 +23283,14 @@ export class RecommendationProvider_ {
     @Field({nullable: true}) 
     @MaxLength(8)
     UpdatedAt?: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
         
     @Field(() => [mj_core_schema_server_object_types.RecommendationRun_])
     RecommendationRunsArray: mj_core_schema_server_object_types.RecommendationRun_[]; // Link to RecommendationRuns
@@ -22861,6 +23444,14 @@ export class RecommendationRun_ {
     @Field({nullable: true}) 
     @MaxLength(8)
     UpdatedAt?: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
           
     @Field() 
     @MaxLength(510)
@@ -23037,6 +23628,14 @@ export class RecommendationItem_ {
     @Field({nullable: true}) 
     @MaxLength(8)
     UpdatedAt?: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
           
     @Field() 
     @MaxLength(510)
@@ -23483,6 +24082,14 @@ export class RecordChangeReplayRun_ {
     UpdatedAt: Date;
           
     @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
+          
+    @Field() 
     @MaxLength(200)
     User: string;
         
@@ -23640,6 +24247,14 @@ export class LibraryItem_ {
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
           
     @Field() 
     @MaxLength(510)
