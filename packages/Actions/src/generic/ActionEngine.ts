@@ -98,7 +98,7 @@ export class ActionResult {
 }
 
 /**
- * Generic class for holding parameters for an action for both inputs and outputs
+ * Runtime parameter class that is used to pass key/value pairs in arrays to/from the action engine.  
  */
 export class ActionParam {
    /**

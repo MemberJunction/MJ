@@ -122,10 +122,33 @@ export class MJLinkField extends BaseRecordComponent implements AfterViewInit {
         this.matchingRecords = [];
         if (relatedEntityID) {
             this.RelatedEntityInfo = md.EntityByID(relatedEntityID); 
-            // do a lookup using runView for records that have the Name field that start with the query
             this.RelatedEntityNameField = this.RelatedEntityInfo.NameField ? this.RelatedEntityInfo.NameField.Name : '';
+            const escapedQuery = query.replace(/'/g, "''");
+            let filter = '';
+
+            if (!this.RelatedEntityInfo.FirstPrimaryKey.NeedsQuotes) {
+                // the pkey is a number, so let's see if the query is a number
+                if (isNaN(Number(query)) && this.RelatedEntityNameField === '') {
+                    // if the query is not a number (for number pkeys) and we don't have a name field to search on, then we can't search
+                    return;
+                }
+                else {
+                    // if we get here it means we either have a RelatedEntityNameField to search on or the query is a number
+                    if (!isNaN(Number(query))) {
+                        // if the query is a number, then we can search on the pkey
+                        filter = `[${this.RelatedEntityInfo.FirstPrimaryKey.Name}] = ${query}`;    
+                    }
+                }
+            }
+            else {
+                // the pkey is a string, so we can search on it no matter what the query is, a number, not a number, whatever
+                filter = `[${this.RelatedEntityInfo.FirstPrimaryKey.Name}] = '${escapedQuery}'`;
+            }
+            
             if (this.RelatedEntityNameField) {
-                const filter = `[${this.RelatedEntityNameField}] LIKE '${query}%'`;
+                filter = `[${this.RelatedEntityNameField}] LIKE '${escapedQuery}%'${filter.length > 0 ? ' OR ' + filter : ''}`;
+            }
+            if (filter && filter.length > 0) {
                 const rv = new RunView();
                 const result = await rv.RunView({
                     EntityName: this.RelatedEntityInfo.Name,
@@ -135,16 +158,27 @@ export class MJLinkField extends BaseRecordComponent implements AfterViewInit {
                     MaxRows: 5
                 })
                 if (result && result.Results?.length > 0) {
-                    this.matchingRecords = result.Results.filter(record => record[this.RelatedEntityNameField].toLowerCase().includes(query.toLowerCase()));    
-                }
+                    this.matchingRecords = result.Results;
+                }    
+            }
+            else {
+                this.matchingRecords = [<BaseEntity><any>{Name: "Can't search on " + this.RelatedEntityInfo.Name + ' records'}]; // this will have the effect of a single record in the list that says "Can't search on..."
             }
         }
     }
 
     public onRecordSelected(linkedRecord: BaseEntity) {
-        this.RecordName = linkedRecord.Get(this.RelatedEntityNameField);
-        this.RecordLinked = true;
-        this.showMatchingRecords = false;
-        this.record.Set(this.FieldName, linkedRecord.FirstPrimaryKey.Value);
+        if (linkedRecord.EntityInfo) {
+            this.RecordName = this.RelatedEntityNameField ? linkedRecord.Get(this.RelatedEntityNameField) : linkedRecord.PrimaryKey.ToString();
+            this.RecordLinked = true;
+            this.showMatchingRecords = false;
+            this.record.Set(this.FieldName, linkedRecord.FirstPrimaryKey.Value);    
+        }
+        else {
+            // this means that we really don't have a selected record and we were just showing the "Can't search on..." record
+            this.showMatchingRecords = false;
+            this.RecordLinked = false;
+            this.RecordName = '';
+        }
     }
 }
