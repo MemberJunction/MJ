@@ -1,20 +1,37 @@
-<!-- <input type="text" class="input-box" [ngClass]="RecordLinked ? 'record-linked' : ''" [(ngModel)]="RecordName" kendoTextBox /><button kendoButton (click)="onClearClicked()">Clear</button>
- -->
+@if (RelatedEntityInfo) {
+    <div>
+        @if (LinkComponentType === 'Search') {
+            <input 
+                #inputBox
+                type="text" 
+                class="input-box" 
+                [ngClass]="RecordLinked ? 'record-linked' : ''" 
+                [(ngModel)]="RecordName" 
+                kendoTextBox 
+            />
+            <button kendoButton (click)="onClearClicked()">Clear</button>
 
-<div>
-    <input 
-        #inputBox
-        type="text" 
-        class="input-box" 
-        [ngClass]="RecordLinked ? 'record-linked' : ''" 
-        [(ngModel)]="RecordName" 
-        kendoTextBox 
-    />
-    <button kendoButton (click)="onClearClicked()">Clear</button>
-
-    <ul *ngIf="showMatchingRecords" class="matching-records">
-        <li *ngFor="let record of matchingRecords" (click)="onRecordSelected(record)">
-            {{ RelatedEntityNameField ? record.Get(RelatedEntityNameField) : record.PrimaryKey.ToString() }}
-        </li>
-    </ul>
-</div>
+            <ul *ngIf="showMatchingRecords" class="matching-records">
+                <li *ngFor="let record of RelatedEntityRecords" (click)="onRecordSelected(record)">
+                    {{ RelatedEntityNameField ? record.Get(RelatedEntityNameField) : record.PrimaryKey.ToString() }}
+                </li>
+            </ul>
+        }
+        @else {
+            <kendo-multicolumncombobox 
+                [data]="RelatedEntityRecords"
+                [textField]="RelatedEntityInfo.NameField ? RelatedEntityInfo.NameField.Name : RelatedEntityInfo.FirstPrimaryKey.Name"
+                [valueField]="RelatedEntityInfo.FirstPrimaryKey.Name"
+                [(value)]="SelectedRecord"
+                >
+                @for (d of dropDownColumns; track d) {
+                    <kendo-combobox-column
+                        [field]="d.Name"
+                        [title]="d.DisplayNameOrName"
+                    >
+                    </kendo-combobox-column>
+                }
+            </kendo-multicolumncombobox> 
+        }
+    </div>
+}

@@ -16,6 +16,7 @@ import { CommunicationProviderMessageTypeEntity } from '@memberjunction/core-ent
             Type="numerictextbox"
             [EditMode]="EditMode"
             LinkType="Record"
+            LinkComponentType="Dropdown"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -24,6 +25,7 @@ import { CommunicationProviderMessageTypeEntity } from '@memberjunction/core-ent
             Type="numerictextbox"
             [EditMode]="EditMode"
             LinkType="Record"
+            LinkComponentType="Dropdown"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"

@@ -2724,6 +2724,23 @@ import { RegisterClass } from "@memberjunction/global";
         }
         
         /**
+        * * Field Name: RelationshipDefaultDisplayType
+        * * Display Name: Relationship Default Display Type
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: getutcdate()
+        * * Value List Type: List
+        * * Possible Values 
+        *   * Search
+        *   * Dropdown
+        * * Description: When another entity links to this entity with a foreign key, this is the default component type that will be used in the UI. CodeGen will populate the RelatedEntityDisplayType column in the Entity Fields entity with whatever is provided here whenever a new foreign key is detected by CodeGen. The selection can be overridden on a per-foreign-key basis in each row of the Entity Fields entity.
+        */
+        get RelationshipDefaultDisplayType(): 'Search' | 'Dropdown' {  
+            return this.Get('RelationshipDefaultDisplayType');
+        }
+        set RelationshipDefaultDisplayType(value: 'Search' | 'Dropdown') {
+            this.Set('RelationshipDefaultDisplayType', value);
+        }
+        /**
         * * Field Name: CodeName
         * * Display Name: Code Name
         * * SQL Data Type: nvarchar(MAX)
@@ -2737,7 +2754,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: ClassName
         * * Display Name: Class Name
         * * SQL Data Type: nvarchar(MAX)
-        * * Default Value: getutcdate()
+        * * Default Value: Search
         */
         get ClassName(): string | null {  
             return this.Get('ClassName');

@@ -30,6 +30,7 @@ import { DashboardCategoryEntity } from '@memberjunction/core-entities';
             Type="numerictextbox"
             [EditMode]="EditMode"
             LinkType="Record"
+            LinkComponentType="Dropdown"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -38,6 +39,7 @@ import { DashboardCategoryEntity } from '@memberjunction/core-entities';
             Type="numerictextbox"
             [EditMode]="EditMode"
             LinkType="Record"
+            LinkComponentType="Dropdown"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"

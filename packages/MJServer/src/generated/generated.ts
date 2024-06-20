@@ -2,7 +2,7 @@
 * ALL ENTITIES - TypeGraphQL Type Class Definition - AUTO GENERATED FILE
 * Generated Entities and Resolvers for Server
 * 
-* GENERATED: 6/20/2024, 9:07:57 AM
+* GENERATED: 6/20/2024, 1:14:32 PM
 * 
 *   >>> DO NOT MODIFY THIS FILE!!!!!!!!!!!!
 *   >>> YOUR CHANGES WILL BE OVERWRITTEN
@@ -2501,6 +2501,10 @@ export class Entity_ {
     @MaxLength(10)
     _mj__UpdatedAt: Date;
           
+    @Field({description: 'When another entity links to this entity with a foreign key, this is the default component type that will be used in the UI. CodeGen will populate the RelatedEntityDisplayType column in the Entity Fields entity with whatever is provided here whenever a new foreign key is detected by CodeGen. The selection can be overridden on a per-foreign-key basis in each row of the Entity Fields entity.'}) 
+    @MaxLength(40)
+    RelationshipDefaultDisplayType: string;
+          
     @Field({nullable: true}) 
     CodeName?: string;
           
@@ -2756,6 +2760,9 @@ export class CreateEntityInput {
 
     @Field({ nullable: true })
     Icon?: string;
+
+    @Field()
+    RelationshipDefaultDisplayType: string;
 }
     
         
@@ -2883,6 +2890,9 @@ export class UpdateEntityInput {
 
     @Field({ nullable: true })
     Icon?: string;
+
+    @Field()
+    RelationshipDefaultDisplayType: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
