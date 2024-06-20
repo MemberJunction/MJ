@@ -2,6 +2,77 @@
   "name": "@memberjunction/ng-form-toolbar",
   "entries": [
     {
+      "date": "Wed, 19 Jun 2024 16:32:44 GMT",
+      "version": "1.8.0",
+      "tag": "@memberjunction/ng-form-toolbar_v1.8.0",
+      "comments": {
+        "minor": [
+          {
+            "author": "jonathan.stfelix@bluecypress.io",
+            "package": "@memberjunction/ng-form-toolbar",
+            "commit": "1c2fff38336c4c90e218b219623a055a1cb2924c",
+            "comment": "Applying package updates [skip ci]"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-form-toolbar",
+            "comment": "Bump @memberjunction/global to v1.8.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-form-toolbar",
+            "comment": "Bump @memberjunction/core to v1.8.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-form-toolbar",
+            "comment": "Bump @memberjunction/ng-shared to v1.8.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-form-toolbar",
+            "comment": "Bump @memberjunction/ng-base-forms to v1.8.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-form-toolbar",
+            "comment": "Bump @memberjunction/ng-ask-skip to v1.8.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-form-toolbar",
+            "comment": "Bump @memberjunction/ng-record-changes to v1.8.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-form-toolbar",
+            "comment": "Bump @memberjunction/ng-container-directives to v1.8.0",
+            "commit": "not available"
+          }
+        ],
+        "patch": [
+          {
+            "author": "97354817+AN-BC@users.noreply.github.com",
+            "package": "@memberjunction/ng-form-toolbar",
+            "commit": "988b020f185a009618a46d8d56ee3eb45b1a4f7f",
+            "comment": "Applying package updates [skip ci]"
+          },
+          {
+            "author": "97354817+AN-BC@users.noreply.github.com",
+            "package": "@memberjunction/ng-form-toolbar",
+            "commit": "f6ebf268643072af1d8e1798045676d55112cc68",
+            "comment": "Applying package updates [skip ci]"
+          }
+        ]
+      }
+    },
+    {
       "date": "Wed, 12 Jun 2024 20:13:29 GMT",
       "version": "1.7.1",
       "tag": "@memberjunction/ng-form-toolbar_v1.7.1",

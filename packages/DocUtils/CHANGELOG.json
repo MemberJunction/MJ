@@ -2,6 +2,53 @@
   "name": "@memberjunction/doc-utils",
   "entries": [
     {
+      "date": "Wed, 19 Jun 2024 16:32:44 GMT",
+      "version": "1.8.0",
+      "tag": "@memberjunction/doc-utils_v1.8.0",
+      "comments": {
+        "minor": [
+          {
+            "author": "jonathan.stfelix@bluecypress.io",
+            "package": "@memberjunction/doc-utils",
+            "commit": "1c2fff38336c4c90e218b219623a055a1cb2924c",
+            "comment": "Applying package updates [skip ci]"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/doc-utils",
+            "comment": "Bump @memberjunction/core to v1.8.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/doc-utils",
+            "comment": "Bump @memberjunction/core-entities to v1.8.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/doc-utils",
+            "comment": "Bump @memberjunction/global to v1.8.0",
+            "commit": "not available"
+          }
+        ],
+        "patch": [
+          {
+            "author": "97354817+AN-BC@users.noreply.github.com",
+            "package": "@memberjunction/doc-utils",
+            "commit": "16720f1a3661fddd20afcbf3afe58d9bd4bf2fa8",
+            "comment": "Applying package updates [skip ci]"
+          },
+          {
+            "author": "97354817+AN-BC@users.noreply.github.com",
+            "package": "@memberjunction/doc-utils",
+            "commit": "baa78189045985f29e053a990e9066f5e0825ade",
+            "comment": "Applying package updates [skip ci]"
+          }
+        ]
+      }
+    },
+    {
       "date": "Wed, 12 Jun 2024 20:13:28 GMT",
       "version": "1.7.1",
       "tag": "@memberjunction/doc-utils_v1.7.1",
