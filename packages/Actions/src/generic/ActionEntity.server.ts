@@ -85,7 +85,10 @@ export class ActionEntityServerEntity extends ActionEntity {
 
         let newCodeGenerated: boolean = false;
         let codeLibraries: ActionLibrary[] = [];
-        if (this.GetFieldByName('UserPrompt').Dirty|| !this.IsSaved || this.ForceCodeGeneration) {
+        if ( this.Type === 'Generated' && // only generate when the type is Generated
+             !this.CodeLocked && // only generate when the code is not locked
+             (this.GetFieldByName('UserPrompt').Dirty || !this.IsSaved || this.ForceCodeGeneration)  // only generate when the UserPrompt field is dirty or this is a new record or we are being asked to FORCE code generation
+           ) {
             // UserPrompt field is dirty, or this is a new record, either way, this is the condition where we want to generate the Code.
             const result = await this.GenerateCode();
             if (result.Success) {
@@ -100,73 +103,77 @@ export class ActionEntityServerEntity extends ActionEntity {
             else
                 throw new Error(`Failed to generate code for Action ${this.Name}.`);
         }
+
         this.ForceCodeGeneration = false; // make sure to reset this flag every time we save, it should never live past one run of the Save method, of course if Save fails, below, then it will not be reset
         const wasNewRecord = !this.IsSaved;
         if (await super.Save(options)) {
-            if (newCodeGenerated) {
-                // new code was generated, we need to sync up the ActionLibraries table with the libraries used in the code for this Action
-                // get a list of existing ActionLibrary records that match this Action
-                const existingLibraries: ActionLibraryEntity[] = [];       
-                if (!wasNewRecord) {
-                    const rv = new RunView();
-                    const libResult = await rv.RunView(
-                        {
-                            EntityName: 'Action Libraries',
-                            ExtraFilter: `ActionID = ${this.ID}`,
-                            ResultType: 'entity_object'
-                        },
-                        this.ContextCurrentUser
-                    );
-                    if (libResult.Success && libResult.Results.length > 0) {
-                        existingLibraries.push(...libResult.Results);
-                    }
-                }
-
-                // now we need to go through the libraries we ARE currently using in the current code and make sure they are in the ActionLibraries table
-                // and make sure nothing is in the table that we are not using
-                const librariesToAdd = codeLibraries.filter(l => !existingLibraries.some(el => el.Library.trim().toLowerCase() === l.LibraryName.trim().toLowerCase()));
-                const librariesToRemove = existingLibraries.filter(el => !codeLibraries.some(l => l.LibraryName.trim().toLowerCase() === el.Library.trim().toLowerCase()));
-                const librariesToUpdate = existingLibraries.filter(el => codeLibraries.some(l => l.LibraryName.trim().toLowerCase() === el.Library.trim().toLowerCase()));
-                const md = new Metadata();
-                const tg = await md.CreateTransactionGroup();
-                for (const lib of librariesToAdd) {
-                    const libMetadata = md.Libraries.find(l => l.Name.trim().toLowerCase() === lib.LibraryName.trim().toLowerCase());
-                    if (libMetadata) {
-                        const newLib = await md.GetEntityObject<ActionLibraryEntity>('Action Libraries', this.ContextCurrentUser);
-                        newLib.ActionID = this.ID;
-                        newLib.LibraryID = libMetadata.ID;
-                        newLib.ItemsUsed = lib.ItemsUsed.join(',');
-                        newLib.TransactionGroup = tg;
-                        newLib.Save(); // no await, within a TG
-                    }
-                }
-
-                // now update the libraries that were already in place to ensure the ItemsUsed are up to date
-                for (const lib of librariesToUpdate) {
-                    const newCode = codeLibraries.find(l => l.LibraryName.trim().toLowerCase() === lib.Library.trim().toLowerCase());
-                    lib.ItemsUsed = newCode.ItemsUsed.join(',');
-                    lib.TransactionGroup = tg;
-                    lib.Save(); // no await, within a TG
-                }
-
-                // now remove the libraries that are no longer used
-                for (const lib of librariesToRemove) {
-                    // each lib in this array iteration is already a BaseEntity derived object
-                    lib.TransactionGroup = tg;
-                    lib.Delete(); // no await, within a TG
-                }
-
-                // now commit the transaction
-                if (await tg.Submit()) 
-                    return true
-                else
-                    return false;
-            }
+            if (newCodeGenerated) 
+                return this.manageLibraries(codeLibraries, wasNewRecord);
             else 
                 return true;
         }
         else
             return false;        
+    }
+
+    protected async manageLibraries(codeLibraries: ActionLibrary[], wasNewRecord: boolean): Promise<boolean> {
+        // new code was generated, we need to sync up the ActionLibraries table with the libraries used in the code for this Action
+        // get a list of existing ActionLibrary records that match this Action
+        const existingLibraries: ActionLibraryEntity[] = [];       
+        if (!wasNewRecord) {
+            const rv = new RunView();
+            const libResult = await rv.RunView(
+                {
+                    EntityName: 'Action Libraries',
+                    ExtraFilter: `ActionID = ${this.ID}`,
+                    ResultType: 'entity_object'
+                },
+                this.ContextCurrentUser
+            );
+            if (libResult.Success && libResult.Results.length > 0) {
+                existingLibraries.push(...libResult.Results);
+            }
+        }
+
+        // now we need to go through the libraries we ARE currently using in the current code and make sure they are in the ActionLibraries table
+        // and make sure nothing is in the table that we are not using
+        const librariesToAdd = codeLibraries.filter(l => !existingLibraries.some(el => el.Library.trim().toLowerCase() === l.LibraryName.trim().toLowerCase()));
+        const librariesToRemove = existingLibraries.filter(el => !codeLibraries.some(l => l.LibraryName.trim().toLowerCase() === el.Library.trim().toLowerCase()));
+        const librariesToUpdate = existingLibraries.filter(el => codeLibraries.some(l => l.LibraryName.trim().toLowerCase() === el.Library.trim().toLowerCase()));
+        const md = new Metadata();
+        const tg = await md.CreateTransactionGroup();
+        for (const lib of librariesToAdd) {
+            const libMetadata = md.Libraries.find(l => l.Name.trim().toLowerCase() === lib.LibraryName.trim().toLowerCase());
+            if (libMetadata) {
+                const newLib = await md.GetEntityObject<ActionLibraryEntity>('Action Libraries', this.ContextCurrentUser);
+                newLib.ActionID = this.ID;
+                newLib.LibraryID = libMetadata.ID;
+                newLib.ItemsUsed = lib.ItemsUsed.join(',');
+                newLib.TransactionGroup = tg;
+                newLib.Save(); // no await, within a TG
+            }
+        }
+
+        // now update the libraries that were already in place to ensure the ItemsUsed are up to date
+        for (const lib of librariesToUpdate) {
+            const newCode = codeLibraries.find(l => l.LibraryName.trim().toLowerCase() === lib.Library.trim().toLowerCase());
+            lib.ItemsUsed = newCode.ItemsUsed.join(',');
+            lib.TransactionGroup = tg;
+            lib.Save(); // no await, within a TG
+        }
+
+        // now remove the libraries that are no longer used
+        for (const lib of librariesToRemove) {
+            // each lib in this array iteration is already a BaseEntity derived object
+            lib.TransactionGroup = tg;
+            lib.Delete(); // no await, within a TG
+        }
+
+        // now commit the transaction
+        if (await tg.Submit()) 
+            return true;
+        else
+            return false;
     }
 
     protected SendMessage(message: string) {
@@ -205,7 +212,7 @@ export class ActionEntityServerEntity extends ActionEntity {
             let result: GeneratedCode = await this.InternalGenerateCode(llm, chatParams, maxAttempts);
             if(result.Success){
                 //now run the code through the QA agent to make sure the code is valid
-                let qaResult: GeneratedCode = await this.ValidateCode(llm, result, maxAttempts);
+                let qaResult: GeneratedCode = await this.ValidateCode(llm, this.UserPrompt, result, maxAttempts);
                 return qaResult;
             }
             else{
@@ -272,10 +279,10 @@ export class ActionEntityServerEntity extends ActionEntity {
         }
     }
 
-    protected async ValidateCode(llm: BaseLLM, generatedCode: GeneratedCode, attemptsRemaining: number): Promise<GeneratedCode> {
+    protected async ValidateCode(llm: BaseLLM, userRequest: string, generatedCode: GeneratedCode, attemptsRemaining: number): Promise<GeneratedCode> {
         this.SendMessage(`Reviewing code...`);
         const model = await AIEngine.Instance.GetHighestPowerModel(this.AIVendorName, 'llm', this.ContextCurrentUser)
-        const promptMessage: string = this.GenerateValidateCodePrompt(generatedCode);
+        const promptMessage: string = this.GenerateValidateCodePrompt(userRequest, generatedCode);
         const validatePrompt: ChatMessage = {
             role: 'system',
             content: promptMessage
@@ -289,8 +296,16 @@ export class ActionEntityServerEntity extends ActionEntity {
         if(result.Success){
             return result;
         }
-        else{
-            return this.ValidateCode(llm, generatedCode, attemptsRemaining - 1);
+        else if (attemptsRemaining > 1) { 
+            return this.ValidateCode(llm, userRequest, generatedCode, attemptsRemaining - 1);
+        }
+        else {
+            return {
+                Success: false,
+                Code: '',
+                Comments: `Error communicating with AI: ${result.Comments}`,
+                LibrariesUsed: []
+            }
         }
     }
 
@@ -325,7 +340,7 @@ const returnType = {
         return prompt;
     }
     
-    public GenerateValidateCodePrompt(generatedCode: GeneratedCode): string {
+    public GenerateValidateCodePrompt(userRequest: string, generatedCode: GeneratedCode): string {
         return `<RETURN_FORMAT>
     * CRITICAL - I am a bot, I can ONLY understand fully formed JSON responses
     * YOUR RESPONSE MUST BE A JSON OBJECT
@@ -343,7 +358,8 @@ Your job is to:
 2- Verify that the given code satifies the user's request.
 </INTRODUCTION>
 
-The user's request is: ${this.UserPrompt}
+The user's original request was:
+${userRequest}
 
 The generated code is below:
 <GENERATEDCODE>
