@@ -20336,6 +20336,18 @@ import { RegisterClass } from "@memberjunction/global";
         }
         
         /**
+        * * Field Name: EntityActionID
+        * * Display Name: Entity Action ID
+        * * SQL Data Type: int
+        * * Related Entity/Foreign Key: Entity Actions (vwEntityActions.ID)
+        */
+        get EntityActionID(): number {  
+            return this.Get('EntityActionID');
+        }
+        set EntityActionID(value: number) {
+            this.Set('EntityActionID', value);
+        }
+        /**
         * * Field Name: ActionParamID
         * * Display Name: Action Param ID
         * * SQL Data Type: int
@@ -20412,7 +20424,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: ActionParam
         * * Display Name: Action Param
         * * SQL Data Type: nvarchar(255)
-        * * Default Value: null
         */
         get ActionParam(): string {  
             return this.Get('ActionParam');

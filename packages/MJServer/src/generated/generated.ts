@@ -2,7 +2,7 @@
 * ALL ENTITIES - TypeGraphQL Type Class Definition - AUTO GENERATED FILE
 * Generated Entities and Resolvers for Server
 * 
-* GENERATED: 6/19/2024, 9:48:11 AM
+* GENERATED: 6/19/2024, 11:24:48 AM
 * 
 *   >>> DO NOT MODIFY THIS FILE!!!!!!!!!!!!
 *   >>> YOUR CHANGES WILL BE OVERWRITTEN
@@ -18194,6 +18194,9 @@ export class EntityAction_ {
     @Field(() => [mj_core_schema_server_object_types.EntityActionFilter_])
     EntityActionFiltersArray: mj_core_schema_server_object_types.EntityActionFilter_[]; // Link to EntityActionFilters
     
+    @Field(() => [mj_core_schema_server_object_types.EntityActionParam_])
+    EntityActionParamsArray: mj_core_schema_server_object_types.EntityActionParam_[]; // Link to EntityActionParams
+    
 }
         
 //****************************************************************************
@@ -18298,6 +18301,14 @@ export class EntityActionResolver extends ResolverBase {
         this.CheckUserReadPermissions('Entity Action Filters', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityActionFilters] WHERE [EntityActionID]=${entityaction_.ID} ` + this.getRowLevelSecurityWhereClause('Entity Action Filters', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Entity Action Filters', await dataSource.query(sSQL));
+        return result;
+    }
+          
+    @FieldResolver(() => [mj_core_schema_server_object_types.EntityActionParam_])
+    async EntityActionParamsArray(@Root() entityaction_: EntityAction_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Entity Action Params', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityActionParams] WHERE [EntityActionID]=${entityaction_.ID} ` + this.getRowLevelSecurityWhereClause('Entity Action Params', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Entity Action Params', await dataSource.query(sSQL));
         return result;
     }
         
@@ -23902,6 +23913,9 @@ export class EntityActionParam_ {
     ID: number;
           
     @Field(() => Int) 
+    EntityActionID: number;
+          
+    @Field(() => Int) 
     ActionParamID: number;
           
     @Field({description: 'Type of the value, which can be Static, Entity Object, or Script.'}) 
@@ -23934,6 +23948,9 @@ export class EntityActionParam_ {
 @InputType()
 export class CreateEntityActionParamInput {
     @Field(() => Int)
+    EntityActionID: number;
+
+    @Field(() => Int)
     ActionParamID: number;
 
     @Field()
@@ -23954,6 +23971,9 @@ export class CreateEntityActionParamInput {
 export class UpdateEntityActionParamInput {
     @Field(() => Int)
     ID: number;
+
+    @Field(() => Int)
+    EntityActionID: number;
 
     @Field(() => Int)
     ActionParamID: number;
