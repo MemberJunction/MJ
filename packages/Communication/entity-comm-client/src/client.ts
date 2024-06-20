@@ -69,17 +69,17 @@ export class EntityCommunicationsEngineClient extends EntityCommunicationsEngine
             return undefined;
 
         return {
-            ID: messageType.ID,
-            CommunicationProviderID: messageType.CommunicationProviderID,
-            CommunicationBaseMessageTypeID: messageType.CommunicationBaseMessageTypeID,
-            Name: messageType.Name,
-            Status: messageType.Status,
-            AdditionalAttributes: messageType.AdditionalAttributes ? messageType.AdditionalAttributes : '',
-            CreatedAt: messageType.CreatedAt,
-            UpdatedAt: messageType.UpdatedAt,
-            CommunicationProvider: messageType.CommunicationProvider,
-            CommunicationBaseMessageType: messageType.CommunicationBaseMessageType
-        }
+          ID: messageType.ID,
+          CommunicationProviderID: messageType.CommunicationProviderID,
+          CommunicationBaseMessageTypeID: messageType.CommunicationBaseMessageTypeID,
+          Name: messageType.Name,
+          Status: messageType.Status,
+          AdditionalAttributes: messageType.AdditionalAttributes ? messageType.AdditionalAttributes : '',
+          __mj_CreatedAt: messageType.__mj_CreatedAt,
+          __mj_UpdatedAt: messageType.__mj_UpdatedAt,
+          CommunicationProvider: messageType.CommunicationProvider,
+          CommunicationBaseMessageType: messageType.CommunicationBaseMessageType,
+        };
     }
 
     protected getTemplateValues(template: TemplateEntityExtended) {
@@ -87,20 +87,20 @@ export class EntityCommunicationsEngineClient extends EntityCommunicationsEngine
             return undefined;
 
         return {
-            ID: template.ID,
-            Name: template.Name,
-            Description: template.Description ? template.Description : '',
-            UserPrompt: template.UserPrompt ? template.UserPrompt : '',
-            CategoryID: template.CategoryID,
-            UserID: template.UserID,
-            ActiveAt: template.ActiveAt,
-            DisabledAt: template.DisabledAt,
-            IsActive: template.IsActive,
-            CreatedAt: template.CreatedAt,
-            UpdatedAt: template.UpdatedAt,
-            Category: template.Category ? template.Category : '',
-            User: template.User
-        }
+          ID: template.ID,
+          Name: template.Name,
+          Description: template.Description ? template.Description : '',
+          UserPrompt: template.UserPrompt ? template.UserPrompt : '',
+          CategoryID: template.CategoryID,
+          UserID: template.UserID,
+          ActiveAt: template.ActiveAt,
+          DisabledAt: template.DisabledAt,
+          IsActive: template.IsActive,
+          __mj_CreatedAt: template.__mj_CreatedAt,
+          __mj_UpdatedAt: template.__mj_UpdatedAt,
+          Category: template.Category ? template.Category : '',
+          User: template.User,
+        };
     }
 }
 

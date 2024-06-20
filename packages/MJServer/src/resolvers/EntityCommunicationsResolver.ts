@@ -169,7 +169,7 @@ export class ReportResolver {
                                         @Ctx() { userPayload }: AppContext): Promise<RunEntityCommunicationResultType> {
     try {
         await EntityCommunicationsEngine.Instance.Config(false, userPayload.userRecord);
-        const newMessage = new Message(<Message>message);
+        const newMessage = new Message(message as unknown as Message);
         await TemplateEngineServer.Instance.Config(false, userPayload.userRecord);
         // for the templates, replace the values from the input with the objects from the Template Engine we have here
         if (newMessage.BodyTemplate) {
