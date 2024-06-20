@@ -2,7 +2,7 @@
 * ALL ENTITIES - TypeGraphQL Type Class Definition - AUTO GENERATED FILE
 * Generated Entities and Resolvers for Server
 * 
-* GENERATED: 6/18/2024, 7:47:25 AM
+* GENERATED: 6/20/2024, 1:14:32 PM
 * 
 *   >>> DO NOT MODIFY THIS FILE!!!!!!!!!!!!
 *   >>> YOUR CHANGES WILL BE OVERWRITTEN
@@ -20,7 +20,7 @@ import { mj_core_schema } from '../config';
 
 import * as mj_core_schema_server_object_types from '@memberjunction/server'
 
-import { CompanyEntity, EmployeeEntity, UserFavoriteEntity, EmployeeCompanyIntegrationEntity, EmployeeRoleEntity, EmployeeSkillEntity, RoleEntity, SkillEntity, IntegrationURLFormatEntity, IntegrationEntity, CompanyIntegrationEntity, EntityFieldEntity, EntityEntity, UserEntity, EntityRelationshipEntity, UserRecordLogEntity, UserViewEntity, CompanyIntegrationRunEntity, CompanyIntegrationRunDetailEntity, ErrorLogEntity, ApplicationEntity, ApplicationEntityEntity, EntityPermissionEntity, UserApplicationEntityEntity, UserApplicationEntity, CompanyIntegrationRunAPILogEntity, ListEntity, ListDetailEntity, UserViewRunEntity, UserViewRunDetailEntity, WorkflowRunEntity, WorkflowEntity, WorkflowEngineEntity, RecordChangeEntity, UserRoleEntity, RowLevelSecurityFilterEntity, AuditLogEntity, AuthorizationEntity, AuthorizationRoleEntity, AuditLogTypeEntity, EntityFieldValueEntity, AIModelEntity, AIActionEntity, AIModelActionEntity, EntityAIActionEntity, AIModelTypeEntity, QueueTypeEntity, QueueEntity, QueueTaskEntity, DashboardEntity, OutputTriggerTypeEntity, OutputFormatTypeEntity, OutputDeliveryTypeEntity, ReportEntity, ReportSnapshotEntity, ResourceTypeEntity, TagEntity, TaggedItemEntity, WorkspaceEntity, WorkspaceItemEntity, DatasetEntity, DatasetItemEntity, ConversationDetailEntity, ConversationEntity, UserNotificationEntity, SchemaInfoEntity, CompanyIntegrationRecordMapEntity, RecordMergeLogEntity, RecordMergeDeletionLogEntity, QueryFieldEntity, QueryCategoryEntity, QueryEntity, QueryPermissionEntity, VectorIndexEntity, EntityDocumentTypeEntity, EntityDocumentRunEntity, VectorDatabaseEntity, EntityRecordDocumentEntity, EntityDocumentEntity, DataContextItemEntity, DataContextEntity, UserViewCategoryEntity, DashboardCategoryEntity, ReportCategoryEntity, FileStorageProviderEntity, FileEntity, FileCategoryEntity, FileEntityRecordLinkEntity, VersionInstallationEntity, DuplicateRunDetailMatchEntity, EntityDocumentSettingEntity, EntitySettingEntity, DuplicateRunEntity, DuplicateRunDetailEntity, EntityBehaviorEntity, EntityBehaviorTypeEntity, ApplicationSettingEntity, ActionCategoryEntity, EntityActionEntity, EntityActionInvocationEntity, ActionAuthorizationEntity, EntityActionInvocationTypeEntity, ActionEntity, EntityActionFilterEntity, ActionFilterEntity, ActionContextTypeEntity, ActionResultCodeEntity, ActionContextEntity, ActionExecutionLogEntity, ActionParamEntity, ActionLibraryEntity, LibraryEntity, ListCategoryEntity, CommunicationProviderEntity, CommunicationRunEntity, CommunicationProviderMessageTypeEntity, CommunicationLogEntity, CommunicationBaseMessageTypeEntity, TemplateEntity, TemplateCategoryEntity, TemplateContentEntity, TemplateParamEntity, TemplateContentTypeEntity, RecommendationEntity, RecommendationProviderEntity, RecommendationRunEntity, RecommendationItemEntity, EntityCommunicationMessageTypeEntity, EntityCommunicationFieldEntity, RecordChangeReplayRunEntity, LibraryItemEntity, EntityRelationshipDisplayComponentEntity } from '@memberjunction/core-entities';
+import { CompanyEntity, EmployeeEntity, UserFavoriteEntity, EmployeeCompanyIntegrationEntity, EmployeeRoleEntity, EmployeeSkillEntity, RoleEntity, SkillEntity, IntegrationURLFormatEntity, IntegrationEntity, CompanyIntegrationEntity, EntityFieldEntity, EntityEntity, UserEntity, EntityRelationshipEntity, UserRecordLogEntity, UserViewEntity, CompanyIntegrationRunEntity, CompanyIntegrationRunDetailEntity, ErrorLogEntity, ApplicationEntity, ApplicationEntityEntity, EntityPermissionEntity, UserApplicationEntityEntity, UserApplicationEntity, CompanyIntegrationRunAPILogEntity, ListEntity, ListDetailEntity, UserViewRunEntity, UserViewRunDetailEntity, WorkflowRunEntity, WorkflowEntity, WorkflowEngineEntity, RecordChangeEntity, UserRoleEntity, RowLevelSecurityFilterEntity, AuditLogEntity, AuthorizationEntity, AuthorizationRoleEntity, AuditLogTypeEntity, EntityFieldValueEntity, AIModelEntity, AIActionEntity, AIModelActionEntity, EntityAIActionEntity, AIModelTypeEntity, QueueTypeEntity, QueueEntity, QueueTaskEntity, DashboardEntity, OutputTriggerTypeEntity, OutputFormatTypeEntity, OutputDeliveryTypeEntity, ReportEntity, ReportSnapshotEntity, ResourceTypeEntity, TagEntity, TaggedItemEntity, WorkspaceEntity, WorkspaceItemEntity, DatasetEntity, DatasetItemEntity, ConversationDetailEntity, ConversationEntity, UserNotificationEntity, SchemaInfoEntity, CompanyIntegrationRecordMapEntity, RecordMergeLogEntity, RecordMergeDeletionLogEntity, QueryFieldEntity, QueryCategoryEntity, QueryEntity, QueryPermissionEntity, VectorIndexEntity, EntityDocumentTypeEntity, EntityDocumentRunEntity, VectorDatabaseEntity, EntityRecordDocumentEntity, EntityDocumentEntity, DataContextItemEntity, DataContextEntity, UserViewCategoryEntity, DashboardCategoryEntity, ReportCategoryEntity, FileStorageProviderEntity, FileEntity, FileCategoryEntity, FileEntityRecordLinkEntity, VersionInstallationEntity, DuplicateRunDetailMatchEntity, EntityDocumentSettingEntity, EntitySettingEntity, DuplicateRunEntity, DuplicateRunDetailEntity, EntityBehaviorEntity, EntityBehaviorTypeEntity, ApplicationSettingEntity, ActionCategoryEntity, EntityActionEntity, EntityActionInvocationEntity, ActionAuthorizationEntity, EntityActionInvocationTypeEntity, ActionEntity, EntityActionFilterEntity, ActionFilterEntity, ActionContextTypeEntity, ActionResultCodeEntity, ActionContextEntity, ActionExecutionLogEntity, ActionParamEntity, ActionLibraryEntity, LibraryEntity, ListCategoryEntity, CommunicationProviderEntity, CommunicationRunEntity, CommunicationProviderMessageTypeEntity, CommunicationLogEntity, CommunicationBaseMessageTypeEntity, TemplateEntity, TemplateCategoryEntity, TemplateContentEntity, TemplateParamEntity, TemplateContentTypeEntity, RecommendationEntity, RecommendationProviderEntity, RecommendationRunEntity, RecommendationItemEntity, EntityCommunicationMessageTypeEntity, EntityCommunicationFieldEntity, RecordChangeReplayRunEntity, LibraryItemEntity, EntityRelationshipDisplayComponentEntity, EntityActionParamEntity } from '@memberjunction/core-entities';
     
 
 //****************************************************************************
@@ -527,12 +527,12 @@ export class UserFavorite_ {
     RecordID: string;
           
     @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
           
     @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
           
     @Field() 
     @MaxLength(510)
@@ -685,12 +685,12 @@ export class EmployeeCompanyIntegration_ {
     IsActive: boolean;
           
     @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
           
     @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
         
 }
         
@@ -1232,12 +1232,12 @@ export class Skill_ {
     ParentID?: number;
           
     @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
           
     @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
           
     @Field({nullable: true}) 
     @MaxLength(100)
@@ -1346,6 +1346,14 @@ export class IntegrationURLFormat_ {
     @Field() 
     @MaxLength(1000)
     URLFormat: string;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
           
     @Field(() => Int) 
     IntegrationID: number;
@@ -1491,12 +1499,12 @@ export class Integration_ {
     BatchRequestWaitTime: number;
           
     @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
           
     @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
         
     @Field(() => [mj_core_schema_server_object_types.IntegrationURLFormat_])
     IntegrationURLFormatsArray: mj_core_schema_server_object_types.IntegrationURLFormat_[]; // Link to IntegrationURLFormats
@@ -1672,14 +1680,6 @@ export class CompanyIntegration_ {
     @MaxLength(510)
     APIKey?: string;
           
-    @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
-          
-    @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
-          
     @Field({nullable: true}) 
     @MaxLength(200)
     ExternalSystemID?: string;
@@ -1698,6 +1698,14 @@ export class CompanyIntegration_ {
     @Field({nullable: true}) 
     @MaxLength(510)
     CustomAttribute1?: string;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
           
     @Field(() => Int) 
     CompanyID: number;
@@ -2493,6 +2501,10 @@ export class Entity_ {
     @MaxLength(10)
     _mj__UpdatedAt: Date;
           
+    @Field({description: 'When another entity links to this entity with a foreign key, this is the default component type that will be used in the UI. CodeGen will populate the RelatedEntityDisplayType column in the Entity Fields entity with whatever is provided here whenever a new foreign key is detected by CodeGen. The selection can be overridden on a per-foreign-key basis in each row of the Entity Fields entity.'}) 
+    @MaxLength(40)
+    RelationshipDefaultDisplayType: string;
+          
     @Field({nullable: true}) 
     CodeName?: string;
           
@@ -2748,6 +2760,9 @@ export class CreateEntityInput {
 
     @Field({ nullable: true })
     Icon?: string;
+
+    @Field()
+    RelationshipDefaultDisplayType: string;
 }
     
         
@@ -2875,6 +2890,9 @@ export class UpdateEntityInput {
 
     @Field({ nullable: true })
     Icon?: string;
+
+    @Field()
+    RelationshipDefaultDisplayType: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -4206,6 +4224,14 @@ export class UserRecordLog_ {
     TotalCount: number;
           
     @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
+          
+    @Field() 
     @MaxLength(510)
     Entity: string;
           
@@ -4691,6 +4717,14 @@ export class CompanyIntegrationRun_ {
     Comments?: string;
           
     @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
+          
+    @Field() 
     @MaxLength(200)
     RunByUser: string;
         
@@ -4852,6 +4886,14 @@ export class CompanyIntegrationRunDetail_ {
     IsSuccess: boolean;
           
     @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
+          
+    @Field() 
     @MaxLength(510)
     Entity: string;
           
@@ -5008,6 +5050,14 @@ export class ErrorLog_ {
           
     @Field({nullable: true}) 
     Details?: string;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
         
 }
         
@@ -5733,6 +5783,14 @@ export class UserApplicationEntity_ {
     Sequence: number;
           
     @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
+          
+    @Field() 
     @MaxLength(100)
     Application: string;
           
@@ -5880,6 +5938,14 @@ export class UserApplication_ {
           
     @Field(() => Boolean) 
     IsActive: boolean;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
           
     @Field() 
     @MaxLength(200)
@@ -6050,6 +6116,14 @@ export class CompanyIntegrationRunAPILog_ {
           
     @Field({nullable: true}) 
     Parameters?: string;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
         
 }
         
@@ -6174,16 +6248,16 @@ export class List_ {
     @Field(() => Int, {nullable: true}) 
     CompanyIntegrationID?: number;
           
-    @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
-          
-    @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
-          
     @Field(() => Int, {nullable: true}) 
     CategoryID?: number;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
           
     @Field() 
     @MaxLength(510)
@@ -6375,6 +6449,14 @@ export class ListDetail_ {
     Sequence: number;
           
     @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
+          
+    @Field() 
     @MaxLength(200)
     List: string;
         
@@ -6512,6 +6594,14 @@ export class UserViewRun_ {
           
     @Field(() => Int) 
     RunByUserID: number;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
           
     @Field() 
     @MaxLength(200)
@@ -6658,6 +6748,14 @@ export class UserViewRunDetail_ {
     @MaxLength(510)
     RecordID: string;
           
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
+          
     @Field(() => Int) 
     UserViewID: number;
           
@@ -6801,6 +6899,14 @@ export class WorkflowRun_ {
     Results?: string;
           
     @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
+          
+    @Field() 
     @MaxLength(200)
     Workflow: string;
           
@@ -6930,14 +7036,6 @@ export class Workflow_ {
     @MaxLength(200)
     ExternalSystemRecordID: string;
           
-    @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
-          
-    @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
-          
     @Field(() => Boolean, {description: 'If set to 1, the workflow will be run automatically on the interval specified by the AutoRunIntervalType and AutoRunInterval fields'}) 
     AutoRunEnabled: boolean;
           
@@ -6951,6 +7049,14 @@ export class Workflow_ {
     @Field({nullable: true, description: 'If specified, this subclass key, via the ClassFactory, will be instantiated, to execute this workflow. If not specified the WorkflowBase class will be used by default.'}) 
     @MaxLength(400)
     SubclassName?: string;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
           
     @Field(() => Int, {nullable: true}) 
     AutoRunIntervalMinutes?: number;
@@ -7105,12 +7211,12 @@ export class WorkflowEngine_ {
     DriverClass: string;
           
     @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
           
     @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
         
     @Field(() => [mj_core_schema_server_object_types.Workflow_])
     WorkflowsArray: mj_core_schema_server_object_types.Workflow_[]; // Link to Workflows
@@ -7719,12 +7825,12 @@ export class AuditLog_ {
     RecordID?: string;
           
     @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
           
     @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
           
     @Field() 
     @MaxLength(200)
@@ -8050,12 +8156,12 @@ export class AuthorizationRole_ {
     Type: string;
           
     @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
           
     @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
         
 }
 //****************************************************************************
@@ -8428,12 +8534,12 @@ export class AIModel_ {
     PowerRank?: number;
           
     @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
           
     @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
           
     @Field() 
     @MaxLength(100)
@@ -8680,12 +8786,12 @@ export class AIAction_ {
     IsActive: boolean;
           
     @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
           
     @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
           
     @Field({nullable: true}) 
     @MaxLength(100)
@@ -8868,12 +8974,12 @@ export class AIModelAction_ {
     IsActive: boolean;
           
     @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
           
     @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
           
     @Field() 
     @MaxLength(100)
@@ -9273,6 +9379,14 @@ export class AIModelType_ {
           
     @Field({nullable: true}) 
     Description?: string;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
         
     @Field(() => [mj_core_schema_server_object_types.AIModel_])
     AIModelsArray: mj_core_schema_server_object_types.AIModel_[]; // Link to AIModels
@@ -9429,6 +9543,14 @@ export class QueueType_ {
           
     @Field(() => Boolean) 
     IsActive: boolean;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
         
     @Field(() => [mj_core_schema_server_object_types.Queue_])
     QueuesArray: mj_core_schema_server_object_types.Queue_[]; // Link to Queues
@@ -9565,12 +9687,12 @@ export class Queue_ {
     LastHeartbeat: Date;
           
     @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
           
     @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
           
     @Field() 
     @MaxLength(100)
@@ -9815,6 +9937,14 @@ export class QueueTask_ {
     Comments?: string;
           
     @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
+          
+    @Field() 
     @MaxLength(100)
     Queue: string;
         
@@ -9989,6 +10119,14 @@ export class Dashboard_ {
     @Field(() => Int, {nullable: true}) 
     UserID?: number;
           
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
+          
     @Field({nullable: true}) 
     @MaxLength(200)
     Category?: string;
@@ -10140,6 +10278,14 @@ export class OutputTriggerType_ {
           
     @Field({nullable: true}) 
     Description?: string;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
         
     @Field(() => [mj_core_schema_server_object_types.Report_])
     ReportsArray: mj_core_schema_server_object_types.Report_[]; // Link to Reports
@@ -10224,6 +10370,14 @@ export class OutputFormatType_ {
           
     @Field({nullable: true}) 
     DisplayFormat?: string;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
         
     @Field(() => [mj_core_schema_server_object_types.Report_])
     ReportsArray: mj_core_schema_server_object_types.Report_[]; // Link to Reports
@@ -10305,6 +10459,14 @@ export class OutputDeliveryType_ {
           
     @Field({nullable: true}) 
     Description?: string;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
         
     @Field(() => [mj_core_schema_server_object_types.Report_])
     ReportsArray: mj_core_schema_server_object_types.Report_[]; // Link to Reports
@@ -10433,12 +10595,12 @@ export class Report_ {
     OutputWorkflowID?: number;
           
     @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
           
     @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
           
     @Field({nullable: true}) 
     @MaxLength(200)
@@ -10704,6 +10866,14 @@ export class ReportSnapshot_ {
     UserID?: number;
           
     @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
+          
+    @Field() 
     @MaxLength(510)
     Report: string;
           
@@ -10954,6 +11124,14 @@ export class Tag_ {
     @Field(() => Int, {nullable: true}) 
     ParentID?: number;
           
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
+          
     @Field({nullable: true}) 
     @MaxLength(510)
     Parent?: string;
@@ -11054,6 +11232,14 @@ export class TaggedItem_ {
     RecordID: string;
           
     @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
+          
+    @Field() 
     @MaxLength(510)
     Tag: string;
           
@@ -11135,12 +11321,12 @@ export class Workspace_ {
     UserID: number;
           
     @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
           
     @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
           
     @Field() 
     @MaxLength(200)
@@ -11306,12 +11492,12 @@ export class WorkspaceItem_ {
     Configuration?: string;
           
     @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
           
     @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
           
     @Field() 
     @MaxLength(510)
@@ -11478,12 +11664,12 @@ export class Dataset_ {
     Description?: string;
           
     @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
           
     @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
         
     @Field(() => [mj_core_schema_server_object_types.DatasetItem_])
     DatasetItemsArray: mj_core_schema_server_object_types.DatasetItem_[]; // Link to DatasetItems
@@ -11584,12 +11770,12 @@ export class DatasetItem_ {
     Description?: string;
           
     @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
           
     @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
           
     @Field() 
     @MaxLength(510)
@@ -11679,12 +11865,12 @@ export class ConversationDetail_ {
     HiddenToUser: boolean;
           
     @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
           
     @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
           
     @Field({nullable: true}) 
     @MaxLength(200)
@@ -11876,12 +12062,12 @@ export class Conversation_ {
     DataContextID?: number;
           
     @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
           
     @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
           
     @Field() 
     @MaxLength(200)
@@ -12101,12 +12287,12 @@ export class UserNotification_ {
     ReadAt?: Date;
           
     @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
           
     @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
           
     @Field() 
     @MaxLength(200)
@@ -12281,12 +12467,12 @@ export class SchemaInfo_ {
     Comments?: string;
           
     @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
           
     @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
         
 }
         
@@ -12428,12 +12614,12 @@ export class CompanyIntegrationRecordMap_ {
     EntityRecordID: string;
           
     @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
           
     @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
           
     @Field() 
     @MaxLength(510)
@@ -12600,12 +12786,12 @@ export class RecordMergeLog_ {
     Comments?: string;
           
     @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
           
-    @Field({nullable: true}) 
-    @MaxLength(8)
-    UpdatedAt?: Date;
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
           
     @Field() 
     @MaxLength(510)
@@ -12813,12 +12999,12 @@ export class RecordMergeDeletionLog_ {
     ProcessingLog?: string;
           
     @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
           
     @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
         
 }
         
@@ -13745,12 +13931,12 @@ export class VectorIndex_ {
     EmbeddingModelID: number;
           
     @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
           
     @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
           
     @Field() 
     @MaxLength(200)
@@ -14192,12 +14378,12 @@ export class VectorDatabase_ {
     ClassKey?: string;
           
     @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
           
     @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
         
     @Field(() => [mj_core_schema_server_object_types.VectorIndex_])
     VectorIndexesArray: mj_core_schema_server_object_types.VectorIndex_[]; // Link to VectorIndexes
@@ -14783,12 +14969,12 @@ export class DataContextItem_ {
     LastRefreshedAt?: Date;
           
     @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
           
     @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
           
     @Field() 
     @MaxLength(510)
@@ -14982,12 +15168,12 @@ export class DataContext_ {
     LastRefreshedAt?: Date;
           
     @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
           
     @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
           
     @Field() 
     @MaxLength(200)
@@ -15156,19 +15342,19 @@ export class UserViewCategory_ {
     @Field(() => Int, {nullable: true}) 
     ParentID?: number;
           
-    @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
-          
-    @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
-          
     @Field(() => Int) 
     EntityID: number;
           
     @Field(() => Int) 
     UserID: number;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
           
     @Field({nullable: true}) 
     @MaxLength(200)
@@ -15347,16 +15533,16 @@ export class DashboardCategory_ {
     @Field(() => Int, {nullable: true}) 
     ParentID?: number;
           
-    @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
-          
-    @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
-          
     @Field(() => Int) 
     UserID: number;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
           
     @Field({nullable: true}) 
     @MaxLength(200)
@@ -15529,16 +15715,16 @@ export class ReportCategory_ {
     @Field(() => Int, {nullable: true}) 
     ParentID?: number;
           
-    @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
-          
-    @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
-          
     @Field(() => Int) 
     UserID: number;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
           
     @Field({nullable: true}) 
     @MaxLength(200)
@@ -15723,12 +15909,12 @@ export class FileStorageProvider_ {
     IsActive: boolean;
           
     @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
           
     @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
         
     @Field(() => [mj_core_schema_server_object_types.File_])
     FilesArray: mj_core_schema_server_object_types.File_[]; // Link to Files
@@ -15904,12 +16090,12 @@ export class File_ {
     Status: string;
           
     @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
           
     @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
           
     @Field() 
     @MaxLength(100)
@@ -16090,12 +16276,12 @@ export class FileCategory_ {
     ParentID?: number;
           
     @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
           
     @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
           
     @Field({nullable: true}) 
     @MaxLength(510)
@@ -16259,12 +16445,12 @@ export class FileEntityRecordLink_ {
     RecordID: string;
           
     @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
           
     @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
           
     @Field() 
     @MaxLength(1000)
@@ -16421,12 +16607,12 @@ export class VersionInstallation_ {
     Comments?: string;
           
     @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
           
     @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
           
     @Field({nullable: true}) 
     @MaxLength(604)
@@ -16619,12 +16805,12 @@ export class DuplicateRunDetailMatch_ {
     RecordMergeLogID?: number;
           
     @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
           
     @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
         
 }
         
@@ -17122,12 +17308,12 @@ export class DuplicateRun_ {
     SourceListID: number;
           
     @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
           
     @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
           
     @Field() 
     @MaxLength(510)
@@ -17342,12 +17528,12 @@ export class DuplicateRunDetail_ {
     MergeErrorMessage?: string;
           
     @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
           
     @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
         
     @Field(() => [mj_core_schema_server_object_types.DuplicateRunDetailMatch_])
     DuplicateRunDetailMatchesArray: mj_core_schema_server_object_types.DuplicateRunDetailMatch_[]; // Link to DuplicateRunDetailMatches
@@ -18194,6 +18380,9 @@ export class EntityAction_ {
     @Field(() => [mj_core_schema_server_object_types.EntityActionFilter_])
     EntityActionFiltersArray: mj_core_schema_server_object_types.EntityActionFilter_[]; // Link to EntityActionFilters
     
+    @Field(() => [mj_core_schema_server_object_types.EntityActionParam_])
+    EntityActionParamsArray: mj_core_schema_server_object_types.EntityActionParam_[]; // Link to EntityActionParams
+    
 }
         
 //****************************************************************************
@@ -18298,6 +18487,14 @@ export class EntityActionResolver extends ResolverBase {
         this.CheckUserReadPermissions('Entity Action Filters', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityActionFilters] WHERE [EntityActionID]=${entityaction_.ID} ` + this.getRowLevelSecurityWhereClause('Entity Action Filters', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Entity Action Filters', await dataSource.query(sSQL));
+        return result;
+    }
+          
+    @FieldResolver(() => [mj_core_schema_server_object_types.EntityActionParam_])
+    async EntityActionParamsArray(@Root() entityaction_: EntityAction_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Entity Action Params', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityActionParams] WHERE [EntityActionID]=${entityaction_.ID} ` + this.getRowLevelSecurityWhereClause('Entity Action Params', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Entity Action Params', await dataSource.query(sSQL));
         return result;
     }
         
@@ -18493,12 +18690,12 @@ export class ActionAuthorization_ {
     Comments?: string;
           
     @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
           
     @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
           
     @Field() 
     @MaxLength(850)
@@ -19426,12 +19623,12 @@ export class ActionContextType_ {
     Description?: string;
           
     @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
           
     @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
         
     @Field(() => [mj_core_schema_server_object_types.ActionContext_])
     ActionContextsArray: mj_core_schema_server_object_types.ActionContext_[]; // Link to ActionContexts
@@ -19574,12 +19771,12 @@ export class ActionResultCode_ {
     Description?: string;
           
     @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
           
     @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
           
     @Field() 
     @MaxLength(850)
@@ -19721,12 +19918,12 @@ export class ActionContext_ {
     Status: string;
           
     @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
           
     @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
           
     @Field() 
     @MaxLength(850)
@@ -19886,12 +20083,12 @@ export class ActionExecutionLog_ {
     RetentionPeriod?: number;
           
     @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
           
     @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
           
     @Field() 
     @MaxLength(850)
@@ -20078,17 +20275,20 @@ export class ActionParam_ {
     IsRequired: boolean;
           
     @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
           
     @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
           
     @Field() 
     @MaxLength(850)
     Action: string;
         
+    @Field(() => [mj_core_schema_server_object_types.EntityActionParam_])
+    EntityActionParamsArray: mj_core_schema_server_object_types.EntityActionParam_[]; // Link to EntityActionParams
+    
 }
         
 //****************************************************************************
@@ -20209,7 +20409,15 @@ export class ActionParamResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Action Params', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-    
+      
+    @FieldResolver(() => [mj_core_schema_server_object_types.EntityActionParam_])
+    async EntityActionParamsArray(@Root() actionparam_: ActionParam_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Entity Action Params', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityActionParams] WHERE [ActionParamID]=${actionparam_.ID} ` + this.getRowLevelSecurityWhereClause('Entity Action Params', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Entity Action Params', await dataSource.query(sSQL));
+        return result;
+    }
+        
     @Mutation(() => ActionParam_)
     async CreateActionParam(
         @Arg('input', () => CreateActionParamInput) input: CreateActionParamInput,
@@ -20254,12 +20462,12 @@ export class ActionLibrary_ {
     ItemsUsed?: string;
           
     @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
           
     @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
           
     @Field() 
     @MaxLength(850)
@@ -20582,16 +20790,16 @@ export class ListCategory_ {
     @Field(() => Int, {nullable: true}) 
     ParentID?: number;
           
-    @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
-          
-    @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
-          
     @Field(() => Int) 
     UserID: number;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
         
 }
         
@@ -20736,12 +20944,12 @@ export class CommunicationProvider_ {
     SupportsReceiving: boolean;
           
     @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
           
     @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
         
     @Field(() => [mj_core_schema_server_object_types.CommunicationProviderMessageType_])
     CommunicationProviderMessageTypesArray: mj_core_schema_server_object_types.CommunicationProviderMessageType_[]; // Link to CommunicationProviderMessageTypes
@@ -20922,12 +21130,12 @@ export class CommunicationRun_ {
     ErrorMessage?: string;
           
     @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
           
     @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
           
     @Field() 
     @MaxLength(200)
@@ -21105,12 +21313,12 @@ export class CommunicationProviderMessageType_ {
     AdditionalAttributes?: string;
           
     @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
           
     @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
           
     @Field() 
     @MaxLength(510)
@@ -21252,6 +21460,12 @@ export class CommunicationProviderMessageTypeResolver extends ResolverBase {
         return this.UpdateRecord('Communication Provider Message Types', input, dataSource, userPayload, pubSub);
     }
     
+    @Mutation(() => CommunicationProviderMessageType_)
+    async DeleteCommunicationProviderMessageType(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Communication Provider Message Types', key, options, dataSource, userPayload, pubSub);
+    }
+    
 }
 
 //****************************************************************************
@@ -21290,12 +21504,12 @@ export class CommunicationLog_ {
     ErrorMessage?: string;
           
     @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
           
     @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
           
     @Field() 
     @MaxLength(510)
@@ -21471,12 +21685,12 @@ export class CommunicationBaseMessageType_ {
     MaxBytes?: number;
           
     @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
           
     @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
         
     @Field(() => [mj_core_schema_server_object_types.CommunicationProviderMessageType_])
     CommunicationProviderMessageTypesArray: mj_core_schema_server_object_types.CommunicationProviderMessageType_[]; // Link to CommunicationProviderMessageTypes
@@ -21659,12 +21873,12 @@ export class Template_ {
     IsActive: boolean;
           
     @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
           
     @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
           
     @Field({nullable: true}) 
     @MaxLength(510)
@@ -21859,12 +22073,12 @@ export class TemplateCategory_ {
     UserID: number;
           
     @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
           
     @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
           
     @Field({nullable: true}) 
     @MaxLength(510)
@@ -22037,12 +22251,12 @@ export class TemplateContent_ {
     IsActive: boolean;
           
     @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
           
     @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
           
     @Field() 
     @MaxLength(510)
@@ -22211,12 +22425,12 @@ export class TemplateParam_ {
     RecordID?: string;
           
     @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
           
     @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
           
     @Field() 
     @MaxLength(510)
@@ -22383,12 +22597,12 @@ export class TemplateContentType_ {
     Description?: string;
           
     @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
           
     @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
         
     @Field(() => [mj_core_schema_server_object_types.TemplateContent_])
     TemplateContentsArray: mj_core_schema_server_object_types.TemplateContent_[]; // Link to TemplateContents
@@ -22523,13 +22737,13 @@ export class Recommendation_ {
     @Field({description: 'The record ID of the source entity'}) 
     SourceEntityRecordID: string;
           
-    @Field({nullable: true}) 
-    @MaxLength(8)
-    CreatedAt?: Date;
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
           
-    @Field({nullable: true}) 
-    @MaxLength(8)
-    UpdatedAt?: Date;
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
           
     @Field() 
     @MaxLength(510)
@@ -22672,13 +22886,13 @@ export class RecommendationProvider_ {
     @Field({nullable: true}) 
     Description?: string;
           
-    @Field({nullable: true}) 
-    @MaxLength(8)
-    CreatedAt?: Date;
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
           
-    @Field({nullable: true}) 
-    @MaxLength(8)
-    UpdatedAt?: Date;
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
         
     @Field(() => [mj_core_schema_server_object_types.RecommendationRun_])
     RecommendationRunsArray: mj_core_schema_server_object_types.RecommendationRun_[]; // Link to RecommendationRuns
@@ -22825,13 +23039,13 @@ export class RecommendationRun_ {
     @Field(() => Int) 
     RunByUserID: number;
           
-    @Field({nullable: true}) 
-    @MaxLength(8)
-    CreatedAt?: Date;
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
           
-    @Field({nullable: true}) 
-    @MaxLength(8)
-    UpdatedAt?: Date;
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
           
     @Field() 
     @MaxLength(510)
@@ -23001,13 +23215,13 @@ export class RecommendationItem_ {
     @Field(() => Float, {nullable: true, description: 'A value between 0 and 1 indicating the probability of the match, higher numbers indicating a more certain match/recommendation.'}) 
     MatchProbability?: number;
           
-    @Field({nullable: true}) 
-    @MaxLength(8)
-    CreatedAt?: Date;
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
           
-    @Field({nullable: true}) 
-    @MaxLength(8)
-    UpdatedAt?: Date;
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
           
     @Field() 
     @MaxLength(510)
@@ -23446,12 +23660,12 @@ export class RecordChangeReplayRun_ {
     UserID: number;
           
     @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
           
     @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
           
     @Field() 
     @MaxLength(200)
@@ -23605,12 +23819,12 @@ export class LibraryItem_ {
     Type: string;
           
     @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
           
     @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
           
     @Field() 
     @MaxLength(510)
@@ -23872,6 +24086,171 @@ export class EntityRelationshipDisplayComponentResolver extends ResolverBase {
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.UpdateRecord('Entity Relationship Display Components', input, dataSource, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for Entity Action Params
+//****************************************************************************
+@ObjectType({ description: 'Stores paramater mappings to enable Entity Actions to automatically invoke Actions' })
+export class EntityActionParam_ {  
+    @Field(() => Int) 
+    ID: number;
+          
+    @Field(() => Int) 
+    EntityActionID: number;
+          
+    @Field(() => Int) 
+    ActionParamID: number;
+          
+    @Field({description: 'Type of the value, which can be Static, Entity Object, or Script.'}) 
+    @MaxLength(40)
+    ValueType: string;
+          
+    @Field({nullable: true, description: 'Value of the parameter, used only when ValueType is Static or Script. When value is Script, any valid JavaScript code can be provided. The script will have access to an object called EntityActionContext. This object will have a property called EntityObject on it that will contain the BaseEntity derived sub-class with the current data for the entity object this action is operating against. The script must provide the parameter value to the EntityActionContext.result property. This scripting capabilty is designed for very small and simple code, for anything of meaningful complexity, create a sub-class instead.'}) 
+    Value?: string;
+          
+    @Field({nullable: true, description: 'Additional comments regarding the parameter.'}) 
+    Comments?: string;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
+          
+    @Field() 
+    @MaxLength(510)
+    ActionParam: string;
+        
+}
+        
+//****************************************************************************
+// INPUT TYPE for Entity Action Params   
+//****************************************************************************
+@InputType()
+export class CreateEntityActionParamInput {
+    @Field(() => Int)
+    EntityActionID: number;
+
+    @Field(() => Int)
+    ActionParamID: number;
+
+    @Field()
+    ValueType: string;
+
+    @Field({ nullable: true })
+    Value?: string;
+
+    @Field({ nullable: true })
+    Comments?: string;
+}
+    
+        
+//****************************************************************************
+// INPUT TYPE for Entity Action Params   
+//****************************************************************************
+@InputType()
+export class UpdateEntityActionParamInput {
+    @Field(() => Int)
+    ID: number;
+
+    @Field(() => Int)
+    EntityActionID: number;
+
+    @Field(() => Int)
+    ActionParamID: number;
+
+    @Field()
+    ValueType: string;
+
+    @Field({ nullable: true })
+    Value?: string;
+
+    @Field({ nullable: true })
+    Comments?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
+//****************************************************************************
+// RESOLVER for Entity Action Params
+//****************************************************************************
+@ObjectType()
+export class RunEntityActionParamViewResult {
+    @Field(() => [EntityActionParam_])
+    Results: EntityActionParam_[];
+
+    @Field(() => Int, {nullable: true})
+    UserViewRunID?: number;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(EntityActionParam_)
+export class EntityActionParamResolver extends ResolverBase {
+    @Query(() => RunEntityActionParamViewResult)
+    async RunEntityActionParamViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunEntityActionParamViewResult)
+    async RunEntityActionParamViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunEntityActionParamViewResult)
+    async RunEntityActionParamDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        input.EntityName = 'Entity Action Params';
+        return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
+    }
+    @Query(() => EntityActionParam_, { nullable: true })
+    async EntityActionParam(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<EntityActionParam_ | null> {
+        this.CheckUserReadPermissions('Entity Action Params', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityActionParams] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Entity Action Params', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Entity Action Params', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
+    }
+    
+    @Mutation(() => EntityActionParam_)
+    async CreateEntityActionParam(
+        @Arg('input', () => CreateEntityActionParamInput) input: CreateEntityActionParamInput,
+        @Ctx() { dataSource, userPayload }: AppContext, 
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.CreateRecord('Entity Action Params', input, dataSource, userPayload, pubSub)
+    }
+        
+    @Mutation(() => EntityActionParam_)
+    async UpdateEntityActionParam(
+        @Arg('input', () => UpdateEntityActionParamInput) input: UpdateEntityActionParamInput,
+        @Ctx() { dataSource, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.UpdateRecord('Entity Action Params', input, dataSource, userPayload, pubSub);
+    }
+    
+    @Mutation(() => EntityActionParam_)
+    async DeleteEntityActionParam(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Entity Action Params', key, options, dataSource, userPayload, pubSub);
     }
     
 }

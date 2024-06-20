@@ -40,7 +40,7 @@ export class BaseEnginePropertyConfig extends BaseInfo {
      * When set to 'individual_properties', each item in the dataset is set to a property on the object with the name of the item's key plus the item's Code name. 
      * For example, if the item's key is 'Demo' and the item's Code name is 'FirstItem', the property set on the object would be 'Demo_FirstItem'.
      */
-    DatasetResultHandling: 'single_property' | 'individual_properties' = 'single_property';
+    DatasetResultHandling?: 'single_property' | 'individual_properties' = 'single_property';
     /**
      * Optional, order by clause to apply to the data load, only applies when type is 'entity'
      */

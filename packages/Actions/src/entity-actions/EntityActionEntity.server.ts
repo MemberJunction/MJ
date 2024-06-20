@@ -1,5 +1,5 @@
 import { BaseEntity, UserInfo } from "@memberjunction/core";
-import { EntityActionEntity, EntityActionFilterEntity, EntityActionInvocationEntity } from "@memberjunction/core-entities";
+import { EntityActionEntity, EntityActionFilterEntity, EntityActionInvocationEntity, EntityActionParamEntity } from "@memberjunction/core-entities";
 import { RegisterClass } from "@memberjunction/global";
 import { EntityActionEngine } from "./EntityActionEngine";
 
@@ -7,6 +7,7 @@ import { EntityActionEngine } from "./EntityActionEngine";
 export class EntityActionEntityServer extends EntityActionEntity {
     private _filters: EntityActionFilterEntity[] = null;
     private _invocations: EntityActionInvocationEntity[] = null;
+    private _params: EntityActionParamEntity[] = null;
 
     /**
      * Get the filters for this entity action
@@ -28,6 +29,14 @@ export class EntityActionEntityServer extends EntityActionEntity {
             this._invocations = EntityActionEngine.Instance.Invocations?.filter(i => i.EntityActionID === this.ID) ?? [];
         }
         return this._invocations
+    }
+
+    public get Params(): EntityActionParamEntity[] {
+        if (!this._params) {
+            // load the data from the EntityActionEngine
+            this._params = EntityActionEngine.Instance.Params?.filter(p => p.EntityActionID === this.ID) ?? [];
+        }
+        return this._params;
     }
 
     

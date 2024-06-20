@@ -71,6 +71,8 @@ export class EntityRelationshipInfo extends BaseInfo  {
     DisplayIconType: 'Related Entity Icon'| 'Custom' | 'None' = 'Related Entity Icon'
     DisplayIcon: string = null
     DisplayUserViewGUID: string = null
+    DisplayComponentID: number = null
+    DisplayComponentConfiguration: string = null
     __mj_CreatedAt: Date = null
     __mj_UpdatedAt: Date = null
 
@@ -86,6 +88,7 @@ export class EntityRelationshipInfo extends BaseInfo  {
     RelatedEntityBaseTableCodeName: string = null
     DisplayUserViewName: string = null
     DisplayUserViewID: number = null
+    DisplayComponent: string = null
 
     constructor (initData: any) {
         super();
@@ -281,6 +284,7 @@ export class EntityFieldInfo extends BaseInfo {
     RelatedEntityFieldName: string = null
     IncludeRelatedEntityNameFieldInBaseView: boolean = null
     RelatedEntityNameFieldMap: string = null
+    RelatedEntityDisplayType: 'Search' | 'Dropdown' = null
     __mj_CreatedAt: Date = null
     __mj_UpdatedAt: Date = null
     

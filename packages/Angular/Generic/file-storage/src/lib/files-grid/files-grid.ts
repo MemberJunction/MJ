@@ -147,7 +147,7 @@ export class FilesGridComponent implements OnInit, OnChanges {
    */
   public canBeDeleted(file: FileEntity): boolean {
     const status = file.Status;
-    const deletable = status === 'Uploaded' || Date.now() - +file.CreatedAt > 10 * 60 * 60;
+    const deletable = status === 'Uploaded' || Date.now() - +file.__mj_CreatedAt > 10 * 60 * 60;
     // console.log({ status, deletable, ID: file.ID, CreatedAt: file.CreatedAt });
     return deletable;
   }

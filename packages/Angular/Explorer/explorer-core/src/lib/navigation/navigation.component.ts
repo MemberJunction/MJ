@@ -394,13 +394,13 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
     const workspaceParams: RunViewParams = {
       EntityName: "Workspaces",
       ExtraFilter: `UserID=${md.CurrentUser.ID}`,
-      OrderBy: "UpdatedAt DESC", // by default get the workspace that was most recently updated
+      OrderBy: "__mj_UpdatedAt DESC", // by default get the workspace that was most recently updated
       ResultType: "entity_object" /*we want entity objects back so that we can modify them as needed*/
     }
     const workspaces = await rv.RunView(workspaceParams);
     if (workspaces.Success) {
       if (workspaces.Results.length) {
-        this.workSpace = workspaces.Results[0]; // by default get the first one, and since we are sorting by UpdatedAt DESC above, will be most recently modified one. Future feature for multi-workspace support we'll have to adjust this
+        this.workSpace = workspaces.Results[0]; // by default get the first one, and since we are sorting by __mj_UpdatedAt DESC above, will be most recently modified one. Future feature for multi-workspace support we'll have to adjust this
       } 
       else {
         // no matching record found, so create a new one

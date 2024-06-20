@@ -74,7 +74,7 @@ export class SkipChatWithRecordComponent implements AfterViewInit {
               const result = await rv.RunView({
                   EntityName: "Conversations",
                   ExtraFilter: "UserID=" + md.CurrentUser.ID + " AND LinkedEntityID=" + this.LinkedEntityID + " AND LinkedRecordID='" + this.LinkedPrimaryKey.Values() + "'",
-                  OrderBy: "CreatedAt DESC" // in case there are more than one get the latest
+                  OrderBy: "__mj_CreatedAt DESC" // in case there are more than one get the latest
               })
               if (result && result.Success && result.Results.length > 0) {
                   this._conversationId = result.Results[0].ID;
@@ -82,7 +82,7 @@ export class SkipChatWithRecordComponent implements AfterViewInit {
                   const result2 = await rv.RunView({
                       EntityName: "Conversation Details",
                       ExtraFilter: "ConversationID=" + this._conversationId,
-                      OrderBy: "CreatedAt ASC"
+                      OrderBy: "__mj_CreatedAt ASC"
                   });
 
                   // now, send the messages to the chat component

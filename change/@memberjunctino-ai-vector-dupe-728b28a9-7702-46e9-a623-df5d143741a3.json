@@ -1,0 +1,7 @@
+{
+  "type": "patch",
+  "comment": "Applying package updates [skip ci]",
+  "packageName": "@memberjunction/ai-vector-dupe",
+  "email": "craig.adam@bluecypress.io",
+  "dependentChangeType": "patch"
+}

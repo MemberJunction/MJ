@@ -123,6 +123,10 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
     return this.compareMode || this.mergeMode || this.duplicateMode || this.addToListMode;
   }
 
+  public get EntityInfo(): EntityInfo | undefined {
+    return this._entityInfo;
+  }
+
   public showNewRecordDialog: boolean = false;
 
   public selectableSettings: SelectableSettings = {
@@ -655,13 +659,16 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
   async Refresh(params: RunViewParams) {
     this.Params = params;
 
+    if (this.AllowLoad === false) { // MUST DO THIS IMMEDIATELY AFTER STORING PARAMS SO THAT IT IS NOT ASYNC FROM HERE - THAT WAY WE GET FUTURE CALLS TO Refresh() when AllowLoad is set to TRUE
+      return;
+    }
+
+    // NOW WE CAN DO ASYNC stuff, before we check AllowLoad we must not do async stuff
+
     await TemplateEngineBase.Instance.Config(false);
     await EntityCommunicationsEngineClient.Instance.Config(false);
     await CommunicationEngineBase.Instance.Config(false);
 
-    if (this.AllowLoad === false) {
-      return;
-    }
     if (params && (params.ViewEntity || params.ViewID || params.ViewName || (params.EntityName && params.ExtraFilter))) {
       const startTime = new Date().getTime();
       this.isLoading = true

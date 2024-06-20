@@ -1,17 +1,21 @@
-export { initializeConfig } from './config'
+export { initializeConfig } from './Config/config'
 
-export * from './angular_client_codegen'
-export * from './config'
-export * from './db'
-export * from './dbSchema'
+export * from './Config/config'
+export * from './Config/db-connection'
+export * from './Database/dbSchema'
 export * from './entity_subclasses_codegen'
 export * from './action_subclasses_codegen';
 export * from './graphql_server_codegen'
-export * from './logging'
-export * from './manageMetadata'
-export * from './runCommand'
-export * from './sql_codegen'
-export * from './sql'
-export * from './util'
+export * from './Misc/logging'
+export * from './Database/manage-metadata'
+export * from './Misc/runCommand'
+export * from './Database/sql_codegen'
+export * from './Database/sql'
+export * from './Misc/util'
+
+export * from './Angular/angular-codegen'
+export * from './Angular/related-entity-components';
+export * from './Angular/user-view-grid-related-entity-component';
+export * from './Angular/join-grid-related-entity-component';
 
 export * from './runCodeGen'

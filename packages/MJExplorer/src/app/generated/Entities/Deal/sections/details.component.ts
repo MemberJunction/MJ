@@ -32,6 +32,7 @@ import { TimelineGroup } from '@memberjunction/ng-timeline';
             Type="numerictextbox"
             [EditMode]="EditMode"
             LinkType="Record"
+            LinkComponentType="Search"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -40,6 +41,7 @@ import { TimelineGroup } from '@memberjunction/ng-timeline';
             Type="numerictextbox"
             [EditMode]="EditMode"
             LinkType="Record"
+            LinkComponentType="Search"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -48,6 +50,7 @@ import { TimelineGroup } from '@memberjunction/ng-timeline';
             Type="numerictextbox"
             [EditMode]="EditMode"
             LinkType="Record"
+            LinkComponentType="Search"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -98,6 +101,7 @@ import { TimelineGroup } from '@memberjunction/ng-timeline';
             Type="numerictextbox"
             [EditMode]="EditMode"
             LinkType="Record"
+            LinkComponentType="Search"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -155,6 +159,7 @@ import { TimelineGroup } from '@memberjunction/ng-timeline';
             Type="numerictextbox"
             [EditMode]="EditMode"
             LinkType="Record"
+            LinkComponentType="Search"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -163,6 +168,7 @@ import { TimelineGroup } from '@memberjunction/ng-timeline';
             Type="numerictextbox"
             [EditMode]="EditMode"
             LinkType="Record"
+            LinkComponentType="Search"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -171,6 +177,7 @@ import { TimelineGroup } from '@memberjunction/ng-timeline';
             Type="numerictextbox"
             [EditMode]="EditMode"
             LinkType="Record"
+            LinkComponentType="Search"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"

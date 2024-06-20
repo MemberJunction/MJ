@@ -16,19 +16,31 @@
                         </mj-form-section>
                     </mj-tab-body>
                     
-                    <mj-tab Name="Communication Provider Message Types" 
+                    <mj-tab Name="Message Types" 
                         [Visible]="record.IsSaved" 
                         [Props]="{EntityRelationshipID: 264}">
-                        Communication Provider Message Types
+                        Message Types
                     </mj-tab>
                     <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Communication Provider Message Types')"  
-                            [NewRecordValues]="NewRecordValues('Communication Provider Message Types')"
-                            [AllowLoad]="IsCurrentTab('Communication Provider Message Types')"  
-                            [EditMode]="GridEditMode()"  
-                            [BottomMargin]="GridBottomMargin">
-                        </mj-user-view-grid>
+                        <mj-join-grid
+                            [ShowSaveButton]="false"
+                            [ShowCancelButton]="false"
+                            [EditMode]="GridEditMode()"
+                            RowsEntityName="Communication Base Message Types"
+                            RowsEntityDisplayField="Type"
+                            RowsExtraFilter=""
+                            RowsEntityDataSource="FullEntity"
+                            RowsOrderBy="Type"
+                            RowsEntityDisplayName="Base Type"
+                            ColumnsMode="Fields"
+                            JoinEntityName="Communication Provider Message Types"
+                            JoinEntityRowForeignKey="CommunicationBaseMessageTypeID"
+                            [JoinEntityExtraFilter]="'CommunicationProviderID=' + record.ID"
+                            [JoinEntityDisplayColumns]="['Name','Status','AdditionalAttributes']"
+                            [NewRecordDefaultValues]="{CommunicationProviderID: record.ID}"
+                        >
+                        </mj-join-grid>
+                                            
                     </mj-tab-body>
 
                     <mj-tab Name="Communication Logs" 
@@ -43,7 +55,7 @@
                             [AllowLoad]="IsCurrentTab('Communication Logs')"  
                             [EditMode]="GridEditMode()"  
                             [BottomMargin]="GridBottomMargin">
-                        </mj-user-view-grid>
+                        </mj-user-view-grid>                    
                     </mj-tab-body>
                 </mj-tabstrip>
     </form>

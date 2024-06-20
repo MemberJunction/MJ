@@ -10,7 +10,7 @@ export class EntityCommunicationMessageTypeExtended extends EntityCommunicationM
 
 export abstract class EntityCommunicationsEngineBase extends BaseEngine<EntityCommunicationsEngineBase> {
     public async Config(forceRefresh?: boolean, contextUser?: UserInfo) {
-        const c: BaseEnginePropertyConfig[] = [
+        const c: Partial<BaseEnginePropertyConfig>[] = [
             {
                 EntityName: "Entity Communication Message Types",
                 PropertyName: "_EntityCommunicationMessageTypes"

@@ -3964,6 +3964,7 @@ import { SalesLineItemEntity } from 'mj_generatedentities';
             Type="numerictextbox"
             [EditMode]="EditMode"
             LinkType="Record"
+            LinkComponentType="Search"
         ></mj-form-field>
 
     </div>

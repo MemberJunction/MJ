@@ -3,6 +3,8 @@ import { WorkflowEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { LoadWorkflowDetailsComponent } from "./sections/details.component"
+import { UserViewGridComponent } from "@memberjunction/ng-user-view-grid"
+
 @RegisterClass(BaseFormComponent, 'Workflows') // Tell MemberJunction about this class
 @Component({
     selector: 'gen-workflow-form',

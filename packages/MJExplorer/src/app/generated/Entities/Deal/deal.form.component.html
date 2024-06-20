@@ -16,15 +16,6 @@
                         </mj-form-section>
                     </mj-tab-body>
 
-                    <mj-tab Name="Timeline">
-                        Timeline
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-timeline 
-                            [Groups]="timelineGroups">
-                        </mj-timeline>
-                    </mj-tab-body>
-                    
                     <mj-tab Name="Activities" 
                         [Visible]="record.IsSaved" 
                         [Props]="{EntityRelationshipID: 151}">
@@ -37,7 +28,7 @@
                             [AllowLoad]="IsCurrentTab('Activities')"  
                             [EditMode]="GridEditMode()"  
                             [BottomMargin]="GridBottomMargin">
-                        </mj-user-view-grid>
+                        </mj-user-view-grid>                    
                     </mj-tab-body>
                 </mj-tabstrip>
     </form>

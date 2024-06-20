@@ -3,6 +3,7 @@ import { QueryFieldEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { LoadQueryFieldDetailsComponent } from "./sections/details.component"
+
 @RegisterClass(BaseFormComponent, 'Query Fields') // Tell MemberJunction about this class
 @Component({
     selector: 'gen-queryfield-form',

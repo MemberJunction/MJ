@@ -5,6 +5,8 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { LoadActionDetailsComponent } from "./sections/details.component"
 import { LoadActionTopComponent } from "./sections/top.component"
 import { LoadActionCodeComponent } from "./sections/code.component"
+import { UserViewGridComponent } from "@memberjunction/ng-user-view-grid"
+
 @RegisterClass(BaseFormComponent, 'Actions') // Tell MemberJunction about this class
 @Component({
     selector: 'gen-action-form',

@@ -3,6 +3,7 @@ import { VersionInstallationEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { LoadVersionInstallationDetailsComponent } from "./sections/details.component"
+
 @RegisterClass(BaseFormComponent, 'Version Installations') // Tell MemberJunction about this class
 @Component({
     selector: 'gen-versioninstallation-form',

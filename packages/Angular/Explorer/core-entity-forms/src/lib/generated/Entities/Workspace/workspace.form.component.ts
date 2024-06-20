@@ -3,6 +3,8 @@ import { WorkspaceEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { LoadWorkspaceDetailsComponent } from "./sections/details.component"
+import { UserViewGridComponent } from "@memberjunction/ng-user-view-grid"
+
 @RegisterClass(BaseFormComponent, 'Workspaces') // Tell MemberJunction about this class
 @Component({
     selector: 'gen-workspace-form',

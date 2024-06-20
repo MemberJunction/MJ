@@ -1,7 +1,7 @@
 import { EntityFieldValueListType, EntityInfo, TypeScriptTypeFromSQLType } from '@memberjunction/core';
 import fs from 'fs';
 import path from 'path';
-import { makeDir } from './util';
+import { makeDir } from './Misc/util';
 import { RegisterClass } from '@memberjunction/global';
 
 /**

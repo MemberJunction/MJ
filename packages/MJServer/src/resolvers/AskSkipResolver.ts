@@ -275,8 +275,8 @@ export class AskSkipResolver {
         feedback: q.Feedback,
         status: q.Status,
         qualityRank: q.QualityRank,
-        createdAt: q.CreatedAt,
-        updatedAt: q.UpdatedAt,
+        createdAt: q.__mj_CreatedAt,
+        updatedAt: q.__mj_UpdatedAt,
         categoryID: q.CategoryID, 
         fields: q.Fields.map((f) => {
           return {
@@ -294,8 +294,8 @@ export class AskSkipResolver {
             computationDescription: f.ComputationDescription,
             isSummary: f.IsSummary,
             summaryDescription: f.SummaryDescription,
-            createdAt: f.CreatedAt,
-            updatedAt: f.UpdatedAt,
+            createdAt: f.__mj_CreatedAt,
+            updatedAt: f.__mj_UpdatedAt,
           }
         })
       }
@@ -470,23 +470,23 @@ export class AskSkipResolver {
       const md = new Metadata();
       const e = md.Entities.find((e) => e.Name === 'Conversation Details');
       const sql = `SELECT 
-                      ${maxHistoricalMessages ? 'TOP ' + maxHistoricalMessages : ''} ID, Message, Role, CreatedAt 
+                      ${maxHistoricalMessages ? 'TOP ' + maxHistoricalMessages : ''} ID, Message, Role, __mj_CreatedAt 
                    FROM 
                       ${e.SchemaName}.${e.BaseView} 
                    WHERE 
                       ConversationID = ${ConversationId} 
                    ORDER 
-                      BY CreatedAt DESC`;
+                      BY __mj_CreatedAt DESC`;
       const result = await dataSource.query(sql);
       if (!result) 
         throw new Error(`Error running SQL: ${sql}`);
       else  {
-        // first, let's sort the result array into a local variable called returnData and in that we will sort by CreatedAt in ASCENDING order so we have the right chronological order
+        // first, let's sort the result array into a local variable called returnData and in that we will sort by __mj_CreatedAt in ASCENDING order so we have the right chronological order
         // the reason we're doing a LOCAL sort here is because in the SQL query above, we're sorting in DESCENDING order so we can use the TOP clause to limit the number of records and get the 
         // N most recent records. We want to sort in ASCENDING order because we want to send the messages to the Skip API in the order they were created.
         const returnData = result.sort((a: any, b: any) => {
-          const aDate = new Date(a.CreatedAt);
-          const bDate = new Date(b.CreatedAt);
+          const aDate = new Date(a.__mj_CreatedAt);
+          const bDate = new Date(b.__mj_CreatedAt);
           return aDate.getTime() - bDate.getTime();
         });
 

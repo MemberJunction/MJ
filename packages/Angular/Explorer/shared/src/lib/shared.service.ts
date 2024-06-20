@@ -267,7 +267,7 @@ export class SharedService {
       const result = await rv.RunView({
           EntityName: 'User Notifications',
           ExtraFilter: 'UserID=' + md.CurrentUser.ID,
-          OrderBy: 'CreatedAt DESC',
+          OrderBy: '__mj_CreatedAt DESC',
           ResultType: 'entity_object' /* we want the entity objects, this has a little bit of overhead cost, but since we'll want to be able to modify the unread state it is helpful to have these ready to go */
       })
       if (result && result.Success) {
