@@ -1,8 +1,21 @@
 # Change Log - @memberjunction/ng-query-grid
 
-This log was last generated on Wed, 19 Jun 2024 16:32:44 GMT and should not be manually modified.
+This log was last generated on Fri, 21 Jun 2024 13:15:28 GMT and should not be manually modified.
 
 <!-- Start content -->
+
+## 1.8.1
+
+Fri, 21 Jun 2024 13:15:28 GMT
+
+### Patches
+
+- Bump @memberjunction/core-entities to v1.8.1
+- Bump @memberjunction/global to v1.8.1
+- Bump @memberjunction/core to v1.8.1
+- Bump @memberjunction/ng-container-directives to v1.8.1
+- Bump @memberjunction/ng-compare-records to v1.8.1
+- Bump @memberjunction/ng-shared to v1.8.1
 
 ## 1.8.0
 

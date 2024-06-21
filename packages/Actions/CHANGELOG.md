@@ -1,8 +1,24 @@
 # Change Log - @memberjunction/actions
 
-This log was last generated on Wed, 19 Jun 2024 16:32:44 GMT and should not be manually modified.
+This log was last generated on Fri, 21 Jun 2024 13:15:27 GMT and should not be manually modified.
 
 <!-- Start content -->
+
+## 1.8.1
+
+Fri, 21 Jun 2024 13:15:27 GMT
+
+### Patches
+
+- Applying package updates [skip ci] (97354817+AN-BC@users.noreply.github.com)
+- Applying package updates [skip ci] (97354817+AN-BC@users.noreply.github.com)
+- Applying package updates [skip ci] (97354817+AN-BC@users.noreply.github.com)
+- Bump @memberjunction/global to v1.8.1
+- Bump @memberjunction/core to v1.8.1
+- Bump @memberjunction/core-entities to v1.8.1
+- Bump @memberjunction/ai to v1.8.1
+- Bump @memberjunction/aiengine to v1.8.1
+- Bump @memberjunction/doc-utils to v1.8.1
 
 ## 1.8.0
 

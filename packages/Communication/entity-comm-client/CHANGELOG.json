@@ -2,6 +2,51 @@
   "name": "@memberjunction/entity-communications-client",
   "entries": [
     {
+      "date": "Fri, 21 Jun 2024 13:15:27 GMT",
+      "version": "1.8.1",
+      "tag": "@memberjunction/entity-communications-client_v1.8.1",
+      "comments": {
+        "patch": [
+          {
+            "author": "craig.adam@bluecypress.io",
+            "package": "@memberjunction/entity-communications-client",
+            "commit": "9d158fc36a1dd2049792c395d3b28850b9d364c6",
+            "comment": "Applying package updates [skip ci]"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/entity-communications-client",
+            "comment": "Bump @memberjunction/global to v1.8.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/entity-communications-client",
+            "comment": "Bump @memberjunction/core to v1.8.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/entity-communications-client",
+            "comment": "Bump @memberjunction/core-entities to v1.8.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/entity-communications-client",
+            "comment": "Bump @memberjunction/entity-communications-base to v1.8.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/entity-communications-client",
+            "comment": "Bump @memberjunction/graphql-dataprovider to v1.8.1",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
       "date": "Wed, 19 Jun 2024 16:32:44 GMT",
       "version": "1.8.0",
       "tag": "@memberjunction/entity-communications-client_v1.8.0",
