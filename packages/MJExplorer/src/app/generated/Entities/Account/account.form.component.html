@@ -52,13 +52,11 @@
                         Deals
                     </mj-tab>
                     <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Deals')"  
-                            [NewRecordValues]="NewRecordValues('Deals')"
-                            [AllowLoad]="IsCurrentTab('Deals')"  
-                            [EditMode]="GridEditMode()"  
-                            [BottomMargin]="GridBottomMargin">
-                        </mj-user-view-grid>                    
+                        <mj-timeline
+                            DisplayOrientation="vertical"
+                            [Groups]="[{EntityName: 'Deals', DataSourceType: 'entity', Filter: 'AccountID=' + record.ID, TitleFieldName: 'Title', DateFieldName: 'CloseDate'}]">
+                        </mj-timeline>
+                                            
                     </mj-tab-body>
 
                     <mj-tab Name="Invoices" 

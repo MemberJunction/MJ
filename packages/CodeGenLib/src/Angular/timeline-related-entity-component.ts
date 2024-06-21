@@ -1,6 +1,5 @@
 import { RegisterClass, SafeJSONParse } from "@memberjunction/global";
 import { AngularComponentInfo, ComponentConfigBase, GenerationInput, GenerationResult, RelatedEntityDisplayComponentGeneratorBase } from "./related-entity-components";
-import { Metadata } from "@memberjunction/core";
 
 
 /**
@@ -56,13 +55,15 @@ export class TimelineRelatedEntityGenerator extends RelatedEntityDisplayComponen
         if (!config)
             throw new Error("Invalid configuration for component for relationship " + input.RelationshipInfo.ID);
 
-        const fk = this.GetForeignKey(input.Entity.Name, input.RelationshipInfo.RelatedEntity);
-        const filter = `${fk.Name} = record.${input.Entity.FirstPrimaryKey.Name}`;
+        const fk = this.GetForeignKey(input.RelationshipInfo.RelatedEntity, input.Entity.Name);
+        const filter = `'${fk.Name}=' + record.${input.Entity.FirstPrimaryKey.Name}`;
         const template = `<mj-timeline
     DisplayOrientation="${config.DisplayOrientation}"
-    [Groups]="[{EntityName: '${input.RelationshipInfo.RelatedEntity}', DataSourceType='entity', Filter='${filter}', TitleFieldName='${config.TitleField}', DateFieldName='${config.DateField}'}]">
-</mj-timeline>
-`
+    [Groups]="[{EntityName: '${input.RelationshipInfo.RelatedEntity}', DataSourceType: 'entity', Filter: ${filter}, TitleFieldName: '${config.TitleField}', DateFieldName: '${config.DateField}'}]">
+</mj-timeline>`
+
+
+//{EntityName: 'Deals', DataSourceType:'entity', Filter:'AccountID=' + record.ID, TitleFieldName:'Title', DateFieldName:'CloseDate'}
         return {
             Success: true,
             TemplateOutput: template,
