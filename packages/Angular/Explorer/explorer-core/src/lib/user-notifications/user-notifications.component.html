@@ -29,7 +29,7 @@
       <div [class]="getItemWrapperClass(dataItem)">
         <div [class]="getItemTitleClass(dataItem)" (click)="notificationClicked(dataItem)">{{dataItem.Title}}</div>
         <div class="notification-body"  (click)="notificationClicked(dataItem)">
-          <div class="notification-date">{{dataItem.CreatedAt | date:'long'}}</div>
+          <div class="notification-date">{{dataItem.__mj_CreatedAt | date:'long'}}</div>
           <div class="notification-message">{{dataItem.Message}}</div>
         </div>
         <div>

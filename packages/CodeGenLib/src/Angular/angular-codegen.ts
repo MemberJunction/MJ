@@ -495,8 +495,11 @@ export function Load${entity.ClassName}${this.stripWhiteSpace(section.Name)}Comp
             }
 
             let linkType = null;
-            if (field.RelatedEntity && field.RelatedEntity.length > 0)
+            let linkComponentType = null;
+            if (field.RelatedEntity && field.RelatedEntity.length > 0) {
                 linkType = 'Record'
+                linkComponentType = `\n            LinkComponentType="${field.RelatedEntityDisplayType}"`
+            }
             else if (field.ExtendedType && field.ExtendedType.length > 0) { 
                 switch (field.ExtendedType.trim().toLowerCase()) {
                     case 'url':
@@ -513,7 +516,7 @@ export function Load${entity.ClassName}${this.stripWhiteSpace(section.Name)}Comp
             [ShowLabel]="${ section.Fields.length > 1 ? 'true' : 'false'}"
             FieldName="${field.CodeName}"
             Type="${editControl}"
-            [EditMode]="EditMode"${linkType ? `\n            LinkType="${linkType}"` : ''}
+            [EditMode]="EditMode"${linkType ? `\n            LinkType="${linkType}"` : ''}${linkComponentType ? linkComponentType : ''}
         ></mj-form-field>
 `
           }

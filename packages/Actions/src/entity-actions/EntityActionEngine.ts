@@ -1,9 +1,9 @@
 import { BaseEngine, BaseEnginePropertyConfig, BaseEntity, UserInfo } from "@memberjunction/core";
-import { EntityActionFilterEntity, EntityActionInvocationEntity, EntityActionInvocationTypeEntity } from "@memberjunction/core-entities";
+import { ActionExecutionLogEntity, ActionResultCodeEntity, EntityActionFilterEntity, EntityActionInvocationEntity, EntityActionInvocationTypeEntity, EntityActionParamEntity } from "@memberjunction/core-entities";
 import { MJGlobal } from "@memberjunction/global";
 import { EntityActionEntityServer } from "./EntityActionEntity.server";
 import { EntityActionInvocationBase } from "./EntityActionInvocationTypes";
-import { ActionResult } from "../generic/ActionEngine";
+import { ActionParam, ActionResult, RunActionParams } from "../generic/ActionEngine";
 
 /**
  * Parameters type for invoking an entity action
@@ -39,6 +39,42 @@ export class EntityActionInvocationParams {
 }
 
 
+
+/**
+ * Class that has the result of a complete action execution, returned by the Run method of the ActionEngine.
+ */
+export class EntityActionResult {
+    /**
+     * Contains the parameters that were used to run the action as a convenience.
+     */
+    public RunParams: RunActionParams;
+       
+    /**
+     * Indicates if the action was successful or not.
+     */
+    public Success: boolean;
+ 
+    /**
+     * A code that indicates the outcome of the action. Will be one of the possible ResultCodes enumerated in the ActionResultCodeEntity
+     */
+    public Result?: ActionResultCodeEntity;
+ 
+    /**
+     * Whenever an action is executed a log entry is created. This log entry is stored in the database and can be used to track the execution of the action. This property contains the log entry object for the action that was run.
+     */
+    public LogEntry: ActionExecutionLogEntity;
+ 
+    /**
+     * Optional, a message an action can include that describes the outcome of the action. This is typically used to display a message to the user.
+     */
+    public Message?: string;
+ 
+    /**
+     * All parameters including inputs and outputs are provided here for convenience
+     */
+    public Params?: ActionParam[];
+ }
+
 /**
  * The purpose of this class is to handle the invocation of actions for entities in all of the supported invocation contexts.
  */
@@ -50,6 +86,7 @@ export class EntityActionEngine extends BaseEngine<EntityActionEngine> {
  
     // internal instance properties used for the singleton pattern
     private _EntityActions: EntityActionEntityServer[] = [];
+    private _EntityActionParams: EntityActionParamEntity[] = [];
     private _EntityActionInvocationTypes: EntityActionInvocationTypeEntity[] = [];
     private _EntityActionFilters: EntityActionFilterEntity[] = [];
     private _EntityActionInvocations: EntityActionInvocationEntity[] = [];
@@ -75,12 +112,17 @@ export class EntityActionEngine extends BaseEngine<EntityActionEngine> {
                 PropertyName: '_EntityActionInvocations'
             },
             {
-                EntityName: 'Entity Actions',
+                EntityName: 'Entity Actions', // sub-class for this will handle dynamic loading of filters, invocations, and params when needed by callers of those read-only properties
                 PropertyName: '_EntityActions'
+            },
+            {
+                EntityName: 'Entity Action Params',
+                PropertyName: '_EntityActionParams'
             }
         ]; 
         await this.Load(configs, forceRefresh, contextUser);
     }
+
 
     /**
      * List of all the EntityActionInvocationTypeEntity objects that are available for use in the system. Make sure you call Config() before any other methods on this class.
@@ -108,6 +150,13 @@ export class EntityActionEngine extends BaseEngine<EntityActionEngine> {
      */
     public get EntityActions(): EntityActionEntityServer[] {
         return this._EntityActions;
+    }
+
+    /**
+     * List of all of the Entity Action Params that are available for use in the system. Make sure you call Config() before any other methods on this class.
+     */
+    public get Params(): EntityActionParamEntity[] {   
+        return this._EntityActionParams;
     }
 
     /**
@@ -150,7 +199,7 @@ export class EntityActionEngine extends BaseEngine<EntityActionEngine> {
      * @param params Parameters for the action invocation
      * @returns 
      */
-    public async RunEntityAction(params: EntityActionInvocationParams): Promise<ActionResult> {
+    public async RunEntityAction(params: EntityActionInvocationParams): Promise<EntityActionResult> {
         /*
             Logic for invoking an Entity Action:
             1) Validate the params, making sure that we have the right stuff

@@ -38,7 +38,7 @@
         }
         @if (FieldInfo && FieldInfo.RelatedEntity && FieldInfo.RelatedEntity.length > 0) {
             <!-- Foreign Key Link here -->
-             <mj-link-field [record]="record" [FieldName]="FieldName"></mj-link-field>
+             <mj-link-field [record]="record" [FieldName]="FieldName" [LinkComponentType]="LinkComponentType"></mj-link-field>
         }
         @else {
             <!-- Not a foreign key -->

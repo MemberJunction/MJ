@@ -583,6 +583,7 @@ export class ManageMetadataBase {
       sf.AutoIncrement,
       IIF(sf.IsVirtual = 1, 0, IIF(sf.FieldName = '${EntityInfo.CreatedAtFieldName}' OR sf.FieldName = '${EntityInfo.UpdatedAtFieldName}' OR sf.FieldName = 'ID', 0, 1)) AllowUpdateAPI,
       sf.IsVirtual,
+      e.RelationshipDefaultDisplayType,
       re.ID RelatedEntityID,
       fk.referenced_column RelatedEntityFieldName,
       IIF(sf.FieldName = 'Name', 1, 0) IsNameField,
@@ -687,7 +688,8 @@ export class ManageMetadataBase {
          IncludeRelatedEntityNameFieldInBaseView,
          DefaultInView,
          IsPrimaryKey,
-         IsUnique
+         IsUnique,
+         RelatedEntityDisplayType
       )
       VALUES
       (
@@ -712,7 +714,8 @@ export class ManageMetadataBase {
          ${n.RelatedEntityID && n.RelatedEntityID > 0 && n.Type.trim().toLowerCase() === 'int' ? 1 : 0},
          ${bDefaultInView ? 1 : 0},
          ${n.IsPrimaryKey},
-         ${n.IsUnique}
+         ${n.IsUnique},
+         '${n.RelationshipDefaultDisplayType}'
       )`      
    }
    
