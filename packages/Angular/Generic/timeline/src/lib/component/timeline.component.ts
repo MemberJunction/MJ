@@ -23,7 +23,7 @@ export class TimelineGroup {
   /**
    * The actual data you want displayed in this group. This is an array of BaseEntity objects that will be displayed in the timeline. You can populate this array from a view or any other source.
    */
-  EntityObjects: BaseEntity[] = [];
+  EntityObjects?: BaseEntity[] = [];
   /**
    * The name of the field in the entity that contains the title of the record that will be displayed in the timeline
    */
@@ -35,7 +35,7 @@ export class TimelineGroup {
   /**
    * Use standard or custom icons, if custom is specified, the DisplayIcon property must be set
    */
-  DisplayIconMode: 'standard' | 'custom' = 'standard';
+  DisplayIconMode?: 'standard' | 'custom' = 'standard';
   /**
    * Only used if DisplayIconMode is set to custom, the CSS class name to use from Font Awesome (or any other library that has styles pre-loaded), for the span that will be shown
    */
@@ -43,7 +43,7 @@ export class TimelineGroup {
   /**
    * Color mode for items in this group, defaults to auto-selected in which case the color will be determined by the system automatically based on the # of groups
    */
-  DisplayColorMode: 'auto' | 'manual' = 'auto';
+  DisplayColorMode?: 'auto' | 'manual' = 'auto';
   /**
    * Only used if DisplayColorMode is set to manual, the color to use for the items in this group. Any valid color string that can be set into the element style via CSS is valid here.
    */
@@ -53,7 +53,7 @@ export class TimelineGroup {
    * When set to field, the SummaryFieldName will be used to display detailed information about the record in the timeline. If set to custom, you need to provide
    * a function for the SummaryFunction property. If set to none, no summary will be displayed.
    */
-  SummaryMode: 'field' | 'custom' | 'none' = 'field';
+  SummaryMode?: 'field' | 'custom' | 'none' = 'field';
   /**
    * When SummaryMode is set to 'custom', this function will be used to generate the summary for the record. The function should take a single parameter, the BaseEntity object and will return a string.
    * The string returned can be plain text or HTML and will be displayed in the timeline.
@@ -90,7 +90,7 @@ export class TimelineGroup {
 export class TimelineComponent implements AfterViewInit { 
   private _groups: TimelineGroup[] = [];
 
-  @Input() DisplayOrientation: 'horizontal' | 'vertical' = 'horizontal';
+  @Input() DisplayOrientation: 'horizontal' | 'vertical' = 'vertical';
 
   /**
    * Provide an array of one or more TimelineGroup objects to display the data in the timeline. Each group will be displayed in a different color and icon.
@@ -126,18 +126,21 @@ export class TimelineComponent implements AfterViewInit {
   */
   public events: TimelineEvent[] = [];
 
-  ngAfterViewInit(): void {
+  async ngAfterViewInit() {
     if (this.AllowLoad)
-      this.Refresh();
+      await this.Refresh();
   }
 
 
   /**
    * This method refreshes the timeline with the data from the provided parameters.
    */
-  public Refresh() {
+  public async Refresh() {
+    this.events.splice(0, this.events.length); // clear out what we have
     if (this.Groups && this.Groups.length > 0) {
-      this.Groups.forEach(g => this.LoadSingleGroup(g));
+      for (const g of this.Groups) {
+        await this.LoadSingleGroup(g);
+      }
     }
   }
 
@@ -145,13 +148,40 @@ export class TimelineComponent implements AfterViewInit {
    * This method loads the data for a single group and adds it to the timelineGroupEvents array.
    * @param group 
    */
-  protected LoadSingleGroup(group: TimelineGroup) {
-    this.events = group.EntityObjects.map(e => {
+  protected async LoadSingleGroup(group: TimelineGroup) {
+    // load up the events for the specified group into the events array
+    let newItems: TimelineEvent[] = [];
+
+    switch (group.DataSourceType) {
+      case 'array':
+        // use the provided array
+        if (!group.EntityObjects)
+          throw new Error("No EntityObjects provided for group");
+        newItems = this.mapEntityObjectsToEvents(group, group.EntityObjects!);
+        break;
+      case 'entity':
+        // use run view
+        const rv = new RunView();
+        const result = await rv.RunView({
+          EntityName: group.EntityName,
+          ExtraFilter: group.Filter,
+          ResultType: 'entity_object'
+        });
+        if (result && result.Success)
+          newItems = this.mapEntityObjectsToEvents(group, result.Results);
+        break;
+    }
+
+    this.events.push(...newItems);
+  }
+
+  protected mapEntityObjectsToEvents(group: TimelineGroup, entityObjects: BaseEntity[]): TimelineEvent[] {
+    const ret: TimelineEvent[] = entityObjects.map(e => {
       let date = new Date(e.Get(group.DateFieldName));
-      let title = group.TitleFieldName;
+      let title = e.Get(group.TitleFieldName);
       let summary = "";
       if (group.SummaryMode == 'field') {
-        summary = group.TitleFieldName;
+        summary = e.Get(group.TitleFieldName);
       } else if (group.SummaryMode == 'custom') {
         summary = group.SummaryFunction ? group.SummaryFunction(e) : "";
       }
@@ -164,5 +194,6 @@ export class TimelineComponent implements AfterViewInit {
         actions: [],
       };
     })
+    return ret;
   }
 }
