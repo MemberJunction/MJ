@@ -2,6 +2,69 @@
   "name": "@memberjunction/core-actions",
   "entries": [
     {
+      "date": "Fri, 21 Jun 2024 13:15:27 GMT",
+      "version": "1.8.1",
+      "tag": "@memberjunction/core-actions_v1.8.1",
+      "comments": {
+        "patch": [
+          {
+            "author": "97354817+AN-BC@users.noreply.github.com",
+            "package": "@memberjunction/core-actions",
+            "commit": "8491c57f2dadf3e575d0584761adfbe86fc24ee6",
+            "comment": "Applying package updates [skip ci]"
+          },
+          {
+            "author": "97354817+AN-BC@users.noreply.github.com",
+            "package": "@memberjunction/core-actions",
+            "commit": "4531707e9a6d1d1392bdc5220a0ae195b884bd1c",
+            "comment": "Applying package updates [skip ci]"
+          },
+          {
+            "author": "97354817+AN-BC@users.noreply.github.com",
+            "package": "@memberjunction/core-actions",
+            "commit": "5f6958b43fb127be5fcd906d13ee7f5b8c2fbe12",
+            "comment": "Applying package updates [skip ci]"
+          },
+          {
+            "author": "97354817+AN-BC@users.noreply.github.com",
+            "package": "@memberjunction/core-actions",
+            "commit": "5b8fc9d43448bf6a09fda773d1621611305ec97b",
+            "comment": "Applying package updates [skip ci]"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/core-actions",
+            "comment": "Bump @memberjunction/global to v1.8.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/core-actions",
+            "comment": "Bump @memberjunction/core to v1.8.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/core-actions",
+            "comment": "Bump @memberjunction/core-entities to v1.8.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/core-actions",
+            "comment": "Bump @memberjunction/actions to v1.8.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/core-actions",
+            "comment": "Bump @memberjunction/communication-engine to v1.8.1",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
       "date": "Wed, 19 Jun 2024 16:32:44 GMT",
       "version": "1.8.0",
       "tag": "@memberjunction/core-actions_v1.8.0",

@@ -2,6 +2,27 @@
   "name": "@memberjunction/skip-types",
   "entries": [
     {
+      "date": "Fri, 21 Jun 2024 13:15:28 GMT",
+      "version": "1.8.1",
+      "tag": "@memberjunction/skip-types_v1.8.1",
+      "comments": {
+        "patch": [
+          {
+            "author": "beachball",
+            "package": "@memberjunction/skip-types",
+            "comment": "Bump @memberjunction/core-entities to v1.8.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/skip-types",
+            "comment": "Bump @memberjunction/data-context to v1.8.1",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
       "date": "Wed, 19 Jun 2024 16:32:44 GMT",
       "version": "1.8.0",
       "tag": "@memberjunction/skip-types_v1.8.0",
