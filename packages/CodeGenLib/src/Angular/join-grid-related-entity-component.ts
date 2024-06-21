@@ -37,20 +37,6 @@ export class JoinGridRelatedEntityGenerator extends RelatedEntityDisplayComponen
         ];
     }
 
-    protected GetForeignKeyName(entityName: string, relatedEntityName: string): string {
-        // find a foreign key field that links the entity to the related entity
-        const md = new Metadata();
-        const e = md.EntityByName(entityName);
-        if (!e)
-            throw new Error("Could not find entity " + entityName);
-
-        // now find the field in e that matches the related entity
-        const field = e.Fields.find(f => f.RelatedEntity === relatedEntityName);
-        if (!field)
-            throw new Error("Could not find a foreign key field in entity " + entityName + " that links to " + relatedEntityName);
-
-        return field.Name;
-    }
 
     public async Generate(input: GenerationInput): Promise<GenerationResult> {
         const config = SafeJSONParse<JoinGridConfigInfo>(input.RelationshipInfo.DisplayComponentConfiguration);

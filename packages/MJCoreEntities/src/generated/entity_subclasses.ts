@@ -19587,9 +19587,32 @@ import { RegisterClass } from "@memberjunction/global";
             this.Set('Description', value);
         }
         /**
+        * * Field Name: CodeType
+        * * Display Name: Code Type
+        * * SQL Data Type: nvarchar(25)
+        * * Default Value: Other
+        * * Value List Type: List
+        * * Possible Values 
+        *   * TypeScript
+        *   * SQL
+        *   * HTML
+        *   * CSS
+        *   * JavaScript
+        *   * JSON
+        *   * Other
+        * * Description: Refers to the primary language or codetype of the templates of this type, HTML, JSON, JavaScript, etc
+        */
+        get CodeType(): 'TypeScript' | 'SQL' | 'HTML' | 'CSS' | 'JavaScript' | 'JSON' | 'Other' {  
+            return this.Get('CodeType');
+        }
+        set CodeType(value: 'TypeScript' | 'SQL' | 'HTML' | 'CSS' | 'JavaScript' | 'JSON' | 'Other') {
+            this.Set('CodeType', value);
+        }
+        /**
         * * Field Name: __mj_CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_CreatedAt(): Date {  
             return this.Get('__mj_CreatedAt');
@@ -19599,6 +19622,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_UpdatedAt(): Date {  
             return this.Get('__mj_UpdatedAt');
@@ -20806,12 +20830,13 @@ import { RegisterClass } from "@memberjunction/global";
         *   * Static
         *   * Entity Object
         *   * Script
+        *   * Entity Field
         * * Description: Type of the value, which can be Static, Entity Object, or Script.
         */
-        get ValueType(): 'Static' | 'Entity Object' | 'Script' {  
+        get ValueType(): 'Static' | 'Entity Object' | 'Script' | 'Entity Field' {  
             return this.Get('ValueType');
         }
-        set ValueType(value: 'Static' | 'Entity Object' | 'Script') {
+        set ValueType(value: 'Static' | 'Entity Object' | 'Script' | 'Entity Field') {
             this.Set('ValueType', value);
         }
         /**

@@ -55,6 +55,9 @@ export abstract class EntityActionInvocationBase {
                 case 'Entity Object':
                     value = entityObject;
                     break;
+                case 'Entity Field':
+                    value = entityObject[eap.Value];
+                    break;
                 case 'Script':
                     value = await this.SafeEvalScript(eap.ID, eap.Value, entityObject);
                     break;
@@ -98,8 +101,8 @@ export abstract class EntityActionInvocationBase {
                     })();
                 `);
     
-            await scriptFunction(entityActionContext);
-            return entityActionContext.result;
+            const ret = await scriptFunction(entityActionContext);
+            return ret || entityActionContext.result;
         }
         catch (e) {
             console.error(`Error executing script: ${e.message}`);

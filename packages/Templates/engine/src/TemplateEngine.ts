@@ -1,5 +1,5 @@
-import { BaseEngine, BaseEnginePropertyConfig, UserInfo } from "@memberjunction/core";
-import { TemplateCategoryEntity, TemplateContentEntity, TemplateContentTypeEntity, TemplateParamEntity } from "@memberjunction/core-entities";
+import { UserInfo } from "@memberjunction/core";
+import { TemplateContentEntity } from "@memberjunction/core-entities";
 import * as nunjucks from 'nunjucks';
 import { MJGlobal } from "@memberjunction/global";
 import { TemplateExtensionBase } from "./extensions/TemplateExtensionBase";
@@ -71,13 +71,17 @@ export class TemplateEngineServer extends TemplateEngineBase {
 
     private _nunjucksEnv: nunjucks.Environment;
     private _templateLoader: TemplateEntityLoader;
- 
+
+    /**
+     * Cache for templates that have been created by nunjucks so we don't have to create them over and over
+     */
+    private _templateCache: Map<number, any> = new Map<number, any>();
 
     public AddTemplate(templateEntity: TemplateEntityExtended) {
         this._templateLoader.AddTemplate(templateEntity.ID, templateEntity);
     }
  
-
+    
     /**
      * Renders a template with the given data.
      * @param templateEntity the template object to render
@@ -103,7 +107,7 @@ export class TemplateEngineServer extends TemplateEngineBase {
                 };
             }
      
-            const template = new nunjucks.Template(templateContent.TemplateText, this._nunjucksEnv);
+            const template = this.getNunjucksTemplate(templateContent.ID, templateContent.TemplateText);
             const result = await this.renderTemplateAsync(template, data); 
             return {
                 Success: true,
@@ -118,6 +122,25 @@ export class TemplateEngineServer extends TemplateEngineBase {
                 Message: e.message
             };
         }
+    }
+
+    /**
+     * This method is responsible for creating a new Nunjucks template, caching it, and returning it.
+     * If the templateContentId already had a template created, it will return that template from the cache.
+     * @param templateId 
+     * @param templateText 
+     */
+    protected getNunjucksTemplate(templateContentId: number, templateText: string): any {
+        let template = this._templateCache.get(templateContentId);
+        if (!template) {
+            template = new nunjucks.Template(templateText, this._nunjucksEnv);
+            this._templateCache.set(templateContentId, template);
+        }
+        return template;
+    }
+
+    public ClearTemplateCache() {
+        this._templateCache.clear();
     }
 
     /**

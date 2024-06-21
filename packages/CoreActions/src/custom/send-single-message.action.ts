@@ -23,6 +23,7 @@ export class SendSingleMessageAction extends BaseAction {
         const to = params.Params.find(p => p.Name === 'To');
         const from = params.Params.find(p => p.Name === 'From');
         const provider = params.Params.find(p => p.Name === 'Provider');
+        await CommunicationEngine.Instance.Config(false, params.ContextUser);
         const p = CommunicationEngine.Instance.Providers.find(p => p.Name === provider.Value)
         const messageType = params.Params.find(p => p.Name === 'MessageType');
         const mt = p.MessageTypes.find(mt => mt.Name === messageType.Value);

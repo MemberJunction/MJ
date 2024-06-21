@@ -390,7 +390,7 @@ Your response must be JSON and parsable into this type:
     const returnType = {
         reflection: string, //Jot down your notes here on why you think the given code was valid or not. If it wasnt, write down why it isnt. Is it because there are syntax or logic errors, or because it doesnt satisfy the user's request?
         success: boolean //whether or not the above code is valid and can successfully compile and run, using the given libraries and data types
-        code: string, // If the code is not valid, you will populate this field with the same code but with corrections
+        code: string, // REMEMBER: your code will be inserted INTO an existing method so do not generate the method signature, just the code that I will drop into my existing method as shown in the <CONTEXTINFO> 
         explanation: string // If the code is not valid, you will provide an explanation for a semi-technical person explaining what the corrected code does. Here again use line breaks liberally to make it easy to read but do NOT indent with spaces/tabs as I will handle that. Use * lists and numbered lists as appropriate.
         libraries: [
             {LibraryName: string, ItemsUsed: string[]}, // If the code is not valid, tell me the libraries you have used in the corrected code you created here in this array of libraries. I need this info to properly import them in the final code.
