@@ -2,7 +2,7 @@
 * ALL ENTITIES - TypeGraphQL Type Class Definition - AUTO GENERATED FILE
 * Generated Entities and Resolvers for Server
 * 
-* GENERATED: 6/20/2024, 6:02:22 PM
+* GENERATED: 6/21/2024, 5:33:44 PM
 * 
 *   >>> DO NOT MODIFY THIS FILE!!!!!!!!!!!!
 *   >>> YOUR CHANGES WILL BE OVERWRITTEN
@@ -22625,6 +22625,10 @@ export class TemplateContentType_ {
     @Field({nullable: true, description: 'Description of the template content type'}) 
     Description?: string;
           
+    @Field({description: 'Refers to the primary language or codetype of the templates of this type, HTML, JSON, JavaScript, etc'}) 
+    @MaxLength(50)
+    CodeType: string;
+          
     @Field() 
     @MaxLength(10)
     _mj__CreatedAt: Date;
@@ -22648,6 +22652,9 @@ export class CreateTemplateContentTypeInput {
 
     @Field({ nullable: true })
     Description?: string;
+
+    @Field()
+    CodeType: string;
 }
     
         
@@ -22664,6 +22671,9 @@ export class UpdateTemplateContentTypeInput {
 
     @Field({ nullable: true })
     Description?: string;
+
+    @Field()
+    CodeType: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
