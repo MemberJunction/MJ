@@ -19413,12 +19413,13 @@ import { RegisterClass } from "@memberjunction/global";
         *   * Array
         *   * Object
         *   * Record
-        * * Description: Type of the parameter
+        *   * Entity
+        * * Description: Type of the parameter - Record is an individual record within the entity specified by EntityID. Entity means an entire Entity or an entity filtered by the LinkedParameterName/Field attributes and/or ExtraFilter. Object is any valid JSON object. Array and Scalar have their common meanings.
         */
-        get Type(): 'Scalar' | 'Array' | 'Object' | 'Record' {  
+        get Type(): 'Scalar' | 'Array' | 'Object' | 'Record' | 'Entity' {  
             return this.Get('Type');
         }
-        set Type(value: 'Scalar' | 'Array' | 'Object' | 'Record') {
+        set Type(value: 'Scalar' | 'Array' | 'Object' | 'Record' | 'Entity') {
             this.Set('Type', value);
         }
         /**
@@ -19450,7 +19451,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Entity ID
         * * SQL Data Type: int
         * * Related Entity/Foreign Key: Entities (vwEntities.ID)
-        * * Description: Entity ID, used only when Type is Record
+        * * Description: Entity ID, used only when Type is Record or Entity
         */
         get EntityID(): number | null {  
             return this.Get('EntityID');
@@ -19459,10 +19460,46 @@ import { RegisterClass } from "@memberjunction/global";
             this.Set('EntityID', value);
         }
         /**
+        * * Field Name: LinkedParameterName
+        * * Display Name: Linked Parameter Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Only used when Type=Entity, this is used to link an Entity parameter with another parameter so that the rows in the Entity parameter can be filtered automatically based on the FKEY relationship between the Record and this Entity parameter. For example, if the Entity-based parameter is for an entity like Activities and there is another parameter of type Record for an entity like Contacts, in that situation the Activities Parameter would point to the Contacts parameter as the LinkedParameterName because we would filter down the Activities in each template render to only those linked to the Contact.
+        */
+        get LinkedParameterName(): string | null {  
+            return this.Get('LinkedParameterName');
+        }
+        set LinkedParameterName(value: string | null) {
+            this.Set('LinkedParameterName', value);
+        }
+        /**
+        * * Field Name: LinkedParameterField
+        * * Display Name: Linked Parameter Field
+        * * SQL Data Type: nvarchar(500)
+        * * Description: If the LinkedParameterName is specified, this is an optional setting to specify the field within the LinkedParameter that will be used for filtering. This is only needed if there is more than one foreign key relationship between the Entity parameter and the Linked parameter, or if there is no defined foreign key in the database between the two entities.
+        */
+        get LinkedParameterField(): string | null {  
+            return this.Get('LinkedParameterField');
+        }
+        set LinkedParameterField(value: string | null) {
+            this.Set('LinkedParameterField', value);
+        }
+        /**
+        * * Field Name: ExtraFilter
+        * * Display Name: Extra Filter
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Only used when Type = Entity, used to specify an optional filter to reduce the set of rows that are returned for each of the templates being rendered.
+        */
+        get ExtraFilter(): string | null {  
+            return this.Get('ExtraFilter');
+        }
+        set ExtraFilter(value: string | null) {
+            this.Set('ExtraFilter', value);
+        }
+        /**
         * * Field Name: RecordID
         * * Display Name: Record ID
         * * SQL Data Type: nvarchar(2000)
-        * * Description: Record ID, used only when Type is Record
+        * * Description: Record ID, used only when Type is Record and a specific hardcoded record ID is desired, this is an uncommon use case, helpful for pulling in static types and metadata in some cases.
         */
         get RecordID(): string | null {  
             return this.Get('RecordID');
@@ -19474,6 +19511,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_CreatedAt(): Date {  
             return this.Get('__mj_CreatedAt');
@@ -19483,6 +19521,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_UpdatedAt(): Date {  
             return this.Get('__mj_UpdatedAt');
@@ -19492,7 +19531,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: Template
         * * Display Name: Template
         * * SQL Data Type: nvarchar(255)
-        * * Default Value: getutcdate()
         */
         get Template(): string {  
             return this.Get('Template');
@@ -19502,7 +19540,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: Entity
         * * Display Name: Entity
         * * SQL Data Type: nvarchar(255)
-        * * Default Value: getutcdate()
         */
         get Entity(): string | null {  
             return this.Get('Entity');

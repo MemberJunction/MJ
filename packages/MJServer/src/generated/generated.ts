@@ -2,7 +2,7 @@
 * ALL ENTITIES - TypeGraphQL Type Class Definition - AUTO GENERATED FILE
 * Generated Entities and Resolvers for Server
 * 
-* GENERATED: 6/21/2024, 6:11:17 PM
+* GENERATED: 6/22/2024, 6:46:39 AM
 * 
 *   >>> DO NOT MODIFY THIS FILE!!!!!!!!!!!!
 *   >>> YOUR CHANGES WILL BE OVERWRITTEN
@@ -22436,7 +22436,7 @@ export class TemplateParam_ {
     @Field({nullable: true, description: 'Description of the parameter'}) 
     Description?: string;
           
-    @Field({description: 'Type of the parameter'}) 
+    @Field({description: 'Type of the parameter - Record is an individual record within the entity specified by EntityID. Entity means an entire Entity or an entity filtered by the LinkedParameterName/Field attributes and/or ExtraFilter. Object is any valid JSON object. Array and Scalar have their common meanings.'}) 
     @MaxLength(40)
     Type: string;
           
@@ -22446,10 +22446,21 @@ export class TemplateParam_ {
     @Field(() => Boolean) 
     IsRequired: boolean;
           
-    @Field(() => Int, {nullable: true, description: 'Entity ID, used only when Type is Record'}) 
+    @Field(() => Int, {nullable: true, description: 'Entity ID, used only when Type is Record or Entity'}) 
     EntityID?: number;
           
-    @Field({nullable: true, description: 'Record ID, used only when Type is Record'}) 
+    @Field({nullable: true, description: 'Only used when Type=Entity, this is used to link an Entity parameter with another parameter so that the rows in the Entity parameter can be filtered automatically based on the FKEY relationship between the Record and this Entity parameter. For example, if the Entity-based parameter is for an entity like Activities and there is another parameter of type Record for an entity like Contacts, in that situation the Activities Parameter would point to the Contacts parameter as the LinkedParameterName because we would filter down the Activities in each template render to only those linked to the Contact.'}) 
+    @MaxLength(510)
+    LinkedParameterName?: string;
+          
+    @Field({nullable: true, description: 'If the LinkedParameterName is specified, this is an optional setting to specify the field within the LinkedParameter that will be used for filtering. This is only needed if there is more than one foreign key relationship between the Entity parameter and the Linked parameter, or if there is no defined foreign key in the database between the two entities.'}) 
+    @MaxLength(1000)
+    LinkedParameterField?: string;
+          
+    @Field({nullable: true, description: 'Only used when Type = Entity, used to specify an optional filter to reduce the set of rows that are returned for each of the templates being rendered.'}) 
+    ExtraFilter?: string;
+          
+    @Field({nullable: true, description: 'Record ID, used only when Type is Record and a specific hardcoded record ID is desired, this is an uncommon use case, helpful for pulling in static types and metadata in some cases.'}) 
     @MaxLength(4000)
     RecordID?: string;
           
@@ -22498,6 +22509,15 @@ export class CreateTemplateParamInput {
     EntityID?: number;
 
     @Field({ nullable: true })
+    LinkedParameterName?: string;
+
+    @Field({ nullable: true })
+    LinkedParameterField?: string;
+
+    @Field({ nullable: true })
+    ExtraFilter?: string;
+
+    @Field({ nullable: true })
     RecordID?: string;
 }
     
@@ -22530,6 +22550,15 @@ export class UpdateTemplateParamInput {
 
     @Field(() => Int, { nullable: true })
     EntityID?: number;
+
+    @Field({ nullable: true })
+    LinkedParameterName?: string;
+
+    @Field({ nullable: true })
+    LinkedParameterField?: string;
+
+    @Field({ nullable: true })
+    ExtraFilter?: string;
 
     @Field({ nullable: true })
     RecordID?: string;

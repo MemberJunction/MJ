@@ -1057,8 +1057,7 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
     msg.MessageType = email;
 
 
-    msg.BodyTemplate = TemplateEngineBase.Instance.FindTemplate('Test Template')
-    msg.HTMLBodyTemplate = msg.BodyTemplate;
+    msg.HTMLBodyTemplate =  TemplateEngineBase.Instance.FindTemplate('User/Roles Demo')
     msg.SubjectTemplate = TemplateEngineBase.Instance.FindTemplate('Test Subject Template')
     
     const result = await EntityCommunicationsEngineClient.Instance.RunEntityCommunication(this._entityInfo!.ID, this.Params, "SendGrid", "Email", msg);
