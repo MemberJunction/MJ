@@ -37,6 +37,7 @@
     "@memberjunction/ng-tabstrip": "1.8.1",
     "@memberjunction/ng-user-view-grid": "1.8.1",
     "@memberjunction/ng-timeline": "1.8.1",
+    "@memberjunction/ng-join-grid": "1.8.1",
     "@progress/kendo-angular-notification": "16.2.0",
     "@progress/kendo-angular-scheduler": "16.2.0",
     "@progress/kendo-theme-default": "8.0.1",
