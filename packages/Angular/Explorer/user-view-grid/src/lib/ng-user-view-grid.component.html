@@ -241,9 +241,12 @@
 ></mj-entity-form-dialog>
 
 
-<mj-template-preview-dialog 
+<mj-entity-communications-preview-window 
     #templatePreviewDialog
     [DialogVisible]="showTemplatePreviewDialog"
+    (DialogClosed)="showTemplatePreviewDialog = false"
+    [entityInfo]="_entityInfo"
+    [runViewParams]="Params"
 >
 
-</mj-template-preview-dialog>
+</mj-entity-communications-preview-window> 

@@ -7,24 +7,26 @@ import { ButtonsModule } from '@progress/kendo-angular-buttons';
 import { ListBoxModule } from '@progress/kendo-angular-listbox';
  
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
-import { TemplatePreviewComponent } from './lib/template-preview.component';
-import { TemplatePreviewDialogComponent } from './lib/dialog.component';
+import { EntityCommunicationsPreviewWindowComponent } from './lib/window.component';
+import { EntityCommunicationsPreviewComponent } from './lib/preview.component';
+import { IndicatorsModule } from '@progress/kendo-angular-indicators';
 
 @NgModule({
   declarations: [
-    TemplatePreviewComponent,
-    TemplatePreviewDialogComponent
+    EntityCommunicationsPreviewComponent,
+    EntityCommunicationsPreviewWindowComponent
   ],
   imports: [
     CommonModule,
     DialogsModule,
     ContainerDirectivesModule,
     ButtonsModule,
-    ListBoxModule
+    ListBoxModule,
+    IndicatorsModule
   ],
   exports: [
-    TemplatePreviewComponent,
-    TemplatePreviewDialogComponent
+    EntityCommunicationsPreviewComponent,
+    EntityCommunicationsPreviewWindowComponent
   ]
 })
-export class TemplatePreviewModule { }
+export class EntityCommunicationsModule { }

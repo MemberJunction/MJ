@@ -22,6 +22,7 @@ import { BaseFormComponentEvent, BaseFormComponentEventCodes, FormEditingComplet
 import { EntityCommunicationsEngineClient } from '@memberjunction/entity-communications-client';
 import { CommunicationEngineBase, Message } from '@memberjunction/communication-types';
 import { TemplateEngineBase } from '@memberjunction/templates-base-types';
+import { EntityCommunicationParams } from '@memberjunction/entity-communications-base';
 
 
 export type GridRowClickedEvent = {
@@ -1045,30 +1046,39 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
 
     this.showTemplatePreviewDialog = true;
 
-    const msg: Message = new Message();
-    msg.From = "amith@bluecypress.io"
-    msg.Body = "This is a test message";
-    msg.Subject = "Test Subject";
+    // const msg: Message = new Message();
+    // msg.From = "amith@bluecypress.io"
+    // msg.Body = "This is a test message";
+    // msg.Subject = "Test Subject";
 
-    const sendGrid = CommunicationEngineBase.Instance.Providers.find(p => p.Name === "SendGrid")
-    if (!sendGrid)
-      throw new Error("SendGrid provider not found");
+    // const sendGrid = CommunicationEngineBase.Instance.Providers.find(p => p.Name === "SendGrid")
+    // if (!sendGrid)
+    //   throw new Error("SendGrid provider not found");
 
-    const email = sendGrid.MessageTypes.find(mt => mt.Name === "Email");
-    if (!email) 
-      throw new Error("Email message type not found");
-    msg.MessageType = email;
+    // const email = sendGrid.MessageTypes.find(mt => mt.Name === "Email");
+    // if (!email) 
+    //   throw new Error("Email message type not found");
+    // msg.MessageType = email;
 
 
-    msg.HTMLBodyTemplate =  TemplateEngineBase.Instance.FindTemplate('User/Roles Demo')
-    msg.SubjectTemplate = TemplateEngineBase.Instance.FindTemplate('Test Subject Template')
+    // msg.HTMLBodyTemplate =  TemplateEngineBase.Instance.FindTemplate('User/Roles Demo')
+    // msg.SubjectTemplate = TemplateEngineBase.Instance.FindTemplate('Test Subject Template')
     
-    const result = await EntityCommunicationsEngineClient.Instance.RunEntityCommunication(this._entityInfo!.ID, this.Params, "SendGrid", "Email", msg);
-    if (result && result.Success) {
-      this.CreateSimpleNotification("Communication Sent", 'success', 2000)
-    }
-    else
-      this.CreateSimpleNotification("Error sending communication", 'error', 5000)
+    // const commParams: EntityCommunicationParams = {
+    //   EntityID: this._entityInfo!.ID, 
+    //   RunViewParams: this.Params, 
+    //   ProviderName: "SendGrid", 
+    //   ProviderMessageTypeName: "Email", 
+    //   Message: msg,
+    //   PreviewOnly: true,
+    //   IncludeProcessedMessages: true
+    // }
+    // const result = await EntityCommunicationsEngineClient.Instance.RunEntityCommunication(commParams);
+    // if (result && result.Success) {
+    //   this.CreateSimpleNotification("Communication Sent", 'success', 2000)
+    // }
+    // else
+    //   this.CreateSimpleNotification("Error sending communication", 'error', 5000)
   }
 
 

@@ -1,19 +1,25 @@
 import { Component, ViewChild, ElementRef, Output, EventEmitter, OnInit, Input, AfterViewInit, AfterViewChecked } from '@angular/core';
 
-import { Metadata, BaseEntity, LogError, KeyValuePair, RunQueryParams, RunQuery } from '@memberjunction/core';
+import { Metadata, BaseEntity, LogError, KeyValuePair, RunQueryParams, RunQuery, EntityInfo, RunViewParams } from '@memberjunction/core';
   
 import { DisplaySimpleNotificationRequestData, MJEventType, MJGlobal } from '@memberjunction/global';
 import { ListBoxToolbarConfig } from '@progress/kendo-angular-listbox';
  
 @Component({
-  selector: 'mj-template-preview-dialog',
-  templateUrl: './dialog.component.html',
-  styleUrls: ['./dialog.component.css']
+  selector: 'mj-entity-communications-preview-window',
+  templateUrl: './window.component.html',
+  styleUrls: ['./window.component.css']
 })
-export class TemplatePreviewDialogComponent {
-  @Input() DialogTitle: string = 'Select Template';
-  @Input() DialogWidth: string = '700px';
-  @Input() DialogHeight: string = '450px';
+export class EntityCommunicationsPreviewWindowComponent {
+  @Input() Title: string = 'Communications Preview';
+  @Input() Width = 650;
+  @Input() Height = 600;
+  @Input() MinWidth = 400;
+  @Input() MinHeight = 350;
+  @Input() Resizable = true;
+
+  @Input() entityInfo: EntityInfo | undefined;
+  @Input() runViewParams: RunViewParams | undefined;
 
   @Input() get DialogVisible(): boolean {
     return this._dialogVisible;

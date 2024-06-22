@@ -33,7 +33,7 @@
     "@memberjunction/ng-compare-records": "1.8.1",
     "@memberjunction/ng-container-directives": "1.8.1",
     "@memberjunction/entity-communications-client": "1.8.1",
-    "@memberjunction/ng-template-preview": "1.8.1",
+    "@memberjunction/ng-entity-communications": "1.8.1",
     "@memberjunction/ng-base-types": "1.8.1",
     "@progress/kendo-angular-grid": "16.2.0",
     "@progress/kendo-angular-layout": "16.2.0",
