@@ -1,0 +1,17 @@
+@if (DialogVisible) {
+    <kendo-window
+        [width]="Width"
+        [height]="Height"
+        [minWidth]="MinWidth"
+        [minHeight]="MinHeight"
+        [title]="Title"        
+        (close)="OnCancel()"
+        [resizable]="Resizable"
+    >
+        <mj-entity-communications-preview
+            [entityInfo]="entityInfo"
+            [runViewParams]="runViewParams"
+        >
+        </mj-entity-communications-preview>
+    </kendo-window>    
+}

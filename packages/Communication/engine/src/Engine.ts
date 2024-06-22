@@ -43,7 +43,7 @@ export class CommunicationEngine extends CommunicationEngineBase {
       * @param providerMessageTypeName 
       * @param message this will be used as a starting point but the To will be replaced with the recipient in the recipients array
       */
-     public async SendMessages(providerName: string, providerMessageTypeName: string, message: Message, recipients: MessageRecipient[]): Promise<MessageResult[]> {
+     public async SendMessages(providerName: string, providerMessageTypeName: string, message: Message, recipients: MessageRecipient[], previewOnly: boolean = false): Promise<MessageResult[]> {
         const run = await this.StartRun();
         if (!run)
             throw new Error(`Failed to start communication run.`);
@@ -53,7 +53,7 @@ export class CommunicationEngine extends CommunicationEngineBase {
             const messageCopy = new Message(message);
             messageCopy.To = r.To;
             messageCopy.ContextData = r.ContextData;
-            const result = await this.SendSingleMessage(providerName, providerMessageTypeName, messageCopy, run);
+            const result = await this.SendSingleMessage(providerName, providerMessageTypeName, messageCopy, run, previewOnly);
             results.push(result);
         }
 
@@ -66,7 +66,7 @@ export class CommunicationEngine extends CommunicationEngineBase {
      /**
       * Sends a single message using the specified provider. The provider must be one of the providers that are configured in the system.
       */
-     public async SendSingleMessage(providerName: string, providerMessageTypeName: string, message: Message, run?: CommunicationRunEntity): Promise<MessageResult> {
+     public async SendSingleMessage(providerName: string, providerMessageTypeName: string, message: Message, run?: CommunicationRunEntity, previewOnly?: boolean): Promise<MessageResult> {
         if (!this.Loaded)
             throw new Error(`Metadata not loaded. Call Config() before accessing metadata.`);
 
@@ -90,18 +90,23 @@ export class CommunicationEngine extends CommunicationEngineBase {
         const processedMessage = new ProcessedMessageServer(message);
         const processResult = await processedMessage.Process(false, this.ContextUser);
         if (processResult.Success) {
-            const log = await this.StartLog(processedMessage, run);
-            if (log) {
-                const sendResult = await provider.SendSingleMessage(processedMessage);
-                log.Status = sendResult.Success ? 'Complete' : 'Failed';
-                log.ErrorMessage = sendResult.Error;
-                if (!await log.Save())
-                    throw new Error(`Failed to complete log for message.`);
-                else
-                    return sendResult;
+            if (previewOnly) {
+                return { Success: true, Error: '', Message: processedMessage };
             }
-            else
-                throw new Error(`Failed to start log for message.`);
+            else {
+                const log = await this.StartLog(processedMessage, run);
+                if (log) {
+                    const sendResult = await provider.SendSingleMessage(processedMessage);
+                    log.Status = sendResult.Success ? 'Complete' : 'Failed';
+                    log.ErrorMessage = sendResult.Error;
+                    if (!await log.Save())
+                        throw new Error(`Failed to complete log for message.`);
+                    else
+                        return sendResult;
+                }
+                else
+                    throw new Error(`Failed to start log for message.`);    
+            }
         }
         else
             throw new Error(`Failed to process message: ${processResult.Message}`);

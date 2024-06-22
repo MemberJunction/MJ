@@ -2,7 +2,7 @@ import { CommunicationEngine } from "@memberjunction/communication-engine";
 import { Message, MessageRecipient } from "@memberjunction/communication-types";
 import { EntityInfo, Metadata, RunView, RunViewParams } from "@memberjunction/core";
 import { TemplateParamEntity } from "@memberjunction/core-entities";
-import { EntityCommunicationMessageTypeExtended, EntityCommunicationsEngineBase } from "@memberjunction/entity-communications-base";
+import { EntityCommunicationMessageTypeExtended, EntityCommunicationParams, EntityCommunicationResult, EntityCommunicationsEngineBase } from "@memberjunction/entity-communications-base";
 import { TemplateEntityExtended } from "@memberjunction/templates-base-types";
 
  
@@ -12,44 +12,37 @@ import { TemplateEntityExtended } from "@memberjunction/templates-base-types";
 export class EntityCommunicationsEngine extends EntityCommunicationsEngineBase {
     /**
      * Executes a given message request against a view of records for a given entity
-     * @param entityID 
-     * @param runViewParams 
-     * @param providerName 
-     * @param providerMessageTypeName 
-     * @param message 
      */
-    public async RunEntityCommunication(entityID: number, runViewParams: RunViewParams, 
-                                        providerName: string, providerMessageTypeName: string, 
-                                        message: Message): Promise<{Success: boolean, ErrorMessage: string}> {
+    public async RunEntityCommunication(params: EntityCommunicationParams): Promise<EntityCommunicationResult> {
         try {
             this.TryThrowIfNotLoaded();
 
             const md = new Metadata();
-            const entityInfo = md.Entities.find(e => e.ID === entityID);    
+            const entityInfo = md.Entities.find(e => e.ID === params.EntityID);    
             if (!entityInfo)
-                throw new Error(`Entity ${entityID} not found`);
+                throw new Error(`Entity ${params.EntityID} not found`);
     
-            if (!this.EntitySupportsCommunication(entityID)) {
-                throw new Error(`Entity ${entityID} does not support communication`);
+            if (!this.EntitySupportsCommunication(params.EntityID)) {
+                throw new Error(`Entity ${params.EntityID} does not support communication`);
             }
     
             await CommunicationEngine.Instance.Config(false, this.ContextUser);
     
-            const provider = CommunicationEngine.Instance.Providers.find(p => p.Name.trim().toLowerCase() === providerName.trim().toLowerCase());
+            const provider = CommunicationEngine.Instance.Providers.find(p => p.Name.trim().toLowerCase() === params.ProviderName.trim().toLowerCase());
             if (!provider) 
-                throw new Error(`Provider ${providerName} not found`);
-            const providerMessageType = provider.MessageTypes.find(mt => mt.Name.trim().toLowerCase() === providerMessageTypeName.trim().toLowerCase());
+                throw new Error(`Provider ${params.ProviderName} not found`);
+            const providerMessageType = provider.MessageTypes.find(mt => mt.Name.trim().toLowerCase() === params.ProviderMessageTypeName.trim().toLowerCase());
     
-            const entityMessageTypes = this.GetEntityCommunicationMessageTypes(entityID);
+            const entityMessageTypes = this.GetEntityCommunicationMessageTypes(params.EntityID);
             const entityMessageType = entityMessageTypes.find(m => m.BaseMessageTypeID === providerMessageType.CommunicationBaseMessageTypeID);
             if (!entityMessageType) {
-                throw new Error(`Entity ${entityID} does not support message type ${providerMessageType.CommunicationBaseMessageType}`);
+                throw new Error(`Entity ${params.EntityID} does not support message type ${providerMessageType.CommunicationBaseMessageType}`);
             }
     
             // next our main job here is to run the view, get all the records, and then call the communication engine
             const rv = new RunView();
             const rvParams2 = {
-                ...runViewParams
+                ...params.RunViewParams
             }
             // now change rvParams2.Fields to have ALL entity fields to make sure we get them all
             rvParams2.Fields = entityInfo.Fields.map(f => f.Name);
@@ -59,18 +52,24 @@ export class EntityCommunicationsEngine extends EntityCommunicationsEngineBase {
                 // have the results, now we can map the results to the types the comm engine needs and call SendMessages() in the comm engine
                 await CommunicationEngine.Instance.Config(false, this.ContextUser);
 
-                const recipients = await this.PopulateRecipientContextData(entityInfo, entityMessageType, message, result.Results);
-                const sendResult = await CommunicationEngine.Instance.SendMessages(providerName, providerMessageTypeName, message, recipients);
+                const recipients = await this.PopulateRecipientContextData(entityInfo, entityMessageType, params.Message, result.Results);
+                const sendResult = await CommunicationEngine.Instance.SendMessages(params.ProviderName, params.ProviderMessageTypeName, params.Message, recipients, params.PreviewOnly);
                 if (sendResult && sendResult.length === recipients.length) {
                     // make sure none of the messages failed
                     return { 
                         Success: !sendResult.some(r => !r.Success), 
-                        ErrorMessage: sendResult.filter(r => !r.Success).map(r => r.Error).join('; ')
+                        ErrorMessage: sendResult.filter(r => !r.Success).map(r => r.Error).join('; '),
+                        Results: sendResult.map((r,i) => {
+                            return {
+                                RecipientData: recipients[i], 
+                                Message: r.Message
+                            }
+                        })
                     };
                 }
             }
             else {
-                throw new Error(`Failed to run view ${runViewParams.ViewName}: ${result.ErrorMessage}`);
+                throw new Error(`Failed to run view ${params.RunViewParams.ViewName}: ${result.ErrorMessage}`);
             }
     
             return {

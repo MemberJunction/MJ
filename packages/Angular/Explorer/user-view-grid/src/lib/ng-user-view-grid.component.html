@@ -239,3 +239,14 @@
     Mode="complete"
     [Visible]="showNewRecordDialog"
 ></mj-entity-form-dialog>
+
+
+<mj-entity-communications-preview-window 
+    #templatePreviewDialog
+    [DialogVisible]="showTemplatePreviewDialog"
+    (DialogClosed)="showTemplatePreviewDialog = false"
+    [entityInfo]="_entityInfo"
+    [runViewParams]="Params"
+>
+
+</mj-entity-communications-preview-window> 

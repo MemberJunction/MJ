@@ -1,0 +1,65 @@
+.step-1, .step-2 {
+    margin: 20px 0;
+}
+
+.template-preview {
+    border: 1px solid #ccc;
+    margin-top: 10px;
+}
+
+.subject-line {
+    font-weight: bolder;
+    border-bottom: 1px solid #ccc;
+    padding: 5px;
+}
+
+.preview-body {
+    padding: 5px;
+}
+
+ul {
+    list-style: none;
+    padding: 0;
+}
+
+li {
+    padding: 10px;
+    border: 1px solid #ccc;
+    margin: 5px 0;
+    cursor: pointer;
+}
+
+li:hover {
+    background-color: #f0f0f0;
+}
+
+.vcr-controls {
+    margin-top: 5px;
+    margin-bottom: 15px;
+}
+
+.vcr-controls button {
+    margin-right: 5px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 20px;
+    color: #007bff;
+}
+
+.vcr-controls button:hover {
+    color: #0056b3;
+}
+
+.vcr-controls button:disabled {
+    color: #ccc;
+    cursor: not-allowed;
+}
+
+.vcr-controls button:disabled span {
+    color: #ccc;
+}
+
+.index-indicator {
+    margin: 0 10px;
+}

@@ -1,5 +1,5 @@
 import { LogError, Metadata, RunViewParams } from "@memberjunction/core";
-import { EntityCommunicationsEngineBase } from "@memberjunction/entity-communications-base";
+import { EntityCommunicationParams, EntityCommunicationResult, EntityCommunicationsEngineBase } from "@memberjunction/entity-communications-base";
 import { Message } from "@memberjunction/communication-types";
 import { GraphQLDataProvider } from "@memberjunction/graphql-dataprovider";
 import { TemplateEntityExtended } from "@memberjunction/templates-base-types";
@@ -15,49 +15,59 @@ export class EntityCommunicationsEngineClient extends EntityCommunicationsEngine
      * @param providerMessageTypeName 
      * @param message 
      */
-    public async RunEntityCommunication(entityID: number, runViewParams: RunViewParams, providerName: string, providerMessageTypeName: string, message: Message): Promise<{Success: boolean, ErrorMessage: string}> {
+    public async RunEntityCommunication(params: EntityCommunicationParams): Promise<EntityCommunicationResult> {
         try {
-            const gql = `query RunEntityCommunicationByViewID($entityID: Int!, $runViewByIDInput: RunViewByIDInput!, $providerName: String!, $providerMessageTypeName: String!, $message: CommunicationMessageInput!) {
-            RunEntityCommunicationByViewID(entityID: $entityID, runViewByIDInput: $runViewByIDInput, providerName: $providerName, providerMessageTypeName: $providerMessageTypeName, message: $message) {
+            const gql = `query RunEntityCommunicationByViewID($entityID: Int!, $runViewByIDInput: RunViewByIDInput!, $providerName: String!, $providerMessageTypeName: String!, $message: CommunicationMessageInput!, $previewOnly: Boolean!, $includeProcessedMessages: Boolean!) {
+            RunEntityCommunicationByViewID(entityID: $entityID, runViewByIDInput: $runViewByIDInput, providerName: $providerName, providerMessageTypeName: $providerMessageTypeName, message: $message, previewOnly: $previewOnly, includeProcessedMessages: $includeProcessedMessages) {
                 Success
                 ErrorMessage
+                Results
             }
             }`
             const result = await GraphQLDataProvider.ExecuteGQL(gql, { 
-                entityID: entityID, 
+                entityID: params.EntityID, 
+                previewOnly: params.PreviewOnly,
+                includeProcessedMessages: params.IncludeProcessedMessages,
                 runViewByIDInput: {
-                    ViewID: runViewParams.ViewID,
-                    ExtraFilter: runViewParams.ExtraFilter,
-                    OrderBy: runViewParams.OrderBy,
-                    Fields: runViewParams.Fields,
-                    UserSearchString: runViewParams.UserSearchString,
-                    ExcludeUserViewRunID: runViewParams.ExcludeUserViewRunID,
-                    OverrideExcludeFilter: runViewParams.OverrideExcludeFilter,
-                    SaveViewResults: runViewParams.SaveViewResults,
-                    ExcludeDataFromAllPriorViewRuns: runViewParams.ExcludeDataFromAllPriorViewRuns,
-                    IgnoreMaxRows: runViewParams.IgnoreMaxRows,
-                    MaxRows: runViewParams.MaxRows,
-                    ForceAuditLog: runViewParams.ForceAuditLog,
-                    AuditLogDescription: runViewParams.AuditLogDescription,
-                    ResultType: runViewParams.ResultType
+                    ViewID: params.RunViewParams.ViewID,
+                    ExtraFilter: params.RunViewParams.ExtraFilter,
+                    OrderBy: params.RunViewParams.OrderBy,
+                    Fields: params.RunViewParams.Fields,
+                    UserSearchString: params.RunViewParams.UserSearchString,
+                    ExcludeUserViewRunID: params.RunViewParams.ExcludeUserViewRunID,
+                    OverrideExcludeFilter: params.RunViewParams.OverrideExcludeFilter,
+                    SaveViewResults: params.RunViewParams.SaveViewResults,
+                    ExcludeDataFromAllPriorViewRuns: params.RunViewParams.ExcludeDataFromAllPriorViewRuns,
+                    IgnoreMaxRows: params.RunViewParams.IgnoreMaxRows,
+                    MaxRows: params.RunViewParams.MaxRows,
+                    ForceAuditLog: params.RunViewParams.ForceAuditLog,
+                    AuditLogDescription: params.RunViewParams.AuditLogDescription,
+                    ResultType: params.RunViewParams.ResultType
                 }, 
-                providerName: providerName, 
-                providerMessageTypeName: providerMessageTypeName, 
+                providerName: params.ProviderName, 
+                providerMessageTypeName: params.ProviderMessageTypeName, 
                 message: {
-                    MessageType: this.getMessageTypeValues(message.MessageType),
-                    From: message.From ? message.From : "",
-                    To: message.To ? message.To : "",
-                    Body: message.Body,
-                    BodyTemplate: this.getTemplateValues(message.BodyTemplate),
-                    HTMLBody: message.HTMLBody,
-                    HTMLBodyTemplate: this.getTemplateValues(message.HTMLBodyTemplate),
-                    Subject: message.Subject,
-                    SubjectTemplate: this.getTemplateValues(message.SubjectTemplate),
-                    ContextData: message.ContextData
+                    MessageType: this.getMessageTypeValues(params.Message.MessageType),
+                    From: params.Message.From ? params.Message.From : "",
+                    To: params.Message.To ? params.Message.To : "",
+                    Body: params.Message.Body,
+                    BodyTemplate: this.getTemplateValues(params.Message.BodyTemplate),
+                    HTMLBody: params.Message.HTMLBody,
+                    HTMLBodyTemplate: this.getTemplateValues(params.Message.HTMLBodyTemplate),
+                    Subject: params.Message.Subject,
+                    SubjectTemplate: this.getTemplateValues(params.Message.SubjectTemplate),
+                    ContextData: params.Message.ContextData
                 }
             });
     
-            return result?.RunEntityCommunicationByViewID;
+            if (result && result.RunEntityCommunicationByViewID) {
+                const r = result.RunEntityCommunicationByViewID;
+                return {
+                    Success: r.Success,
+                    ErrorMessage: r.ErrorMessage,
+                    Results: r.Results?.Results // flatten out the Results, the Results property is an object that wraps the Results array
+                };    
+            }
         }
         catch (err) {
             LogError('Error executing RunEntityCommunication query', undefined, err);          
