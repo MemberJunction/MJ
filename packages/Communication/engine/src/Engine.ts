@@ -104,6 +104,6 @@ export class CommunicationEngine extends CommunicationEngineBase {
                 throw new Error(`Failed to start log for message.`);
         }
         else
-            throw new Error(`Failed to process message.`);
+            throw new Error(`Failed to process message: ${processResult.Message}`);
      }
 }

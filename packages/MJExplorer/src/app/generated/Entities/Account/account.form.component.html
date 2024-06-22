@@ -53,10 +53,9 @@
                     </mj-tab>
                     <mj-tab-body>
                         <mj-timeline
-                            DisplayOrientation="vertical"
+                            DisplayOrientation="horizontal"
                             [Groups]="[{EntityName: 'Deals', DataSourceType: 'entity', Filter: 'AccountID=' + record.ID, TitleFieldName: 'Title', DateFieldName: 'CloseDate'}]">
-                        </mj-timeline>
-                                            
+                        </mj-timeline>                    
                     </mj-tab-body>
 
                     <mj-tab Name="Invoices" 

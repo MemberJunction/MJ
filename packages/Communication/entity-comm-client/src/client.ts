@@ -75,8 +75,8 @@ export class EntityCommunicationsEngineClient extends EntityCommunicationsEngine
           Name: messageType.Name,
           Status: messageType.Status,
           AdditionalAttributes: messageType.AdditionalAttributes ? messageType.AdditionalAttributes : '',
-          __mj_CreatedAt: messageType.__mj_CreatedAt,
-          __mj_UpdatedAt: messageType.__mj_UpdatedAt,
+          _mj_CreatedAt: messageType.__mj_CreatedAt,
+          _mj_UpdatedAt: messageType.__mj_UpdatedAt,
           CommunicationProvider: messageType.CommunicationProvider,
           CommunicationBaseMessageType: messageType.CommunicationBaseMessageType,
         };
@@ -96,8 +96,8 @@ export class EntityCommunicationsEngineClient extends EntityCommunicationsEngine
           ActiveAt: template.ActiveAt,
           DisabledAt: template.DisabledAt,
           IsActive: template.IsActive,
-          __mj_CreatedAt: template.__mj_CreatedAt,
-          __mj_UpdatedAt: template.__mj_UpdatedAt,
+          _mj_CreatedAt: template.__mj_CreatedAt,
+          _mj_UpdatedAt: template.__mj_UpdatedAt,
           Category: template.Category ? template.Category : '',
           User: template.User,
         };
