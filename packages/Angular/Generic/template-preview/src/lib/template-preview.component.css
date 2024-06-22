@@ -1,0 +1,29 @@
+.wizard-container {
+    padding: 20px;
+}
+
+.step-1, .step-2 {
+    margin: 20px 0;
+}
+
+ul {
+    list-style: none;
+    padding: 0;
+}
+
+li {
+    padding: 10px;
+    border: 1px solid #ccc;
+    margin: 5px 0;
+    cursor: pointer;
+}
+
+li:hover {
+    background-color: #f0f0f0;
+}
+
+.template-preview {
+    border: 1px solid #ccc;
+    padding: 20px;
+    margin-top: 10px;
+}

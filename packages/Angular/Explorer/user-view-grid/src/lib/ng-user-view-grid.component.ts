@@ -1035,12 +1035,15 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
   }
 
 
+  public showTemplatePreviewDialog: boolean = false;
   /**
    * Handles communication functionality for a given view, only available if the entity being displayed supports communication.
    */
   public async doCommunication() {
     if (!this.Params)
       return;
+
+    this.showTemplatePreviewDialog = true;
 
     const msg: Message = new Message();
     msg.From = "amith@bluecypress.io"

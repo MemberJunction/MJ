@@ -17,6 +17,7 @@ import { ContainerDirectivesModule } from '@memberjunction/ng-container-directiv
 
 import { UserViewGridComponent } from './lib/ng-user-view-grid.component';
 import { EntityFormDialogModule } from '@memberjunction/ng-entity-form-dialog';
+import { TemplatePreviewModule } from '@memberjunction/ng-template-preview';
 
 @NgModule({
   declarations: [
@@ -36,7 +37,8 @@ import { EntityFormDialogModule } from '@memberjunction/ng-entity-form-dialog';
     LayoutModule,
     InputsModule,
     EntityFormDialogModule,
-    IndicatorsModule
+    IndicatorsModule,
+    TemplatePreviewModule
   ],
   exports: [
     UserViewGridComponent
