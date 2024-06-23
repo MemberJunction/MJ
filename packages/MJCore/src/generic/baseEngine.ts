@@ -1,5 +1,7 @@
 import { BaseSingleton, MJEvent, MJEventType, MJGlobal } from "@memberjunction/global";
-import { BehaviorSubject, Observable } from "rxjs";
+import { BehaviorSubject, Observable, Subject } from "rxjs";
+import { debounceTime } from "rxjs/operators";
+
 import { UserInfo } from "./securityInfo";
 import { RunView } from "../views/runView";
 import { LogError, LogStatus } from "./logging";
@@ -83,7 +85,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> {
     private _dynamicConfigs: Map<string, BaseEnginePropertyConfig> = new Map();
     private _dataMap: Map<string, { entityName?: string, datasetName?: string, data: any[] }> = new Map();
     private _expirationTimers: Map<string, number> = new Map();
-
+    private _entityEventSubjects: Map<string, Subject<BaseEntityEvent>> = new Map();
 
     /**
      * Returns a COPY of the metadata configs array for the engine. This is a copy so you can't modify the original configs by modifying this array.
@@ -175,28 +177,18 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> {
     }
 
     /**
-     * This is the best method to override in order to customize the handling of a sub-class for specific BaseEntity events.
+     * This method handles the individual base entity event and just checks to see if it is a delete or save event and if so, debounces it. 
+     * Override this method if you want to have a different handling for the filtering of events that are debounced or if you don't want to debounce
+     * at all you can do that in an override of this method.
      * @param event 
      */
     protected async HandleIndividualBaseEntityEvent(event: BaseEntityEvent): Promise<boolean> {
         try {
-            let refreshCount = 0;
             if (event.type === 'delete' || event.type === 'save') {
-                const entityName = event.baseEntity.EntityInfo.Name.toLowerCase().trim();
-                for (const config of this.Configs) {
-                    if (config.AutoRefresh && config.EntityName.trim().toLowerCase() === entityName) {
-                        LogStatus(`Refreshing metadata for ${config.PropertyName} due to BaseEntity ${event.type} event for: ${entityName}, pkey: ${event.baseEntity.PrimaryKey.ToString()}`);
-                        await this.LoadSingleConfig(config, this._contextUser);
-                        refreshCount++;
-                    }
-                }
-                if (refreshCount > 0) {
-                    // we need to call AdditionalLoading here - because in many cases engine sub-classes do various kinds of data mashups 
-                    // after we have loaded - for example the TemplateEngine takes the TemplateContents and TemplateParams and stuffs them
-                    // into arrays in each template to make it easier to get Params/Contents for each Template. Such operations are common
-                    // and need to be done after the initial load and after any refreshes.
-                    await this.AdditionalLoading(this._contextUser);
-                }
+                const eName = event.baseEntity.EntityInfo.Name.toLowerCase().trim();
+                const matchingAutoRefreshConfig = this.Configs.some(c => c.AutoRefresh && c.EntityName.trim().toLowerCase() === eName);
+                if (matchingAutoRefreshConfig)
+                    return this.DebounceIndividualBaseEntityEvent(event);
             }
             return true;
         }
@@ -205,6 +197,75 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> {
             return false;
         }
     }
+
+
+    /**
+     * This method handles the debouncing process, by default using the EntityEventDebounceTime property to set the debounce time. Debouncing is 
+     * done on a per-entity basis, meaning that if the debounce time passes for a specific entity name, the event will be processed. This is done to
+     * prevent multiple events from being processed in quick succession for a single entity which would cause a lot of wasted processing.
+     * 
+     * Override this method if you want to change how debouncing time such as having variable debounce times per-entity, etc.
+     * @param event 
+     * @returns 
+     */
+    protected async DebounceIndividualBaseEntityEvent(event: BaseEntityEvent): Promise<boolean> {
+        try {
+            const entityName = event.baseEntity.EntityInfo.Name.toLowerCase().trim();
+    
+            if (!this._entityEventSubjects.has(entityName)) {
+                const subject = new Subject<BaseEntityEvent>();
+                subject.pipe(
+                    debounceTime(this.EntityEventDebounceTime)
+                ).subscribe(async (e) => {
+                    await this.ProcessEntityEvent(e);
+                });
+                this._entityEventSubjects.set(entityName, subject);
+            }
+    
+            this._entityEventSubjects.get(entityName).next(event);
+    
+            return true;
+        } catch (e) {
+            LogError(e);
+            return false;
+        }
+    }
+    
+    private _entityEventDebounceTime: number = 5000;// Default debounce time in milliseconds (5 seconds)
+    /**
+     * Overridable property to set the debounce time for entity events. Default is 5000 milliseconds (5 seconds).
+     */
+    protected get EntityEventDebounceTime(): number {
+        return this._entityEventDebounceTime; 
+    }
+    
+    /**
+     * This method does the actual work of processing the entity event. It is not directly called from the event handler because we want to first debounce the events
+     * which also introduces a delay which is usually desirable so that our processing is typically outside of the scope of any transaction processing that would have
+     * originated the event.
+     * 
+     * This is the best method to override if you want to change the actual processing of an entity event but do NOT want to modify the debouncing behavior.
+     */
+    protected async ProcessEntityEvent(event: BaseEntityEvent): Promise<void> {
+        const entityName = event.baseEntity.EntityInfo.Name.toLowerCase().trim();
+        let refreshCount = 0;
+        for (const config of this.Configs) {
+            if (config.AutoRefresh && config.EntityName.trim().toLowerCase() === entityName) {
+                LogStatus(`>>> Refreshing metadata for ${config.PropertyName} due to BaseEntity ${event.type} event for: ${event.baseEntity.EntityInfo.Name}, pkey: ${event.baseEntity.PrimaryKey.ToString()}`);
+                await this.LoadSingleConfig(config, this._contextUser);
+                refreshCount++;
+            }
+        }
+        if (refreshCount > 0) {
+            // we need to call AdditionalLoading here - because in many cases engine sub-classes do various kinds of data mashups 
+            // after we have loaded - for example the TemplateEngine takes the TemplateContents and TemplateParams and stuffs them
+            // into arrays in each template to make it easier to get Params/Contents for each Template. Such operations are common
+            // and need to be done after the initial load and after any refreshes.
+            await this.AdditionalLoading(this._contextUser);
+        }
+    }
+    
+
 
     /**
      * Utility method to upgrade an object to a BaseEnginePropertyConfig object.
