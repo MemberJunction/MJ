@@ -48,24 +48,29 @@ export class TemplateEngineServer extends TemplateEngineBase {
         return super.getInstance<TemplateEngineServer>();
     }
 
+    private _oneTimeLoadingComplete: boolean = false;
     protected async AdditionalLoading(contextUser?: UserInfo): Promise<void> {
+        // pass along the call to our base class so it can do whatever it wants
         await super.AdditionalLoading(contextUser);
 
-        // do this after the templates are loaded and doing it inside AdditionalLoading() ensures it is done after the templates are loaded and
-        // only done once
-        this._templateLoader = new TemplateEntityLoader();
-        this._nunjucksEnv = new nunjucks.Environment(this._templateLoader, { autoescape: true, dev: true });
+        // clear our template cache as we are going to reload all of the templates
+        this.ClearTemplateCache();
+        if (!this._oneTimeLoadingComplete) {
+            this._oneTimeLoadingComplete = true; // flag to make sure we don't do this again
 
-        // get all of the extensions that are registered and register them with nunjucks
-        const extensions = MJGlobal.Instance.ClassFactory.GetAllRegistrations(TemplateExtensionBase);
-        if (extensions && extensions.length > 0) {
-            for (const ext of extensions) {
-                const instance = new ext.SubClass(contextUser);                
-                this._nunjucksEnv.addExtension(ext.Key, instance);
+            // do this after the templates are loaded and doing it inside AdditionalLoading() ensures it is done after the templates are loaded and
+            // only done once
+            this._templateLoader = new TemplateEntityLoader();
+            this._nunjucksEnv = new nunjucks.Environment(this._templateLoader, { autoescape: true, dev: true });
+
+            // get all of the extensions that are registered and register them with nunjucks
+            const extensions = MJGlobal.Instance.ClassFactory.GetAllRegistrations(TemplateExtensionBase);
+            if (extensions && extensions.length > 0) {
+                for (const ext of extensions) {
+                    const instance = new ext.SubClass(contextUser);                
+                    this._nunjucksEnv.addExtension(ext.Key, instance);
+                }
             }
-            // const aiPromptExtension = new AIPromptExtension();
-            // aiPromptExtension._contextUser = contextUser;
-            // this._nunjucksEnv.addExtension('AIPrompt', aiPromptExtension);
         }
     }
 
