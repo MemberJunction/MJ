@@ -48,7 +48,7 @@
     "plotly.js-dist-min": "^2.3.4",
     "@types/plotly.js-dist-min": "^2.3.4",
     "@angular/cdk": "18.0.2",
-    "ngx-markdown": "^18.0.0"
+    "ngx-markdown": "18.0.0"
   },
   "sideEffects": false
 }
