@@ -30,7 +30,7 @@
     "@progress/kendo-angular-buttons": "16.2.0",
     "@progress/kendo-angular-dialog": "16.2.0",
     "tslib": "^2.3.0",
-    "ngx-markdown": "18.0.0"
+    "ngx-markdown": "^18.0.0"
   },
   "sideEffects": false
 }
