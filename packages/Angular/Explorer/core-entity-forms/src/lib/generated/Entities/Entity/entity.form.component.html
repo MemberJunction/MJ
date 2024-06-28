@@ -520,21 +520,6 @@
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
-                    <mj-tab Name="Entity Behaviors" 
-                        [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: 204}">
-                        Entity Behaviors
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Entity Behaviors')"  
-                            [NewRecordValues]="NewRecordValues('Entity Behaviors')"
-                            [AllowLoad]="IsCurrentTab('Entity Behaviors')"  
-                            [EditMode]="GridEditMode()"  
-                            [BottomMargin]="GridBottomMargin">
-                        </mj-user-view-grid>                    
-                    </mj-tab-body>
-
                     <mj-tab Name="Entity Actions" 
                         [Visible]="record.IsSaved" 
                         [Props]="{EntityRelationshipID: 241}">

@@ -2636,6 +2636,36 @@ import { RegisterClass } from "@memberjunction/global";
             this.Set('CascadeDeletes', value);
         }
         /**
+        * * Field Name: DeleteType
+        * * Display Name: Delete Type
+        * * SQL Data Type: nvarchar(10)
+        * * Default Value: Hard
+        * * Value List Type: List
+        * * Possible Values 
+        *   * Hard
+        *   * Soft
+        * * Description: Hard deletes physically remove rows from the underlying BaseTable. Soft deletes do not remove rows but instead mark the row as deleted by using the special field __mj_DeletedAt which will automatically be added to the entity's basetable by the CodeGen tool.
+        */
+        get DeleteType(): 'Hard' | 'Soft' {  
+            return this.Get('DeleteType');
+        }
+        set DeleteType(value: 'Hard' | 'Soft') {
+            this.Set('DeleteType', value);
+        }
+        /**
+        * * Field Name: AllowRecordMerge
+        * * Display Name: Allow Record Merge
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: This field must be turned on in order to enable merging of records for the entity. For AllowRecordMerge to be turned on, AllowDeleteAPI must be set to 1, and DeleteType must be set to Soft
+        */
+        get AllowRecordMerge(): boolean {  
+            return this.Get('AllowRecordMerge');
+        }
+        set AllowRecordMerge(value: boolean) {
+            this.Set('AllowRecordMerge', value);
+        }
+        /**
         * * Field Name: spMatch
         * * Display Name: sp Match
         * * SQL Data Type: nvarchar(255)
@@ -2646,6 +2676,23 @@ import { RegisterClass } from "@memberjunction/global";
         }
         set spMatch(value: string | null) {
             this.Set('spMatch', value);
+        }
+        /**
+        * * Field Name: RelationshipDefaultDisplayType
+        * * Display Name: Relationship Default Display Type
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Search
+        * * Value List Type: List
+        * * Possible Values 
+        *   * Search
+        *   * Dropdown
+        * * Description: When another entity links to this entity with a foreign key, this is the default component type that will be used in the UI. CodeGen will populate the RelatedEntityDisplayType column in the Entity Fields entity with whatever is provided here whenever a new foreign key is detected by CodeGen. The selection can be overridden on a per-foreign-key basis in each row of the Entity Fields entity.
+        */
+        get RelationshipDefaultDisplayType(): 'Search' | 'Dropdown' {  
+            return this.Get('RelationshipDefaultDisplayType');
+        }
+        set RelationshipDefaultDisplayType(value: 'Search' | 'Dropdown') {
+            this.Set('RelationshipDefaultDisplayType', value);
         }
         /**
         * * Field Name: UserFormGenerated
@@ -2709,6 +2756,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_CreatedAt
         * * Display Name: __mj _Created At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_CreatedAt(): Date {  
             return this.Get('__mj_CreatedAt');
@@ -2718,33 +2766,16 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_UpdatedAt
         * * Display Name: __mj _Updated At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_UpdatedAt(): Date {  
             return this.Get('__mj_UpdatedAt');
         }
         
         /**
-        * * Field Name: RelationshipDefaultDisplayType
-        * * Display Name: Relationship Default Display Type
-        * * SQL Data Type: nvarchar(20)
-        * * Default Value: getutcdate()
-        * * Value List Type: List
-        * * Possible Values 
-        *   * Search
-        *   * Dropdown
-        * * Description: When another entity links to this entity with a foreign key, this is the default component type that will be used in the UI. CodeGen will populate the RelatedEntityDisplayType column in the Entity Fields entity with whatever is provided here whenever a new foreign key is detected by CodeGen. The selection can be overridden on a per-foreign-key basis in each row of the Entity Fields entity.
-        */
-        get RelationshipDefaultDisplayType(): 'Search' | 'Dropdown' {  
-            return this.Get('RelationshipDefaultDisplayType');
-        }
-        set RelationshipDefaultDisplayType(value: 'Search' | 'Dropdown') {
-            this.Set('RelationshipDefaultDisplayType', value);
-        }
-        /**
         * * Field Name: CodeName
         * * Display Name: Code Name
         * * SQL Data Type: nvarchar(MAX)
-        * * Default Value: getutcdate()
         */
         get CodeName(): string | null {  
             return this.Get('CodeName');
@@ -2754,7 +2785,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: ClassName
         * * Display Name: Class Name
         * * SQL Data Type: nvarchar(MAX)
-        * * Default Value: Search
         */
         get ClassName(): string | null {  
             return this.Get('ClassName');
@@ -6536,15 +6566,6 @@ import { RegisterClass } from "@memberjunction/global";
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
-        }
-        
-        /**
-        * * Field Name: Entity
-        * * Display Name: Entity
-        * * SQL Data Type: nvarchar(255)
-        */
-        get Entity(): string {  
-            return this.Get('Entity');
         }
         
         /**
@@ -15600,244 +15621,6 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: __mj_UpdatedAt
         * * Display Name: Updated At
-        * * SQL Data Type: datetimeoffset
-        */
-        get __mj_UpdatedAt(): Date {  
-            return this.Get('__mj_UpdatedAt');
-        }
-        
-
-    }
-        
-    /**
-     * Entity Behaviors - strongly typed entity sub-class
-     * * Schema: __mj
-     * * Base Table: EntityBehavior
-     * * Base View: vwEntityBehaviors
-     * * @description Stores the behaviors for each entity and is used for code generation and injection of behavior code into various areas of the system.
-     * * Primary Key: ID
-     * @extends {BaseEntity}
-     * @class
-     * @public
-     */
-    @RegisterClass(BaseEntity, 'Entity Behaviors')
-    export class EntityBehaviorEntity extends BaseEntity {
-        /**
-        * Loads the Entity Behaviors record from the database
-        * @param ID: number - primary key value to load the Entity Behaviors record.
-        * @param EntityRelationshipsToLoad - (optional) the relationships to load
-        * @returns {Promise<boolean>} - true if successful, false otherwise
-        * @public
-        * @async
-        * @memberof EntityBehaviorEntity
-        * @method
-        * @override
-        */      
-        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const compositeKey: CompositeKey = new CompositeKey();
-            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
-        }
-        
-            /**
-        * * Field Name: ID
-        * * Display Name: ID
-        * * SQL Data Type: int
-        */
-        get ID(): number {  
-            return this.Get('ID');
-        }
-        
-        /**
-        * * Field Name: EntityID
-        * * Display Name: Entity ID
-        * * SQL Data Type: int
-        * * Related Entity/Foreign Key: Entities (vwEntities.ID)
-        */
-        get EntityID(): number {  
-            return this.Get('EntityID');
-        }
-        set EntityID(value: number) {
-            this.Set('EntityID', value);
-        }
-        /**
-        * * Field Name: BehaviorTypeID
-        * * Display Name: Behavior Type ID
-        * * SQL Data Type: int
-        * * Related Entity/Foreign Key: Entity Behavior Types (vwEntityBehaviorTypes.ID)
-        */
-        get BehaviorTypeID(): number {  
-            return this.Get('BehaviorTypeID');
-        }
-        set BehaviorTypeID(value: number) {
-            this.Set('BehaviorTypeID', value);
-        }
-        /**
-        * * Field Name: Description
-        * * Display Name: Description
-        * * SQL Data Type: nvarchar(MAX)
-        * * Description: This field will be used by the AI system to generate code that corresponds to the requested behavior and inject the code into the appropriate part(s) of the system.
-        */
-        get Description(): string {  
-            return this.Get('Description');
-        }
-        set Description(value: string) {
-            this.Set('Description', value);
-        }
-        /**
-        * * Field Name: RegenerateCode
-        * * Display Name: Regenerate Code
-        * * SQL Data Type: bit
-        * * Default Value: 0
-        * * Description: This bit field is automatically turned on whenever the Description field is changed so that a future server process will pick it up and regenerate the code. This might happen asynchronously or synchronously depending on system setup.
-        */
-        get RegenerateCode(): boolean {  
-            return this.Get('RegenerateCode');
-        }
-        set RegenerateCode(value: boolean) {
-            this.Set('RegenerateCode', value);
-        }
-        /**
-        * * Field Name: Code
-        * * Display Name: Code
-        * * SQL Data Type: nvarchar(MAX)
-        * * Description: This is the code that implements the desired behavior. If the CodeGenerated bit is set to 1, each time CodeGen runs, it will use the Code specified here in the appropriate place(s). To override the generated code and prevent it from being changed in the future, set CodeGenerated = 0
-        */
-        get Code(): string | null {  
-            return this.Get('Code');
-        }
-        set Code(value: string | null) {
-            this.Set('Code', value);
-        }
-        /**
-        * * Field Name: CodeExplanation
-        * * Display Name: Code Explanation
-        * * SQL Data Type: nvarchar(MAX)
-        * * Description: When an AI model generates code this will be populated with the AI's explanation of how the code works to meet the requirements of the behavior. For a non-generated piece of code a developer could manually place an explanation in this field.
-        */
-        get CodeExplanation(): string | null {  
-            return this.Get('CodeExplanation');
-        }
-        set CodeExplanation(value: string | null) {
-            this.Set('CodeExplanation', value);
-        }
-        /**
-        * * Field Name: CodeGenerated
-        * * Display Name: Code Generated
-        * * SQL Data Type: bit
-        * * Default Value: 1
-        */
-        get CodeGenerated(): boolean {  
-            return this.Get('CodeGenerated');
-        }
-        set CodeGenerated(value: boolean) {
-            this.Set('CodeGenerated', value);
-        }
-        /**
-        * * Field Name: __mj_CreatedAt
-        * * Display Name: __mj _Created At
-        * * SQL Data Type: datetimeoffset
-        */
-        get __mj_CreatedAt(): Date {  
-            return this.Get('__mj_CreatedAt');
-        }
-        
-        /**
-        * * Field Name: __mj_UpdatedAt
-        * * Display Name: __mj _Updated At
-        * * SQL Data Type: datetimeoffset
-        */
-        get __mj_UpdatedAt(): Date {  
-            return this.Get('__mj_UpdatedAt');
-        }
-        
-        /**
-        * * Field Name: Entity
-        * * Display Name: Entity
-        * * SQL Data Type: nvarchar(255)
-        * * Default Value: getutcdate()
-        */
-        get Entity(): string {  
-            return this.Get('Entity');
-        }
-        
-
-    }
-        
-    /**
-     * Entity Behavior Types - strongly typed entity sub-class
-     * * Schema: __mj
-     * * Base Table: EntityBehaviorType
-     * * Base View: vwEntityBehaviorTypes
-     * * @description This table stores the list of possible behavior types to use in the Entity Behavior Types entity. 
-     * * Primary Key: ID
-     * @extends {BaseEntity}
-     * @class
-     * @public
-     */
-    @RegisterClass(BaseEntity, 'Entity Behavior Types')
-    export class EntityBehaviorTypeEntity extends BaseEntity {
-        /**
-        * Loads the Entity Behavior Types record from the database
-        * @param ID: number - primary key value to load the Entity Behavior Types record.
-        * @param EntityRelationshipsToLoad - (optional) the relationships to load
-        * @returns {Promise<boolean>} - true if successful, false otherwise
-        * @public
-        * @async
-        * @memberof EntityBehaviorTypeEntity
-        * @method
-        * @override
-        */      
-        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const compositeKey: CompositeKey = new CompositeKey();
-            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
-        }
-        
-            /**
-        * * Field Name: ID
-        * * Display Name: ID
-        * * SQL Data Type: int
-        */
-        get ID(): number {  
-            return this.Get('ID');
-        }
-        
-        /**
-        * * Field Name: Name
-        * * Display Name: Name
-        * * SQL Data Type: nvarchar(100)
-        * * Description: The name of the behavior, a unique column for the table. 
-        */
-        get Name(): string {  
-            return this.Get('Name');
-        }
-        set Name(value: string) {
-            this.Set('Name', value);
-        }
-        /**
-        * * Field Name: Description
-        * * Display Name: Description
-        * * SQL Data Type: nvarchar(MAX)
-        */
-        get Description(): string | null {  
-            return this.Get('Description');
-        }
-        set Description(value: string | null) {
-            this.Set('Description', value);
-        }
-        /**
-        * * Field Name: __mj_CreatedAt
-        * * Display Name: __mj _Created At
-        * * SQL Data Type: datetimeoffset
-        */
-        get __mj_CreatedAt(): Date {  
-            return this.Get('__mj_CreatedAt');
-        }
-        
-        /**
-        * * Field Name: __mj_UpdatedAt
-        * * Display Name: __mj _Updated At
         * * SQL Data Type: datetimeoffset
         */
         get __mj_UpdatedAt(): Date {  

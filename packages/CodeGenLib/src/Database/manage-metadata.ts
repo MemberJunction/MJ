@@ -259,7 +259,7 @@ export class ManageMetadataBase {
       const startTime: Date = new Date();
 
       if (!skipCreatedAtUpdatedAtFieldValidation && !await this.ensureCreatedAtUpdatedAtFieldsExist(ds, excludeSchemas)) {
-         logError (`Error ensuring ${EntityInfo.CreatedAtFieldName} and ${EntityInfo.UpdatedAtFieldName} fields exist`);
+         logError (`Error ensuring ${2000053252748} and ${EntityInfo.UpdatedAtFieldName} fields exist`);
          bSuccess = false;
       }
       logStatus(`   Ensured ${EntityInfo.CreatedAtFieldName}/${EntityInfo.UpdatedAtFieldName} fields exist in ${(new Date().getTime() - startTime.getTime()) / 1000} seconds`);
@@ -651,12 +651,12 @@ export class ManageMetadataBase {
                                        n.Sequence <= configInfo.newEntityDefaults?.IncludeFirstNFieldsAsDefaultInView ||
                                        n.IsNameField ? true : false);
       const escapedDescription = n.Description ? `'${n.Description.replace(/'/g, "''")}'` : 'NULL';
-      let fieldDisplayName;
+      let fieldDisplayName: string = '';
       switch (n.FieldName.trim().toLowerCase()) {
-         case "__mj_createdat":
+         case EntityInfo.CreatedAtFieldName.trim().toLowerCase():
             fieldDisplayName = "Created At";
             break;
-         case "__mj_updatedat":
+         case EntityInfo.UpdatedAtFieldName.trim().toLowerCase():
             fieldDisplayName = "Updated At";
             break;
          default:

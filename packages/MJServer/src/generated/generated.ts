@@ -2,7 +2,7 @@
 * ALL ENTITIES - TypeGraphQL Type Class Definition - AUTO GENERATED FILE
 * Generated Entities and Resolvers for Server
 * 
-* GENERATED: 6/22/2024, 6:46:39 AM
+* GENERATED: 6/28/2024, 2:50:43 PM
 * 
 *   >>> DO NOT MODIFY THIS FILE!!!!!!!!!!!!
 *   >>> YOUR CHANGES WILL BE OVERWRITTEN
@@ -20,7 +20,7 @@ import { mj_core_schema } from '../config';
 
 import * as mj_core_schema_server_object_types from '@memberjunction/server'
 
-import { CompanyEntity, EmployeeEntity, UserFavoriteEntity, EmployeeCompanyIntegrationEntity, EmployeeRoleEntity, EmployeeSkillEntity, RoleEntity, SkillEntity, IntegrationURLFormatEntity, IntegrationEntity, CompanyIntegrationEntity, EntityFieldEntity, EntityEntity, UserEntity, EntityRelationshipEntity, UserRecordLogEntity, UserViewEntity, CompanyIntegrationRunEntity, CompanyIntegrationRunDetailEntity, ErrorLogEntity, ApplicationEntity, ApplicationEntityEntity, EntityPermissionEntity, UserApplicationEntityEntity, UserApplicationEntity, CompanyIntegrationRunAPILogEntity, ListEntity, ListDetailEntity, UserViewRunEntity, UserViewRunDetailEntity, WorkflowRunEntity, WorkflowEntity, WorkflowEngineEntity, RecordChangeEntity, UserRoleEntity, RowLevelSecurityFilterEntity, AuditLogEntity, AuthorizationEntity, AuthorizationRoleEntity, AuditLogTypeEntity, EntityFieldValueEntity, AIModelEntity, AIActionEntity, AIModelActionEntity, EntityAIActionEntity, AIModelTypeEntity, QueueTypeEntity, QueueEntity, QueueTaskEntity, DashboardEntity, OutputTriggerTypeEntity, OutputFormatTypeEntity, OutputDeliveryTypeEntity, ReportEntity, ReportSnapshotEntity, ResourceTypeEntity, TagEntity, TaggedItemEntity, WorkspaceEntity, WorkspaceItemEntity, DatasetEntity, DatasetItemEntity, ConversationDetailEntity, ConversationEntity, UserNotificationEntity, SchemaInfoEntity, CompanyIntegrationRecordMapEntity, RecordMergeLogEntity, RecordMergeDeletionLogEntity, QueryFieldEntity, QueryCategoryEntity, QueryEntity, QueryPermissionEntity, VectorIndexEntity, EntityDocumentTypeEntity, EntityDocumentRunEntity, VectorDatabaseEntity, EntityRecordDocumentEntity, EntityDocumentEntity, DataContextItemEntity, DataContextEntity, UserViewCategoryEntity, DashboardCategoryEntity, ReportCategoryEntity, FileStorageProviderEntity, FileEntity, FileCategoryEntity, FileEntityRecordLinkEntity, VersionInstallationEntity, DuplicateRunDetailMatchEntity, EntityDocumentSettingEntity, EntitySettingEntity, DuplicateRunEntity, DuplicateRunDetailEntity, EntityBehaviorEntity, EntityBehaviorTypeEntity, ApplicationSettingEntity, ActionCategoryEntity, EntityActionEntity, EntityActionInvocationEntity, ActionAuthorizationEntity, EntityActionInvocationTypeEntity, ActionEntity, EntityActionFilterEntity, ActionFilterEntity, ActionContextTypeEntity, ActionResultCodeEntity, ActionContextEntity, ActionExecutionLogEntity, ActionParamEntity, ActionLibraryEntity, LibraryEntity, ListCategoryEntity, CommunicationProviderEntity, CommunicationRunEntity, CommunicationProviderMessageTypeEntity, CommunicationLogEntity, CommunicationBaseMessageTypeEntity, TemplateEntity, TemplateCategoryEntity, TemplateContentEntity, TemplateParamEntity, TemplateContentTypeEntity, RecommendationEntity, RecommendationProviderEntity, RecommendationRunEntity, RecommendationItemEntity, EntityCommunicationMessageTypeEntity, EntityCommunicationFieldEntity, RecordChangeReplayRunEntity, LibraryItemEntity, EntityRelationshipDisplayComponentEntity, EntityActionParamEntity } from '@memberjunction/core-entities';
+import { CompanyEntity, EmployeeEntity, UserFavoriteEntity, EmployeeCompanyIntegrationEntity, EmployeeRoleEntity, EmployeeSkillEntity, RoleEntity, SkillEntity, IntegrationURLFormatEntity, IntegrationEntity, CompanyIntegrationEntity, EntityFieldEntity, EntityEntity, UserEntity, EntityRelationshipEntity, UserRecordLogEntity, UserViewEntity, CompanyIntegrationRunEntity, CompanyIntegrationRunDetailEntity, ErrorLogEntity, ApplicationEntity, ApplicationEntityEntity, EntityPermissionEntity, UserApplicationEntityEntity, UserApplicationEntity, CompanyIntegrationRunAPILogEntity, ListEntity, ListDetailEntity, UserViewRunEntity, UserViewRunDetailEntity, WorkflowRunEntity, WorkflowEntity, WorkflowEngineEntity, RecordChangeEntity, UserRoleEntity, RowLevelSecurityFilterEntity, AuditLogEntity, AuthorizationEntity, AuthorizationRoleEntity, AuditLogTypeEntity, EntityFieldValueEntity, AIModelEntity, AIActionEntity, AIModelActionEntity, EntityAIActionEntity, AIModelTypeEntity, QueueTypeEntity, QueueEntity, QueueTaskEntity, DashboardEntity, OutputTriggerTypeEntity, OutputFormatTypeEntity, OutputDeliveryTypeEntity, ReportEntity, ReportSnapshotEntity, ResourceTypeEntity, TagEntity, TaggedItemEntity, WorkspaceEntity, WorkspaceItemEntity, DatasetEntity, DatasetItemEntity, ConversationDetailEntity, ConversationEntity, UserNotificationEntity, SchemaInfoEntity, CompanyIntegrationRecordMapEntity, RecordMergeLogEntity, RecordMergeDeletionLogEntity, QueryFieldEntity, QueryCategoryEntity, QueryEntity, QueryPermissionEntity, VectorIndexEntity, EntityDocumentTypeEntity, EntityDocumentRunEntity, VectorDatabaseEntity, EntityRecordDocumentEntity, EntityDocumentEntity, DataContextItemEntity, DataContextEntity, UserViewCategoryEntity, DashboardCategoryEntity, ReportCategoryEntity, FileStorageProviderEntity, FileEntity, FileCategoryEntity, FileEntityRecordLinkEntity, VersionInstallationEntity, DuplicateRunDetailMatchEntity, EntityDocumentSettingEntity, EntitySettingEntity, DuplicateRunEntity, DuplicateRunDetailEntity, ApplicationSettingEntity, ActionCategoryEntity, EntityActionEntity, EntityActionInvocationEntity, ActionAuthorizationEntity, EntityActionInvocationTypeEntity, ActionEntity, EntityActionFilterEntity, ActionFilterEntity, ActionContextTypeEntity, ActionResultCodeEntity, ActionContextEntity, ActionExecutionLogEntity, ActionParamEntity, ActionLibraryEntity, LibraryEntity, ListCategoryEntity, CommunicationProviderEntity, CommunicationRunEntity, CommunicationProviderMessageTypeEntity, CommunicationLogEntity, CommunicationBaseMessageTypeEntity, TemplateEntity, TemplateCategoryEntity, TemplateContentEntity, TemplateParamEntity, TemplateContentTypeEntity, RecommendationEntity, RecommendationProviderEntity, RecommendationRunEntity, RecommendationItemEntity, EntityCommunicationMessageTypeEntity, EntityCommunicationFieldEntity, RecordChangeReplayRunEntity, LibraryItemEntity, EntityRelationshipDisplayComponentEntity, EntityActionParamEntity } from '@memberjunction/core-entities';
     
 
 //****************************************************************************
@@ -2470,9 +2470,20 @@ export class Entity_ {
     @Field(() => Boolean, {description: 'When set to 1, the deleted spDelete will pre-process deletion to related entities that have 1:M cardinality with this entity. This does not have effect if spDeleteGenerated = 0'}) 
     CascadeDeletes: boolean;
           
+    @Field({description: 'Hard deletes physically remove rows from the underlying BaseTable. Soft deletes do not remove rows but instead mark the row as deleted by using the special field __mj_DeletedAt which will automatically be added to the entity\'s basetable by the CodeGen tool.'}) 
+    @MaxLength(20)
+    DeleteType: string;
+          
+    @Field(() => Boolean, {description: 'This field must be turned on in order to enable merging of records for the entity. For AllowRecordMerge to be turned on, AllowDeleteAPI must be set to 1, and DeleteType must be set to Soft'}) 
+    AllowRecordMerge: boolean;
+          
     @Field({nullable: true, description: 'When specified, this stored procedure is used to find matching records in this particular entity. The convention is to pass in the primary key(s) columns for the given entity to the procedure and the return will be zero to many rows where there is a column for each primary key field(s) and a ProbabilityScore (numeric(1,12)) column that has a 0 to 1 value of the probability of a match.'}) 
     @MaxLength(510)
     spMatch?: string;
+          
+    @Field({description: 'When another entity links to this entity with a foreign key, this is the default component type that will be used in the UI. CodeGen will populate the RelatedEntityDisplayType column in the Entity Fields entity with whatever is provided here whenever a new foreign key is detected by CodeGen. The selection can be overridden on a per-foreign-key basis in each row of the Entity Fields entity.'}) 
+    @MaxLength(40)
+    RelationshipDefaultDisplayType: string;
           
     @Field(() => Boolean) 
     UserFormGenerated: boolean;
@@ -2500,10 +2511,6 @@ export class Entity_ {
     @Field() 
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-          
-    @Field({description: 'When another entity links to this entity with a foreign key, this is the default component type that will be used in the UI. CodeGen will populate the RelatedEntityDisplayType column in the Entity Fields entity with whatever is provided here whenever a new foreign key is detected by CodeGen. The selection can be overridden on a per-foreign-key basis in each row of the Entity Fields entity.'}) 
-    @MaxLength(40)
-    RelationshipDefaultDisplayType: string;
           
     @Field({nullable: true}) 
     CodeName?: string;
@@ -2615,9 +2622,6 @@ export class Entity_ {
     
     @Field(() => [mj_core_schema_server_object_types.DuplicateRun_])
     DuplicateRunsArray: mj_core_schema_server_object_types.DuplicateRun_[]; // Link to DuplicateRuns
-    
-    @Field(() => [mj_core_schema_server_object_types.EntityBehavior_])
-    EntityBehaviorsArray: mj_core_schema_server_object_types.EntityBehavior_[]; // Link to EntityBehaviors
     
     @Field(() => [mj_core_schema_server_object_types.EntityAction_])
     EntityActionsArray: mj_core_schema_server_object_types.EntityAction_[]; // Link to EntityActions
@@ -2743,8 +2747,17 @@ export class CreateEntityInput {
     @Field(() => Boolean)
     CascadeDeletes: boolean;
 
+    @Field()
+    DeleteType: string;
+
+    @Field(() => Boolean)
+    AllowRecordMerge: boolean;
+
     @Field({ nullable: true })
     spMatch?: string;
+
+    @Field()
+    RelationshipDefaultDisplayType: string;
 
     @Field(() => Boolean)
     UserFormGenerated: boolean;
@@ -2760,9 +2773,6 @@ export class CreateEntityInput {
 
     @Field({ nullable: true })
     Icon?: string;
-
-    @Field()
-    RelationshipDefaultDisplayType: string;
 }
     
         
@@ -2873,8 +2883,17 @@ export class UpdateEntityInput {
     @Field(() => Boolean)
     CascadeDeletes: boolean;
 
+    @Field()
+    DeleteType: string;
+
+    @Field(() => Boolean)
+    AllowRecordMerge: boolean;
+
     @Field({ nullable: true })
     spMatch?: string;
+
+    @Field()
+    RelationshipDefaultDisplayType: string;
 
     @Field(() => Boolean)
     UserFormGenerated: boolean;
@@ -2890,9 +2909,6 @@ export class UpdateEntityInput {
 
     @Field({ nullable: true })
     Icon?: string;
-
-    @Field()
-    RelationshipDefaultDisplayType: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -3195,14 +3211,6 @@ export class EntityResolverBase extends ResolverBase {
         this.CheckUserReadPermissions('Duplicate Runs', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwDuplicateRuns] WHERE [EntityID]=${entity_.ID} ` + this.getRowLevelSecurityWhereClause('Duplicate Runs', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Duplicate Runs', await dataSource.query(sSQL));
-        return result;
-    }
-          
-    @FieldResolver(() => [mj_core_schema_server_object_types.EntityBehavior_])
-    async EntityBehaviorsArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('Entity Behaviors', userPayload);
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityBehaviors] WHERE [EntityID]=${entity_.ID} ` + this.getRowLevelSecurityWhereClause('Entity Behaviors', userPayload, EntityPermissionType.Read, 'AND');
-        const result = this.ArrayMapFieldNamesToCodeNames('Entity Behaviors', await dataSource.query(sSQL));
         return result;
     }
           
@@ -7376,10 +7384,6 @@ export class RecordChange_ {
     @Field() 
     @MaxLength(10)
     UpdatedAt: Date;
-          
-    @Field() 
-    @MaxLength(510)
-    Entity: string;
           
     @Field() 
     @MaxLength(200)
@@ -17669,333 +17673,6 @@ export class DuplicateRunDetailResolver extends ResolverBase {
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.UpdateRecord('Duplicate Run Details', input, dataSource, userPayload, pubSub);
-    }
-    
-}
-
-//****************************************************************************
-// ENTITY CLASS for Entity Behaviors
-//****************************************************************************
-@ObjectType({ description: 'Stores the behaviors for each entity and is used for code generation and injection of behavior code into various areas of the system.' })
-export class EntityBehavior_ {  
-    @Field(() => Int) 
-    ID: number;
-          
-    @Field(() => Int) 
-    EntityID: number;
-          
-    @Field(() => Int) 
-    BehaviorTypeID: number;
-          
-    @Field({description: 'This field will be used by the AI system to generate code that corresponds to the requested behavior and inject the code into the appropriate part(s) of the system.'}) 
-    Description: string;
-          
-    @Field(() => Boolean, {description: 'This bit field is automatically turned on whenever the Description field is changed so that a future server process will pick it up and regenerate the code. This might happen asynchronously or synchronously depending on system setup.'}) 
-    RegenerateCode: boolean;
-          
-    @Field({nullable: true, description: 'This is the code that implements the desired behavior. If the CodeGenerated bit is set to 1, each time CodeGen runs, it will use the Code specified here in the appropriate place(s). To override the generated code and prevent it from being changed in the future, set CodeGenerated = 0'}) 
-    Code?: string;
-          
-    @Field({nullable: true, description: 'When an AI model generates code this will be populated with the AI\'s explanation of how the code works to meet the requirements of the behavior. For a non-generated piece of code a developer could manually place an explanation in this field.'}) 
-    CodeExplanation?: string;
-          
-    @Field(() => Boolean) 
-    CodeGenerated: boolean;
-          
-    @Field() 
-    @MaxLength(10)
-    _mj__CreatedAt: Date;
-          
-    @Field() 
-    @MaxLength(10)
-    _mj__UpdatedAt: Date;
-          
-    @Field() 
-    @MaxLength(510)
-    Entity: string;
-        
-}
-        
-//****************************************************************************
-// INPUT TYPE for Entity Behaviors   
-//****************************************************************************
-@InputType()
-export class CreateEntityBehaviorInput {
-    @Field(() => Int)
-    EntityID: number;
-
-    @Field(() => Int)
-    BehaviorTypeID: number;
-
-    @Field()
-    Description: string;
-
-    @Field(() => Boolean)
-    RegenerateCode: boolean;
-
-    @Field({ nullable: true })
-    Code?: string;
-
-    @Field({ nullable: true })
-    CodeExplanation?: string;
-
-    @Field(() => Boolean)
-    CodeGenerated: boolean;
-}
-    
-        
-//****************************************************************************
-// INPUT TYPE for Entity Behaviors   
-//****************************************************************************
-@InputType()
-export class UpdateEntityBehaviorInput {
-    @Field(() => Int)
-    ID: number;
-
-    @Field(() => Int)
-    EntityID: number;
-
-    @Field(() => Int)
-    BehaviorTypeID: number;
-
-    @Field()
-    Description: string;
-
-    @Field(() => Boolean)
-    RegenerateCode: boolean;
-
-    @Field({ nullable: true })
-    Code?: string;
-
-    @Field({ nullable: true })
-    CodeExplanation?: string;
-
-    @Field(() => Boolean)
-    CodeGenerated: boolean;
-
-    @Field(() => [KeyValuePairInput], { nullable: true })
-    OldValues___?: KeyValuePairInput[];
-}
-    
-//****************************************************************************
-// RESOLVER for Entity Behaviors
-//****************************************************************************
-@ObjectType()
-export class RunEntityBehaviorViewResult {
-    @Field(() => [EntityBehavior_])
-    Results: EntityBehavior_[];
-
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
-
-    @Field(() => Int, {nullable: true})
-    RowCount: number;
-
-    @Field(() => Int, {nullable: true})
-    TotalRowCount: number;
-
-    @Field(() => Int, {nullable: true})
-    ExecutionTime: number;
-
-    @Field({nullable: true})
-    ErrorMessage?: string;
-
-    @Field(() => Boolean, {nullable: false})
-    Success: boolean;
-}
-
-@Resolver(EntityBehavior_)
-export class EntityBehaviorResolver extends ResolverBase {
-    @Query(() => RunEntityBehaviorViewResult)
-    async RunEntityBehaviorViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
-    }
-
-    @Query(() => RunEntityBehaviorViewResult)
-    async RunEntityBehaviorViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
-    }
-
-    @Query(() => RunEntityBehaviorViewResult)
-    async RunEntityBehaviorDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        input.EntityName = 'Entity Behaviors';
-        return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
-    }
-    @Query(() => EntityBehavior_, { nullable: true })
-    async EntityBehavior(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<EntityBehavior_ | null> {
-        this.CheckUserReadPermissions('Entity Behaviors', userPayload);
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityBehaviors] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Entity Behaviors', userPayload, EntityPermissionType.Read, 'AND');
-        const result = this.MapFieldNamesToCodeNames('Entity Behaviors', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
-        return result;
-    }
-    
-    @Mutation(() => EntityBehavior_)
-    async CreateEntityBehavior(
-        @Arg('input', () => CreateEntityBehaviorInput) input: CreateEntityBehaviorInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
-        @PubSub() pubSub: PubSubEngine
-    ) {
-        return this.CreateRecord('Entity Behaviors', input, dataSource, userPayload, pubSub)
-    }
-        
-    @Mutation(() => EntityBehavior_)
-    async UpdateEntityBehavior(
-        @Arg('input', () => UpdateEntityBehaviorInput) input: UpdateEntityBehaviorInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
-        @PubSub() pubSub: PubSubEngine
-    ) {
-        return this.UpdateRecord('Entity Behaviors', input, dataSource, userPayload, pubSub);
-    }
-    
-    @Mutation(() => EntityBehavior_)
-    async DeleteEntityBehavior(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
-        return this.DeleteRecord('Entity Behaviors', key, options, dataSource, userPayload, pubSub);
-    }
-    
-}
-
-//****************************************************************************
-// ENTITY CLASS for Entity Behavior Types
-//****************************************************************************
-@ObjectType({ description: 'This table stores the list of possible behavior types to use in the Entity Behavior Types entity. ' })
-export class EntityBehaviorType_ {  
-    @Field(() => Int) 
-    ID: number;
-          
-    @Field({description: 'The name of the behavior, a unique column for the table. '}) 
-    @MaxLength(200)
-    Name: string;
-          
-    @Field({nullable: true}) 
-    Description?: string;
-          
-    @Field() 
-    @MaxLength(10)
-    _mj__CreatedAt: Date;
-          
-    @Field() 
-    @MaxLength(10)
-    _mj__UpdatedAt: Date;
-        
-    @Field(() => [mj_core_schema_server_object_types.EntityBehavior_])
-    EntityBehaviorsArray: mj_core_schema_server_object_types.EntityBehavior_[]; // Link to EntityBehaviors
-    
-}
-        
-//****************************************************************************
-// INPUT TYPE for Entity Behavior Types   
-//****************************************************************************
-@InputType()
-export class CreateEntityBehaviorTypeInput {
-    @Field()
-    Name: string;
-
-    @Field({ nullable: true })
-    Description?: string;
-}
-    
-        
-//****************************************************************************
-// INPUT TYPE for Entity Behavior Types   
-//****************************************************************************
-@InputType()
-export class UpdateEntityBehaviorTypeInput {
-    @Field(() => Int)
-    ID: number;
-
-    @Field()
-    Name: string;
-
-    @Field({ nullable: true })
-    Description?: string;
-
-    @Field(() => [KeyValuePairInput], { nullable: true })
-    OldValues___?: KeyValuePairInput[];
-}
-    
-//****************************************************************************
-// RESOLVER for Entity Behavior Types
-//****************************************************************************
-@ObjectType()
-export class RunEntityBehaviorTypeViewResult {
-    @Field(() => [EntityBehaviorType_])
-    Results: EntityBehaviorType_[];
-
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
-
-    @Field(() => Int, {nullable: true})
-    RowCount: number;
-
-    @Field(() => Int, {nullable: true})
-    TotalRowCount: number;
-
-    @Field(() => Int, {nullable: true})
-    ExecutionTime: number;
-
-    @Field({nullable: true})
-    ErrorMessage?: string;
-
-    @Field(() => Boolean, {nullable: false})
-    Success: boolean;
-}
-
-@Resolver(EntityBehaviorType_)
-export class EntityBehaviorTypeResolver extends ResolverBase {
-    @Query(() => RunEntityBehaviorTypeViewResult)
-    async RunEntityBehaviorTypeViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
-    }
-
-    @Query(() => RunEntityBehaviorTypeViewResult)
-    async RunEntityBehaviorTypeViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
-    }
-
-    @Query(() => RunEntityBehaviorTypeViewResult)
-    async RunEntityBehaviorTypeDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        input.EntityName = 'Entity Behavior Types';
-        return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
-    }
-    @Query(() => EntityBehaviorType_, { nullable: true })
-    async EntityBehaviorType(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<EntityBehaviorType_ | null> {
-        this.CheckUserReadPermissions('Entity Behavior Types', userPayload);
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityBehaviorTypes] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Entity Behavior Types', userPayload, EntityPermissionType.Read, 'AND');
-        const result = this.MapFieldNamesToCodeNames('Entity Behavior Types', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
-        return result;
-    }
-      
-    @FieldResolver(() => [mj_core_schema_server_object_types.EntityBehavior_])
-    async EntityBehaviorsArray(@Root() entitybehaviortype_: EntityBehaviorType_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('Entity Behaviors', userPayload);
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityBehaviors] WHERE [BehaviorTypeID]=${entitybehaviortype_.ID} ` + this.getRowLevelSecurityWhereClause('Entity Behaviors', userPayload, EntityPermissionType.Read, 'AND');
-        const result = this.ArrayMapFieldNamesToCodeNames('Entity Behaviors', await dataSource.query(sSQL));
-        return result;
-    }
-        
-    @Mutation(() => EntityBehaviorType_)
-    async CreateEntityBehaviorType(
-        @Arg('input', () => CreateEntityBehaviorTypeInput) input: CreateEntityBehaviorTypeInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
-        @PubSub() pubSub: PubSubEngine
-    ) {
-        return this.CreateRecord('Entity Behavior Types', input, dataSource, userPayload, pubSub)
-    }
-        
-    @Mutation(() => EntityBehaviorType_)
-    async UpdateEntityBehaviorType(
-        @Arg('input', () => UpdateEntityBehaviorTypeInput) input: UpdateEntityBehaviorTypeInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
-        @PubSub() pubSub: PubSubEngine
-    ) {
-        return this.UpdateRecord('Entity Behavior Types', input, dataSource, userPayload, pubSub);
-    }
-    
-    @Mutation(() => EntityBehaviorType_)
-    async DeleteEntityBehaviorType(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
-        return this.DeleteRecord('Entity Behavior Types', key, options, dataSource, userPayload, pubSub);
     }
     
 }

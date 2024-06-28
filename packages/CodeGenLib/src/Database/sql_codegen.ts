@@ -945,6 +945,24 @@ ${updatedAtTrigger}
                 sSelect += ', ';
             sSelect += `@${k.CodeName} AS [${k.Name}]`;        
         }
+
+        // next up, create the delete code which is based on the type of delete the entity is set to
+        // start off by creating the where clause first and then prepend the delete or update statement to it
+        let deleteCode: string = `    WHERE 
+        ${entity.PrimaryKeys.map(k => `[${k.Name}] = @${k.CodeName}`).join(' AND ')}
+`
+        if (entity.DeleteType === 'Hard') {
+            deleteCode =`    DELETE FROM 
+        [${entity.SchemaName}].[${entity.BaseTable}]
+${deleteCode}`
+        }
+        else {
+            deleteCode = `    UPDATE
+        [${entity.SchemaName}].[${entity.BaseTable}]
+    SET
+        ${EntityInfo.DeletedAtFieldName} = GETUTCDATE()
+${deleteCode}`
+        }
     
         return `
 ------------------------------------------------------------
@@ -959,10 +977,7 @@ AS
 BEGIN
     SET NOCOUNT ON;${sCascadeDeletes}
 
-    DELETE FROM 
-        [${entity.SchemaName}].[${entity.BaseTable}]
-    WHERE 
-        ${entity.PrimaryKeys.map(k => `[${k.Name}] = @${k.CodeName}`).join(' AND ')}
+${deleteCode}
 
     SELECT ${sSelect} -- Return the primary key to indicate we successfully deleted the record
 END

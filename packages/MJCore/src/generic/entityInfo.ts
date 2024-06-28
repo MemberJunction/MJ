@@ -592,6 +592,10 @@ export class EntityInfo extends BaseInfo {
     spUpdateGenerated: boolean = null
     spDeleteGenerated: boolean = null
     CascadeDeletes: boolean = null
+    DeleteType: 'Hard' | 'Soft' = 'Hard'
+    AllowRecordMerge: boolean = null
+    spMatch: string = null
+    RelationshipDefaultDisplayType: 'Search' | 'Dropdown' = null
     UserFormGenerated: boolean = null
     EntityObjectSubclassName: string = null
     EntityObjectSubclassImport: string = null
@@ -661,6 +665,7 @@ export class EntityInfo extends BaseInfo {
 
     private static __createdAtFieldName = '__mj_CreatedAt';
     private static __updatedAtFieldName = '__mj_UpdatedAt';
+    private static __deletedAtFieldName = '__mj_DeletedAt';
     /**
      * Returns the name of the special reserved field that is used to store the CreatedAt timestamp across all of MJ. This is only used when an entity has TrackRecordChanges turned on
      */
@@ -672,6 +677,12 @@ export class EntityInfo extends BaseInfo {
      */
     public static get UpdatedAtFieldName(): string {
         return EntityInfo.__updatedAtFieldName;
+    }
+    /**
+     * Returns the name of the special reserved field that is used to store the DeletedAt timestamp across all of MJ. This is only used when an entity has DeleteType=Soft
+     */
+    public static get DeletedAtFieldName(): string {
+        return EntityInfo.__deletedAtFieldName;
     }
 
 
