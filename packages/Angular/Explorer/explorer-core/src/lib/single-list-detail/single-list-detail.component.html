@@ -1,49 +1,99 @@
 <div class="app-container">
     <div class="flex-display-row-header">
         <h1>{{listName}}</h1>
-        <button kendobutton (click)="toggleAddDialog(true)" themeColor="info">
+        <button kendobutton class="add-btn" (click)="toggleAddDialog(true)" themeColor="info">
             <span class="fa-solid fa-plus"></span>
-            Add to List
+            Add More Records
         </button>
+    </div>
+    <div>
+        <div class="title-wrapper">
+            <div class="search">
+              <kendo-textbox 
+              type="text" 
+              #searchInput 
+              placeholder="Search in List" 
+              (keyup)="onKeyup(searchInput.value)"
+              [clearButton]="true"
+              size="large"
+              rounded="large"
+              fillMode="solid"
+              >
+                <ng-template kendoTextBoxPrefixTemplate [showSeparator]="true">
+                  <span class="fa-solid fa-magnifying-glass margin-left-small"></span>
+                </ng-template>
+              </kendo-textbox>
+            </div>
+          </div>
     </div>
     @if(showLoader){
         <kendo-loader type="converging-spinner"></kendo-loader>
     }
     @else{
-        <kendo-grid [data]="gridData"></kendo-grid>
+        <kendo-grid [data]="filteredGridData"></kendo-grid>
     }
 </div>
+
 <kendo-dialog
-title="Add to List"
+class="dialog-wrapper"
+title="Select Views to Add"
 *ngIf="showAddDialog"
 (close)="toggleAddDialog(false)"
 [minWidth]="250"
 [width]="650"
 [height]="550"
 >
+<div class="search-header">
+    <kendo-textbox
+  id="listSearch"
+  placeholder="Search Views..."
+  kendoTextBox
+  [clearButton]="true"
+  class="search-bar"
+></kendo-textbox>
+<!--
+<button kendoButton class="btn-no-border btn-outline">
+    <span class="fa-solid fa-plus"></span>
+    New View
+</button>
+-->
+</div>
+<hr>
+<div class="overflow-y-scroll">
     @if(showAddLoader){
         <kendo-loader type="converging-spinner"></kendo-loader>
     }
     @else {
-        <div class="mt-10">
-            <kendo-label text="Select a View">
-                <kendo-dropdownlist 
-                    class="mt-10"
-                    [data]="userViews"
-                    [filterable]="true"
-                    textField="Name"
-                    valueField="ID"
-                    [(ngModel)]="selectedUserView"
-                />
-            </kendo-label>
-        </div>
+        @for(userView of userViews; track userView){
+            <div class="list-item">
+                <div class="list-text" [ngClass]="{'list-selected': userViewsToAdd.includes(userView)}">
+                    {{userView.Name}}
+                </div>
+                @if(userViewsToAdd.includes(userView)){
+                    <button kendoButton class="btn-no-border btn-selected" (click)="removeViewFromSelectedList(userView)">
+                        <span class="fa-solid fa-minus"></span>
+                        Remove
+                    </button>
+                }
+                @else {
+                    <button kendoButton class="btn-no-border" (click)="addViewToSelectedList(userView)">
+                        <div class="btn-margin-right">
+                            <span class="fa-solid fa-plus"></span>
+                            Add
+                        </div>
+                    </button>
+                }
+            </div>
+            <hr>
+        }
     }
-    <kendo-dialog-actions class="popup-actions-btn">
-        <button class="cancel-btn" (click)="addTolist()" [disabled]="showAddLoader || !selectedUserView" kendoButton themeColor="info">
-          Create
-        </button>
-        <button  class="yes-btn" (click)="toggleAddDialog(false)" [disabled]="showAddLoader" kendoButton fillMode="outline" themeColor="info">
-          Cancel
-        </button>
-    </kendo-dialog-actions>
+</div>
+<kendo-dialog-actions class="popup-actions-btn">
+    <button class="cancel-btn" (click)="addTolist()" [disabled]="showAddLoader" kendoButton themeColor="info">
+      Done
+    </button>
+    <button  class="yes-btn" (click)="toggleAddDialog(false)" [disabled]="showAddLoader" kendoButton fillMode="outline" themeColor="info">
+      Cancel
+    </button>
+</kendo-dialog-actions>
 </kendo-dialog>
