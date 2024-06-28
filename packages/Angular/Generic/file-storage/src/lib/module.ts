@@ -44,6 +44,6 @@ import { FilesGridComponent } from './files-grid/files-grid';
     MenusModule,
     IndicatorsModule,
   ],
-  exports: [CategoryTreeComponent, FilesGridComponent],
+  exports: [CategoryTreeComponent, FilesGridComponent, FileUploadComponent],
 })
 export class FileStorageModule {}

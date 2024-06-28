@@ -18,6 +18,7 @@ import {
 } from '@memberjunction/server';
 import { createDownloadUrl, createUploadUrl, deleteObject, moveObject } from '@memberjunction/storage';
 import { CreateFileInput, FileResolver as FileResolverBase, File_, UpdateFileInput } from '../generated/generated';
+import { FieldMapper } from '@memberjunction/graphql-dataprovider';
 
 @InputType()
 export class CreateUploadURLInput {
@@ -70,7 +71,8 @@ export class FileResolver extends FileResolverBase {
     const { updatedInput, UploadUrl } = await createUploadUrl(providerEntity, fileRecord);
 
     // Save the file record with the updated input
-    fileEntity.LoadFromData(input);
+    const mapper = new FieldMapper();
+    fileEntity.LoadFromData(mapper.ReverseMapFields({ ...input }));
     fileEntity.SetMany(updatedInput);
     await fileEntity.Save();
     const File = fileEntity.GetAll();
@@ -122,7 +124,12 @@ export class FileResolver extends FileResolverBase {
   }
 
   @Mutation(() => File_)
-  async DeleteFile(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+  async DeleteFile(
+    @Arg('ID', () => Int) ID: number,
+    @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput,
+    @Ctx() { dataSource, userPayload }: AppContext,
+    @PubSub() pubSub: PubSubEngine
+  ) {
     const md = new Metadata();
     const userInfo = this.GetUserFromPayload(userPayload);
 

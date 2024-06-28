@@ -2,16 +2,16 @@
  * The graphQLDataProvider provides a data provider for the entities framework that uses GraphQL to communicate
  * with the server.
  * In practice - this FILE will NOT exist in the entities library, we need to move to its own separate project
- * so it is only included by the consumer of the entities library if they want to use it. 
+ * so it is only included by the consumer of the entities library if they want to use it.
 **************************************************************************************************************/
 
-import { BaseEntity, IEntityDataProvider, IMetadataProvider, IRunViewProvider, ProviderConfigDataBase, RunViewResult, 
+import { BaseEntity, IEntityDataProvider, IMetadataProvider, IRunViewProvider, ProviderConfigDataBase, RunViewResult,
          EntityInfo, EntityFieldInfo, EntityFieldTSType,
-         RunViewParams, ProviderBase, ProviderType, UserInfo, UserRoleInfo, RecordChange, 
+         RunViewParams, ProviderBase, ProviderType, UserInfo, UserRoleInfo, RecordChange,
          ILocalStorageProvider, EntitySaveOptions, LogError,
-         TransactionGroupBase, TransactionItem, DatasetItemFilterType, DatasetResultType, DatasetStatusResultType, EntityRecordNameInput, 
-         EntityRecordNameResult, IRunReportProvider, RunReportResult, RunReportParams, RecordDependency, RecordMergeRequest, RecordMergeResult, 
-         IRunQueryProvider, RunQueryResult, PotentialDuplicateRequest, PotentialDuplicateResponse, CompositeKey, EntityDeleteOptions, 
+         TransactionGroupBase, TransactionItem, DatasetItemFilterType, DatasetResultType, DatasetStatusResultType, EntityRecordNameInput,
+         EntityRecordNameResult, IRunReportProvider, RunReportResult, RunReportParams, RecordDependency, RecordMergeRequest, RecordMergeResult,
+         IRunQueryProvider, RunQueryResult, PotentialDuplicateRequest, PotentialDuplicateResponse, CompositeKey, EntityDeleteOptions,
          RunQueryParams, BaseEntityResult,
          KeyValuePair} from "@memberjunction/core";
 import { UserViewEntityExtended, ViewInfo } from '@memberjunction/core-entities'
@@ -22,6 +22,7 @@ import { GraphQLTransactionGroup } from "./graphQLTransactionGroup";
 import { openDB, DBSchema, IDBPDatabase } from '@tempfix/idb';
 import { Observable } from 'rxjs';
 import { Client, createClient } from 'graphql-ws';
+import { FieldMapper } from './FieldMapper';
 
 // define the shape for a RefreshToken function that can be called by the GraphQLDataProvider whenever it receives an exception that the JWT it has already is expired
 export type RefreshTokenFunction = () => Promise<string>;
@@ -50,7 +51,7 @@ export class GraphQLProviderConfigData extends ProviderConfigDataBase {
 
 
     /**
-     * 
+     *
      * @param token Token is the JWT token that is used to authenticate the user with the server
      * @param url the URL to the GraphQL endpoint
      * @param wsurl the URL to the GraphQL websocket endpoint. This is used for subscriptions, if you are not using subscriptions, you can pass in a blank string for this
@@ -63,8 +64,8 @@ export class GraphQLProviderConfigData extends ProviderConfigDataBase {
                 url: string,
                 wsurl: string,
                 refreshTokenFunction: RefreshTokenFunction,
-                MJCoreSchemaName?: string, 
-                includeSchemas?: string[], 
+                MJCoreSchemaName?: string,
+                includeSchemas?: string[],
                 excludeSchemas?: string[]) {
         super(
                 {
@@ -72,7 +73,7 @@ export class GraphQLProviderConfigData extends ProviderConfigDataBase {
                     URL: url,
                     WSURL: wsurl,
                     RefreshTokenFunction: refreshTokenFunction,
-                }, 
+                },
                 MJCoreSchemaName,
                 includeSchemas,
                 excludeSchemas
@@ -97,7 +98,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
           return v.toString(16);
         });
     }
-    
+
     public async Config(configData: GraphQLProviderConfigData): Promise<boolean> {
         try {
             // FIRST, set up the GraphQL client
@@ -254,7 +255,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 innerParams.ResultType = params.ResultType ? params.ResultType : 'simple';
                 if (params.AuditLogDescription && params.AuditLogDescription.length > 0)
                     innerParams.AuditLogDescription = params.AuditLogDescription;
-                
+
                 if (!dynamicView) {
                     innerParams.ExcludeUserViewRunID = params.ExcludeUserViewRunID ? params.ExcludeUserViewRunID : -1;
                     innerParams.ExcludeDataFromAllPriorViewRuns = params.ExcludeDataFromAllPriorViewRuns ? params.ExcludeDataFromAllPriorViewRuns : false;
@@ -263,7 +264,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 }
 
                 const fieldList = this.getViewRunTimeFieldList(e, viewEntity, params, dynamicView);
-           
+
                 const query = gql`
                     query RunViewQuery ($input: ${paramType}!) {
                     ${qName}(input: $input) {
@@ -298,7 +299,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                     return viewData[qName];
                 }
             }
-            else 
+            else
                 throw ("No parameters passed to RunView");
 
             return null;
@@ -322,17 +323,18 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 v = await ViewInfo.GetViewEntityByName(params.ViewName, contextUser);
                 entityName = v.Entity
             }
-            else    
-                throw new Error(`No EntityName, ViewID or ViewName passed to RunView`)    
+            else
+                throw new Error(`No EntityName, ViewID or ViewName passed to RunView`)
         }
         else
-            entityName = params.EntityName    
+            entityName = params.EntityName
 
         return {entityName, v}
     }
 
     protected getViewRunTimeFieldList(e: EntityInfo, v: UserViewEntityExtended, params: RunViewParams, dynamicView: boolean): string[] {
         const fieldList = [];
+        const mapper = new FieldMapper();
         if (params.Fields) {
             for (const kv of e.PrimaryKeys) {
                 if (params.Fields.find(f => f.trim().toLowerCase() === kv.Name.toLowerCase()) === undefined)
@@ -341,26 +343,20 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
 
             // now add any other fields that were passed in
             params.Fields.forEach(f => {
-                if (f.trim().toLowerCase().startsWith('__mj_'))
-                    fieldList.push(f.replace('__mj_', '_mj__'));
-                else
-                    fieldList.push(f)
+              fieldList.push(mapper.MapFieldName(f))
             });
         }
         else {
-            // no fields were passed in. So, let's check to see if we are running an dynamic view. 
+            // no fields were passed in. So, let's check to see if we are running an dynamic view.
             // If so, we need to include all fields since the caller didn't specify the fields they want
             // otherwise, we include the fields that are part of the view definition.
             if (dynamicView) {
-                // include all fields since no fields were passed in                
+                // include all fields since no fields were passed in
                 e.Fields.forEach(f => {
                     if (!f.IsBinaryFieldType) {
-                        if (f.CodeName.trim().toLowerCase().startsWith('__mj_'))
-                            fieldList.push(f.CodeName.replace('__mj_', '_mj__'));
-                        else
-                            fieldList.push(f.CodeName)
+                      fieldList.push(mapper.MapFieldName(f.CodeName));
                     }
-                }); 
+                });
             }
             else {
                 // NOTE: in the below, c.EntityField SHOULD always exist, however there is a possibility that at some point a VIEW was created that used fields
@@ -372,14 +368,11 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                     if (fieldList.find(f => f.trim().toLowerCase() === kv.Name.toLowerCase()) === undefined)
                         fieldList.push(kv.Name); // always include the primary key fields in view run time field list
                 }
-                    
+
                 // Now: include the fields that are part of the view definition
                 v.Columns.forEach(c => {
                     if (c.hidden === false && !fieldList.find(item => item.trim().toLowerCase() === c.EntityField?.Name.trim().toLowerCase())) { // don't include hidden fields and don't include the pkey field again
-                        if (c.EntityField.CodeName.trim().toLowerCase().startsWith('__mj_'))
-                            fieldList.push(c.EntityField.CodeName.replace('__mj_', '_mj__'));
-                        else
-                            fieldList.push(c.EntityField.CodeName)
+                      fieldList.push(mapper.MapFieldName(c.EntityField.CodeName));
                     }
                 });
             }
@@ -390,7 +383,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
     // END ---- IRunViewProvider
     /**************************************************************************/
 
-    
+
     /**************************************************************************/
     // START ---- IEntityDataProvider
     /**************************************************************************/
@@ -407,7 +400,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             }
             const result = await this.RunView(p);
             if (result) {
-                // sort the results client side because, for now, the RunViewParams doesn't support OrderBy dynamically like we tried. Later change this to do via the SQL query 
+                // sort the results client side because, for now, the RunViewParams doesn't support OrderBy dynamically like we tried. Later change this to do via the SQL query
                 return result.Results.sort((a: RecordChange, b: RecordChange) => {
                     return (a.ChangedAt > b.ChangedAt) ? -1 : 1 // sort descending on the date.... GraphQL passes back the date as time since base date
                  });
@@ -430,7 +423,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
      * @param entityName the name of the entity to check
      * @param KeyValuePairs the KeyValuePairs of the record to check
      */
-    public async GetRecordDependencies(entityName: string, primaryKey: CompositeKey): Promise<RecordDependency[]> { 
+    public async GetRecordDependencies(entityName: string, primaryKey: CompositeKey): Promise<RecordDependency[]> {
         try {
             // execute the gql query to get the dependencies
             const query = gql`query GetRecordDependenciesQuery ($entityName: String!, $CompositeKey: CompositeKeyInputType!) {
@@ -443,7 +436,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                             FieldName
                             Value
                         }
-                    } 
+                    }
                 }
             }`
 
@@ -514,7 +507,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             return data.GetRecordDuplicates;
         }
     }
-    
+
     public async MergeRecords(request: RecordMergeRequest): Promise<RecordMergeResult> {
         try {
             // execute the gql query to get the dependencies
@@ -593,14 +586,9 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
 
             // only pass along writable fields, AND the PKEY value if this is an update
             const filteredFields = entity.Fields.filter(f => f.SQLType.trim().toLowerCase() !== 'uniqueidentifier' && (f.ReadOnly === false || (f.IsPrimaryKey && entity.IsSaved) ));
+            const mapper = new FieldMapper();
             const inner = `                ${mutationName}(input: $input) {
-                ${entity.Fields.map(f => {
-                    if (f.Name.trim().toLowerCase().startsWith('__mj_'))
-                        return f.CodeName.replace('__mj_', '_mj__');
-                    else
-                        return f.CodeName
-
-                }).join("\n                    ")}
+                ${entity.Fields.map(f => mapper.MapFieldName(f.CodeName)).join("\n                    ")}
             }`
             const outer = gql`mutation ${type}${entity.EntityInfo.ClassName} ($input: ${mutationName}Input!) {
                 ${inner}
@@ -609,7 +597,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             for (let i = 0; i < filteredFields.length; i++) {
                 const f = filteredFields[i];
                 let val = f.Value;
-                if (val && f.EntityFieldInfo.TSType === EntityFieldTSType.Date) 
+                if (val && f.EntityFieldInfo.TSType === EntityFieldTSType.Date)
                     val = val.getTime();
                 if (val && f.EntityFieldInfo.TSType === EntityFieldTSType.Boolean && typeof val !== 'boolean')
                     val = parseInt(val) === 0 ? false : true; // convert to boolean
@@ -639,12 +627,12 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 });
                 vars.input['OldValues___'] = ov; // add the OldValues prop to the input property that is part of the vars already
             }
-            
+
             if (entity.TransactionGroup) {
                 return new Promise((resolve, reject) => {
                     const mutationInputTypes = [
                         {
-                            varName: 'input', 
+                            varName: 'input',
                             inputType: mutationName + 'Input!'
                         }
                     ];
@@ -653,21 +641,21 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
 
                     // we are part of a transaction group, so just add our query to the list
                     // and when the transaction is committed, we will send all the queries at once
-                    entity.TransactionGroup.AddTransaction(new TransactionItem(entity, inner, vars, {mutationName, 
-                                                                                             mutationInputTypes: mutationInputTypes}, 
+                    entity.TransactionGroup.AddTransaction(new TransactionItem(entity, inner, vars, {mutationName,
+                                                                                             mutationInputTypes: mutationInputTypes},
                                                                                             (results: any, success: boolean) => {
                         // we get here whenever the transaction group does gets around to committing
                         // our query. We need to update our entity with the values that were returned
                         // from the mutation if it was successful.
                         result.EndedAt = new Date();
-                        if (success && results) { 
+                        if (success && results) {
                             // got our data, send it back to the caller, which is the entity object
                             // and that object needs to update itself from this data.
                             result.Success = true;
                             resolve (this.ConvertBackToMJFields(results));
                         }
                         else {
-                            // the transaction failed, nothing to update, but we need to call Reject so the 
+                            // the transaction failed, nothing to update, but we need to call Reject so the
                             // promise resolves with a rejection so our outer caller knows
                             result.Success = false;
                             result.Message = 'Transaction failed';
@@ -725,22 +713,15 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                     vars[field.CodeName] =  parseInt(val); // converting to number here for graphql type to work properly
                 }
                 else
-                    vars[field.CodeName] = val;    
+                    vars[field.CodeName] = val;
             }
 
             const rel = EntityRelationshipsToLoad && EntityRelationshipsToLoad.length > 0 ? this.getRelatedEntityString(entity.EntityInfo, EntityRelationshipsToLoad) : '';
 
+            const mapper = new FieldMapper();
             const query = gql`query Single${entity.EntityInfo.ClassName}${rel.length > 0 ? 'Full' : ''} (${pkeyOuterParamString}) {
                 ${entity.EntityInfo.ClassName}(${pkeyInnerParamString}) {
-                    ${entity.Fields.filter(f => !f.EntityFieldInfo.IsBinaryFieldType).map(f => {
-                        if (f.EntityFieldInfo.Name.trim().toLowerCase().startsWith('__mj_')) {
-                            // fields that start with __mj_ need to be converted to _mj__ for the GraphQL query
-                            return f.CodeName.replace('__mj_', '_mj__');
-                        }
-                        else {
-                            return f.CodeName;
-                        }
-                    }).join("\n                    ")}
+                    ${entity.Fields.filter(f => !f.EntityFieldInfo.IsBinaryFieldType).map(f => mapper.MapFieldName(f.CodeName)).join("\n                    ")}
                     ${rel}
                 }
             }
@@ -762,19 +743,12 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
 
     /**
      * This method will convert back any fields that start with _mj__ back to __mj_ so that the entity object can properly update itself with the data that was returned from the server
-     * @param ret 
-     * @returns 
+     * @param ret
+     * @returns
      */
     protected ConvertBackToMJFields(ret: any): any {
-        const keys = Object.keys(ret);
-        keys.forEach(k => {
-            if (k.trim().toLowerCase().startsWith('_mj__')) {
-                const newKey = k.replace('_mj__', '__mj_');
-                ret[newKey] = ret[k];
-                delete ret[k]; // DO remove the old key as it has no purpose anymore as it was just for transport since GraphQL wont allow fields that start with __
-            }
-        });
-
+        const mapper = new FieldMapper();
+        mapper.ReverseMapFields(ret);
         return ret; // clean object to pass back here
     }
 
@@ -798,7 +772,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         const result = new BaseEntityResult();
         try {
             entity.RegisterTransactionPreprocessing();
-            
+
             result.StartedAt = new Date();
             result.Type = 'delete';
             result.OriginalValues = entity.Fields.map(f => { return {FieldName: f.CodeName, Value: f.Value} });
@@ -845,13 +819,13 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 return new Promise((resolve, reject) => {
                     // we are part of a transaction group, so just add our query to the list
                     // and when the transaction is committed, we will send all the queries at once
-                    entity.TransactionGroup.AddTransaction(new TransactionItem(entity, inner, vars, {mutationName: queryName, 
-                                                                                             mutationInputTypes: mutationInputTypes}, 
+                    entity.TransactionGroup.AddTransaction(new TransactionItem(entity, inner, vars, {mutationName: queryName,
+                                                                                             mutationInputTypes: mutationInputTypes},
                                                                                             (results: any, success: boolean) => {
                         // we get here whenever the transaction group does gets around to committing
-                        // our query.  
+                        // our query.
                         result.EndedAt = new Date(); // done processing
-                        if (success && results) { 
+                        if (success && results) {
                             // success indicated by the entity.PrimaryKey.Value matching the return value of the mutation
                             let success: boolean = true;
                             for (const pk of entity.PrimaryKey.KeyValuePairs) {
@@ -865,7 +839,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                                 resolve (true)
                             }
                             else {
-                                // the transaction failed, nothing to update, but we need to call Reject so the 
+                                // the transaction failed, nothing to update, but we need to call Reject so the
                                 // promise resolves with a rejection so our outer caller knows
                                 result.Success = false;
                                 result.Message = 'Transaction failed to commit'
@@ -873,7 +847,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                             }
                         }
                         else {
-                            // the transaction failed, nothing to update, but we need to call Reject so the 
+                            // the transaction failed, nothing to update, but we need to call Reject so the
                             // promise resolves with a rejection so our outer caller knows
                             result.Success = false;
                             result.Message = 'Transaction failed to commit'
@@ -887,7 +861,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 const d = await GraphQLDataProvider.ExecuteGQL(query, vars)
                 if (d && d[queryName]) {
                     for (let key of entity.PrimaryKey.KeyValuePairs) {
-                        if (key.Value !== d[queryName][key.FieldName]) 
+                        if (key.Value !== d[queryName][key.FieldName])
                             throw new Error ('Missing primary key value in server Delete response: ' + key.FieldName);
                     }
                     result.Success = true;
@@ -895,7 +869,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                     return true; // all of the return values match the primary key values, so we are good and delete worked
                 }
                 else
-                    throw new Error(`Delete failed for ${entity.EntityInfo.Name}: ${entity.PrimaryKey.ToString()} `);    
+                    throw new Error(`Delete failed for ${entity.EntityInfo.Name}: ${entity.PrimaryKey.ToString()} `);
             }
         }
         catch (e) {
@@ -903,7 +877,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             result.Success = false;
             result.Message = e.response?.errors?.length > 0 ? e.response.errors[0].message : e.message;
             LogError(e);
-            
+
             return false;
         }
     }
@@ -925,7 +899,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 LatestUpdateDate
                 Results
             }
-        }` 
+        }`
         const data = await GraphQLDataProvider.ExecuteGQL(query,  {DatasetName: datasetName, ItemFilters: itemFilters });
         if (data && data.GetDatasetByName && data.GetDatasetByName.Success) {
             return {
@@ -946,7 +920,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 LatestUpdateDate: null,
                 Results: null
             };
-        }        
+        }
     }
 
     public async GetDatasetStatusByName(datasetName: string, itemFilters?: DatasetItemFilterType[]): Promise<DatasetStatusResultType> {
@@ -959,7 +933,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 LatestUpdateDate
                 EntityUpdateDates
             }
-        }` 
+        }`
         const data = await GraphQLDataProvider.ExecuteGQL(query,  {DatasetName: datasetName, ItemFilters: itemFilters});
         if (data && data.GetDatasetStatusByName && data.GetDatasetStatusByName.Success) {
             return {
@@ -1001,17 +975,17 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 Success
                 IsFavorite
             }
-        }` 
+        }`
 
         const data = await GraphQLDataProvider.ExecuteGQL(query,  {params: {
-                                                                            UserID: userId, 
-                                                                            EntityID: e.ID, 
+                                                                            UserID: userId,
+                                                                            EntityID: e.ID,
                                                                             CompositeKey: {KeyValuePairs: this.ensureKeyValuePairValueIsString(primaryKey.KeyValuePairs)}
-                                                                            } 
+                                                                            }
                                                                   }
                                                          );
         if (data && data.GetRecordFavoriteStatus && data.GetRecordFavoriteStatus.Success)
-            return data.GetRecordFavoriteStatus.IsFavorite;        
+            return data.GetRecordFavoriteStatus.IsFavorite;
     }
 
     public async SetRecordFavoriteStatus(userId: number, entityName: string, primaryKey: CompositeKey, isFavorite: boolean, contextUser: UserInfo): Promise<void> {
@@ -1024,17 +998,17 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             SetRecordFavoriteStatus(params: $params){
                 Success
             }
-        }` 
+        }`
 
         const data = await GraphQLDataProvider.ExecuteGQL(query,  { params: {
-                                                                                UserID: userId, 
-                                                                                EntityID: e.ID, 
+                                                                                UserID: userId,
+                                                                                EntityID: e.ID,
                                                                                 CompositeKey: {KeyValuePairs: this.ensureKeyValuePairValueIsString(primaryKey.KeyValuePairs)},
-                                                                                IsFavorite: isFavorite} 
+                                                                                IsFavorite: isFavorite}
                                                                  }
                                                          );
         if (data && data.SetRecordFavoriteStatus !== null)
-            return data.SetRecordFavoriteStatus.Success;        
+            return data.SetRecordFavoriteStatus.Success;
     }
 
     public async GetEntityRecordName(entityName: string, primaryKey: CompositeKey): Promise<string> {
@@ -1048,10 +1022,10 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 Status
                 RecordName
             }
-        }` 
+        }`
 
         const data = await GraphQLDataProvider.ExecuteGQL(query, {
-                                                                    EntityName: entityName, 
+                                                                    EntityName: entityName,
                                                                     CompositeKey: {KeyValuePairs: this.ensureKeyValuePairValueIsString(primaryKey.KeyValuePairs)}
                                                                 });
         if (data && data.GetEntityRecordName && data.GetEntityRecordName.Success)
@@ -1075,22 +1049,22 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 EntityName
                 RecordName
             }
-        }` 
- 
-        const data = await GraphQLDataProvider.ExecuteGQL(query,  {info: info.map(i => { 
-            return { 
-                     EntityName: i.EntityName, 
+        }`
+
+        const data = await GraphQLDataProvider.ExecuteGQL(query,  {info: info.map(i => {
+            return {
+                     EntityName: i.EntityName,
                      CompositeKey: {KeyValuePairs: this.ensureKeyValuePairValueIsString(i.CompositeKey.KeyValuePairs)}
-                    } 
+                    }
                 })});
         if (data && data.GetEntityRecordNames)
             return data.GetEntityRecordNames;
     }
- 
+
     public static async ExecuteGQL(query: string, variables: any, refreshTokenIfNeeded: boolean = true): Promise<any> {
         try {
             const data = await GraphQLDataProvider._client.request(query, variables);
-            return data;    
+            return data;
         }
         catch (e) {
             if (e && e.response && e.response.errors?.length > 0) {//e.code === 'JWT_EXPIRED') {
@@ -1113,7 +1087,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             }
             else {
                 LogError(e);
-                throw e; // force the caller to handle the error    
+                throw e; // force the caller to handle the error
             }
         }
     }
@@ -1123,8 +1097,8 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             const newToken = await GraphQLDataProvider._configData.Data.RefreshTokenFunction();
             if (newToken) {
                 GraphQLDataProvider._configData.Token = newToken; // update the token
-                GraphQLDataProvider._client = this.CreateNewGraphQLClient(GraphQLDataProvider._configData.URL, 
-                                                                          GraphQLDataProvider._configData.Token, 
+                GraphQLDataProvider._client = this.CreateNewGraphQLClient(GraphQLDataProvider._configData.URL,
+                                                                          GraphQLDataProvider._configData.Token,
                                                                           GraphQLDataProvider._sessionId);
             }
             else {
@@ -1138,13 +1112,13 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
 
     protected static CreateNewGraphQLClient(url: string, token: string, sessionId: string): GraphQLClient {
         return new GraphQLClient(url, {
-            headers: { 
+            headers: {
                 authorization: 'Bearer ' + token,
                 'x-session-id': sessionId
             }
         });
     }
- 
+
     private _innerCurrentUserQueryString = `CurrentUser {
         ${this.userInfoString()}
         UserRolesArray {
@@ -1152,20 +1126,20 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         }
     }
     `
- 
+
 
     private _currentUserQuery = gql`query CurrentUserAndRoles {
-        ${this._innerCurrentUserQueryString}    
+        ${this._innerCurrentUserQueryString}
     }`
 
 
- 
+
     private userInfoString(): string {
         return this.infoString(new UserInfo(null, null))
     }
     private userRoleInfoString(): string {
         return this.infoString(new UserRoleInfo(null))
-    } 
+    }
     private infoString(object: any): string {
         let sOutput: string = '';
         const keys = Object.keys(object)
@@ -1180,7 +1154,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         return sOutput
     }
 
-    
+
     private _localStorageProvider: ILocalStorageProvider;
     get LocalStorageProvider(): ILocalStorageProvider {
         if (!this._localStorageProvider)
@@ -1205,7 +1179,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
 
         if (!this._wsClient)
             this._wsClient = createClient({
-                url: this.ConfigData.WSURL, 
+                url: this.ConfigData.WSURL,
                 connectionParams: {
                     Authorization: 'Bearer ' + this.ConfigData.Token,
                 },
@@ -1223,7 +1197,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             }
         }
         `;
-    
+
         const newObservable = new Observable<string>((observer) => {
             const unsubscribe = this._wsClient.subscribe(
               { query: SUBSCRIBE_TO_STATUS, variables: { sessionId } },
@@ -1231,15 +1205,15 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 next: (data) => {
                     return observer.next(<string>data.data.statusUpdates)
                 },
-                error: (error) => { 
-                    return observer.error(error) 
+                error: (error) => {
+                    return observer.error(error)
                 },
                 complete: () => {
                     return observer.complete()
                 },
               }
             );
-        
+
             return () => {
               // Cleanup logic
               console.log('would unsub here')
@@ -1258,9 +1232,9 @@ class BrowserStorageProviderBase implements ILocalStorageProvider {
 
     public async getItem(key: string): Promise<string | null> {
         return new Promise((resolve) => {
-            if (this._localStorage.hasOwnProperty(key)) 
+            if (this._localStorage.hasOwnProperty(key))
                 resolve(this._localStorage[key]);
-            else 
+            else
                 resolve(null);
         });
     }
@@ -1289,7 +1263,7 @@ class BrowserLocalStorageProvider extends BrowserStorageProviderBase  {
     public async getItem(key: string): Promise<string | null> {
         if (localStorage)
             return localStorage.getItem(key);
-        else 
+        else
             return await super.getItem(key)
     }
 
@@ -1303,7 +1277,7 @@ class BrowserLocalStorageProvider extends BrowserStorageProviderBase  {
     public async remove(key: string): Promise<void> {
         if (localStorage)
             localStorage.removeItem(key);
-        else 
+        else
             await super.remove(key)
     }
 }
@@ -1356,4 +1330,3 @@ class BrowserIndexedDBStorageProvider extends BrowserStorageProviderBase {
     }
 }
 
- 
