@@ -257,11 +257,12 @@ export class UserViewPropertiesDialogComponent extends BaseFormComponent impleme
       this.sharedService.CreateSimpleNotification('Validation Errors: ' + valResults.Errors.map((e) => e.Message).join('\n'), 'warning', 7500);
     }
 
-    this.showloader = false;
-    this.isDialogOpened = false;
-
     let saveResult: boolean = await this.record.Save(); 
     if(saveResult){
+      // stop showing the loader and close the dialog if we saved successfully
+      this.showloader = false;
+      this.isDialogOpened = false;
+  
       let event: any = {
         Saved: true, 
         ViewEntity: this.record,
