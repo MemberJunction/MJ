@@ -222,7 +222,11 @@ export class Metadata {
      * @returns 
      */
     public async MergeRecords(request: RecordMergeRequest, contextUser?: UserInfo): Promise<RecordMergeResult> {
-        return await Metadata.Provider.MergeRecords(request, contextUser);
+        const e = this.EntityByName(request.EntityName);
+        if (e.AllowRecordMerge)
+            return await Metadata.Provider.MergeRecords(request, contextUser);
+        else
+            throw new Error(`Entity ${request.EntityName} does not allow record merging, check the AllowRecordMerge property in the entity metadata`);
     }
 
     /**

@@ -593,6 +593,9 @@ export class SQLCodeGenBase {
         const relatedFieldsString: string = await this.generateBaseViewRelatedFieldsString(ds, entity.Fields);
         const relatedFieldsJoinString: string = this.generateBaseViewJoins(entity.Fields);
         const permissions: string = this.generateViewPermissions(entity);
+        const whereClause: string = entity.DeleteType === 'Soft' ? `WHERE 
+    ${baseTableFirstChar}.[${EntityInfo.DeletedAtFieldName}] IS NULL
+` : '';
         return `
 ------------------------------------------------------------
 ----- BASE VIEW FOR ENTITY:      ${entity.Name}
@@ -609,7 +612,7 @@ SELECT
     ${baseTableFirstChar}.*${relatedFieldsString.length > 0 ? ',' : ''}${relatedFieldsString}
 FROM
     [${entity.SchemaName}].[${entity.BaseTable}] AS ${baseTableFirstChar}${relatedFieldsJoinString ? '\n' + relatedFieldsJoinString : ''}
-GO${permissions}
+${whereClause}GO${permissions}
     `
     }
     
@@ -893,8 +896,12 @@ ${updatedAtTrigger}
                 else
                     isFirst = false;
     
-                if (prefix !== '' && ef.IsSpecialDateField )
-                    sOutput += `GETUTCDATE()`;
+                if (prefix !== '' && ef.IsSpecialDateField) {
+                    if (ef.IsCreatedAtField || ef.IsUpdatedAtField)
+                        sOutput += `GETUTCDATE()`; // we set the inserted row value to the current date for created and updated at fields
+                    else
+                        sOutput += `NULL`; // we don't set the deleted at field on an insert, only on a delete
+                }
                 else {
                     let sVal = prefix + (prefix !== '' ? ef.CodeName : ef.Name); // if we have a prefix, then we need to use the CodeName, otherwise we use the actual field name
                     if (!prefix || prefix.length === 0)
@@ -945,6 +952,24 @@ ${updatedAtTrigger}
                 sSelect += ', ';
             sSelect += `@${k.CodeName} AS [${k.Name}]`;        
         }
+
+        // next up, create the delete code which is based on the type of delete the entity is set to
+        // start off by creating the where clause first and then prepend the delete or update statement to it
+        let deleteCode: string = `    WHERE 
+        ${entity.PrimaryKeys.map(k => `[${k.Name}] = @${k.CodeName}`).join(' AND ')}
+`
+        if (entity.DeleteType === 'Hard') {
+            deleteCode =`    DELETE FROM 
+        [${entity.SchemaName}].[${entity.BaseTable}]
+${deleteCode}`
+        }
+        else {
+            deleteCode = `    UPDATE
+        [${entity.SchemaName}].[${entity.BaseTable}]
+    SET
+        ${EntityInfo.DeletedAtFieldName} = GETUTCDATE()
+${deleteCode}        AND ${EntityInfo.DeletedAtFieldName} IS NULL -- don't update the record if it's already been deleted via a soft delete`
+        }
     
         return `
 ------------------------------------------------------------
@@ -959,10 +984,7 @@ AS
 BEGIN
     SET NOCOUNT ON;${sCascadeDeletes}
 
-    DELETE FROM 
-        [${entity.SchemaName}].[${entity.BaseTable}]
-    WHERE 
-        ${entity.PrimaryKeys.map(k => `[${k.Name}] = @${k.CodeName}`).join(' AND ')}
+${deleteCode}
 
     SELECT ${sSelect} -- Return the primary key to indicate we successfully deleted the record
 END

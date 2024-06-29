@@ -2,7 +2,7 @@
 * ALL ENTITIES - TypeGraphQL Type Class Definition - AUTO GENERATED FILE
 * Generated Entities and Resolvers for Server
 * 
-* GENERATED: 6/24/2024, 3:48:07 PM
+* GENERATED: 6/28/2024, 9:46:17 PM
 * 
 *   >>> DO NOT MODIFY THIS FILE!!!!!!!!!!!!
 *   >>> YOUR CHANGES WILL BE OVERWRITTEN
@@ -924,6 +924,10 @@ export class Account_ {
     @Field({nullable: true}) 
     @MaxLength(8)
     LastEnrichedAt?: Date;
+          
+    @Field({nullable: true}) 
+    @MaxLength(10)
+    _mj__DeletedAt?: Date;
         
     @Field(() => [Contact_])
     ContactsArray: Contact_[]; // Link to Contacts
