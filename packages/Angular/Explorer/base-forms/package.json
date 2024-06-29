@@ -39,7 +39,7 @@
     "@progress/kendo-angular-inputs": "16.2.0",
     "@progress/kendo-angular-dateinputs": "16.2.0",
     "@progress/kendo-angular-dialog": "16.2.0",
-    "ngx-markdown": "18.0.0",
+    "ngx-markdown": "^18.0.0",
     "rxjs": "^7.8.1",
     "tslib": "^2.3.0"
   },

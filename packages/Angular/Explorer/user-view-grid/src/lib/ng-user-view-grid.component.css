@@ -86,7 +86,7 @@
 
 .overflow-y-scroll {
     overflow-y: auto;
-    max-height: 275px;
+    max-height: 300px;
 }
 
 .padding-bottom-small {
@@ -97,4 +97,62 @@
     display: flex;
     justify-content: space-between;
     padding-bottom: 5px;
+    align-items: center;
+}
+
+.btn-no-border {
+    border: none;
+    background: none;
+    color: var(--border-blue);
+    font-size: 16px;
+    font-weight: 500;
+    cursor: pointer;
+}
+
+.btn-selected {
+    font-weight: bold;
+}
+
+.list-text {
+    font-size: large;
+}
+.list-selected {
+    font-weight: bold;
+    color: var(--border-blue);
+}
+
+.btn-margin-right {
+    margin-right: 35px;
+}
+
+.divider {
+    color: lightgray
+}
+
+.search-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 0;
+}
+
+.search-bar {
+    width: 65%;
+    padding-bottom: 10px;
+}
+
+.dialog-wrapper {
+    padding: 15px 25px;
+}
+
+.btn-outline {
+    border: 2px solid var(--border-blue);
+    border-radius: 8px;
+    padding: 5px 30px;
+
+    background: none;
+    color: var(--border-blue);
+    font-size: 16px;
+    font-weight: 500;
+    cursor: pointer;
 }
