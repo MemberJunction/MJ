@@ -593,6 +593,9 @@ export class SQLCodeGenBase {
         const relatedFieldsString: string = await this.generateBaseViewRelatedFieldsString(ds, entity.Fields);
         const relatedFieldsJoinString: string = this.generateBaseViewJoins(entity.Fields);
         const permissions: string = this.generateViewPermissions(entity);
+        const whereClause: string = entity.DeleteType === 'Soft' ? `WHERE 
+    ${baseTableFirstChar}.[${EntityInfo.DeletedAtFieldName}] IS NULL
+` : '';
         return `
 ------------------------------------------------------------
 ----- BASE VIEW FOR ENTITY:      ${entity.Name}
@@ -609,7 +612,7 @@ SELECT
     ${baseTableFirstChar}.*${relatedFieldsString.length > 0 ? ',' : ''}${relatedFieldsString}
 FROM
     [${entity.SchemaName}].[${entity.BaseTable}] AS ${baseTableFirstChar}${relatedFieldsJoinString ? '\n' + relatedFieldsJoinString : ''}
-GO${permissions}
+${whereClause}GO${permissions}
     `
     }
     
@@ -893,8 +896,12 @@ ${updatedAtTrigger}
                 else
                     isFirst = false;
     
-                if (prefix !== '' && ef.IsSpecialDateField )
-                    sOutput += `GETUTCDATE()`;
+                if (prefix !== '' && ef.IsSpecialDateField) {
+                    if (ef.IsCreatedAtField || ef.IsUpdatedAtField)
+                        sOutput += `GETUTCDATE()`; // we set the inserted row value to the current date for created and updated at fields
+                    else
+                        sOutput += `NULL`; // we don't set the deleted at field on an insert, only on a delete
+                }
                 else {
                     let sVal = prefix + (prefix !== '' ? ef.CodeName : ef.Name); // if we have a prefix, then we need to use the CodeName, otherwise we use the actual field name
                     if (!prefix || prefix.length === 0)
@@ -961,7 +968,7 @@ ${deleteCode}`
         [${entity.SchemaName}].[${entity.BaseTable}]
     SET
         ${EntityInfo.DeletedAtFieldName} = GETUTCDATE()
-${deleteCode}`
+${deleteCode}        AND ${EntityInfo.DeletedAtFieldName} IS NULL -- don't update the record if it's already been deleted via a soft delete`
         }
     
         return `

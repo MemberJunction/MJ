@@ -12,7 +12,8 @@ import { BaseEntity, IEntityDataProvider, IMetadataProvider, IRunViewProvider, P
          StripStopWords, RecordDependency, RecordMergeRequest, RecordMergeResult, RecordMergeDetailResult, EntityDependency, KeyValuePair, IRunQueryProvider, RunQueryResult, PotentialDuplicateRequest, PotentialDuplicateResponse, LogStatus,
          CompositeKey,
          EntityDeleteOptions,
-         BaseEntityResult} from "@memberjunction/core";
+         BaseEntityResult,
+         Metadata} from "@memberjunction/core";
 
 import { AuditLogEntity, DuplicateRunEntity, EntityAIActionEntity, ListEntity, RecordMergeDeletionLogEntity, RecordMergeLogEntity, UserFavoriteEntity, UserViewEntityExtended, ViewInfo } from '@memberjunction/core-entities'
 import { AIEngine, EntityAIActionParams } from "@memberjunction/aiengine";
@@ -789,6 +790,10 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
     }
 
     public async MergeRecords(request: RecordMergeRequest, contextUser?: UserInfo): Promise<RecordMergeResult> {
+        const e = this.Entities.find(e=>e.Name.trim().toLowerCase() === request.EntityName.trim().toLowerCase());
+        if (!e || !e.AllowRecordMerge)
+            throw new Error(`Entity ${request.EntityName} does not allow record merging, check the AllowRecordMerge property in the entity metadata`);
+
         const result: RecordMergeResult = {
             Success: false,
             RecordMergeLogID: null,

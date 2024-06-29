@@ -516,6 +516,10 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
     }
     
     public async MergeRecords(request: RecordMergeRequest): Promise<RecordMergeResult> {
+        const e = this.Entities.find(e=>e.Name.trim().toLowerCase() === request.EntityName.trim().toLowerCase());
+        if (!e || !e.AllowRecordMerge)
+            throw new Error(`Entity ${request.EntityName} does not allow record merging, check the AllowRecordMerge property in the entity metadata`);
+
         try {
             // execute the gql query to get the dependencies
             const mutation = gql`mutation MergeRecordsMutation ($request: RecordMergeRequest!) {
@@ -886,9 +890,20 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 // no transaction just go for it
                 const d = await GraphQLDataProvider.ExecuteGQL(query, vars)
                 if (d && d[queryName]) {
+                    const data = d[queryName];
                     for (let key of entity.PrimaryKey.KeyValuePairs) {
-                        if (key.Value !== d[queryName][key.FieldName]) 
-                            throw new Error ('Missing primary key value in server Delete response: ' + key.FieldName);
+                        // we want to now compare key.Value against data[key.FieldName]
+                        let returnedVal = data[key.FieldName];
+                        let originalVal = key.Value;
+                        // we want to ignore types so we should convert numbers to strings for the comparison
+                        if (typeof originalVal === 'number')
+                            originalVal = originalVal.toString();
+                        if (typeof returnedVal === 'number')
+                            returnedVal = returnedVal.toString();
+                        // now compare the two values
+                        if (originalVal !== returnedVal) {
+                            throw new Error (`Primary key value mismatch in server Delete response. Field: ${key.FieldName}, Original: ${originalVal}, Returned: ${returnedVal}`);
+                        }
                     }
                     result.Success = true;
                     result.EndedAt = new Date(); // done processing

@@ -2,7 +2,7 @@
 * ALL ENTITIES - TypeGraphQL Type Class Definition - AUTO GENERATED FILE
 * Generated Entities and Resolvers for Server
 * 
-* GENERATED: 6/28/2024, 2:50:43 PM
+* GENERATED: 6/28/2024, 9:46:17 PM
 * 
 *   >>> DO NOT MODIFY THIS FILE!!!!!!!!!!!!
 *   >>> YOUR CHANGES WILL BE OVERWRITTEN
@@ -7384,6 +7384,10 @@ export class RecordChange_ {
     @Field() 
     @MaxLength(10)
     UpdatedAt: Date;
+          
+    @Field() 
+    @MaxLength(510)
+    Entity: string;
           
     @Field() 
     @MaxLength(200)

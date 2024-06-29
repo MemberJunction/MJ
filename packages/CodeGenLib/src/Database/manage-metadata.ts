@@ -254,15 +254,18 @@ export class ManageMetadataBase {
     * @param excludeSchemas 
     * @returns 
     */
-   public async manageEntityFields(ds: DataSource, excludeSchemas: string[], skipCreatedAtUpdatedAtFieldValidation: boolean): Promise<boolean> {
+   public async manageEntityFields(ds: DataSource, excludeSchemas: string[], skipCreatedAtUpdatedAtDeletedAtFieldValidation: boolean): Promise<boolean> {
       let bSuccess = true;
       const startTime: Date = new Date();
 
-      if (!skipCreatedAtUpdatedAtFieldValidation && !await this.ensureCreatedAtUpdatedAtFieldsExist(ds, excludeSchemas)) {
-         logError (`Error ensuring ${2000053252748} and ${EntityInfo.UpdatedAtFieldName} fields exist`);
-         bSuccess = false;
-      }
-      logStatus(`   Ensured ${EntityInfo.CreatedAtFieldName}/${EntityInfo.UpdatedAtFieldName} fields exist in ${(new Date().getTime() - startTime.getTime()) / 1000} seconds`);
+      if (!skipCreatedAtUpdatedAtDeletedAtFieldValidation) {
+         if (!await this.ensureCreatedAtUpdatedAtFieldsExist(ds, excludeSchemas) ||
+             !await this.ensureDeletedAtFieldsExist(ds, excludeSchemas)) {
+            logError (`Error ensuring ${EntityInfo.CreatedAtFieldName}, ${EntityInfo.UpdatedAtFieldName} and ${EntityInfo.DeletedAtFieldName} fields exist`);
+            bSuccess = false;
+         }
+         logStatus(`   Ensured ${EntityInfo.CreatedAtFieldName}/${EntityInfo.UpdatedAtFieldName}/${EntityInfo.DeletedAtFieldName} fields exist in ${(new Date().getTime() - startTime.getTime()) / 1000} seconds`);
+      } 
 
       const step1StartTime: Date = new Date();
       if (! await this.deleteUnneededEntityFields(ds, excludeSchemas)) {
@@ -313,6 +316,43 @@ export class ManageMetadataBase {
 
 
    /**
+    * This method ensures that the __mj_DeletedAt field exists in each entity that has DeleteType=Soft. If the field does not exist, it is created.
+    */
+   protected async ensureDeletedAtFieldsExist(ds: DataSource, excludeSchemas: string[]): Promise<boolean> {
+      try {
+         const sqlEntities = `SELECT * FROM [${mj_core_schema()}].vwEntities WHERE DeleteType='Soft' AND SchemaName NOT IN (${excludeSchemas.map(s => `'${s}'`).join(',')})`;
+         const entities = await ds.query(sqlEntities);
+         let overallResult = true;
+         if (entities.length > 0) {
+            // we have 1+ entities that need the special fields, so loop through them and ensure the fields exist
+            // validate that each entity has the __mj_DeletedAt field, and it is a DATETIMEOFFSET fields, NOT NULL and both are fields that have a DEFAULT value of GETUTCDATE().
+            for (const e of entities) {
+               const sql = `SELECT 
+                              * 
+                            FROM 
+                              INFORMATION_SCHEMA.COLUMNS
+                            WHERE 
+                              TABLE_SCHEMA='${e.SchemaName}' 
+                              AND TABLE_NAME = '${e.BaseTable}' 
+                              AND COLUMN_NAME = '${EntityInfo.DeletedAtFieldName}'`
+               const result = await ds.query(sql);
+               const deletedAt = result.find(r => r.COLUMN_NAME.trim().toLowerCase() === EntityInfo.DeletedAtFieldName.trim().toLowerCase());
+
+               // now, if we have the fields, we need to check the default value and update if necessary
+               const fieldResult = await this.ensureSpecialDateFieldExistsAndHasCorrectDefaultValue(ds, e, EntityInfo.DeletedAtFieldName, deletedAt, true)
+
+               overallResult = overallResult && fieldResult;
+            }
+         }
+         return overallResult;
+      }
+      catch (e) {
+         logError(e);
+         return false;
+      }
+   }
+
+   /**
     * This method ensures that the __mj_CreatedAt and __mj_UpdatedAt fields exist in each entity that has TrackRecordChanges set to true. If the fields do not exist, they are created.
     * If the fields exist but have incorrect default values, the default values are updated. The default value that is to be used for these special fields is GETUTCDATE() which is the
     * UTC date and time. This method is called as part of the manageEntityFields method and is not intended to be called directly.
@@ -340,8 +380,8 @@ export class ManageMetadataBase {
                const updatedAt = result.find(r => r.COLUMN_NAME.trim().toLowerCase() === EntityInfo.UpdatedAtFieldName.trim().toLowerCase());
 
                // now, if we have the fields, we need to check the default value and update if necessary
-               const fieldResult = await this.ensureSpecialDateFieldExistsAndHasCorrectDefaultValue(ds, e, EntityInfo.CreatedAtFieldName, createdAt) &&
-                                   await this.ensureSpecialDateFieldExistsAndHasCorrectDefaultValue(ds, e, EntityInfo.UpdatedAtFieldName, updatedAt);
+               const fieldResult = await this.ensureSpecialDateFieldExistsAndHasCorrectDefaultValue(ds, e, EntityInfo.CreatedAtFieldName, createdAt, false) &&
+                                   await this.ensureSpecialDateFieldExistsAndHasCorrectDefaultValue(ds, e, EntityInfo.UpdatedAtFieldName, updatedAt, false);
 
                overallResult = overallResult && fieldResult;
             }
@@ -361,31 +401,37 @@ export class ManageMetadataBase {
     * @param fieldName 
     * @param currentFieldData 
     */
-   protected async ensureSpecialDateFieldExistsAndHasCorrectDefaultValue(ds: DataSource, entity: any, fieldName: string, currentFieldData: any): Promise<boolean> {
+   protected async ensureSpecialDateFieldExistsAndHasCorrectDefaultValue(ds: DataSource, entity: any, fieldName: string, currentFieldData: any, allowNull: boolean): Promise<boolean> {
       if (!currentFieldData) {
          // field doesn't exist, let's create it
-         const sql = `ALTER TABLE [${entity.SchemaName}].[${entity.BaseTable}] ADD ${fieldName} DATETIMEOFFSET NOT NULL DEFAULT GETUTCDATE()`;
+         const sql = `ALTER TABLE [${entity.SchemaName}].[${entity.BaseTable}] ADD ${fieldName} DATETIMEOFFSET ${allowNull ? 'NULL' : 'NOT NULL DEFAULT GETUTCDATE()'}`;
          await ds.query(sql);
       }
       else {
          // field does exist, let's first check the data type/nullability
-         if (currentFieldData.DATA_TYPE.trim().toLowerCase() !== 'datetimeoffset' || currentFieldData.IS_NULLABLE.trim().toLowerCase() !== 'no') {
-            // the column is the wrong type, so let's update it, first removing the default constraint, then 
+         if ( currentFieldData.DATA_TYPE.trim().toLowerCase() !== 'datetimeoffset' || 
+             (currentFieldData.IS_NULLABLE.trim().toLowerCase() !== 'no' && !allowNull) || 
+             (currentFieldData.IS_NULLABLE.trim().toLowerCase() === 'no' && allowNull)) {
+            // the column is the wrong type, or has wrong nullability attribute, so let's update it, first removing the default constraint, then 
             // modifying the column, and finally adding the default constraint back in.
             await this.dropExistingDefaultConstraint(ds, entity, fieldName);
 
-            const sql = `ALTER TABLE [${entity.SchemaName}].[${entity.BaseTable}] ALTER COLUMN ${fieldName} DATETIMEOFFSET NOT NULL`;
+            const sql = `ALTER TABLE [${entity.SchemaName}].[${entity.BaseTable}] ALTER COLUMN ${fieldName} DATETIMEOFFSET ${allowNull ? 'NULL' : 'NOT NULL'}`;
             await ds.query(sql);
 
-            await this.createDefaultConstraintForSpecialDateField(ds, entity, fieldName);
+            if (!allowNull)
+               await this.createDefaultConstraintForSpecialDateField(ds, entity, fieldName);
          }
          else {
-            // if we get here that means the column is the correct type and nullability, so now let's check the default value  
-            const defaultValue = currentFieldData.COLUMN_DEFAULT;
-            const realDefaultValue = ExtractActualDefaultValue(defaultValue);
-            if (realDefaultValue.trim().toLowerCase() !== 'getutcdate()') {
-               await this.dropAndCreateDefaultConstraintForSpecialDateField(ds, entity, fieldName);
-            }
+            // if we get here that means the column is the correct type and nullability, so now let's check the default value, but we only do that if we are dealing with a
+            // field that is NOT NULL
+            if (!allowNull) {
+               const defaultValue = currentFieldData.COLUMN_DEFAULT;
+               const realDefaultValue = ExtractActualDefaultValue(defaultValue);
+               if (realDefaultValue.trim().toLowerCase() !== 'getutcdate()') {
+                  await this.dropAndCreateDefaultConstraintForSpecialDateField(ds, entity, fieldName);
+               }
+            } 
          }
       }
       // if we get here, we're good

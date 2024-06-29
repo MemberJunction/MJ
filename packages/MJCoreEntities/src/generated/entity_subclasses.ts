@@ -6569,6 +6569,15 @@ import { RegisterClass } from "@memberjunction/global";
         }
         
         /**
+        * * Field Name: Entity
+        * * Display Name: Entity
+        * * SQL Data Type: nvarchar(255)
+        */
+        get Entity(): string {  
+            return this.Get('Entity');
+        }
+        
+        /**
         * * Field Name: User
         * * Display Name: User
         * * SQL Data Type: nvarchar(100)

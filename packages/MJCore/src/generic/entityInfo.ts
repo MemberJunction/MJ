@@ -427,11 +427,11 @@ export class EntityFieldInfo extends BaseInfo {
     }
 
     /**
-     * Helper method that returns true if the field is one of the special reserved MJ date fields for tracking CreatedAt and UpdatedAt timestamps. This is only used when the 
-     * entity has TrackRecordChanges=1
+     * Helper method that returns true if the field is one of the special reserved MJ date fields for tracking CreatedAt and UpdatedAt timestamps as well as the DeletedAt timestamp used for entities that
+     * have DeleteType=Soft. This is only used when the entity has TrackRecordChanges=1 or for entities where DeleteType=Soft
      */
     get IsSpecialDateField(): boolean {
-        return this.IsCreatedAtField || this.IsUpdatedAtField;
+        return this.IsCreatedAtField || this.IsUpdatedAtField || this.IsDeletedAtField;
     }
 
     /**
@@ -445,6 +445,13 @@ export class EntityFieldInfo extends BaseInfo {
      */
     get IsUpdatedAtField(): boolean {
         return this.Name.trim().toLowerCase() === EntityInfo.UpdatedAtFieldName.trim().toLowerCase();
+    }
+
+    /**
+     * Returns true if the field is the DeletedAt field, a special field that is used to track the deletion date of a record. This is only used when the entity has DeleteType=Soft
+     */
+    get IsDeletedAtField(): boolean {
+        return this.Name.trim().toLowerCase() === EntityInfo.DeletedAtFieldName.trim().toLowerCase();
     }
 
     /**

@@ -960,6 +960,15 @@ import { RegisterClass } from "@memberjunction/global";
         set LastEnrichedAt(value: Date | null) {
             this.Set('LastEnrichedAt', value);
         }
+        /**
+        * * Field Name: __mj_DeletedAt
+        * * Display Name: __mj _Deleted At
+        * * SQL Data Type: datetimeoffset
+        */
+        get __mj_DeletedAt(): Date | null {  
+            return this.Get('__mj_DeletedAt');
+        }
+        
 
     }
         
