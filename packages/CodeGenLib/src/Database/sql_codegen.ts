@@ -733,18 +733,40 @@ ${whereClause}GO${permissions}
         const efString: string = this.createEntityFieldsParamString(entity.Fields, !entity.FirstPrimaryKey.AutoIncrement);
         const permissions: string = this.generateSPPermissions(entity, spName, SPType.Create);
     
-        let primaryKeyInsertValue = '';
+        let preInsertCode = '';
+        let outputCode = '';
         let selectInsertedRecord = '';
         let additionalFieldList = '';
         let additionalValueList = '';
         if (entity.FirstPrimaryKey.AutoIncrement) {
             selectInsertedRecord = `SELECT * FROM [${entity.SchemaName}].[${entity.BaseView}] WHERE [${entity.FirstPrimaryKey.Name}] = SCOPE_IDENTITY()`;
         } else if (entity.FirstPrimaryKey.Type.toLowerCase().trim() === 'uniqueidentifier') {
-            primaryKeyInsertValue = `DECLARE @newId UNIQUEIDENTIFIER = NEWID();\n    SET @${entity.FirstPrimaryKey.Name} = @newId;\n`;
-            additionalFieldList = ',\n            [' + entity.FirstPrimaryKey.CodeName + ']';
-            additionalValueList = ',\n            @newId';
-    
-            selectInsertedRecord = `SELECT * FROM [${entity.SchemaName}].[${entity.BaseView}] WHERE [${entity.FirstPrimaryKey.Name}] = @newId`;
+            // our primary key is a uniqueidentifier. Two scenarios exist for this:
+            // 1) The default value is specified in the database (usually either NEWID() or NEWSEQUENTIALID()). 
+            // 2) No default value is specified, so we need to generate a new GUID in the stored procedure using NEWID() --- NewSequentialID() is not allowed in a stored procedure, only usable as a default value.
+
+            // so, first check to see if there is a default value for the field or not
+            const hasDefaultValue = entity.FirstPrimaryKey.DefaultValue && entity.FirstPrimaryKey.DefaultValue.trim().length > 0;
+            // if we have a default value, then we do NOT want to insert a new value, let the database use the default
+            if (hasDefaultValue) {
+                // in this situation, we DO have a default value, so we do NOT insert a new value, we let the database use the default
+                // however, we need to do some extra preprocessing to use the OUTPUT from the INSERT statement and return the record that was
+                // just created, that is how we get the newly created GUID that was the default value
+                preInsertCode = `DECLARE @InsertedRow TABLE ([${entity.FirstPrimaryKey.Name}] UNIQUEIDENTIFIER)`;
+                outputCode = `OUTPUT INSERTED.[${entity.FirstPrimaryKey.Name}] INTO @InsertedRow
+    `
+                selectInsertedRecord = `SELECT * FROM [${entity.SchemaName}].[${entity.BaseView}] WHERE [${entity.FirstPrimaryKey.Name}] = (SELECT [${entity.FirstPrimaryKey.Name}] FROM @InsertedRow)`;    
+            }
+            else {
+                // we have no default value, so we use NEWID() to generate a new GUID and we manually insert it into the table
+                // as part of the sproc
+                preInsertCode = `DECLARE @newId UNIQUEIDENTIFIER = NEWID();\n    SET @${entity.FirstPrimaryKey.Name} = @newId;\n`;
+
+                additionalFieldList = ',\n            [' + entity.FirstPrimaryKey.Name + ']';
+                additionalValueList = ',\n            @newId';
+        
+                selectInsertedRecord = `SELECT * FROM [${entity.SchemaName}].[${entity.BaseView}] WHERE [${entity.FirstPrimaryKey.Name}] = @newId`;    
+            }
         } else {
             selectInsertedRecord = `SELECT * FROM [${entity.SchemaName}].[${entity.BaseView}] WHERE `;
             let isFirst = true;
@@ -768,13 +790,13 @@ CREATE PROCEDURE [${entity.SchemaName}].[${spName}]
 AS
 BEGIN
     SET NOCOUNT ON;
-    ${primaryKeyInsertValue}
+    ${preInsertCode}
     INSERT INTO 
     [${entity.SchemaName}].[${entity.BaseTable}]
         (
             ${this.createEntityFieldsInsertString(entity, entity.Fields, '')}${additionalFieldList}
         )
-    VALUES
+    ${outputCode}VALUES
         (
             ${this.createEntityFieldsInsertString(entity, entity.Fields, '@')}${additionalValueList}
         )

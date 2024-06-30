@@ -889,10 +889,10 @@ export class ManageMetadataBase {
                   parsedValues.reverse();
 
                   // we have parsed values from the check constraint, so sync them with the entity field values
-                  await this.syncEntityFieldValues(ds, r.EntityID, r.ColumnName, parsedValues);
+                  await this.syncEntityFieldValues(ds, r.EntityFieldID, parsedValues);
                   
                   // finally, make sure the ValueListType column within the EntityField table is set to "List" because for check constraints we only allow the values specified in the list.
-                  await ds.query(`UPDATE [${mj_core_schema()}].EntityField SET ValueListType='List' WHERE EntityID=${r.EntityID} AND Name='${r.ColumnName}'`)
+                  await ds.query(`UPDATE [${mj_core_schema()}].EntityField SET ValueListType='List' WHERE ID='${r.EntityFieldID}'`)
                }
             }
          }
@@ -906,10 +906,10 @@ export class ManageMetadataBase {
       }
    }
    
-   protected async syncEntityFieldValues(ds: DataSource, entityID: number, entityFieldName: string, possibleValues: string[]): Promise<boolean> {
+   protected async syncEntityFieldValues(ds: DataSource, entityFieldID: number, possibleValues: string[]): Promise<boolean> {
       try {
          // first, get a list of all of the existing entity field values for the field already in the database
-         const sSQL = `SELECT * FROM [${mj_core_schema()}].EntityFieldValue WHERE EntityID=${entityID} AND EntityFieldName = '${entityFieldName}'`;
+         const sSQL = `SELECT * FROM [${mj_core_schema()}].EntityFieldValue WHERE EntityFieldID= '${entityFieldID}'`;
          const existingValues = await ds.query(sSQL);
          // now, loop through the possible values and add any that are not already in the database
    
@@ -919,7 +919,7 @@ export class ManageMetadataBase {
             for (const ev of existingValues) {
                if (!possibleValues.find(v => v === ev.Value)) {
                   // delete the value from the database
-                  const sSQLDelete = `DELETE FROM [${mj_core_schema()}].EntityFieldValue WHERE ID=${ev.ID}`;
+                  const sSQLDelete = `DELETE FROM [${mj_core_schema()}].EntityFieldValue WHERE ID='${ev.ID}'`;
                   await ds.query(sSQLDelete);
                   numRemoved++;
                }
@@ -931,9 +931,9 @@ export class ManageMetadataBase {
                if (!existingValues.find(ev => ev.Value === v)) {
                   // add the value to the database
                   const sSQLInsert = `INSERT INTO [${mj_core_schema()}].EntityFieldValue 
-                                       (EntityID, EntityFieldName, Sequence, Value, Code) 
+                                       (EntityFieldID, Sequence, Value, Code) 
                                     VALUES 
-                                       (${entityID}, '${entityFieldName}', ${1 + possibleValues.indexOf(v)}, '${v}', '${v}')`;
+                                       ('${entityFieldID}', ${1 + possibleValues.indexOf(v)}, '${v}', '${v}')`;
                   await ds.query(sSQLInsert);
                   numAdded++;
                }
@@ -945,7 +945,7 @@ export class ManageMetadataBase {
                const ev = existingValues.find(ev => ev.Value === v);
                if (ev) {
                   // update the sequence to match the order in the possible values list
-                  const sSQLUpdate = `UPDATE [${mj_core_schema()}].EntityFieldValue SET Sequence=${1 + possibleValues.indexOf(v)} WHERE ID=${ev.ID}`;
+                  const sSQLUpdate = `UPDATE [${mj_core_schema()}].EntityFieldValue SET Sequence=${1 + possibleValues.indexOf(v)} WHERE ID='${ev.ID}'`;
                   await ds.query(sSQLUpdate);
                   numUpdated++;
                }

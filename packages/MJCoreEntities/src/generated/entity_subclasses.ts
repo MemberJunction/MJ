@@ -95,6 +95,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_CreatedAt
         * * Display Name: __mj _Created At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_CreatedAt(): Date {  
             return this.Get('__mj_CreatedAt');
@@ -104,6 +105,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_UpdatedAt
         * * Display Name: __mj _Updated At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_UpdatedAt(): Date {  
             return this.Get('__mj_UpdatedAt');
@@ -251,6 +253,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_CreatedAt
         * * Display Name: __mj _Created At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_CreatedAt(): Date {  
             return this.Get('__mj_CreatedAt');
@@ -260,6 +263,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_UpdatedAt
         * * Display Name: __mj _Updated At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_UpdatedAt(): Date {  
             return this.Get('__mj_UpdatedAt');
@@ -269,7 +273,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: FirstLast
         * * Display Name: First Last
         * * SQL Data Type: nvarchar(81)
-        * * Default Value: getutcdate()
         */
         get FirstLast(): string | null {  
             return this.Get('FirstLast');
@@ -279,7 +282,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: Supervisor
         * * Display Name: Supervisor
         * * SQL Data Type: nvarchar(81)
-        * * Default Value: getutcdate()
         */
         get Supervisor(): string | null {  
             return this.Get('Supervisor');
@@ -392,6 +394,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_CreatedAt(): Date {  
             return this.Get('__mj_CreatedAt');
@@ -401,6 +404,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_UpdatedAt(): Date {  
             return this.Get('__mj_UpdatedAt');
@@ -409,7 +413,6 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: Entity
         * * SQL Data Type: nvarchar(255)
-        * * Default Value: getutcdate()
         */
         get Entity(): string {  
             return this.Get('Entity');
@@ -419,7 +422,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: EntityBaseTable
         * * Display Name: Entity Base Table
         * * SQL Data Type: nvarchar(255)
-        * * Default Value: getutcdate()
         */
         get EntityBaseTable(): string {  
             return this.Get('EntityBaseTable');
@@ -537,6 +539,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_CreatedAt(): Date {  
             return this.Get('__mj_CreatedAt');
@@ -546,6 +549,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_UpdatedAt(): Date {  
             return this.Get('__mj_UpdatedAt');
@@ -632,6 +636,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_CreatedAt
         * * Display Name: __mj _Created At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_CreatedAt(): Date {  
             return this.Get('__mj_CreatedAt');
@@ -641,6 +646,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_UpdatedAt
         * * Display Name: __mj _Updated At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_UpdatedAt(): Date {  
             return this.Get('__mj_UpdatedAt');
@@ -650,7 +656,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: Role
         * * Display Name: Role
         * * SQL Data Type: nvarchar(50)
-        * * Default Value: getutcdate()
         */
         get Role(): string {  
             return this.Get('Role');
@@ -737,6 +742,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_CreatedAt
         * * Display Name: __mj _Created At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_CreatedAt(): Date {  
             return this.Get('__mj_CreatedAt');
@@ -746,6 +752,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_UpdatedAt
         * * Display Name: __mj _Updated At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_UpdatedAt(): Date {  
             return this.Get('__mj_UpdatedAt');
@@ -755,7 +762,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: Skill
         * * Display Name: Skill
         * * SQL Data Type: nvarchar(50)
-        * * Default Value: getutcdate()
         */
         get Skill(): string {  
             return this.Get('Skill');
@@ -850,6 +856,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_CreatedAt
         * * Display Name: __mj _Created At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_CreatedAt(): Date {  
             return this.Get('__mj_CreatedAt');
@@ -859,6 +866,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_UpdatedAt
         * * Display Name: __mj _Updated At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_UpdatedAt(): Date {  
             return this.Get('__mj_UpdatedAt');
@@ -955,6 +963,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_CreatedAt(): Date {  
             return this.Get('__mj_CreatedAt');
@@ -964,6 +973,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_UpdatedAt(): Date {  
             return this.Get('__mj_UpdatedAt');
@@ -973,7 +983,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: Parent
         * * Display Name: Parent
         * * SQL Data Type: nvarchar(50)
-        * * Default Value: getutcdate()
         */
         get Parent(): string | null {  
             return this.Get('Parent');
@@ -1256,6 +1265,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_CreatedAt(): Date {  
             return this.Get('__mj_CreatedAt');
@@ -1265,6 +1275,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_UpdatedAt(): Date {  
             return this.Get('__mj_UpdatedAt');
@@ -1416,6 +1427,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: IsExternalSystemReadOnly
         * * Display Name: Is External System Read Only
         * * SQL Data Type: bit
+        * * Default Value: 0
         */
         get IsExternalSystemReadOnly(): boolean {  
             return this.Get('IsExternalSystemReadOnly');
@@ -1438,7 +1450,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: ClientSecret
         * * Display Name: Client Secret
         * * SQL Data Type: nvarchar(255)
-        * * Default Value: 0
         */
         get ClientSecret(): string | null {  
             return this.Get('ClientSecret');
@@ -1461,6 +1472,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_CreatedAt(): Date {  
             return this.Get('__mj_CreatedAt');
@@ -1470,6 +1482,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_UpdatedAt(): Date {  
             return this.Get('__mj_UpdatedAt');
@@ -1479,7 +1492,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CompanyID
         * * Display Name: Company ID
         * * SQL Data Type: int
-        * * Default Value: getutcdate()
         */
         get CompanyID(): number {  
             return this.Get('CompanyID');
@@ -1489,7 +1501,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: IntegrationID
         * * Display Name: Integration ID
         * * SQL Data Type: int
-        * * Default Value: getutcdate()
         */
         get IntegrationID(): number {  
             return this.Get('IntegrationID');
@@ -1574,7 +1585,7 @@ import { RegisterClass } from "@memberjunction/global";
     export class EntityFieldEntity extends BaseEntity {
         /**
         * Loads the Entity Fields record from the database
-        * @param ID: number - primary key value to load the Entity Fields record.
+        * @param ID: string - primary key value to load the Entity Fields record.
         * @param EntityRelationshipsToLoad - (optional) the relationships to load
         * @returns {Promise<boolean>} - true if successful, false otherwise
         * @public
@@ -1583,7 +1594,7 @@ import { RegisterClass } from "@memberjunction/global";
         * @method
         * @override
         */      
-        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+        public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
             const compositeKey: CompositeKey = new CompositeKey();
             compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -1591,9 +1602,10 @@ import { RegisterClass } from "@memberjunction/global";
         
             /**
         * * Field Name: ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
         */
-        get ID(): number {  
+        get ID(): string {  
             return this.Get('ID');
         }
         
@@ -2997,6 +3009,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_CreatedAt
         * * Display Name: __mj _Created At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_CreatedAt(): Date {  
             return this.Get('__mj_CreatedAt');
@@ -3006,6 +3019,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_UpdatedAt
         * * Display Name: __mj _Updated At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_UpdatedAt(): Date {  
             return this.Get('__mj_UpdatedAt');
@@ -3015,7 +3029,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: FirstLast
         * * Display Name: First Last
         * * SQL Data Type: nvarchar(101)
-        * * Default Value: getutcdate()
         */
         get FirstLast(): string | null {  
             return this.Get('FirstLast');
@@ -3025,7 +3038,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: EmployeeFirstLast
         * * Display Name: Employee First Last
         * * SQL Data Type: nvarchar(81)
-        * * Default Value: getutcdate()
         */
         get EmployeeFirstLast(): string | null {  
             return this.Get('EmployeeFirstLast');
@@ -3908,6 +3920,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_CreatedAt
         * * Display Name: __mj _Created At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_CreatedAt(): Date {  
             return this.Get('__mj_CreatedAt');
@@ -3917,6 +3930,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_UpdatedAt
         * * Display Name: __mj _Updated At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_UpdatedAt(): Date {  
             return this.Get('__mj_UpdatedAt');
@@ -3926,7 +3940,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UserName
         * * Display Name: User Name
         * * SQL Data Type: nvarchar(100)
-        * * Default Value: getutcdate()
         */
         get UserName(): string {  
             return this.Get('UserName');
@@ -3936,7 +3949,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UserFirstLast
         * * Display Name: User First Last
         * * SQL Data Type: nvarchar(101)
-        * * Default Value: getutcdate()
         */
         get UserFirstLast(): string | null {  
             return this.Get('UserFirstLast');
@@ -4393,6 +4405,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedBy
         * * Display Name: Created By
         * * SQL Data Type: nvarchar(50)
+        * * Default Value: suser_name()
         */
         get CreatedBy(): string | null {  
             return this.Get('CreatedBy');
@@ -4403,7 +4416,6 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: Status
         * * SQL Data Type: nvarchar(10)
-        * * Default Value: suser_name()
         */
         get Status(): string | null {  
             return this.Get('Status');
@@ -4435,6 +4447,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_CreatedAt(): Date {  
             return this.Get('__mj_CreatedAt');
@@ -4540,6 +4553,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_CreatedAt
         * * Display Name: __mj _Created At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_CreatedAt(): Date {  
             return this.Get('__mj_CreatedAt');
@@ -4549,6 +4563,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_UpdatedAt
         * * Display Name: __mj _Updated At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_UpdatedAt(): Date {  
             return this.Get('__mj_UpdatedAt');
@@ -4646,6 +4661,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_CreatedAt
         * * Display Name: __mj _Created At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_CreatedAt(): Date {  
             return this.Get('__mj_CreatedAt');
@@ -4655,6 +4671,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_UpdatedAt
         * * Display Name: __mj _Updated At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_UpdatedAt(): Date {  
             return this.Get('__mj_UpdatedAt');
@@ -4663,7 +4680,6 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: Application
         * * SQL Data Type: nvarchar(50)
-        * * Default Value: getutcdate()
         */
         get Application(): string {  
             return this.Get('Application');
@@ -4672,7 +4688,6 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: Entity
         * * SQL Data Type: nvarchar(255)
-        * * Default Value: getutcdate()
         */
         get Entity(): string {  
             return this.Get('Entity');
@@ -4879,6 +4894,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_CreatedAt
         * * Display Name: __mj _Created At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_CreatedAt(): Date {  
             return this.Get('__mj_CreatedAt');
@@ -4888,6 +4904,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_UpdatedAt
         * * Display Name: __mj _Updated At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_UpdatedAt(): Date {  
             return this.Get('__mj_UpdatedAt');
@@ -4897,7 +4914,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: Entity
         * * Display Name: Entity
         * * SQL Data Type: nvarchar(255)
-        * * Default Value: getutcdate()
         */
         get Entity(): string {  
             return this.Get('Entity');
@@ -4907,7 +4923,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: RoleSQLName
         * * Display Name: Role SQLName
         * * SQL Data Type: nvarchar(250)
-        * * Default Value: getutcdate()
         */
         get RoleSQLName(): string | null {  
             return this.Get('RoleSQLName');
@@ -5467,6 +5482,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_CreatedAt(): Date {  
             return this.Get('__mj_CreatedAt');
@@ -5476,6 +5492,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_UpdatedAt(): Date {  
             return this.Get('__mj_UpdatedAt');
@@ -5485,7 +5502,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: Entity
         * * Display Name: Entity
         * * SQL Data Type: nvarchar(255)
-        * * Default Value: getutcdate()
         */
         get Entity(): string {  
             return this.Get('Entity');
@@ -5495,7 +5511,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: User
         * * Display Name: User
         * * SQL Data Type: nvarchar(100)
-        * * Default Value: getutcdate()
         */
         get User(): string {  
             return this.Get('User');
@@ -6118,6 +6133,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: AutoRunEnabled
         * * Display Name: Auto Run Enabled
         * * SQL Data Type: bit
+        * * Default Value: 0
         * * Description: If set to 1, the workflow will be run automatically on the interval specified by the AutoRunIntervalType and AutoRunInterval fields
         */
         get AutoRunEnabled(): boolean {  
@@ -6150,7 +6166,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: AutoRunInterval
         * * Display Name: Auto Run Interval
         * * SQL Data Type: int
-        * * Default Value: 0
         * * Description: The interval, denominated in the units specified in the AutoRunIntervalUnits column, between auto runs of this workflow.
         */
         get AutoRunInterval(): number | null {  
@@ -6175,6 +6190,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_CreatedAt(): Date {  
             return this.Get('__mj_CreatedAt');
@@ -6184,6 +6200,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_UpdatedAt(): Date {  
             return this.Get('__mj_UpdatedAt');
@@ -6193,7 +6210,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: AutoRunIntervalMinutes
         * * Display Name: Auto Run Interval Minutes
         * * SQL Data Type: int
-        * * Default Value: getutcdate()
         */
         get AutoRunIntervalMinutes(): number | null {  
             return this.Get('AutoRunIntervalMinutes');
@@ -6297,6 +6313,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_CreatedAt(): Date {  
             return this.Get('__mj_CreatedAt');
@@ -6306,6 +6323,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_UpdatedAt(): Date {  
             return this.Get('__mj_UpdatedAt');
@@ -6664,6 +6682,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_CreatedAt
         * * Display Name: __mj _Created At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_CreatedAt(): Date {  
             return this.Get('__mj_CreatedAt');
@@ -6673,6 +6692,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_UpdatedAt
         * * Display Name: __mj _Updated At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_UpdatedAt(): Date {  
             return this.Get('__mj_UpdatedAt');
@@ -6682,7 +6702,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: User
         * * Display Name: User
         * * SQL Data Type: nvarchar(100)
-        * * Default Value: getutcdate()
         */
         get User(): string {  
             return this.Get('User');
@@ -6790,6 +6809,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_CreatedAt
         * * Display Name: __mj _Created At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_CreatedAt(): Date {  
             return this.Get('__mj_CreatedAt');
@@ -6799,6 +6819,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_UpdatedAt
         * * Display Name: __mj _Updated At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_UpdatedAt(): Date {  
             return this.Get('__mj_UpdatedAt');
@@ -6958,6 +6979,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_CreatedAt(): Date {  
             return this.Get('__mj_CreatedAt');
@@ -6967,6 +6989,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_UpdatedAt(): Date {  
             return this.Get('__mj_UpdatedAt');
@@ -6976,7 +6999,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: User
         * * Display Name: User
         * * SQL Data Type: nvarchar(100)
-        * * Default Value: getutcdate()
         */
         get User(): string {  
             return this.Get('User');
@@ -6986,7 +7008,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: Entity
         * * Display Name: Entity
         * * SQL Data Type: nvarchar(255)
-        * * Default Value: getutcdate()
         */
         get Entity(): string | null {  
             return this.Get('Entity');
@@ -7119,6 +7140,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_CreatedAt
         * * Display Name: __mj _Created At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_CreatedAt(): Date {  
             return this.Get('__mj_CreatedAt');
@@ -7128,6 +7150,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_UpdatedAt
         * * Display Name: __mj _Updated At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_UpdatedAt(): Date {  
             return this.Get('__mj_UpdatedAt');
@@ -7137,7 +7160,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: Parent
         * * Display Name: Parent
         * * SQL Data Type: nvarchar(100)
-        * * Default Value: getutcdate()
         */
         get Parent(): string | null {  
             return this.Get('Parent');
@@ -7252,6 +7274,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_CreatedAt(): Date {  
             return this.Get('__mj_CreatedAt');
@@ -7261,6 +7284,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_UpdatedAt(): Date {  
             return this.Get('__mj_UpdatedAt');
@@ -7381,6 +7405,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_CreatedAt
         * * Display Name: __mj _Created At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_CreatedAt(): Date {  
             return this.Get('__mj_CreatedAt');
@@ -7390,6 +7415,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_UpdatedAt
         * * Display Name: __mj _Updated At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_UpdatedAt(): Date {  
             return this.Get('__mj_UpdatedAt');
@@ -7399,7 +7425,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: Parent
         * * Display Name: Parent
         * * SQL Data Type: nvarchar(50)
-        * * Default Value: getutcdate()
         */
         get Parent(): string | null {  
             return this.Get('Parent');
@@ -7422,7 +7447,7 @@ import { RegisterClass } from "@memberjunction/global";
     export class EntityFieldValueEntity extends BaseEntity {
         /**
         * Loads the Entity Field Values record from the database
-        * @param ID: number - primary key value to load the Entity Field Values record.
+        * @param ID: string - primary key value to load the Entity Field Values record.
         * @param EntityRelationshipsToLoad - (optional) the relationships to load
         * @returns {Promise<boolean>} - true if successful, false otherwise
         * @public
@@ -7431,7 +7456,7 @@ import { RegisterClass } from "@memberjunction/global";
         * @method
         * @override
         */      
-        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+        public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
             const compositeKey: CompositeKey = new CompositeKey();
             compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -7452,36 +7477,23 @@ import { RegisterClass } from "@memberjunction/global";
             /**
         * * Field Name: ID
         * * Display Name: ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
         */
-        get ID(): number {  
+        get ID(): string {  
             return this.Get('ID');
         }
         
         /**
-        * * Field Name: EntityID
-        * * Display Name: Entity ID
-        * * SQL Data Type: int
-        * * Related Entity/Foreign Key: Entity Fields (vwEntityFields.EntityID)
+        * * Field Name: EntityFieldID
+        * * Display Name: Entity Field ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Entity Fields (vwEntityFields.ID)
         */
-        get EntityID(): number {  
-            return this.Get('EntityID');
+        get EntityFieldID(): string {  
+            return this.Get('EntityFieldID');
         }
-        set EntityID(value: number) {
-            this.Set('EntityID', value);
-        }
-        /**
-        * * Field Name: EntityFieldName
-        * * Display Name: Entity Field Name
-        * * SQL Data Type: nvarchar(255)
-        * * Related Entity/Foreign Key: Entity Fields (vwEntityFields.Name)
-        */
-        get EntityFieldName(): string {  
-            return this.Get('EntityFieldName');
-        }
-        set EntityFieldName(value: string) {
-            this.Set('EntityFieldName', value);
-        }
+        
         /**
         * * Field Name: Sequence
         * * Display Name: Sequence
@@ -7530,6 +7542,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_CreatedAt
         * * Display Name: __mj _Created At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_CreatedAt(): Date {  
             return this.Get('__mj_CreatedAt');
@@ -7539,6 +7552,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_UpdatedAt
         * * Display Name: __mj _Updated At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_UpdatedAt(): Date {  
             return this.Get('__mj_UpdatedAt');
@@ -7548,7 +7562,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: EntityField
         * * Display Name: Entity Field
         * * SQL Data Type: nvarchar(255)
-        * * Default Value: getutcdate()
         */
         get EntityField(): string {  
             return this.Get('EntityField');
@@ -7558,10 +7571,18 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: Entity
         * * Display Name: Entity
         * * SQL Data Type: nvarchar(255)
-        * * Default Value: getutcdate()
         */
         get Entity(): string {  
             return this.Get('Entity');
+        }
+        
+        /**
+        * * Field Name: EntityID
+        * * Display Name: Entity ID
+        * * SQL Data Type: int
+        */
+        get EntityID(): number {  
+            return this.Get('EntityID');
         }
         
 
@@ -7713,6 +7734,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_CreatedAt(): Date {  
             return this.Get('__mj_CreatedAt');
@@ -7722,6 +7744,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_UpdatedAt(): Date {  
             return this.Get('__mj_UpdatedAt');
@@ -7731,7 +7754,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: AIModelType
         * * Display Name: AIModel Type
         * * SQL Data Type: nvarchar(50)
-        * * Default Value: getutcdate()
         */
         get AIModelType(): string {  
             return this.Get('AIModelType');
@@ -7840,6 +7862,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_CreatedAt(): Date {  
             return this.Get('__mj_CreatedAt');
@@ -7849,6 +7872,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_UpdatedAt(): Date {  
             return this.Get('__mj_UpdatedAt');
@@ -7858,7 +7882,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: DefaultModel
         * * Display Name: Default Model
         * * SQL Data Type: nvarchar(50)
-        * * Default Value: getutcdate()
         */
         get DefaultModel(): string | null {  
             return this.Get('DefaultModel');
@@ -7946,6 +7969,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_CreatedAt(): Date {  
             return this.Get('__mj_CreatedAt');
@@ -7955,6 +7979,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_UpdatedAt(): Date {  
             return this.Get('__mj_UpdatedAt');
@@ -7964,7 +7989,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: AIModel
         * * Display Name: AIModel
         * * SQL Data Type: nvarchar(50)
-        * * Default Value: getutcdate()
         */
         get AIModel(): string {  
             return this.Get('AIModel');
@@ -7974,7 +7998,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: AIAction
         * * Display Name: AIAction
         * * SQL Data Type: nvarchar(50)
-        * * Default Value: getutcdate()
         */
         get AIAction(): string {  
             return this.Get('AIAction');
@@ -8687,6 +8710,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_CreatedAt(): Date {  
             return this.Get('__mj_CreatedAt');
@@ -8696,6 +8720,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_UpdatedAt(): Date {  
             return this.Get('__mj_UpdatedAt');
@@ -8705,7 +8730,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: QueueType
         * * Display Name: Queue Type
         * * SQL Data Type: nvarchar(50)
-        * * Default Value: getutcdate()
         */
         get QueueType(): string {  
             return this.Get('QueueType');
@@ -9605,6 +9629,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_CreatedAt(): Date {  
             return this.Get('__mj_CreatedAt');
@@ -9614,6 +9639,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_UpdatedAt(): Date {  
             return this.Get('__mj_UpdatedAt');
@@ -9623,7 +9649,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: Category
         * * Display Name: Category
         * * SQL Data Type: nvarchar(100)
-        * * Default Value: getutcdate()
         */
         get Category(): string | null {  
             return this.Get('Category');
@@ -9633,7 +9658,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: User
         * * Display Name: User
         * * SQL Data Type: nvarchar(100)
-        * * Default Value: getutcdate()
         */
         get User(): string {  
             return this.Get('User');
@@ -9782,6 +9806,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_CreatedAt(): Date {  
             return this.Get('__mj_CreatedAt');
@@ -9801,7 +9826,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: Report
         * * Display Name: Report
         * * SQL Data Type: nvarchar(255)
-        * * Default Value: getutcdate()
         */
         get Report(): string {  
             return this.Get('Report');
@@ -9941,6 +9965,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_CreatedAt
         * * Display Name: __mj _Created At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_CreatedAt(): Date {  
             return this.Get('__mj_CreatedAt');
@@ -9950,6 +9975,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_UpdatedAt
         * * Display Name: __mj _Updated At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_UpdatedAt(): Date {  
             return this.Get('__mj_UpdatedAt');
@@ -9959,7 +9985,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: Entity
         * * Display Name: Entity
         * * SQL Data Type: nvarchar(255)
-        * * Default Value: getutcdate()
         */
         get Entity(): string | null {  
             return this.Get('Entity');
@@ -10312,6 +10337,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_CreatedAt(): Date {  
             return this.Get('__mj_CreatedAt');
@@ -10321,6 +10347,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_UpdatedAt(): Date {  
             return this.Get('__mj_UpdatedAt');
@@ -10330,7 +10357,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: User
         * * Display Name: User
         * * SQL Data Type: nvarchar(100)
-        * * Default Value: getutcdate()
         */
         get User(): string {  
             return this.Get('User');
@@ -10461,6 +10487,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_CreatedAt(): Date {  
             return this.Get('__mj_CreatedAt');
@@ -10470,6 +10497,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_UpdatedAt(): Date {  
             return this.Get('__mj_UpdatedAt');
@@ -10479,7 +10507,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: WorkSpace
         * * Display Name: Work Space
         * * SQL Data Type: nvarchar(255)
-        * * Default Value: getutcdate()
         */
         get WorkSpace(): string {  
             return this.Get('WorkSpace');
@@ -10489,7 +10516,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: ResourceType
         * * Display Name: Resource Type
         * * SQL Data Type: nvarchar(255)
-        * * Default Value: getutcdate()
         */
         get ResourceType(): string {  
             return this.Get('ResourceType');
@@ -10587,6 +10613,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_CreatedAt(): Date {  
             return this.Get('__mj_CreatedAt');
@@ -10596,6 +10623,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_UpdatedAt(): Date {  
             return this.Get('__mj_UpdatedAt');
@@ -10751,6 +10779,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_CreatedAt(): Date {  
             return this.Get('__mj_CreatedAt');
@@ -10760,6 +10789,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_UpdatedAt(): Date {  
             return this.Get('__mj_UpdatedAt');
@@ -10769,7 +10799,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: Entity
         * * Display Name: Entity
         * * SQL Data Type: nvarchar(255)
-        * * Default Value: getutcdate()
         */
         get Entity(): string {  
             return this.Get('Entity');
@@ -10894,6 +10923,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_CreatedAt(): Date {  
             return this.Get('__mj_CreatedAt');
@@ -10903,6 +10933,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_UpdatedAt(): Date {  
             return this.Get('__mj_UpdatedAt');
@@ -10912,7 +10943,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: Conversation
         * * Display Name: Conversation
         * * SQL Data Type: nvarchar(100)
-        * * Default Value: getutcdate()
         */
         get Conversation(): string | null {  
             return this.Get('Conversation');
@@ -11066,6 +11096,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_CreatedAt(): Date {  
             return this.Get('__mj_CreatedAt');
@@ -11075,6 +11106,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_UpdatedAt(): Date {  
             return this.Get('__mj_UpdatedAt');
@@ -11084,7 +11116,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: User
         * * Display Name: User
         * * SQL Data Type: nvarchar(100)
-        * * Default Value: getutcdate()
         */
         get User(): string {  
             return this.Get('User');
@@ -11094,7 +11125,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: LinkedEntity
         * * Display Name: Linked Entity
         * * SQL Data Type: nvarchar(255)
-        * * Default Value: getutcdate()
         */
         get LinkedEntity(): string | null {  
             return this.Get('LinkedEntity');
@@ -11235,6 +11265,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_CreatedAt(): Date {  
             return this.Get('__mj_CreatedAt');
@@ -11244,6 +11275,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_UpdatedAt(): Date {  
             return this.Get('__mj_UpdatedAt');
@@ -11253,7 +11285,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: User
         * * Display Name: User
         * * SQL Data Type: nvarchar(100)
-        * * Default Value: getutcdate()
         */
         get User(): string {  
             return this.Get('User');
@@ -11361,6 +11392,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_CreatedAt(): Date {  
             return this.Get('__mj_CreatedAt');
@@ -11370,6 +11402,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_UpdatedAt(): Date {  
             return this.Get('__mj_UpdatedAt');
@@ -11478,6 +11511,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_CreatedAt(): Date {  
             return this.Get('__mj_CreatedAt');
@@ -11487,6 +11521,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_UpdatedAt(): Date {  
             return this.Get('__mj_UpdatedAt');
@@ -11496,7 +11531,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: Entity
         * * Display Name: Entity
         * * SQL Data Type: nvarchar(255)
-        * * Default Value: getutcdate()
         */
         get Entity(): string {  
             return this.Get('Entity');
@@ -11684,6 +11718,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_CreatedAt(): Date {  
             return this.Get('__mj_CreatedAt');
@@ -11693,6 +11728,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_UpdatedAt(): Date {  
             return this.Get('__mj_UpdatedAt');
@@ -11702,7 +11738,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: Entity
         * * Display Name: Entity
         * * SQL Data Type: nvarchar(255)
-        * * Default Value: getutcdate()
         */
         get Entity(): string {  
             return this.Get('Entity');
@@ -11712,7 +11747,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: InitiatedByUser
         * * Display Name: Initiated By User
         * * SQL Data Type: nvarchar(100)
-        * * Default Value: getutcdate()
         */
         get InitiatedByUser(): string {  
             return this.Get('InitiatedByUser');
@@ -11826,6 +11860,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_CreatedAt(): Date {  
             return this.Get('__mj_CreatedAt');
@@ -11835,6 +11870,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_UpdatedAt(): Date {  
             return this.Get('__mj_UpdatedAt');
@@ -12035,6 +12071,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_CreatedAt
         * * Display Name: __mj _Created At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_CreatedAt(): Date {  
             return this.Get('__mj_CreatedAt');
@@ -12044,6 +12081,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_UpdatedAt
         * * Display Name: __mj _Updated At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_UpdatedAt(): Date {  
             return this.Get('__mj_UpdatedAt');
@@ -12053,7 +12091,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: Query
         * * Display Name: Query
         * * SQL Data Type: nvarchar(255)
-        * * Default Value: getutcdate()
         */
         get Query(): string {  
             return this.Get('Query');
@@ -12063,7 +12100,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: SourceEntity
         * * Display Name: Source Entity
         * * SQL Data Type: nvarchar(255)
-        * * Default Value: getutcdate()
         */
         get SourceEntity(): string | null {  
             return this.Get('SourceEntity');
@@ -12160,6 +12196,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_CreatedAt
         * * Display Name: __mj _Created At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_CreatedAt(): Date {  
             return this.Get('__mj_CreatedAt');
@@ -12169,6 +12206,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_UpdatedAt
         * * Display Name: __mj _Updated At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_UpdatedAt(): Date {  
             return this.Get('__mj_UpdatedAt');
@@ -12178,7 +12216,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: Parent
         * * Display Name: Parent
         * * SQL Data Type: nvarchar(50)
-        * * Default Value: getutcdate()
         */
         get Parent(): string | null {  
             return this.Get('Parent');
@@ -12188,7 +12225,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: User
         * * Display Name: User
         * * SQL Data Type: nvarchar(100)
-        * * Default Value: getutcdate()
         */
         get User(): string {  
             return this.Get('User');
@@ -12384,6 +12420,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_CreatedAt
         * * Display Name: __mj _Created At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_CreatedAt(): Date {  
             return this.Get('__mj_CreatedAt');
@@ -12393,6 +12430,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_UpdatedAt
         * * Display Name: __mj _Updated At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_UpdatedAt(): Date {  
             return this.Get('__mj_UpdatedAt');
@@ -12402,7 +12440,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: Category
         * * Display Name: Category
         * * SQL Data Type: nvarchar(50)
-        * * Default Value: getutcdate()
         */
         get Category(): string | null {  
             return this.Get('Category');
@@ -12489,6 +12526,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_CreatedAt
         * * Display Name: __mj _Created At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_CreatedAt(): Date {  
             return this.Get('__mj_CreatedAt');
@@ -12498,6 +12536,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_UpdatedAt
         * * Display Name: __mj _Updated At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_UpdatedAt(): Date {  
             return this.Get('__mj_UpdatedAt');
@@ -12606,6 +12645,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_CreatedAt(): Date {  
             return this.Get('__mj_CreatedAt');
@@ -12615,6 +12655,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_UpdatedAt(): Date {  
             return this.Get('__mj_UpdatedAt');
@@ -12624,7 +12665,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: VectorDatabase
         * * Display Name: Vector Database
         * * SQL Data Type: nvarchar(100)
-        * * Default Value: getutcdate()
         */
         get VectorDatabase(): string {  
             return this.Get('VectorDatabase');
@@ -12634,7 +12674,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: EmbeddingModel
         * * Display Name: Embedding Model
         * * SQL Data Type: nvarchar(50)
-        * * Default Value: getutcdate()
         */
         get EmbeddingModel(): string {  
             return this.Get('EmbeddingModel');
@@ -12719,6 +12758,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_CreatedAt
         * * Display Name: __mj _Created At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_CreatedAt(): Date {  
             return this.Get('__mj_CreatedAt');
@@ -12728,6 +12768,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_UpdatedAt
         * * Display Name: __mj _Updated At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_UpdatedAt(): Date {  
             return this.Get('__mj_UpdatedAt');
@@ -12842,6 +12883,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_CreatedAt
         * * Display Name: __mj _Created At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_CreatedAt(): Date {  
             return this.Get('__mj_CreatedAt');
@@ -12851,6 +12893,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_UpdatedAt
         * * Display Name: __mj _Updated At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_UpdatedAt(): Date {  
             return this.Get('__mj_UpdatedAt');
@@ -12860,7 +12903,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: EntityDocument
         * * Display Name: Entity Document
         * * SQL Data Type: nvarchar(250)
-        * * Default Value: getutcdate()
         */
         get EntityDocument(): string {  
             return this.Get('EntityDocument');
@@ -12967,6 +13009,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_CreatedAt(): Date {  
             return this.Get('__mj_CreatedAt');
@@ -12976,6 +13019,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_UpdatedAt(): Date {  
             return this.Get('__mj_UpdatedAt');
@@ -13127,6 +13171,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_CreatedAt
         * * Display Name: __mj _Created At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_CreatedAt(): Date {  
             return this.Get('__mj_CreatedAt');
@@ -13136,6 +13181,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_UpdatedAt
         * * Display Name: __mj _Updated At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_UpdatedAt(): Date {  
             return this.Get('__mj_UpdatedAt');
@@ -13310,6 +13356,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_CreatedAt
         * * Display Name: __mj _Created At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_CreatedAt(): Date {  
             return this.Get('__mj_CreatedAt');
@@ -13319,6 +13366,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_UpdatedAt
         * * Display Name: __mj _Updated At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_UpdatedAt(): Date {  
             return this.Get('__mj_UpdatedAt');
@@ -13328,7 +13376,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: Entity
         * * Display Name: Entity
         * * SQL Data Type: nvarchar(255)
-        * * Default Value: getutcdate()
         */
         get Entity(): string {  
             return this.Get('Entity');
@@ -13338,7 +13385,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: Type
         * * Display Name: Type
         * * SQL Data Type: nvarchar(100)
-        * * Default Value: getutcdate()
         */
         get Type(): string {  
             return this.Get('Type');
@@ -13509,6 +13555,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_CreatedAt(): Date {  
             return this.Get('__mj_CreatedAt');
@@ -13518,6 +13565,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_UpdatedAt(): Date {  
             return this.Get('__mj_UpdatedAt');
@@ -13527,7 +13575,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: DataContext
         * * Display Name: Data Context
         * * SQL Data Type: nvarchar(255)
-        * * Default Value: getutcdate()
         */
         get DataContext(): string {  
             return this.Get('DataContext');
@@ -13537,7 +13584,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: View
         * * Display Name: View
         * * SQL Data Type: nvarchar(100)
-        * * Default Value: getutcdate()
         */
         get View(): string | null {  
             return this.Get('View');
@@ -13652,6 +13698,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_CreatedAt(): Date {  
             return this.Get('__mj_CreatedAt');
@@ -13661,6 +13708,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_UpdatedAt(): Date {  
             return this.Get('__mj_UpdatedAt');
@@ -13670,7 +13718,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: User
         * * Display Name: User
         * * SQL Data Type: nvarchar(100)
-        * * Default Value: getutcdate()
         */
         get User(): string {  
             return this.Get('User');
@@ -13779,6 +13826,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_CreatedAt(): Date {  
             return this.Get('__mj_CreatedAt');
@@ -13788,6 +13836,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_UpdatedAt(): Date {  
             return this.Get('__mj_UpdatedAt');
@@ -13797,7 +13846,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: Parent
         * * Display Name: Parent
         * * SQL Data Type: nvarchar(100)
-        * * Default Value: getutcdate()
         */
         get Parent(): string | null {  
             return this.Get('Parent');
@@ -13807,7 +13855,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: User
         * * Display Name: User
         * * SQL Data Type: nvarchar(100)
-        * * Default Value: getutcdate()
         */
         get User(): string {  
             return this.Get('User');
@@ -13904,6 +13951,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_CreatedAt(): Date {  
             return this.Get('__mj_CreatedAt');
@@ -13913,6 +13961,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_UpdatedAt(): Date {  
             return this.Get('__mj_UpdatedAt');
@@ -13922,7 +13971,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: Parent
         * * Display Name: Parent
         * * SQL Data Type: nvarchar(100)
-        * * Default Value: getutcdate()
         */
         get Parent(): string | null {  
             return this.Get('Parent');
@@ -13932,7 +13980,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: User
         * * Display Name: User
         * * SQL Data Type: nvarchar(100)
-        * * Default Value: getutcdate()
         */
         get User(): string {  
             return this.Get('User');
@@ -14029,6 +14076,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_CreatedAt(): Date {  
             return this.Get('__mj_CreatedAt');
@@ -14038,6 +14086,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_UpdatedAt(): Date {  
             return this.Get('__mj_UpdatedAt');
@@ -14047,7 +14096,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: Parent
         * * Display Name: Parent
         * * SQL Data Type: nvarchar(100)
-        * * Default Value: getutcdate()
         */
         get Parent(): string | null {  
             return this.Get('Parent');
@@ -14057,7 +14105,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: User
         * * Display Name: User
         * * SQL Data Type: nvarchar(100)
-        * * Default Value: getutcdate()
         */
         get User(): string {  
             return this.Get('User');
@@ -14188,6 +14235,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_CreatedAt(): Date {  
             return this.Get('__mj_CreatedAt');
@@ -14197,6 +14245,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_UpdatedAt(): Date {  
             return this.Get('__mj_UpdatedAt');
@@ -14328,6 +14377,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_CreatedAt(): Date {  
             return this.Get('__mj_CreatedAt');
@@ -14337,6 +14387,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_UpdatedAt(): Date {  
             return this.Get('__mj_UpdatedAt');
@@ -14346,7 +14397,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: Provider
         * * Display Name: Provider
         * * SQL Data Type: nvarchar(50)
-        * * Default Value: getutcdate()
         */
         get Provider(): string {  
             return this.Get('Provider');
@@ -14356,7 +14406,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: Category
         * * Display Name: Category
         * * SQL Data Type: nvarchar(255)
-        * * Default Value: getutcdate()
         */
         get Category(): string | null {  
             return this.Get('Category');
@@ -14441,6 +14490,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_CreatedAt(): Date {  
             return this.Get('__mj_CreatedAt');
@@ -14450,6 +14500,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_UpdatedAt(): Date {  
             return this.Get('__mj_UpdatedAt');
@@ -14459,7 +14510,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: Parent
         * * Display Name: Parent
         * * SQL Data Type: nvarchar(255)
-        * * Default Value: getutcdate()
         */
         get Parent(): string | null {  
             return this.Get('Parent');
@@ -14557,6 +14607,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_CreatedAt(): Date {  
             return this.Get('__mj_CreatedAt');
@@ -14566,6 +14617,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_UpdatedAt(): Date {  
             return this.Get('__mj_UpdatedAt');
@@ -14575,7 +14627,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: File
         * * Display Name: File
         * * SQL Data Type: nvarchar(500)
-        * * Default Value: getutcdate()
         */
         get File(): string {  
             return this.Get('File');
@@ -14585,7 +14636,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: Entity
         * * Display Name: Entity
         * * SQL Data Type: nvarchar(255)
-        * * Default Value: getutcdate()
         */
         get Entity(): string {  
             return this.Get('Entity');
@@ -14752,6 +14802,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_CreatedAt(): Date {  
             return this.Get('__mj_CreatedAt');
@@ -14761,6 +14812,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_UpdatedAt(): Date {  
             return this.Get('__mj_UpdatedAt');
@@ -14770,7 +14822,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CompleteVersion
         * * Display Name: Complete Version
         * * SQL Data Type: nvarchar(302)
-        * * Default Value: getutcdate()
         */
         get CompleteVersion(): string | null {  
             return this.Get('CompleteVersion');
@@ -14968,6 +15019,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_CreatedAt(): Date {  
             return this.Get('__mj_CreatedAt');
@@ -14977,6 +15029,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_UpdatedAt(): Date {  
             return this.Get('__mj_UpdatedAt');
@@ -15084,6 +15137,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_CreatedAt
         * * Display Name: __mj _Created At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_CreatedAt(): Date {  
             return this.Get('__mj_CreatedAt');
@@ -15093,6 +15147,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_UpdatedAt
         * * Display Name: __mj _Updated At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_UpdatedAt(): Date {  
             return this.Get('__mj_UpdatedAt');
@@ -15102,7 +15157,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: EntityDocument
         * * Display Name: Entity Document
         * * SQL Data Type: nvarchar(250)
-        * * Default Value: getutcdate()
         */
         get EntityDocument(): string {  
             return this.Get('EntityDocument');
@@ -15210,6 +15264,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_CreatedAt
         * * Display Name: __mj _Created At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_CreatedAt(): Date {  
             return this.Get('__mj_CreatedAt');
@@ -15219,6 +15274,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_UpdatedAt
         * * Display Name: __mj _Updated At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_UpdatedAt(): Date {  
             return this.Get('__mj_UpdatedAt');
@@ -15228,7 +15284,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: Entity
         * * Display Name: Entity
         * * SQL Data Type: nvarchar(255)
-        * * Default Value: getutcdate()
         */
         get Entity(): string {  
             return this.Get('Entity');
@@ -15419,6 +15474,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_CreatedAt(): Date {  
             return this.Get('__mj_CreatedAt');
@@ -15428,6 +15484,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_UpdatedAt(): Date {  
             return this.Get('__mj_UpdatedAt');
@@ -15437,7 +15494,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: Entity
         * * Display Name: Entity
         * * SQL Data Type: nvarchar(255)
-        * * Default Value: getutcdate()
         */
         get Entity(): string {  
             return this.Get('Entity');
@@ -15447,7 +15503,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: StartedByUser
         * * Display Name: Started By User
         * * SQL Data Type: nvarchar(100)
-        * * Default Value: getutcdate()
         */
         get StartedByUser(): string {  
             return this.Get('StartedByUser');
@@ -15622,6 +15677,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_CreatedAt(): Date {  
             return this.Get('__mj_CreatedAt');
@@ -15631,6 +15687,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_UpdatedAt(): Date {  
             return this.Get('__mj_UpdatedAt');
@@ -15726,6 +15783,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_CreatedAt
         * * Display Name: __mj _Created At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_CreatedAt(): Date {  
             return this.Get('__mj_CreatedAt');
@@ -15735,6 +15793,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_UpdatedAt
         * * Display Name: __mj _Updated At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_UpdatedAt(): Date {  
             return this.Get('__mj_UpdatedAt');
@@ -15841,6 +15900,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_CreatedAt
         * * Display Name: __mj _Created At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_CreatedAt(): Date {  
             return this.Get('__mj_CreatedAt');
@@ -15850,6 +15910,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_UpdatedAt
         * * Display Name: __mj _Updated At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_UpdatedAt(): Date {  
             return this.Get('__mj_UpdatedAt');
@@ -15859,7 +15920,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: Parent
         * * Display Name: Parent
         * * SQL Data Type: nvarchar(255)
-        * * Default Value: getutcdate()
         */
         get Parent(): string | null {  
             return this.Get('Parent');
@@ -15953,6 +16013,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_CreatedAt
         * * Display Name: __mj _Created At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_CreatedAt(): Date {  
             return this.Get('__mj_CreatedAt');
@@ -15962,6 +16023,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_UpdatedAt
         * * Display Name: __mj _Updated At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_UpdatedAt(): Date {  
             return this.Get('__mj_UpdatedAt');
@@ -15971,7 +16033,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: Entity
         * * Display Name: Entity
         * * SQL Data Type: nvarchar(255)
-        * * Default Value: getutcdate()
         */
         get Entity(): string {  
             return this.Get('Entity');
@@ -15981,7 +16042,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: Action
         * * Display Name: Action
         * * SQL Data Type: nvarchar(425)
-        * * Default Value: getutcdate()
         */
         get Action(): string {  
             return this.Get('Action');
@@ -16075,6 +16135,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_CreatedAt
         * * Display Name: __mj _Created At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_CreatedAt(): Date {  
             return this.Get('__mj_CreatedAt');
@@ -16084,6 +16145,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_UpdatedAt
         * * Display Name: __mj _Updated At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_UpdatedAt(): Date {  
             return this.Get('__mj_UpdatedAt');
@@ -16093,7 +16155,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: InvocationType
         * * Display Name: Invocation Type
         * * SQL Data Type: nvarchar(255)
-        * * Default Value: getutcdate()
         */
         get InvocationType(): string {  
             return this.Get('InvocationType');
@@ -16180,6 +16241,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_CreatedAt(): Date {  
             return this.Get('__mj_CreatedAt');
@@ -16189,6 +16251,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_UpdatedAt(): Date {  
             return this.Get('__mj_UpdatedAt');
@@ -16198,7 +16261,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: Action
         * * Display Name: Action
         * * SQL Data Type: nvarchar(425)
-        * * Default Value: getutcdate()
         */
         get Action(): string {  
             return this.Get('Action');
@@ -16286,6 +16348,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_CreatedAt
         * * Display Name: __mj _Created At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_CreatedAt(): Date {  
             return this.Get('__mj_CreatedAt');
@@ -16295,6 +16358,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_UpdatedAt
         * * Display Name: __mj _Updated At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_UpdatedAt(): Date {  
             return this.Get('__mj_UpdatedAt');
@@ -16688,6 +16752,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_CreatedAt
         * * Display Name: __mj _Created At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_CreatedAt(): Date {  
             return this.Get('__mj_CreatedAt');
@@ -16697,6 +16762,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_UpdatedAt
         * * Display Name: __mj _Updated At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_UpdatedAt(): Date {  
             return this.Get('__mj_UpdatedAt');
@@ -16792,6 +16858,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_CreatedAt
         * * Display Name: __mj _Created At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_CreatedAt(): Date {  
             return this.Get('__mj_CreatedAt');
@@ -16801,6 +16868,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_UpdatedAt
         * * Display Name: __mj _Updated At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_UpdatedAt(): Date {  
             return this.Get('__mj_UpdatedAt');
@@ -16876,6 +16944,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_CreatedAt(): Date {  
             return this.Get('__mj_CreatedAt');
@@ -16885,6 +16954,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_UpdatedAt(): Date {  
             return this.Get('__mj_UpdatedAt');
@@ -17097,6 +17167,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_CreatedAt(): Date {  
             return this.Get('__mj_CreatedAt');
@@ -17106,6 +17177,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_UpdatedAt(): Date {  
             return this.Get('__mj_UpdatedAt');
@@ -17115,7 +17187,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: Action
         * * Display Name: Action
         * * SQL Data Type: nvarchar(425)
-        * * Default Value: getutcdate()
         */
         get Action(): string {  
             return this.Get('Action');
@@ -17125,7 +17196,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: ContextType
         * * Display Name: Context Type
         * * SQL Data Type: nvarchar(255)
-        * * Default Value: getutcdate()
         */
         get ContextType(): string {  
             return this.Get('ContextType');
@@ -17260,6 +17330,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_CreatedAt(): Date {  
             return this.Get('__mj_CreatedAt');
@@ -17269,6 +17340,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_UpdatedAt(): Date {  
             return this.Get('__mj_UpdatedAt');
@@ -17278,7 +17350,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: Action
         * * Display Name: Action
         * * SQL Data Type: nvarchar(425)
-        * * Default Value: getutcdate()
         */
         get Action(): string {  
             return this.Get('Action');
@@ -17288,7 +17359,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: User
         * * Display Name: User
         * * SQL Data Type: nvarchar(100)
-        * * Default Value: getutcdate()
         */
         get User(): string {  
             return this.Get('User');
@@ -17443,6 +17513,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_CreatedAt(): Date {  
             return this.Get('__mj_CreatedAt');
@@ -17452,6 +17523,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_UpdatedAt(): Date {  
             return this.Get('__mj_UpdatedAt');
@@ -17461,7 +17533,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: Action
         * * Display Name: Action
         * * SQL Data Type: nvarchar(425)
-        * * Default Value: getutcdate()
         */
         get Action(): string {  
             return this.Get('Action');
@@ -17549,6 +17620,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_CreatedAt(): Date {  
             return this.Get('__mj_CreatedAt');
@@ -17558,6 +17630,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_UpdatedAt(): Date {  
             return this.Get('__mj_UpdatedAt');
@@ -17567,7 +17640,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: Action
         * * Display Name: Action
         * * SQL Data Type: nvarchar(425)
-        * * Default Value: getutcdate()
         */
         get Action(): string {  
             return this.Get('Action');
@@ -17577,7 +17649,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: Library
         * * Display Name: Library
         * * SQL Data Type: nvarchar(255)
-        * * Default Value: getutcdate()
         */
         get Library(): string {  
             return this.Get('Library');
@@ -17705,6 +17776,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_CreatedAt
         * * Display Name: __mj _Created At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_CreatedAt(): Date {  
             return this.Get('__mj_CreatedAt');
@@ -17714,6 +17786,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_UpdatedAt
         * * Display Name: __mj _Updated At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_UpdatedAt(): Date {  
             return this.Get('__mj_UpdatedAt');
@@ -17820,6 +17893,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_CreatedAt(): Date {  
             return this.Get('__mj_CreatedAt');
@@ -17829,6 +17903,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_UpdatedAt(): Date {  
             return this.Get('__mj_UpdatedAt');
@@ -17957,6 +18032,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_CreatedAt(): Date {  
             return this.Get('__mj_CreatedAt');
@@ -17966,6 +18042,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_UpdatedAt(): Date {  
             return this.Get('__mj_UpdatedAt');
@@ -18120,6 +18197,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_CreatedAt(): Date {  
             return this.Get('__mj_CreatedAt');
@@ -18129,6 +18207,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_UpdatedAt(): Date {  
             return this.Get('__mj_UpdatedAt');
@@ -18138,7 +18217,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: User
         * * Display Name: User
         * * SQL Data Type: nvarchar(100)
-        * * Default Value: getutcdate()
         */
         get User(): string {  
             return this.Get('User');
@@ -18254,6 +18332,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_CreatedAt(): Date {  
             return this.Get('__mj_CreatedAt');
@@ -18263,6 +18342,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_UpdatedAt(): Date {  
             return this.Get('__mj_UpdatedAt');
@@ -18272,7 +18352,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CommunicationProvider
         * * Display Name: Communication Provider
         * * SQL Data Type: nvarchar(255)
-        * * Default Value: getutcdate()
         */
         get CommunicationProvider(): string {  
             return this.Get('CommunicationProvider');
@@ -18282,7 +18361,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CommunicationBaseMessageType
         * * Display Name: Communication Base Message Type
         * * SQL Data Type: nvarchar(100)
-        * * Default Value: getutcdate()
         */
         get CommunicationBaseMessageType(): string {  
             return this.Get('CommunicationBaseMessageType');
@@ -18452,6 +18530,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_CreatedAt(): Date {  
             return this.Get('__mj_CreatedAt');
@@ -18461,6 +18540,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_UpdatedAt(): Date {  
             return this.Get('__mj_UpdatedAt');
@@ -18470,7 +18550,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CommunicationProvider
         * * Display Name: Communication Provider
         * * SQL Data Type: nvarchar(255)
-        * * Default Value: getutcdate()
         */
         get CommunicationProvider(): string {  
             return this.Get('CommunicationProvider');
@@ -18480,7 +18559,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CommunicationProviderMessageType
         * * Display Name: Communication Provider Message Type
         * * SQL Data Type: nvarchar(255)
-        * * Default Value: getutcdate()
         */
         get CommunicationProviderMessageType(): string {  
             return this.Get('CommunicationProviderMessageType');
@@ -18606,6 +18684,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_CreatedAt(): Date {  
             return this.Get('__mj_CreatedAt');
@@ -18615,6 +18694,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_UpdatedAt(): Date {  
             return this.Get('__mj_UpdatedAt');
@@ -18776,6 +18856,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_CreatedAt(): Date {  
             return this.Get('__mj_CreatedAt');
@@ -18785,6 +18866,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_UpdatedAt(): Date {  
             return this.Get('__mj_UpdatedAt');
@@ -18794,7 +18876,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: Category
         * * Display Name: Category
         * * SQL Data Type: nvarchar(255)
-        * * Default Value: getutcdate()
         */
         get Category(): string | null {  
             return this.Get('Category');
@@ -18804,7 +18885,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: User
         * * Display Name: User
         * * SQL Data Type: nvarchar(100)
-        * * Default Value: getutcdate()
         */
         get User(): string {  
             return this.Get('User');
@@ -18916,6 +18996,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_CreatedAt(): Date {  
             return this.Get('__mj_CreatedAt');
@@ -18925,6 +19006,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_UpdatedAt(): Date {  
             return this.Get('__mj_UpdatedAt');
@@ -18934,7 +19016,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: Parent
         * * Display Name: Parent
         * * SQL Data Type: nvarchar(255)
-        * * Default Value: getutcdate()
         */
         get Parent(): string | null {  
             return this.Get('Parent');
@@ -18944,7 +19025,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: User
         * * Display Name: User
         * * SQL Data Type: nvarchar(100)
-        * * Default Value: getutcdate()
         */
         get User(): string {  
             return this.Get('User');
@@ -19069,6 +19149,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_CreatedAt(): Date {  
             return this.Get('__mj_CreatedAt');
@@ -19078,6 +19159,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_UpdatedAt(): Date {  
             return this.Get('__mj_UpdatedAt');
@@ -19087,7 +19169,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: Template
         * * Display Name: Template
         * * SQL Data Type: nvarchar(255)
-        * * Default Value: getutcdate()
         */
         get Template(): string {  
             return this.Get('Template');
@@ -19097,7 +19178,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: Type
         * * Display Name: Type
         * * SQL Data Type: nvarchar(255)
-        * * Default Value: getutcdate()
         */
         get Type(): string {  
             return this.Get('Type');
@@ -19551,6 +19631,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_CreatedAt(): Date {  
             return this.Get('__mj_CreatedAt');
@@ -19560,6 +19641,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_UpdatedAt(): Date {  
             return this.Get('__mj_UpdatedAt');
@@ -19569,7 +19651,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: SourceEntity
         * * Display Name: Source Entity
         * * SQL Data Type: nvarchar(255)
-        * * Default Value: getutcdate()
         */
         get SourceEntity(): string {  
             return this.Get('SourceEntity');
@@ -19655,6 +19736,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_CreatedAt(): Date {  
             return this.Get('__mj_CreatedAt');
@@ -19664,6 +19746,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_UpdatedAt(): Date {  
             return this.Get('__mj_UpdatedAt');
@@ -19805,6 +19888,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_CreatedAt(): Date {  
             return this.Get('__mj_CreatedAt');
@@ -19814,6 +19898,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_UpdatedAt(): Date {  
             return this.Get('__mj_UpdatedAt');
@@ -19823,7 +19908,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: RecommendationProvider
         * * Display Name: Recommendation Provider
         * * SQL Data Type: nvarchar(255)
-        * * Default Value: getutcdate()
         */
         get RecommendationProvider(): string {  
             return this.Get('RecommendationProvider');
@@ -19833,7 +19917,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: RunByUser
         * * Display Name: Run By User
         * * SQL Data Type: nvarchar(100)
-        * * Default Value: getutcdate()
         */
         get RunByUser(): string {  
             return this.Get('RunByUser');
@@ -19946,6 +20029,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_CreatedAt(): Date {  
             return this.Get('__mj_CreatedAt');
@@ -19955,6 +20039,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_UpdatedAt(): Date {  
             return this.Get('__mj_UpdatedAt');
@@ -19964,7 +20049,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: DestinationEntity
         * * Display Name: Destination Entity
         * * SQL Data Type: nvarchar(255)
-        * * Default Value: getutcdate()
         */
         get DestinationEntity(): string {  
             return this.Get('DestinationEntity');
@@ -20067,6 +20151,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_CreatedAt
         * * Display Name: __mj _Created At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_CreatedAt(): Date {  
             return this.Get('__mj_CreatedAt');
@@ -20076,6 +20161,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_UpdatedAt
         * * Display Name: __mj _Updated At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_UpdatedAt(): Date {  
             return this.Get('__mj_UpdatedAt');
@@ -20094,7 +20180,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: BaseMessageType
         * * Display Name: Base Message Type
         * * SQL Data Type: nvarchar(100)
-        * * Default Value: getutcdate()
         */
         get BaseMessageType(): string {  
             return this.Get('BaseMessageType');
@@ -20195,6 +20280,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_CreatedAt
         * * Display Name: __mj _Created At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_CreatedAt(): Date {  
             return this.Get('__mj_CreatedAt');
@@ -20204,6 +20290,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_UpdatedAt
         * * Display Name: __mj _Updated At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_UpdatedAt(): Date {  
             return this.Get('__mj_UpdatedAt');
@@ -20321,6 +20408,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_CreatedAt(): Date {  
             return this.Get('__mj_CreatedAt');
@@ -20330,6 +20418,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_UpdatedAt(): Date {  
             return this.Get('__mj_UpdatedAt');
@@ -20339,7 +20428,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: User
         * * Display Name: User
         * * SQL Data Type: nvarchar(100)
-        * * Default Value: getutcdate()
         */
         get User(): string {  
             return this.Get('User');
@@ -20447,6 +20535,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_CreatedAt(): Date {  
             return this.Get('__mj_CreatedAt');
@@ -20456,6 +20545,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: __mj_UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
         */
         get __mj_UpdatedAt(): Date {  
             return this.Get('__mj_UpdatedAt');
@@ -20465,7 +20555,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: Library
         * * Display Name: Library
         * * SQL Data Type: nvarchar(255)
-        * * Default Value: getutcdate()
         */
         get Library(): string {  
             return this.Get('Library');
