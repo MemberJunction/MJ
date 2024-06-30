@@ -207,8 +207,7 @@ export type EntityFieldValueListType = typeof EntityFieldValueListType[keyof typ
 
 
 export class EntityFieldValueInfo extends BaseInfo {
-    EntityID: number = null
-    EntityFieldName: string = null
+    EntityFieldID: string = null // EntityFieldID is a uniqueidentifier column
     Sequence: number = null
     Value: string = null
     Code: string = null

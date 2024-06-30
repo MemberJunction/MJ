@@ -864,6 +864,7 @@ SELECT
 	ef.Sequence EntityFieldSequence,
 	ef.Name EntityFieldName,
 	c.column_id Sequence,
+  basetable_columns.column_id BaseTableSequence,
 	c.name FieldName,
 	COALESCE(bt.name, t.name) Type, -- get the type from the base type (bt) if it exists, this is in the case of a user-defined type being used, t.name would be the UDT name.
 	IIF(t.is_user_defined = 1, t.name, NULL) UserDefinedType, -- we have a user defined type, so pass that to the view caller too
@@ -917,8 +918,8 @@ ON
 LEFT OUTER JOIN 
     sys.default_constraints dc 
 ON 
-    e.object_id = dc.parent_object_id AND
-	c.column_id = dc.parent_column_id
+  e.object_id = dc.parent_object_id AND
+	basetable_columns.column_id = dc.parent_column_id
 LEFT OUTER JOIN 
     sys.extended_properties EP_Table 
 ON 
@@ -1131,15 +1132,15 @@ CREATE VIEW [__mj].[vwEntityFieldValues]
 AS
 SELECT 
     efv.*,
-    EntityField_EntityID.[Name] AS [EntityField],
-    EntityField_EntityID.[Entity] AS [Entity]
+    ef.[Name] AS [EntityField],
+    ef.[Entity],
+    ef.[EntityID]
 FROM
     [__mj].[EntityFieldValue] AS efv
 INNER JOIN
-    [__mj].[vwEntityFields] AS EntityField_EntityID
+    [__mj].[vwEntityFields] AS ef
   ON
-    [efv].[EntityID] = EntityField_EntityID.[EntityID] AND
-	efv.EntityFieldName = EntityField_EntityID.Name
+    [efv].[EntityFieldID] = ef.ID 
 GO
 
 
@@ -1382,7 +1383,7 @@ DROP PROC IF EXISTS [__mj].[spUpdateEntityFieldRelatedEntityNameFieldMap]
 GO
 CREATE PROC [__mj].[spUpdateEntityFieldRelatedEntityNameFieldMap] 
 (
-	@EntityFieldID INT, 
+	@EntityFieldID uniqueidentifier, 
 	@RelatedEntityNameFieldMap NVARCHAR(50)
 )
 AS
@@ -1447,8 +1448,10 @@ GO
 CREATE VIEW __mj.vwEntityFieldsWithCheckConstraints
 AS
 SELECT 
-	e.ID as EntityID,
-	e.Name as EntityName,
+	  e.ID as EntityID,
+	  e.Name as EntityName,
+    ef.ID as EntityFieldID,
+    ef.Name as EntityFieldName,
     sch.name AS SchemaName,
     obj.name AS TableName,
     col.name AS ColumnName,
@@ -1467,6 +1470,11 @@ INNER JOIN
 	ON
 	e.SchemaName = sch.Name AND
 	e.BaseTable = obj.name
+INNER JOIN
+  __mj.EntityField ef
+  ON
+  e.ID = ef.EntityID AND
+  ef.Name = col.name
 GO
 
 

@@ -224,7 +224,7 @@ export abstract class ProviderBase implements IMetadataProvider {
         if (fieldValues && fieldValues.length > 0)
             for (let f of fields) {
                 // populate the field values for each field, if we have them
-                f.EntityFieldValues = fieldValues.filter(fv => fv.EntityID === f.EntityID && fv.EntityFieldName.trim().toLowerCase() === f.Name.trim().toLowerCase());
+                f.EntityFieldValues = fieldValues.filter(fv => fv.EntityFieldID === f.ID);
             }
             
         for (let e of entities) {

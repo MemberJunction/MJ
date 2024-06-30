@@ -2,7 +2,7 @@
 * ALL ENTITIES - TypeGraphQL Type Class Definition - AUTO GENERATED FILE
 * Generated Entities and Resolvers for Server
 * 
-* GENERATED: 6/28/2024, 9:46:17 PM
+* GENERATED: 6/29/2024, 10:22:38 PM
 * 
 *   >>> DO NOT MODIFY THIS FILE!!!!!!!!!!!!
 *   >>> YOUR CHANGES WILL BE OVERWRITTEN
@@ -1902,8 +1902,9 @@ export class CompanyIntegrationResolver extends ResolverBase {
 //****************************************************************************
 @ObjectType({ description: 'List of all fields within each entity with metadata about each field' })
 export class EntityField_ {  
-    @Field(() => Int) 
-    ID: number;
+    @Field() 
+    @MaxLength(16)
+    ID: string;
           
     @Field(() => Int) 
     EntityID: number;
@@ -2170,8 +2171,8 @@ export class CreateEntityFieldInput {
 //****************************************************************************
 @InputType()
 export class UpdateEntityFieldInput {
-    @Field(() => Int)
-    ID: number;
+    @Field()
+    ID: string;
 
     @Field({ nullable: true })
     DisplayName?: string;
@@ -2297,9 +2298,9 @@ export class EntityFieldResolver extends ResolverBase {
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => EntityField_, { nullable: true })
-    async EntityField(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<EntityField_ | null> {
+    async EntityField(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<EntityField_ | null> {
         this.CheckUserReadPermissions('Entity Fields', userPayload);
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityFields] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Entity Fields', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityFields] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Entity Fields', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Entity Fields', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
@@ -2315,7 +2316,7 @@ export class EntityFieldResolver extends ResolverBase {
     @FieldResolver(() => [mj_core_schema_server_object_types.EntityFieldValue_])
     async EntityFieldValuesArray(@Root() entityfield_: EntityField_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entity Field Values', userPayload);
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityFieldValues] WHERE [EntityFieldID]=${entityfield_.ID} ` + this.getRowLevelSecurityWhereClause('Entity Field Values', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityFieldValues] WHERE [EntityFieldID]='${entityfield_.ID}' ` + this.getRowLevelSecurityWhereClause('Entity Field Values', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Entity Field Values', await dataSource.query(sSQL));
         return result;
     }
@@ -2339,7 +2340,7 @@ export class EntityFieldResolver extends ResolverBase {
     }
     
     @Mutation(() => EntityField_)
-    async DeleteEntityField(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteEntityField(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Entity Fields', key, options, dataSource, userPayload, pubSub);
     }
@@ -8354,15 +8355,13 @@ export class AuditLogTypeResolver extends ResolverBase {
 //****************************************************************************
 @ObjectType()
 export class EntityFieldValue_ {  
-    @Field(() => Int) 
-    ID: number;
-          
-    @Field(() => Int) 
-    EntityID: number;
+    @Field() 
+    @MaxLength(16)
+    ID: string;
           
     @Field() 
-    @MaxLength(510)
-    EntityFieldName: string;
+    @MaxLength(16)
+    EntityFieldID: string;
           
     @Field(() => Int) 
     Sequence: number;
@@ -8393,6 +8392,9 @@ export class EntityFieldValue_ {
     @Field() 
     @MaxLength(510)
     Entity: string;
+          
+    @Field(() => Int) 
+    EntityID: number;
         
 }
         
@@ -8401,14 +8403,8 @@ export class EntityFieldValue_ {
 //****************************************************************************
 @InputType()
 export class UpdateEntityFieldValueInput {
-    @Field(() => Int)
-    ID: number;
-
-    @Field(() => Int)
-    EntityID: number;
-
     @Field()
-    EntityFieldName: string;
+    ID: string;
 
     @Field(() => Int)
     Sequence: number;
@@ -8471,9 +8467,9 @@ export class EntityFieldValueResolver extends ResolverBase {
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => EntityFieldValue_, { nullable: true })
-    async EntityFieldValue(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<EntityFieldValue_ | null> {
+    async EntityFieldValue(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<EntityFieldValue_ | null> {
         this.CheckUserReadPermissions('Entity Field Values', userPayload);
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityFieldValues] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Entity Field Values', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityFieldValues] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Entity Field Values', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Entity Field Values', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
