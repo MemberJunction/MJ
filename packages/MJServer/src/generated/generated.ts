@@ -2,7 +2,7 @@
 * ALL ENTITIES - TypeGraphQL Type Class Definition - AUTO GENERATED FILE
 * Generated Entities and Resolvers for Server
 * 
-* GENERATED: 6/29/2024, 10:22:38 PM
+* GENERATED: 6/30/2024, 8:30:09 AM
 * 
 *   >>> DO NOT MODIFY THIS FILE!!!!!!!!!!!!
 *   >>> YOUR CHANGES WILL BE OVERWRITTEN
@@ -8961,8 +8961,9 @@ export class AIActionResolver extends ResolverBase {
 //****************************************************************************
 @ObjectType({ description: 'Tracks the actions supported by each AI Model' })
 export class AIModelAction_ {  
-    @Field(() => Int) 
-    ID: number;
+    @Field() 
+    @MaxLength(16)
+    ID: string;
           
     @Field(() => Int) 
     AIModelID: number;
@@ -9012,8 +9013,8 @@ export class CreateAIModelActionInput {
 //****************************************************************************
 @InputType()
 export class UpdateAIModelActionInput {
-    @Field(() => Int)
-    ID: number;
+    @Field()
+    ID: string;
 
     @Field(() => Int)
     AIModelID: number;
@@ -9073,9 +9074,9 @@ export class AIModelActionResolver extends ResolverBase {
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => AIModelAction_, { nullable: true })
-    async AIModelAction(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<AIModelAction_ | null> {
+    async AIModelAction(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<AIModelAction_ | null> {
         this.CheckUserReadPermissions('AI Model Actions', userPayload);
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIModelActions] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('AI Model Actions', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIModelActions] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('AI Model Actions', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('AI Model Actions', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
@@ -9107,7 +9108,7 @@ export class AIModelActionResolver extends ResolverBase {
     }
     
     @Mutation(() => AIModelAction_)
-    async DeleteAIModelAction(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteAIModelAction(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('AI Model Actions', key, options, dataSource, userPayload, pubSub);
     }
@@ -18345,8 +18346,9 @@ export class EntityActionInvocationResolver extends ResolverBase {
 //****************************************************************************
 @ObjectType({ description: 'Links actions to authorizations, one or more of these must be possessed by a user in order to execute the action.' })
 export class ActionAuthorization_ {  
-    @Field(() => Int) 
-    ID: number;
+    @Field() 
+    @MaxLength(16)
+    ID: string;
           
     @Field(() => Int) 
     ActionID: number;
@@ -18393,8 +18395,8 @@ export class CreateActionAuthorizationInput {
 //****************************************************************************
 @InputType()
 export class UpdateActionAuthorizationInput {
-    @Field(() => Int)
-    ID: number;
+    @Field()
+    ID: string;
 
     @Field(() => Int)
     ActionID: number;
@@ -18454,9 +18456,9 @@ export class ActionAuthorizationResolver extends ResolverBase {
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => ActionAuthorization_, { nullable: true })
-    async ActionAuthorization(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ActionAuthorization_ | null> {
+    async ActionAuthorization(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ActionAuthorization_ | null> {
         this.CheckUserReadPermissions('Action Authorizations', userPayload);
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionAuthorizations] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Action Authorizations', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionAuthorizations] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Action Authorizations', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Action Authorizations', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
@@ -18480,7 +18482,7 @@ export class ActionAuthorizationResolver extends ResolverBase {
     }
     
     @Mutation(() => ActionAuthorization_)
-    async DeleteActionAuthorization(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteActionAuthorization(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Action Authorizations', key, options, dataSource, userPayload, pubSub);
     }
@@ -19454,8 +19456,9 @@ export class ActionContextTypeResolver extends ResolverBase {
 //****************************************************************************
 @ObjectType({ description: 'Defines the possible result codes for each action.' })
 export class ActionResultCode_ {  
-    @Field(() => Int) 
-    ID: number;
+    @Field() 
+    @MaxLength(16)
+    ID: string;
           
     @Field(() => Int) 
     ActionID: number;
@@ -19508,8 +19511,8 @@ export class CreateActionResultCodeInput {
 //****************************************************************************
 @InputType()
 export class UpdateActionResultCodeInput {
-    @Field(() => Int)
-    ID: number;
+    @Field()
+    ID: string;
 
     @Field(() => Int)
     ActionID: number;
@@ -19572,9 +19575,9 @@ export class ActionResultCodeResolver extends ResolverBase {
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => ActionResultCode_, { nullable: true })
-    async ActionResultCode(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ActionResultCode_ | null> {
+    async ActionResultCode(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ActionResultCode_ | null> {
         this.CheckUserReadPermissions('Action Result Codes', userPayload);
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionResultCodes] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Action Result Codes', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionResultCodes] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Action Result Codes', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Action Result Codes', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
@@ -19598,7 +19601,7 @@ export class ActionResultCodeResolver extends ResolverBase {
     }
     
     @Mutation(() => ActionResultCode_)
-    async DeleteActionResultCode(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteActionResultCode(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Action Result Codes', key, options, dataSource, userPayload, pubSub);
     }
@@ -19610,8 +19613,9 @@ export class ActionResultCodeResolver extends ResolverBase {
 //****************************************************************************
 @ObjectType({ description: 'Links actions to their supported context types enabling a given action to be executable in more than one context.' })
 export class ActionContext_ {  
-    @Field(() => Int) 
-    ID: number;
+    @Field() 
+    @MaxLength(16)
+    ID: string;
           
     @Field(() => Int) 
     ActionID: number;
@@ -19662,8 +19666,8 @@ export class CreateActionContextInput {
 //****************************************************************************
 @InputType()
 export class UpdateActionContextInput {
-    @Field(() => Int)
-    ID: number;
+    @Field()
+    ID: string;
 
     @Field(() => Int)
     ActionID: number;
@@ -19723,9 +19727,9 @@ export class ActionContextResolver extends ResolverBase {
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => ActionContext_, { nullable: true })
-    async ActionContext(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ActionContext_ | null> {
+    async ActionContext(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ActionContext_ | null> {
         this.CheckUserReadPermissions('Action Contexts', userPayload);
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionContexts] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Action Contexts', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionContexts] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Action Contexts', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Action Contexts', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
@@ -19749,7 +19753,7 @@ export class ActionContextResolver extends ResolverBase {
     }
     
     @Mutation(() => ActionContext_)
-    async DeleteActionContext(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteActionContext(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Action Contexts', key, options, dataSource, userPayload, pubSub);
     }
@@ -19761,8 +19765,9 @@ export class ActionContextResolver extends ResolverBase {
 //****************************************************************************
 @ObjectType({ description: 'Tracks every execution of an action, including start and end times, inputs, outputs, and result codes.' })
 export class ActionExecutionLog_ {  
-    @Field(() => Int) 
-    ID: number;
+    @Field() 
+    @MaxLength(16)
+    ID: string;
           
     @Field(() => Int) 
     ActionID: number;
@@ -19839,8 +19844,8 @@ export class CreateActionExecutionLogInput {
 //****************************************************************************
 @InputType()
 export class UpdateActionExecutionLogInput {
-    @Field(() => Int)
-    ID: number;
+    @Field()
+    ID: string;
 
     @Field(() => Int)
     ActionID: number;
@@ -19912,9 +19917,9 @@ export class ActionExecutionLogResolver extends ResolverBase {
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => ActionExecutionLog_, { nullable: true })
-    async ActionExecutionLog(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ActionExecutionLog_ | null> {
+    async ActionExecutionLog(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ActionExecutionLog_ | null> {
         this.CheckUserReadPermissions('Action Execution Logs', userPayload);
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionExecutionLogs] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Action Execution Logs', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionExecutionLogs] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Action Execution Logs', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Action Execution Logs', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
@@ -19938,7 +19943,7 @@ export class ActionExecutionLogResolver extends ResolverBase {
     }
     
     @Mutation(() => ActionExecutionLog_)
-    async DeleteActionExecutionLog(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteActionExecutionLog(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Action Execution Logs', key, options, dataSource, userPayload, pubSub);
     }
@@ -20155,8 +20160,9 @@ export class ActionParamResolver extends ResolverBase {
 //****************************************************************************
 @ObjectType({ description: 'Tracks the list of libraries that a given Action uses, including a list of classes/functions for each library.' })
 export class ActionLibrary_ {  
-    @Field(() => Int) 
-    ID: number;
+    @Field() 
+    @MaxLength(16)
+    ID: string;
           
     @Field(() => Int) 
     ActionID: number;
@@ -20206,8 +20212,8 @@ export class CreateActionLibraryInput {
 //****************************************************************************
 @InputType()
 export class UpdateActionLibraryInput {
-    @Field(() => Int)
-    ID: number;
+    @Field()
+    ID: string;
 
     @Field(() => Int)
     ActionID: number;
@@ -20267,9 +20273,9 @@ export class ActionLibraryResolver extends ResolverBase {
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => ActionLibrary_, { nullable: true })
-    async ActionLibrary(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ActionLibrary_ | null> {
+    async ActionLibrary(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ActionLibrary_ | null> {
         this.CheckUserReadPermissions('Action Libraries', userPayload);
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionLibraries] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Action Libraries', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionLibraries] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Action Libraries', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Action Libraries', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
@@ -20293,7 +20299,7 @@ export class ActionLibraryResolver extends ResolverBase {
     }
     
     @Mutation(() => ActionLibrary_)
-    async DeleteActionLibrary(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteActionLibrary(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Action Libraries', key, options, dataSource, userPayload, pubSub);
     }

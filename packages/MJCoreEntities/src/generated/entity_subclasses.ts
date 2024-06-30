@@ -7905,7 +7905,7 @@ import { RegisterClass } from "@memberjunction/global";
     export class AIModelActionEntity extends BaseEntity {
         /**
         * Loads the AI Model Actions record from the database
-        * @param ID: number - primary key value to load the AI Model Actions record.
+        * @param ID: string - primary key value to load the AI Model Actions record.
         * @param EntityRelationshipsToLoad - (optional) the relationships to load
         * @returns {Promise<boolean>} - true if successful, false otherwise
         * @public
@@ -7914,7 +7914,7 @@ import { RegisterClass } from "@memberjunction/global";
         * @method
         * @override
         */      
-        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+        public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
             const compositeKey: CompositeKey = new CompositeKey();
             compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -7923,9 +7923,10 @@ import { RegisterClass } from "@memberjunction/global";
             /**
         * * Field Name: ID
         * * Display Name: ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
         */
-        get ID(): number {  
+        get ID(): string {  
             return this.Get('ID');
         }
         
@@ -16178,7 +16179,7 @@ import { RegisterClass } from "@memberjunction/global";
     export class ActionAuthorizationEntity extends BaseEntity {
         /**
         * Loads the Action Authorizations record from the database
-        * @param ID: number - primary key value to load the Action Authorizations record.
+        * @param ID: string - primary key value to load the Action Authorizations record.
         * @param EntityRelationshipsToLoad - (optional) the relationships to load
         * @returns {Promise<boolean>} - true if successful, false otherwise
         * @public
@@ -16187,7 +16188,7 @@ import { RegisterClass } from "@memberjunction/global";
         * @method
         * @override
         */      
-        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+        public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
             const compositeKey: CompositeKey = new CompositeKey();
             compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -16196,9 +16197,10 @@ import { RegisterClass } from "@memberjunction/global";
             /**
         * * Field Name: ID
         * * Display Name: ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
         */
-        get ID(): number {  
+        get ID(): string {  
             return this.Get('ID');
         }
         
@@ -16978,7 +16980,7 @@ import { RegisterClass } from "@memberjunction/global";
     export class ActionResultCodeEntity extends BaseEntity {
         /**
         * Loads the Action Result Codes record from the database
-        * @param ID: number - primary key value to load the Action Result Codes record.
+        * @param ID: string - primary key value to load the Action Result Codes record.
         * @param EntityRelationshipsToLoad - (optional) the relationships to load
         * @returns {Promise<boolean>} - true if successful, false otherwise
         * @public
@@ -16987,7 +16989,7 @@ import { RegisterClass } from "@memberjunction/global";
         * @method
         * @override
         */      
-        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+        public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
             const compositeKey: CompositeKey = new CompositeKey();
             compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -16996,9 +16998,10 @@ import { RegisterClass } from "@memberjunction/global";
             /**
         * * Field Name: ID
         * * Display Name: ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
         */
-        get ID(): number {  
+        get ID(): string {  
             return this.Get('ID');
         }
         
@@ -17097,7 +17100,7 @@ import { RegisterClass } from "@memberjunction/global";
     export class ActionContextEntity extends BaseEntity {
         /**
         * Loads the Action Contexts record from the database
-        * @param ID: number - primary key value to load the Action Contexts record.
+        * @param ID: string - primary key value to load the Action Contexts record.
         * @param EntityRelationshipsToLoad - (optional) the relationships to load
         * @returns {Promise<boolean>} - true if successful, false otherwise
         * @public
@@ -17106,7 +17109,7 @@ import { RegisterClass } from "@memberjunction/global";
         * @method
         * @override
         */      
-        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+        public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
             const compositeKey: CompositeKey = new CompositeKey();
             compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -17115,9 +17118,10 @@ import { RegisterClass } from "@memberjunction/global";
             /**
         * * Field Name: ID
         * * Display Name: ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
         */
-        get ID(): number {  
+        get ID(): string {  
             return this.Get('ID');
         }
         
@@ -17219,7 +17223,7 @@ import { RegisterClass } from "@memberjunction/global";
     export class ActionExecutionLogEntity extends BaseEntity {
         /**
         * Loads the Action Execution Logs record from the database
-        * @param ID: number - primary key value to load the Action Execution Logs record.
+        * @param ID: string - primary key value to load the Action Execution Logs record.
         * @param EntityRelationshipsToLoad - (optional) the relationships to load
         * @returns {Promise<boolean>} - true if successful, false otherwise
         * @public
@@ -17228,7 +17232,7 @@ import { RegisterClass } from "@memberjunction/global";
         * @method
         * @override
         */      
-        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+        public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
             const compositeKey: CompositeKey = new CompositeKey();
             compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -17237,9 +17241,10 @@ import { RegisterClass } from "@memberjunction/global";
             /**
         * * Field Name: ID
         * * Display Name: ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
         */
-        get ID(): number {  
+        get ID(): string {  
             return this.Get('ID');
         }
         
@@ -17556,7 +17561,7 @@ import { RegisterClass } from "@memberjunction/global";
     export class ActionLibraryEntity extends BaseEntity {
         /**
         * Loads the Action Libraries record from the database
-        * @param ID: number - primary key value to load the Action Libraries record.
+        * @param ID: string - primary key value to load the Action Libraries record.
         * @param EntityRelationshipsToLoad - (optional) the relationships to load
         * @returns {Promise<boolean>} - true if successful, false otherwise
         * @public
@@ -17565,7 +17570,7 @@ import { RegisterClass } from "@memberjunction/global";
         * @method
         * @override
         */      
-        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+        public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
             const compositeKey: CompositeKey = new CompositeKey();
             compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -17574,9 +17579,10 @@ import { RegisterClass } from "@memberjunction/global";
             /**
         * * Field Name: ID
         * * Display Name: ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
         */
-        get ID(): number {  
+        get ID(): string {  
             return this.Get('ID');
         }
         
