@@ -12,7 +12,7 @@ import { SkipAPIChatWithRecordResponse } from "@memberjunction/skip-types";
     styleUrls: ['./skip-chat-with-record.component.css']
   })  
 export class SkipChatWithRecordComponent implements AfterViewInit {
-  @Input() LinkedEntityID!: number;
+  @Input() LinkedEntityID!: string;
   @Input() LinkedPrimaryKey: CompositeKey = new CompositeKey();
   
   @ViewChild('mjChat') mjChat!: ChatComponent;

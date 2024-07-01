@@ -26,7 +26,7 @@ export class DataContextItem {
     /**
      * EntityID - the ID of the entity in the system, only used if type = 'full_entity', 'view', or 'single_record' --- for type of 'query' or 'sql' this property is not used as results can come from any number of entities in combination
      */
-    EntityID?: number;
+    EntityID?: string;
 
     /**
      * ViewID - the ID of the view in the system, only used if type = 'view' 
@@ -61,7 +61,7 @@ export class DataContextItem {
     /**
      * This field can be used at run time to stash the record ID in the database of the Data Context Item, if it was already saved. For items that haven't/won't be saved, this property can be ignored.
      */
-    DataContextItemID?: number;
+    DataContextItemID?: string;
 
     /**
      * ViewEntity - the object instantiated that contains the metadata for the UserView being used - only populated if the type is 'view', also this is NOT to be sent to/from the API server, it is a placeholder that can be used 
@@ -620,7 +620,7 @@ export class DataContext {
             const md = new Metadata();
             for (const item of this.Items) {
                 const dciEntity = <DataContextItemEntity>await md.GetEntityObject('Data Context Items', contextUser);
-                if (item.DataContextItemID > 0) 
+                if (item.DataContextItemID && item.DataContextItemID.length > 0) 
                   await dciEntity.Load(item.DataContextItemID);
                 else
                   dciEntity.NewRecord();

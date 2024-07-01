@@ -431,13 +431,13 @@ export class ViewInfo {
      * @static
      * @async
      */
-    static async GetViewsForUser(entityId?: number, contextUser?: UserInfo): Promise<UserViewEntityExtended[]> {
+    static async GetViewsForUser(entityId?: string, contextUser?: UserInfo): Promise<UserViewEntityExtended[]> {
         const rv = new RunView();
         const md = new Metadata();
         const result = await rv.RunView({
             EntityName: 'User Views',
             ExtraFilter: `UserID = ${contextUser ? contextUser.ID : md.CurrentUser.ID}
-                         ${entityId ? ` AND EntityID = ${entityId}` : ''}`
+                         ${entityId ? ` AND EntityID = '${entityId}'` : ''}`
         });
         const rd = result?.Results as Array<any>;
         if (result && result.Success && rd) 
@@ -500,7 +500,7 @@ export class ViewInfo {
 }
 
 export class ViewColumnInfo extends BaseInfo {
-    ID: number = null
+    ID: string = null
     Name: string = null
     DisplayName: string = null
     hidden: boolean = null

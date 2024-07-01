@@ -26,7 +26,7 @@ import { EntityCommunicationParams } from '@memberjunction/entity-communications
 
 
 export type GridRowClickedEvent = {
-  entityId: number;
+  entityId: string;
   entityName: string;
   CompositeKey: CompositeKey;
 }

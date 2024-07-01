@@ -18,7 +18,7 @@ export class ApplicationViewComponent extends BaseBrowserComponent implements On
     @ViewChild('entityRow') entityRowRef: Element | undefined;
     @ViewChild('userViewDialog') viewPropertiesDialog!: UserViewPropertiesDialogComponent;
 
-    @Input() public categoryEntityID!: number;
+    @Input() public categoryEntityID!: string;
 
     public currentlySelectedAppEntity: EntityEntity | undefined;
 

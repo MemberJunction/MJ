@@ -201,7 +201,7 @@ export class SkipChatComponent implements OnInit, AfterViewInit, AfterViewChecke
     }
   }
  
-  public get LinkedEntityID(): number | null {
+  public get LinkedEntityID(): string | null {
     if (this.LinkedEntity && this.LinkedEntity.length > 0) {
       // lookup the entity id from the linkedentity provided to us as a property
       const md = new Metadata();
@@ -462,7 +462,7 @@ export class SkipChatComponent implements OnInit, AfterViewInit, AfterViewChecke
     convo.Type = 'skip';
     convo.IsArchived = false;
     const linkedEntityID = this.LinkedEntityID;
-    if (linkedEntityID && linkedEntityID > 0 && this.CompositeKeyIsPopulated()) {
+    if (linkedEntityID && linkedEntityID.length > 0 && this.CompositeKeyIsPopulated()) {
       convo.LinkedEntityID = linkedEntityID;
       convo.LinkedRecordID = this.LinkedEntityCompositeKey.Values();
     }
@@ -473,7 +473,7 @@ export class SkipChatComponent implements OnInit, AfterViewInit, AfterViewChecke
     dc.UserID = md.CurrentUser.ID;
     if (await dc.Save()) {
       // now create a data context item for the linked record if we have one
-      if (this.LinkedEntityID && this.LinkedEntityID > 0 && this.CompositeKeyIsPopulated()) {
+      if (this.LinkedEntityID && this.LinkedEntityID.length > 0 && this.CompositeKeyIsPopulated()) {
         const dci = await md.GetEntityObject<DataContextItemEntity>('Data Context Items');
         dci.NewRecord();
         dci.DataContextID = dc.ID;

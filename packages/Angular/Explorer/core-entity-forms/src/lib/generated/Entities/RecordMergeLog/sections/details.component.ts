@@ -13,7 +13,7 @@ import { RecordMergeLogEntity } from '@memberjunction/core-entities';
             [record]="record"
             [ShowLabel]="true"
             FieldName="EntityID"
-            Type="numerictextbox"
+            Type="textbox"
             [EditMode]="EditMode"
             LinkType="Record"
             LinkComponentType="Search"
@@ -47,6 +47,8 @@ import { RecordMergeLogEntity } from '@memberjunction/core-entities';
             FieldName="ApprovedByUserID"
             Type="numerictextbox"
             [EditMode]="EditMode"
+            LinkType="Record"
+            LinkComponentType="Search"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"

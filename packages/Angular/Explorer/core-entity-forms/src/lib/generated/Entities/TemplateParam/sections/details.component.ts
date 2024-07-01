@@ -56,15 +56,6 @@ import { TemplateParamEntity } from '@memberjunction/core-entities';
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="EntityID"
-            Type="numerictextbox"
-            [EditMode]="EditMode"
-            LinkType="Record"
-            LinkComponentType="Search"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
             FieldName="LinkedParameterName"
             Type="textarea"
             [EditMode]="EditMode"
@@ -82,6 +73,15 @@ import { TemplateParamEntity } from '@memberjunction/core-entities';
             FieldName="ExtraFilter"
             Type="textarea"
             [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="EntityID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            LinkType="Record"
+            LinkComponentType="Search"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"

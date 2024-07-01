@@ -13,7 +13,7 @@ import { EntityCommunicationMessageTypeEntity } from '@memberjunction/core-entit
             [record]="record"
             [ShowLabel]="true"
             FieldName="EntityID"
-            Type="numerictextbox"
+            Type="textbox"
             [EditMode]="EditMode"
             LinkType="Record"
             LinkComponentType="Dropdown"

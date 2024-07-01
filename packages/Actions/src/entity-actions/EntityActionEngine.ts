@@ -174,7 +174,7 @@ export class EntityActionEngine extends BaseEngine<EntityActionEngine> {
      * @param entityID 
      * @returns 
      */
-    public GetActionsByEntityID(entityID: number): EntityActionEntityServer[] {
+    public GetActionsByEntityID(entityID: string): EntityActionEntityServer[] {
         return this._EntityActions.filter(e => e.EntityID === entityID);
     }
 

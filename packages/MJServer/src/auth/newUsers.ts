@@ -6,7 +6,7 @@ import { UserEntity, UserRoleEntity } from "@memberjunction/core-entities";
 
 @RegisterClass(NewUserBase)
 export class NewUserBase {
-    public async createNewUser(firstName: string, lastName: string, email: string, linkedRecordType: string = 'None', linkedEntityId?: number, linkedEntityRecordId?: number) {
+    public async createNewUser(firstName: string, lastName: string, email: string, linkedRecordType: string = 'None', linkedEntityId?: string, linkedEntityRecordId?: number) {
         try {
             const md = new Metadata();
             const contextUser = UserCache.Instance.Users.find(u => u.Email.trim().toLowerCase() === configInfo?.userHandling?.contextUserForNewUserCreation?.trim().toLowerCase())

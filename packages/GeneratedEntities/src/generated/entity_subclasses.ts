@@ -607,7 +607,9 @@ import { RegisterClass } from "@memberjunction/global";
         get BCMID(): string {  
             return this.Get('BCMID');
         }
-        
+        set BCMID(value: string) {
+            this.Set('BCMID', value);
+        }
         /**
         * * Field Name: Name
         * * Display Name: Name
@@ -1031,7 +1033,9 @@ import { RegisterClass } from "@memberjunction/global";
         get BCMID(): string {  
             return this.Get('BCMID');
         }
-        
+        set BCMID(value: string) {
+            this.Set('BCMID', value);
+        }
         /**
         * * Field Name: FirstName
         * * Display Name: First Name
@@ -1519,7 +1523,9 @@ import { RegisterClass } from "@memberjunction/global";
         get BCMID(): string {  
             return this.Get('BCMID');
         }
-        
+        set BCMID(value: string) {
+            this.Set('BCMID', value);
+        }
         /**
         * * Field Name: EmployeeID
         * * Display Name: Employee ID
@@ -1899,7 +1905,9 @@ import { RegisterClass } from "@memberjunction/global";
         get BCMID(): string {  
             return this.Get('BCMID');
         }
-        
+        set BCMID(value: string) {
+            this.Set('BCMID', value);
+        }
         /**
         * * Field Name: ExternalSystemRecordID
         * * Display Name: External System Record ID
@@ -2399,7 +2407,9 @@ import { RegisterClass } from "@memberjunction/global";
         get BCMID(): string {  
             return this.Get('BCMID');
         }
-        
+        set BCMID(value: string) {
+            this.Set('BCMID', value);
+        }
         /**
         * * Field Name: InvoiceDate
         * * Display Name: Invoice Date
@@ -17833,7 +17843,9 @@ import { RegisterClass } from "@memberjunction/global";
         get CRMAccountID(): string | null {  
             return this.Get('CRMAccountID');
         }
-        
+        set CRMAccountID(value: string | null) {
+            this.Set('CRMAccountID', value);
+        }
         /**
         * * Field Name: MainGreatPlainsCustomerID
         * * Display Name: Main Great Plains Customer ID
@@ -17963,7 +17975,9 @@ import { RegisterClass } from "@memberjunction/global";
         get CRMContactID(): string | null {  
             return this.Get('CRMContactID');
         }
-        
+        set CRMContactID(value: string | null) {
+            this.Set('CRMContactID', value);
+        }
         /**
         * * Field Name: MainGreatPlainsCustomerID
         * * Display Name: Main Great Plains Customer ID
@@ -18030,7 +18044,9 @@ import { RegisterClass } from "@memberjunction/global";
         get CRMAccountID(): string | null {  
             return this.Get('CRMAccountID');
         }
-        
+        set CRMAccountID(value: string | null) {
+            this.Set('CRMAccountID', value);
+        }
         /**
         * * Field Name: CreatedAt
         * * Display Name: Created At
@@ -18785,7 +18801,9 @@ import { RegisterClass } from "@memberjunction/global";
         get Address1_AddressId(): string | null {  
             return this.Get('Address1_AddressId');
         }
-        
+        set Address1_AddressId(value: string | null) {
+            this.Set('Address1_AddressId', value);
+        }
         /**
         * * Field Name: Address1_Fax
         * * Display Name: Address 1_Fax
@@ -19047,7 +19065,9 @@ import { RegisterClass } from "@memberjunction/global";
         get Address2_AddressId(): string | null {  
             return this.Get('Address2_AddressId');
         }
-        
+        set Address2_AddressId(value: string | null) {
+            this.Set('Address2_AddressId', value);
+        }
         /**
         * * Field Name: Address2_Fax
         * * Display Name: Address 2_Fax
@@ -19254,7 +19274,9 @@ import { RegisterClass } from "@memberjunction/global";
         get OwnerId(): string | null {  
             return this.Get('OwnerId');
         }
-        
+        set OwnerId(value: string | null) {
+            this.Set('OwnerId', value);
+        }
         /**
         * * Field Name: OwnerIdName
         * * Display Name: Owner Id Name
@@ -19307,7 +19329,9 @@ import { RegisterClass } from "@memberjunction/global";
         get OwningUser(): string | null {  
             return this.Get('OwningUser');
         }
-        
+        set OwningUser(value: string | null) {
+            this.Set('OwningUser', value);
+        }
         /**
         * * Field Name: OwningTeam
         * * Display Name: Owning Team
@@ -19316,7 +19340,9 @@ import { RegisterClass } from "@memberjunction/global";
         get OwningTeam(): string | null {  
             return this.Get('OwningTeam');
         }
-        
+        set OwningTeam(value: string | null) {
+            this.Set('OwningTeam', value);
+        }
         /**
         * * Field Name: AccountId
         * * Display Name: Account Id
@@ -19345,7 +19371,9 @@ import { RegisterClass } from "@memberjunction/global";
         get TerritoryId(): string | null {  
             return this.Get('TerritoryId');
         }
-        
+        set TerritoryId(value: string | null) {
+            this.Set('TerritoryId', value);
+        }
         /**
         * * Field Name: DefaultPriceLevelId
         * * Display Name: Default Price Level Id
@@ -19354,7 +19382,9 @@ import { RegisterClass } from "@memberjunction/global";
         get DefaultPriceLevelId(): string | null {  
             return this.Get('DefaultPriceLevelId');
         }
-        
+        set DefaultPriceLevelId(value: string | null) {
+            this.Set('DefaultPriceLevelId', value);
+        }
         /**
         * * Field Name: CustomerSizeCode
         * * Display Name: Customer Size Code
@@ -19451,7 +19481,9 @@ import { RegisterClass } from "@memberjunction/global";
         get OwningBusinessUnit(): string | null {  
             return this.Get('OwningBusinessUnit');
         }
-        
+        set OwningBusinessUnit(value: string | null) {
+            this.Set('OwningBusinessUnit', value);
+        }
         /**
         * * Field Name: TraversedPath
         * * Display Name: Traversed Path
@@ -19471,7 +19503,9 @@ import { RegisterClass } from "@memberjunction/global";
         get OriginatingLeadId(): string | null {  
             return this.Get('OriginatingLeadId');
         }
-        
+        set OriginatingLeadId(value: string | null) {
+            this.Set('OriginatingLeadId', value);
+        }
         /**
         * * Field Name: PaymentTermsCode
         * * Display Name: Payment Terms Code
@@ -19503,7 +19537,9 @@ import { RegisterClass } from "@memberjunction/global";
         get PrimaryContactId(): string | null {  
             return this.Get('PrimaryContactId');
         }
-        
+        set PrimaryContactId(value: string | null) {
+            this.Set('PrimaryContactId', value);
+        }
         /**
         * * Field Name: ParticipatesInWorkflow
         * * Display Name: Participates In Workflow
@@ -19853,7 +19889,9 @@ import { RegisterClass } from "@memberjunction/global";
         get CreatedBy(): string | null {  
             return this.Get('CreatedBy');
         }
-        
+        set CreatedBy(value: string | null) {
+            this.Set('CreatedBy', value);
+        }
         /**
         * * Field Name: ModifiedOn
         * * Display Name: Modified On
@@ -19873,7 +19911,9 @@ import { RegisterClass } from "@memberjunction/global";
         get ModifiedBy(): string | null {  
             return this.Get('ModifiedBy');
         }
-        
+        set ModifiedBy(value: string | null) {
+            this.Set('ModifiedBy', value);
+        }
         /**
         * * Field Name: VersionNumber
         * * Display Name: Version Number
@@ -19894,7 +19934,9 @@ import { RegisterClass } from "@memberjunction/global";
         get ParentAccountId(): string | null {  
             return this.Get('ParentAccountId');
         }
-        
+        set ParentAccountId(value: string | null) {
+            this.Set('ParentAccountId', value);
+        }
         /**
         * * Field Name: Aging30
         * * Display Name: Aging 30
@@ -19969,7 +20011,9 @@ import { RegisterClass } from "@memberjunction/global";
         get PreferredSystemUserId(): string | null {  
             return this.Get('PreferredSystemUserId');
         }
-        
+        set PreferredSystemUserId(value: string | null) {
+            this.Set('PreferredSystemUserId', value);
+        }
         /**
         * * Field Name: PreferredAppointmentTimeCode
         * * Display Name: Preferred Appointment Time Code
@@ -20012,7 +20056,9 @@ import { RegisterClass } from "@memberjunction/global";
         get MasterId(): string | null {  
             return this.Get('MasterId');
         }
-        
+        set MasterId(value: string | null) {
+            this.Set('MasterId', value);
+        }
         /**
         * * Field Name: LastUsedInCampaign
         * * Display Name: Last Used In Campaign
@@ -20032,7 +20078,9 @@ import { RegisterClass } from "@memberjunction/global";
         get PreferredServiceId(): string | null {  
             return this.Get('PreferredServiceId');
         }
-        
+        set PreferredServiceId(value: string | null) {
+            this.Set('PreferredServiceId', value);
+        }
         /**
         * * Field Name: PreferredEquipmentId
         * * Display Name: Preferred Equipment Id
@@ -20041,7 +20089,9 @@ import { RegisterClass } from "@memberjunction/global";
         get PreferredEquipmentId(): string | null {  
             return this.Get('PreferredEquipmentId');
         }
-        
+        set PreferredEquipmentId(value: string | null) {
+            this.Set('PreferredEquipmentId', value);
+        }
         /**
         * * Field Name: ExchangeRate
         * * Display Name: Exchange Rate
@@ -20105,7 +20155,9 @@ import { RegisterClass } from "@memberjunction/global";
         get TransactionCurrencyId(): string | null {  
             return this.Get('TransactionCurrencyId');
         }
-        
+        set TransactionCurrencyId(value: string | null) {
+            this.Set('TransactionCurrencyId', value);
+        }
         /**
         * * Field Name: CreditLimit_Base
         * * Display Name: Credit Limit _Base
@@ -20191,7 +20243,9 @@ import { RegisterClass } from "@memberjunction/global";
         get CreatedOnBehalfBy(): string | null {  
             return this.Get('CreatedOnBehalfBy');
         }
-        
+        set CreatedOnBehalfBy(value: string | null) {
+            this.Set('CreatedOnBehalfBy', value);
+        }
         /**
         * * Field Name: ModifiedOnBehalfBy
         * * Display Name: Modified On Behalf By
@@ -20200,7 +20254,9 @@ import { RegisterClass } from "@memberjunction/global";
         get ModifiedOnBehalfBy(): string | null {  
             return this.Get('ModifiedOnBehalfBy');
         }
-        
+        set ModifiedOnBehalfBy(value: string | null) {
+            this.Set('ModifiedOnBehalfBy', value);
+        }
         /**
         * * Field Name: StageId
         * * Display Name: Stage Id
@@ -20209,7 +20265,9 @@ import { RegisterClass } from "@memberjunction/global";
         get StageId(): string | null {  
             return this.Get('StageId');
         }
-        
+        set StageId(value: string | null) {
+            this.Set('StageId', value);
+        }
         /**
         * * Field Name: ProcessId
         * * Display Name: Process Id
@@ -20218,7 +20276,9 @@ import { RegisterClass } from "@memberjunction/global";
         get ProcessId(): string | null {  
             return this.Get('ProcessId');
         }
-        
+        set ProcessId(value: string | null) {
+            this.Set('ProcessId', value);
+        }
         /**
         * * Field Name: EntityImageId
         * * Display Name: Entity Image Id
@@ -20227,7 +20287,9 @@ import { RegisterClass } from "@memberjunction/global";
         get EntityImageId(): string | null {  
             return this.Get('EntityImageId');
         }
-        
+        set EntityImageId(value: string | null) {
+            this.Set('EntityImageId', value);
+        }
         /**
         * * Field Name: OpenDeals
         * * Display Name: Open Deals
@@ -20324,7 +20386,9 @@ import { RegisterClass } from "@memberjunction/global";
         get CreatedByExternalParty(): string | null {  
             return this.Get('CreatedByExternalParty');
         }
-        
+        set CreatedByExternalParty(value: string | null) {
+            this.Set('CreatedByExternalParty', value);
+        }
         /**
         * * Field Name: ModifiedByExternalParty
         * * Display Name: Modified By External Party
@@ -20333,7 +20397,9 @@ import { RegisterClass } from "@memberjunction/global";
         get ModifiedByExternalParty(): string | null {  
             return this.Get('ModifiedByExternalParty');
         }
-        
+        set ModifiedByExternalParty(value: string | null) {
+            this.Set('ModifiedByExternalParty', value);
+        }
         /**
         * * Field Name: PrimarySatoriId
         * * Display Name: Primary Satori Id
@@ -20364,7 +20430,9 @@ import { RegisterClass } from "@memberjunction/global";
         get SLAId(): string | null {  
             return this.Get('SLAId');
         }
-        
+        set SLAId(value: string | null) {
+            this.Set('SLAId', value);
+        }
         /**
         * * Field Name: SLAInvokedId
         * * Display Name: SLAInvoked Id
@@ -20373,7 +20441,9 @@ import { RegisterClass } from "@memberjunction/global";
         get SLAInvokedId(): string | null {  
             return this.Get('SLAInvokedId');
         }
-        
+        set SLAInvokedId(value: string | null) {
+            this.Set('SLAInvokedId', value);
+        }
         /**
         * * Field Name: OnHoldTime
         * * Display Name: On Hold Time
@@ -20547,7 +20617,9 @@ import { RegisterClass } from "@memberjunction/global";
         get eone_shippingmethodid(): string | null {  
             return this.Get('eone_shippingmethodid');
         }
-        
+        set eone_shippingmethodid(value: string | null) {
+            this.Set('eone_shippingmethodid', value);
+        }
         /**
         * * Field Name: eone_customerclassid
         * * Display Name: eone _customerclassid
@@ -20556,7 +20628,9 @@ import { RegisterClass } from "@memberjunction/global";
         get eone_customerclassid(): string | null {  
             return this.Get('eone_customerclassid');
         }
-        
+        set eone_customerclassid(value: string | null) {
+            this.Set('eone_customerclassid', value);
+        }
         /**
         * * Field Name: Eone_CreditLimitAmount
         * * Display Name: Eone _Credit Limit Amount
@@ -20598,7 +20672,9 @@ import { RegisterClass } from "@memberjunction/global";
         get acep_stateorprovinceid(): string | null {  
             return this.Get('acep_stateorprovinceid');
         }
-        
+        set acep_stateorprovinceid(value: string | null) {
+            this.Set('acep_stateorprovinceid', value);
+        }
         /**
         * * Field Name: Acep_GPPriceLevel
         * * Display Name: Acep _GPPrice Level
@@ -20640,7 +20716,9 @@ import { RegisterClass } from "@memberjunction/global";
         get acep_countryid(): string | null {  
             return this.Get('acep_countryid');
         }
-        
+        set acep_countryid(value: string | null) {
+            this.Set('acep_countryid', value);
+        }
         /**
         * * Field Name: Acep_LongName
         * * Display Name: Acep _Long Name
@@ -20726,7 +20804,9 @@ import { RegisterClass } from "@memberjunction/global";
         get eone_paymenttermsid(): string | null {  
             return this.Get('eone_paymenttermsid');
         }
-        
+        set eone_paymenttermsid(value: string | null) {
+            this.Set('eone_paymenttermsid', value);
+        }
         /**
         * * Field Name: Eone_AgingBucketValue4
         * * Display Name: Eone _Aging Bucket Value 4
@@ -20768,7 +20848,9 @@ import { RegisterClass } from "@memberjunction/global";
         get acep_categoryid(): string | null {  
             return this.Get('acep_categoryid');
         }
-        
+        set acep_categoryid(value: string | null) {
+            this.Set('acep_categoryid', value);
+        }
         /**
         * * Field Name: Eone_AgingBucketValue2
         * * Display Name: Eone _Aging Bucket Value 2
@@ -20832,7 +20914,9 @@ import { RegisterClass } from "@memberjunction/global";
         get acep_onlinetransactioncredentialid(): string | null {  
             return this.Get('acep_onlinetransactioncredentialid');
         }
-        
+        set acep_onlinetransactioncredentialid(value: string | null) {
+            this.Set('acep_onlinetransactioncredentialid', value);
+        }
         /**
         * * Field Name: Eone_AgingBucketDescription6
         * * Display Name: Eone _Aging Bucket Description 6
@@ -20918,7 +21002,9 @@ import { RegisterClass } from "@memberjunction/global";
         get msa_managingpartnerid(): string | null {  
             return this.Get('msa_managingpartnerid');
         }
-        
+        set msa_managingpartnerid(value: string | null) {
+            this.Set('msa_managingpartnerid', value);
+        }
         /**
         * * Field Name: Eone_AgingBucketValue1
         * * Display Name: Eone _Aging Bucket Value 1
@@ -20949,7 +21035,9 @@ import { RegisterClass } from "@memberjunction/global";
         get Acep_DirectAccessId(): string | null {  
             return this.Get('Acep_DirectAccessId');
         }
-        
+        set Acep_DirectAccessId(value: string | null) {
+            this.Set('Acep_DirectAccessId', value);
+        }
         /**
         * * Field Name: acep_productid
         * * Display Name: acep _productid
@@ -20958,7 +21046,9 @@ import { RegisterClass } from "@memberjunction/global";
         get acep_productid(): string | null {  
             return this.Get('acep_productid');
         }
-        
+        set acep_productid(value: string | null) {
+            this.Set('acep_productid', value);
+        }
         /**
         * * Field Name: Acep_DeactivatedDate
         * * Display Name: Acep _Deactivated Date
@@ -21011,7 +21101,9 @@ import { RegisterClass } from "@memberjunction/global";
         get acep_CertificationBoard(): string | null {  
             return this.Get('acep_CertificationBoard');
         }
-        
+        set acep_CertificationBoard(value: string | null) {
+            this.Set('acep_CertificationBoard', value);
+        }
         /**
         * * Field Name: acep_Chapter
         * * Display Name: acep _Chapter
@@ -21020,7 +21112,9 @@ import { RegisterClass } from "@memberjunction/global";
         get acep_Chapter(): string | null {  
             return this.Get('acep_Chapter');
         }
-        
+        set acep_Chapter(value: string | null) {
+            this.Set('acep_Chapter', value);
+        }
         /**
         * * Field Name: acep_EMRARegion
         * * Display Name: acep _EMRARegion
@@ -21029,7 +21123,9 @@ import { RegisterClass } from "@memberjunction/global";
         get acep_EMRARegion(): string | null {  
             return this.Get('acep_EMRARegion');
         }
-        
+        set acep_EMRARegion(value: string | null) {
+            this.Set('acep_EMRARegion', value);
+        }
         /**
         * * Field Name: acep_Group
         * * Display Name: acep _Group
@@ -21038,7 +21134,9 @@ import { RegisterClass } from "@memberjunction/global";
         get acep_Group(): string | null {  
             return this.Get('acep_Group');
         }
-        
+        set acep_Group(value: string | null) {
+            this.Set('acep_Group', value);
+        }
         /**
         * * Field Name: acep_Hospital
         * * Display Name: acep _Hospital
@@ -21047,7 +21145,9 @@ import { RegisterClass } from "@memberjunction/global";
         get acep_Hospital(): string | null {  
             return this.Get('acep_Hospital');
         }
-        
+        set acep_Hospital(value: string | null) {
+            this.Set('acep_Hospital', value);
+        }
         /**
         * * Field Name: acep_MedicalSchool
         * * Display Name: acep _Medical School
@@ -21056,7 +21156,9 @@ import { RegisterClass } from "@memberjunction/global";
         get acep_MedicalSchool(): string | null {  
             return this.Get('acep_MedicalSchool');
         }
-        
+        set acep_MedicalSchool(value: string | null) {
+            this.Set('acep_MedicalSchool', value);
+        }
         /**
         * * Field Name: acep_Residency
         * * Display Name: acep _Residency
@@ -21065,7 +21167,9 @@ import { RegisterClass } from "@memberjunction/global";
         get acep_Residency(): string | null {  
             return this.Get('acep_Residency');
         }
-        
+        set acep_Residency(value: string | null) {
+            this.Set('acep_Residency', value);
+        }
         /**
         * * Field Name: acep_Section
         * * Display Name: acep _Section
@@ -21074,7 +21178,9 @@ import { RegisterClass } from "@memberjunction/global";
         get acep_Section(): string | null {  
             return this.Get('acep_Section');
         }
-        
+        set acep_Section(value: string | null) {
+            this.Set('acep_Section', value);
+        }
         /**
         * * Field Name: acep_Venue
         * * Display Name: acep _Venue
@@ -21083,7 +21189,9 @@ import { RegisterClass } from "@memberjunction/global";
         get acep_Venue(): string | null {  
             return this.Get('acep_Venue');
         }
-        
+        set acep_Venue(value: string | null) {
+            this.Set('acep_Venue', value);
+        }
         /**
         * * Field Name: acep_FacebookAddress
         * * Display Name: acep _Facebook Address
@@ -21114,7 +21222,9 @@ import { RegisterClass } from "@memberjunction/global";
         get acep_Fellowship(): string | null {  
             return this.Get('acep_Fellowship');
         }
-        
+        set acep_Fellowship(value: string | null) {
+            this.Set('acep_Fellowship', value);
+        }
         /**
         * * Field Name: acep_Clerkship
         * * Display Name: acep _Clerkship
@@ -21123,7 +21233,9 @@ import { RegisterClass } from "@memberjunction/global";
         get acep_Clerkship(): string | null {  
             return this.Get('acep_Clerkship');
         }
-        
+        set acep_Clerkship(value: string | null) {
+            this.Set('acep_Clerkship', value);
+        }
         /**
         * * Field Name: acep_GPTaxScheduleIDcode
         * * Display Name: acep _GPTax Schedule IDcode
@@ -21231,7 +21343,9 @@ import { RegisterClass } from "@memberjunction/global";
         get acep_CEDR(): string | null {  
             return this.Get('acep_CEDR');
         }
-        
+        set acep_CEDR(value: string | null) {
+            this.Set('acep_CEDR', value);
+        }
         /**
         * * Field Name: acep_DummyFieldToRemove
         * * Display Name: acep _Dummy Field To Remove
@@ -21263,7 +21377,9 @@ import { RegisterClass } from "@memberjunction/global";
         get acep_HealthSystem(): string | null {  
             return this.Get('acep_HealthSystem');
         }
-        
+        set acep_HealthSystem(value: string | null) {
+            this.Set('acep_HealthSystem', value);
+        }
         /**
         * * Field Name: acep_pdinterviewlink
         * * Display Name: acep _pdinterviewlink
@@ -21371,7 +21487,9 @@ import { RegisterClass } from "@memberjunction/global";
         get OrganizationId(): string | null {  
             return this.Get('OrganizationId');
         }
-        
+        set OrganizationId(value: string | null) {
+            this.Set('OrganizationId', value);
+        }
         /**
         * * Field Name: Value
         * * Display Name: Value
@@ -21510,7 +21628,9 @@ import { RegisterClass } from "@memberjunction/global";
         get OrganizationId(): string | null {  
             return this.Get('OrganizationId');
         }
-        
+        set OrganizationId(value: string | null) {
+            this.Set('OrganizationId', value);
+        }
         /**
         * * Field Name: ModifiedByYomiName
         * * Display Name: Modified By Yomi Name
@@ -21640,7 +21760,9 @@ import { RegisterClass } from "@memberjunction/global";
         get PriceLevelId(): string | null {  
             return this.Get('PriceLevelId');
         }
-        
+        set PriceLevelId(value: string | null) {
+            this.Set('PriceLevelId', value);
+        }
         /**
         * * Field Name: ProductPriceLevelId
         * * Display Name: Product Price Level Id
@@ -21659,7 +21781,9 @@ import { RegisterClass } from "@memberjunction/global";
         get UoMId(): string | null {  
             return this.Get('UoMId');
         }
-        
+        set UoMId(value: string | null) {
+            this.Set('UoMId', value);
+        }
         /**
         * * Field Name: UoMScheduleId
         * * Display Name: Uo MSchedule Id
@@ -21668,7 +21792,9 @@ import { RegisterClass } from "@memberjunction/global";
         get UoMScheduleId(): string | null {  
             return this.Get('UoMScheduleId');
         }
-        
+        set UoMScheduleId(value: string | null) {
+            this.Set('UoMScheduleId', value);
+        }
         /**
         * * Field Name: DiscountTypeId
         * * Display Name: Discount Type Id
@@ -21677,7 +21803,9 @@ import { RegisterClass } from "@memberjunction/global";
         get DiscountTypeId(): string | null {  
             return this.Get('DiscountTypeId');
         }
-        
+        set DiscountTypeId(value: string | null) {
+            this.Set('DiscountTypeId', value);
+        }
         /**
         * * Field Name: ProductId
         * * Display Name: Product Id
@@ -21687,7 +21815,9 @@ import { RegisterClass } from "@memberjunction/global";
         get ProductId(): string | null {  
             return this.Get('ProductId');
         }
-        
+        set ProductId(value: string | null) {
+            this.Set('ProductId', value);
+        }
         /**
         * * Field Name: Percentage
         * * Display Name: Percentage
@@ -21806,7 +21936,9 @@ import { RegisterClass } from "@memberjunction/global";
         get CreatedBy(): string | null {  
             return this.Get('CreatedBy');
         }
-        
+        set CreatedBy(value: string | null) {
+            this.Set('CreatedBy', value);
+        }
         /**
         * * Field Name: ModifiedBy
         * * Display Name: Modified By
@@ -21815,7 +21947,9 @@ import { RegisterClass } from "@memberjunction/global";
         get ModifiedBy(): string | null {  
             return this.Get('ModifiedBy');
         }
-        
+        set ModifiedBy(value: string | null) {
+            this.Set('ModifiedBy', value);
+        }
         /**
         * * Field Name: ExchangeRate
         * * Display Name: Exchange Rate
@@ -21835,7 +21969,9 @@ import { RegisterClass } from "@memberjunction/global";
         get TransactionCurrencyId(): string | null {  
             return this.Get('TransactionCurrencyId');
         }
-        
+        set TransactionCurrencyId(value: string | null) {
+            this.Set('TransactionCurrencyId', value);
+        }
         /**
         * * Field Name: OverriddenCreatedOn
         * * Display Name: Overridden Created On
@@ -21888,7 +22024,9 @@ import { RegisterClass } from "@memberjunction/global";
         get CreatedOnBehalfBy(): string | null {  
             return this.Get('CreatedOnBehalfBy');
         }
-        
+        set CreatedOnBehalfBy(value: string | null) {
+            this.Set('CreatedOnBehalfBy', value);
+        }
         /**
         * * Field Name: ModifiedOnBehalfBy
         * * Display Name: Modified On Behalf By
@@ -21897,7 +22035,9 @@ import { RegisterClass } from "@memberjunction/global";
         get ModifiedOnBehalfBy(): string | null {  
             return this.Get('ModifiedOnBehalfBy');
         }
-        
+        set ModifiedOnBehalfBy(value: string | null) {
+            this.Set('ModifiedOnBehalfBy', value);
+        }
         /**
         * * Field Name: ProcessId
         * * Display Name: Process Id
@@ -21906,7 +22046,9 @@ import { RegisterClass } from "@memberjunction/global";
         get ProcessId(): string | null {  
             return this.Get('ProcessId');
         }
-        
+        set ProcessId(value: string | null) {
+            this.Set('ProcessId', value);
+        }
         /**
         * * Field Name: StageId
         * * Display Name: Stage Id
@@ -21915,7 +22057,9 @@ import { RegisterClass } from "@memberjunction/global";
         get StageId(): string | null {  
             return this.Get('StageId');
         }
-        
+        set StageId(value: string | null) {
+            this.Set('StageId', value);
+        }
         /**
         * * Field Name: TraversedPath
         * * Display Name: Traversed Path
@@ -22133,7 +22277,9 @@ import { RegisterClass } from "@memberjunction/global";
         get OwnerId(): string | null {  
             return this.Get('OwnerId');
         }
-        
+        set OwnerId(value: string | null) {
+            this.Set('OwnerId', value);
+        }
         /**
         * * Field Name: OwnerIdName
         * * Display Name: Owner Id Name
@@ -22186,7 +22332,9 @@ import { RegisterClass } from "@memberjunction/global";
         get OwningUser(): string | null {  
             return this.Get('OwningUser');
         }
-        
+        set OwningUser(value: string | null) {
+            this.Set('OwningUser', value);
+        }
         /**
         * * Field Name: OwningTeam
         * * Display Name: Owning Team
@@ -22195,7 +22343,9 @@ import { RegisterClass } from "@memberjunction/global";
         get OwningTeam(): string | null {  
             return this.Get('OwningTeam');
         }
-        
+        set OwningTeam(value: string | null) {
+            this.Set('OwningTeam', value);
+        }
         /**
         * * Field Name: Acep_AcquisitionPromoCode
         * * Display Name: Acep _Acquisition Promo Code
@@ -22477,7 +22627,9 @@ import { RegisterClass } from "@memberjunction/global";
         get CreatedBy(): string | null {  
             return this.Get('CreatedBy');
         }
-        
+        set CreatedBy(value: string | null) {
+            this.Set('CreatedBy', value);
+        }
         /**
         * * Field Name: CreatedOn
         * * Display Name: Created On
@@ -22508,7 +22660,9 @@ import { RegisterClass } from "@memberjunction/global";
         get ModifiedBy(): string | null {  
             return this.Get('ModifiedBy');
         }
-        
+        set ModifiedBy(value: string | null) {
+            this.Set('ModifiedBy', value);
+        }
         /**
         * * Field Name: ModifiedOn
         * * Display Name: Modified On
@@ -22539,7 +22693,9 @@ import { RegisterClass } from "@memberjunction/global";
         get OwningBusinessUnit(): string | null {  
             return this.Get('OwningBusinessUnit');
         }
-        
+        set OwningBusinessUnit(value: string | null) {
+            this.Set('OwningBusinessUnit', value);
+        }
         /**
         * * Field Name: statecode
         * * Display Name: statecode
@@ -22604,7 +22760,9 @@ import { RegisterClass } from "@memberjunction/global";
         get acep_contactid(): string | null {  
             return this.Get('acep_contactid');
         }
-        
+        set acep_contactid(value: string | null) {
+            this.Set('acep_contactid', value);
+        }
         /**
         * * Field Name: Acep_CurrentCRMOrderId
         * * Display Name: Acep _Current CRMOrder Id
@@ -22614,7 +22772,9 @@ import { RegisterClass } from "@memberjunction/global";
         get Acep_CurrentCRMOrderId(): string | null {  
             return this.Get('Acep_CurrentCRMOrderId');
         }
-        
+        set Acep_CurrentCRMOrderId(value: string | null) {
+            this.Set('Acep_CurrentCRMOrderId', value);
+        }
         /**
         * * Field Name: Acep_futureCRMOrderId
         * * Display Name: Acep _future CRMOrder Id
@@ -22624,7 +22784,9 @@ import { RegisterClass } from "@memberjunction/global";
         get Acep_futureCRMOrderId(): string | null {  
             return this.Get('Acep_futureCRMOrderId');
         }
-        
+        set Acep_futureCRMOrderId(value: string | null) {
+            this.Set('Acep_futureCRMOrderId', value);
+        }
         /**
         * * Field Name: Acep_BillingOptionId
         * * Display Name: Acep _Billing Option Id
@@ -22633,7 +22795,9 @@ import { RegisterClass } from "@memberjunction/global";
         get Acep_BillingOptionId(): string | null {  
             return this.Get('Acep_BillingOptionId');
         }
-        
+        set Acep_BillingOptionId(value: string | null) {
+            this.Set('Acep_BillingOptionId', value);
+        }
         /**
         * * Field Name: CreatedOnBehalfBy
         * * Display Name: Created On Behalf By
@@ -22642,7 +22806,9 @@ import { RegisterClass } from "@memberjunction/global";
         get CreatedOnBehalfBy(): string | null {  
             return this.Get('CreatedOnBehalfBy');
         }
-        
+        set CreatedOnBehalfBy(value: string | null) {
+            this.Set('CreatedOnBehalfBy', value);
+        }
         /**
         * * Field Name: ModifiedOnBehalfBy
         * * Display Name: Modified On Behalf By
@@ -22651,7 +22817,9 @@ import { RegisterClass } from "@memberjunction/global";
         get ModifiedOnBehalfBy(): string | null {  
             return this.Get('ModifiedOnBehalfBy');
         }
-        
+        set ModifiedOnBehalfBy(value: string | null) {
+            this.Set('ModifiedOnBehalfBy', value);
+        }
         /**
         * * Field Name: acep_FutureBillingOptionId
         * * Display Name: acep _Future Billing Option Id
@@ -22660,7 +22828,9 @@ import { RegisterClass } from "@memberjunction/global";
         get acep_FutureBillingOptionId(): string | null {  
             return this.Get('acep_FutureBillingOptionId');
         }
-        
+        set acep_FutureBillingOptionId(value: string | null) {
+            this.Set('acep_FutureBillingOptionId', value);
+        }
         /**
         * * Field Name: acep_LastRateChangeDate
         * * Display Name: acep _Last Rate Change Date
@@ -23252,7 +23422,9 @@ import { RegisterClass } from "@memberjunction/global";
         get Address1_AddressId(): string | null {  
             return this.Get('Address1_AddressId');
         }
-        
+        set Address1_AddressId(value: string | null) {
+            this.Set('Address1_AddressId', value);
+        }
         /**
         * * Field Name: Address1_Fax
         * * Display Name: Address 1_Fax
@@ -23514,7 +23686,9 @@ import { RegisterClass } from "@memberjunction/global";
         get Address2_AddressId(): string | null {  
             return this.Get('Address2_AddressId');
         }
-        
+        set Address2_AddressId(value: string | null) {
+            this.Set('Address2_AddressId', value);
+        }
         /**
         * * Field Name: Address2_Fax
         * * Display Name: Address 2_Fax
@@ -23776,7 +23950,9 @@ import { RegisterClass } from "@memberjunction/global";
         get Address3_AddressId(): string | null {  
             return this.Get('Address3_AddressId');
         }
-        
+        set Address3_AddressId(value: string | null) {
+            this.Set('Address3_AddressId', value);
+        }
         /**
         * * Field Name: Address3_Fax
         * * Display Name: Address 3_Fax
@@ -23983,7 +24159,9 @@ import { RegisterClass } from "@memberjunction/global";
         get OwnerId(): string | null {  
             return this.Get('OwnerId');
         }
-        
+        set OwnerId(value: string | null) {
+            this.Set('OwnerId', value);
+        }
         /**
         * * Field Name: OwnerIdName
         * * Display Name: Owner Id Name
@@ -24036,7 +24214,9 @@ import { RegisterClass } from "@memberjunction/global";
         get OwningUser(): string | null {  
             return this.Get('OwningUser');
         }
-        
+        set OwningUser(value: string | null) {
+            this.Set('OwningUser', value);
+        }
         /**
         * * Field Name: OwningTeam
         * * Display Name: Owning Team
@@ -24045,7 +24225,9 @@ import { RegisterClass } from "@memberjunction/global";
         get OwningTeam(): string | null {  
             return this.Get('OwningTeam');
         }
-        
+        set OwningTeam(value: string | null) {
+            this.Set('OwningTeam', value);
+        }
         /**
         * * Field Name: AccountId
         * * Display Name: Account Id
@@ -24054,7 +24236,9 @@ import { RegisterClass } from "@memberjunction/global";
         get AccountId(): string | null {  
             return this.Get('AccountId');
         }
-        
+        set AccountId(value: string | null) {
+            this.Set('AccountId', value);
+        }
         /**
         * * Field Name: AccountIdName
         * * Display Name: Account Id Name
@@ -24085,7 +24269,9 @@ import { RegisterClass } from "@memberjunction/global";
         get ParentContactId(): string | null {  
             return this.Get('ParentContactId');
         }
-        
+        set ParentContactId(value: string | null) {
+            this.Set('ParentContactId', value);
+        }
         /**
         * * Field Name: ParentContactIdName
         * * Display Name: Parent Contact Id Name
@@ -24125,7 +24311,9 @@ import { RegisterClass } from "@memberjunction/global";
         get DefaultPriceLevelId(): string | null {  
             return this.Get('DefaultPriceLevelId');
         }
-        
+        set DefaultPriceLevelId(value: string | null) {
+            this.Set('DefaultPriceLevelId', value);
+        }
         /**
         * * Field Name: CustomerSizeCode
         * * Display Name: Customer Size Code
@@ -24178,7 +24366,9 @@ import { RegisterClass } from "@memberjunction/global";
         get OriginatingLeadId(): string | null {  
             return this.Get('OriginatingLeadId');
         }
-        
+        set OriginatingLeadId(value: string | null) {
+            this.Set('OriginatingLeadId', value);
+        }
         /**
         * * Field Name: OwningBusinessUnit
         * * Display Name: Owning Business Unit
@@ -24187,7 +24377,9 @@ import { RegisterClass } from "@memberjunction/global";
         get OwningBusinessUnit(): string | null {  
             return this.Get('OwningBusinessUnit');
         }
-        
+        set OwningBusinessUnit(value: string | null) {
+            this.Set('OwningBusinessUnit', value);
+        }
         /**
         * * Field Name: PaymentTermsCode
         * * Display Name: Payment Terms Code
@@ -24735,7 +24927,9 @@ import { RegisterClass } from "@memberjunction/global";
         get CreatedBy(): string | null {  
             return this.Get('CreatedBy');
         }
-        
+        set CreatedBy(value: string | null) {
+            this.Set('CreatedBy', value);
+        }
         /**
         * * Field Name: ModifiedOn
         * * Display Name: Modified On
@@ -24755,7 +24949,9 @@ import { RegisterClass } from "@memberjunction/global";
         get ModifiedBy(): string | null {  
             return this.Get('ModifiedBy');
         }
-        
+        set ModifiedBy(value: string | null) {
+            this.Set('ModifiedBy', value);
+        }
         /**
         * * Field Name: NumberOfChildren
         * * Display Name: Number Of Children
@@ -24918,7 +25114,9 @@ import { RegisterClass } from "@memberjunction/global";
         get PreferredSystemUserId(): string | null {  
             return this.Get('PreferredSystemUserId');
         }
-        
+        set PreferredSystemUserId(value: string | null) {
+            this.Set('PreferredSystemUserId', value);
+        }
         /**
         * * Field Name: PreferredServiceId
         * * Display Name: Preferred Service Id
@@ -24927,7 +25125,9 @@ import { RegisterClass } from "@memberjunction/global";
         get PreferredServiceId(): string | null {  
             return this.Get('PreferredServiceId');
         }
-        
+        set PreferredServiceId(value: string | null) {
+            this.Set('PreferredServiceId', value);
+        }
         /**
         * * Field Name: MasterId
         * * Display Name: Master Id
@@ -24937,7 +25137,9 @@ import { RegisterClass } from "@memberjunction/global";
         get MasterId(): string | null {  
             return this.Get('MasterId');
         }
-        
+        set MasterId(value: string | null) {
+            this.Set('MasterId', value);
+        }
         /**
         * * Field Name: PreferredAppointmentDayCode
         * * Display Name: Preferred Appointment Day Code
@@ -24979,7 +25181,9 @@ import { RegisterClass } from "@memberjunction/global";
         get ParentCustomerId(): string | null {  
             return this.Get('ParentCustomerId');
         }
-        
+        set ParentCustomerId(value: string | null) {
+            this.Set('ParentCustomerId', value);
+        }
         /**
         * * Field Name: Merged
         * * Display Name: Merged
@@ -25010,7 +25214,9 @@ import { RegisterClass } from "@memberjunction/global";
         get SubscriptionId(): string | null {  
             return this.Get('SubscriptionId');
         }
-        
+        set SubscriptionId(value: string | null) {
+            this.Set('SubscriptionId', value);
+        }
         /**
         * * Field Name: PreferredEquipmentId
         * * Display Name: Preferred Equipment Id
@@ -25019,7 +25225,9 @@ import { RegisterClass } from "@memberjunction/global";
         get PreferredEquipmentId(): string | null {  
             return this.Get('PreferredEquipmentId');
         }
-        
+        set PreferredEquipmentId(value: string | null) {
+            this.Set('PreferredEquipmentId', value);
+        }
         /**
         * * Field Name: LastUsedInCampaign
         * * Display Name: Last Used In Campaign
@@ -25061,7 +25269,9 @@ import { RegisterClass } from "@memberjunction/global";
         get TransactionCurrencyId(): string | null {  
             return this.Get('TransactionCurrencyId');
         }
-        
+        set TransactionCurrencyId(value: string | null) {
+            this.Set('TransactionCurrencyId', value);
+        }
         /**
         * * Field Name: OverriddenCreatedOn
         * * Display Name: Overridden Created On
@@ -25191,7 +25401,9 @@ import { RegisterClass } from "@memberjunction/global";
         get CreatedOnBehalfBy(): string | null {  
             return this.Get('CreatedOnBehalfBy');
         }
-        
+        set CreatedOnBehalfBy(value: string | null) {
+            this.Set('CreatedOnBehalfBy', value);
+        }
         /**
         * * Field Name: ModifiedOnBehalfBy
         * * Display Name: Modified On Behalf By
@@ -25200,7 +25412,9 @@ import { RegisterClass } from "@memberjunction/global";
         get ModifiedOnBehalfBy(): string | null {  
             return this.Get('ModifiedOnBehalfBy');
         }
-        
+        set ModifiedOnBehalfBy(value: string | null) {
+            this.Set('ModifiedOnBehalfBy', value);
+        }
         /**
         * * Field Name: IsAutoCreate
         * * Display Name: Is Auto Create
@@ -25220,7 +25434,9 @@ import { RegisterClass } from "@memberjunction/global";
         get StageId(): string | null {  
             return this.Get('StageId');
         }
-        
+        set StageId(value: string | null) {
+            this.Set('StageId', value);
+        }
         /**
         * * Field Name: ProcessId
         * * Display Name: Process Id
@@ -25229,7 +25445,9 @@ import { RegisterClass } from "@memberjunction/global";
         get ProcessId(): string | null {  
             return this.Get('ProcessId');
         }
-        
+        set ProcessId(value: string | null) {
+            this.Set('ProcessId', value);
+        }
         /**
         * * Field Name: EntityImageId
         * * Display Name: Entity Image Id
@@ -25238,7 +25456,9 @@ import { RegisterClass } from "@memberjunction/global";
         get EntityImageId(): string | null {  
             return this.Get('EntityImageId');
         }
-        
+        set EntityImageId(value: string | null) {
+            this.Set('EntityImageId', value);
+        }
         /**
         * * Field Name: TraversedPath
         * * Display Name: Traversed Path
@@ -25258,7 +25478,9 @@ import { RegisterClass } from "@memberjunction/global";
         get SLAId(): string | null {  
             return this.Get('SLAId');
         }
-        
+        set SLAId(value: string | null) {
+            this.Set('SLAId', value);
+        }
         /**
         * * Field Name: SLAInvokedId
         * * Display Name: SLAInvoked Id
@@ -25267,7 +25489,9 @@ import { RegisterClass } from "@memberjunction/global";
         get SLAInvokedId(): string | null {  
             return this.Get('SLAInvokedId');
         }
-        
+        set SLAInvokedId(value: string | null) {
+            this.Set('SLAInvokedId', value);
+        }
         /**
         * * Field Name: OnHoldTime
         * * Display Name: On Hold Time
@@ -25364,7 +25588,9 @@ import { RegisterClass } from "@memberjunction/global";
         get CreatedByExternalParty(): string | null {  
             return this.Get('CreatedByExternalParty');
         }
-        
+        set CreatedByExternalParty(value: string | null) {
+            this.Set('CreatedByExternalParty', value);
+        }
         /**
         * * Field Name: ModifiedByExternalParty
         * * Display Name: Modified By External Party
@@ -25373,7 +25599,9 @@ import { RegisterClass } from "@memberjunction/global";
         get ModifiedByExternalParty(): string | null {  
             return this.Get('ModifiedByExternalParty');
         }
-        
+        set ModifiedByExternalParty(value: string | null) {
+            this.Set('ModifiedByExternalParty', value);
+        }
         /**
         * * Field Name: MarketingOnly
         * * Display Name: Marketing Only
@@ -25657,7 +25885,9 @@ import { RegisterClass } from "@memberjunction/global";
         get acep_plannersid(): string | null {  
             return this.Get('acep_plannersid');
         }
-        
+        set acep_plannersid(value: string | null) {
+            this.Set('acep_plannersid', value);
+        }
         /**
         * * Field Name: Acep_EmployerAddressState
         * * Display Name: Acep _Employer Address State
@@ -25776,7 +26006,9 @@ import { RegisterClass } from "@memberjunction/global";
         get acep_countryofcitizenshipid(): string | null {  
             return this.Get('acep_countryofcitizenshipid');
         }
-        
+        set acep_countryofcitizenshipid(value: string | null) {
+            this.Set('acep_countryofcitizenshipid', value);
+        }
         /**
         * * Field Name: Acep_PrimaryFax
         * * Display Name: Acep _Primary Fax
@@ -25829,7 +26061,9 @@ import { RegisterClass } from "@memberjunction/global";
         get acep_countryid(): string | null {  
             return this.Get('acep_countryid');
         }
-        
+        set acep_countryid(value: string | null) {
+            this.Set('acep_countryid', value);
+        }
         /**
         * * Field Name: Acep_emailaddress4
         * * Display Name: Acep _emailaddress 4
@@ -25927,7 +26161,9 @@ import { RegisterClass } from "@memberjunction/global";
         get Acep_ACEPMembershipId(): string | null {  
             return this.Get('Acep_ACEPMembershipId');
         }
-        
+        set Acep_ACEPMembershipId(value: string | null) {
+            this.Set('Acep_ACEPMembershipId', value);
+        }
         /**
         * * Field Name: Acep_PercentFundedbyIndividual
         * * Display Name: Acep _Percent Fundedby Individual
@@ -26123,7 +26359,9 @@ import { RegisterClass } from "@memberjunction/global";
         get adx_systemuserid(): string | null {  
             return this.Get('adx_systemuserid');
         }
-        
+        set adx_systemuserid(value: string | null) {
+            this.Set('adx_systemuserid', value);
+        }
         /**
         * * Field Name: Acep_QuestionCode
         * * Display Name: Acep _Question Code
@@ -26231,7 +26469,9 @@ import { RegisterClass } from "@memberjunction/global";
         get acep_emcareercountryid(): string | null {  
             return this.Get('acep_emcareercountryid');
         }
-        
+        set acep_emcareercountryid(value: string | null) {
+            this.Set('acep_emcareercountryid', value);
+        }
         /**
         * * Field Name: Acep_WorkSettingOther
         * * Display Name: Acep _Work Setting Other
@@ -26450,7 +26690,9 @@ import { RegisterClass } from "@memberjunction/global";
         get Acep_EMRAMembershipId(): string | null {  
             return this.Get('Acep_EMRAMembershipId');
         }
-        
+        set Acep_EMRAMembershipId(value: string | null) {
+            this.Set('Acep_EMRAMembershipId', value);
+        }
         /**
         * * Field Name: Acep_FormalName
         * * Display Name: Acep _Formal Name
@@ -26746,7 +26988,9 @@ import { RegisterClass } from "@memberjunction/global";
         get Acep_SEMPAMembershipId(): string | null {  
             return this.Get('Acep_SEMPAMembershipId');
         }
-        
+        set Acep_SEMPAMembershipId(value: string | null) {
+            this.Set('Acep_SEMPAMembershipId', value);
+        }
         /**
         * * Field Name: Adx_failedpasswordattempts
         * * Display Name: Adx _failedpasswordattempts
@@ -26920,7 +27164,9 @@ import { RegisterClass } from "@memberjunction/global";
         get acep_emcareerstateorprovinceid(): string | null {  
             return this.Get('acep_emcareerstateorprovinceid');
         }
-        
+        set acep_emcareerstateorprovinceid(value: string | null) {
+            this.Set('acep_emcareerstateorprovinceid', value);
+        }
         /**
         * * Field Name: Acep_AllowBirthday
         * * Display Name: Acep _Allow Birthday
@@ -27062,7 +27308,9 @@ import { RegisterClass } from "@memberjunction/global";
         get msa_managingpartnerid(): string | null {  
             return this.Get('msa_managingpartnerid');
         }
-        
+        set msa_managingpartnerid(value: string | null) {
+            this.Set('msa_managingpartnerid', value);
+        }
         /**
         * * Field Name: Acep_emailaddress5
         * * Display Name: Acep _emailaddress 5
@@ -27313,7 +27561,9 @@ import { RegisterClass } from "@memberjunction/global";
         get acep_stateorprovinceid(): string | null {  
             return this.Get('acep_stateorprovinceid');
         }
-        
+        set acep_stateorprovinceid(value: string | null) {
+            this.Set('acep_stateorprovinceid', value);
+        }
         /**
         * * Field Name: Acep_ModifiedByProcess
         * * Display Name: Acep _Modified By Process
@@ -27685,7 +27935,9 @@ import { RegisterClass } from "@memberjunction/global";
         get acep_MarketingDataIndividual(): string | null {  
             return this.Get('acep_MarketingDataIndividual');
         }
-        
+        set acep_MarketingDataIndividual(value: string | null) {
+            this.Set('acep_MarketingDataIndividual', value);
+        }
         /**
         * * Field Name: acep_Biography
         * * Display Name: acep _Biography
@@ -28222,7 +28474,9 @@ import { RegisterClass } from "@memberjunction/global";
         get OrganizationId(): string | null {  
             return this.Get('OrganizationId');
         }
-        
+        set OrganizationId(value: string | null) {
+            this.Set('OrganizationId', value);
+        }
         /**
         * * Field Name: UoMId
         * * Display Name: Uo MId
@@ -28241,7 +28495,9 @@ import { RegisterClass } from "@memberjunction/global";
         get BaseUoM(): string | null {  
             return this.Get('BaseUoM');
         }
-        
+        set BaseUoM(value: string | null) {
+            this.Set('BaseUoM', value);
+        }
         /**
         * * Field Name: Name
         * * Display Name: Name
@@ -28261,7 +28517,9 @@ import { RegisterClass } from "@memberjunction/global";
         get UoMScheduleId(): string | null {  
             return this.Get('UoMScheduleId');
         }
-        
+        set UoMScheduleId(value: string | null) {
+            this.Set('UoMScheduleId', value);
+        }
         /**
         * * Field Name: Quantity
         * * Display Name: Quantity
@@ -28292,7 +28550,9 @@ import { RegisterClass } from "@memberjunction/global";
         get CreatedBy(): string | null {  
             return this.Get('CreatedBy');
         }
-        
+        set CreatedBy(value: string | null) {
+            this.Set('CreatedBy', value);
+        }
         /**
         * * Field Name: ModifiedBy
         * * Display Name: Modified By
@@ -28301,7 +28561,9 @@ import { RegisterClass } from "@memberjunction/global";
         get ModifiedBy(): string | null {  
             return this.Get('ModifiedBy');
         }
-        
+        set ModifiedBy(value: string | null) {
+            this.Set('ModifiedBy', value);
+        }
         /**
         * * Field Name: ModifiedOn
         * * Display Name: Modified On
@@ -28365,7 +28627,9 @@ import { RegisterClass } from "@memberjunction/global";
         get CreatedOnBehalfBy(): string | null {  
             return this.Get('CreatedOnBehalfBy');
         }
-        
+        set CreatedOnBehalfBy(value: string | null) {
+            this.Set('CreatedOnBehalfBy', value);
+        }
         /**
         * * Field Name: ModifiedOnBehalfBy
         * * Display Name: Modified On Behalf By
@@ -28374,7 +28638,9 @@ import { RegisterClass } from "@memberjunction/global";
         get ModifiedOnBehalfBy(): string | null {  
             return this.Get('ModifiedOnBehalfBy');
         }
-        
+        set ModifiedOnBehalfBy(value: string | null) {
+            this.Set('ModifiedOnBehalfBy', value);
+        }
         /**
         * * Field Name: CreatedByExternalParty
         * * Display Name: Created By External Party
@@ -28383,7 +28649,9 @@ import { RegisterClass } from "@memberjunction/global";
         get CreatedByExternalParty(): string | null {  
             return this.Get('CreatedByExternalParty');
         }
-        
+        set CreatedByExternalParty(value: string | null) {
+            this.Set('CreatedByExternalParty', value);
+        }
         /**
         * * Field Name: ModifiedByExternalParty
         * * Display Name: Modified By External Party
@@ -28392,7 +28660,9 @@ import { RegisterClass } from "@memberjunction/global";
         get ModifiedByExternalParty(): string | null {  
             return this.Get('ModifiedByExternalParty');
         }
-        
+        set ModifiedByExternalParty(value: string | null) {
+            this.Set('ModifiedByExternalParty', value);
+        }
 
     }
         
@@ -28896,7 +29166,9 @@ import { RegisterClass } from "@memberjunction/global";
         get OwnerId(): string | null {  
             return this.Get('OwnerId');
         }
-        
+        set OwnerId(value: string | null) {
+            this.Set('OwnerId', value);
+        }
         /**
         * * Field Name: OwnerIdName
         * * Display Name: Owner Id Name
@@ -28949,7 +29221,9 @@ import { RegisterClass } from "@memberjunction/global";
         get OwningUser(): string | null {  
             return this.Get('OwningUser');
         }
-        
+        set OwningUser(value: string | null) {
+            this.Set('OwningUser', value);
+        }
         /**
         * * Field Name: OwningTeam
         * * Display Name: Owning Team
@@ -28958,7 +29232,9 @@ import { RegisterClass } from "@memberjunction/global";
         get OwningTeam(): string | null {  
             return this.Get('OwningTeam');
         }
-        
+        set OwningTeam(value: string | null) {
+            this.Set('OwningTeam', value);
+        }
         /**
         * * Field Name: AccountId
         * * Display Name: Account Id
@@ -28967,7 +29243,9 @@ import { RegisterClass } from "@memberjunction/global";
         get AccountId(): string | null {  
             return this.Get('AccountId');
         }
-        
+        set AccountId(value: string | null) {
+            this.Set('AccountId', value);
+        }
         /**
         * * Field Name: AccountIdName
         * * Display Name: Account Id Name
@@ -28998,7 +29276,9 @@ import { RegisterClass } from "@memberjunction/global";
         get ContactId(): string | null {  
             return this.Get('ContactId');
         }
-        
+        set ContactId(value: string | null) {
+            this.Set('ContactId', value);
+        }
         /**
         * * Field Name: ContactIdName
         * * Display Name: Contact Id Name
@@ -29038,7 +29318,9 @@ import { RegisterClass } from "@memberjunction/global";
         get OpportunityId(): string | null {  
             return this.Get('OpportunityId');
         }
-        
+        set OpportunityId(value: string | null) {
+            this.Set('OpportunityId', value);
+        }
         /**
         * * Field Name: QuoteId
         * * Display Name: Quote Id
@@ -29047,7 +29329,9 @@ import { RegisterClass } from "@memberjunction/global";
         get QuoteId(): string | null {  
             return this.Get('QuoteId');
         }
-        
+        set QuoteId(value: string | null) {
+            this.Set('QuoteId', value);
+        }
         /**
         * * Field Name: PriorityCode
         * * Display Name: Priority Code
@@ -29089,7 +29373,9 @@ import { RegisterClass } from "@memberjunction/global";
         get OwningBusinessUnit(): string | null {  
             return this.Get('OwningBusinessUnit');
         }
-        
+        set OwningBusinessUnit(value: string | null) {
+            this.Set('OwningBusinessUnit', value);
+        }
         /**
         * * Field Name: SubmitStatusDescription
         * * Display Name: Submit Status Description
@@ -29109,7 +29395,9 @@ import { RegisterClass } from "@memberjunction/global";
         get PriceLevelId(): string | null {  
             return this.Get('PriceLevelId');
         }
-        
+        set PriceLevelId(value: string | null) {
+            this.Set('PriceLevelId', value);
+        }
         /**
         * * Field Name: LastBackofficeSubmit
         * * Display Name: Last Backoffice Submit
@@ -29305,7 +29593,9 @@ import { RegisterClass } from "@memberjunction/global";
         get CreatedBy(): string | null {  
             return this.Get('CreatedBy');
         }
-        
+        set CreatedBy(value: string | null) {
+            this.Set('CreatedBy', value);
+        }
         /**
         * * Field Name: CreatedOn
         * * Display Name: Created On
@@ -29325,7 +29615,9 @@ import { RegisterClass } from "@memberjunction/global";
         get ModifiedBy(): string | null {  
             return this.Get('ModifiedBy');
         }
-        
+        set ModifiedBy(value: string | null) {
+            this.Set('ModifiedBy', value);
+        }
         /**
         * * Field Name: ModifiedOn
         * * Display Name: Modified On
@@ -29631,7 +29923,9 @@ import { RegisterClass } from "@memberjunction/global";
         get CustomerId(): string | null {  
             return this.Get('CustomerId');
         }
-        
+        set CustomerId(value: string | null) {
+            this.Set('CustomerId', value);
+        }
         /**
         * * Field Name: CustomerIdName
         * * Display Name: Customer Id Name
@@ -29673,7 +29967,9 @@ import { RegisterClass } from "@memberjunction/global";
         get CampaignId(): string | null {  
             return this.Get('CampaignId');
         }
-        
+        set CampaignId(value: string | null) {
+            this.Set('CampaignId', value);
+        }
         /**
         * * Field Name: BillTo_AddressId
         * * Display Name: Bill To _Address Id
@@ -29682,7 +29978,9 @@ import { RegisterClass } from "@memberjunction/global";
         get BillTo_AddressId(): string | null {  
             return this.Get('BillTo_AddressId');
         }
-        
+        set BillTo_AddressId(value: string | null) {
+            this.Set('BillTo_AddressId', value);
+        }
         /**
         * * Field Name: ShipTo_AddressId
         * * Display Name: Ship To _Address Id
@@ -29691,7 +29989,9 @@ import { RegisterClass } from "@memberjunction/global";
         get ShipTo_AddressId(): string | null {  
             return this.Get('ShipTo_AddressId');
         }
-        
+        set ShipTo_AddressId(value: string | null) {
+            this.Set('ShipTo_AddressId', value);
+        }
         /**
         * * Field Name: IsPriceLocked
         * * Display Name: Is Price Locked
@@ -29744,7 +30044,9 @@ import { RegisterClass } from "@memberjunction/global";
         get TransactionCurrencyId(): string | null {  
             return this.Get('TransactionCurrencyId');
         }
-        
+        set TransactionCurrencyId(value: string | null) {
+            this.Set('TransactionCurrencyId', value);
+        }
         /**
         * * Field Name: TimeZoneRuleVersionNumber
         * * Display Name: Time Zone Rule Version Number
@@ -29896,7 +30198,9 @@ import { RegisterClass } from "@memberjunction/global";
         get CreatedOnBehalfBy(): string | null {  
             return this.Get('CreatedOnBehalfBy');
         }
-        
+        set CreatedOnBehalfBy(value: string | null) {
+            this.Set('CreatedOnBehalfBy', value);
+        }
         /**
         * * Field Name: ModifiedOnBehalfBy
         * * Display Name: Modified On Behalf By
@@ -29905,7 +30209,9 @@ import { RegisterClass } from "@memberjunction/global";
         get ModifiedOnBehalfBy(): string | null {  
             return this.Get('ModifiedOnBehalfBy');
         }
-        
+        set ModifiedOnBehalfBy(value: string | null) {
+            this.Set('ModifiedOnBehalfBy', value);
+        }
         /**
         * * Field Name: BillTo_Composite
         * * Display Name: Bill To _Composite
@@ -29936,7 +30242,9 @@ import { RegisterClass } from "@memberjunction/global";
         get ProcessId(): string | null {  
             return this.Get('ProcessId');
         }
-        
+        set ProcessId(value: string | null) {
+            this.Set('ProcessId', value);
+        }
         /**
         * * Field Name: StageId
         * * Display Name: Stage Id
@@ -29945,7 +30253,9 @@ import { RegisterClass } from "@memberjunction/global";
         get StageId(): string | null {  
             return this.Get('StageId');
         }
-        
+        set StageId(value: string | null) {
+            this.Set('StageId', value);
+        }
         /**
         * * Field Name: EntityImageId
         * * Display Name: Entity Image Id
@@ -29954,7 +30264,9 @@ import { RegisterClass } from "@memberjunction/global";
         get EntityImageId(): string | null {  
             return this.Get('EntityImageId');
         }
-        
+        set EntityImageId(value: string | null) {
+            this.Set('EntityImageId', value);
+        }
         /**
         * * Field Name: TraversedPath
         * * Display Name: Traversed Path
@@ -29996,7 +30308,9 @@ import { RegisterClass } from "@memberjunction/global";
         get SLAId(): string | null {  
             return this.Get('SLAId');
         }
-        
+        set SLAId(value: string | null) {
+            this.Set('SLAId', value);
+        }
         /**
         * * Field Name: SLAInvokedId
         * * Display Name: SLAInvoked Id
@@ -30005,7 +30319,9 @@ import { RegisterClass } from "@memberjunction/global";
         get SLAInvokedId(): string | null {  
             return this.Get('SLAInvokedId');
         }
-        
+        set SLAInvokedId(value: string | null) {
+            this.Set('SLAInvokedId', value);
+        }
         /**
         * * Field Name: Acep_InstallmentStartDate
         * * Display Name: Acep _Installment Start Date
@@ -30092,7 +30408,9 @@ import { RegisterClass } from "@memberjunction/global";
         get Acep_SEMPAMembershipId(): string | null {  
             return this.Get('Acep_SEMPAMembershipId');
         }
-        
+        set Acep_SEMPAMembershipId(value: string | null) {
+            this.Set('Acep_SEMPAMembershipId', value);
+        }
         /**
         * * Field Name: Acep_ChangeOrdertoInstallmenttype
         * * Display Name: Acep _Change Orderto Installmenttype
@@ -30123,7 +30441,9 @@ import { RegisterClass } from "@memberjunction/global";
         get Acep_ACEPMembershipHistoryId(): string | null {  
             return this.Get('Acep_ACEPMembershipHistoryId');
         }
-        
+        set Acep_ACEPMembershipHistoryId(value: string | null) {
+            this.Set('Acep_ACEPMembershipHistoryId', value);
+        }
         /**
         * * Field Name: Acep_parentorderid
         * * Display Name: Acep _parentorderid
@@ -30144,7 +30464,9 @@ import { RegisterClass } from "@memberjunction/global";
         get acep_orgorderforrefundid(): string | null {  
             return this.Get('acep_orgorderforrefundid');
         }
-        
+        set acep_orgorderforrefundid(value: string | null) {
+            this.Set('acep_orgorderforrefundid', value);
+        }
         /**
         * * Field Name: Acep_expirationdate
         * * Display Name: Acep _expirationdate
@@ -30165,7 +30487,9 @@ import { RegisterClass } from "@memberjunction/global";
         get Acep_ACEPMembershipId(): string | null {  
             return this.Get('Acep_ACEPMembershipId');
         }
-        
+        set Acep_ACEPMembershipId(value: string | null) {
+            this.Set('Acep_ACEPMembershipId', value);
+        }
         /**
         * * Field Name: Acep_CCTransactionDetails
         * * Display Name: Acep _CCTransaction Details
@@ -30185,7 +30509,9 @@ import { RegisterClass } from "@memberjunction/global";
         get Acep_BillingOptionId(): string | null {  
             return this.Get('Acep_BillingOptionId');
         }
-        
+        set Acep_BillingOptionId(value: string | null) {
+            this.Set('Acep_BillingOptionId', value);
+        }
         /**
         * * Field Name: Acep_installmenttype
         * * Display Name: Acep _installmenttype
@@ -30216,7 +30542,9 @@ import { RegisterClass } from "@memberjunction/global";
         get acep_eventregisterid(): string | null {  
             return this.Get('acep_eventregisterid');
         }
-        
+        set acep_eventregisterid(value: string | null) {
+            this.Set('acep_eventregisterid', value);
+        }
         /**
         * * Field Name: acep_batchid
         * * Display Name: acep _batchid
@@ -30225,7 +30553,9 @@ import { RegisterClass } from "@memberjunction/global";
         get acep_batchid(): string | null {  
             return this.Get('acep_batchid');
         }
-        
+        set acep_batchid(value: string | null) {
+            this.Set('acep_batchid', value);
+        }
         /**
         * * Field Name: acep_printrunid
         * * Display Name: acep _printrunid
@@ -30234,7 +30564,9 @@ import { RegisterClass } from "@memberjunction/global";
         get acep_printrunid(): string | null {  
             return this.Get('acep_printrunid');
         }
-        
+        set acep_printrunid(value: string | null) {
+            this.Set('acep_printrunid', value);
+        }
         /**
         * * Field Name: Acep_PaymentTypeCode
         * * Display Name: Acep _Payment Type Code
@@ -30265,7 +30597,9 @@ import { RegisterClass } from "@memberjunction/global";
         get acep_eventexhibitorid(): string | null {  
             return this.Get('acep_eventexhibitorid');
         }
-        
+        set acep_eventexhibitorid(value: string | null) {
+            this.Set('acep_eventexhibitorid', value);
+        }
         /**
         * * Field Name: Acep_cyclestartdate
         * * Display Name: Acep _cyclestartdate
@@ -30307,7 +30641,9 @@ import { RegisterClass } from "@memberjunction/global";
         get acep_cmeapprovalid(): string | null {  
             return this.Get('acep_cmeapprovalid');
         }
-        
+        set acep_cmeapprovalid(value: string | null) {
+            this.Set('acep_cmeapprovalid', value);
+        }
         /**
         * * Field Name: Acep_PostedDate
         * * Display Name: Acep _Posted Date
@@ -30361,7 +30697,9 @@ import { RegisterClass } from "@memberjunction/global";
         get Acep_EMRAMembershipId(): string | null {  
             return this.Get('Acep_EMRAMembershipId');
         }
-        
+        set Acep_EMRAMembershipId(value: string | null) {
+            this.Set('Acep_EMRAMembershipId', value);
+        }
         /**
         * * Field Name: Eone_OrderStatus
         * * Display Name: Eone _Order Status
@@ -30414,7 +30752,9 @@ import { RegisterClass } from "@memberjunction/global";
         get acep_conferenceregistrationid(): string | null {  
             return this.Get('acep_conferenceregistrationid');
         }
-        
+        set acep_conferenceregistrationid(value: string | null) {
+            this.Set('acep_conferenceregistrationid', value);
+        }
         /**
         * * Field Name: Acep_InstallmentDate
         * * Display Name: Acep _Installment Date
@@ -30467,7 +30807,9 @@ import { RegisterClass } from "@memberjunction/global";
         get eone_paymenttermsid(): string | null {  
             return this.Get('eone_paymenttermsid');
         }
-        
+        set eone_paymenttermsid(value: string | null) {
+            this.Set('eone_paymenttermsid', value);
+        }
         /**
         * * Field Name: Acep_GroupBillId
         * * Display Name: Acep _Group Bill Id
@@ -30476,7 +30818,9 @@ import { RegisterClass } from "@memberjunction/global";
         get Acep_GroupBillId(): string | null {  
             return this.Get('Acep_GroupBillId');
         }
-        
+        set Acep_GroupBillId(value: string | null) {
+            this.Set('Acep_GroupBillId', value);
+        }
         /**
         * * Field Name: acep_eventsponsorid
         * * Display Name: acep _eventsponsorid
@@ -30485,7 +30829,9 @@ import { RegisterClass } from "@memberjunction/global";
         get acep_eventsponsorid(): string | null {  
             return this.Get('acep_eventsponsorid');
         }
-        
+        set acep_eventsponsorid(value: string | null) {
+            this.Set('acep_eventsponsorid', value);
+        }
         /**
         * * Field Name: Acep_OrderTypeId
         * * Display Name: Acep _Order Type Id
@@ -30494,7 +30840,9 @@ import { RegisterClass } from "@memberjunction/global";
         get Acep_OrderTypeId(): string | null {  
             return this.Get('Acep_OrderTypeId');
         }
-        
+        set Acep_OrderTypeId(value: string | null) {
+            this.Set('Acep_OrderTypeId', value);
+        }
         /**
         * * Field Name: acep_salesorderid
         * * Display Name: acep _salesorderid
@@ -30503,7 +30851,9 @@ import { RegisterClass } from "@memberjunction/global";
         get acep_salesorderid(): string | null {  
             return this.Get('acep_salesorderid');
         }
-        
+        set acep_salesorderid(value: string | null) {
+            this.Set('acep_salesorderid', value);
+        }
         /**
         * * Field Name: eone_shippingmethodid
         * * Display Name: eone _shippingmethodid
@@ -30512,7 +30862,9 @@ import { RegisterClass } from "@memberjunction/global";
         get eone_shippingmethodid(): string | null {  
             return this.Get('eone_shippingmethodid');
         }
-        
+        set eone_shippingmethodid(value: string | null) {
+            this.Set('eone_shippingmethodid', value);
+        }
         /**
         * * Field Name: acep_membershipid
         * * Display Name: acep _membershipid
@@ -30521,7 +30873,9 @@ import { RegisterClass } from "@memberjunction/global";
         get acep_membershipid(): string | null {  
             return this.Get('acep_membershipid');
         }
-        
+        set acep_membershipid(value: string | null) {
+            this.Set('acep_membershipid', value);
+        }
         /**
         * * Field Name: acep_ordersource
         * * Display Name: acep _ordersource
@@ -30597,7 +30951,9 @@ import { RegisterClass } from "@memberjunction/global";
         get acep_OrderContact(): string | null {  
             return this.Get('acep_OrderContact');
         }
-        
+        set acep_OrderContact(value: string | null) {
+            this.Set('acep_OrderContact', value);
+        }
         /**
         * * Field Name: acep_AlternateToEmailAddresses
         * * Display Name: acep _Alternate To Email Addresses
@@ -30628,7 +30984,9 @@ import { RegisterClass } from "@memberjunction/global";
         get acep_MeetingRegistrationId(): string | null {  
             return this.Get('acep_MeetingRegistrationId');
         }
-        
+        set acep_MeetingRegistrationId(value: string | null) {
+            this.Set('acep_MeetingRegistrationId', value);
+        }
         /**
         * * Field Name: acep_shiptoemail
         * * Display Name: acep _shiptoemail
@@ -30659,7 +31017,9 @@ import { RegisterClass } from "@memberjunction/global";
         get acep_statementbatch(): string | null {  
             return this.Get('acep_statementbatch');
         }
-        
+        set acep_statementbatch(value: string | null) {
+            this.Set('acep_statementbatch', value);
+        }
 
     }
         
@@ -30723,7 +31083,9 @@ import { RegisterClass } from "@memberjunction/global";
         get OwnerId(): string | null {  
             return this.Get('OwnerId');
         }
-        
+        set OwnerId(value: string | null) {
+            this.Set('OwnerId', value);
+        }
         /**
         * * Field Name: OwnerIdType
         * * Display Name: Owner Id Type
@@ -30754,7 +31116,9 @@ import { RegisterClass } from "@memberjunction/global";
         get OwningBusinessUnit(): string | null {  
             return this.Get('OwningBusinessUnit');
         }
-        
+        set OwningBusinessUnit(value: string | null) {
+            this.Set('OwningBusinessUnit', value);
+        }
         /**
         * * Field Name: SalesOrderIsPriceLocked
         * * Display Name: Sales Order Is Price Locked
@@ -30774,7 +31138,9 @@ import { RegisterClass } from "@memberjunction/global";
         get OwningUser(): string | null {  
             return this.Get('OwningUser');
         }
-        
+        set OwningUser(value: string | null) {
+            this.Set('OwningUser', value);
+        }
         /**
         * * Field Name: SalesOrderIdName
         * * Display Name: Sales Order Id Name
@@ -30947,7 +31313,9 @@ import { RegisterClass } from "@memberjunction/global";
         get SalesOrderId(): string | null {  
             return this.Get('SalesOrderId');
         }
-        
+        set SalesOrderId(value: string | null) {
+            this.Set('SalesOrderId', value);
+        }
         /**
         * * Field Name: SalesRepId
         * * Display Name: Sales Rep Id
@@ -30956,7 +31324,9 @@ import { RegisterClass } from "@memberjunction/global";
         get SalesRepId(): string | null {  
             return this.Get('SalesRepId');
         }
-        
+        set SalesRepId(value: string | null) {
+            this.Set('SalesRepId', value);
+        }
         /**
         * * Field Name: IsProductOverridden
         * * Display Name: Is Product Overridden
@@ -31021,7 +31391,9 @@ import { RegisterClass } from "@memberjunction/global";
         get UoMId(): string | null {  
             return this.Get('UoMId');
         }
-        
+        set UoMId(value: string | null) {
+            this.Set('UoMId', value);
+        }
         /**
         * * Field Name: QuantityCancelled
         * * Display Name: Quantity Cancelled
@@ -31042,7 +31414,9 @@ import { RegisterClass } from "@memberjunction/global";
         get ProductId(): string | null {  
             return this.Get('ProductId');
         }
-        
+        set ProductId(value: string | null) {
+            this.Set('ProductId', value);
+        }
         /**
         * * Field Name: RequestDeliveryBy
         * * Display Name: Request Delivery By
@@ -31216,7 +31590,9 @@ import { RegisterClass } from "@memberjunction/global";
         get CreatedBy(): string | null {  
             return this.Get('CreatedBy');
         }
-        
+        set CreatedBy(value: string | null) {
+            this.Set('CreatedBy', value);
+        }
         /**
         * * Field Name: ModifiedBy
         * * Display Name: Modified By
@@ -31225,7 +31601,9 @@ import { RegisterClass } from "@memberjunction/global";
         get ModifiedBy(): string | null {  
             return this.Get('ModifiedBy');
         }
-        
+        set ModifiedBy(value: string | null) {
+            this.Set('ModifiedBy', value);
+        }
         /**
         * * Field Name: ShipTo_Line2
         * * Display Name: Ship To _Line 2
@@ -31377,7 +31755,9 @@ import { RegisterClass } from "@memberjunction/global";
         get ShipTo_AddressId(): string | null {  
             return this.Get('ShipTo_AddressId');
         }
-        
+        set ShipTo_AddressId(value: string | null) {
+            this.Set('ShipTo_AddressId', value);
+        }
         /**
         * * Field Name: TimeZoneRuleVersionNumber
         * * Display Name: Time Zone Rule Version Number
@@ -31441,7 +31821,9 @@ import { RegisterClass } from "@memberjunction/global";
         get TransactionCurrencyId(): string | null {  
             return this.Get('TransactionCurrencyId');
         }
-        
+        set TransactionCurrencyId(value: string | null) {
+            this.Set('TransactionCurrencyId', value);
+        }
         /**
         * * Field Name: BaseAmount_Base
         * * Display Name: Base Amount _Base
@@ -31516,7 +31898,9 @@ import { RegisterClass } from "@memberjunction/global";
         get CreatedOnBehalfBy(): string | null {  
             return this.Get('CreatedOnBehalfBy');
         }
-        
+        set CreatedOnBehalfBy(value: string | null) {
+            this.Set('CreatedOnBehalfBy', value);
+        }
         /**
         * * Field Name: ModifiedOnBehalfBy
         * * Display Name: Modified On Behalf By
@@ -31525,7 +31909,9 @@ import { RegisterClass } from "@memberjunction/global";
         get ModifiedOnBehalfBy(): string | null {  
             return this.Get('ModifiedOnBehalfBy');
         }
-        
+        set ModifiedOnBehalfBy(value: string | null) {
+            this.Set('ModifiedOnBehalfBy', value);
+        }
         /**
         * * Field Name: SequenceNumber
         * * Display Name: Sequence Number
@@ -31546,7 +31932,9 @@ import { RegisterClass } from "@memberjunction/global";
         get ParentBundleId(): string | null {  
             return this.Get('ParentBundleId');
         }
-        
+        set ParentBundleId(value: string | null) {
+            this.Set('ParentBundleId', value);
+        }
         /**
         * * Field Name: ProductTypeCode
         * * Display Name: Product Type Code
@@ -31577,7 +31965,9 @@ import { RegisterClass } from "@memberjunction/global";
         get ProductAssociationId(): string | null {  
             return this.Get('ProductAssociationId');
         }
-        
+        set ProductAssociationId(value: string | null) {
+            this.Set('ProductAssociationId', value);
+        }
         /**
         * * Field Name: Acep_IsPrimary
         * * Display Name: Acep _Is Primary
@@ -31652,7 +32042,9 @@ import { RegisterClass } from "@memberjunction/global";
         get acep_BillingOption(): string | null {  
             return this.Get('acep_BillingOption');
         }
-        
+        set acep_BillingOption(value: string | null) {
+            this.Set('acep_BillingOption', value);
+        }
         /**
         * * Field Name: acep_primaryemployer
         * * Display Name: acep _primaryemployer
@@ -32110,7 +32502,9 @@ import { RegisterClass } from "@memberjunction/global";
         get DefaultUoMScheduleId(): string | null {  
             return this.Get('DefaultUoMScheduleId');
         }
-        
+        set DefaultUoMScheduleId(value: string | null) {
+            this.Set('DefaultUoMScheduleId', value);
+        }
         /**
         * * Field Name: SubjectId
         * * Display Name: Subject Id
@@ -32119,7 +32513,9 @@ import { RegisterClass } from "@memberjunction/global";
         get SubjectId(): string | null {  
             return this.Get('SubjectId');
         }
-        
+        set SubjectId(value: string | null) {
+            this.Set('SubjectId', value);
+        }
         /**
         * * Field Name: OrganizationId
         * * Display Name: Organization Id
@@ -32128,7 +32524,9 @@ import { RegisterClass } from "@memberjunction/global";
         get OrganizationId(): string | null {  
             return this.Get('OrganizationId');
         }
-        
+        set OrganizationId(value: string | null) {
+            this.Set('OrganizationId', value);
+        }
         /**
         * * Field Name: Name
         * * Display Name: Name
@@ -32149,7 +32547,9 @@ import { RegisterClass } from "@memberjunction/global";
         get DefaultUoMId(): string | null {  
             return this.Get('DefaultUoMId');
         }
-        
+        set DefaultUoMId(value: string | null) {
+            this.Set('DefaultUoMId', value);
+        }
         /**
         * * Field Name: PriceLevelId
         * * Display Name: Price Level Id
@@ -32158,7 +32558,9 @@ import { RegisterClass } from "@memberjunction/global";
         get PriceLevelId(): string | null {  
             return this.Get('PriceLevelId');
         }
-        
+        set PriceLevelId(value: string | null) {
+            this.Set('PriceLevelId', value);
+        }
         /**
         * * Field Name: Description
         * * Display Name: Description
@@ -32376,7 +32778,9 @@ import { RegisterClass } from "@memberjunction/global";
         get CreatedBy(): string | null {  
             return this.Get('CreatedBy');
         }
-        
+        set CreatedBy(value: string | null) {
+            this.Set('CreatedBy', value);
+        }
         /**
         * * Field Name: StateCode
         * * Display Name: State Code
@@ -32396,7 +32800,9 @@ import { RegisterClass } from "@memberjunction/global";
         get ModifiedBy(): string | null {  
             return this.Get('ModifiedBy');
         }
-        
+        set ModifiedBy(value: string | null) {
+            this.Set('ModifiedBy', value);
+        }
         /**
         * * Field Name: StatusCode
         * * Display Name: Status Code
@@ -32438,7 +32844,9 @@ import { RegisterClass } from "@memberjunction/global";
         get TransactionCurrencyId(): string | null {  
             return this.Get('TransactionCurrencyId');
         }
-        
+        set TransactionCurrencyId(value: string | null) {
+            this.Set('TransactionCurrencyId', value);
+        }
         /**
         * * Field Name: ExchangeRate
         * * Display Name: Exchange Rate
@@ -32524,7 +32932,9 @@ import { RegisterClass } from "@memberjunction/global";
         get CreatedOnBehalfBy(): string | null {  
             return this.Get('CreatedOnBehalfBy');
         }
-        
+        set CreatedOnBehalfBy(value: string | null) {
+            this.Set('CreatedOnBehalfBy', value);
+        }
         /**
         * * Field Name: ModifiedOnBehalfBy
         * * Display Name: Modified On Behalf By
@@ -32533,7 +32943,9 @@ import { RegisterClass } from "@memberjunction/global";
         get ModifiedOnBehalfBy(): string | null {  
             return this.Get('ModifiedOnBehalfBy');
         }
-        
+        set ModifiedOnBehalfBy(value: string | null) {
+            this.Set('ModifiedOnBehalfBy', value);
+        }
         /**
         * * Field Name: EntityImageId
         * * Display Name: Entity Image Id
@@ -32542,7 +32954,9 @@ import { RegisterClass } from "@memberjunction/global";
         get EntityImageId(): string | null {  
             return this.Get('EntityImageId');
         }
-        
+        set EntityImageId(value: string | null) {
+            this.Set('EntityImageId', value);
+        }
         /**
         * * Field Name: ProcessId
         * * Display Name: Process Id
@@ -32551,7 +32965,9 @@ import { RegisterClass } from "@memberjunction/global";
         get ProcessId(): string | null {  
             return this.Get('ProcessId');
         }
-        
+        set ProcessId(value: string | null) {
+            this.Set('ProcessId', value);
+        }
         /**
         * * Field Name: StageId
         * * Display Name: Stage Id
@@ -32560,7 +32976,9 @@ import { RegisterClass } from "@memberjunction/global";
         get StageId(): string | null {  
             return this.Get('StageId');
         }
-        
+        set StageId(value: string | null) {
+            this.Set('StageId', value);
+        }
         /**
         * * Field Name: ParentProductId
         * * Display Name: Parent Product Id
@@ -32570,7 +32988,9 @@ import { RegisterClass } from "@memberjunction/global";
         get ParentProductId(): string | null {  
             return this.Get('ParentProductId');
         }
-        
+        set ParentProductId(value: string | null) {
+            this.Set('ParentProductId', value);
+        }
         /**
         * * Field Name: ProductStructure
         * * Display Name: Product Structure
@@ -32645,7 +33065,9 @@ import { RegisterClass } from "@memberjunction/global";
         get CreatedByExternalParty(): string | null {  
             return this.Get('CreatedByExternalParty');
         }
-        
+        set CreatedByExternalParty(value: string | null) {
+            this.Set('CreatedByExternalParty', value);
+        }
         /**
         * * Field Name: ModifiedByExternalParty
         * * Display Name: Modified By External Party
@@ -32654,7 +33076,9 @@ import { RegisterClass } from "@memberjunction/global";
         get ModifiedByExternalParty(): string | null {  
             return this.Get('ModifiedByExternalParty');
         }
-        
+        set ModifiedByExternalParty(value: string | null) {
+            this.Set('ModifiedByExternalParty', value);
+        }
         /**
         * * Field Name: Eone_QuantityDamaged
         * * Display Name: Eone _Quantity Damaged
@@ -32685,7 +33109,9 @@ import { RegisterClass } from "@memberjunction/global";
         get acep_courseproductid(): string | null {  
             return this.Get('acep_courseproductid');
         }
-        
+        set acep_courseproductid(value: string | null) {
+            this.Set('acep_courseproductid', value);
+        }
         /**
         * * Field Name: Acep_Duration
         * * Display Name: Acep _Duration
@@ -32716,7 +33142,9 @@ import { RegisterClass } from "@memberjunction/global";
         get acep_subscriptiondetailid(): string | null {  
             return this.Get('acep_subscriptiondetailid');
         }
-        
+        set acep_subscriptiondetailid(value: string | null) {
+            this.Set('acep_subscriptiondetailid', value);
+        }
         /**
         * * Field Name: Acep_IntegrationPartnerCode
         * * Display Name: Acep _Integration Partner Code
@@ -32890,7 +33318,9 @@ import { RegisterClass } from "@memberjunction/global";
         get acep_eventproductid(): string | null {  
             return this.Get('acep_eventproductid');
         }
-        
+        set acep_eventproductid(value: string | null) {
+            this.Set('acep_eventproductid', value);
+        }
         /**
         * * Field Name: Acep_Date
         * * Display Name: Acep _Date
@@ -32910,7 +33340,9 @@ import { RegisterClass } from "@memberjunction/global";
         get Acep_PublicationId(): string | null {  
             return this.Get('Acep_PublicationId');
         }
-        
+        set Acep_PublicationId(value: string | null) {
+            this.Set('Acep_PublicationId', value);
+        }
         /**
         * * Field Name: Acep_MultiYearValue
         * * Display Name: Acep _Multi Year Value
@@ -32963,7 +33395,9 @@ import { RegisterClass } from "@memberjunction/global";
         get acep_productid(): string | null {  
             return this.Get('acep_productid');
         }
-        
+        set acep_productid(value: string | null) {
+            this.Set('acep_productid', value);
+        }
         /**
         * * Field Name: Eone_QuantityInService
         * * Display Name: Eone _Quantity In Service
@@ -33159,7 +33593,9 @@ import { RegisterClass } from "@memberjunction/global";
         get acep_CMEActivityId(): string | null {  
             return this.Get('acep_CMEActivityId');
         }
-        
+        set acep_CMEActivityId(value: string | null) {
+            this.Set('acep_CMEActivityId', value);
+        }
         /**
         * * Field Name: acep_Color
         * * Display Name: acep _Color
@@ -33179,7 +33615,9 @@ import { RegisterClass } from "@memberjunction/global";
         get acep_CountryofOriginId(): string | null {  
             return this.Get('acep_CountryofOriginId');
         }
-        
+        set acep_CountryofOriginId(value: string | null) {
+            this.Set('acep_CountryofOriginId', value);
+        }
         /**
         * * Field Name: acep_Dimensions
         * * Display Name: acep _Dimensions
@@ -33287,7 +33725,9 @@ import { RegisterClass } from "@memberjunction/global";
         get acep_ProductTypeId(): string | null {  
             return this.Get('acep_ProductTypeId');
         }
-        
+        set acep_ProductTypeId(value: string | null) {
+            this.Set('acep_ProductTypeId', value);
+        }
         /**
         * * Field Name: acep_ProductURL
         * * Display Name: acep _Product URL
@@ -33308,7 +33748,9 @@ import { RegisterClass } from "@memberjunction/global";
         get acep_PublisherId(): string | null {  
             return this.Get('acep_PublisherId');
         }
-        
+        set acep_PublisherId(value: string | null) {
+            this.Set('acep_PublisherId', value);
+        }
         /**
         * * Field Name: acep_PurchaseURL
         * * Display Name: acep _Purchase URL
@@ -33373,7 +33815,9 @@ import { RegisterClass } from "@memberjunction/global";
         get acep_VariantParentId(): string | null {  
             return this.Get('acep_VariantParentId');
         }
-        
+        set acep_VariantParentId(value: string | null) {
+            this.Set('acep_VariantParentId', value);
+        }
         /**
         * * Field Name: acep_About
         * * Display Name: acep _About
@@ -33448,7 +33892,9 @@ import { RegisterClass } from "@memberjunction/global";
         get acep_OrderTypeId(): string | null {  
             return this.Get('acep_OrderTypeId');
         }
-        
+        set acep_OrderTypeId(value: string | null) {
+            this.Set('acep_OrderTypeId', value);
+        }
         /**
         * * Field Name: acep_PublishtoStore
         * * Display Name: acep _Publishto Store
@@ -33490,7 +33936,9 @@ import { RegisterClass } from "@memberjunction/global";
         get acep_ecmeproducttypeid(): string | null {  
             return this.Get('acep_ecmeproducttypeid');
         }
-        
+        set acep_ecmeproducttypeid(value: string | null) {
+            this.Set('acep_ecmeproducttypeid', value);
+        }
         /**
         * * Field Name: acep_importsource
         * * Display Name: acep _importsource

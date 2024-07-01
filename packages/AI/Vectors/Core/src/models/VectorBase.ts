@@ -18,7 +18,7 @@ export class VectorBase {
     public get CurrentUser(): UserInfo { return this._currentUser; }
     public set CurrentUser(user: UserInfo) { this._currentUser = user; }
 
-    protected async getRecordsByEntityID(entityID: number, recordIDs?: CompositeKey[]): Promise<BaseEntity[]> {
+    protected async getRecordsByEntityID(entityID: string, recordIDs?: CompositeKey[]): Promise<BaseEntity[]> {
         const md = new Metadata();
         const entity = md.Entities.find(e => e.ID === entityID);
         if (!entity){

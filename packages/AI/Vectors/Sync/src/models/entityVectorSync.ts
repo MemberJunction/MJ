@@ -27,7 +27,7 @@ export class EntityVectorSyncer extends VectorBase {
         const parser = EntityDocumentTemplateParser.CreateInstance();
         const entityDocument: EntityDocumentEntity = await this.GetEntityDocument(request.entityDocumentID);
         const vectorIndexEntity: VectorIndexEntity = await this.GetOrCreateVectorIndex(entityDocument);
-        const obj = await this.GetVectorDatabaseAndEmbeddingClassByEntityDocumentID(request.entityDocumentID);
+        const obj = await this.GetVectorDatabaseAndEmbeddingClassByEntityDocumentID(request.entityDocumentID, request.entityID);
         const allrecords: BaseEntity[] = await super.getRecordsByEntityID(request.entityID);
         
         //small number in the hopes we dont hit embedding token limits
@@ -115,7 +115,7 @@ export class EntityVectorSyncer extends VectorBase {
      * @param AIModel 
      * @returns 
      */
-    public async CreateDefaultEntityDocument(EntityID: number, VectorDatabase: VectorDatabaseEntity, AIModel: AIModelEntity): Promise<EntityDocumentEntity> {
+    public async CreateDefaultEntityDocument(EntityID: string, VectorDatabase: VectorDatabaseEntity, AIModel: AIModelEntity): Promise<EntityDocumentEntity> {
         const md = new Metadata();
         const entity = md.Entities.find(e => e.ID === EntityID);
         if (!entity) 
@@ -143,15 +143,15 @@ export class EntityVectorSyncer extends VectorBase {
         }
     }
 
-    protected async GetVectorDatabaseAndEmbeddingClassByEntityDocumentID(entityDocumentID: number, createDocumentIfNotFound: boolean = false): Promise<{embedding: Embeddings, vectorDB: VectorDBBase}> {
-        let entityDocument: EntityDocumentEntity | null = await this.GetEntityDocument(entityDocumentID) || await this.GetFirstActiveEntityDocumentForEntity(entityDocumentID);
+    protected async GetVectorDatabaseAndEmbeddingClassByEntityDocumentID(entityDocumentID: number, entityID: string, createDocumentIfNotFound: boolean = false): Promise<{embedding: Embeddings, vectorDB: VectorDBBase}> {
+        let entityDocument: EntityDocumentEntity | null = await this.GetEntityDocument(entityDocumentID) || await this.GetFirstActiveEntityDocumentForEntity(entityID);
         if(!entityDocument){
             if(createDocumentIfNotFound){
                 if(!entityDocument){
                     LogStatus(`No active Entity Document found for entity ${entityDocumentID}, creating one`);
                     const defaultVectorDB: VectorDatabaseEntity = this.getVectorDatabase();
                     const defaultAIModel: AIModelEntity = this.getAIModel();
-                    entityDocument = await this.CreateDefaultEntityDocument(entityDocumentID, defaultVectorDB, defaultAIModel);
+                    entityDocument = await this.CreateDefaultEntityDocument(entityID, defaultVectorDB, defaultAIModel);
                 }
             }
             else{
@@ -206,7 +206,7 @@ export class EntityVectorSyncer extends VectorBase {
         return cache.GetDocumentByName(EntityDocumentName);
     }
 
-    public async GetFirstActiveEntityDocumentForEntity(entityID: number): Promise<EntityDocumentEntity | null> {
+    public async GetFirstActiveEntityDocumentForEntity(entityID: string): Promise<EntityDocumentEntity | null> {
         const entityDocument: EntityDocumentEntity = await this.runViewForSingleValue<EntityDocumentEntity>("Entity Documents", `EntityID = ${entityID} AND TypeID = 9 AND Status = 'Active'`);
         if(!entityDocument){
             LogError(`No active Entity Document with entityID=${entityID} found`);

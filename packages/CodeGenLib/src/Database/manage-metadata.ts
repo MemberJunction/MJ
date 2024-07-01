@@ -95,7 +95,7 @@ export class ManageMetadataBase {
    //       // and add/update/delete the entity fields to match what's in the view
    //       let bSuccess = true;
    
-   //       const sql = `SELECT * FROM vwSQLColumnsAndEntityFields WHERE EntityID = ${ve.ID}`;
+   //       const sql = `SELECT * FROM vwSQLColumnsAndEntityFields WHERE EntityID = '${ve.ID}'`;
    //       const veFields = await ds.query(sql);
    //       if (veFields && veFields.length > 0) {
    //          // we have 1+ fields, now loop through them and process each one
@@ -213,7 +213,7 @@ export class ManageMetadataBase {
          // now loop through all of our fkey fields
          for (const f of entityFields) {
             // for each field determine if an existing relationship exists, if not, create it
-            const sSQLRelationship = `SELECT * FROM ${mj_core_schema()}.EntityRelationship WHERE EntityID = ${f.RelatedEntityID} AND RelatedEntityID = ${f.EntityID}`;
+            const sSQLRelationship = `SELECT * FROM ${mj_core_schema()}.EntityRelationship WHERE EntityID='${f.RelatedEntityID}' AND RelatedEntityID='${f.EntityID}'`;
             const relationships = await ds.query(sSQLRelationship);
             if (relationships && relationships.length === 0) {
                // no relationship exists, so create it
@@ -222,7 +222,7 @@ export class ManageMetadataBase {
                const relCount = relationshipCountMap.get(f.EntityID) ? relationshipCountMap.get(f.EntityID) : 0;
                const sequence = relCount + 1;
                const sSQLInsert = `INSERT INTO ${mj_core_schema()}.EntityRelationship (EntityID, RelatedEntityID, RelatedEntityJoinField, Type, BundleInAPI, DisplayInForm, DisplayName, Sequence) 
-                                       VALUES (${f.RelatedEntityID}, ${f.EntityID}, '${f.Name}', 'One To Many', 1, 1, '${e.Name}', ${sequence})`;
+                                       VALUES ('${f.RelatedEntityID}', '${f.EntityID}', '${f.Name}', 'One To Many', 1, 1, '${e.Name}', ${sequence})`;
                // now update the map for the relationship count
                relationshipCountMap.set(f.EntityID, sequence);                                       
                await ds.query(sSQLInsert);
@@ -522,7 +522,7 @@ export class ManageMetadataBase {
          // now loop through the new entities and generate descriptions for them
          for (let e of ManageMetadataBase.newEntityList) {
             const data = await ds.query(`SELECT * FROM [${mj_core_schema()}].vwEntities WHERE Name = '${e}'`);
-            const fields = await ds.query(`SELECT * FROM [${mj_core_schema()}].vwEntityFields WHERE EntityID = ${data[0].ID}`);
+            const fields = await ds.query(`SELECT * FROM [${mj_core_schema()}].vwEntityFields WHERE EntityID='${data[0].ID}'`);
             const entityUserMessage = userMessage + `Entity Name: ${e}, 
                                                      Base Table: ${data[0].BaseTable}, 
                                                      Schema: ${data[0].SchemaName}. 
@@ -842,10 +842,10 @@ export class ManageMetadataBase {
     * @param relatedEntityNameFieldMap 
     * @returns 
     */
-   public async updateEntityFieldRelatedEntityNameFieldMap(ds: DataSource, entityFieldID: number, relatedEntityNameFieldMap: string): Promise<boolean> {
+   public async updateEntityFieldRelatedEntityNameFieldMap(ds: DataSource, entityFieldID: string, relatedEntityNameFieldMap: string): Promise<boolean> {
       try   {
          const sSQL = `EXEC [${mj_core_schema()}].spUpdateEntityFieldRelatedEntityNameFieldMap 
-         @EntityFieldID=${entityFieldID} ,
+         @EntityFieldID='${entityFieldID}',
          @RelatedEntityNameFieldMap='${relatedEntityNameFieldMap}'`
          
          await ds.query(sSQL)

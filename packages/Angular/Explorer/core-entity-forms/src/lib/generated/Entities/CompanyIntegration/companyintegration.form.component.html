@@ -16,99 +16,9 @@
                         </mj-form-section>
                     </mj-tab-body>
                     
-                    <mj-tab Name="Lists" 
-                        [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: 54}">
-                        Lists
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Lists')"  
-                            [NewRecordValues]="NewRecordValues('Lists')"
-                            [AllowLoad]="IsCurrentTab('Lists')"  
-                            [EditMode]="GridEditMode()"  
-                            [BottomMargin]="GridBottomMargin">
-                        </mj-user-view-grid>                    
-                    </mj-tab-body>
-
-                    <mj-tab Name="Employee Company Integrations" 
-                        [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: 55}">
-                        Employee Company Integrations
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Employee Company Integrations')"  
-                            [NewRecordValues]="NewRecordValues('Employee Company Integrations')"
-                            [AllowLoad]="IsCurrentTab('Employee Company Integrations')"  
-                            [EditMode]="GridEditMode()"  
-                            [BottomMargin]="GridBottomMargin">
-                        </mj-user-view-grid>                    
-                    </mj-tab-body>
-
-                    <mj-tab Name="Company Integration Runs" 
-                        [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: 56}">
-                        Company Integration Runs
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Company Integration Runs')"  
-                            [NewRecordValues]="NewRecordValues('Company Integration Runs')"
-                            [AllowLoad]="IsCurrentTab('Company Integration Runs')"  
-                            [EditMode]="GridEditMode()"  
-                            [BottomMargin]="GridBottomMargin">
-                        </mj-user-view-grid>                    
-                    </mj-tab-body>
-
-                    <mj-tab Name="Company Integration Record Maps" 
-                        [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: 124}">
-                        Company Integration Record Maps
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Company Integration Record Maps')"  
-                            [NewRecordValues]="NewRecordValues('Company Integration Record Maps')"
-                            [AllowLoad]="IsCurrentTab('Company Integration Record Maps')"  
-                            [EditMode]="GridEditMode()"  
-                            [BottomMargin]="GridBottomMargin">
-                        </mj-user-view-grid>                    
-                    </mj-tab-body>
-
-                    <mj-tab Name="Activities" 
-                        [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: 158}">
-                        Activities
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Activities')"  
-                            [NewRecordValues]="NewRecordValues('Activities')"
-                            [AllowLoad]="IsCurrentTab('Activities')"  
-                            [EditMode]="GridEditMode()"  
-                            [BottomMargin]="GridBottomMargin">
-                        </mj-user-view-grid>                    
-                    </mj-tab-body>
-
-                    <mj-tab Name="Deals" 
-                        [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: 159}">
-                        Deals
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Deals')"  
-                            [NewRecordValues]="NewRecordValues('Deals')"
-                            [AllowLoad]="IsCurrentTab('Deals')"  
-                            [EditMode]="GridEditMode()"  
-                            [BottomMargin]="GridBottomMargin">
-                        </mj-user-view-grid>                    
-                    </mj-tab-body>
-
                     <mj-tab Name="Invoices" 
                         [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: 160}">
+                        [Props]="{EntityRelationshipID: 'B1AF3D70-7A48-4080-A618-1A648F145266'}">
                         Invoices
                     </mj-tab>
                     <mj-tab-body>
@@ -121,9 +31,39 @@
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
+                    <mj-tab Name="Company Integration Record Maps" 
+                        [Visible]="record.IsSaved" 
+                        [Props]="{EntityRelationshipID: '0D2DB598-3AA0-4DCB-8F0B-24AC5EF36116'}">
+                        Company Integration Record Maps
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Company Integration Record Maps')"  
+                            [NewRecordValues]="NewRecordValues('Company Integration Record Maps')"
+                            [AllowLoad]="IsCurrentTab('Company Integration Record Maps')"  
+                            [EditMode]="GridEditMode()"  
+                            [BottomMargin]="GridBottomMargin">
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Deals" 
+                        [Visible]="record.IsSaved" 
+                        [Props]="{EntityRelationshipID: '1B4A2F2C-82C9-4EC5-85CD-25142EF529A2'}">
+                        Deals
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Deals')"  
+                            [NewRecordValues]="NewRecordValues('Deals')"
+                            [AllowLoad]="IsCurrentTab('Deals')"  
+                            [EditMode]="GridEditMode()"  
+                            [BottomMargin]="GridBottomMargin">
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
                     <mj-tab Name="Payment Terms Types" 
                         [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: 161}">
+                        [Props]="{EntityRelationshipID: '0A046C72-FEC9-4AB1-8DCC-49AFB8541DB1'}">
                         Payment Terms Types
                     </mj-tab>
                     <mj-tab-body>
@@ -131,6 +71,66 @@
                             [Params]="BuildRelationshipViewParamsByEntityName('Payment Terms Types')"  
                             [NewRecordValues]="NewRecordValues('Payment Terms Types')"
                             [AllowLoad]="IsCurrentTab('Payment Terms Types')"  
+                            [EditMode]="GridEditMode()"  
+                            [BottomMargin]="GridBottomMargin">
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Lists" 
+                        [Visible]="record.IsSaved" 
+                        [Props]="{EntityRelationshipID: '6E9A52B3-9B1F-428A-8831-AD5959677DC8'}">
+                        Lists
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Lists')"  
+                            [NewRecordValues]="NewRecordValues('Lists')"
+                            [AllowLoad]="IsCurrentTab('Lists')"  
+                            [EditMode]="GridEditMode()"  
+                            [BottomMargin]="GridBottomMargin">
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Company Integration Runs" 
+                        [Visible]="record.IsSaved" 
+                        [Props]="{EntityRelationshipID: 'C4A0E5F4-865F-4E5A-A035-B017E34AF52F'}">
+                        Company Integration Runs
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Company Integration Runs')"  
+                            [NewRecordValues]="NewRecordValues('Company Integration Runs')"
+                            [AllowLoad]="IsCurrentTab('Company Integration Runs')"  
+                            [EditMode]="GridEditMode()"  
+                            [BottomMargin]="GridBottomMargin">
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Employee Company Integrations" 
+                        [Visible]="record.IsSaved" 
+                        [Props]="{EntityRelationshipID: '8814BA9C-04AD-4640-9994-D34C30537349'}">
+                        Employee Company Integrations
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Employee Company Integrations')"  
+                            [NewRecordValues]="NewRecordValues('Employee Company Integrations')"
+                            [AllowLoad]="IsCurrentTab('Employee Company Integrations')"  
+                            [EditMode]="GridEditMode()"  
+                            [BottomMargin]="GridBottomMargin">
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Activities" 
+                        [Visible]="record.IsSaved" 
+                        [Props]="{EntityRelationshipID: 'E52C82FF-D90F-44CB-807A-EBFF1159C5B5'}">
+                        Activities
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Activities')"  
+                            [NewRecordValues]="NewRecordValues('Activities')"
+                            [AllowLoad]="IsCurrentTab('Activities')"  
                             [EditMode]="GridEditMode()"  
                             [BottomMargin]="GridBottomMargin">
                         </mj-user-view-grid>                    

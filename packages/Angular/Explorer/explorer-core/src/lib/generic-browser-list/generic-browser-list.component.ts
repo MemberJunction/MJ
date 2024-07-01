@@ -29,7 +29,7 @@ export class GenericBrowserListComponent implements OnInit{
   @Input() public CategoryEntityName: string = '';
   @Input() public selectedFolderID: number | null = null;
   @Input() public showNotifications: boolean = true;
-  @Input() public categoryEntityID: number | null = null;
+  @Input() public categoryEntityID: string | null = null;
   @Input() public displayAsGrid: boolean = false;
   @Input() public resourceName: string = "Resource";
   /**

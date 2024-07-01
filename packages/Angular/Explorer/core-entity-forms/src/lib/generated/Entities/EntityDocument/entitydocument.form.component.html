@@ -16,24 +16,9 @@
                         </mj-form-section>
                     </mj-tab-body>
                     
-                    <mj-tab Name="Entity Document Runs" 
-                        [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: 166}">
-                        Entity Document Runs
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Entity Document Runs')"  
-                            [NewRecordValues]="NewRecordValues('Entity Document Runs')"
-                            [AllowLoad]="IsCurrentTab('Entity Document Runs')"  
-                            [EditMode]="GridEditMode()"  
-                            [BottomMargin]="GridBottomMargin">
-                        </mj-user-view-grid>                    
-                    </mj-tab-body>
-
                     <mj-tab Name="Entity Document Settings" 
                         [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: 201}">
+                        [Props]="{EntityRelationshipID: 'B2FC7C37-07FF-4431-A0F3-3026C920BA51'}">
                         Entity Document Settings
                     </mj-tab>
                     <mj-tab-body>
@@ -41,6 +26,21 @@
                             [Params]="BuildRelationshipViewParamsByEntityName('Entity Document Settings')"  
                             [NewRecordValues]="NewRecordValues('Entity Document Settings')"
                             [AllowLoad]="IsCurrentTab('Entity Document Settings')"  
+                            [EditMode]="GridEditMode()"  
+                            [BottomMargin]="GridBottomMargin">
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Entity Document Runs" 
+                        [Visible]="record.IsSaved" 
+                        [Props]="{EntityRelationshipID: '4059B484-AA39-4F8D-B02B-C0CD6131D69F'}">
+                        Entity Document Runs
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Entity Document Runs')"  
+                            [NewRecordValues]="NewRecordValues('Entity Document Runs')"
+                            [AllowLoad]="IsCurrentTab('Entity Document Runs')"  
                             [EditMode]="GridEditMode()"  
                             [BottomMargin]="GridBottomMargin">
                         </mj-user-view-grid>                    

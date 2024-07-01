@@ -93,7 +93,7 @@ export class QueryFieldInfo extends BaseInfo {
      * The full SQL type for the field, for example datetime or nvarchar(10) etc.
      */
     SQLFullType: string = null
-    SourceEntityID: number = null
+    SourceEntityID: string = null
     SourceFieldName: string = null
     IsComputed: boolean = null
     ComputationDescription: string = null

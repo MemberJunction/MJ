@@ -197,9 +197,9 @@ export class UserRolesGridComponent implements OnInit, OnChanges {
 
   protected IsReallyDirty(ur: UserRoleEntity_Ext): boolean {
     // logic is simple, if we are in the database, but the checkbox is not checked (or vice versa), then we are dirty
-    if (ur.Selected && ur.ID > 0)
+    if (ur.Selected && ur.IsSaved)
       return false; // if we are in the database and the checkbox is checked, we are not dirty
-    else if (!ur.Selected && ur.ID > 0)
+    else if (!ur.Selected && ur.IsSaved)
       return true; // if we are in the database and the checkbox is not checked, we are dirty because we'd have to be removed
     else if (ur.Selected)
       return true; // if we are NOT in the database and the checkbox is checked, we are dirty because we'd have to be added

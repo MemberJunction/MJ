@@ -13,7 +13,7 @@ import { EntityRecordDocumentEntity } from '@memberjunction/core-entities';
             [record]="record"
             [ShowLabel]="true"
             FieldName="EntityID"
-            Type="numerictextbox"
+            Type="textbox"
             [EditMode]="EditMode"
             LinkType="Record"
             LinkComponentType="Search"
@@ -36,8 +36,10 @@ import { EntityRecordDocumentEntity } from '@memberjunction/core-entities';
             [record]="record"
             [ShowLabel]="true"
             FieldName="VectorIndexID"
-            Type="numerictextbox"
+            Type="textbox"
             [EditMode]="EditMode"
+            LinkType="Record"
+            LinkComponentType="Search"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -66,6 +68,8 @@ import { EntityRecordDocumentEntity } from '@memberjunction/core-entities';
             FieldName="EntityDocumentID"
             Type="numerictextbox"
             [EditMode]="EditMode"
+            LinkType="Record"
+            LinkComponentType="Search"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"

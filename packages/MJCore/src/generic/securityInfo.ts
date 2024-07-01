@@ -236,6 +236,7 @@ export type AuthorizationRoleType = typeof AuthorizationRoleType[keyof typeof Au
 
 
 export class AuthorizationRoleInfo extends BaseInfo {
+    ID: string = null
     AuthorizationName: string = null
     RoleName: string = null
     Type: string = null

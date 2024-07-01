@@ -156,7 +156,7 @@ export class UserNotificationsComponent implements AfterViewInit {
 
   async markAsRead(notification: UserNotificationEntity, bRead: boolean, transGroup: TransactionGroupBase | null): Promise<boolean> {
     if (notification) {
-      const notificationId: number = notification.ID;
+      const notificationId = notification.ID;
       notification.Unread = !bRead;
       let notificationEntity: UserNotificationEntity;
       if (notification instanceof UserNotificationEntity) {

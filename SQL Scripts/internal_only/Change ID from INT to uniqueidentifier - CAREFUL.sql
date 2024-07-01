@@ -1,5 +1,5 @@
  -- Set the table name here
-DECLARE @TableName NVARCHAR(128) = 'ActionResultCode';
+DECLARE @TableName NVARCHAR(128) = 'WorkspaceItem';
 DECLARE @SchemaName NVARCHAR(128) = '__mj';
 DECLARE @SQL NVARCHAR(MAX);
 DECLARE @PKName NVARCHAR(128);

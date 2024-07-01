@@ -74,7 +74,7 @@ export abstract class EntityActionInvocationBase {
         return returnValues;
     }
 
-    private _scriptCache: Map<number, Function> = new Map<number, Function>();
+    private _scriptCache: Map<string, Function> = new Map<string, Function>();
 
     /**
      * Attempt to execute a script and wraps in try/catch to handle any errors so that no exceptions are thrown
@@ -83,7 +83,7 @@ export abstract class EntityActionInvocationBase {
      * @param scriptText the script to execute
      * @param entityObject the entity object to pass to the script
      */
-    public async SafeEvalScript(EntityActionID: number, scriptText: string, entityObject: BaseEntity): Promise<any> {
+    public async SafeEvalScript(EntityActionID: string, scriptText: string, entityObject: BaseEntity): Promise<any> {
         const entityActionContext = { 
             entityObject,
             result: null 

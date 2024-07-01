@@ -13,7 +13,7 @@ import { ItemType, TreeItem } from '../../generic/Item.types';
 import { MJTabStripComponent, TabClosedEvent, TabContextMenuEvent, TabEvent } from '@memberjunction/ng-tabstrip';
 
 export interface Tab {
-  id?: number;
+  id?: string;
   label?: string;
   icon?: string;
   data?: any;
@@ -557,7 +557,7 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
     }
     else {
       const newTab: Tab = {
-        id: -1, // initially -1 but will be changed to the WorkspaceItem ID once we save it
+        id: "", // initially blank but will be changed to the WorkspaceItem ID once we save it
         data: data,
         labelLoading: true,
         contentLoading: false,
@@ -859,7 +859,7 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
     if (index >= 0)
       this.tabs.splice(index, 1);
 
-    if (!tab.workspaceItem && tab.id && tab.id > 0) {
+    if (!tab.workspaceItem && tab.id && tab.id.length > 0) {
       // we lazy load the workspaceItem entity objects, so we load it here so we can delete it below, but only when it wasn't already loaded
       const md = new Metadata();
       tab.workspaceItem = <WorkspaceItemEntity>await md.GetEntityObject('Workspace Items');

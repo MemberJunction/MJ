@@ -18,7 +18,7 @@ import { TextAreaComponent } from '@progress/kendo-angular-inputs';
 
 
 export type GridRowClickedEvent = {
-  entityId: number;
+  entityId: string;
   entityName: string;
   CompositeKey: CompositeKey;
 }
