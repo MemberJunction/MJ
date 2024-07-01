@@ -219,8 +219,7 @@ SELECT
 	relatedEntity.ClassName RelatedEntityClassName,
 	relatedEntity.CodeName RelatedEntityCodeName,
 	relatedEntity.BaseTableCodeName RelatedEntityBaseTableCodeName,
-	uv.Name DisplayUserViewName,
-	uv.ID DisplayUserViewID
+	uv.Name DisplayUserViewName
 FROM
 	[__mj].EntityRelationship er
 INNER JOIN
@@ -234,7 +233,7 @@ ON
 LEFT OUTER JOIN
 	[__mj].UserView uv
 ON	
-	er.DisplayUserViewGUID = uv.GUID
+	er.DisplayUserViewID = uv.ID
 GO
 
  
@@ -568,6 +567,7 @@ CREATE PROCEDURE [__mj].[spCreateRecordChange_Internal]
 AS
 BEGIN
     SET NOCOUNT ON;
+    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
     INSERT INTO 
     [__mj].[RecordChange]
         (
@@ -582,6 +582,7 @@ BEGIN
             Status,
             Comments
         )
+    OUTPUT INSERTED.[ID] INTO @InsertedRow
     VALUES
         (
             (SELECT ID FROM __mj.Entity WHERE Name = @EntityName),
@@ -597,7 +598,7 @@ BEGIN
         )
 
     -- return the new record from the base view, which might have some calculated fields
-    SELECT * FROM [__mj].vwRecordChanges WHERE ID = SCOPE_IDENTITY()
+    SELECT * FROM [__mj].vwRecordChanges WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
 END
 
 GO 
@@ -672,12 +673,12 @@ CREATE TYPE __mj.IDListTableType AS TABLE
 );
 GO
 
-CREATE PROCEDURE [__mj].spCreateUserViewRunWithDetail(@UserViewID INT, @UserEmail NVARCHAR(255), @RecordIDList __mj.IDListTableType READONLY) 
+CREATE PROCEDURE [__mj].spCreateUserViewRunWithDetail(@UserViewID uniqueidentifier, @UserEmail NVARCHAR(255), @RecordIDList __mj.IDListTableType READONLY) 
 AS
-DECLARE @RunID INT
+DECLARE @RunID uniqueidentifier
 DECLARE @Now DATETIME
 SELECT @Now=GETDATE()
-DECLARE @outputTable TABLE (ID INT, UserViewID INT, RunAt DATETIME, RunByUserID INT, UserView NVARCHAR(100), RunByUser NVARCHAR(100))
+DECLARE @outputTable TABLE (ID uniqueidentifier, UserViewID uniqueidentifier, RunAt DATETIME, RunByUserID INT, UserView NVARCHAR(100), RunByUser NVARCHAR(100))
 DECLARE @UserID INT
 SELECT @UserID=ID FROM vwUsers WHERE Email=@UserEmail
 INSERT INTO @outputTable
@@ -730,73 +731,7 @@ BEGIN
 END
 GO
 
-
  
-DROP PROC IF EXISTS [__mj].spGetNextEntityID
-GO
-CREATE PROC [__mj].spGetNextEntityID
-    @schemaName NVARCHAR(255)
-AS
-BEGIN
-    DECLARE @EntityIDMin INT;
-    DECLARE @EntityIDMax INT;
-    DECLARE @MaxEntityID INT;
-	DECLARE @NextID INT;
-
-    -- STEP 1: Get EntityIDMin and EntityIDMax from __mj.SchemaInfo
-    SELECT 
-		@EntityIDMin = EntityIDMin, @EntityIDMax = EntityIDMax
-    FROM 
-		__mj.SchemaInfo
-    WHERE 
-		SchemaName = @schemaName;
-
-    -- STEP 2: If no matching schemaName, insert a new row into __mj.SchemaInfo
-    IF @EntityIDMin IS NULL OR @EntityIDMax IS NULL
-    BEGIN
-        -- Get the maximum ID from the __mj.Entity table
-		DECLARE @MaxEntityIDFromSchema INT;
-        SELECT @MaxEntityID = ISNULL(MAX(ID), 0) FROM __mj.Entity;
-		SELECT @MaxEntityIDFromSchema = ISNULL(MAX(EntityIDMax),0) FROM __mj.SchemaInfo;
-		IF @MaxEntityIDFromSchema > @MaxEntityID 
-			SELECT @MaxEntityID = @MaxEntityIDFromSchema; -- use the max ID From the schema info table if it is higher
-
-        -- Calculate the new EntityIDMin
-        SET @EntityIDMin = CASE 
-                              WHEN @MaxEntityID >= 25000001 THEN @MaxEntityID + 1
-                              ELSE 25000001
-                            END;
-
-        -- Calculate the new EntityIDMax
-        SET @EntityIDMax = @EntityIDMin + 24999;
-
-        -- Insert the new row into __mj.SchemaInfo
-        INSERT INTO __mj.SchemaInfo (SchemaName, EntityIDMin, EntityIDMax)
-        VALUES (@schemaName, @EntityIDMin, @EntityIDMax);
-    END
-
-    -- STEP 3: Get the maximum ID currently in the __mj.Entity table within the range
-    SELECT 
-		@NextID = ISNULL(MAX(ID), @EntityIDMin - 1) -- we subtract 1 from entityIDMin as it will be used the first time if Max(EntityID) is null, and below we will increment it by one to be the first ID in that range
-    FROM 
-		__mj.Entity
-    WHERE 
-		ID BETWEEN @EntityIDMin AND @EntityIDMax
-
-    -- STEP 4: Increment to get the next ID
-    SET @NextID = @NextID + 1;
-
-    -- STEP 5: Check if the next ID is within the allowed range for the schema in question
-    IF @NextID > @EntityIDMax
-		BEGIN
-			SELECT -1 AS NextID -- calling code needs to konw this is an invalid condition
-		END
-	ELSE
-		SELECT @NextID AS NextID
-END;
-
-GO
-
 
 DROP VIEW IF EXISTS [__mj].[vwSQLTablesAndEntities]
 GO
@@ -1305,42 +1240,7 @@ INSERT INTO [__mj].[CompanyIntegrationRunAPILog]
            ,@IsSuccess)
 GO
 
-
-
-DROP PROC IF EXISTS [__mj].[spCreateCompanyIntegrationRunDetail]
-GO
-CREATE PROC [__mj].[spCreateCompanyIntegrationRunDetail]
-@CompanyIntegrationRunID AS INT,
-@EntityID INT=NULL,
-@EntityName NVARCHAR(200)=NULL,
-@RecordID INT,
-@Action NCHAR(20),
-@IsSuccess BIT,
-@ExecutedAt DATETIMEOFFSET(7) = NULL,
-@NewID AS INT OUTPUT
-AS
-INSERT INTO __mj.CompanyIntegrationRunDetail
-(  
-  CompanyIntegrationRunID,
-  EntityID,
-  RecordID,
-  Action,
-  IsSuccess,
-  ExecutedAt
-)
-VALUES
-(
-  @CompanyIntegrationRunID,
-  IIF (@EntityID IS NULL, (SELECT ID FROM __mj.Entity WHERE REPLACE(Name,' ', '')=@EntityName), @EntityID),
-  @RecordID,
-  @Action,
-  @IsSuccess,
-  IIF (@ExecutedAt IS NULL, GETDATE(), @ExecutedAt)
-)
-
-SELECT @NewID = SCOPE_IDENTITY()
-GO
-
+ 
 
 DROP PROC IF EXISTS [__mj].[spCreateErrorLog]
 GO

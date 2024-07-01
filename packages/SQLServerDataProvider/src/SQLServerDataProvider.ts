@@ -156,7 +156,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
                 let viewEntity: any = null, entityInfo: EntityInfo = null;
                 if (params.ViewEntity) 
                     viewEntity = params.ViewEntity;
-                else if (params.ViewID && params.ViewID > 0) 
+                else if (params.ViewID && params.ViewID.length > 0) 
                     viewEntity = await ViewInfo.GetViewEntity(params.ViewID, contextUser);
                 else if (params.ViewName && params.ViewName.length > 0) 
                     viewEntity = await ViewInfo.GetViewEntityByName(params.ViewName, contextUser);
@@ -248,7 +248,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
                 if ((excludeUserViewRunID && excludeUserViewRunID > 0) || 
                     (params.ExcludeDataFromAllPriorViewRuns === true) ) {
                     
-                    let sExcludeSQL: string = `ID NOT IN (SELECT RecordID FROM [${this.MJCoreSchemaName}].vwUserViewRunDetails WHERE EntityID=${viewEntity.EntityID} AND` 
+                    let sExcludeSQL: string = `ID NOT IN (SELECT RecordID FROM [${this.MJCoreSchemaName}].vwUserViewRunDetails WHERE EntityID='${viewEntity.EntityID}' AND` 
                     if (params.ExcludeDataFromAllPriorViewRuns === true)
                         sExcludeSQL += ` UserViewID=${viewEntity.ID})`; // exclude ALL prior runs for this view, we do NOT need to also add the UserViewRunID even if it was provided because this will automatically filter that out too
                     else
@@ -536,7 +536,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
     }
 
     
-    public async createAuditLogRecord(user: UserInfo, authorizationName: string | null, auditLogTypeName: string, status: string, details: string | null, entityId: number, recordId: any | null, auditLogDescription: string | null): Promise<AuditLogEntity> {
+    public async createAuditLogRecord(user: UserInfo, authorizationName: string | null, auditLogTypeName: string, status: string, details: string | null, entityId: string, recordId: any | null, auditLogDescription: string | null): Promise<AuditLogEntity> {
         try {
             const authorization = authorizationName ? this.Authorizations.find((a) => a?.Name?.trim().toLowerCase() === authorizationName.trim().toLowerCase()) : null;
             const auditLogType = auditLogTypeName ? this.AuditLogTypes.find((a) => a?.Name?.trim().toLowerCase() === auditLogTypeName.trim().toLowerCase()) : null;
@@ -610,7 +610,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
         return id !== null;
     }
 
-    public async GetRecordFavoriteID(userId: number, entityName: string, CompositeKey: CompositeKey): Promise<number | null> {
+    public async GetRecordFavoriteID(userId: number, entityName: string, CompositeKey: CompositeKey): Promise<string | null> {
         try {
             const sSQL = `SELECT ID FROM [${this.MJCoreSchemaName}].vwUserFavorites WHERE UserID=${userId} AND Entity='${entityName}' AND RecordID='${CompositeKey.Values()}'`
             const result = await this.ExecuteSQL(sSQL);
@@ -1810,7 +1810,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
                     if (filter) 
                         filterSQL = ' WHERE ' + filter.Filter;
                 }
-                const itemSQL = `SELECT MAX(${item.DateFieldToCheck}) AS UpdateDate, ${item.EntityID} AS EntityID, '${item.Entity}' AS EntityName FROM [${item.EntitySchemaName}].[${item.EntityBaseView}]${filterSQL}`;
+                const itemSQL = `SELECT MAX(${item.DateFieldToCheck}) AS UpdateDate, '${item.EntityID}' AS EntityID, '${item.Entity}' AS EntityName FROM [${item.EntitySchemaName}].[${item.EntityBaseView}]${filterSQL}`;
                 combinedSQL += itemSQL;
                 if (index < items.length - 1) {
                     combinedSQL += ' UNION ALL ';

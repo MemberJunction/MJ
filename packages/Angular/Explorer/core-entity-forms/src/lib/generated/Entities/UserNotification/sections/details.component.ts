@@ -38,6 +38,8 @@ import { UserNotificationEntity } from '@memberjunction/core-entities';
             FieldName="ResourceTypeID"
             Type="numerictextbox"
             [EditMode]="EditMode"
+            LinkType="Record"
+            LinkComponentType="Search"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"

@@ -16,7 +16,7 @@ export class AIActionParams {
 }
 
 export class EntityAIActionParams extends AIActionParams {
-    entityAIActionId: number
+    entityAIActionId: string
     entityRecord: BaseEntity
 }
 

@@ -31,7 +31,7 @@ import { EmployeeCompanyIntegrationEntity } from '@memberjunction/core-entities'
             [record]="record"
             [ShowLabel]="true"
             FieldName="ExternalSystemRecordID"
-            Type="textbox"
+            Type="textarea"
             [EditMode]="EditMode"
         ></mj-form-field>
         <mj-form-field 

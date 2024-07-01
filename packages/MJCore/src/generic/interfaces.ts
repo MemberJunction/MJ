@@ -59,11 +59,11 @@ export class PotentialDuplicateRequest {
     /**
     * The ID of the entity the record belongs to
     **/
-    EntityID: number;
+    EntityID: string;
     /**
     * The ID of the List entity to use
     **/
-    ListID: number
+    ListID: number;
     /**
      * The Primary Key values of each record
      * we're checking for duplicates
@@ -85,10 +85,10 @@ export class PotentialDuplicateRequest {
 }
 
 export class PotentialDuplicateResult {
-    EntityID: number;
+    EntityID: string;
     RecordCompositeKey: CompositeKey;
     Duplicates: PotentialDuplicate[];
-    DuplicateRunDetailMatchRecordIDs: number[];
+    DuplicateRunDetailMatchRecordIDs: string[];
 }
 
 //Wrapper for the PotentialDuplicateResponse class that includes  additional properties

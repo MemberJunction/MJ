@@ -61,9 +61,9 @@ export class Folder {
 }
 
 export class TreeFolder extends Folder {
-    public EntityID: number;
+    public EntityID: string;
 
-    constructor(entityID: number, id: number, folderName: string){
+    constructor(entityID: string, id: number, folderName: string){
         super(id, folderName);
         this.EntityID = entityID;
     }

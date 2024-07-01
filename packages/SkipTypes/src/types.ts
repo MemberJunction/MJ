@@ -118,7 +118,7 @@ export const SkipRequestPhase = {
 export type SkipRequestPhase = typeof SkipRequestPhase[keyof typeof SkipRequestPhase];
 
 export class SkipEntityFieldInfo {
-    entityID: number;
+    entityID: string;
     sequence: number;
     name: string;
     displayName?: string;
@@ -140,7 +140,7 @@ export class SkipEntityFieldInfo {
     defaultColumnWidth: number;
     isVirtual: boolean;
     isNameField: boolean;
-    relatedEntityID?: number;
+    relatedEntityID?: string;
     relatedEntityFieldName?: string;
     relatedEntity?: string;
     relatedEntitySchemaName?: string;
@@ -148,8 +148,8 @@ export class SkipEntityFieldInfo {
 }
 
 export class SkipEntityRelationshipInfo {
-    entityID: number;
-    relatedEntityID: number;
+    entityID: string;
+    relatedEntityID: string;
     type: string;
     entityKeyField: string;
     relatedEntityJoinField: string;
@@ -163,7 +163,7 @@ export class SkipEntityRelationshipInfo {
 }
 
 export class SkipEntityInfo {
-    id: number;
+    id: string;
     name!: string;
     description?: string;
     schemaName!: string;
@@ -200,7 +200,7 @@ export class SkipQueryFieldInfo {
      * The full SQL type for the field, for example datetime or nvarchar(10) etc.
      */
     sqlFullType: string;
-    sourceEntityID: number;
+    sourceEntityID: string;
     sourceFieldName: string;
     isComputed: boolean;
     computationDescription: string;

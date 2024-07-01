@@ -10,7 +10,7 @@ export class EntityCommunicationMessageTypeExtended extends EntityCommunicationM
 
 
 export class EntityCommunicationParams {
-    EntityID: number;
+    EntityID: string;
     RunViewParams: RunViewParams
     ProviderName: string
     ProviderMessageTypeName: string
@@ -68,7 +68,7 @@ export abstract class EntityCommunicationsEngineBase extends BaseEngine<EntityCo
      * @param entityID 
      * @returns 
      */
-    public GetEntityCommunicationMessageTypes(entityID: number): EntityCommunicationMessageTypeExtended[] {
+    public GetEntityCommunicationMessageTypes(entityID: string): EntityCommunicationMessageTypeExtended[] {
         this.TryThrowIfNotLoaded();
         return this.EntityCommunicationMessageTypes.filter(m => m.EntityID === entityID);
     }
@@ -77,7 +77,7 @@ export abstract class EntityCommunicationsEngineBase extends BaseEngine<EntityCo
      * Returns true if the specified entity has any communication message types 
      * @param entityID 
      */
-    public EntitySupportsCommunication(entityID: number): boolean {
+    public EntitySupportsCommunication(entityID: string): boolean {
         this.TryThrowIfNotLoaded();
         return this.GetEntityCommunicationMessageTypes(entityID).length > 0;
     }

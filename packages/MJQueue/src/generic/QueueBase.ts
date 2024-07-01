@@ -39,7 +39,7 @@ export class TaskBase {
   {
     return this._data;
   } 
-  public get ID(): number {
+  public get ID(): string {
     return this._taskRecord.ID;
   }
   constructor (taskRecord: QueueTaskEntity, data: any, options: TaskOptions) {
@@ -162,7 +162,7 @@ export abstract class QueueBase  {
     }
   }
 
-  public FindTask(ID: number): TaskBase {
+  public FindTask(ID: string): TaskBase {
     return this._queue.find(t => t.ID === ID);
   }
 }

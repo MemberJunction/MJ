@@ -558,7 +558,7 @@ export function Load${entity.ClassName}${this.stripWhiteSpace(section.Name)}Comp
 
             const tabCode = `${index > 0 ? '\n' : ''}                    <mj-tab Name="${tabName}" 
                         [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: ${relatedEntity.ID}}">
+                        [Props]="{EntityRelationshipID: '${relatedEntity.ID}'}">
                         ${icon}${tabName}
                     </mj-tab>
                     <mj-tab-body>

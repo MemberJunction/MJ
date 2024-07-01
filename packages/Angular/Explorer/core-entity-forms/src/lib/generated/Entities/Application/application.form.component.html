@@ -16,16 +16,16 @@
                         </mj-form-section>
                     </mj-tab-body>
                     
-                    <mj-tab Name="Entities" 
+                    <mj-tab Name="Application Settings" 
                         [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: 23}">
-                        Entities
+                        [Props]="{EntityRelationshipID: '333FB200-C08B-4AC2-B247-5955C29250AB'}">
+                        Application Settings
                     </mj-tab>
                     <mj-tab-body>
                         <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Application Entities')"  
-                            [NewRecordValues]="NewRecordValues('Application Entities')"
-                            [AllowLoad]="IsCurrentTab('Entities')"  
+                            [Params]="BuildRelationshipViewParamsByEntityName('Application Settings')"  
+                            [NewRecordValues]="NewRecordValues('Application Settings')"
+                            [AllowLoad]="IsCurrentTab('Application Settings')"  
                             [EditMode]="GridEditMode()"  
                             [BottomMargin]="GridBottomMargin">
                         </mj-user-view-grid>                    
@@ -33,7 +33,7 @@
 
                     <mj-tab Name="User Applications" 
                         [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: 92}">
+                        [Props]="{EntityRelationshipID: '732ED20A-8DE6-4FA6-9CBE-7367C1842C68'}">
                         User Applications
                     </mj-tab>
                     <mj-tab-body>
@@ -46,16 +46,16 @@
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
-                    <mj-tab Name="Application Settings" 
+                    <mj-tab Name="Entities" 
                         [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: 205}">
-                        Application Settings
+                        [Props]="{EntityRelationshipID: 'F0557530-4768-4C74-850D-9582671BDB4B'}">
+                        Entities
                     </mj-tab>
                     <mj-tab-body>
                         <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Application Settings')"  
-                            [NewRecordValues]="NewRecordValues('Application Settings')"
-                            [AllowLoad]="IsCurrentTab('Application Settings')"  
+                            [Params]="BuildRelationshipViewParamsByEntityName('Application Entities')"  
+                            [NewRecordValues]="NewRecordValues('Application Entities')"
+                            [AllowLoad]="IsCurrentTab('Entities')"  
                             [EditMode]="GridEditMode()"  
                             [BottomMargin]="GridBottomMargin">
                         </mj-user-view-grid>                    

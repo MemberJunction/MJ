@@ -64,7 +64,7 @@ export class EntityPermissionsGridComponent implements OnInit, OnChanges {
       throw new Error("Role not found: " + this.RoleName)
 
     const rv = new RunView();
-    const filter: string = this.Mode === 'Entity' ? 'EntityID=' + entity!.ID : `RoleName='${r?.Name}'`;
+    const filter: string = this.Mode === 'Entity' ? `EntityID='${entity!.ID}'` : `RoleName='${r?.Name}'`;
     const result = await rv.RunView({
       EntityName: 'Entity Permissions',
       ExtraFilter: filter,
@@ -174,7 +174,7 @@ export class EntityPermissionsGridComponent implements OnInit, OnChanges {
   protected IsPermissionReallyDirty(p: EntityPermissionEntity): boolean {
     if (!p.Dirty)
       return false;
-    else if (p.ID > 0)
+    else if (p.IsSaved)
       return true;
     else
       return p.CanRead || p.CanCreate || p.CanUpdate || p.CanDelete; // if we have a new record, only consider it dirty if at least one permission is true

@@ -18,7 +18,7 @@
                     
                     <mj-tab Name="Contacts" 
                         [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: 142}">
+                        [Props]="{EntityRelationshipID: '595EE4C1-09BD-4070-B2F8-22BA67B6AFCE'}">
                         Contacts
                     </mj-tab>
                     <mj-tab-body>
@@ -31,9 +31,21 @@
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
+                    <mj-tab Name="Deals" 
+                        [Visible]="record.IsSaved" 
+                        [Props]="{EntityRelationshipID: 'CB3A56C3-F5E9-49A9-9D9F-3E021815840E'}">
+                        Deals
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-timeline
+                            DisplayOrientation="horizontal"
+                            [Groups]="[{EntityName: 'Deals', DataSourceType: 'entity', Filter: 'AccountID=' + record.ID, TitleFieldName: 'Title', DateFieldName: 'CloseDate'}]">
+                        </mj-timeline>                    
+                    </mj-tab-body>
+
                     <mj-tab Name="Activities" 
                         [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: 143}">
+                        [Props]="{EntityRelationshipID: '2A1789D9-0CCD-457E-85E2-BF0F337FE72F'}">
                         Activities
                     </mj-tab>
                     <mj-tab-body>
@@ -46,21 +58,9 @@
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
-                    <mj-tab Name="Deals" 
-                        [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: 144}">
-                        Deals
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-timeline
-                            DisplayOrientation="horizontal"
-                            [Groups]="[{EntityName: 'Deals', DataSourceType: 'entity', Filter: 'AccountID=' + record.ID, TitleFieldName: 'Title', DateFieldName: 'CloseDate'}]">
-                        </mj-timeline>                    
-                    </mj-tab-body>
-
                     <mj-tab Name="Invoices" 
                         [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: 145}">
+                        [Props]="{EntityRelationshipID: 'F173FC3D-0611-451F-A8A8-F07999243789'}">
                         Invoices
                     </mj-tab>
                     <mj-tab-body>

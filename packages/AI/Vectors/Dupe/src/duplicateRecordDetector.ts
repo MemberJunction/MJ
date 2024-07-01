@@ -174,7 +174,7 @@ export class DuplicateRecordDetector extends VectorBase {
         return response;
     }
 
-    private async GetRecordsByListID(listID: number, entityID: number): Promise<BaseEntity[]> {
+    private async GetRecordsByListID(listID: number, entityID: string): Promise<BaseEntity[]> {
         const entityInfo: EntityInfo = super.Metadata.EntityByID(entityID);
         if(!entityInfo){
             throw new Error(`Failed to load Entity Info with ID ${entityID}`);

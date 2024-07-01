@@ -23,6 +23,8 @@ export type RecordChangeStatus = typeof RecordChangeStatus[keyof typeof RecordCh
  * Record Change object has information on a change to a record in the Record Changes entity
  */
 export class RecordChange extends BaseInfo {
+    ID: string = null
+
     EntityID: number = null
     RecordID: any = null
     ChangedAt: Date = null
@@ -54,9 +56,11 @@ export class RecordChange extends BaseInfo {
  * maps to information in the Entity Relationships metadata entity.
  */
 export class EntityRelationshipInfo extends BaseInfo  {
-    EntityID: number = null 
+    ID: string = null
+
+    EntityID: string = null 
     Sequence: number = null
-    RelatedEntityID: number = null
+    RelatedEntityID: string = null
     BundleInAPI: boolean = null
     IncludeInParentAllQuery: boolean = null
     Type: string = null 
@@ -70,7 +74,7 @@ export class EntityRelationshipInfo extends BaseInfo  {
     DisplayName: string = null
     DisplayIconType: 'Related Entity Icon'| 'Custom' | 'None' = 'Related Entity Icon'
     DisplayIcon: string = null
-    DisplayUserViewGUID: string = null
+    DisplayUserViewID: string = null
     DisplayComponentID: number = null
     DisplayComponentConfiguration: string = null
     __mj_CreatedAt: Date = null
@@ -87,7 +91,6 @@ export class EntityRelationshipInfo extends BaseInfo  {
     RelatedEntityClassName: string = null
     RelatedEntityBaseTableCodeName: string = null
     DisplayUserViewName: string = null
-    DisplayUserViewID: number = null
     DisplayComponent: string = null
 
     constructor (initData: any) {
@@ -107,6 +110,8 @@ export type EntityPermissionType = typeof EntityPermissionType[keyof typeof Enti
 
 
 export class EntityUserPermissionInfo {
+    ID: string = null
+
     Entity: EntityInfo;
     User: UserInfo;
     CanCreate: boolean;
@@ -116,7 +121,9 @@ export class EntityUserPermissionInfo {
 }
 
 export class EntityPermissionInfo extends BaseInfo{
-    EntityID: number = null
+    ID: string = null
+
+    EntityID: string = null
     RoleName: string = null
     CanCreate: boolean = null
     CanRead: boolean = null
@@ -207,6 +214,8 @@ export type EntityFieldValueListType = typeof EntityFieldValueListType[keyof typ
 
 
 export class EntityFieldValueInfo extends BaseInfo {
+    ID: string = null
+
     EntityFieldID: string = null // EntityFieldID is a uniqueidentifier column
     Sequence: number = null
     Value: string = null
@@ -234,10 +243,12 @@ export type GeneratedFormSectionType = typeof GeneratedFormSectionType[keyof typ
  * Field information within an entity - object models data from the Entity Fields entity in the metadata
  */
 export class EntityFieldInfo extends BaseInfo {
+    ID: string = null
+
     /**
      * Foreign key to the Entities entity.
      */
-    EntityID: number = null
+    EntityID: string = null
     /**
      * The sequence of the field within the entity, typically the intended display order
      */
@@ -279,7 +290,7 @@ export class EntityFieldInfo extends BaseInfo {
     GeneratedFormSection: string = null
     IsVirtual: boolean = null 
     IsNameField: boolean = null 
-    RelatedEntityID: number = null
+    RelatedEntityID: string = null
     RelatedEntityFieldName: string = null
     IncludeRelatedEntityNameFieldInBaseView: boolean = null
     RelatedEntityNameFieldMap: string = null
@@ -421,7 +432,6 @@ export class EntityFieldInfo extends BaseInfo {
         return this.IsVirtual || 
                !this.AllowUpdateAPI || 
                this.IsPrimaryKey || 
-               this.Type.toLowerCase() === 'uniqueidentifier' ||
                this.IsSpecialDateField;
     }
 
@@ -524,6 +534,8 @@ export class EntityFieldInfo extends BaseInfo {
  * Entity Document Type Info object has information about the document types that exist across all entities. When Entity Documents are created they are associated with a document type.
  */
 export class EntityDocumentTypeInfo extends BaseInfo {
+    ID: string = null
+
     Name: string = null
     Description: string = null  
     __mj_CreatedAt: Date = null
@@ -540,7 +552,8 @@ export class EntityDocumentTypeInfo extends BaseInfo {
  * Settings allow you to store key/value pairs of information that can be used to configure the behavior of the entity.
  */
 export class EntitySettingInfo extends BaseInfo {   
-    EntityID: number = null
+    ID: string = null
+    EntityID: string = null
     Name: string = null
     Value: string = null
     Comments: string = null
@@ -559,10 +572,12 @@ export class EntitySettingInfo extends BaseInfo {
  * Metadata about an entity
  */
 export class EntityInfo extends BaseInfo {
+    public ID: string = null
+
     /**
      * Reserved for future use
      */
-    public ParentID: number = null   
+    public ParentID: string = null   
     /**
      * Unique name of the entity
      */
@@ -652,7 +667,7 @@ export class EntityInfo extends BaseInfo {
     }
 
     get ForeignKeys(): EntityFieldInfo[] {
-        return this.Fields.filter((f) => f.RelatedEntityID > 0);
+        return this.Fields.filter((f) => f.RelatedEntityID && f.RelatedEntityID.length > 0);
     }
 
     get Fields(): EntityFieldInfo[] {
@@ -883,9 +898,9 @@ export class EntityInfo extends BaseInfo {
         if (filter && filter.length > 0) 
             params.ExtraFilter = `(${params.ExtraFilter}) AND (${filter})`; // caller provided their own filter, so AND it in with the relationship filter we have here
 
-        if (relationship.DisplayUserViewGUID && relationship.DisplayUserViewGUID.length > 0) {
+        if (relationship.DisplayUserViewID && relationship.DisplayUserViewID.length > 0) {
             // we have been given a specific view to run, use it
-            params.ViewID = relationship.DisplayUserViewID; // virtual field - the durable key is the GUID, but the base view for entityrelationship brings in view name and ID
+            params.ViewID = relationship.DisplayUserViewID;  
         }
         else {
             // no view specified, so specify the entity instead

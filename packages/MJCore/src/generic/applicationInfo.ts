@@ -3,6 +3,7 @@ import { EntityInfo } from './entityInfo'
 import { IMetadataProvider } from './interfaces';
 
 export class ApplicationSettingInfo extends BaseInfo {
+    ID: string = null
     ApplicationName: string = null
     Name: string = null
     Value: string = null
@@ -17,8 +18,9 @@ export class ApplicationSettingInfo extends BaseInfo {
 }
 
 export class ApplicationEntityInfo extends BaseInfo {
+    ID: string = null
     ApplicationName: string = null
-    EntityID: number = null
+    EntityID: string = null
     Sequence: number = null
     DefaultForNewUser: boolean = null
     Application: string = null

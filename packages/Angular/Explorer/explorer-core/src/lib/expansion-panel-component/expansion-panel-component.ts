@@ -89,7 +89,7 @@ export class ExpansionPanelComponent {
         this.items = [...this.items];
     }
 
-    private async getFoldersForTreeNode(entityID: number, selectedFolderID: string | null): Promise<TreeItem[]> {
+    private async getFoldersForTreeNode(entityID: string, selectedFolderID: string | null): Promise<TreeItem[]> {
         const md = new Metadata();
 
         const categoryIDFilter: string = selectedFolderID ? `ParentID=${selectedFolderID}` : 'ParentID IS NULL';
@@ -106,7 +106,7 @@ export class ExpansionPanelComponent {
         });
     }
 
-    private async getUserViewsForTreeNode(entityID: number, selectedFolderID: string | null): Promise<TreeItem[]> {
+    private async getUserViewsForTreeNode(entityID: string, selectedFolderID: string | null): Promise<TreeItem[]> {
         const md = new Metadata();
 
         const categoryIDFilter: string = selectedFolderID ? `CategoryID=${selectedFolderID}` : 'CategoryID IS NULL';

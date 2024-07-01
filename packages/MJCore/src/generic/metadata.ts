@@ -66,7 +66,7 @@ export class Metadata {
      * @param entityID 
      * @returns 
      */
-    public EntityByID(entityID: number): EntityInfo {
+    public EntityByID(entityID: string): EntityInfo {
         return this.Entities.find(e => e.ID === entityID);
     }
 
@@ -114,7 +114,7 @@ export class Metadata {
      * @param entityName 
      * @returns 
      */
-    public EntityIDFromName(entityName: string): number {
+    public EntityIDFromName(entityName: string): string {
         let entity = this.Entities.find(e => e.Name == entityName);
         if (entity != null)
             return entity.ID;
@@ -127,7 +127,7 @@ export class Metadata {
      * @param entityID 
      * @returns 
      */
-    public EntityNameFromID(entityID: number): string {
+    public EntityNameFromID(entityID: string): string {
         let entity = this.Entities.find(e => e.ID == entityID);
         if(entity){
             return entity.Name;
@@ -142,7 +142,7 @@ export class Metadata {
      * Helper function to return an EntityInfo from an Entity ID
      * @param entityID
      */
-    public EntityFromEntityID(entityID: number): EntityInfo | null {
+    public EntityFromEntityID(entityID: string): EntityInfo | null {
         let entity = this.Entities.find(e => e.ID == entityID);
         if(entity){
             return entity;

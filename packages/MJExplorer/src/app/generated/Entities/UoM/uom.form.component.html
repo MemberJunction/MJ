@@ -16,24 +16,9 @@
                         </mj-form-section>
                     </mj-tab-body>
                     
-                    <mj-tab Name="Products" 
-                        [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: 224}">
-                        Products
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Products')"  
-                            [NewRecordValues]="NewRecordValues('Products')"
-                            [AllowLoad]="IsCurrentTab('Products')"  
-                            [EditMode]="GridEditMode()"  
-                            [BottomMargin]="GridBottomMargin">
-                        </mj-user-view-grid>                    
-                    </mj-tab-body>
-
                     <mj-tab Name="Sales Order Details" 
                         [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: 225}">
+                        [Props]="{EntityRelationshipID: 'D5B9D27A-5DF7-4693-A90F-38C33F7B740C'}">
                         Sales Order Details
                     </mj-tab>
                     <mj-tab-body>
@@ -46,24 +31,9 @@
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
-                    <mj-tab Name="Product Price Levels" 
-                        [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: 226}">
-                        Product Price Levels
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Product Price Levels')"  
-                            [NewRecordValues]="NewRecordValues('Product Price Levels')"
-                            [AllowLoad]="IsCurrentTab('Product Price Levels')"  
-                            [EditMode]="GridEditMode()"  
-                            [BottomMargin]="GridBottomMargin">
-                        </mj-user-view-grid>                    
-                    </mj-tab-body>
-
                     <mj-tab Name="Uo Ms" 
                         [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: 227}">
+                        [Props]="{EntityRelationshipID: '4C2DE29B-F7D9-4D37-9A36-72D0D6B5FB47'}">
                         Uo Ms
                     </mj-tab>
                     <mj-tab-body>
@@ -71,6 +41,36 @@
                             [Params]="BuildRelationshipViewParamsByEntityName('Uo Ms')"  
                             [NewRecordValues]="NewRecordValues('Uo Ms')"
                             [AllowLoad]="IsCurrentTab('Uo Ms')"  
+                            [EditMode]="GridEditMode()"  
+                            [BottomMargin]="GridBottomMargin">
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Products" 
+                        [Visible]="record.IsSaved" 
+                        [Props]="{EntityRelationshipID: 'D5F5CA65-B415-4E27-8F84-AB18774C9846'}">
+                        Products
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Products')"  
+                            [NewRecordValues]="NewRecordValues('Products')"
+                            [AllowLoad]="IsCurrentTab('Products')"  
+                            [EditMode]="GridEditMode()"  
+                            [BottomMargin]="GridBottomMargin">
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Product Price Levels" 
+                        [Visible]="record.IsSaved" 
+                        [Props]="{EntityRelationshipID: '16A19239-19DB-453D-89FA-DBD105F62138'}">
+                        Product Price Levels
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Product Price Levels')"  
+                            [NewRecordValues]="NewRecordValues('Product Price Levels')"
+                            [AllowLoad]="IsCurrentTab('Product Price Levels')"  
                             [EditMode]="GridEditMode()"  
                             [BottomMargin]="GridBottomMargin">
                         </mj-user-view-grid>                    

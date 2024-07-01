@@ -14,8 +14,8 @@ import { ResolverBase } from './ResolverBase';
 //****************************************************************************
 @InputType()
 export class RunViewByIDInput {
-  @Field(() => Int)
-  ViewID: number;
+  @Field(() => String)
+  ViewID: string;
 
   @Field(() => String, {
     nullable: true,
@@ -269,8 +269,8 @@ export class RunViewResultRow {
   @Field(() => Int)
   ID: number;
 
-  @Field(() => Int)
-  EntityID: number;
+  @Field(() => String)
+  EntityID: string;
 
   @Field(() => String)
   Data: string;
@@ -281,8 +281,8 @@ export class RunViewResult {
   @Field(() => [RunViewResultRow])
   Results: RunViewResultRow[];
 
-  @Field(() => Int, { nullable: true })
-  UserViewRunID?: number;
+  @Field(() => String, { nullable: true })
+  UserViewRunID?: string;
 
   @Field(() => Int, { nullable: true })
   RowCount: number;
@@ -377,7 +377,7 @@ export class RunViewResolver extends ResolverBase {
     }
   }
 
-  protected processRawData(rawData: any[], entityId: number): RunViewResultRow[] {
+  protected processRawData(rawData: any[], entityId: string): RunViewResultRow[] {
     const returnResult = [];
     for (let i = 0; i < rawData.length; i++) {
       const row = rawData[i];

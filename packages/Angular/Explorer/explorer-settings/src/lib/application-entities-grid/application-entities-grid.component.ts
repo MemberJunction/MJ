@@ -26,11 +26,11 @@ export class ApplicationEntityEntity_Ext extends ApplicationEntityEntity {
     this._applicationName = value;
   }
 
-  private _entityID: number = 0;
-  public get SavedEntityID(): number {
+  private _entityID: string = "";
+  public get SavedEntityID(): string {
     return this._entityID;
   }
-  public set SavedEntityID(value: number) {
+  public set SavedEntityID(value: string) {
     this._entityID = value;
   }
 }
@@ -50,7 +50,7 @@ export class ApplicationEntitiesGridComponent implements OnInit, OnChanges {
     /**
      * The ID of the entity we are working with, required if Mode is 'Entities'
      */
-  @Input() EntityID!: number;
+  @Input() EntityID!: string;
   public isLoading: boolean = false;
   public rows: ApplicationEntityEntity_Ext[] = [];
   @Input() public Mode: 'Applications' | 'Entities' = 'Applications';
@@ -87,7 +87,7 @@ export class ApplicationEntitiesGridComponent implements OnInit, OnChanges {
     this.isLoading = true
 
     const rv = new RunView();
-    const filter: string = this.Mode === 'Applications' ? `Application='${this.ApplicationName}'` : `EntityID=${this.EntityID}`;
+    const filter: string = this.Mode === 'Applications' ? `Application='${this.ApplicationName}'` : `EntityID='${this.EntityID}'`;
     const result = await rv.RunView({
         EntityName: 'Application Entities',
         ExtraFilter: filter,
@@ -225,9 +225,9 @@ export class ApplicationEntitiesGridComponent implements OnInit, OnChanges {
 
   protected IsReallyDirty(ae: ApplicationEntityEntity_Ext): boolean {
     // logic is simple, if we are in the database, but the checkbox is not checked (or vice versa), then we are dirty
-    if (ae.Selected && ae.ID > 0)
+    if (ae.Selected && ae.IsSaved)
       return false; // if we are in the database and the checkbox is checked, we are not dirty
-    else if (!ae.Selected && ae.ID > 0)
+    else if (!ae.Selected && ae.IsSaved)
       return true; // if we are in the database and the checkbox is not checked, we are dirty because we'd have to be removed
     else if (ae.Selected)
       return true; // if we are NOT in the database and the checkbox is checked, we are dirty because we'd have to be added

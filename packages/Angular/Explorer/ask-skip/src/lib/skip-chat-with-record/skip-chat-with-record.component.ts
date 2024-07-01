@@ -12,7 +12,7 @@ import { SkipAPIChatWithRecordResponse } from "@memberjunction/skip-types";
     styleUrls: ['./skip-chat-with-record.component.css']
   })  
 export class SkipChatWithRecordComponent implements AfterViewInit {
-  @Input() LinkedEntityID!: number;
+  @Input() LinkedEntityID!: string;
   @Input() LinkedPrimaryKey: CompositeKey = new CompositeKey();
   
   @ViewChild('mjChat') mjChat!: ChatComponent;
@@ -73,7 +73,7 @@ export class SkipChatWithRecordComponent implements AfterViewInit {
               const md = new Metadata();
               const result = await rv.RunView({
                   EntityName: "Conversations",
-                  ExtraFilter: "UserID=" + md.CurrentUser.ID + " AND LinkedEntityID=" + this.LinkedEntityID + " AND LinkedRecordID='" + this.LinkedPrimaryKey.Values() + "'",
+                  ExtraFilter: "UserID=" + md.CurrentUser.ID + " AND LinkedEntityID='" + this.LinkedEntityID + "' AND LinkedRecordID='" + this.LinkedPrimaryKey.Values() + "'",
                   OrderBy: "__mj_CreatedAt DESC" // in case there are more than one get the latest
               })
               if (result && result.Success && result.Results.length > 0) {
