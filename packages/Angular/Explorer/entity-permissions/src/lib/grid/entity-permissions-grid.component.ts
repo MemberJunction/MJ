@@ -64,7 +64,7 @@ export class EntityPermissionsGridComponent implements OnInit, OnChanges {
       throw new Error("Role not found: " + this.RoleName)
 
     const rv = new RunView();
-    const filter: string = this.Mode === 'Entity' ? 'EntityID=' + entity!.ID : `RoleName='${r?.Name}'`;
+    const filter: string = this.Mode === 'Entity' ? `EntityID='${entity!.ID}'` : `RoleName='${r?.Name}'`;
     const result = await rv.RunView({
       EntityName: 'Entity Permissions',
       ExtraFilter: filter,

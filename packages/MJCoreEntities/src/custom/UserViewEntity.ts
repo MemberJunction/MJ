@@ -110,7 +110,7 @@ export class UserViewEntityExtended extends UserViewEntity  {
         return super.LoadFromData(data)
     }
 
-    async Load(ID: number, EntityRelationshipsToLoad?: string[]): Promise<boolean> {
+    async Load(ID: string, EntityRelationshipsToLoad?: string[]): Promise<boolean> {
         // first load up the view info, use the superclass to do this
         const result = await super.Load(ID, EntityRelationshipsToLoad)
         if (result) {
@@ -449,7 +449,7 @@ export class ViewInfo {
      * @param viewName Name of the view to lookup the ID for 
      * @returns the ID of the User View record that matches the provided name, if found
      */
-    static async GetViewID(viewName: string): Promise<number> {
+    static async GetViewID(viewName: string): Promise<string> {
         const rv = new RunView();
         const result = await rv.RunView({EntityName: 'User Views', ExtraFilter: `Name = '${viewName}'`})
         const rd = result?.Results as Array<any>;
@@ -471,7 +471,7 @@ export class ViewInfo {
      * @static
      * @async
      */
-    static async GetViewEntity(viewId: number, contextUser?: UserInfo): Promise<UserViewEntityExtended> {
+    static async GetViewEntity(viewId: string, contextUser?: UserInfo): Promise<UserViewEntityExtended> {
         const md = new Metadata();
         const view = <UserViewEntityExtended>await md.GetEntityObject('User Views', contextUser);
         if (await view.Load(viewId))

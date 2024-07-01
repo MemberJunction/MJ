@@ -156,7 +156,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
                 let viewEntity: any = null, entityInfo: EntityInfo = null;
                 if (params.ViewEntity) 
                     viewEntity = params.ViewEntity;
-                else if (params.ViewID && params.ViewID > 0) 
+                else if (params.ViewID && params.ViewID.length > 0) 
                     viewEntity = await ViewInfo.GetViewEntity(params.ViewID, contextUser);
                 else if (params.ViewName && params.ViewName.length > 0) 
                     viewEntity = await ViewInfo.GetViewEntityByName(params.ViewName, contextUser);
@@ -248,7 +248,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
                 if ((excludeUserViewRunID && excludeUserViewRunID > 0) || 
                     (params.ExcludeDataFromAllPriorViewRuns === true) ) {
                     
-                    let sExcludeSQL: string = `ID NOT IN (SELECT RecordID FROM [${this.MJCoreSchemaName}].vwUserViewRunDetails WHERE EntityID=${viewEntity.EntityID} AND` 
+                    let sExcludeSQL: string = `ID NOT IN (SELECT RecordID FROM [${this.MJCoreSchemaName}].vwUserViewRunDetails WHERE EntityID='${viewEntity.EntityID}' AND` 
                     if (params.ExcludeDataFromAllPriorViewRuns === true)
                         sExcludeSQL += ` UserViewID=${viewEntity.ID})`; // exclude ALL prior runs for this view, we do NOT need to also add the UserViewRunID even if it was provided because this will automatically filter that out too
                     else

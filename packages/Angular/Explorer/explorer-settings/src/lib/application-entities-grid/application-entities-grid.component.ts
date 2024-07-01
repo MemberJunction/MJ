@@ -87,7 +87,7 @@ export class ApplicationEntitiesGridComponent implements OnInit, OnChanges {
     this.isLoading = true
 
     const rv = new RunView();
-    const filter: string = this.Mode === 'Applications' ? `Application='${this.ApplicationName}'` : `EntityID=${this.EntityID}`;
+    const filter: string = this.Mode === 'Applications' ? `Application='${this.ApplicationName}'` : `EntityID='${this.EntityID}'`;
     const result = await rv.RunView({
         EntityName: 'Application Entities',
         ExtraFilter: filter,

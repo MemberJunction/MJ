@@ -31,7 +31,7 @@ export class DataContextItem {
     /**
      * ViewID - the ID of the view in the system, only used if type = 'view' 
      */
-    ViewID?: number;
+    ViewID?: string;
 
     /**
      * QueryID - the ID of the query in the system, only used if type = 'query'

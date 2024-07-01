@@ -134,7 +134,7 @@ export class ResolverBase {
       if (!entity) throw new Error(`Entity ${viewInput.EntityName} not found in metadata`);
 
       const viewInfo: UserViewEntity = {
-        ID: -1,
+        ID: "",
         Entity: viewInput.EntityName,
         EntityID: entity.ID,
         EntityBaseView: entity.BaseView as string,

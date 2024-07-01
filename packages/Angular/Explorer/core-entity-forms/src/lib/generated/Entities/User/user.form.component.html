@@ -465,6 +465,21 @@
                             [BottomMargin]="GridBottomMargin">
                         </mj-user-view-grid>                    
                     </mj-tab-body>
+
+                    <mj-tab Name="List Categories" 
+                        [Visible]="record.IsSaved" 
+                        [Props]="{EntityRelationshipID: 'DFB97A06-7E37-EF11-86D4-000D3A4E707E'}">
+                        List Categories
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('List Categories')"  
+                            [NewRecordValues]="NewRecordValues('List Categories')"
+                            [AllowLoad]="IsCurrentTab('List Categories')"  
+                            [EditMode]="GridEditMode()"  
+                            [BottomMargin]="GridBottomMargin">
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
                 </mj-tabstrip>
     </form>
 </div>

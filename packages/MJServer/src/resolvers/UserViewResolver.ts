@@ -43,7 +43,7 @@ export class UserViewResolver extends UserViewResolverBase {
   }
 
   @Query(() => [UserView_])
-  async UpdateWhereClause(@Arg('ID', () => Int) ID: number, @Ctx() { userPayload }: AppContext) {
+  async UpdateWhereClause(@Arg('ID', () => String) ID: string, @Ctx() { userPayload }: AppContext) {
     // in this query we want to update the uesrView record in the DB with a new where clause
     // this should normally not be a factor but we have this exposed in the GraphQL API so that
     // a dev can force the update if desired from the client. The normal path is just to update

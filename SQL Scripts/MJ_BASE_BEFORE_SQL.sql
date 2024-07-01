@@ -219,8 +219,7 @@ SELECT
 	relatedEntity.ClassName RelatedEntityClassName,
 	relatedEntity.CodeName RelatedEntityCodeName,
 	relatedEntity.BaseTableCodeName RelatedEntityBaseTableCodeName,
-	uv.Name DisplayUserViewName,
-	uv.ID DisplayUserViewID
+	uv.Name DisplayUserViewName
 FROM
 	[__mj].EntityRelationship er
 INNER JOIN
@@ -234,7 +233,7 @@ ON
 LEFT OUTER JOIN
 	[__mj].UserView uv
 ON	
-	er.DisplayUserViewGUID = uv.GUID
+	er.DisplayUserViewID = uv.ID
 GO
 
  
@@ -674,12 +673,12 @@ CREATE TYPE __mj.IDListTableType AS TABLE
 );
 GO
 
-CREATE PROCEDURE [__mj].spCreateUserViewRunWithDetail(@UserViewID INT, @UserEmail NVARCHAR(255), @RecordIDList __mj.IDListTableType READONLY) 
+CREATE PROCEDURE [__mj].spCreateUserViewRunWithDetail(@UserViewID uniqueidentifier, @UserEmail NVARCHAR(255), @RecordIDList __mj.IDListTableType READONLY) 
 AS
-DECLARE @RunID INT
+DECLARE @RunID uniqueidentifier
 DECLARE @Now DATETIME
 SELECT @Now=GETDATE()
-DECLARE @outputTable TABLE (ID INT, UserViewID INT, RunAt DATETIME, RunByUserID INT, UserView NVARCHAR(100), RunByUser NVARCHAR(100))
+DECLARE @outputTable TABLE (ID uniqueidentifier, UserViewID uniqueidentifier, RunAt DATETIME, RunByUserID INT, UserView NVARCHAR(100), RunByUser NVARCHAR(100))
 DECLARE @UserID INT
 SELECT @UserID=ID FROM vwUsers WHERE Email=@UserEmail
 INSERT INTO @outputTable

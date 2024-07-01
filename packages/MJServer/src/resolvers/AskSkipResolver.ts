@@ -913,7 +913,7 @@ export class AskSkipResolver {
     };
   }
 
-  protected async getViewData(ViewId: number, user: UserInfo): Promise<any> {
+  protected async getViewData(ViewId: string, user: UserInfo): Promise<any> {
     const rv = new RunView();
     const result = await rv.RunView({ViewID: ViewId, IgnoreMaxRows: true}, user);
     if (result && result.Success)

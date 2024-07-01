@@ -74,7 +74,7 @@ export class EntityRelationshipInfo extends BaseInfo  {
     DisplayName: string = null
     DisplayIconType: 'Related Entity Icon'| 'Custom' | 'None' = 'Related Entity Icon'
     DisplayIcon: string = null
-    DisplayUserViewGUID: string = null
+    DisplayUserViewID: string = null
     DisplayComponentID: number = null
     DisplayComponentConfiguration: string = null
     __mj_CreatedAt: Date = null
@@ -91,7 +91,6 @@ export class EntityRelationshipInfo extends BaseInfo  {
     RelatedEntityClassName: string = null
     RelatedEntityBaseTableCodeName: string = null
     DisplayUserViewName: string = null
-    DisplayUserViewID: number = null
     DisplayComponent: string = null
 
     constructor (initData: any) {
@@ -899,9 +898,9 @@ export class EntityInfo extends BaseInfo {
         if (filter && filter.length > 0) 
             params.ExtraFilter = `(${params.ExtraFilter}) AND (${filter})`; // caller provided their own filter, so AND it in with the relationship filter we have here
 
-        if (relationship.DisplayUserViewGUID && relationship.DisplayUserViewGUID.length > 0) {
+        if (relationship.DisplayUserViewID && relationship.DisplayUserViewID.length > 0) {
             // we have been given a specific view to run, use it
-            params.ViewID = relationship.DisplayUserViewID; // virtual field - the durable key is the GUID, but the base view for entityrelationship brings in view name and ID
+            params.ViewID = relationship.DisplayUserViewID;  
         }
         else {
             // no view specified, so specify the entity instead

@@ -128,7 +128,7 @@ import { EntityRelationshipEntity } from '@memberjunction/core-entities';
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="DisplayUserViewGUID"
+            FieldName="DisplayUserViewID"
             Type="textbox"
             [EditMode]="EditMode"
             LinkType="Record"
@@ -231,13 +231,6 @@ import { EntityRelationshipEntity } from '@memberjunction/core-entities';
             [record]="record"
             [ShowLabel]="true"
             FieldName="DisplayUserViewName"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="DisplayUserViewID"
             Type="textbox"
             [EditMode]="EditMode"
         ></mj-form-field>

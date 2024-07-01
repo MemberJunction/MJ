@@ -3329,17 +3329,15 @@ import { RegisterClass } from "@memberjunction/global";
             this.Set('DisplayIcon', value);
         }
         /**
-        * * Field Name: DisplayUserViewGUID
-        * * Display Name: Display User View GUID
+        * * Field Name: DisplayUserViewID
+        * * Display Name: Display User View ID
         * * SQL Data Type: uniqueidentifier
-        * * Related Entity/Foreign Key: User Views (vwUserViews.GUID)
+        * * Related Entity/Foreign Key: User Views (vwUserViews.ID)
         */
-        get DisplayUserViewGUID(): string | null {  
-            return this.Get('DisplayUserViewGUID');
+        get DisplayUserViewID(): string | null {  
+            return this.Get('DisplayUserViewID');
         }
-        set DisplayUserViewGUID(value: string | null) {
-            this.Set('DisplayUserViewGUID', value);
-        }
+        
         /**
         * * Field Name: DisplayComponentID
         * * Display Name: Display Component ID
@@ -3472,15 +3470,6 @@ import { RegisterClass } from "@memberjunction/global";
         */
         get DisplayUserViewName(): string | null {  
             return this.Get('DisplayUserViewName');
-        }
-        
-        /**
-        * * Field Name: DisplayUserViewID
-        * * Display Name: Display User View ID
-        * * SQL Data Type: int
-        */
-        get DisplayUserViewID(): number | null {  
-            return this.Get('DisplayUserViewID');
         }
         
 
@@ -3699,7 +3688,7 @@ import { RegisterClass } from "@memberjunction/global";
     export class UserViewEntity extends BaseEntity {
         /**
         * Loads the User Views record from the database
-        * @param ID: number - primary key value to load the User Views record.
+        * @param ID: string - primary key value to load the User Views record.
         * @param EntityRelationshipsToLoad - (optional) the relationships to load
         * @returns {Promise<boolean>} - true if successful, false otherwise
         * @public
@@ -3708,7 +3697,7 @@ import { RegisterClass } from "@memberjunction/global";
         * @method
         * @override
         */      
-        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+        public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
             const compositeKey: CompositeKey = new CompositeKey();
             compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -3716,9 +3705,10 @@ import { RegisterClass } from "@memberjunction/global";
         
             /**
         * * Field Name: ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
         */
-        get ID(): number {  
+        get ID(): string {  
             return this.Get('ID');
         }
         
@@ -3756,16 +3746,6 @@ import { RegisterClass } from "@memberjunction/global";
         set Name(value: string) {
             this.Set('Name', value);
         }
-        /**
-        * * Field Name: GUID
-        * * Display Name: GUID
-        * * SQL Data Type: uniqueidentifier
-        * * Default Value: newid()
-        */
-        get GUID(): string {  
-            return this.Get('GUID');
-        }
-        
         /**
         * * Field Name: Description
         * * SQL Data Type: nvarchar(MAX)
@@ -5075,7 +5055,7 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: Application
         * * Display Name: Application
-        * * SQL Data Type: nvarchar(50)
+        * * SQL Data Type: nvarchar(100)
         */
         get Application(): string {  
             return this.Get('Application');
@@ -5084,7 +5064,7 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: User
         * * Display Name: User
-        * * SQL Data Type: nvarchar(100)
+        * * SQL Data Type: uniqueidentifier
         */
         get User(): string {  
             return this.Get('User');
@@ -5654,7 +5634,7 @@ import { RegisterClass } from "@memberjunction/global";
     export class UserViewRunEntity extends BaseEntity {
         /**
         * Loads the User View Runs record from the database
-        * @param ID: number - primary key value to load the User View Runs record.
+        * @param ID: string - primary key value to load the User View Runs record.
         * @param EntityRelationshipsToLoad - (optional) the relationships to load
         * @returns {Promise<boolean>} - true if successful, false otherwise
         * @public
@@ -5663,7 +5643,7 @@ import { RegisterClass } from "@memberjunction/global";
         * @method
         * @override
         */      
-        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+        public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
             const compositeKey: CompositeKey = new CompositeKey();
             compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -5683,22 +5663,23 @@ import { RegisterClass } from "@memberjunction/global";
             
             /**
         * * Field Name: ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
         */
-        get ID(): number {  
+        get ID(): string {  
             return this.Get('ID');
         }
         
         /**
         * * Field Name: UserViewID
         * * Display Name: User View ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: User Views (vwUserViews.ID)
         */
-        get UserViewID(): number {  
+        get UserViewID(): string {  
             return this.Get('UserViewID');
         }
-        set UserViewID(value: number) {
+        set UserViewID(value: string) {
             this.Set('UserViewID', value);
         }
         /**
@@ -5819,13 +5800,13 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: UserViewRunID
         * * Display Name: User View Run ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: User View Runs (vwUserViewRuns.ID)
         */
-        get UserViewRunID(): number {  
+        get UserViewRunID(): string {  
             return this.Get('UserViewRunID');
         }
-        set UserViewRunID(value: number) {
+        set UserViewRunID(value: string) {
             this.Set('UserViewRunID', value);
         }
         /**
@@ -5862,9 +5843,9 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: UserViewID
         * * Display Name: User View
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
         */
-        get UserViewID(): number {  
+        get UserViewID(): string {  
             return this.Get('UserViewID');
         }
         
@@ -13513,14 +13494,13 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: ViewID
         * * Display Name: View ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: User Views (vwUserViews.ID)
-        * * Description: Only used if Type='view'
         */
-        get ViewID(): number | null {  
+        get ViewID(): string | null {  
             return this.Get('ViewID');
         }
-        set ViewID(value: number | null) {
+        set ViewID(value: string | null) {
             this.Set('ViewID', value);
         }
         /**
