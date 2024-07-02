@@ -50,7 +50,7 @@ import { RecommendationRunEntity } from '@memberjunction/core-entities';
             [record]="record"
             [ShowLabel]="true"
             FieldName="RunByUserID"
-            Type="numerictextbox"
+            Type="textbox"
             [EditMode]="EditMode"
             LinkType="Record"
             LinkComponentType="Search"

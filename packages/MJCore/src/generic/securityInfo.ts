@@ -6,6 +6,8 @@ import { Metadata } from "./metadata";
  * Information about a single user
  */
 export class UserInfo extends BaseInfo {
+    //ID: string = null;
+
     /* Name of the user that is used in various places in UIs/etc, can be anything including FirstLast, Email, a Handle, etc */
     Name: string = null
     FirstName: string = null

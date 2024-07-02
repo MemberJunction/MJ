@@ -359,13 +359,13 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: UserID
         * * Display Name: User ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Users (vwUsers.ID)
         */
-        get UserID(): number {  
+        get UserID(): string {  
             return this.Get('UserID');
         }
-        set UserID(value: number) {
+        set UserID(value: string) {
             this.Set('UserID', value);
         }
         /**
@@ -2861,7 +2861,7 @@ import { RegisterClass } from "@memberjunction/global";
     export class UserEntity extends BaseEntity {
         /**
         * Loads the Users record from the database
-        * @param ID: number - primary key value to load the Users record.
+        * @param ID: string - primary key value to load the Users record.
         * @param EntityRelationshipsToLoad - (optional) the relationships to load
         * @returns {Promise<boolean>} - true if successful, false otherwise
         * @public
@@ -2870,21 +2870,13 @@ import { RegisterClass } from "@memberjunction/global";
         * @method
         * @override
         */      
-        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+        public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
             const compositeKey: CompositeKey = new CompositeKey();
             compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
         
             /**
-        * * Field Name: ID
-        * * SQL Data Type: int
-        */
-        get ID(): number {  
-            return this.Get('ID');
-        }
-        
-        /**
         * * Field Name: Name
         * * SQL Data Type: nvarchar(100)
         */
@@ -3030,6 +3022,15 @@ import { RegisterClass } from "@memberjunction/global";
         set LinkedEntityID(value: string | null) {
             this.Set('LinkedEntityID', value);
         }
+        /**
+        * * Field Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
+        */
+        get ID(): string {  
+            return this.Get('ID');
+        }
+        
         /**
         * * Field Name: FirstLast
         * * Display Name: First Last
@@ -3528,13 +3529,13 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: UserID
         * * Display Name: User ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Users (vwUsers.ID)
         */
-        get UserID(): number {  
+        get UserID(): string {  
             return this.Get('UserID');
         }
-        set UserID(value: number) {
+        set UserID(value: string) {
             this.Set('UserID', value);
         }
         /**
@@ -3715,13 +3716,13 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: UserID
         * * Display Name: User ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Users (vwUsers.ID)
         */
-        get UserID(): number {  
+        get UserID(): string {  
             return this.Get('UserID');
         }
-        set UserID(value: number) {
+        set UserID(value: string) {
             this.Set('UserID', value);
         }
         /**
@@ -4046,13 +4047,13 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: RunByUserID
         * * Display Name: RunByUser ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Users (vwUsers.ID)
         */
-        get RunByUserID(): number {  
+        get RunByUserID(): string {  
             return this.Get('RunByUserID');
         }
-        set RunByUserID(value: number) {
+        set RunByUserID(value: string) {
             this.Set('RunByUserID', value);
         }
         /**
@@ -5055,7 +5056,7 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: Application
         * * Display Name: Application
-        * * SQL Data Type: nvarchar(100)
+        * * SQL Data Type: nvarchar(50)
         */
         get Application(): string {  
             return this.Get('Application');
@@ -5064,7 +5065,7 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: User
         * * Display Name: User
-        * * SQL Data Type: uniqueidentifier
+        * * SQL Data Type: nvarchar(100)
         */
         get User(): string {  
             return this.Get('User');
@@ -5122,13 +5123,13 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: UserID
         * * Display Name: User ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Users (vwUsers.ID)
         */
-        get UserID(): number {  
+        get UserID(): string {  
             return this.Get('UserID');
         }
-        set UserID(value: number) {
+        set UserID(value: string) {
             this.Set('UserID', value);
         }
         /**
@@ -5429,13 +5430,13 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: UserID
         * * Display Name: User ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Users (vwUsers.ID)
         */
-        get UserID(): number {  
+        get UserID(): string {  
             return this.Get('UserID');
         }
-        set UserID(value: number) {
+        set UserID(value: string) {
             this.Set('UserID', value);
         }
         /**
@@ -5696,13 +5697,13 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: RunByUserID
         * * Display Name: Run By User ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Users (vwUsers.ID)
         */
-        get RunByUserID(): number {  
+        get RunByUserID(): string {  
             return this.Get('RunByUserID');
         }
-        set RunByUserID(value: number) {
+        set RunByUserID(value: string) {
             this.Set('RunByUserID', value);
         }
         /**
@@ -6408,14 +6409,13 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: UserID
         * * Display Name: User ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Users (vwUsers.ID)
-        * * Description: The user that made the change
         */
-        get UserID(): number {  
+        get UserID(): string {  
             return this.Get('UserID');
         }
-        set UserID(value: number) {
+        set UserID(value: string) {
             this.Set('UserID', value);
         }
         /**
@@ -6658,13 +6658,13 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: UserID
         * * Display Name: User ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Users (vwUsers.ID)
         */
-        get UserID(): number {  
+        get UserID(): string {  
             return this.Get('UserID');
         }
-        set UserID(value: number) {
+        set UserID(value: string) {
             this.Set('UserID', value);
         }
         /**
@@ -6895,13 +6895,13 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: UserID
         * * Display Name: User ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Users (vwUsers.ID)
         */
-        get UserID(): number {  
+        get UserID(): string {  
             return this.Get('UserID');
         }
-        set UserID(value: number) {
+        set UserID(value: string) {
             this.Set('UserID', value);
         }
         /**
@@ -8997,6 +8997,18 @@ import { RegisterClass } from "@memberjunction/global";
             this.Set('Description', value);
         }
         /**
+        * * Field Name: UserID
+        * * Display Name: User ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Users (vwUsers.ID)
+        */
+        get UserID(): string {  
+            return this.Get('UserID');
+        }
+        set UserID(value: string) {
+            this.Set('UserID', value);
+        }
+        /**
         * * Field Name: CategoryID
         * * Display Name: Category ID
         * * SQL Data Type: int
@@ -9020,18 +9032,6 @@ import { RegisterClass } from "@memberjunction/global";
             this.Set('UIConfigDetails', value);
         }
         /**
-        * * Field Name: UserID
-        * * Display Name: User ID
-        * * SQL Data Type: int
-        * * Related Entity/Foreign Key: Users (vwUsers.ID)
-        */
-        get UserID(): number | null {  
-            return this.Get('UserID');
-        }
-        set UserID(value: number | null) {
-            this.Set('UserID', value);
-        }
-        /**
         * * Field Name: __mj_CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetimeoffset
@@ -9052,21 +9052,21 @@ import { RegisterClass } from "@memberjunction/global";
         }
         
         /**
+        * * Field Name: User
+        * * Display Name: User
+        * * SQL Data Type: nvarchar(100)
+        */
+        get User(): string {  
+            return this.Get('User');
+        }
+        
+        /**
         * * Field Name: Category
         * * Display Name: Category
         * * SQL Data Type: nvarchar(100)
         */
         get Category(): string | null {  
             return this.Get('Category');
-        }
-        
-        /**
-        * * Field Name: User
-        * * Display Name: User
-        * * SQL Data Type: nvarchar(100)
-        */
-        get User(): string | null {  
-            return this.Get('User');
         }
         
 
@@ -9479,13 +9479,13 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: UserID
         * * Display Name: User ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Users (vwUsers.ID)
         */
-        get UserID(): number {  
+        get UserID(): string {  
             return this.Get('UserID');
         }
-        set UserID(value: number) {
+        set UserID(value: string) {
             this.Set('UserID', value);
         }
         /**
@@ -9803,13 +9803,13 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: UserID
         * * Display Name: User ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Users (vwUsers.ID)
         */
-        get UserID(): number | null {  
+        get UserID(): string | null {  
             return this.Get('UserID');
         }
-        set UserID(value: number | null) {
+        set UserID(value: string | null) {
             this.Set('UserID', value);
         }
         /**
@@ -10335,13 +10335,13 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: UserID
         * * Display Name: User ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Users (vwUsers.ID)
         */
-        get UserID(): number {  
+        get UserID(): string {  
             return this.Get('UserID');
         }
-        set UserID(value: number) {
+        set UserID(value: string) {
             this.Set('UserID', value);
         }
         /**
@@ -11005,13 +11005,13 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: UserID
         * * Display Name: User ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Users (vwUsers.ID)
         */
-        get UserID(): number {  
+        get UserID(): string {  
             return this.Get('UserID');
         }
-        set UserID(value: number) {
+        set UserID(value: string) {
             this.Set('UserID', value);
         }
         /**
@@ -11188,13 +11188,13 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: UserID
         * * Display Name: User ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Users (vwUsers.ID)
         */
-        get UserID(): number {  
+        get UserID(): string {  
             return this.Get('UserID');
         }
-        set UserID(value: number) {
+        set UserID(value: string) {
             this.Set('UserID', value);
         }
         /**
@@ -11632,13 +11632,13 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: InitiatedByUserID
         * * Display Name: Initiated By User ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Users (vwUsers.ID)
         */
-        get InitiatedByUserID(): number {  
+        get InitiatedByUserID(): string {  
             return this.Get('InitiatedByUserID');
         }
-        set InitiatedByUserID(value: number) {
+        set InitiatedByUserID(value: string) {
             this.Set('InitiatedByUserID', value);
         }
         /**
@@ -11661,13 +11661,13 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: ApprovedByUserID
         * * Display Name: Approved By User ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Users (vwUsers.ID)
         */
-        get ApprovedByUserID(): number | null {  
+        get ApprovedByUserID(): string | null {  
             return this.Get('ApprovedByUserID');
         }
-        set ApprovedByUserID(value: number | null) {
+        set ApprovedByUserID(value: string | null) {
             this.Set('ApprovedByUserID', value);
         }
         /**
@@ -12203,13 +12203,13 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: UserID
         * * Display Name: User ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Users (vwUsers.ID)
         */
-        get UserID(): number {  
+        get UserID(): string {  
             return this.Get('UserID');
         }
-        set UserID(value: number) {
+        set UserID(value: string) {
             this.Set('UserID', value);
         }
         /**
@@ -13686,18 +13686,6 @@ import { RegisterClass } from "@memberjunction/global";
             this.Set('Name', value);
         }
         /**
-        * * Field Name: UserID
-        * * Display Name: User ID
-        * * SQL Data Type: int
-        * * Related Entity/Foreign Key: Users (vwUsers.ID)
-        */
-        get UserID(): number {  
-            return this.Get('UserID');
-        }
-        set UserID(value: number) {
-            this.Set('UserID', value);
-        }
-        /**
         * * Field Name: Description
         * * Display Name: Description
         * * SQL Data Type: nvarchar(MAX)
@@ -13707,6 +13695,18 @@ import { RegisterClass } from "@memberjunction/global";
         }
         set Description(value: string | null) {
             this.Set('Description', value);
+        }
+        /**
+        * * Field Name: UserID
+        * * Display Name: User ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Users (vwUsers.ID)
+        */
+        get UserID(): string {  
+            return this.Get('UserID');
+        }
+        set UserID(value: string) {
+            this.Set('UserID', value);
         }
         /**
         * * Field Name: LastRefreshedAt
@@ -13838,13 +13838,13 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: UserID
         * * Display Name: User ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Users (vwUsers.ID)
         */
-        get UserID(): number {  
+        get UserID(): string {  
             return this.Get('UserID');
         }
-        set UserID(value: number) {
+        set UserID(value: string) {
             this.Set('UserID', value);
         }
         /**
@@ -13963,13 +13963,13 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: UserID
         * * Display Name: User ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Users (vwUsers.ID)
         */
-        get UserID(): number {  
+        get UserID(): string {  
             return this.Get('UserID');
         }
-        set UserID(value: number) {
+        set UserID(value: string) {
             this.Set('UserID', value);
         }
         /**
@@ -14088,13 +14088,13 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: UserID
         * * Display Name: User ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Users (vwUsers.ID)
         */
-        get UserID(): number {  
+        get UserID(): string {  
             return this.Get('UserID');
         }
-        set UserID(value: number) {
+        set UserID(value: string) {
             this.Set('UserID', value);
         }
         /**
@@ -15387,13 +15387,13 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: StartedByUserID
         * * Display Name: Started By User ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Users (vwUsers.ID)
         */
-        get StartedByUserID(): number {  
+        get StartedByUserID(): string {  
             return this.Get('StartedByUserID');
         }
-        set StartedByUserID(value: number) {
+        set StartedByUserID(value: string) {
             this.Set('StartedByUserID', value);
         }
         /**
@@ -15450,13 +15450,13 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: ApprovedByUserID
         * * Display Name: Approved By User ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Users (vwUsers.ID)
         */
-        get ApprovedByUserID(): number | null {  
+        get ApprovedByUserID(): string | null {  
             return this.Get('ApprovedByUserID');
         }
-        set ApprovedByUserID(value: number | null) {
+        set ApprovedByUserID(value: string | null) {
             this.Set('ApprovedByUserID', value);
         }
         /**
@@ -15848,7 +15848,7 @@ import { RegisterClass } from "@memberjunction/global";
     export class ActionCategoryEntity extends BaseEntity {
         /**
         * Loads the Action Categories record from the database
-        * @param ID: number - primary key value to load the Action Categories record.
+        * @param ID: string - primary key value to load the Action Categories record.
         * @param EntityRelationshipsToLoad - (optional) the relationships to load
         * @returns {Promise<boolean>} - true if successful, false otherwise
         * @public
@@ -15857,7 +15857,7 @@ import { RegisterClass } from "@memberjunction/global";
         * @method
         * @override
         */      
-        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+        public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
             const compositeKey: CompositeKey = new CompositeKey();
             compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -15866,9 +15866,10 @@ import { RegisterClass } from "@memberjunction/global";
             /**
         * * Field Name: ID
         * * Display Name: ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
         */
-        get ID(): number {  
+        get ID(): string {  
             return this.Get('ID');
         }
         
@@ -15899,14 +15900,13 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: ParentID
         * * Display Name: Parent ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Action Categories (vwActionCategories.ID)
-        * * Description: Parent category ID for hierarchical organization.
         */
-        get ParentID(): number | null {  
+        get ParentID(): string | null {  
             return this.Get('ParentID');
         }
-        set ParentID(value: number | null) {
+        set ParentID(value: string | null) {
             this.Set('ParentID', value);
         }
         /**
@@ -15974,7 +15974,7 @@ import { RegisterClass } from "@memberjunction/global";
     export class EntityActionEntity extends BaseEntity {
         /**
         * Loads the Entity Actions record from the database
-        * @param ID: number - primary key value to load the Entity Actions record.
+        * @param ID: string - primary key value to load the Entity Actions record.
         * @param EntityRelationshipsToLoad - (optional) the relationships to load
         * @returns {Promise<boolean>} - true if successful, false otherwise
         * @public
@@ -15983,22 +15983,13 @@ import { RegisterClass } from "@memberjunction/global";
         * @method
         * @override
         */      
-        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+        public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
             const compositeKey: CompositeKey = new CompositeKey();
             compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
         
             /**
-        * * Field Name: ID
-        * * Display Name: ID
-        * * SQL Data Type: int
-        */
-        get ID(): number {  
-            return this.Get('ID');
-        }
-        
-        /**
         * * Field Name: EntityID
         * * Display Name: Entity ID
         * * SQL Data Type: uniqueidentifier
@@ -16013,13 +16004,13 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: ActionID
         * * Display Name: Action ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Actions (vwActions.ID)
         */
-        get ActionID(): number {  
+        get ActionID(): string {  
             return this.Get('ActionID');
         }
-        set ActionID(value: number) {
+        set ActionID(value: string) {
             this.Set('ActionID', value);
         }
         /**
@@ -16058,6 +16049,16 @@ import { RegisterClass } from "@memberjunction/global";
         */
         get __mj_UpdatedAt(): Date {  
             return this.Get('__mj_UpdatedAt');
+        }
+        
+        /**
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
+        */
+        get ID(): string {  
+            return this.Get('ID');
         }
         
         /**
@@ -16124,13 +16125,13 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: EntityActionID
         * * Display Name: Entity Action ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Entity Actions (vwEntityActions.ID)
         */
-        get EntityActionID(): number {  
+        get EntityActionID(): string {  
             return this.Get('EntityActionID');
         }
-        set EntityActionID(value: number) {
+        set EntityActionID(value: string) {
             this.Set('EntityActionID', value);
         }
         /**
@@ -16238,13 +16239,13 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: ActionID
         * * Display Name: Action ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Actions (vwActions.ID)
         */
-        get ActionID(): number {  
+        get ActionID(): string {  
             return this.Get('ActionID');
         }
-        set ActionID(value: number) {
+        set ActionID(value: string) {
             this.Set('ActionID', value);
         }
         /**
@@ -16415,7 +16416,7 @@ import { RegisterClass } from "@memberjunction/global";
     export class ActionEntity extends BaseEntity {
         /**
         * Loads the Actions record from the database
-        * @param ID: number - primary key value to load the Actions record.
+        * @param ID: string - primary key value to load the Actions record.
         * @param EntityRelationshipsToLoad - (optional) the relationships to load
         * @returns {Promise<boolean>} - true if successful, false otherwise
         * @public
@@ -16424,7 +16425,7 @@ import { RegisterClass } from "@memberjunction/global";
         * @method
         * @override
         */      
-        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+        public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
             const compositeKey: CompositeKey = new CompositeKey();
             compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -16433,22 +16434,23 @@ import { RegisterClass } from "@memberjunction/global";
             /**
         * * Field Name: ID
         * * Display Name: ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
         */
-        get ID(): number {  
+        get ID(): string {  
             return this.Get('ID');
         }
         
         /**
         * * Field Name: CategoryID
         * * Display Name: Category ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Action Categories (vwActionCategories.ID)
         */
-        get CategoryID(): number | null {  
+        get CategoryID(): string | null {  
             return this.Get('CategoryID');
         }
-        set CategoryID(value: number | null) {
+        set CategoryID(value: string | null) {
             this.Set('CategoryID', value);
         }
         /**
@@ -16569,14 +16571,13 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: CodeApprovedByUserID
         * * Display Name: Code Approved By User ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Users (vwUsers.ID)
-        * * Description: UserID who approved the code.
         */
-        get CodeApprovedByUserID(): number | null {  
+        get CodeApprovedByUserID(): string | null {  
             return this.Get('CodeApprovedByUserID');
         }
-        set CodeApprovedByUserID(value: number | null) {
+        set CodeApprovedByUserID(value: string | null) {
             this.Set('CodeApprovedByUserID', value);
         }
         /**
@@ -16731,25 +16732,25 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: EntityActionID
         * * Display Name: Entity Action ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Entity Actions (vwEntityActions.ID)
         */
-        get EntityActionID(): number {  
+        get EntityActionID(): string {  
             return this.Get('EntityActionID');
         }
-        set EntityActionID(value: number) {
+        set EntityActionID(value: string) {
             this.Set('EntityActionID', value);
         }
         /**
         * * Field Name: ActionFilterID
         * * Display Name: Action Filter ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Action Filters (vwActionFilters.ID)
         */
-        get ActionFilterID(): number {  
+        get ActionFilterID(): string {  
             return this.Get('ActionFilterID');
         }
-        set ActionFilterID(value: number) {
+        set ActionFilterID(value: string) {
             this.Set('ActionFilterID', value);
         }
         /**
@@ -16820,7 +16821,7 @@ import { RegisterClass } from "@memberjunction/global";
     export class ActionFilterEntity extends BaseEntity {
         /**
         * Loads the Action Filters record from the database
-        * @param ID: number - primary key value to load the Action Filters record.
+        * @param ID: string - primary key value to load the Action Filters record.
         * @param EntityRelationshipsToLoad - (optional) the relationships to load
         * @returns {Promise<boolean>} - true if successful, false otherwise
         * @public
@@ -16829,7 +16830,7 @@ import { RegisterClass } from "@memberjunction/global";
         * @method
         * @override
         */      
-        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+        public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
             const compositeKey: CompositeKey = new CompositeKey();
             compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -16838,9 +16839,10 @@ import { RegisterClass } from "@memberjunction/global";
             /**
         * * Field Name: ID
         * * Display Name: ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
         */
-        get ID(): number {  
+        get ID(): string {  
             return this.Get('ID');
         }
         
@@ -16926,7 +16928,7 @@ import { RegisterClass } from "@memberjunction/global";
     export class ActionContextTypeEntity extends BaseEntity {
         /**
         * Loads the Action Context Types record from the database
-        * @param ID: number - primary key value to load the Action Context Types record.
+        * @param ID: string - primary key value to load the Action Context Types record.
         * @param EntityRelationshipsToLoad - (optional) the relationships to load
         * @returns {Promise<boolean>} - true if successful, false otherwise
         * @public
@@ -16935,7 +16937,7 @@ import { RegisterClass } from "@memberjunction/global";
         * @method
         * @override
         */      
-        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+        public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
             const compositeKey: CompositeKey = new CompositeKey();
             compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -16944,9 +16946,10 @@ import { RegisterClass } from "@memberjunction/global";
             /**
         * * Field Name: ID
         * * Display Name: ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
         */
-        get ID(): number {  
+        get ID(): string {  
             return this.Get('ID');
         }
         
@@ -17040,13 +17043,13 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: ActionID
         * * Display Name: Action ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Actions (vwActions.ID)
         */
-        get ActionID(): number {  
+        get ActionID(): string {  
             return this.Get('ActionID');
         }
-        set ActionID(value: number) {
+        set ActionID(value: string) {
             this.Set('ActionID', value);
         }
         /**
@@ -17160,25 +17163,25 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: ActionID
         * * Display Name: Action ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Actions (vwActions.ID)
         */
-        get ActionID(): number {  
+        get ActionID(): string {  
             return this.Get('ActionID');
         }
-        set ActionID(value: number) {
+        set ActionID(value: string) {
             this.Set('ActionID', value);
         }
         /**
         * * Field Name: ContextTypeID
         * * Display Name: Context Type ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Action Context Types (vwActionContextTypes.ID)
         */
-        get ContextTypeID(): number {  
+        get ContextTypeID(): string | null {  
             return this.Get('ContextTypeID');
         }
-        set ContextTypeID(value: number) {
+        set ContextTypeID(value: string | null) {
             this.Set('ContextTypeID', value);
         }
         /**
@@ -17233,7 +17236,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Context Type
         * * SQL Data Type: nvarchar(255)
         */
-        get ContextType(): string {  
+        get ContextType(): string | null {  
             return this.Get('ContextType');
         }
         
@@ -17283,13 +17286,13 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: ActionID
         * * Display Name: Action ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Actions (vwActions.ID)
         */
-        get ActionID(): number {  
+        get ActionID(): string {  
             return this.Get('ActionID');
         }
-        set ActionID(value: number) {
+        set ActionID(value: string) {
             this.Set('ActionID', value);
         }
         /**
@@ -17342,13 +17345,13 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: UserID
         * * Display Name: User ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Users (vwUsers.ID)
         */
-        get UserID(): number {  
+        get UserID(): string {  
             return this.Get('UserID');
         }
-        set UserID(value: number) {
+        set UserID(value: string) {
             this.Set('UserID', value);
         }
         /**
@@ -17419,7 +17422,7 @@ import { RegisterClass } from "@memberjunction/global";
     export class ActionParamEntity extends BaseEntity {
         /**
         * Loads the Action Params record from the database
-        * @param ID: number - primary key value to load the Action Params record.
+        * @param ID: string - primary key value to load the Action Params record.
         * @param EntityRelationshipsToLoad - (optional) the relationships to load
         * @returns {Promise<boolean>} - true if successful, false otherwise
         * @public
@@ -17428,7 +17431,7 @@ import { RegisterClass } from "@memberjunction/global";
         * @method
         * @override
         */      
-        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+        public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
             const compositeKey: CompositeKey = new CompositeKey();
             compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -17437,22 +17440,23 @@ import { RegisterClass } from "@memberjunction/global";
             /**
         * * Field Name: ID
         * * Display Name: ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
         */
-        get ID(): number {  
+        get ID(): string {  
             return this.Get('ID');
         }
         
         /**
         * * Field Name: ActionID
         * * Display Name: Action ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Actions (vwActions.ID)
         */
-        get ActionID(): number {  
+        get ActionID(): string {  
             return this.Get('ActionID');
         }
-        set ActionID(value: number) {
+        set ActionID(value: string) {
             this.Set('ActionID', value);
         }
         /**
@@ -17621,13 +17625,13 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: ActionID
         * * Display Name: Action ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Actions (vwActions.ID)
         */
-        get ActionID(): number {  
+        get ActionID(): string {  
             return this.Get('ActionID');
         }
-        set ActionID(value: number) {
+        set ActionID(value: string) {
             this.Set('ActionID', value);
         }
         /**
@@ -17921,13 +17925,13 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: UserID
         * * Display Name: User ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Users (vwUsers.ID)
         */
-        get UserID(): number {  
+        get UserID(): string {  
             return this.Get('UserID');
         }
-        set UserID(value: number) {
+        set UserID(value: string) {
             this.Set('UserID', value);
         }
         /**
@@ -18146,13 +18150,13 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: UserID
         * * Display Name: User ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Users (vwUsers.ID)
         */
-        get UserID(): number {  
+        get UserID(): string {  
             return this.Get('UserID');
         }
-        set UserID(value: number) {
+        set UserID(value: string) {
             this.Set('UserID', value);
         }
         /**
@@ -18849,13 +18853,13 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: UserID
         * * Display Name: User ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Users (vwUsers.ID)
         */
-        get UserID(): number {  
+        get UserID(): string {  
             return this.Get('UserID');
         }
-        set UserID(value: number) {
+        set UserID(value: string) {
             this.Set('UserID', value);
         }
         /**
@@ -19026,13 +19030,13 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: UserID
         * * Display Name: User ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Users (vwUsers.ID)
         */
-        get UserID(): number {  
+        get UserID(): string {  
             return this.Get('UserID');
         }
-        set UserID(value: number) {
+        set UserID(value: string) {
             this.Set('UserID', value);
         }
         /**
@@ -19919,13 +19923,13 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: RunByUserID
         * * Display Name: Run By User ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Users (vwUsers.ID)
         */
-        get RunByUserID(): number {  
+        get RunByUserID(): string {  
             return this.Get('RunByUserID');
         }
-        set RunByUserID(value: number) {
+        set RunByUserID(value: string) {
             this.Set('RunByUserID', value);
         }
         /**
@@ -20439,13 +20443,13 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: UserID
         * * Display Name: User ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Users (vwUsers.ID)
         */
-        get UserID(): number {  
+        get UserID(): string {  
             return this.Get('UserID');
         }
-        set UserID(value: number) {
+        set UserID(value: string) {
             this.Set('UserID', value);
         }
         /**
@@ -20763,25 +20767,25 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: EntityActionID
         * * Display Name: Entity Action ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Entity Actions (vwEntityActions.ID)
         */
-        get EntityActionID(): number {  
+        get EntityActionID(): string {  
             return this.Get('EntityActionID');
         }
-        set EntityActionID(value: number) {
+        set EntityActionID(value: string) {
             this.Set('EntityActionID', value);
         }
         /**
         * * Field Name: ActionParamID
         * * Display Name: Action Param ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Action Params (vwActionParams.ID)
         */
-        get ActionParamID(): number {  
+        get ActionParamID(): string {  
             return this.Get('ActionParamID');
         }
-        set ActionParamID(value: number) {
+        set ActionParamID(value: string) {
             this.Set('ActionParamID', value);
         }
         /**

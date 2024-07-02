@@ -26,6 +26,15 @@ import { DashboardEntity } from '@memberjunction/core-entities';
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
+            FieldName="UserID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            LinkType="Record"
+            LinkComponentType="Search"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
             FieldName="CategoryID"
             Type="numerictextbox"
             [EditMode]="EditMode"
@@ -38,15 +47,6 @@ import { DashboardEntity } from '@memberjunction/core-entities';
             FieldName="UIConfigDetails"
             Type="textarea"
             [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="UserID"
-            Type="numerictextbox"
-            [EditMode]="EditMode"
-            LinkType="Record"
-            LinkComponentType="Search"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -65,14 +65,14 @@ import { DashboardEntity } from '@memberjunction/core-entities';
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="Category"
+            FieldName="User"
             Type="textbox"
             [EditMode]="EditMode"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="User"
+            FieldName="Category"
             Type="textbox"
             [EditMode]="EditMode"
         ></mj-form-field>
