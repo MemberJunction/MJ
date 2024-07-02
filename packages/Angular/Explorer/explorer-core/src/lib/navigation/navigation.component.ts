@@ -611,7 +611,7 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
     let url: string = '/resource';
     switch (rt?.Name.toLowerCase().trim()) {
       case 'user views':
-        if (data.ResourceRecordID && !isNaN(data.ResourceRecordID) && data.ResourceRecordID > 0) {
+        if (data.ResourceRecordID) {
           url += `/view/${data.ResourceRecordID}`;
         }
         else if (data.Configuration?.Entity) {

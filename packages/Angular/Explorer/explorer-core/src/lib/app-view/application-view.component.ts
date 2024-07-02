@@ -59,7 +59,7 @@ export class ApplicationViewComponent extends BaseBrowserComponent implements On
                 // next up we need to find the UserApplication record based on the app and the current user
                 const userAppResult = await rv.RunView<UserApplicationEntity>({
                     EntityName: "User Applications",
-                    ExtraFilter: `UserID=${md.CurrentUser.ID} AND ApplicationID=${this.app.ID}`,
+                    ExtraFilter: `UserID=${md.CurrentUser.ID} AND ApplicationID=${this.app.ID.toString()}`,
                     ResultType: 'entity_object'
                 })
                 if (!userAppResult || userAppResult.Success === false || userAppResult.Results.length === 0)
@@ -74,7 +74,7 @@ export class ApplicationViewComponent extends BaseBrowserComponent implements On
                 const userAppEntities = await rv.RunView<UserApplicationEntityEntity>({
                   EntityName: 'User Application Entities',
                   ResultType: 'entity_object',
-                  ExtraFilter: `UserApplicationID = ${this.userApp!.ID}`,
+                  ExtraFilter: `UserApplicationID = ${this.userApp!.ID.toString()}`,
                   OrderBy: 'Sequence'
                 })
                 if (userAppEntities && userAppEntities.Success) {
@@ -138,7 +138,7 @@ export class ApplicationViewComponent extends BaseBrowserComponent implements On
           const userAppEntities = await rv.RunView<UserApplicationEntityEntity>({
             EntityName: 'User Application Entities',
             ResultType: 'entity_object',
-            ExtraFilter: `UserApplicationID = ${this.userApp!.ID}`,
+            ExtraFilter: `UserApplicationID = ${this.userApp!.ID.toString()}`,
             OrderBy: 'Sequence'
           })
 
@@ -153,14 +153,15 @@ export class ApplicationViewComponent extends BaseBrowserComponent implements On
             const existing = existingUserAppEntities.find(uae => uae.EntityID === e.ID);
             if (existing) {
               existing.Sequence = index;
+              existing.EntityID = e.ID;
               userAppEntitiesToSave.push(existing);
             } 
             else {
               // this is a new app entity that the user has selected
               const newApp = await md.GetEntityObject<UserApplicationEntityEntity>("User Application Entities");
               newApp.UserApplicationID = this.userApp!.ID;
-              newApp.EntityID = e.ID;
               newApp.Sequence = index;
+              newApp.EntityID = e.ID;
               userAppEntitiesToSave.push(newApp);
             }
           }
@@ -175,6 +176,13 @@ export class ApplicationViewComponent extends BaseBrowserComponent implements On
           const tg = await md.CreateTransactionGroup();
           userAppEntitiesToSave.forEach(toSave => {
             toSave.TransactionGroup = tg;
+            if(!toSave.EntityID){
+                console.log("no enttiy ID for", toSave.ID, toSave.UserApplicationID);
+            }
+            if(toSave.Sequence === 0){
+                console.log(toSave);
+                console.log(toSave.Sequence, toSave.UserApplicationID, toSave.EntityID);
+            }
             toSave.Save(); // no await since we are in a transaction group
           })
           userAppEntitiesToDelete.forEach(d => {
