@@ -20,7 +20,7 @@ export class UserRolesGridComponent implements OnInit, OnChanges {
     /**
      * The ID of the user we are working with, required if Mode is 'Users'
      */
-  @Input() UserID!: number;
+  @Input() UserID!: string;
   public isLoading: boolean = false;
   public userRoles: UserRoleEntity_Ext[] = [];
   @Input() public Mode: 'Users' | 'Roles' = 'Users';

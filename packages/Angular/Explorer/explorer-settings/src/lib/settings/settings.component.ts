@@ -24,7 +24,7 @@ export class SettingsComponent implements OnInit {
   public baseRoute: string = '/settings';
 
   public selectedRoleName: string = '';
-  public selectedUserID: number = 0;
+  public selectedUserID: string = "";
   public selectedApplicationName: string = '';
 
   public options = [
@@ -89,7 +89,7 @@ export class SettingsComponent implements OnInit {
         this.selectItem(SettingsItem.Users, false);
         break;
       case 'user':
-        this.selectedUserID = segments.length > 2 ? parseInt(segments[2]) : 0;
+        this.selectedUserID = segments.length > 2 ? segments[2] : "";
         this.selectItem(SettingsItem.User, false);
         break;
       case 'roles':

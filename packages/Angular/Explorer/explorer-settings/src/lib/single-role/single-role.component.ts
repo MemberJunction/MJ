@@ -23,11 +23,11 @@ export class UserRoleEntity_Ext extends UserRoleEntity {
     this._userName = value;
   }
 
-  private _userID: number = 0;
-  public get SavedUserID(): number {
+  private _userID: string = "";
+  public get SavedUserID(): string {
     return this._userID;
   }
-  public set SavedUserID(value: number) {
+  public set SavedUserID(value: string) {
     this._userID = value;
   }
 

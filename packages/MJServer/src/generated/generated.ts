@@ -2,7 +2,7 @@
 * ALL ENTITIES - TypeGraphQL Type Class Definition - AUTO GENERATED FILE
 * Generated Entities and Resolvers for Server
 * 
-* GENERATED: 7/1/2024, 2:54:31 AM
+* GENERATED: 7/1/2024, 10:20:30 PM
 * 
 *   >>> DO NOT MODIFY THIS FILE!!!!!!!!!!!!
 *   >>> YOUR CHANGES WILL BE OVERWRITTEN
@@ -517,8 +517,9 @@ export class UserFavorite_ {
     @MaxLength(16)
     ID: string;
           
-    @Field(() => Int) 
-    UserID: number;
+    @Field() 
+    @MaxLength(16)
+    UserID: string;
           
     @Field() 
     @MaxLength(16)
@@ -555,8 +556,8 @@ export class UserFavorite_ {
 //****************************************************************************
 @InputType()
 export class CreateUserFavoriteInput {
-    @Field(() => Int)
-    UserID: number;
+    @Field()
+    UserID: string;
 
     @Field()
     EntityID: string;
@@ -574,8 +575,8 @@ export class UpdateUserFavoriteInput {
     @Field()
     ID: string;
 
-    @Field(() => Int)
-    UserID: number;
+    @Field()
+    UserID: string;
 
     @Field()
     EntityID: string;
@@ -3294,9 +3295,6 @@ export class EntityResolverBase extends ResolverBase {
 //****************************************************************************
 @ObjectType({ description: 'A list of all users who have or had access to the system' })
 export class User_ {  
-    @Field(() => Int) 
-    ID: number;
-          
     @Field() 
     @MaxLength(200)
     Name: string;
@@ -3345,6 +3343,10 @@ export class User_ {
     @Field({nullable: true}) 
     @MaxLength(16)
     LinkedEntityID?: string;
+          
+    @Field() 
+    @MaxLength(16)
+    ID: string;
           
     @Field({nullable: true}) 
     @MaxLength(202)
@@ -3510,9 +3512,6 @@ export class CreateUserInput {
 //****************************************************************************
 @InputType()
 export class UpdateUserInput {
-    @Field(() => Int)
-    ID: number;
-
     @Field()
     Name: string;
 
@@ -3545,6 +3544,9 @@ export class UpdateUserInput {
 
     @Field({ nullable: true })
     LinkedEntityID?: string;
+
+    @Field()
+    ID: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -3595,9 +3597,9 @@ export class UserResolverBase extends ResolverBase {
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => User_, { nullable: true })
-    async User(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<User_ | null> {
+    async User(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<User_ | null> {
         this.CheckUserReadPermissions('Users', userPayload);
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwUsers] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Users', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwUsers] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Users', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Users', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
@@ -3613,7 +3615,7 @@ export class UserResolverBase extends ResolverBase {
     @FieldResolver(() => [mj_core_schema_server_object_types.RecommendationRun_])
     async RecommendationRunsArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Recommendation Runs', userPayload);
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwRecommendationRuns] WHERE [RunByUserID]=${user_.ID} ` + this.getRowLevelSecurityWhereClause('Recommendation Runs', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwRecommendationRuns] WHERE [RunByUserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('Recommendation Runs', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Recommendation Runs', await dataSource.query(sSQL));
         return result;
     }
@@ -3621,7 +3623,7 @@ export class UserResolverBase extends ResolverBase {
     @FieldResolver(() => [mj_core_schema_server_object_types.UserApplication_])
     async UserApplicationsArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('User Applications', userPayload);
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwUserApplications] WHERE [UserID]=${user_.ID} ` + this.getRowLevelSecurityWhereClause('User Applications', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwUserApplications] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('User Applications', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('User Applications', await dataSource.query(sSQL));
         return result;
     }
@@ -3629,7 +3631,7 @@ export class UserResolverBase extends ResolverBase {
     @FieldResolver(() => [mj_core_schema_server_object_types.Dashboard_])
     async DashboardsArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Dashboards', userPayload);
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwDashboards] WHERE [UserID]=${user_.ID} ` + this.getRowLevelSecurityWhereClause('Dashboards', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwDashboards] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('Dashboards', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Dashboards', await dataSource.query(sSQL));
         return result;
     }
@@ -3637,7 +3639,7 @@ export class UserResolverBase extends ResolverBase {
     @FieldResolver(() => [mj_core_schema_server_object_types.RecordChange_])
     async RecordChangesArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Record Changes', userPayload);
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwRecordChanges] WHERE [UserID]=${user_.ID} ` + this.getRowLevelSecurityWhereClause('Record Changes', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwRecordChanges] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('Record Changes', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Record Changes', await dataSource.query(sSQL));
         return result;
     }
@@ -3645,7 +3647,7 @@ export class UserResolverBase extends ResolverBase {
     @FieldResolver(() => [mj_core_schema_server_object_types.Report_])
     async ReportsArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Reports', userPayload);
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwReports] WHERE [UserID]=${user_.ID} ` + this.getRowLevelSecurityWhereClause('Reports', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwReports] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('Reports', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Reports', await dataSource.query(sSQL));
         return result;
     }
@@ -3653,7 +3655,7 @@ export class UserResolverBase extends ResolverBase {
     @FieldResolver(() => [mj_core_schema_server_object_types.DashboardCategory_])
     async DashboardCategoriesArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Dashboard Categories', userPayload);
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwDashboardCategories] WHERE [UserID]=${user_.ID} ` + this.getRowLevelSecurityWhereClause('Dashboard Categories', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwDashboardCategories] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('Dashboard Categories', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Dashboard Categories', await dataSource.query(sSQL));
         return result;
     }
@@ -3661,7 +3663,7 @@ export class UserResolverBase extends ResolverBase {
     @FieldResolver(() => [mj_core_schema_server_object_types.Action_])
     async ActionsArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Actions', userPayload);
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActions] WHERE [CodeApprovedByUserID]=${user_.ID} ` + this.getRowLevelSecurityWhereClause('Actions', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActions] WHERE [CodeApprovedByUserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('Actions', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Actions', await dataSource.query(sSQL));
         return result;
     }
@@ -3669,7 +3671,7 @@ export class UserResolverBase extends ResolverBase {
     @FieldResolver(() => [mj_core_schema_server_object_types.QueryCategory_])
     async QueryCategoriesArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Query Categories', userPayload);
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwQueryCategories] WHERE [UserID]=${user_.ID} ` + this.getRowLevelSecurityWhereClause('Query Categories', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwQueryCategories] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('Query Categories', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Query Categories', await dataSource.query(sSQL));
         return result;
     }
@@ -3677,7 +3679,7 @@ export class UserResolverBase extends ResolverBase {
     @FieldResolver(() => [mj_core_schema_server_object_types.UserViewCategory_])
     async UserViewCategoriesArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('User View Categories', userPayload);
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwUserViewCategories] WHERE [UserID]=${user_.ID} ` + this.getRowLevelSecurityWhereClause('User View Categories', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwUserViewCategories] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('User View Categories', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('User View Categories', await dataSource.query(sSQL));
         return result;
     }
@@ -3685,7 +3687,7 @@ export class UserResolverBase extends ResolverBase {
     @FieldResolver(() => [mj_core_schema_server_object_types.DataContext_])
     async DataContextsArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Data Contexts', userPayload);
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwDataContexts] WHERE [UserID]=${user_.ID} ` + this.getRowLevelSecurityWhereClause('Data Contexts', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwDataContexts] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('Data Contexts', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Data Contexts', await dataSource.query(sSQL));
         return result;
     }
@@ -3693,7 +3695,7 @@ export class UserResolverBase extends ResolverBase {
     @FieldResolver(() => [mj_core_schema_server_object_types.RecordMergeLog_])
     async RecordMergeLogsArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Record Merge Logs', userPayload);
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwRecordMergeLogs] WHERE [InitiatedByUserID]=${user_.ID} ` + this.getRowLevelSecurityWhereClause('Record Merge Logs', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwRecordMergeLogs] WHERE [InitiatedByUserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('Record Merge Logs', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Record Merge Logs', await dataSource.query(sSQL));
         return result;
     }
@@ -3701,7 +3703,7 @@ export class UserResolverBase extends ResolverBase {
     @FieldResolver(() => [mj_core_schema_server_object_types.CompanyIntegrationRun_])
     async CompanyIntegrationRunsArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Company Integration Runs', userPayload);
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwCompanyIntegrationRuns] WHERE [RunByUserID]=${user_.ID} ` + this.getRowLevelSecurityWhereClause('Company Integration Runs', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwCompanyIntegrationRuns] WHERE [RunByUserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('Company Integration Runs', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Company Integration Runs', await dataSource.query(sSQL));
         return result;
     }
@@ -3709,7 +3711,7 @@ export class UserResolverBase extends ResolverBase {
     @FieldResolver(() => [mj_core_schema_server_object_types.ReportCategory_])
     async ReportCategoriesArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Report Categories', userPayload);
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwReportCategories] WHERE [UserID]=${user_.ID} ` + this.getRowLevelSecurityWhereClause('Report Categories', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwReportCategories] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('Report Categories', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Report Categories', await dataSource.query(sSQL));
         return result;
     }
@@ -3717,7 +3719,7 @@ export class UserResolverBase extends ResolverBase {
     @FieldResolver(() => [mj_core_schema_server_object_types.RecordChangeReplayRun_])
     async RecordChangeReplayRunsArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Record Change Replay Runs', userPayload);
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwRecordChangeReplayRuns] WHERE [UserID]=${user_.ID} ` + this.getRowLevelSecurityWhereClause('Record Change Replay Runs', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwRecordChangeReplayRuns] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('Record Change Replay Runs', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Record Change Replay Runs', await dataSource.query(sSQL));
         return result;
     }
@@ -3725,7 +3727,7 @@ export class UserResolverBase extends ResolverBase {
     @FieldResolver(() => [mj_core_schema_server_object_types.UserRole_])
     async UserRolesArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('User Roles', userPayload);
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwUserRoles] WHERE [UserID]=${user_.ID} ` + this.getRowLevelSecurityWhereClause('User Roles', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwUserRoles] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('User Roles', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('User Roles', await dataSource.query(sSQL));
         return result;
     }
@@ -3733,7 +3735,7 @@ export class UserResolverBase extends ResolverBase {
     @FieldResolver(() => [mj_core_schema_server_object_types.UserViewRun_])
     async UserViewRunsArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('User View Runs', userPayload);
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwUserViewRuns] WHERE [RunByUserID]=${user_.ID} ` + this.getRowLevelSecurityWhereClause('User View Runs', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwUserViewRuns] WHERE [RunByUserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('User View Runs', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('User View Runs', await dataSource.query(sSQL));
         return result;
     }
@@ -3741,7 +3743,7 @@ export class UserResolverBase extends ResolverBase {
     @FieldResolver(() => [mj_core_schema_server_object_types.Workspace_])
     async WorkspacesArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Workspaces', userPayload);
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwWorkspaces] WHERE [UserID]=${user_.ID} ` + this.getRowLevelSecurityWhereClause('Workspaces', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwWorkspaces] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('Workspaces', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Workspaces', await dataSource.query(sSQL));
         return result;
     }
@@ -3749,7 +3751,7 @@ export class UserResolverBase extends ResolverBase {
     @FieldResolver(() => [mj_core_schema_server_object_types.Conversation_])
     async ConversationsArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Conversations', userPayload);
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwConversations] WHERE [UserID]=${user_.ID} ` + this.getRowLevelSecurityWhereClause('Conversations', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwConversations] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('Conversations', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Conversations', await dataSource.query(sSQL));
         return result;
     }
@@ -3757,7 +3759,7 @@ export class UserResolverBase extends ResolverBase {
     @FieldResolver(() => [mj_core_schema_server_object_types.List_])
     async ListsArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Lists', userPayload);
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwLists] WHERE [UserID]=${user_.ID} ` + this.getRowLevelSecurityWhereClause('Lists', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwLists] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('Lists', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Lists', await dataSource.query(sSQL));
         return result;
     }
@@ -3765,7 +3767,7 @@ export class UserResolverBase extends ResolverBase {
     @FieldResolver(() => [mj_core_schema_server_object_types.CommunicationRun_])
     async CommunicationRunsArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Communication Runs', userPayload);
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwCommunicationRuns] WHERE [UserID]=${user_.ID} ` + this.getRowLevelSecurityWhereClause('Communication Runs', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwCommunicationRuns] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('Communication Runs', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Communication Runs', await dataSource.query(sSQL));
         return result;
     }
@@ -3773,7 +3775,7 @@ export class UserResolverBase extends ResolverBase {
     @FieldResolver(() => [mj_core_schema_server_object_types.ActionExecutionLog_])
     async ActionExecutionLogsArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Action Execution Logs', userPayload);
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionExecutionLogs] WHERE [UserID]=${user_.ID} ` + this.getRowLevelSecurityWhereClause('Action Execution Logs', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionExecutionLogs] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('Action Execution Logs', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Action Execution Logs', await dataSource.query(sSQL));
         return result;
     }
@@ -3781,7 +3783,7 @@ export class UserResolverBase extends ResolverBase {
     @FieldResolver(() => [mj_core_schema_server_object_types.AuditLog_])
     async AuditLogsArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Audit Logs', userPayload);
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAuditLogs] WHERE [UserID]=${user_.ID} ` + this.getRowLevelSecurityWhereClause('Audit Logs', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAuditLogs] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('Audit Logs', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Audit Logs', await dataSource.query(sSQL));
         return result;
     }
@@ -3789,7 +3791,7 @@ export class UserResolverBase extends ResolverBase {
     @FieldResolver(() => [mj_core_schema_server_object_types.ReportSnapshot_])
     async ReportSnapshotsArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Report Snapshots', userPayload);
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwReportSnapshots] WHERE [UserID]=${user_.ID} ` + this.getRowLevelSecurityWhereClause('Report Snapshots', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwReportSnapshots] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('Report Snapshots', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Report Snapshots', await dataSource.query(sSQL));
         return result;
     }
@@ -3797,7 +3799,7 @@ export class UserResolverBase extends ResolverBase {
     @FieldResolver(() => [mj_core_schema_server_object_types.UserView_])
     async UserViewsArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('User Views', userPayload);
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwUserViews] WHERE [UserID]=${user_.ID} ` + this.getRowLevelSecurityWhereClause('User Views', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwUserViews] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('User Views', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('User Views', await dataSource.query(sSQL));
         return result;
     }
@@ -3805,7 +3807,7 @@ export class UserResolverBase extends ResolverBase {
     @FieldResolver(() => [mj_core_schema_server_object_types.TemplateCategory_])
     async TemplateCategoriesArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Template Categories', userPayload);
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwTemplateCategories] WHERE [UserID]=${user_.ID} ` + this.getRowLevelSecurityWhereClause('Template Categories', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwTemplateCategories] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('Template Categories', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Template Categories', await dataSource.query(sSQL));
         return result;
     }
@@ -3813,7 +3815,7 @@ export class UserResolverBase extends ResolverBase {
     @FieldResolver(() => [mj_core_schema_server_object_types.DuplicateRun_])
     async DuplicateRunsArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Duplicate Runs', userPayload);
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwDuplicateRuns] WHERE [StartedByUserID]=${user_.ID} ` + this.getRowLevelSecurityWhereClause('Duplicate Runs', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwDuplicateRuns] WHERE [StartedByUserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('Duplicate Runs', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Duplicate Runs', await dataSource.query(sSQL));
         return result;
     }
@@ -3821,7 +3823,7 @@ export class UserResolverBase extends ResolverBase {
     @FieldResolver(() => [mj_core_schema_server_object_types.UserRecordLog_])
     async UserRecordLogsArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('User Record Logs', userPayload);
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwUserRecordLogs] WHERE [UserID]=${user_.ID} ` + this.getRowLevelSecurityWhereClause('User Record Logs', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwUserRecordLogs] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('User Record Logs', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('User Record Logs', await dataSource.query(sSQL));
         return result;
     }
@@ -3829,7 +3831,7 @@ export class UserResolverBase extends ResolverBase {
     @FieldResolver(() => [mj_core_schema_server_object_types.UserNotification_])
     async UserNotificationsArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('User Notifications', userPayload);
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwUserNotifications] WHERE [UserID]=${user_.ID} ` + this.getRowLevelSecurityWhereClause('User Notifications', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwUserNotifications] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('User Notifications', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('User Notifications', await dataSource.query(sSQL));
         return result;
     }
@@ -3837,7 +3839,7 @@ export class UserResolverBase extends ResolverBase {
     @FieldResolver(() => [mj_core_schema_server_object_types.Template_])
     async TemplatesArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Templates', userPayload);
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwTemplates] WHERE [UserID]=${user_.ID} ` + this.getRowLevelSecurityWhereClause('Templates', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwTemplates] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('Templates', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Templates', await dataSource.query(sSQL));
         return result;
     }
@@ -3845,7 +3847,7 @@ export class UserResolverBase extends ResolverBase {
     @FieldResolver(() => [mj_core_schema_server_object_types.UserFavorite_])
     async UserFavoritesArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('User Favorites', userPayload);
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwUserFavorites] WHERE [UserID]=${user_.ID} ` + this.getRowLevelSecurityWhereClause('User Favorites', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwUserFavorites] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('User Favorites', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('User Favorites', await dataSource.query(sSQL));
         return result;
     }
@@ -3853,7 +3855,7 @@ export class UserResolverBase extends ResolverBase {
     @FieldResolver(() => [mj_core_schema_server_object_types.ListCategory_])
     async ListCategoriesArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('List Categories', userPayload);
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwListCategories] WHERE [UserID]=${user_.ID} ` + this.getRowLevelSecurityWhereClause('List Categories', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwListCategories] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('List Categories', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('List Categories', await dataSource.query(sSQL));
         return result;
     }
@@ -3877,7 +3879,7 @@ export class UserResolverBase extends ResolverBase {
     }
     
     @Mutation(() => User_)
-    async DeleteUser(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteUser(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Users', key, options, dataSource, userPayload, pubSub);
     }
@@ -4232,8 +4234,9 @@ export class UserRecordLog_ {
     @MaxLength(16)
     ID: string;
           
-    @Field(() => Int) 
-    UserID: number;
+    @Field() 
+    @MaxLength(16)
+    UserID: string;
           
     @Field() 
     @MaxLength(16)
@@ -4296,8 +4299,8 @@ export class UpdateUserRecordLogInput {
     @Field()
     ID: string;
 
-    @Field(() => Int)
-    UserID: number;
+    @Field()
+    UserID: string;
 
     @Field()
     EntityID: string;
@@ -4390,8 +4393,9 @@ export class UserView_ {
     @MaxLength(16)
     ID: string;
           
-    @Field(() => Int) 
-    UserID: number;
+    @Field() 
+    @MaxLength(16)
+    UserID: string;
           
     @Field() 
     @MaxLength(16)
@@ -4491,8 +4495,8 @@ export class UserView_ {
 //****************************************************************************
 @InputType()
 export class CreateUserViewInput {
-    @Field(() => Int)
-    UserID: number;
+    @Field()
+    UserID: string;
 
     @Field()
     EntityID: string;
@@ -4552,8 +4556,8 @@ export class UpdateUserViewInput {
     @Field()
     ID: string;
 
-    @Field(() => Int)
-    UserID: number;
+    @Field()
+    UserID: string;
 
     @Field()
     EntityID: string;
@@ -4728,8 +4732,9 @@ export class CompanyIntegrationRun_ {
     @Field(() => Int) 
     CompanyIntegrationID: number;
           
-    @Field(() => Int) 
-    RunByUserID: number;
+    @Field() 
+    @MaxLength(16)
+    RunByUserID: string;
           
     @Field({nullable: true}) 
     @MaxLength(8)
@@ -4779,8 +4784,8 @@ export class UpdateCompanyIntegrationRunInput {
     @Field(() => Int)
     CompanyIntegrationID: number;
 
-    @Field(() => Int)
-    RunByUserID: number;
+    @Field()
+    RunByUserID: string;
 
     @Field({ nullable: true })
     StartedAt?: Date;
@@ -5824,11 +5829,11 @@ export class UserApplicationEntity_ {
     _mj__UpdatedAt: Date;
           
     @Field() 
-    @MaxLength(200)
+    @MaxLength(100)
     Application: string;
           
     @Field() 
-    @MaxLength(16)
+    @MaxLength(200)
     User: string;
           
     @Field() 
@@ -5960,8 +5965,9 @@ export class UserApplication_ {
     @Field(() => Int) 
     ID: number;
           
-    @Field(() => Int) 
-    UserID: number;
+    @Field() 
+    @MaxLength(16)
+    UserID: string;
           
     @Field(() => Int) 
     ApplicationID: number;
@@ -5998,8 +6004,8 @@ export class UserApplication_ {
 //****************************************************************************
 @InputType()
 export class CreateUserApplicationInput {
-    @Field(() => Int)
-    UserID: number;
+    @Field()
+    UserID: string;
 
     @Field(() => Int)
     ApplicationID: number;
@@ -6020,8 +6026,8 @@ export class UpdateUserApplicationInput {
     @Field(() => Int)
     ID: number;
 
-    @Field(() => Int)
-    UserID: number;
+    @Field()
+    UserID: string;
 
     @Field(() => Int)
     ApplicationID: number;
@@ -6273,8 +6279,9 @@ export class List_ {
     @MaxLength(16)
     EntityID: string;
           
-    @Field(() => Int) 
-    UserID: number;
+    @Field() 
+    @MaxLength(16)
+    UserID: string;
           
     @Field({nullable: true}) 
     @MaxLength(16)
@@ -6325,8 +6332,8 @@ export class CreateListInput {
     @Field()
     EntityID: string;
 
-    @Field(() => Int)
-    UserID: number;
+    @Field()
+    UserID: string;
 
     @Field({ nullable: true })
     CategoryID?: string;
@@ -6356,8 +6363,8 @@ export class UpdateListInput {
     @Field()
     EntityID: string;
 
-    @Field(() => Int)
-    UserID: number;
+    @Field()
+    UserID: string;
 
     @Field({ nullable: true })
     CategoryID?: string;
@@ -6631,8 +6638,9 @@ export class UserViewRun_ {
     @MaxLength(8)
     RunAt: Date;
           
-    @Field(() => Int) 
-    RunByUserID: number;
+    @Field() 
+    @MaxLength(16)
+    RunByUserID: string;
           
     @Field() 
     @MaxLength(10)
@@ -6666,8 +6674,8 @@ export class CreateUserViewRunInput {
     @Field()
     RunAt: Date;
 
-    @Field(() => Int)
-    RunByUserID: number;
+    @Field()
+    RunByUserID: string;
 }
     
         
@@ -6685,8 +6693,8 @@ export class UpdateUserViewRunInput {
     @Field()
     RunAt: Date;
 
-    @Field(() => Int)
-    RunByUserID: number;
+    @Field()
+    RunByUserID: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -7379,8 +7387,9 @@ export class RecordChange_ {
     @MaxLength(1500)
     RecordID: string;
           
-    @Field(() => Int, {description: 'The user that made the change'}) 
-    UserID: number;
+    @Field() 
+    @MaxLength(16)
+    UserID: string;
           
     @Field({description: 'Create, Update, or Delete'}) 
     @MaxLength(40)
@@ -7452,8 +7461,8 @@ export class CreateRecordChangeInput {
     @Field()
     RecordID: string;
 
-    @Field(() => Int)
-    UserID: number;
+    @Field()
+    UserID: string;
 
     @Field()
     Type: string;
@@ -7504,8 +7513,8 @@ export class UpdateRecordChangeInput {
     @Field()
     RecordID: string;
 
-    @Field(() => Int)
-    UserID: number;
+    @Field()
+    UserID: string;
 
     @Field()
     Type: string;
@@ -7625,8 +7634,9 @@ export class UserRole_ {
     @MaxLength(16)
     ID: string;
           
-    @Field(() => Int) 
-    UserID: number;
+    @Field() 
+    @MaxLength(16)
+    UserID: string;
           
     @Field() 
     @MaxLength(100)
@@ -7651,8 +7661,8 @@ export class UserRole_ {
 //****************************************************************************
 @InputType()
 export class CreateUserRoleInput {
-    @Field(() => Int)
-    UserID: number;
+    @Field()
+    UserID: string;
 
     @Field()
     RoleName: string;
@@ -7848,8 +7858,9 @@ export class AuditLog_ {
     @MaxLength(100)
     AuditLogTypeName: string;
           
-    @Field(() => Int) 
-    UserID: number;
+    @Field() 
+    @MaxLength(16)
+    UserID: string;
           
     @Field({nullable: true}) 
     @MaxLength(200)
@@ -7899,8 +7910,8 @@ export class CreateAuditLogInput {
     @Field()
     AuditLogTypeName: string;
 
-    @Field(() => Int)
-    UserID: number;
+    @Field()
+    UserID: string;
 
     @Field({ nullable: true })
     AuthorizationName?: string;
@@ -7933,8 +7944,8 @@ export class UpdateAuditLogInput {
     @Field()
     AuditLogTypeName: string;
 
-    @Field(() => Int)
-    UserID: number;
+    @Field()
+    UserID: string;
 
     @Field({ nullable: true })
     AuthorizationName?: string;
@@ -10165,14 +10176,15 @@ export class Dashboard_ {
     @Field({nullable: true}) 
     Description?: string;
           
+    @Field() 
+    @MaxLength(16)
+    UserID: string;
+          
     @Field(() => Int, {nullable: true}) 
     CategoryID?: number;
           
     @Field() 
     UIConfigDetails: string;
-          
-    @Field(() => Int, {nullable: true}) 
-    UserID?: number;
           
     @Field() 
     @MaxLength(10)
@@ -10182,13 +10194,13 @@ export class Dashboard_ {
     @MaxLength(10)
     _mj__UpdatedAt: Date;
           
-    @Field({nullable: true}) 
+    @Field() 
     @MaxLength(200)
-    Category?: string;
+    User: string;
           
     @Field({nullable: true}) 
     @MaxLength(200)
-    User?: string;
+    Category?: string;
         
 }
         
@@ -10203,14 +10215,14 @@ export class CreateDashboardInput {
     @Field({ nullable: true })
     Description?: string;
 
+    @Field()
+    UserID: string;
+
     @Field(() => Int, { nullable: true })
     CategoryID?: number;
 
     @Field()
     UIConfigDetails: string;
-
-    @Field(() => Int, { nullable: true })
-    UserID?: number;
 }
     
         
@@ -10228,14 +10240,14 @@ export class UpdateDashboardInput {
     @Field({ nullable: true })
     Description?: string;
 
+    @Field()
+    UserID: string;
+
     @Field(() => Int, { nullable: true })
     CategoryID?: number;
 
     @Field()
     UIConfigDetails: string;
-
-    @Field(() => Int, { nullable: true })
-    UserID?: number;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -10607,8 +10619,9 @@ export class Report_ {
     @Field(() => Int, {nullable: true}) 
     CategoryID?: number;
           
-    @Field(() => Int) 
-    UserID: number;
+    @Field() 
+    @MaxLength(16)
+    UserID: string;
           
     @Field() 
     @MaxLength(40)
@@ -10712,8 +10725,8 @@ export class CreateReportInput {
     @Field(() => Int, { nullable: true })
     CategoryID?: number;
 
-    @Field(() => Int)
-    UserID: number;
+    @Field()
+    UserID: string;
 
     @Field()
     SharingScope: string;
@@ -10770,8 +10783,8 @@ export class UpdateReportInput {
     @Field(() => Int, { nullable: true })
     CategoryID?: number;
 
-    @Field(() => Int)
-    UserID: number;
+    @Field()
+    UserID: string;
 
     @Field()
     SharingScope: string;
@@ -10914,8 +10927,9 @@ export class ReportSnapshot_ {
     @Field() 
     ResultSet: string;
           
-    @Field(() => Int, {nullable: true}) 
-    UserID?: number;
+    @Field({nullable: true}) 
+    @MaxLength(16)
+    UserID?: string;
           
     @Field() 
     @MaxLength(10)
@@ -10946,8 +10960,8 @@ export class CreateReportSnapshotInput {
     @Field()
     ResultSet: string;
 
-    @Field(() => Int, { nullable: true })
-    UserID?: number;
+    @Field({ nullable: true })
+    UserID?: string;
 }
     
         
@@ -10965,8 +10979,8 @@ export class UpdateReportSnapshotInput {
     @Field()
     ResultSet: string;
 
-    @Field(() => Int, { nullable: true })
-    UserID?: number;
+    @Field({ nullable: true })
+    UserID?: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -11383,8 +11397,9 @@ export class Workspace_ {
     @Field({nullable: true}) 
     Description?: string;
           
-    @Field(() => Int) 
-    UserID: number;
+    @Field() 
+    @MaxLength(16)
+    UserID: string;
           
     @Field() 
     @MaxLength(10)
@@ -11414,8 +11429,8 @@ export class CreateWorkspaceInput {
     @Field({ nullable: true })
     Description?: string;
 
-    @Field(() => Int)
-    UserID: number;
+    @Field()
+    UserID: string;
 }
     
         
@@ -11433,8 +11448,8 @@ export class UpdateWorkspaceInput {
     @Field({ nullable: true })
     Description?: string;
 
-    @Field(() => Int)
-    UserID: number;
+    @Field()
+    UserID: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -12099,8 +12114,9 @@ export class Conversation_ {
     @Field(() => Int) 
     ID: number;
           
-    @Field(() => Int) 
-    UserID: number;
+    @Field() 
+    @MaxLength(16)
+    UserID: string;
           
     @Field({nullable: true}) 
     @MaxLength(1000)
@@ -12160,8 +12176,8 @@ export class Conversation_ {
 //****************************************************************************
 @InputType()
 export class CreateConversationInput {
-    @Field(() => Int)
-    UserID: number;
+    @Field()
+    UserID: string;
 
     @Field({ nullable: true })
     ExternalID?: string;
@@ -12197,8 +12213,8 @@ export class UpdateConversationInput {
     @Field(() => Int)
     ID: number;
 
-    @Field(() => Int)
-    UserID: number;
+    @Field()
+    UserID: string;
 
     @Field({ nullable: true })
     ExternalID?: string;
@@ -12331,8 +12347,9 @@ export class UserNotification_ {
     @MaxLength(16)
     ID: string;
           
-    @Field(() => Int) 
-    UserID: number;
+    @Field() 
+    @MaxLength(16)
+    UserID: string;
           
     @Field({nullable: true}) 
     @MaxLength(510)
@@ -12376,8 +12393,8 @@ export class UserNotification_ {
 //****************************************************************************
 @InputType()
 export class CreateUserNotificationInput {
-    @Field(() => Int)
-    UserID: number;
+    @Field()
+    UserID: string;
 
     @Field({ nullable: true })
     Title?: string;
@@ -12410,8 +12427,8 @@ export class UpdateUserNotificationInput {
     @Field()
     ID: string;
 
-    @Field(() => Int)
-    UserID: number;
+    @Field()
+    UserID: string;
 
     @Field({ nullable: true })
     Title?: string;
@@ -12832,15 +12849,17 @@ export class RecordMergeLog_ {
     @MaxLength(510)
     SurvivingRecordID: string;
           
-    @Field(() => Int) 
-    InitiatedByUserID: number;
+    @Field() 
+    @MaxLength(16)
+    InitiatedByUserID: string;
           
     @Field() 
     @MaxLength(20)
     ApprovalStatus: string;
           
-    @Field(() => Int, {nullable: true}) 
-    ApprovedByUserID?: number;
+    @Field({nullable: true}) 
+    @MaxLength(16)
+    ApprovedByUserID?: string;
           
     @Field() 
     @MaxLength(20)
@@ -12895,14 +12914,14 @@ export class CreateRecordMergeLogInput {
     @Field()
     SurvivingRecordID: string;
 
-    @Field(() => Int)
-    InitiatedByUserID: number;
+    @Field()
+    InitiatedByUserID: string;
 
     @Field()
     ApprovalStatus: string;
 
-    @Field(() => Int, { nullable: true })
-    ApprovedByUserID?: number;
+    @Field({ nullable: true })
+    ApprovedByUserID?: string;
 
     @Field()
     ProcessingStatus: string;
@@ -12935,14 +12954,14 @@ export class UpdateRecordMergeLogInput {
     @Field()
     SurvivingRecordID: string;
 
-    @Field(() => Int)
-    InitiatedByUserID: number;
+    @Field()
+    InitiatedByUserID: string;
 
     @Field()
     ApprovalStatus: string;
 
-    @Field(() => Int, { nullable: true })
-    ApprovedByUserID?: number;
+    @Field({ nullable: true })
+    ApprovedByUserID?: string;
 
     @Field()
     ProcessingStatus: string;
@@ -13448,8 +13467,9 @@ export class QueryCategory_ {
     @Field({nullable: true}) 
     Description?: string;
           
-    @Field(() => Int) 
-    UserID: number;
+    @Field() 
+    @MaxLength(16)
+    UserID: string;
           
     @Field() 
     @MaxLength(10)
@@ -13489,8 +13509,8 @@ export class CreateQueryCategoryInput {
     @Field({ nullable: true })
     Description?: string;
 
-    @Field(() => Int)
-    UserID: number;
+    @Field()
+    UserID: string;
 }
     
         
@@ -13511,8 +13531,8 @@ export class UpdateQueryCategoryInput {
     @Field({ nullable: true })
     Description?: string;
 
-    @Field(() => Int)
-    UserID: number;
+    @Field()
+    UserID: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -15267,11 +15287,12 @@ export class DataContext_ {
     @MaxLength(510)
     Name: string;
           
-    @Field(() => Int) 
-    UserID: number;
-          
     @Field({nullable: true}) 
     Description?: string;
+          
+    @Field() 
+    @MaxLength(16)
+    UserID: string;
           
     @Field({nullable: true}) 
     @MaxLength(8)
@@ -15305,11 +15326,11 @@ export class CreateDataContextInput {
     @Field()
     Name: string;
 
-    @Field(() => Int)
-    UserID: number;
-
     @Field({ nullable: true })
     Description?: string;
+
+    @Field()
+    UserID: string;
 
     @Field({ nullable: true })
     LastRefreshedAt?: Date;
@@ -15327,11 +15348,11 @@ export class UpdateDataContextInput {
     @Field()
     Name: string;
 
-    @Field(() => Int)
-    UserID: number;
-
     @Field({ nullable: true })
     Description?: string;
+
+    @Field()
+    UserID: string;
 
     @Field({ nullable: true })
     LastRefreshedAt?: Date;
@@ -15456,8 +15477,9 @@ export class UserViewCategory_ {
     @MaxLength(16)
     EntityID: string;
           
-    @Field(() => Int) 
-    UserID: number;
+    @Field() 
+    @MaxLength(16)
+    UserID: string;
           
     @Field() 
     @MaxLength(10)
@@ -15500,8 +15522,8 @@ export class CreateUserViewCategoryInput {
     @Field()
     EntityID: string;
 
-    @Field(() => Int)
-    UserID: number;
+    @Field()
+    UserID: string;
 }
     
         
@@ -15525,8 +15547,8 @@ export class UpdateUserViewCategoryInput {
     @Field()
     EntityID: string;
 
-    @Field(() => Int)
-    UserID: number;
+    @Field()
+    UserID: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -15644,8 +15666,9 @@ export class DashboardCategory_ {
     @Field(() => Int, {nullable: true}) 
     ParentID?: number;
           
-    @Field(() => Int) 
-    UserID: number;
+    @Field() 
+    @MaxLength(16)
+    UserID: string;
           
     @Field() 
     @MaxLength(10)
@@ -15685,8 +15708,8 @@ export class CreateDashboardCategoryInput {
     @Field(() => Int, { nullable: true })
     ParentID?: number;
 
-    @Field(() => Int)
-    UserID: number;
+    @Field()
+    UserID: string;
 }
     
         
@@ -15707,8 +15730,8 @@ export class UpdateDashboardCategoryInput {
     @Field(() => Int, { nullable: true })
     ParentID?: number;
 
-    @Field(() => Int)
-    UserID: number;
+    @Field()
+    UserID: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -15826,8 +15849,9 @@ export class ReportCategory_ {
     @Field(() => Int, {nullable: true}) 
     ParentID?: number;
           
-    @Field(() => Int) 
-    UserID: number;
+    @Field() 
+    @MaxLength(16)
+    UserID: string;
           
     @Field() 
     @MaxLength(10)
@@ -15867,8 +15891,8 @@ export class CreateReportCategoryInput {
     @Field(() => Int, { nullable: true })
     ParentID?: number;
 
-    @Field(() => Int)
-    UserID: number;
+    @Field()
+    UserID: string;
 }
     
         
@@ -15889,8 +15913,8 @@ export class UpdateReportCategoryInput {
     @Field(() => Int, { nullable: true })
     ParentID?: number;
 
-    @Field(() => Int)
-    UserID: number;
+    @Field()
+    UserID: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -17395,8 +17419,9 @@ export class DuplicateRun_ {
     @MaxLength(16)
     EntityID: string;
           
-    @Field(() => Int) 
-    StartedByUserID: number;
+    @Field() 
+    @MaxLength(16)
+    StartedByUserID: string;
           
     @Field() 
     @MaxLength(8)
@@ -17413,8 +17438,9 @@ export class DuplicateRun_ {
     @Field({nullable: true}) 
     ApprovalComments?: string;
           
-    @Field(() => Int, {nullable: true}) 
-    ApprovedByUserID?: number;
+    @Field({nullable: true}) 
+    @MaxLength(16)
+    ApprovedByUserID?: string;
           
     @Field() 
     @MaxLength(40)
@@ -17463,8 +17489,8 @@ export class CreateDuplicateRunInput {
     @Field()
     EntityID: string;
 
-    @Field(() => Int)
-    StartedByUserID: number;
+    @Field()
+    StartedByUserID: string;
 
     @Field()
     StartedAt: Date;
@@ -17478,8 +17504,8 @@ export class CreateDuplicateRunInput {
     @Field({ nullable: true })
     ApprovalComments?: string;
 
-    @Field(() => Int, { nullable: true })
-    ApprovedByUserID?: number;
+    @Field({ nullable: true })
+    ApprovedByUserID?: string;
 
     @Field()
     ProcessingStatus: string;
@@ -17503,8 +17529,8 @@ export class UpdateDuplicateRunInput {
     @Field()
     EntityID: string;
 
-    @Field(() => Int)
-    StartedByUserID: number;
+    @Field()
+    StartedByUserID: string;
 
     @Field()
     StartedAt: Date;
@@ -17518,8 +17544,8 @@ export class UpdateDuplicateRunInput {
     @Field({ nullable: true })
     ApprovalComments?: string;
 
-    @Field(() => Int, { nullable: true })
-    ApprovedByUserID?: number;
+    @Field({ nullable: true })
+    ApprovedByUserID?: string;
 
     @Field()
     ProcessingStatus: string;
@@ -17959,8 +17985,9 @@ export class ApplicationSettingResolver extends ResolverBase {
 //****************************************************************************
 @ObjectType({ description: 'Organizes actions into categories, including name, description, and optional parent category for hierarchy.' })
 export class ActionCategory_ {  
-    @Field(() => Int) 
-    ID: number;
+    @Field() 
+    @MaxLength(16)
+    ID: string;
           
     @Field({description: 'Name of the action category.'}) 
     @MaxLength(510)
@@ -17969,8 +17996,9 @@ export class ActionCategory_ {
     @Field({nullable: true, description: 'Description of the action category.'}) 
     Description?: string;
           
-    @Field(() => Int, {nullable: true, description: 'Parent category ID for hierarchical organization.'}) 
-    ParentID?: number;
+    @Field({nullable: true}) 
+    @MaxLength(16)
+    ParentID?: string;
           
     @Field({description: 'Status of the action category (Pending, Active, Disabled).'}) 
     @MaxLength(40)
@@ -18007,8 +18035,8 @@ export class CreateActionCategoryInput {
     @Field({ nullable: true })
     Description?: string;
 
-    @Field(() => Int, { nullable: true })
-    ParentID?: number;
+    @Field({ nullable: true })
+    ParentID?: string;
 
     @Field()
     Status: string;
@@ -18020,8 +18048,8 @@ export class CreateActionCategoryInput {
 //****************************************************************************
 @InputType()
 export class UpdateActionCategoryInput {
-    @Field(() => Int)
-    ID: number;
+    @Field()
+    ID: string;
 
     @Field()
     Name: string;
@@ -18029,8 +18057,8 @@ export class UpdateActionCategoryInput {
     @Field({ nullable: true })
     Description?: string;
 
-    @Field(() => Int, { nullable: true })
-    ParentID?: number;
+    @Field({ nullable: true })
+    ParentID?: string;
 
     @Field()
     Status: string;
@@ -18084,9 +18112,9 @@ export class ActionCategoryResolver extends ResolverBase {
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => ActionCategory_, { nullable: true })
-    async ActionCategory(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ActionCategory_ | null> {
+    async ActionCategory(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ActionCategory_ | null> {
         this.CheckUserReadPermissions('Action Categories', userPayload);
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionCategories] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Action Categories', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionCategories] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Action Categories', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Action Categories', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
@@ -18094,7 +18122,7 @@ export class ActionCategoryResolver extends ResolverBase {
     @FieldResolver(() => [mj_core_schema_server_object_types.ActionCategory_])
     async ActionCategoriesArray(@Root() actioncategory_: ActionCategory_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Action Categories', userPayload);
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionCategories] WHERE [ParentID]=${actioncategory_.ID} ` + this.getRowLevelSecurityWhereClause('Action Categories', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionCategories] WHERE [ParentID]='${actioncategory_.ID}' ` + this.getRowLevelSecurityWhereClause('Action Categories', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Action Categories', await dataSource.query(sSQL));
         return result;
     }
@@ -18102,7 +18130,7 @@ export class ActionCategoryResolver extends ResolverBase {
     @FieldResolver(() => [mj_core_schema_server_object_types.Action_])
     async ActionsArray(@Root() actioncategory_: ActionCategory_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Actions', userPayload);
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActions] WHERE [CategoryID]=${actioncategory_.ID} ` + this.getRowLevelSecurityWhereClause('Actions', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActions] WHERE [CategoryID]='${actioncategory_.ID}' ` + this.getRowLevelSecurityWhereClause('Actions', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Actions', await dataSource.query(sSQL));
         return result;
     }
@@ -18126,7 +18154,7 @@ export class ActionCategoryResolver extends ResolverBase {
     }
     
     @Mutation(() => ActionCategory_)
-    async DeleteActionCategory(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteActionCategory(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Action Categories', key, options, dataSource, userPayload, pubSub);
     }
@@ -18138,15 +18166,13 @@ export class ActionCategoryResolver extends ResolverBase {
 //****************************************************************************
 @ObjectType({ description: 'Links entities to actions - this is the main place where you define the actions that part of, or available, for a given entity.' })
 export class EntityAction_ {  
-    @Field(() => Int) 
-    ID: number;
-          
     @Field() 
     @MaxLength(16)
     EntityID: string;
           
-    @Field(() => Int) 
-    ActionID: number;
+    @Field() 
+    @MaxLength(16)
+    ActionID: string;
           
     @Field({description: 'Status of the entity action (Pending, Active, Disabled).'}) 
     @MaxLength(40)
@@ -18159,6 +18185,10 @@ export class EntityAction_ {
     @Field() 
     @MaxLength(10)
     _mj__UpdatedAt: Date;
+          
+    @Field() 
+    @MaxLength(16)
+    ID: string;
           
     @Field() 
     @MaxLength(510)
@@ -18187,8 +18217,8 @@ export class CreateEntityActionInput {
     @Field()
     EntityID: string;
 
-    @Field(() => Int)
-    ActionID: number;
+    @Field()
+    ActionID: string;
 
     @Field()
     Status: string;
@@ -18200,17 +18230,17 @@ export class CreateEntityActionInput {
 //****************************************************************************
 @InputType()
 export class UpdateEntityActionInput {
-    @Field(() => Int)
-    ID: number;
-
     @Field()
     EntityID: string;
 
-    @Field(() => Int)
-    ActionID: number;
+    @Field()
+    ActionID: string;
 
     @Field()
     Status: string;
+
+    @Field()
+    ID: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -18261,9 +18291,9 @@ export class EntityActionResolver extends ResolverBase {
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => EntityAction_, { nullable: true })
-    async EntityAction(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<EntityAction_ | null> {
+    async EntityAction(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<EntityAction_ | null> {
         this.CheckUserReadPermissions('Entity Actions', userPayload);
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityActions] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Entity Actions', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityActions] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Entity Actions', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Entity Actions', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
@@ -18271,7 +18301,7 @@ export class EntityActionResolver extends ResolverBase {
     @FieldResolver(() => [mj_core_schema_server_object_types.EntityActionInvocation_])
     async EntityActionInvocationsArray(@Root() entityaction_: EntityAction_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entity Action Invocations', userPayload);
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityActionInvocations] WHERE [EntityActionID]=${entityaction_.ID} ` + this.getRowLevelSecurityWhereClause('Entity Action Invocations', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityActionInvocations] WHERE [EntityActionID]='${entityaction_.ID}' ` + this.getRowLevelSecurityWhereClause('Entity Action Invocations', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Entity Action Invocations', await dataSource.query(sSQL));
         return result;
     }
@@ -18279,7 +18309,7 @@ export class EntityActionResolver extends ResolverBase {
     @FieldResolver(() => [mj_core_schema_server_object_types.EntityActionFilter_])
     async EntityActionFiltersArray(@Root() entityaction_: EntityAction_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entity Action Filters', userPayload);
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityActionFilters] WHERE [EntityActionID]=${entityaction_.ID} ` + this.getRowLevelSecurityWhereClause('Entity Action Filters', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityActionFilters] WHERE [EntityActionID]='${entityaction_.ID}' ` + this.getRowLevelSecurityWhereClause('Entity Action Filters', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Entity Action Filters', await dataSource.query(sSQL));
         return result;
     }
@@ -18287,7 +18317,7 @@ export class EntityActionResolver extends ResolverBase {
     @FieldResolver(() => [mj_core_schema_server_object_types.EntityActionParam_])
     async EntityActionParamsArray(@Root() entityaction_: EntityAction_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entity Action Params', userPayload);
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityActionParams] WHERE [EntityActionID]=${entityaction_.ID} ` + this.getRowLevelSecurityWhereClause('Entity Action Params', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityActionParams] WHERE [EntityActionID]='${entityaction_.ID}' ` + this.getRowLevelSecurityWhereClause('Entity Action Params', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Entity Action Params', await dataSource.query(sSQL));
         return result;
     }
@@ -18311,7 +18341,7 @@ export class EntityActionResolver extends ResolverBase {
     }
     
     @Mutation(() => EntityAction_)
-    async DeleteEntityAction(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteEntityAction(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Entity Actions', key, options, dataSource, userPayload, pubSub);
     }
@@ -18327,8 +18357,9 @@ export class EntityActionInvocation_ {
     @MaxLength(16)
     ID: string;
           
-    @Field(() => Int) 
-    EntityActionID: number;
+    @Field() 
+    @MaxLength(16)
+    EntityActionID: string;
           
     @Field(() => Int) 
     InvocationTypeID: number;
@@ -18356,8 +18387,8 @@ export class EntityActionInvocation_ {
 //****************************************************************************
 @InputType()
 export class CreateEntityActionInvocationInput {
-    @Field(() => Int)
-    EntityActionID: number;
+    @Field()
+    EntityActionID: string;
 
     @Field(() => Int)
     InvocationTypeID: number;
@@ -18375,8 +18406,8 @@ export class UpdateEntityActionInvocationInput {
     @Field()
     ID: string;
 
-    @Field(() => Int)
-    EntityActionID: number;
+    @Field()
+    EntityActionID: string;
 
     @Field(() => Int)
     InvocationTypeID: number;
@@ -18475,8 +18506,9 @@ export class ActionAuthorization_ {
     @MaxLength(16)
     ID: string;
           
-    @Field(() => Int) 
-    ActionID: number;
+    @Field() 
+    @MaxLength(16)
+    ActionID: string;
           
     @Field() 
     @MaxLength(200)
@@ -18504,8 +18536,8 @@ export class ActionAuthorization_ {
 //****************************************************************************
 @InputType()
 export class CreateActionAuthorizationInput {
-    @Field(() => Int)
-    ActionID: number;
+    @Field()
+    ActionID: string;
 
     @Field()
     AuthorizationName: string;
@@ -18523,8 +18555,8 @@ export class UpdateActionAuthorizationInput {
     @Field()
     ID: string;
 
-    @Field(() => Int)
-    ActionID: number;
+    @Field()
+    ActionID: string;
 
     @Field()
     AuthorizationName: string;
@@ -18773,11 +18805,13 @@ export class EntityActionInvocationTypeResolver extends ResolverBase {
 //****************************************************************************
 @ObjectType({ description: 'Stores action definitions, including prompts, generated code, user comments, and status.' })
 export class Action_ {  
-    @Field(() => Int) 
-    ID: number;
+    @Field() 
+    @MaxLength(16)
+    ID: string;
           
-    @Field(() => Int, {nullable: true}) 
-    CategoryID?: number;
+    @Field({nullable: true}) 
+    @MaxLength(16)
+    CategoryID?: string;
           
     @Field() 
     @MaxLength(850)
@@ -18809,8 +18843,9 @@ export class Action_ {
     @Field({nullable: true, description: 'Optional comments when an individual (or an AI) reviews and approves the code.'}) 
     CodeApprovalComments?: string;
           
-    @Field(() => Int, {nullable: true, description: 'UserID who approved the code.'}) 
-    CodeApprovedByUserID?: number;
+    @Field({nullable: true}) 
+    @MaxLength(16)
+    CodeApprovedByUserID?: string;
           
     @Field({nullable: true, description: 'When the code was approved.'}) 
     @MaxLength(8)
@@ -18873,8 +18908,8 @@ export class Action_ {
 //****************************************************************************
 @InputType()
 export class CreateActionInput {
-    @Field(() => Int, { nullable: true })
-    CategoryID?: number;
+    @Field({ nullable: true })
+    CategoryID?: string;
 
     @Field()
     Name: string;
@@ -18903,8 +18938,8 @@ export class CreateActionInput {
     @Field({ nullable: true })
     CodeApprovalComments?: string;
 
-    @Field(() => Int, { nullable: true })
-    CodeApprovedByUserID?: number;
+    @Field({ nullable: true })
+    CodeApprovedByUserID?: string;
 
     @Field({ nullable: true })
     CodeApprovedAt?: Date;
@@ -18928,11 +18963,11 @@ export class CreateActionInput {
 //****************************************************************************
 @InputType()
 export class UpdateActionInput {
-    @Field(() => Int)
-    ID: number;
+    @Field()
+    ID: string;
 
-    @Field(() => Int, { nullable: true })
-    CategoryID?: number;
+    @Field({ nullable: true })
+    CategoryID?: string;
 
     @Field()
     Name: string;
@@ -18961,8 +18996,8 @@ export class UpdateActionInput {
     @Field({ nullable: true })
     CodeApprovalComments?: string;
 
-    @Field(() => Int, { nullable: true })
-    CodeApprovedByUserID?: number;
+    @Field({ nullable: true })
+    CodeApprovedByUserID?: string;
 
     @Field({ nullable: true })
     CodeApprovedAt?: Date;
@@ -19028,9 +19063,9 @@ export class ActionResolver extends ResolverBase {
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => Action_, { nullable: true })
-    async Action(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<Action_ | null> {
+    async Action(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<Action_ | null> {
         this.CheckUserReadPermissions('Actions', userPayload);
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActions] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Actions', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActions] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Actions', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Actions', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
@@ -19038,7 +19073,7 @@ export class ActionResolver extends ResolverBase {
     @FieldResolver(() => [mj_core_schema_server_object_types.ActionParam_])
     async ActionParamsArray(@Root() action_: Action_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Action Params', userPayload);
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionParams] WHERE [ActionID]=${action_.ID} ` + this.getRowLevelSecurityWhereClause('Action Params', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionParams] WHERE [ActionID]='${action_.ID}' ` + this.getRowLevelSecurityWhereClause('Action Params', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Action Params', await dataSource.query(sSQL));
         return result;
     }
@@ -19046,7 +19081,7 @@ export class ActionResolver extends ResolverBase {
     @FieldResolver(() => [mj_core_schema_server_object_types.ActionLibrary_])
     async ActionLibrariesArray(@Root() action_: Action_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Action Libraries', userPayload);
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionLibraries] WHERE [ActionID]=${action_.ID} ` + this.getRowLevelSecurityWhereClause('Action Libraries', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionLibraries] WHERE [ActionID]='${action_.ID}' ` + this.getRowLevelSecurityWhereClause('Action Libraries', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Action Libraries', await dataSource.query(sSQL));
         return result;
     }
@@ -19054,7 +19089,7 @@ export class ActionResolver extends ResolverBase {
     @FieldResolver(() => [mj_core_schema_server_object_types.ActionResultCode_])
     async ActionResultCodesArray(@Root() action_: Action_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Action Result Codes', userPayload);
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionResultCodes] WHERE [ActionID]=${action_.ID} ` + this.getRowLevelSecurityWhereClause('Action Result Codes', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionResultCodes] WHERE [ActionID]='${action_.ID}' ` + this.getRowLevelSecurityWhereClause('Action Result Codes', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Action Result Codes', await dataSource.query(sSQL));
         return result;
     }
@@ -19062,7 +19097,7 @@ export class ActionResolver extends ResolverBase {
     @FieldResolver(() => [mj_core_schema_server_object_types.ActionContext_])
     async ActionContextsArray(@Root() action_: Action_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Action Contexts', userPayload);
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionContexts] WHERE [ActionID]=${action_.ID} ` + this.getRowLevelSecurityWhereClause('Action Contexts', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionContexts] WHERE [ActionID]='${action_.ID}' ` + this.getRowLevelSecurityWhereClause('Action Contexts', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Action Contexts', await dataSource.query(sSQL));
         return result;
     }
@@ -19070,7 +19105,7 @@ export class ActionResolver extends ResolverBase {
     @FieldResolver(() => [mj_core_schema_server_object_types.EntityAction_])
     async EntityActionsArray(@Root() action_: Action_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entity Actions', userPayload);
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityActions] WHERE [ActionID]=${action_.ID} ` + this.getRowLevelSecurityWhereClause('Entity Actions', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityActions] WHERE [ActionID]='${action_.ID}' ` + this.getRowLevelSecurityWhereClause('Entity Actions', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Entity Actions', await dataSource.query(sSQL));
         return result;
     }
@@ -19078,7 +19113,7 @@ export class ActionResolver extends ResolverBase {
     @FieldResolver(() => [mj_core_schema_server_object_types.ActionExecutionLog_])
     async ActionExecutionLogsArray(@Root() action_: Action_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Action Execution Logs', userPayload);
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionExecutionLogs] WHERE [ActionID]=${action_.ID} ` + this.getRowLevelSecurityWhereClause('Action Execution Logs', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionExecutionLogs] WHERE [ActionID]='${action_.ID}' ` + this.getRowLevelSecurityWhereClause('Action Execution Logs', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Action Execution Logs', await dataSource.query(sSQL));
         return result;
     }
@@ -19086,7 +19121,7 @@ export class ActionResolver extends ResolverBase {
     @FieldResolver(() => [mj_core_schema_server_object_types.ActionAuthorization_])
     async ActionAuthorizationsArray(@Root() action_: Action_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Action Authorizations', userPayload);
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionAuthorizations] WHERE [ActionID]=${action_.ID} ` + this.getRowLevelSecurityWhereClause('Action Authorizations', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionAuthorizations] WHERE [ActionID]='${action_.ID}' ` + this.getRowLevelSecurityWhereClause('Action Authorizations', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Action Authorizations', await dataSource.query(sSQL));
         return result;
     }
@@ -19110,7 +19145,7 @@ export class ActionResolver extends ResolverBase {
     }
     
     @Mutation(() => Action_)
-    async DeleteAction(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteAction(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Actions', key, options, dataSource, userPayload, pubSub);
     }
@@ -19126,11 +19161,13 @@ export class EntityActionFilter_ {
     @MaxLength(16)
     ID: string;
           
-    @Field(() => Int) 
-    EntityActionID: number;
+    @Field() 
+    @MaxLength(16)
+    EntityActionID: string;
           
-    @Field(() => Int) 
-    ActionFilterID: number;
+    @Field() 
+    @MaxLength(16)
+    ActionFilterID: string;
           
     @Field(() => Int, {description: 'Order of filter execution.'}) 
     Sequence: number;
@@ -19154,11 +19191,11 @@ export class EntityActionFilter_ {
 //****************************************************************************
 @InputType()
 export class CreateEntityActionFilterInput {
-    @Field(() => Int)
-    EntityActionID: number;
+    @Field()
+    EntityActionID: string;
 
-    @Field(() => Int)
-    ActionFilterID: number;
+    @Field()
+    ActionFilterID: string;
 
     @Field(() => Int)
     Sequence: number;
@@ -19176,11 +19213,11 @@ export class UpdateEntityActionFilterInput {
     @Field()
     ID: string;
 
-    @Field(() => Int)
-    EntityActionID: number;
+    @Field()
+    EntityActionID: string;
 
-    @Field(() => Int)
-    ActionFilterID: number;
+    @Field()
+    ActionFilterID: string;
 
     @Field(() => Int)
     Sequence: number;
@@ -19275,8 +19312,9 @@ export class EntityActionFilterResolver extends ResolverBase {
 //****************************************************************************
 @ObjectType({ description: 'Defines filters that can be evaluated ahead of executing an action. Action Filters are usable in any code pipeline you can execute them with the same context as the action itself and use the outcome to determine if the action should execute or not.' })
 export class ActionFilter_ {  
-    @Field(() => Int) 
-    ID: number;
+    @Field() 
+    @MaxLength(16)
+    ID: string;
           
     @Field() 
     UserDescription: string;
@@ -19327,8 +19365,8 @@ export class CreateActionFilterInput {
 //****************************************************************************
 @InputType()
 export class UpdateActionFilterInput {
-    @Field(() => Int)
-    ID: number;
+    @Field()
+    ID: string;
 
     @Field()
     UserDescription: string;
@@ -19391,9 +19429,9 @@ export class ActionFilterResolver extends ResolverBase {
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => ActionFilter_, { nullable: true })
-    async ActionFilter(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ActionFilter_ | null> {
+    async ActionFilter(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ActionFilter_ | null> {
         this.CheckUserReadPermissions('Action Filters', userPayload);
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionFilters] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Action Filters', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionFilters] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Action Filters', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Action Filters', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
@@ -19401,7 +19439,7 @@ export class ActionFilterResolver extends ResolverBase {
     @FieldResolver(() => [mj_core_schema_server_object_types.EntityActionFilter_])
     async EntityActionFiltersArray(@Root() actionfilter_: ActionFilter_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entity Action Filters', userPayload);
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityActionFilters] WHERE [ActionFilterID]=${actionfilter_.ID} ` + this.getRowLevelSecurityWhereClause('Entity Action Filters', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityActionFilters] WHERE [ActionFilterID]='${actionfilter_.ID}' ` + this.getRowLevelSecurityWhereClause('Entity Action Filters', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Entity Action Filters', await dataSource.query(sSQL));
         return result;
     }
@@ -19425,7 +19463,7 @@ export class ActionFilterResolver extends ResolverBase {
     }
     
     @Mutation(() => ActionFilter_)
-    async DeleteActionFilter(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteActionFilter(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Action Filters', key, options, dataSource, userPayload, pubSub);
     }
@@ -19437,8 +19475,9 @@ export class ActionFilterResolver extends ResolverBase {
 //****************************************************************************
 @ObjectType({ description: 'Lists possible contexts for action execution with optional descriptions.' })
 export class ActionContextType_ {  
-    @Field(() => Int) 
-    ID: number;
+    @Field() 
+    @MaxLength(16)
+    ID: string;
           
     @Field({description: 'Name of the context type.'}) 
     @MaxLength(510)
@@ -19478,8 +19517,8 @@ export class CreateActionContextTypeInput {
 //****************************************************************************
 @InputType()
 export class UpdateActionContextTypeInput {
-    @Field(() => Int)
-    ID: number;
+    @Field()
+    ID: string;
 
     @Field()
     Name: string;
@@ -19536,9 +19575,9 @@ export class ActionContextTypeResolver extends ResolverBase {
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => ActionContextType_, { nullable: true })
-    async ActionContextType(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ActionContextType_ | null> {
+    async ActionContextType(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ActionContextType_ | null> {
         this.CheckUserReadPermissions('Action Context Types', userPayload);
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionContextTypes] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Action Context Types', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionContextTypes] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Action Context Types', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Action Context Types', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
@@ -19546,7 +19585,7 @@ export class ActionContextTypeResolver extends ResolverBase {
     @FieldResolver(() => [mj_core_schema_server_object_types.ActionContext_])
     async ActionContextsArray(@Root() actioncontexttype_: ActionContextType_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Action Contexts', userPayload);
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionContexts] WHERE [ContextTypeID]=${actioncontexttype_.ID} ` + this.getRowLevelSecurityWhereClause('Action Contexts', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionContexts] WHERE [ContextTypeID]='${actioncontexttype_.ID}' ` + this.getRowLevelSecurityWhereClause('Action Contexts', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Action Contexts', await dataSource.query(sSQL));
         return result;
     }
@@ -19570,7 +19609,7 @@ export class ActionContextTypeResolver extends ResolverBase {
     }
     
     @Mutation(() => ActionContextType_)
-    async DeleteActionContextType(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteActionContextType(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Action Context Types', key, options, dataSource, userPayload, pubSub);
     }
@@ -19586,8 +19625,9 @@ export class ActionResultCode_ {
     @MaxLength(16)
     ID: string;
           
-    @Field(() => Int) 
-    ActionID: number;
+    @Field() 
+    @MaxLength(16)
+    ActionID: string;
           
     @Field() 
     @MaxLength(510)
@@ -19618,8 +19658,8 @@ export class ActionResultCode_ {
 //****************************************************************************
 @InputType()
 export class CreateActionResultCodeInput {
-    @Field(() => Int)
-    ActionID: number;
+    @Field()
+    ActionID: string;
 
     @Field()
     ResultCode: string;
@@ -19640,8 +19680,8 @@ export class UpdateActionResultCodeInput {
     @Field()
     ID: string;
 
-    @Field(() => Int)
-    ActionID: number;
+    @Field()
+    ActionID: string;
 
     @Field()
     ResultCode: string;
@@ -19743,11 +19783,13 @@ export class ActionContext_ {
     @MaxLength(16)
     ID: string;
           
-    @Field(() => Int) 
-    ActionID: number;
+    @Field() 
+    @MaxLength(16)
+    ActionID: string;
           
-    @Field(() => Int) 
-    ContextTypeID: number;
+    @Field({nullable: true}) 
+    @MaxLength(16)
+    ContextTypeID?: string;
           
     @Field({description: 'Status of the action context (Pending, Active, Disabled).'}) 
     @MaxLength(40)
@@ -19765,9 +19807,9 @@ export class ActionContext_ {
     @MaxLength(850)
     Action: string;
           
-    @Field() 
+    @Field({nullable: true}) 
     @MaxLength(510)
-    ContextType: string;
+    ContextType?: string;
         
 }
         
@@ -19776,11 +19818,11 @@ export class ActionContext_ {
 //****************************************************************************
 @InputType()
 export class CreateActionContextInput {
-    @Field(() => Int)
-    ActionID: number;
+    @Field()
+    ActionID: string;
 
-    @Field(() => Int)
-    ContextTypeID: number;
+    @Field({ nullable: true })
+    ContextTypeID?: string;
 
     @Field()
     Status: string;
@@ -19795,11 +19837,11 @@ export class UpdateActionContextInput {
     @Field()
     ID: string;
 
-    @Field(() => Int)
-    ActionID: number;
+    @Field()
+    ActionID: string;
 
-    @Field(() => Int)
-    ContextTypeID: number;
+    @Field({ nullable: true })
+    ContextTypeID?: string;
 
     @Field()
     Status: string;
@@ -19895,8 +19937,9 @@ export class ActionExecutionLog_ {
     @MaxLength(16)
     ID: string;
           
-    @Field(() => Int) 
-    ActionID: number;
+    @Field() 
+    @MaxLength(16)
+    ActionID: string;
           
     @Field({description: 'Timestamp of when the action started execution.'}) 
     @MaxLength(8)
@@ -19913,8 +19956,9 @@ export class ActionExecutionLog_ {
     @MaxLength(510)
     ResultCode?: string;
           
-    @Field(() => Int) 
-    UserID: number;
+    @Field() 
+    @MaxLength(16)
+    UserID: string;
           
     @Field(() => Int, {nullable: true, description: 'Number of days to retain the log; NULL for indefinite retention.'}) 
     RetentionPeriod?: number;
@@ -19942,8 +19986,8 @@ export class ActionExecutionLog_ {
 //****************************************************************************
 @InputType()
 export class CreateActionExecutionLogInput {
-    @Field(() => Int)
-    ActionID: number;
+    @Field()
+    ActionID: string;
 
     @Field()
     StartedAt: Date;
@@ -19957,8 +20001,8 @@ export class CreateActionExecutionLogInput {
     @Field({ nullable: true })
     ResultCode?: string;
 
-    @Field(() => Int)
-    UserID: number;
+    @Field()
+    UserID: string;
 
     @Field(() => Int, { nullable: true })
     RetentionPeriod?: number;
@@ -19973,8 +20017,8 @@ export class UpdateActionExecutionLogInput {
     @Field()
     ID: string;
 
-    @Field(() => Int)
-    ActionID: number;
+    @Field()
+    ActionID: string;
 
     @Field()
     StartedAt: Date;
@@ -19988,8 +20032,8 @@ export class UpdateActionExecutionLogInput {
     @Field({ nullable: true })
     ResultCode?: string;
 
-    @Field(() => Int)
-    UserID: number;
+    @Field()
+    UserID: string;
 
     @Field(() => Int, { nullable: true })
     RetentionPeriod?: number;
@@ -20081,11 +20125,13 @@ export class ActionExecutionLogResolver extends ResolverBase {
 //****************************************************************************
 @ObjectType({ description: 'Tracks the input and output parameters for Actions.' })
 export class ActionParam_ {  
-    @Field(() => Int) 
-    ID: number;
+    @Field() 
+    @MaxLength(16)
+    ID: string;
           
-    @Field(() => Int) 
-    ActionID: number;
+    @Field() 
+    @MaxLength(16)
+    ActionID: string;
           
     @Field() 
     @MaxLength(510)
@@ -20133,8 +20179,8 @@ export class ActionParam_ {
 //****************************************************************************
 @InputType()
 export class CreateActionParamInput {
-    @Field(() => Int)
-    ActionID: number;
+    @Field()
+    ActionID: string;
 
     @Field()
     Name: string;
@@ -20164,11 +20210,11 @@ export class CreateActionParamInput {
 //****************************************************************************
 @InputType()
 export class UpdateActionParamInput {
-    @Field(() => Int)
-    ID: number;
+    @Field()
+    ID: string;
 
-    @Field(() => Int)
-    ActionID: number;
+    @Field()
+    ActionID: string;
 
     @Field()
     Name: string;
@@ -20240,9 +20286,9 @@ export class ActionParamResolver extends ResolverBase {
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => ActionParam_, { nullable: true })
-    async ActionParam(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ActionParam_ | null> {
+    async ActionParam(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ActionParam_ | null> {
         this.CheckUserReadPermissions('Action Params', userPayload);
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionParams] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Action Params', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionParams] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Action Params', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Action Params', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
@@ -20250,7 +20296,7 @@ export class ActionParamResolver extends ResolverBase {
     @FieldResolver(() => [mj_core_schema_server_object_types.EntityActionParam_])
     async EntityActionParamsArray(@Root() actionparam_: ActionParam_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entity Action Params', userPayload);
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityActionParams] WHERE [ActionParamID]=${actionparam_.ID} ` + this.getRowLevelSecurityWhereClause('Entity Action Params', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityActionParams] WHERE [ActionParamID]='${actionparam_.ID}' ` + this.getRowLevelSecurityWhereClause('Entity Action Params', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Entity Action Params', await dataSource.query(sSQL));
         return result;
     }
@@ -20274,7 +20320,7 @@ export class ActionParamResolver extends ResolverBase {
     }
     
     @Mutation(() => ActionParam_)
-    async DeleteActionParam(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteActionParam(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Action Params', key, options, dataSource, userPayload, pubSub);
     }
@@ -20290,8 +20336,9 @@ export class ActionLibrary_ {
     @MaxLength(16)
     ID: string;
           
-    @Field(() => Int) 
-    ActionID: number;
+    @Field() 
+    @MaxLength(16)
+    ActionID: string;
           
     @Field(() => Int) 
     LibraryID: number;
@@ -20322,8 +20369,8 @@ export class ActionLibrary_ {
 //****************************************************************************
 @InputType()
 export class CreateActionLibraryInput {
-    @Field(() => Int)
-    ActionID: number;
+    @Field()
+    ActionID: string;
 
     @Field(() => Int)
     LibraryID: number;
@@ -20341,8 +20388,8 @@ export class UpdateActionLibraryInput {
     @Field()
     ID: string;
 
-    @Field(() => Int)
-    ActionID: number;
+    @Field()
+    ActionID: string;
 
     @Field(() => Int)
     LibraryID: number;
@@ -20630,8 +20677,9 @@ export class ListCategory_ {
     @MaxLength(16)
     ParentID?: string;
           
-    @Field(() => Int) 
-    UserID: number;
+    @Field() 
+    @MaxLength(16)
+    UserID: string;
           
     @Field() 
     @MaxLength(10)
@@ -20663,8 +20711,8 @@ export class CreateListCategoryInput {
     @Field({ nullable: true })
     ParentID?: string;
 
-    @Field(() => Int)
-    UserID: number;
+    @Field()
+    UserID: string;
 }
     
         
@@ -20685,8 +20733,8 @@ export class UpdateListCategoryInput {
     @Field({ nullable: true })
     ParentID?: string;
 
-    @Field(() => Int)
-    UserID: number;
+    @Field()
+    UserID: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -20966,8 +21014,9 @@ export class CommunicationRun_ {
     @Field(() => Int) 
     ID: number;
           
-    @Field(() => Int) 
-    UserID: number;
+    @Field() 
+    @MaxLength(16)
+    UserID: string;
           
     @Field({description: 'The direction of the communication run (Sending or Receiving).'}) 
     @MaxLength(40)
@@ -21013,8 +21062,8 @@ export class CommunicationRun_ {
 //****************************************************************************
 @InputType()
 export class CreateCommunicationRunInput {
-    @Field(() => Int)
-    UserID: number;
+    @Field()
+    UserID: string;
 
     @Field()
     Direction: string;
@@ -21044,8 +21093,8 @@ export class UpdateCommunicationRunInput {
     @Field(() => Int)
     ID: number;
 
-    @Field(() => Int)
-    UserID: number;
+    @Field()
+    UserID: string;
 
     @Field()
     Direction: string;
@@ -21721,8 +21770,9 @@ export class Template_ {
     @Field(() => Int, {nullable: true, description: 'Optional, Category that this template is part of'}) 
     CategoryID?: number;
           
-    @Field(() => Int) 
-    UserID: number;
+    @Field() 
+    @MaxLength(16)
+    UserID: string;
           
     @Field({nullable: true, description: 'Optional, if provided, this template will not be available for use until the specified date. Requires IsActive to be set to 1'}) 
     @MaxLength(8)
@@ -21776,8 +21826,8 @@ export class CreateTemplateInput {
     @Field(() => Int, { nullable: true })
     CategoryID?: number;
 
-    @Field(() => Int)
-    UserID: number;
+    @Field()
+    UserID: string;
 
     @Field({ nullable: true })
     ActiveAt?: Date;
@@ -21810,8 +21860,8 @@ export class UpdateTemplateInput {
     @Field(() => Int, { nullable: true })
     CategoryID?: number;
 
-    @Field(() => Int)
-    UserID: number;
+    @Field()
+    UserID: string;
 
     @Field({ nullable: true })
     ActiveAt?: Date;
@@ -21932,8 +21982,9 @@ export class TemplateCategory_ {
     @Field(() => Int, {nullable: true}) 
     ParentID?: number;
           
-    @Field(() => Int) 
-    UserID: number;
+    @Field() 
+    @MaxLength(16)
+    UserID: string;
           
     @Field() 
     @MaxLength(10)
@@ -21973,8 +22024,8 @@ export class CreateTemplateCategoryInput {
     @Field(() => Int, { nullable: true })
     ParentID?: number;
 
-    @Field(() => Int)
-    UserID: number;
+    @Field()
+    UserID: string;
 }
     
         
@@ -21995,8 +22046,8 @@ export class UpdateTemplateCategoryInput {
     @Field(() => Int, { nullable: true })
     ParentID?: number;
 
-    @Field(() => Int)
-    UserID: number;
+    @Field()
+    UserID: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -22942,8 +22993,9 @@ export class RecommendationRun_ {
     @Field({nullable: true}) 
     Description?: string;
           
-    @Field(() => Int) 
-    RunByUserID: number;
+    @Field() 
+    @MaxLength(16)
+    RunByUserID: string;
           
     @Field() 
     @MaxLength(10)
@@ -22986,8 +23038,8 @@ export class CreateRecommendationRunInput {
     @Field({ nullable: true })
     Description?: string;
 
-    @Field(() => Int)
-    RunByUserID: number;
+    @Field()
+    RunByUserID: string;
 }
     
         
@@ -23014,8 +23066,8 @@ export class UpdateRecommendationRunInput {
     @Field({ nullable: true })
     Description?: string;
 
-    @Field(() => Int)
-    RunByUserID: number;
+    @Field()
+    RunByUserID: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -23566,8 +23618,9 @@ export class RecordChangeReplayRun_ {
     @MaxLength(100)
     Status: string;
           
-    @Field(() => Int) 
-    UserID: number;
+    @Field() 
+    @MaxLength(16)
+    UserID: string;
           
     @Field() 
     @MaxLength(10)
@@ -23600,8 +23653,8 @@ export class CreateRecordChangeReplayRunInput {
     @Field()
     Status: string;
 
-    @Field(() => Int)
-    UserID: number;
+    @Field()
+    UserID: string;
 }
     
         
@@ -23622,8 +23675,8 @@ export class UpdateRecordChangeReplayRunInput {
     @Field()
     Status: string;
 
-    @Field(() => Int)
-    UserID: number;
+    @Field()
+    UserID: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -24010,11 +24063,13 @@ export class EntityActionParam_ {
     @MaxLength(16)
     ID: string;
           
-    @Field(() => Int) 
-    EntityActionID: number;
+    @Field() 
+    @MaxLength(16)
+    EntityActionID: string;
           
-    @Field(() => Int) 
-    ActionParamID: number;
+    @Field() 
+    @MaxLength(16)
+    ActionParamID: string;
           
     @Field({description: 'Type of the value, which can be Static, Entity Object, or Script.'}) 
     @MaxLength(40)
@@ -24045,11 +24100,11 @@ export class EntityActionParam_ {
 //****************************************************************************
 @InputType()
 export class CreateEntityActionParamInput {
-    @Field(() => Int)
-    EntityActionID: number;
+    @Field()
+    EntityActionID: string;
 
-    @Field(() => Int)
-    ActionParamID: number;
+    @Field()
+    ActionParamID: string;
 
     @Field()
     ValueType: string;
@@ -24070,11 +24125,11 @@ export class UpdateEntityActionParamInput {
     @Field()
     ID: string;
 
-    @Field(() => Int)
-    EntityActionID: number;
+    @Field()
+    EntityActionID: string;
 
-    @Field(() => Int)
-    ActionParamID: number;
+    @Field()
+    ActionParamID: string;
 
     @Field()
     ValueType: string;

@@ -557,7 +557,7 @@ GO
 CREATE PROCEDURE [__mj].[spCreateRecordChange_Internal]
     @EntityName nvarchar(100),
     @RecordID NVARCHAR(750),
-	  @UserID int,
+	  @UserID uniqueidentifier,
     @Type nvarchar(20),
     @ChangesJSON nvarchar(MAX),
     @ChangesDescription nvarchar(MAX),
@@ -679,7 +679,7 @@ DECLARE @RunID uniqueidentifier
 DECLARE @Now DATETIME
 SELECT @Now=GETDATE()
 DECLARE @outputTable TABLE (ID uniqueidentifier, UserViewID uniqueidentifier, RunAt DATETIME, RunByUserID INT, UserView NVARCHAR(100), RunByUser NVARCHAR(100))
-DECLARE @UserID INT
+DECLARE @UserID uniqueidentifier
 SELECT @UserID=ID FROM vwUsers WHERE Email=@UserEmail
 INSERT INTO @outputTable
 EXEC spCreateUserViewRun @UserViewID=@UserViewID,@RunAt=@Now,@RunByUserID=@UserID
@@ -1195,7 +1195,7 @@ DROP PROC IF EXISTS [__mj].[spCreateCompanyIntegrationRun]
 GO
 CREATE PROC [__mj].[spCreateCompanyIntegrationRun]
 @CompanyIntegrationID AS INT,
-@RunByUserID AS INT,
+@RunByUserID AS uniqueidentifier,
 @StartedAt AS DATETIMEOFFSET(7) = NULL, 
 @Comments AS NVARCHAR(MAX) = NULL,
 @TotalRecords INT = NULL,
