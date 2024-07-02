@@ -124,20 +124,21 @@ export class EntityPermissionInfo extends BaseInfo{
     ID: string = null
 
     EntityID: string = null
-    RoleName: string = null
+    RoleID: string = null
     CanCreate: boolean = null
     CanRead: boolean = null
     CanUpdate: boolean = null
     CanDelete: boolean = null
-    ReadRLSFilterID: number = null
-    CreateRLSFilterID: number = null
-    UpdateRLSFilterID: number = null
-    DeleteRLSFilterID: number = null
+    ReadRLSFilterID: string = null
+    CreateRLSFilterID: string = null
+    UpdateRLSFilterID: string = null
+    DeleteRLSFilterID: string = null
     __mj_CreatedAt: Date = null
     __mj_UpdatedAt: Date = null
 
     // virtual fields - returned by the database VIEW
     Entity: string = null
+    Role: string = null
     RoleSQLName: string = null
     ReadRLSFilter: string = null
     CreateRLSFilter: string = null
@@ -158,7 +159,7 @@ export class EntityPermissionInfo extends BaseInfo{
     }
 
     public RLSFilter(type: EntityPermissionType): RowLevelSecurityFilterInfo {
-        let fID: number = 0;
+        let fID: string = "";
 
         switch (type) {
             case EntityPermissionType.Read:
@@ -174,7 +175,7 @@ export class EntityPermissionInfo extends BaseInfo{
                 fID = this.DeleteRLSFilterID;
                 break;
         }
-        if (fID > 0) 
+        if (fID && fID.length > 0) 
             return Metadata.Provider.RowLevelSecurityFilters.find(f => f.ID === fID);
     }
 
@@ -740,7 +741,7 @@ export class EntityInfo extends BaseInfo {
 
             for (let j: number = 0; j < this.Permissions.length; j++) {
                 const ep: EntityPermissionInfo = this.Permissions[j];
-                const roleMatch: UserRoleInfo = user.UserRoles.find((r) => r.RoleName.trim().toLowerCase() === ep.RoleName.trim().toLowerCase())
+                const roleMatch: UserRoleInfo = user.UserRoles.find((r) => r.RoleID === ep.RoleID)
                 if (roleMatch) // user has this role
                     permissionList.push(ep)
             }
@@ -774,7 +775,7 @@ export class EntityInfo extends BaseInfo {
     public UserExemptFromRowLevelSecurity(user: UserInfo, type: EntityPermissionType): boolean {
         for (let j: number = 0; j < this.Permissions.length; j++) {
             const ep: EntityPermissionInfo = this.Permissions[j];
-            const roleMatch: UserRoleInfo = user.UserRoles.find((r) => r.RoleName.trim().toLowerCase() === ep.RoleName.trim().toLowerCase())
+            const roleMatch: UserRoleInfo = user.UserRoles.find((r) => r.RoleID === ep.RoleID)
             if (roleMatch) { // user has this role 
                 switch (type) {
                     case EntityPermissionType.Create:
@@ -810,7 +811,7 @@ export class EntityInfo extends BaseInfo {
         const rlsList: RowLevelSecurityFilterInfo[] = [];
         for (let j: number = 0; j < this.Permissions.length; j++) {
             const ep: EntityPermissionInfo = this.Permissions[j];
-            const roleMatch: UserRoleInfo = user.UserRoles.find((r) => r.RoleName.trim().toLowerCase() === ep.RoleName.trim().toLowerCase())
+            const roleMatch: UserRoleInfo = user.UserRoles.find((r) => r.RoleID === ep.RoleID)
             if (roleMatch) { // user has this role
                 let matchObject: RowLevelSecurityFilterInfo = null;
                 switch (type) {
