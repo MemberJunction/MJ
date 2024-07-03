@@ -143,7 +143,7 @@ export class EntityVectorSyncer extends VectorBase {
         }
     }
 
-    protected async GetVectorDatabaseAndEmbeddingClassByEntityDocumentID(entityDocumentID: number, entityID: string, createDocumentIfNotFound: boolean = false): Promise<{embedding: Embeddings, vectorDB: VectorDBBase}> {
+    protected async GetVectorDatabaseAndEmbeddingClassByEntityDocumentID(entityDocumentID: string, entityID: string, createDocumentIfNotFound: boolean = false): Promise<{embedding: Embeddings, vectorDB: VectorDBBase}> {
         let entityDocument: EntityDocumentEntity | null = await this.GetEntityDocument(entityDocumentID) || await this.GetFirstActiveEntityDocumentForEntity(entityID);
         if(!entityDocument){
             if(createDocumentIfNotFound){
@@ -190,7 +190,7 @@ export class EntityVectorSyncer extends VectorBase {
         return {embedding, vectorDB};
     }
 
-    public async GetEntityDocument(EntityDocumentID: number): Promise<EntityDocumentEntity | null> {
+    public async GetEntityDocument(EntityDocumentID: string): Promise<EntityDocumentEntity | null> {
         const cache = EntityDocumentCache.Instance;
         if (!cache.IsLoaded) {
             await cache.Refresh(super.CurrentUser);
@@ -217,7 +217,7 @@ export class EntityVectorSyncer extends VectorBase {
     } 
 
     private async GetOrCreateVectorIndex(entityDocument: EntityDocumentEntity): Promise<VectorIndexEntity> {
-        let vectorIndexEntity: VectorIndexEntity = await super.runViewForSingleValue("Vector Indexes", `VectorDatabaseID = ${entityDocument.VectorDatabaseID} AND EmbeddingModelID = ${entityDocument.AIModelID}`);
+        let vectorIndexEntity: VectorIndexEntity = await super.runViewForSingleValue("Vector Indexes", `VectorDatabaseID = '${entityDocument.VectorDatabaseID}' AND EmbeddingModelID = '${entityDocument.AIModelID}'`);
         if(vectorIndexEntity){
             return vectorIndexEntity;
         }

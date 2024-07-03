@@ -63,7 +63,7 @@ export class PotentialDuplicateRequest {
     /**
     * The ID of the List entity to use
     **/
-    ListID: number;
+    ListID: string;
     /**
      * The Primary Key values of each record
      * we're checking for duplicates
@@ -72,7 +72,7 @@ export class PotentialDuplicateRequest {
     /**
     * The ID of the entity document to use
     **/
-    EntityDocumentID?: number;
+    EntityDocumentID?: string;
     /**
     * The minimum score in order to consider a record a potential duplicate
     **/

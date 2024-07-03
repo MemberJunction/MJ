@@ -31,11 +31,11 @@ export class EntityActionInvocationParams {
     /**
      * If the invocation type is view-oriented, this parameter will be needed
      */
-    public ViewID?: number;
+    public ViewID?: string;
     /**
      * If the invocation type is list-oriented, this parameter will be needed
      */
-    public ListID?: number;
+    public ListID?: string;
 }
 
 

@@ -18,8 +18,8 @@ export class PotentialDuplicateRequestType extends PotentialDuplicateRequest {
   @Field(() => [CompositeKeyInputType])
   RecordIDs: CompositeKey[];
 
-  @Field(() => Int, { nullable: true })
-  EntityDocumentID: number;
+  @Field(() => String, { nullable: true })
+  EntityDocumentID: string;
 
   @Field(() => Int, { nullable: true })
   ProbabilityScore: number;
