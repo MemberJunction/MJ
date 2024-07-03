@@ -59,7 +59,7 @@ export class ApplicationViewComponent extends BaseBrowserComponent implements On
                 // next up we need to find the UserApplication record based on the app and the current user
                 const userAppResult = await rv.RunView<UserApplicationEntity>({
                     EntityName: "User Applications",
-                    ExtraFilter: `UserID=${md.CurrentUser.ID} AND ApplicationID=${this.app.ID.toString()}`,
+                    ExtraFilter: `UserID='${md.CurrentUser.ID}' AND ApplicationID='${this.app.ID.toString()}'`,
                     ResultType: 'entity_object'
                 })
                 if (!userAppResult || userAppResult.Success === false || userAppResult.Results.length === 0)
