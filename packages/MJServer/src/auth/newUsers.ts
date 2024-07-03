@@ -30,12 +30,13 @@ export class NewUserBase {
 
             if (await u.Save()) {
                 // user created, now create however many roles we need to create for this user based on the config settings
-                const ur = <UserRoleEntity>await md.GetEntityObject('User Roles', contextUser);
+                const ur = await md.GetEntityObject<UserRoleEntity>('User Roles', contextUser);
                 let bSuccess: boolean = true;
                 for (const role of configInfo.userHandling.newUserRoles) {
                     ur.NewRecord();
                     ur.UserID = u.ID;
-                    ur.RoleName = role;
+                    const roleID = md.Roles.find(r => r.Name === role)?.ID; 
+                    ur.RoleID = roleID;
                     bSuccess = bSuccess && await ur.Save();
                 }
                 if (!bSuccess) {

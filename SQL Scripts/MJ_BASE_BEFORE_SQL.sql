@@ -634,7 +634,7 @@ INNER JOIN
 INNER JOIN
     [__mj].[Role] AS Role_RoleName
   ON
-    [e].[RoleName] = Role_RoleName.[Name]
+    [e].[RoleID] = Role_RoleName.ID
 LEFT OUTER JOIN
 	[__mj].RowLevelSecurityFilter rlsC
   ON

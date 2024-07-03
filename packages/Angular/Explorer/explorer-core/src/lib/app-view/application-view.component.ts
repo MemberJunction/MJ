@@ -59,7 +59,7 @@ export class ApplicationViewComponent extends BaseBrowserComponent implements On
                 // next up we need to find the UserApplication record based on the app and the current user
                 const userAppResult = await rv.RunView<UserApplicationEntity>({
                     EntityName: "User Applications",
-                    ExtraFilter: `UserID=${md.CurrentUser.ID} AND ApplicationID=${this.app.ID}`,
+                    ExtraFilter: `UserID='${md.CurrentUser.ID}' AND ApplicationID=${this.app.ID}`,
                     ResultType: 'entity_object'
                 })
                 if (!userAppResult || userAppResult.Success === false || userAppResult.Results.length === 0)
@@ -220,10 +220,10 @@ export class ApplicationViewComponent extends BaseBrowserComponent implements On
 
         const md = new Metadata();
         const parentFolderIDFilter: string = this.selectedFolderID ? `ParentID=${this.selectedFolderID}` : 'ParentID IS NULL';
-        const categoryFilter: string = `UserID=${md.CurrentUser.ID} AND EntityID='${this.currentlySelectedAppEntity.ID}' AND ` + parentFolderIDFilter;
+        const categoryFilter: string = `UserID='${md.CurrentUser.ID}' AND EntityID='${this.currentlySelectedAppEntity.ID}' AND ` + parentFolderIDFilter;
         
         const categoryIDFilter: string = this.selectedFolderID ? `CategoryID=${this.selectedFolderID}` : 'CategoryID IS NULL';
-        const userViewFilter: string = `UserID = ${md.CurrentUser.ID} AND EntityID='${this.currentlySelectedAppEntity.ID}' AND ` + categoryIDFilter;
+        const userViewFilter: string = `UserID = '${md.CurrentUser.ID}' AND EntityID='${this.currentlySelectedAppEntity.ID}' AND ` + categoryIDFilter;
 
         await super.LoadData({
             sortItemsAfterLoad: true, 

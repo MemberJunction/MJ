@@ -318,10 +318,10 @@ export class ResolverBase {
       const auditLog = await md.GetEntityObject<AuditLogEntity>('Audit Logs', userInfo); // must pass user context on back end as we're not authenticated the same way as the front end
       auditLog.NewRecord();
       auditLog.UserID = userInfo.ID;
-      auditLog.AuditLogTypeName = auditLogType.Name;
+      auditLog.AuditLogTypeID = auditLogType.ID;
 
       if (authorization) 
-        auditLog.AuthorizationName = authorization.Name;
+        auditLog.AuthorizationID = authorization.ID;
 
       if (status?.trim().toLowerCase() === 'success') 
         auditLog.Status = "Success"

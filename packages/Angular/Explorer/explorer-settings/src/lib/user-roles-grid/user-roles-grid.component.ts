@@ -16,7 +16,7 @@ export class UserRolesGridComponent implements OnInit, OnChanges {
   /**
    * The name of the role we are working with, required if Mode is 'Roles'
    */
-  @Input() RoleName!: string;
+  @Input() RoleID!: string;
     /**
      * The ID of the user we are working with, required if Mode is 'Users'
      */
@@ -37,6 +37,11 @@ export class UserRolesGridComponent implements OnInit, OnChanges {
   constructor(private router: Router) { 
   } 
       
+  public get RoleName(): string {
+    const md = new Metadata();
+    const role = md.Roles.find(r => r.ID === this.RoleID);
+    return role ? role.Name : '';
+  }
   ngOnInit(): void {
     this.Refresh()
   }
@@ -47,8 +52,8 @@ export class UserRolesGridComponent implements OnInit, OnChanges {
   }
   async Refresh() {  
     if (this.Mode === 'Roles') 
-        if (!this.RoleName || this.RoleName.length === 0 || !this.RoleRecord) 
-            throw new Error("RoleName and RoleRecord are required when Mode is 'Roles'")
+        if (!this.RoleID || this.RoleID.length === 0 || !this.RoleRecord) 
+            throw new Error("RoleID and RoleRecord are required when Mode is 'Roles'")
     if (this.Mode === 'Users')
         if (!this.UserID || !this.UserRecord) 
             throw new Error("UserID and UserRecord are required when Mode is 'Users'")
@@ -57,7 +62,7 @@ export class UserRolesGridComponent implements OnInit, OnChanges {
     this.isLoading = true
 
     const rv = new RunView();
-    const filter: string = this.Mode === 'Roles' ? `RoleName='${this.RoleName}'` : `UserID=${this.UserID}`;
+    const filter: string = this.Mode === 'Roles' ? `RoleID='${this.RoleID}'` : `UserID='${this.UserID}'`;
     const result = await rv.RunView({
         EntityName: 'User Roles',
         ExtraFilter: filter,
@@ -73,7 +78,7 @@ export class UserRolesGridComponent implements OnInit, OnChanges {
             ur.Selected = true // flip this on for all records that come from the DB
             ur.SavedUserID = ur.UserID; // stash this in an extra property so we can later set it if we have a delete operation
             ur.SavedUserName = ur.User; // stash this in an extra property so we can later set it if we have a delete operation
-            ur.SavedRoleName = ur.RoleName; // stash this in an extra property so we can later set it if we have a delete operation
+            ur.SavedRoleID = ur.RoleID; // stash this in an extra property so we can later set it if we have a delete operation
         }); 
 
         if (this.Mode === 'Roles') {
@@ -89,8 +94,8 @@ export class UserRolesGridComponent implements OnInit, OnChanges {
                 for (const u of usersNotInRole) {
                     const ur = await md.GetEntityObject<UserRoleEntity_Ext>('User Roles')
                     ur.NewRecord();
-                    ur.RoleName = this.RoleName;
-                    ur.SavedRoleName = this.RoleName; // stash this in an extra property so we can later set it if we have a delete operation
+                    ur.RoleID = this.RoleID;
+                    ur.SavedRoleID = this.RoleID; // stash this in an extra property so we can later set it if we have a delete operation
                     ur.UserID = u.ID;
                     ur.Set('User', u.Name); // use weak typing to get around the readonly property
                     ur.SavedUserName = u.Name; // stash this in an extra property so we can later set it if we have a delete operation
@@ -105,21 +110,21 @@ export class UserRolesGridComponent implements OnInit, OnChanges {
         else {
             // for the mode of Users, we want to bring in all of the possible roles and then add any that are not in the existingUserRoles array
             const roles = md.Roles;
-            const rolesNotInUser = roles.filter(r => !existingUserRoles.some(p => p.RoleName === r.Name));
+            const rolesNotInUser = roles.filter(r => !existingUserRoles.some(p => p.RoleID === r.ID));
             for (const r of rolesNotInUser) {
                 const ur = await md.GetEntityObject<UserRoleEntity_Ext>('User Roles')
                 ur.NewRecord();
-                ur.RoleName = r.Name;
+                ur.RoleID = r.ID;
                 ur.UserID = this.UserID;
                 ur.Set('User', this.UserRecord!.Name); // use weak typing to get around the readonly property
                 ur.SavedUserName = this.UserRecord!.Name; // stash this in an extra property so we can later set it if we have a delete operation
                 ur.SavedUserID = this.UserID; // stash this in an extra property so we can later set it if we have a delete operation
-                ur.SavedRoleName = r.Name; // stash this in an extra property so we can later set it if we have a delete operation
+                ur.SavedRoleID = r.ID; // stash this in an extra property so we can later set it if we have a delete operation
                 ur.Selected = false;
                 existingUserRoles.push(ur);
             }            
             // finally sort the array
-            this.userRoles = existingUserRoles.sort((a, b) => a.RoleName!.localeCompare(b.RoleName!));
+            this.userRoles = existingUserRoles;
         }
     }
     else {
@@ -128,6 +133,12 @@ export class UserRolesGridComponent implements OnInit, OnChanges {
     this.isLoading = false
   }
  
+  public getRoleName(roleID: string): string {
+    const md = new Metadata();
+    const role = md.Roles.find(r => r.ID === roleID);
+    return role ? role.Name : '';
+  }
+
   public async saveUserRoles() {
     // iterate through each permisison and for the ones that are dirty, add to transaction group then commit at once
     const md = new Metadata();
@@ -154,7 +165,7 @@ export class UserRolesGridComponent implements OnInit, OnChanges {
           if (ur.User === null) {
             ur.Set('User', ur.SavedUserName); // get around the read-only property
             ur.UserID = ur.SavedUserID
-            ur.RoleName = this.Mode === 'Roles' ? this.RoleName : ur.SavedRoleName;
+            ur.RoleID = this.Mode === 'Roles' ? this.RoleID : ur.SavedRoleID;
           }
         })
       }

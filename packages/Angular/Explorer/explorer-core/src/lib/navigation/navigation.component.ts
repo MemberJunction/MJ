@@ -393,7 +393,7 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
     const rv = new RunView();
     const workspaceParams: RunViewParams = {
       EntityName: "Workspaces",
-      ExtraFilter: `UserID=${md.CurrentUser.ID}`,
+      ExtraFilter: `UserID='${md.CurrentUser.ID}'`,
       OrderBy: "__mj_UpdatedAt DESC", // by default get the workspace that was most recently updated
       ResultType: "entity_object" /*we want entity objects back so that we can modify them as needed*/
     }
@@ -1106,7 +1106,7 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
     this.drawerItems.push(drawerItem);
   }
 
-  protected async loadResourceType(key: string, resourceType: string, path: string, currentUserID: number) {
+  protected async loadResourceType(key: string, resourceType: string, path: string, currentUserID: string) {
     const rt = this.sharedService.ResourceTypeByName(resourceType)
     if (rt) {
       const drawerItem = {

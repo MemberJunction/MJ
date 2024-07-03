@@ -47,14 +47,13 @@ export class VectorBase {
         }).join("\n OR ");
     }
 
-    protected getAIModel(id?: number): AIModelEntityExtended {
-        /*elim this hardcoding by adding virtual field for Type to AI Models entity*/
+    protected getAIModel(id?: string): AIModelEntityExtended {
         let model: AIModelEntityExtended;
         if(id){
-            model = AIEngine.Models.find(m => m.AIModelTypeID === 3 && m.ID === id);
+            model = AIEngine.Models.find(m => m.AIModelType === "Embeddings" && m.ID === id);
         }
         else{
-            model = AIEngine.Models.find(m => m.AIModelTypeID === 3);
+            model = AIEngine.Models.find(m => m.AIModelType === "Embeddings");
         }
 
         if(!model){

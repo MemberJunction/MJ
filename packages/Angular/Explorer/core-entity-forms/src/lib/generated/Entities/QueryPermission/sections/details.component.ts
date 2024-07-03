@@ -21,7 +21,7 @@ import { QueryPermissionEntity } from '@memberjunction/core-entities';
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="RoleName"
+            FieldName="RoleID"
             Type="textbox"
             [EditMode]="EditMode"
             LinkType="Record"

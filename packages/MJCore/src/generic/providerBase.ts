@@ -92,9 +92,9 @@ export abstract class ProviderBase implements IMetadataProvider {
     public abstract GetEntityRecordName(entityName: string, compositeKey: CompositeKey): Promise<string>;
     public abstract GetEntityRecordNames(info: EntityRecordNameInput[]): Promise<EntityRecordNameResult[]>;
 
-    public abstract GetRecordFavoriteStatus(userId: number, entityName: string, CompositeKey: CompositeKey): Promise<boolean>;
+    public abstract GetRecordFavoriteStatus(userId: string, entityName: string, CompositeKey: CompositeKey): Promise<boolean>;
 
-    public abstract SetRecordFavoriteStatus(userId: number, entityName: string, CompositeKey: CompositeKey, isFavorite: boolean, contextUser: UserInfo): Promise<void>;
+    public abstract SetRecordFavoriteStatus(userId: string, entityName: string, CompositeKey: CompositeKey, isFavorite: boolean, contextUser: UserInfo): Promise<void>;
     /******** END - ABSTRACT SECTION ****************************************************************** */
 
 
@@ -581,7 +581,7 @@ export abstract class ProviderBase implements IMetadataProvider {
 
             // combine the entityupdate dates with a single top level entry for the dataset itself
             ret.push({
-                ID: -1,
+                ID: "",
                 Type: 'All Entity Metadata',
                 UpdatedAt: d.LatestUpdateDate
             })

@@ -21,7 +21,7 @@ import { ActionAuthorizationEntity } from '@memberjunction/core-entities';
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="AuthorizationName"
+            FieldName="AuthorizationID"
             Type="textbox"
             [EditMode]="EditMode"
             LinkType="Record"

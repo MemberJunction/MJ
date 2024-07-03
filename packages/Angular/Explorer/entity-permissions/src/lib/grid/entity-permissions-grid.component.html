@@ -18,7 +18,7 @@
                 <td class="permission-left-col" (click)="flipRow(permission)">
                     @if(this.Mode === 'Entity') {
                         <span>
-                            {{ permission.RoleName }}
+                            {{ getRoleName(permission.RoleID) }}
                         </span>    
                     }
                     @else if(this.Mode === 'Role') {

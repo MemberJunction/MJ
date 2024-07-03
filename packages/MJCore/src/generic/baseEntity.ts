@@ -259,8 +259,8 @@ export class DataObjectParams {
 
 export class BaseEntityAIActionParams {
     name: string
-    actionId: number
-    modelId: number
+    actionId: string
+    modelId: string
     systemPrompt: string
     userMessage: string
     result: any

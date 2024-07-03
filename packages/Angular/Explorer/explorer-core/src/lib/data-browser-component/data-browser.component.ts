@@ -35,7 +35,7 @@ export class DataBrowserComponent {
     const userApps = await rv.RunView<UserApplicationEntity>({
       EntityName: 'User Applications',
       ResultType: 'entity_object',
-      ExtraFilter: `UserID = ${new Metadata().CurrentUser.ID}`,
+      ExtraFilter: `UserID = '${new Metadata().CurrentUser.ID}'`,
       OrderBy: 'Sequence'
     })
     if (userApps && userApps.Success) {
@@ -75,7 +75,7 @@ export class DataBrowserComponent {
       const rv = new RunView();
       const userApps = await rv.RunView<UserApplicationEntity>({
         EntityName: 'User Applications',
-        ExtraFilter: `UserID=${md.CurrentUser.ID}`,
+        ExtraFilter: `UserID='${md.CurrentUser.ID}'`,
         ResultType: 'entity_object',
         OrderBy: 'Sequence',
       });

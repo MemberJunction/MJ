@@ -1,6 +1,6 @@
 import { DataSource } from "typeorm";
 import { configInfo, mj_core_schema } from '../Config/config';
-import { CodeNameFromString, EntityInfo, ExtractActualDefaultValue, LogError, LogStatus, Metadata, SeverityType } from "@memberjunction/core";
+import { CodeNameFromString, EntityFieldInfo, EntityInfo, ExtractActualDefaultValue, LogError, LogStatus, Metadata, SeverityType } from "@memberjunction/core";
 import { logError, logMessage, logStatus, logWarning } from "../Misc/logging";
 import { SQLUtilityBase } from "./sql";
 import { AdvancedGeneration, EntityDescriptionResult, EntityNameResult } from "../Misc/advanced_generation";
@@ -28,36 +28,50 @@ export class ManageMetadataBase {
       const excludeSchemas = configInfo.excludeSchemas ? configInfo.excludeSchemas : [];
    
       let bSuccess = true;
+      let start = new Date();
+      logStatus('   Creating new entities...');
       if (! await this.createNewEntities(ds)) {
-         logError('Error creating new entities');
+         logError('   Error creating new entities');
          bSuccess = false;
-      }  
+      }
+      logStatus(`    > Created new entities in ${(new Date().getTime() - start.getTime()) / 1000} seconds`);
+      start = new Date();  
+      logStatus('   Updating existing entities...');
       if (! await this.updateExistingEntitiesFromSchema(ds, excludeSchemas)) {
-         logError('Error updating existing entities');
+         logError('   Error updating existing entities');
          bSuccess = false;
       }  
+      logStatus(`    > Updated existing entities in ${(new Date().getTime() - start.getTime()) / 1000} seconds`);
+      start = new Date();
+      logStatus('   Recompiling base views...');
       const sqlUtility = MJGlobal.Instance.ClassFactory.CreateInstance<SQLUtilityBase>(SQLUtilityBase);
       if (! await sqlUtility.recompileAllBaseViews(ds, excludeSchemas, true)) {
-         logMessage('Warning: Non-Fatal error recompiling base views', SeverityType.Warning, false);
+         logMessage('   Warning: Non-Fatal error recompiling base views', SeverityType.Warning, false);
          // many times the former versions of base views will NOT succesfully recompile, so don't consider that scenario to be a 
          // failure for this entire function
       }         
-   
+      logStatus(`    > Recompiled base views in ${(new Date().getTime() - start.getTime()) / 1000} seconds`);
+      start = new Date();
+      logStatus('   Managing entity fields...');
       if (! await this.manageEntityFields(ds, excludeSchemas, false)) {
-         logError('Error managing entity fields');
+         logError('   Error managing entity fields');
          bSuccess = false;
       }
+      logStatus(`    > Managed entity fields in ${(new Date().getTime() - start.getTime()) / 1000} seconds`);
+      start = new Date();
+      logStatus('   Managing entity relationships...');
       if (! await this.manageEntityRelationships(ds, excludeSchemas, md)) {
-         logError('Error managing entity relationships');
+         logError('   Error managing entity relationships');
          bSuccess = false;
       }
+      logStatus(`    > Managed entity relationships in ${(new Date().getTime() - start.getTime()) / 1000} seconds`);
    
       if (ManageMetadataBase.newEntityList.length > 0) {
          await this.generateNewEntityDescriptions(ds, md); // don't pass excludeSchemas becuase by definition this is the NEW entities we created
       }
    
       if (! await this.manageVirtualEntities(ds)) {
-         logError('Error managing virtual entities');
+         logError('   Error managing virtual entities');
          bSuccess = false;
       }
    
@@ -264,7 +278,7 @@ export class ManageMetadataBase {
             logError (`Error ensuring ${EntityInfo.CreatedAtFieldName}, ${EntityInfo.UpdatedAtFieldName} and ${EntityInfo.DeletedAtFieldName} fields exist`);
             bSuccess = false;
          }
-         logStatus(`   Ensured ${EntityInfo.CreatedAtFieldName}/${EntityInfo.UpdatedAtFieldName}/${EntityInfo.DeletedAtFieldName} fields exist in ${(new Date().getTime() - startTime.getTime()) / 1000} seconds`);
+         logStatus(`      Ensured ${EntityInfo.CreatedAtFieldName}/${EntityInfo.UpdatedAtFieldName}/${EntityInfo.DeletedAtFieldName} fields exist in ${(new Date().getTime() - startTime.getTime()) / 1000} seconds`);
       } 
 
       const step1StartTime: Date = new Date();
@@ -272,44 +286,44 @@ export class ManageMetadataBase {
          logError ('Error deleting unneeded entity fields');
          bSuccess = false;
       }
-      logStatus(`   Deleted unneeded entity fields in ${(new Date().getTime() - step1StartTime.getTime()) / 1000} seconds`);
+      logStatus(`      Deleted unneeded entity fields in ${(new Date().getTime() - step1StartTime.getTime()) / 1000} seconds`);
    
       const step2StartTime: Date = new Date();
       if (! await this.updateExistingEntityFieldsFromSchema(ds, excludeSchemas)) {
          logError ('Error updating existing entity fields from schema')
          bSuccess = false;
       }
-      logStatus(`   Updated existing entity fields from schema in ${(new Date().getTime() - step2StartTime.getTime()) / 1000} seconds`);
+      logStatus(`      Updated existing entity fields from schema in ${(new Date().getTime() - step2StartTime.getTime()) / 1000} seconds`);
    
       const step3StartTime: Date = new Date();
       if (! await this.createNewEntityFieldsFromSchema(ds)) { // has its own internal filtering for exclude schema/table so don't pass in
          logError ('Error creating new entity fields from schema')
          bSuccess = false;
       }
-      logStatus(`   Created new entity fields from schema in ${(new Date().getTime() - step3StartTime.getTime()) / 1000} seconds`);
+      logStatus(`      Created new entity fields from schema in ${(new Date().getTime() - step3StartTime.getTime()) / 1000} seconds`);
    
       const step4StartTime: Date = new Date();
       if (! await this.setDefaultColumnWidthWhereNeeded(ds, excludeSchemas)) {
          logError ('Error setting default column width where needed')
          bSuccess = false;
       }
-      logStatus(`   Set default column width where needed in ${(new Date().getTime() - step4StartTime.getTime()) / 1000} seconds`);
+      logStatus(`      Set default column width where needed in ${(new Date().getTime() - step4StartTime.getTime()) / 1000} seconds`);
    
       const step5StartTime: Date = new Date();
       if (! await this.updateEntityFieldDisplayNameWhereNull(ds, excludeSchemas)) {
          logError('Error updating entity field display name where null');
          bSuccess = false;
       }
-      logStatus(`   Updated entity field display name where null in ${(new Date().getTime() - step5StartTime.getTime()) / 1000} seconds`);
+      logStatus(`      Updated entity field display name where null in ${(new Date().getTime() - step5StartTime.getTime()) / 1000} seconds`);
    
       const step6StartTime: Date = new Date();
       if (! await this.manageEntityFieldValues(ds, excludeSchemas)) {
          logError('Error managing entity field values');
          bSuccess = false;
       }
-      logStatus(`   Managed entity field values in ${(new Date().getTime() - step6StartTime.getTime()) / 1000} seconds`);
+      logStatus(`      Managed entity field values in ${(new Date().getTime() - step6StartTime.getTime()) / 1000} seconds`);
    
-      logStatus(`   Total time to manage entity fields: ${(new Date().getTime() - startTime.getTime()) / 1000} seconds`);
+      logStatus(`      Total time to manage entity fields: ${(new Date().getTime() - startTime.getTime()) / 1000} seconds`);
    
       return bSuccess;
    }
@@ -643,7 +657,10 @@ export class ManageMetadataBase {
       sf.AllowsNull,
       sf.DefaultValue,
       sf.AutoIncrement,
-      IIF(sf.IsVirtual = 1, 0, IIF(sf.FieldName = '${EntityInfo.CreatedAtFieldName}' OR sf.FieldName = '${EntityInfo.UpdatedAtFieldName}' OR sf.FieldName = 'ID', 0, 1)) AllowUpdateAPI,
+      IIF(sf.IsVirtual = 1, 0, IIF(sf.FieldName = '${EntityInfo.CreatedAtFieldName}' OR 
+                                   sf.FieldName = '${EntityInfo.UpdatedAtFieldName}' OR 
+                                   sf.FieldName = '${EntityInfo.DeletedAtFieldName}' OR 
+                                   pk.ColumnName IS NOT NULL, 0, 1)) AllowUpdateAPI,
       sf.IsVirtual,
       e.RelationshipDefaultDisplayType,
       re.ID RelatedEntityID,
@@ -697,7 +714,7 @@ export class ManageMetadataBase {
    SELECT 
       * 
    FROM 
-      NumberedRows WHERE rn = 1 -- if someone has two foreign keys with same to/from table and field name this makes sure we only get the field info ONCE 
+      NumberedRows -- REMOVED - Need all fkey fields WHERE rn = 1 -- if someone has two foreign keys with same to/from table and field name this makes sure we only get the field info ONCE 
    ORDER BY EntityID, Sequence`
       return sSQL;
    }
@@ -718,10 +735,13 @@ export class ManageMetadataBase {
          case EntityInfo.CreatedAtFieldName.trim().toLowerCase():
             fieldDisplayName = "Created At";
             break;
-         case EntityInfo.UpdatedAtFieldName.trim().toLowerCase():
-            fieldDisplayName = "Updated At";
-            break;
-         default:
+            case EntityInfo.UpdatedAtFieldName.trim().toLowerCase():
+               fieldDisplayName = "Updated At";
+               break;
+            case EntityInfo.DeletedAtFieldName.trim().toLowerCase():
+               fieldDisplayName = "Deleted At";
+               break;
+            default:
             fieldDisplayName = this.convertCamelCaseToHaveSpaces(n.FieldName).trim();
             break;
       }
@@ -755,7 +775,7 @@ export class ManageMetadataBase {
       )
       VALUES
       (
-         ${n.EntityID},
+         '${n.EntityID}',
          ${n.Sequence},
          '${n.FieldName}',
          '${fieldDisplayName}',
@@ -769,7 +789,7 @@ export class ManageMetadataBase {
          ${n.AutoIncrement ? 1 : 0},
          ${n.AllowUpdateAPI ? 1 : 0},
          ${n.IsVirtual ? 1 : 0},
-         ${n.RelatedEntityID},
+         ${n.RelatedEntityID && n.RelatedEntityID.length > 0 ? `'${n.RelatedEntityID}'` : 'NULL'},
          ${n.RelatedEntityFieldName && n.RelatedEntityFieldName.length > 0 ? `'${n.RelatedEntityFieldName}'` : 'NULL'},
          ${n.IsNameField !== null ? n.IsNameField : 0},
          ${n.FieldName === 'ID' || n.IsNameField ? 1 : 0},
@@ -817,7 +837,7 @@ export class ManageMetadataBase {
             // wrap in a transaction so we get all of it or none of it
             for (let i = 0; i < newEntityFields.length; ++i) {
                const n = newEntityFields[i];
-               if (n.EntityID !== null && n.EntityID !== undefined && n.EntityID > 0) {
+               if (n.EntityID !== null && n.EntityID !== undefined && n.EntityID.length > 0) {
                   // need to check for null entity id = that is because the above query can return candidate Entity Fields but the entities may not have been created if the entities 
                   // that would have been created violate rules - such as not having an ID column, etc.
                   const sSQLInsert = this.getPendingEntityFieldINSERTSQL(n);
@@ -862,7 +882,7 @@ export class ManageMetadataBase {
          return true;
       }
       catch (e) {
-         logError(e);
+         logError(e);   
          return false;
       }
    }
@@ -896,6 +916,10 @@ export class ManageMetadataBase {
          const filter = excludeSchemas && excludeSchemas.length > 0 ? ` WHERE SchemaName NOT IN (${excludeSchemas.map(s => `'${s}'`).join(',')})` : '';
          const sSQL = `SELECT * FROM [${mj_core_schema()}].vwEntityFieldsWithCheckConstraints${filter}`
          const result = await ds.query(sSQL);
+
+         const efvSQL = `SELECT * FROM [${mj_core_schema()}].EntityFieldValue`;
+         const allEntityFieldValues = await ds.query(efvSQL);
+
          // now, for each of the constraints we get back here, loop through and evaluate if they're simple and if they're simple, parse and sync with entity field values for that field
          for (const r of result) {
             if (r.ConstraintDefinition && r.ConstraintDefinition.length > 0) {
@@ -905,7 +929,7 @@ export class ManageMetadataBase {
                   parsedValues.reverse();
 
                   // we have parsed values from the check constraint, so sync them with the entity field values
-                  await this.syncEntityFieldValues(ds, r.EntityFieldID, parsedValues);
+                  await this.syncEntityFieldValues(ds, r.EntityFieldID, parsedValues, allEntityFieldValues);
                   
                   // finally, make sure the ValueListType column within the EntityField table is set to "List" because for check constraints we only allow the values specified in the list.
                   await ds.query(`UPDATE [${mj_core_schema()}].EntityField SET ValueListType='List' WHERE ID='${r.EntityFieldID}'`)
@@ -922,11 +946,10 @@ export class ManageMetadataBase {
       }
    }
    
-   protected async syncEntityFieldValues(ds: DataSource, entityFieldID: number, possibleValues: string[]): Promise<boolean> {
+   protected async syncEntityFieldValues(ds: DataSource, entityFieldID: number, possibleValues: string[], allEntityFieldValues: any): Promise<boolean> {
       try {
          // first, get a list of all of the existing entity field values for the field already in the database
-         const sSQL = `SELECT * FROM [${mj_core_schema()}].EntityFieldValue WHERE EntityFieldID= '${entityFieldID}'`;
-         const existingValues = await ds.query(sSQL);
+         const existingValues = allEntityFieldValues.filter(efv => efv.EntityFieldID === entityFieldID); 
          // now, loop through the possible values and add any that are not already in the database
    
          // Step 1: for any existing value that is NOT in the list of possible Values, delete it
@@ -959,8 +982,8 @@ export class ManageMetadataBase {
             let numUpdated = 0;
             for (const v of possibleValues) {
                const ev = existingValues.find(ev => ev.Value === v);
-               if (ev) {
-                  // update the sequence to match the order in the possible values list
+               if (ev && ev.Sequence !== 1 + possibleValues.indexOf(v)) {
+                  // update the sequence to match the order in the possible values list, if it doesn't already match
                   const sSQLUpdate = `UPDATE [${mj_core_schema()}].EntityFieldValue SET Sequence=${1 + possibleValues.indexOf(v)} WHERE ID='${ev.ID}'`;
                   await ds.query(sSQLUpdate);
                   numUpdated++;

@@ -38,7 +38,7 @@ export class ProviderConfigDataBase {
 }
 
 export class MetadataInfo {
-    ID: number
+    ID: string
     Type: string
     UpdatedAt: Date
 }
@@ -266,9 +266,9 @@ export interface IMetadataProvider {
      */
     GetEntityRecordNames(info: EntityRecordNameInput[]): Promise<EntityRecordNameResult[]>
 
-    GetRecordFavoriteStatus(userId: number, entityName: string, CompositeKey: CompositeKey): Promise<boolean>
+    GetRecordFavoriteStatus(userId: string, entityName: string, CompositeKey: CompositeKey): Promise<boolean>
 
-    SetRecordFavoriteStatus(userId: number, entityName: string, CompositeKey: CompositeKey, isFavorite: boolean, contextUser: UserInfo): Promise<void>
+    SetRecordFavoriteStatus(userId: string, entityName: string, CompositeKey: CompositeKey, isFavorite: boolean, contextUser: UserInfo): Promise<void>
 
     CreateTransactionGroup(): Promise<TransactionGroupBase>
 
@@ -464,6 +464,6 @@ export type DatasetStatusResultType = {
 
 export type DatasetStatusEntityUpdateDateType = {
     EntityName: string;
-    EntityID: number;
+    EntityID: string;
     UpdateDate: Date;
 }   

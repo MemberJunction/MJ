@@ -125,7 +125,7 @@ export class SingleListDetailComponent implements OnInit {
 
         const runViewResult: RunViewResult = await rv.RunView<UserViewEntity>({
             EntityName: "User Views",
-            ExtraFilter: `UserID = ${md.CurrentUser.ID} AND EntityID = ${this.listRecord.EntityID}`,
+            ExtraFilter: `UserID = '${md.CurrentUser.ID}' AND EntityID = '${this.listRecord.EntityID}'`,
             ResultType: 'entity_object'
         }, md.CurrentUser);
 
