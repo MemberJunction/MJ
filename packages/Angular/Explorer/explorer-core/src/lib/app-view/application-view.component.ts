@@ -176,13 +176,6 @@ export class ApplicationViewComponent extends BaseBrowserComponent implements On
           const tg = await md.CreateTransactionGroup();
           userAppEntitiesToSave.forEach(toSave => {
             toSave.TransactionGroup = tg;
-            if(!toSave.EntityID){
-                console.log("no enttiy ID for", toSave.ID, toSave.UserApplicationID);
-            }
-            if(toSave.Sequence === 0){
-                console.log(toSave);
-                console.log(toSave.Sequence, toSave.UserApplicationID, toSave.EntityID);
-            }
             toSave.Save(); // no await since we are in a transaction group
           })
           userAppEntitiesToDelete.forEach(d => {

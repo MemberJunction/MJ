@@ -713,7 +713,6 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
       else
         throw new Error("Invalid configuration, we need to receive either a ViewEntity, ViewID, ViewName, or EntityName and ExtraFilter in order to run a view")
 
-      console.log(params);
       const rvResult = await rv.RunView(params);
       if (!rvResult.Success) {
         // it failed

@@ -263,7 +263,6 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 }
 
                 const fieldList = this.getViewRunTimeFieldList(e, viewEntity, params, dynamicView);
-                console.log(params.EntityName, fieldList, paramType);
                 const query = gql`
                     query RunViewQuery ($input: ${paramType}!) {
                     ${qName}(input: $input) {
@@ -281,7 +280,6 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
 
                 const viewData = await GraphQLDataProvider.ExecuteGQL(query, {input: innerParams} );
                 if (viewData && viewData[qName]) {
-                    console.log("we have view data");
                     // now, if we have any results in viewData that are for the CodeName, we need to convert them to the Name
                     // so that the caller gets back what they expect
                     const results = viewData[qName].Results;
