@@ -72,6 +72,13 @@ import { CompanyIntegrationRunEntity } from '@memberjunction/core-entities';
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
+            FieldName="ID_"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
             FieldName="RunByUser"
             Type="textbox"
             [EditMode]="EditMode"
