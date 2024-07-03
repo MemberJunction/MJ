@@ -25,7 +25,7 @@ export type RecordChangeStatus = typeof RecordChangeStatus[keyof typeof RecordCh
 export class RecordChange extends BaseInfo {
     ID: string = null
 
-    EntityID: number = null
+    EntityID: string = null
     RecordID: any = null
     ChangedAt: Date = null
     ChangesJSON: string = null

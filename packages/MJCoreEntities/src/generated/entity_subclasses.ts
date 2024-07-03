@@ -6853,6 +6853,16 @@ import { RegisterClass } from "@memberjunction/global";
             return this.Get('User');
         }
         
+        /**
+        * * Field Name: Role
+        * * Display Name: Role
+        * * SQL Data Type: nvarchar(50)
+        * * Default Value: null
+        */
+        get Role(): string {  
+            return this.Get('Role');
+        }
+        
 
     }
         

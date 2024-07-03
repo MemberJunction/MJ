@@ -35,7 +35,7 @@ export class SingleUserComponent implements OnInit {
         await this.UserRecord.Load(this.UserID);      
         this.UserViewsParams = {
             EntityName: 'User Views',
-            ExtraFilter: `UserID = ${this.UserID}`,
+            ExtraFilter: `UserID = '${this.UserID}'`,
         };
     }
   }

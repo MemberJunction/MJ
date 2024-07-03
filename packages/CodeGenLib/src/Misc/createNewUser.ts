@@ -40,10 +40,11 @@ export class CreateNewUserBase {
                             // save was successful, so we can create the User Roles
                             for (let i = 0; i < newUserSetup.Roles.length; i++) {
                                 const roleName = newUserSetup.Roles[i];
+                                const roleID = md.Roles.find(r => r.Name === roleName)?.ID;
                                 const userRole = <UserRoleEntity>await md.GetEntityObject('User Roles', currentUser);
                                 userRole.NewRecord();
                                 userRole.UserID = user.ID;
-                                userRole.RoleName = roleName;
+                                userRole.RoleID = roleID;
                                 if (await userRole.Save()) {
                                     logStatus("   Created User Role: " + roleName);
                                 }

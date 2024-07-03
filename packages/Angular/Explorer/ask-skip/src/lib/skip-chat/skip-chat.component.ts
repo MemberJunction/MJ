@@ -329,7 +329,7 @@ export class SkipChatComponent implements OnInit, AfterViewInit, AfterViewChecke
   
       const result = await rv.RunView({
         EntityName: 'Conversations',
-        ExtraFilter: 'UserID=' + md.CurrentUser.ID,
+        ExtraFilter: `UserID='${md.CurrentUser.ID}'`,
         OrderBy: '__mj_CreatedAt DESC' // get in reverse order so we have latest on top
       })
       if (result && result.Success) {

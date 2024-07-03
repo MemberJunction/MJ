@@ -92,8 +92,8 @@ export class ExpansionPanelComponent {
     private async getFoldersForTreeNode(entityID: string, selectedFolderID: string | null): Promise<TreeItem[]> {
         const md = new Metadata();
 
-        const categoryIDFilter: string = selectedFolderID ? `ParentID=${selectedFolderID}` : 'ParentID IS NULL';
-        const userViewFilter: string = `EntityID = ${entityID} AND ` + categoryIDFilter;
+        const categoryIDFilter: string = selectedFolderID ? `ParentID='${selectedFolderID}'` : 'ParentID IS NULL';
+        const userViewFilter: string = `EntityID = '${entityID}' AND ` + categoryIDFilter;
 
         const viewResults: UserViewCategoryEntity[] = await this.RunView('User View Categories', userViewFilter);
         return viewResults.map((result: UserViewCategoryEntity) => {
@@ -109,8 +109,8 @@ export class ExpansionPanelComponent {
     private async getUserViewsForTreeNode(entityID: string, selectedFolderID: string | null): Promise<TreeItem[]> {
         const md = new Metadata();
 
-        const categoryIDFilter: string = selectedFolderID ? `CategoryID=${selectedFolderID}` : 'CategoryID IS NULL';
-        const userViewFilter: string = `UserID = ${md.CurrentUser.ID} AND EntityID = ${entityID} AND ` + categoryIDFilter;
+        const categoryIDFilter: string = selectedFolderID ? `CategoryID='${selectedFolderID}'` : 'CategoryID IS NULL';
+        const userViewFilter: string = `UserID = '${md.CurrentUser.ID}' AND EntityID = '${entityID}' AND ` + categoryIDFilter;
 
         const viewResults: UserViewEntity[] = await this.RunView('User Views', userViewFilter);
         return viewResults.map((result: UserViewEntity) => {
