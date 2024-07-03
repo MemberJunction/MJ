@@ -377,7 +377,11 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 // Now: include the fields that are part of the view definition
                 v.Columns.forEach(c => {
                     if (c.hidden === false && !fieldList.find(item => item.trim().toLowerCase() === c.EntityField?.Name.trim().toLowerCase())) { // don't include hidden fields and don't include the pkey field again
-                        if (c.EntityField.CodeName.trim().toLowerCase().startsWith('__mj_'))
+                        if (!c.EntityField) {
+                            // this can happen if a field was previously included in a view, but is no longer part of the entity
+                            // simply don't include it in the field list
+                        }
+                        else if (c.EntityField.CodeName.trim().toLowerCase().startsWith('__mj_'))
                             fieldList.push(c.EntityField.CodeName.replace('__mj_', '_mj__'));
                         else
                             fieldList.push(c.EntityField.CodeName)
@@ -1003,7 +1007,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         return new GraphQLTransactionGroup();
     }
 
-    public async GetRecordFavoriteStatus(userId: number, entityName: string, primaryKey: CompositeKey): Promise<boolean> {
+    public async GetRecordFavoriteStatus(userId: string, entityName: string, primaryKey: CompositeKey): Promise<boolean> {
         const valResult = primaryKey.Validate();
         if (!valResult.IsValid)
             return false;
@@ -1030,7 +1034,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             return data.GetRecordFavoriteStatus.IsFavorite;        
     }
 
-    public async SetRecordFavoriteStatus(userId: number, entityName: string, primaryKey: CompositeKey, isFavorite: boolean, contextUser: UserInfo): Promise<void> {
+    public async SetRecordFavoriteStatus(userId: string, entityName: string, primaryKey: CompositeKey, isFavorite: boolean, contextUser: UserInfo): Promise<void> {
         const e = this.Entities.find(e => e.Name === entityName)
         if (!e){
             throw new Error(`Entity ${entityName} not found in metadata`);

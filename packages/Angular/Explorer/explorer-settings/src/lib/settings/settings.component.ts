@@ -23,7 +23,7 @@ export class SettingsComponent implements OnInit {
   public currentItem: SettingsItem = SettingsItem.Users;
   public baseRoute: string = '/settings';
 
-  public selectedRoleName: string = '';
+  public selectedRoleID: string = '';
   public selectedUserID: string = "";
   public selectedApplicationName: string = '';
 
@@ -96,7 +96,7 @@ export class SettingsComponent implements OnInit {
         this.selectItem(SettingsItem.Roles, false);
         break;
       case 'role':
-        this.selectedRoleName = segments.length > 2 ? segments[2] : '';
+        this.selectedRoleID = segments.length > 2 ? segments[2] : '';
         this.selectItem(SettingsItem.Role, false);
         break;
       default:
@@ -108,10 +108,10 @@ export class SettingsComponent implements OnInit {
     this.selectRoute('/settings/application', (<ApplicationEntity>a).Name);
   }
   public selectRole(r: BaseEntity) {
-    this.selectRoute('/settings/role', (<RoleEntity>r).Name);
+    this.selectRoute('/settings/role', (<RoleEntity>r).ID);
   }
-  public selectUser(r: BaseEntity) {
-    this.selectRoute('/settings/user', (<UserEntity>r).ID);
+  public selectUser(u: BaseEntity) {
+    this.selectRoute('/settings/user', (<UserEntity>u).ID);
   }
   public selectRoute(route: string, value: any) {
     this.router.navigate([route, value]);    

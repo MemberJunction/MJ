@@ -549,7 +549,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
             const auditLog = await this.GetEntityObject<AuditLogEntity>('Audit Logs', user); // must pass user context on back end as we're not authenticated the same way as the front end
             auditLog.NewRecord();
             auditLog.UserID = user.ID;
-            auditLog.Set('AuditLogTypeName', auditLogType.Name) // weak typing to get around read-only property
+            auditLog.AuditLogTypeID = auditLogType.ID;
             if (status?.trim().toLowerCase() === 'success')
                 auditLog.Status = 'Success'
             else    
@@ -559,7 +559,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
             auditLog.RecordID = recordId;
 
             if (authorization)
-                auditLog.AuthorizationName = authorization.Name;
+                auditLog.AuthorizationID = authorization.ID;
 
             if (details)
                 auditLog.Details = details;
@@ -605,14 +605,14 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
         return ProviderType.Database;
     }
 
-    public async GetRecordFavoriteStatus(userId: number, entityName: string, CompositeKey: CompositeKey): Promise<boolean> {
+    public async GetRecordFavoriteStatus(userId: string, entityName: string, CompositeKey: CompositeKey): Promise<boolean> {
         const id = await this.GetRecordFavoriteID(userId, entityName, CompositeKey);
         return id !== null;
     }
 
-    public async GetRecordFavoriteID(userId: number, entityName: string, CompositeKey: CompositeKey): Promise<string | null> {
+    public async GetRecordFavoriteID(userId: string, entityName: string, CompositeKey: CompositeKey): Promise<string | null> {
         try {
-            const sSQL = `SELECT ID FROM [${this.MJCoreSchemaName}].vwUserFavorites WHERE UserID=${userId} AND Entity='${entityName}' AND RecordID='${CompositeKey.Values()}'`
+            const sSQL = `SELECT ID FROM [${this.MJCoreSchemaName}].vwUserFavorites WHERE UserID='${userId}' AND Entity='${entityName}' AND RecordID='${CompositeKey.Values()}'`
             const result = await this.ExecuteSQL(sSQL);
             if (result && result.length > 0)
                 return result[0].ID;
@@ -625,7 +625,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
         }
     }
 
-    public async SetRecordFavoriteStatus(userId: number, entityName: string, CompositeKey: CompositeKey, isFavorite: boolean, contextUser: UserInfo): Promise<void> {
+    public async SetRecordFavoriteStatus(userId: string, entityName: string, CompositeKey: CompositeKey, isFavorite: boolean, contextUser: UserInfo): Promise<void> {
         try {
             const currentFavoriteId = await this.GetRecordFavoriteID(userId, entityName, CompositeKey);
             if ((currentFavoriteId === null && isFavorite === false) ||
@@ -1328,7 +1328,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
             const quotes = wrapRecordIdInQuotes ? "'" : '';
             const sSQL = `EXEC [${this.MJCoreSchemaName}].spCreateRecordChange_Internal @EntityName='${entityName}', 
                                                                                         @RecordID=${quotes}${recordID}${quotes}, 
-                                                                                        @UserID=${user.ID},
+                                                                                        @UserID='${user.ID}',
                                                                                         @Type='${type}',
                                                                                         @ChangesJSON='${changesJSON}', 
                                                                                         @ChangesDescription='${oldData && newData ? this.CreateUserDescriptionOfChanges(changes) : !oldData ? 'Record Created' : 'Record Deleted'}', 
@@ -1936,7 +1936,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
     protected async GetCurrentUserMetadata(): Promise<UserInfo> {
         const user = await this.ExecuteSQL(`SELECT * FROM [${this.MJCoreSchemaName}].vwUsers WHERE Email='${this._currentUserEmail}'`);
         if (user && user.length === 1) {
-            const userRoles = await this.ExecuteSQL(`SELECT * FROM [${this.MJCoreSchemaName}].vwUserRoles WHERE UserID=${user[0].ID}`)
+            const userRoles = await this.ExecuteSQL(`SELECT * FROM [${this.MJCoreSchemaName}].vwUserRoles WHERE UserID='${user[0].ID}'`)
             return new UserInfo(this, 
                 {
                     ...user[0],

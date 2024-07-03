@@ -16,8 +16,8 @@ export class UserFavoriteSearchParams {
   @Field(() => CompositeKeyInputType)
   CompositeKey: CompositeKeyInputType;
 
-  @Field(() => Int)
-  UserID: number;
+  @Field(() => String)
+  UserID: string;
 }
 
 @InputType()
@@ -28,8 +28,8 @@ export class UserFavoriteSetParams {
   @Field(() => CompositeKeyInputType)
   CompositeKey: CompositeKeyInputType;
 
-  @Field(() => Int)
-  UserID: number;
+  @Field(() => String)
+  UserID: string;
 
   @Field(() => Boolean)
   IsFavorite: boolean;

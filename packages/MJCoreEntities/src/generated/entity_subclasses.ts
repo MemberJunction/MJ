@@ -111,6 +111,18 @@ import { RegisterClass } from "@memberjunction/global";
             return this.Get('__mj_UpdatedAt');
         }
         
+        /**
+        * * Field Name: ID_
+        * * Display Name: ID_
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
+        */
+        get ID_(): string {  
+            return this.Get('ID_');
+        }
+        set ID_(value: string) {
+            this.Set('ID_', value);
+        }
 
     }
         
@@ -269,6 +281,18 @@ import { RegisterClass } from "@memberjunction/global";
             return this.Get('__mj_UpdatedAt');
         }
         
+        /**
+        * * Field Name: ID_
+        * * Display Name: ID_
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
+        */
+        get ID_(): string {  
+            return this.Get('ID_');
+        }
+        set ID_(value: string) {
+            this.Set('ID_', value);
+        }
         /**
         * * Field Name: FirstLast
         * * Display Name: First Last
@@ -626,13 +650,13 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: RoleID
         * * Display Name: Role ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Roles (vwRoles.ID)
         */
-        get RoleID(): number {  
+        get RoleID(): string {  
             return this.Get('RoleID');
         }
-        set RoleID(value: number) {
+        set RoleID(value: string) {
             this.Set('RoleID', value);
         }
         /**
@@ -789,7 +813,7 @@ import { RegisterClass } from "@memberjunction/global";
     export class RoleEntity extends BaseEntity {
         /**
         * Loads the Roles record from the database
-        * @param ID: number - primary key value to load the Roles record.
+        * @param ID: string - primary key value to load the Roles record.
         * @param EntityRelationshipsToLoad - (optional) the relationships to load
         * @returns {Promise<boolean>} - true if successful, false otherwise
         * @public
@@ -798,7 +822,7 @@ import { RegisterClass } from "@memberjunction/global";
         * @method
         * @override
         */      
-        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+        public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
             const compositeKey: CompositeKey = new CompositeKey();
             compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -806,9 +830,10 @@ import { RegisterClass } from "@memberjunction/global";
         
             /**
         * * Field Name: ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
         */
-        get ID(): number {  
+        get ID(): string {  
             return this.Get('ID');
         }
         
@@ -983,6 +1008,18 @@ import { RegisterClass } from "@memberjunction/global";
             return this.Get('__mj_UpdatedAt');
         }
         
+        /**
+        * * Field Name: ID_
+        * * Display Name: ID_
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
+        */
+        get ID_(): string {  
+            return this.Get('ID_');
+        }
+        set ID_(value: string) {
+            this.Set('ID_', value);
+        }
         /**
         * * Field Name: Parent
         * * Display Name: Parent
@@ -1286,6 +1323,18 @@ import { RegisterClass } from "@memberjunction/global";
             return this.Get('__mj_UpdatedAt');
         }
         
+        /**
+        * * Field Name: ID_
+        * * Display Name: ID_
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
+        */
+        get ID_(): string {  
+            return this.Get('ID_');
+        }
+        set ID_(value: string) {
+            this.Set('ID_', value);
+        }
 
     }
         
@@ -1493,6 +1542,18 @@ import { RegisterClass } from "@memberjunction/global";
             return this.Get('__mj_UpdatedAt');
         }
         
+        /**
+        * * Field Name: ID_
+        * * Display Name: ID_
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
+        */
+        get ID_(): string {  
+            return this.Get('ID_');
+        }
+        set ID_(value: string) {
+            this.Set('ID_', value);
+        }
         /**
         * * Field Name: CompanyID
         * * Display Name: Company ID
@@ -4120,6 +4181,18 @@ import { RegisterClass } from "@memberjunction/global";
         }
         
         /**
+        * * Field Name: ID_
+        * * Display Name: ID_
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
+        */
+        get ID_(): string {  
+            return this.Get('ID_');
+        }
+        set ID_(value: string) {
+            this.Set('ID_', value);
+        }
+        /**
         * * Field Name: RunByUser
         * * Display Name: Run By User
         * * SQL Data Type: nvarchar(100)
@@ -4269,6 +4342,18 @@ import { RegisterClass } from "@memberjunction/global";
             return this.Get('__mj_UpdatedAt');
         }
         
+        /**
+        * * Field Name: ID_
+        * * Display Name: ID_
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
+        */
+        get ID_(): string {  
+            return this.Get('ID_');
+        }
+        set ID_(value: string) {
+            this.Set('ID_', value);
+        }
         /**
         * * Field Name: Entity
         * * SQL Data Type: nvarchar(255)
@@ -4560,6 +4645,18 @@ import { RegisterClass } from "@memberjunction/global";
             return this.Get('__mj_UpdatedAt');
         }
         
+        /**
+        * * Field Name: ID_
+        * * Display Name: ID_
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
+        */
+        get ID_(): string {  
+            return this.Get('ID_');
+        }
+        set ID_(value: string) {
+            this.Set('ID_', value);
+        }
 
     }
         
@@ -4776,16 +4873,16 @@ import { RegisterClass } from "@memberjunction/global";
             this.Set('EntityID', value);
         }
         /**
-        * * Field Name: RoleName
-        * * Display Name: Role Name
-        * * SQL Data Type: nvarchar(50)
-        * * Related Entity/Foreign Key: Roles (vwRoles.Name)
+        * * Field Name: RoleID
+        * * Display Name: Role ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Roles (vwRoles.ID)
         */
-        get RoleName(): string | null {  
-            return this.Get('RoleName');
+        get RoleID(): string {  
+            return this.Get('RoleID');
         }
-        set RoleName(value: string | null) {
-            this.Set('RoleName', value);
+        set RoleID(value: string) {
+            this.Set('RoleID', value);
         }
         /**
         * * Field Name: CanCreate
@@ -4838,49 +4935,49 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: ReadRLSFilterID
         * * Display Name: Read RLSFilter ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Row Level Security Filters (vwRowLevelSecurityFilters.ID)
         */
-        get ReadRLSFilterID(): number | null {  
+        get ReadRLSFilterID(): string | null {  
             return this.Get('ReadRLSFilterID');
         }
-        set ReadRLSFilterID(value: number | null) {
+        set ReadRLSFilterID(value: string | null) {
             this.Set('ReadRLSFilterID', value);
         }
         /**
         * * Field Name: CreateRLSFilterID
         * * Display Name: Create RLSFilter ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Row Level Security Filters (vwRowLevelSecurityFilters.ID)
         */
-        get CreateRLSFilterID(): number | null {  
+        get CreateRLSFilterID(): string | null {  
             return this.Get('CreateRLSFilterID');
         }
-        set CreateRLSFilterID(value: number | null) {
+        set CreateRLSFilterID(value: string | null) {
             this.Set('CreateRLSFilterID', value);
         }
         /**
         * * Field Name: UpdateRLSFilterID
         * * Display Name: Update RLSFilter ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Row Level Security Filters (vwRowLevelSecurityFilters.ID)
         */
-        get UpdateRLSFilterID(): number | null {  
+        get UpdateRLSFilterID(): string | null {  
             return this.Get('UpdateRLSFilterID');
         }
-        set UpdateRLSFilterID(value: number | null) {
+        set UpdateRLSFilterID(value: string | null) {
             this.Set('UpdateRLSFilterID', value);
         }
         /**
         * * Field Name: DeleteRLSFilterID
         * * Display Name: Delete RLSFilter ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Row Level Security Filters (vwRowLevelSecurityFilters.ID)
         */
-        get DeleteRLSFilterID(): number | null {  
+        get DeleteRLSFilterID(): string | null {  
             return this.Get('DeleteRLSFilterID');
         }
-        set DeleteRLSFilterID(value: number | null) {
+        set DeleteRLSFilterID(value: string | null) {
             this.Set('DeleteRLSFilterID', value);
         }
         /**
@@ -5188,6 +5285,18 @@ import { RegisterClass } from "@memberjunction/global";
         }
         
         /**
+        * * Field Name: ID_
+        * * Display Name: ID_
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
+        */
+        get ID_(): string {  
+            return this.Get('ID_');
+        }
+        set ID_(value: string) {
+            this.Set('ID_', value);
+        }
+        /**
         * * Field Name: User
         * * Display Name: User
         * * SQL Data Type: nvarchar(100)
@@ -5494,6 +5603,18 @@ import { RegisterClass } from "@memberjunction/global";
             return this.Get('__mj_UpdatedAt');
         }
         
+        /**
+        * * Field Name: ID_
+        * * Display Name: ID_
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
+        */
+        get ID_(): string {  
+            return this.Get('ID_');
+        }
+        set ID_(value: string) {
+            this.Set('ID_', value);
+        }
         /**
         * * Field Name: Entity
         * * Display Name: Entity
@@ -6207,6 +6328,18 @@ import { RegisterClass } from "@memberjunction/global";
         }
         
         /**
+        * * Field Name: ID_
+        * * Display Name: ID_
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
+        */
+        get ID_(): string {  
+            return this.Get('ID_');
+        }
+        set ID_(value: string) {
+            this.Set('ID_', value);
+        }
+        /**
         * * Field Name: AutoRunIntervalMinutes
         * * Display Name: Auto Run Interval Minutes
         * * SQL Data Type: int
@@ -6329,6 +6462,18 @@ import { RegisterClass } from "@memberjunction/global";
             return this.Get('__mj_UpdatedAt');
         }
         
+        /**
+        * * Field Name: ID_
+        * * Display Name: ID_
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
+        */
+        get ID_(): string {  
+            return this.Get('ID_');
+        }
+        set ID_(value: string) {
+            this.Set('ID_', value);
+        }
 
     }
         
@@ -6668,16 +6813,16 @@ import { RegisterClass } from "@memberjunction/global";
             this.Set('UserID', value);
         }
         /**
-        * * Field Name: RoleName
-        * * Display Name: Role Name
-        * * SQL Data Type: nvarchar(50)
-        * * Related Entity/Foreign Key: Roles (vwRoles.Name)
+        * * Field Name: RoleID
+        * * Display Name: Role ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Roles (vwRoles.ID)
         */
-        get RoleName(): string {  
-            return this.Get('RoleName');
+        get RoleID(): string {  
+            return this.Get('RoleID');
         }
-        set RoleName(value: string) {
-            this.Set('RoleName', value);
+        set RoleID(value: string) {
+            this.Set('RoleID', value);
         }
         /**
         * * Field Name: __mj_CreatedAt
@@ -6708,6 +6853,16 @@ import { RegisterClass } from "@memberjunction/global";
             return this.Get('User');
         }
         
+        /**
+        * * Field Name: Role
+        * * Display Name: Role
+        * * SQL Data Type: nvarchar(50)
+        * * Default Value: null
+        */
+        get Role(): string {  
+            return this.Get('Role');
+        }
+        
 
     }
         
@@ -6725,7 +6880,7 @@ import { RegisterClass } from "@memberjunction/global";
     export class RowLevelSecurityFilterEntity extends BaseEntity {
         /**
         * Loads the Row Level Security Filters record from the database
-        * @param ID: number - primary key value to load the Row Level Security Filters record.
+        * @param ID: string - primary key value to load the Row Level Security Filters record.
         * @param EntityRelationshipsToLoad - (optional) the relationships to load
         * @returns {Promise<boolean>} - true if successful, false otherwise
         * @public
@@ -6734,7 +6889,7 @@ import { RegisterClass } from "@memberjunction/global";
         * @method
         * @override
         */      
-        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+        public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
             const compositeKey: CompositeKey = new CompositeKey();
             compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -6767,9 +6922,10 @@ import { RegisterClass } from "@memberjunction/global";
             /**
         * * Field Name: ID
         * * Display Name: ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
         */
-        get ID(): number {  
+        get ID(): string {  
             return this.Get('ID');
         }
         
@@ -6881,18 +7037,6 @@ import { RegisterClass } from "@memberjunction/global";
         }
         
         /**
-        * * Field Name: AuditLogTypeName
-        * * Display Name: Audit Log Type Name
-        * * SQL Data Type: nvarchar(50)
-        * * Related Entity/Foreign Key: Audit Log Types (vwAuditLogTypes.Name)
-        */
-        get AuditLogTypeName(): string {  
-            return this.Get('AuditLogTypeName');
-        }
-        set AuditLogTypeName(value: string) {
-            this.Set('AuditLogTypeName', value);
-        }
-        /**
         * * Field Name: UserID
         * * Display Name: User ID
         * * SQL Data Type: uniqueidentifier
@@ -6905,16 +7049,28 @@ import { RegisterClass } from "@memberjunction/global";
             this.Set('UserID', value);
         }
         /**
-        * * Field Name: AuthorizationName
-        * * Display Name: Authorization Name
-        * * SQL Data Type: nvarchar(100)
-        * * Related Entity/Foreign Key: Authorizations (vwAuthorizations.Name)
+        * * Field Name: AuditLogTypeID
+        * * Display Name: Audit Log Type ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Audit Log Types (vwAuditLogTypes.ID)
         */
-        get AuthorizationName(): string | null {  
-            return this.Get('AuthorizationName');
+        get AuditLogTypeID(): string {  
+            return this.Get('AuditLogTypeID');
         }
-        set AuthorizationName(value: string | null) {
-            this.Set('AuthorizationName', value);
+        set AuditLogTypeID(value: string) {
+            this.Set('AuditLogTypeID', value);
+        }
+        /**
+        * * Field Name: AuthorizationID
+        * * Display Name: Authorization ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Authorizations (vwAuthorizations.ID)
+        */
+        get AuthorizationID(): string | null {  
+            return this.Get('AuthorizationID');
+        }
+        set AuthorizationID(value: string | null) {
+            this.Set('AuthorizationID', value);
         }
         /**
         * * Field Name: Status
@@ -7032,7 +7188,7 @@ import { RegisterClass } from "@memberjunction/global";
     export class AuthorizationEntity extends BaseEntity {
         /**
         * Loads the Authorizations record from the database
-        * @param ID: number - primary key value to load the Authorizations record.
+        * @param ID: string - primary key value to load the Authorizations record.
         * @param EntityRelationshipsToLoad - (optional) the relationships to load
         * @returns {Promise<boolean>} - true if successful, false otherwise
         * @public
@@ -7041,7 +7197,7 @@ import { RegisterClass } from "@memberjunction/global";
         * @method
         * @override
         */      
-        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+        public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
             const compositeKey: CompositeKey = new CompositeKey();
             compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -7074,22 +7230,23 @@ import { RegisterClass } from "@memberjunction/global";
             /**
         * * Field Name: ID
         * * Display Name: ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
         */
-        get ID(): number {  
+        get ID(): string {  
             return this.Get('ID');
         }
         
         /**
         * * Field Name: ParentID
         * * Display Name: Parent ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Authorizations (vwAuthorizations.ID)
         */
-        get ParentID(): number | null {  
+        get ParentID(): string | null {  
             return this.Get('ParentID');
         }
-        set ParentID(value: number | null) {
+        set ParentID(value: string | null) {
             this.Set('ParentID', value);
         }
         /**
@@ -7120,6 +7277,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Use Audit Log
         * * SQL Data Type: bit
         * * Default Value: 1
+        * * Description: When set to 1, Audit Log records are created whenever this authorization is invoked for a user
         */
         get UseAuditLog(): boolean {  
             return this.Get('UseAuditLog');
@@ -7234,28 +7392,28 @@ import { RegisterClass } from "@memberjunction/global";
         }
         
         /**
-        * * Field Name: AuthorizationName
-        * * Display Name: Authorization Name
-        * * SQL Data Type: nvarchar(100)
-        * * Related Entity/Foreign Key: Authorizations (vwAuthorizations.Name)
+        * * Field Name: AuthorizationID
+        * * Display Name: Authorization ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Authorizations (vwAuthorizations.ID)
         */
-        get AuthorizationName(): string | null {  
-            return this.Get('AuthorizationName');
+        get AuthorizationID(): string {  
+            return this.Get('AuthorizationID');
         }
-        set AuthorizationName(value: string | null) {
-            this.Set('AuthorizationName', value);
+        set AuthorizationID(value: string) {
+            this.Set('AuthorizationID', value);
         }
         /**
-        * * Field Name: RoleName
-        * * Display Name: Role Name
-        * * SQL Data Type: nvarchar(50)
-        * * Related Entity/Foreign Key: Roles (vwRoles.Name)
+        * * Field Name: RoleID
+        * * Display Name: Role ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Roles (vwRoles.ID)
         */
-        get RoleName(): string | null {  
-            return this.Get('RoleName');
+        get RoleID(): string {  
+            return this.Get('RoleID');
         }
-        set RoleName(value: string | null) {
-            this.Set('RoleName', value);
+        set RoleID(value: string) {
+            this.Set('RoleID', value);
         }
         /**
         * * Field Name: Type
@@ -7310,7 +7468,7 @@ import { RegisterClass } from "@memberjunction/global";
     export class AuditLogTypeEntity extends BaseEntity {
         /**
         * Loads the Audit Log Types record from the database
-        * @param ID: number - primary key value to load the Audit Log Types record.
+        * @param ID: string - primary key value to load the Audit Log Types record.
         * @param EntityRelationshipsToLoad - (optional) the relationships to load
         * @returns {Promise<boolean>} - true if successful, false otherwise
         * @public
@@ -7319,7 +7477,7 @@ import { RegisterClass } from "@memberjunction/global";
         * @method
         * @override
         */      
-        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+        public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
             const compositeKey: CompositeKey = new CompositeKey();
             compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -7352,24 +7510,13 @@ import { RegisterClass } from "@memberjunction/global";
             /**
         * * Field Name: ID
         * * Display Name: ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
         */
-        get ID(): number {  
+        get ID(): string {  
             return this.Get('ID');
         }
         
-        /**
-        * * Field Name: ParentID
-        * * Display Name: Parent ID
-        * * SQL Data Type: int
-        * * Related Entity/Foreign Key: Audit Log Types (vwAuditLogTypes.ID)
-        */
-        get ParentID(): number | null {  
-            return this.Get('ParentID');
-        }
-        set ParentID(value: number | null) {
-            this.Set('ParentID', value);
-        }
         /**
         * * Field Name: Name
         * * Display Name: Name
@@ -7393,16 +7540,28 @@ import { RegisterClass } from "@memberjunction/global";
             this.Set('Description', value);
         }
         /**
-        * * Field Name: AuthorizationName
-        * * Display Name: Authorization Name
-        * * SQL Data Type: nvarchar(100)
-        * * Related Entity/Foreign Key: Authorizations (vwAuthorizations.Name)
+        * * Field Name: ParentID
+        * * Display Name: Parent ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Audit Log Types (vwAuditLogTypes.ID)
         */
-        get AuthorizationName(): string | null {  
-            return this.Get('AuthorizationName');
+        get ParentID(): string | null {  
+            return this.Get('ParentID');
         }
-        set AuthorizationName(value: string | null) {
-            this.Set('AuthorizationName', value);
+        set ParentID(value: string | null) {
+            this.Set('ParentID', value);
+        }
+        /**
+        * * Field Name: AuthorizationID
+        * * Display Name: Authorization ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Authorizations (vwAuthorizations.ID)
+        */
+        get AuthorizationID(): string | null {  
+            return this.Get('AuthorizationID');
+        }
+        set AuthorizationID(value: string | null) {
+            this.Set('AuthorizationID', value);
         }
         /**
         * * Field Name: __mj_CreatedAt
@@ -7608,7 +7767,7 @@ import { RegisterClass } from "@memberjunction/global";
     export class AIModelEntity extends BaseEntity {
         /**
         * Loads the AI Models record from the database
-        * @param ID: number - primary key value to load the AI Models record.
+        * @param ID: string - primary key value to load the AI Models record.
         * @param EntityRelationshipsToLoad - (optional) the relationships to load
         * @returns {Promise<boolean>} - true if successful, false otherwise
         * @public
@@ -7617,7 +7776,7 @@ import { RegisterClass } from "@memberjunction/global";
         * @method
         * @override
         */      
-        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+        public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
             const compositeKey: CompositeKey = new CompositeKey();
             compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -7626,9 +7785,10 @@ import { RegisterClass } from "@memberjunction/global";
             /**
         * * Field Name: ID
         * * Display Name: ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
         */
-        get ID(): number {  
+        get ID(): string {  
             return this.Get('ID');
         }
         
@@ -7644,6 +7804,17 @@ import { RegisterClass } from "@memberjunction/global";
             this.Set('Name', value);
         }
         /**
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        */
+        get Description(): string | null {  
+            return this.Get('Description');
+        }
+        set Description(value: string | null) {
+            this.Set('Description', value);
+        }
+        /**
         * * Field Name: Vendor
         * * Display Name: Vendor
         * * SQL Data Type: nvarchar(50)
@@ -7657,14 +7828,26 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: AIModelTypeID
         * * Display Name: AI Model Type ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: AI Model Types (vwAIModelTypes.ID)
         */
-        get AIModelTypeID(): number {  
+        get AIModelTypeID(): string {  
             return this.Get('AIModelTypeID');
         }
-        set AIModelTypeID(value: number) {
+        set AIModelTypeID(value: string) {
             this.Set('AIModelTypeID', value);
+        }
+        /**
+        * * Field Name: PowerRank
+        * * Display Name: Power Rank
+        * * SQL Data Type: int
+        * * Description: A simplified power rank of each model for a given AI Model Type. For example, if we have GPT 3, GPT 3.5, and GPT 4, we would have a PowerRank of 1 for GPT3, 2 for GPT 3.5, and 3 for GPT 4. This can be used within model families like OpenAI or across all models. For example if you had Llama 2 in the mix which is similar to GPT 3.5 it would also have a PowerRank of 2. This can be used at runtime to pick the most/least powerful or compare model relative power.
+        */
+        get PowerRank(): number | null {  
+            return this.Get('PowerRank');
+        }
+        set PowerRank(value: number | null) {
+            this.Set('PowerRank', value);
         }
         /**
         * * Field Name: IsActive
@@ -7677,17 +7860,6 @@ import { RegisterClass } from "@memberjunction/global";
         }
         set IsActive(value: boolean) {
             this.Set('IsActive', value);
-        }
-        /**
-        * * Field Name: Description
-        * * Display Name: Description
-        * * SQL Data Type: nvarchar(MAX)
-        */
-        get Description(): string | null {  
-            return this.Get('Description');
-        }
-        set Description(value: string | null) {
-            this.Set('Description', value);
         }
         /**
         * * Field Name: DriverClass
@@ -7722,18 +7894,6 @@ import { RegisterClass } from "@memberjunction/global";
         }
         set APIName(value: string | null) {
             this.Set('APIName', value);
-        }
-        /**
-        * * Field Name: PowerRank
-        * * Display Name: Power Rank
-        * * SQL Data Type: int
-        * * Description: A simplified power rank of each model for a given AI Model Type. For example, if we have GPT 3, GPT 3.5, and GPT 4, we would have a PowerRank of 1 for GPT3, 2 for GPT 3.5, and 3 for GPT 4. This can be used within model families like OpenAI or across all models. For example if you had Llama 2 in the mix which is similar to GPT 3.5 it would also have a PowerRank of 2. This can be used at runtime to pick the most/least powerful or compare model relative power.
-        */
-        get PowerRank(): number | null {  
-            return this.Get('PowerRank');
-        }
-        set PowerRank(value: number | null) {
-            this.Set('PowerRank', value);
         }
         /**
         * * Field Name: __mj_CreatedAt
@@ -7782,7 +7942,7 @@ import { RegisterClass } from "@memberjunction/global";
     export class AIActionEntity extends BaseEntity {
         /**
         * Loads the AI Actions record from the database
-        * @param ID: number - primary key value to load the AI Actions record.
+        * @param ID: string - primary key value to load the AI Actions record.
         * @param EntityRelationshipsToLoad - (optional) the relationships to load
         * @returns {Promise<boolean>} - true if successful, false otherwise
         * @public
@@ -7791,7 +7951,7 @@ import { RegisterClass } from "@memberjunction/global";
         * @method
         * @override
         */      
-        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+        public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
             const compositeKey: CompositeKey = new CompositeKey();
             compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -7800,9 +7960,10 @@ import { RegisterClass } from "@memberjunction/global";
             /**
         * * Field Name: ID
         * * Display Name: ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
         */
-        get ID(): number {  
+        get ID(): string {  
             return this.Get('ID');
         }
         
@@ -7829,18 +7990,6 @@ import { RegisterClass } from "@memberjunction/global";
             this.Set('Description', value);
         }
         /**
-        * * Field Name: DefaultModelID
-        * * Display Name: Default Model ID
-        * * SQL Data Type: int
-        * * Related Entity/Foreign Key: AI Models (vwAIModels.ID)
-        */
-        get DefaultModelID(): number | null {  
-            return this.Get('DefaultModelID');
-        }
-        set DefaultModelID(value: number | null) {
-            this.Set('DefaultModelID', value);
-        }
-        /**
         * * Field Name: DefaultPrompt
         * * Display Name: Default Prompt
         * * SQL Data Type: nvarchar(MAX)
@@ -7850,6 +7999,18 @@ import { RegisterClass } from "@memberjunction/global";
         }
         set DefaultPrompt(value: string | null) {
             this.Set('DefaultPrompt', value);
+        }
+        /**
+        * * Field Name: DefaultModelID
+        * * Display Name: Default Model ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: AI Models (vwAIModels.ID)
+        */
+        get DefaultModelID(): string | null {  
+            return this.Get('DefaultModelID');
+        }
+        set DefaultModelID(value: string | null) {
+            this.Set('DefaultModelID', value);
         }
         /**
         * * Field Name: IsActive
@@ -7938,25 +8099,25 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: AIModelID
         * * Display Name: AI Model ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: AI Models (vwAIModels.ID)
         */
-        get AIModelID(): number {  
+        get AIModelID(): string {  
             return this.Get('AIModelID');
         }
-        set AIModelID(value: number) {
+        set AIModelID(value: string) {
             this.Set('AIModelID', value);
         }
         /**
         * * Field Name: AIActionID
         * * Display Name: AI Action ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: AI Actions (vwAIActions.ID)
         */
-        get AIActionID(): number {  
+        get AIActionID(): string {  
             return this.Get('AIActionID');
         }
-        set AIActionID(value: number) {
+        set AIActionID(value: string) {
             this.Set('AIActionID', value);
         }
         /**
@@ -8065,28 +8226,28 @@ import { RegisterClass } from "@memberjunction/global";
             this.Set('EntityID', value);
         }
         /**
-        * * Field Name: AIActionID
-        * * Display Name: AI Action ID
-        * * SQL Data Type: int
-        * * Related Entity/Foreign Key: AI Actions (vwAIActions.ID)
-        */
-        get AIActionID(): number {  
-            return this.Get('AIActionID');
-        }
-        set AIActionID(value: number) {
-            this.Set('AIActionID', value);
-        }
-        /**
         * * Field Name: AIModelID
         * * Display Name: AI Model ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: AI Models (vwAIModels.ID)
         */
-        get AIModelID(): number | null {  
+        get AIModelID(): string {  
             return this.Get('AIModelID');
         }
-        set AIModelID(value: number | null) {
+        set AIModelID(value: string) {
             this.Set('AIModelID', value);
+        }
+        /**
+        * * Field Name: AIActionID
+        * * Display Name: AI Action ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: AI Actions (vwAIActions.ID)
+        */
+        get AIActionID(): string {  
+            return this.Get('AIActionID');
+        }
+        set AIActionID(value: string) {
+            this.Set('AIActionID', value);
         }
         /**
         * * Field Name: Name
@@ -8229,21 +8390,21 @@ import { RegisterClass } from "@memberjunction/global";
         }
         
         /**
+        * * Field Name: AIModel
+        * * Display Name: AIModel
+        * * SQL Data Type: nvarchar(50)
+        */
+        get AIModel(): string {  
+            return this.Get('AIModel');
+        }
+        
+        /**
         * * Field Name: AIAction
         * * Display Name: AIAction
         * * SQL Data Type: nvarchar(50)
         */
         get AIAction(): string {  
             return this.Get('AIAction');
-        }
-        
-        /**
-        * * Field Name: AIModel
-        * * Display Name: AIModel
-        * * SQL Data Type: nvarchar(50)
-        */
-        get AIModel(): string | null {  
-            return this.Get('AIModel');
         }
         
         /**
@@ -8273,7 +8434,7 @@ import { RegisterClass } from "@memberjunction/global";
     export class AIModelTypeEntity extends BaseEntity {
         /**
         * Loads the AI Model Types record from the database
-        * @param ID: number - primary key value to load the AI Model Types record.
+        * @param ID: string - primary key value to load the AI Model Types record.
         * @param EntityRelationshipsToLoad - (optional) the relationships to load
         * @returns {Promise<boolean>} - true if successful, false otherwise
         * @public
@@ -8282,7 +8443,7 @@ import { RegisterClass } from "@memberjunction/global";
         * @method
         * @override
         */      
-        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+        public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
             const compositeKey: CompositeKey = new CompositeKey();
             compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -8291,9 +8452,10 @@ import { RegisterClass } from "@memberjunction/global";
             /**
         * * Field Name: ID
         * * Display Name: ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
         */
-        get ID(): number {  
+        get ID(): string {  
             return this.Get('ID');
         }
         
@@ -8480,6 +8642,18 @@ import { RegisterClass } from "@memberjunction/global";
             return this.Get('__mj_UpdatedAt');
         }
         
+        /**
+        * * Field Name: ID_
+        * * Display Name: ID_
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
+        */
+        get ID_(): string {  
+            return this.Get('ID_');
+        }
+        set ID_(value: string) {
+            this.Set('ID_', value);
+        }
 
     }
         
@@ -8733,6 +8907,18 @@ import { RegisterClass } from "@memberjunction/global";
             return this.Get('__mj_UpdatedAt');
         }
         
+        /**
+        * * Field Name: ID_
+        * * Display Name: ID_
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
+        */
+        get ID_(): string {  
+            return this.Get('ID_');
+        }
+        set ID_(value: string) {
+            this.Set('ID_', value);
+        }
         /**
         * * Field Name: QueueType
         * * Display Name: Queue Type
@@ -9176,6 +9362,18 @@ import { RegisterClass } from "@memberjunction/global";
             return this.Get('__mj_UpdatedAt');
         }
         
+        /**
+        * * Field Name: ID_
+        * * Display Name: ID_
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
+        */
+        get ID_(): string {  
+            return this.Get('ID_');
+        }
+        set ID_(value: string) {
+            this.Set('ID_', value);
+        }
 
     }
         
@@ -9294,6 +9492,18 @@ import { RegisterClass } from "@memberjunction/global";
             return this.Get('__mj_UpdatedAt');
         }
         
+        /**
+        * * Field Name: ID_
+        * * Display Name: ID_
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
+        */
+        get ID_(): string {  
+            return this.Get('ID_');
+        }
+        set ID_(value: string) {
+            this.Set('ID_', value);
+        }
 
     }
         
@@ -9401,6 +9611,18 @@ import { RegisterClass } from "@memberjunction/global";
             return this.Get('__mj_UpdatedAt');
         }
         
+        /**
+        * * Field Name: ID_
+        * * Display Name: ID_
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
+        */
+        get ID_(): string {  
+            return this.Get('ID_');
+        }
+        set ID_(value: string) {
+            this.Set('ID_', value);
+        }
 
     }
         
@@ -9654,6 +9876,18 @@ import { RegisterClass } from "@memberjunction/global";
             return this.Get('__mj_UpdatedAt');
         }
         
+        /**
+        * * Field Name: ID_
+        * * Display Name: ID_
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
+        */
+        get ID_(): string {  
+            return this.Get('ID_');
+        }
+        set ID_(value: string) {
+            this.Set('ID_', value);
+        }
         /**
         * * Field Name: Category
         * * Display Name: Category
@@ -9992,6 +10226,18 @@ import { RegisterClass } from "@memberjunction/global";
         }
         
         /**
+        * * Field Name: ID_
+        * * Display Name: ID_
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
+        */
+        get ID_(): string {  
+            return this.Get('ID_');
+        }
+        set ID_(value: string) {
+            this.Set('ID_', value);
+        }
+        /**
         * * Field Name: Entity
         * * Display Name: Entity
         * * SQL Data Type: nvarchar(255)
@@ -10131,6 +10377,18 @@ import { RegisterClass } from "@memberjunction/global";
             return this.Get('__mj_UpdatedAt');
         }
         
+        /**
+        * * Field Name: ID_
+        * * Display Name: ID_
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
+        */
+        get ID_(): string {  
+            return this.Get('ID_');
+        }
+        set ID_(value: string) {
+            this.Set('ID_', value);
+        }
         /**
         * * Field Name: Parent
         * * Display Name: Parent
@@ -10364,6 +10622,18 @@ import { RegisterClass } from "@memberjunction/global";
             return this.Get('__mj_UpdatedAt');
         }
         
+        /**
+        * * Field Name: ID_
+        * * Display Name: ID_
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
+        */
+        get ID_(): string {  
+            return this.Get('ID_');
+        }
+        set ID_(value: string) {
+            this.Set('ID_', value);
+        }
         /**
         * * Field Name: User
         * * Display Name: User
@@ -10641,6 +10911,18 @@ import { RegisterClass } from "@memberjunction/global";
             return this.Get('__mj_UpdatedAt');
         }
         
+        /**
+        * * Field Name: ID_
+        * * Display Name: ID_
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
+        */
+        get ID_(): string {  
+            return this.Get('ID_');
+        }
+        set ID_(value: string) {
+            this.Set('ID_', value);
+        }
 
     }
         
@@ -10953,6 +11235,18 @@ import { RegisterClass } from "@memberjunction/global";
         }
         
         /**
+        * * Field Name: ID_
+        * * Display Name: ID_
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
+        */
+        get ID_(): string {  
+            return this.Get('ID_');
+        }
+        set ID_(value: string) {
+            this.Set('ID_', value);
+        }
+        /**
         * * Field Name: Conversation
         * * Display Name: Conversation
         * * SQL Data Type: nvarchar(255)
@@ -11125,6 +11419,18 @@ import { RegisterClass } from "@memberjunction/global";
             return this.Get('__mj_UpdatedAt');
         }
         
+        /**
+        * * Field Name: ID_
+        * * Display Name: ID_
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
+        */
+        get ID_(): string {  
+            return this.Get('ID_');
+        }
+        set ID_(value: string) {
+            this.Set('ID_', value);
+        }
         /**
         * * Field Name: User
         * * Display Name: User
@@ -11303,6 +11609,15 @@ import { RegisterClass } from "@memberjunction/global";
         */
         get User(): string {  
             return this.Get('User');
+        }
+        
+        /**
+        * * Field Name: ResourceType
+        * * Display Name: Resource Type
+        * * SQL Data Type: nvarchar(255)
+        */
+        get ResourceType(): string | null {  
+            return this.Get('ResourceType');
         }
         
 
@@ -11752,6 +12067,18 @@ import { RegisterClass } from "@memberjunction/global";
             return this.Get('__mj_UpdatedAt');
         }
         
+        /**
+        * * Field Name: ID_
+        * * Display Name: ID_
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
+        */
+        get ID_(): string {  
+            return this.Get('ID_');
+        }
+        set ID_(value: string) {
+            this.Set('ID_', value);
+        }
         /**
         * * Field Name: Entity
         * * Display Name: Entity
@@ -12233,6 +12560,18 @@ import { RegisterClass } from "@memberjunction/global";
         }
         
         /**
+        * * Field Name: ID_
+        * * Display Name: ID_
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
+        */
+        get ID_(): string {  
+            return this.Get('ID_');
+        }
+        set ID_(value: string) {
+            this.Set('ID_', value);
+        }
+        /**
         * * Field Name: Parent
         * * Display Name: Parent
         * * SQL Data Type: nvarchar(50)
@@ -12457,6 +12796,18 @@ import { RegisterClass } from "@memberjunction/global";
         }
         
         /**
+        * * Field Name: ID_
+        * * Display Name: ID_
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
+        */
+        get ID_(): string {  
+            return this.Get('ID_');
+        }
+        set ID_(value: string) {
+            this.Set('ID_', value);
+        }
+        /**
         * * Field Name: Category
         * * Display Name: Category
         * * SQL Data Type: nvarchar(50)
@@ -12532,16 +12883,16 @@ import { RegisterClass } from "@memberjunction/global";
             this.Set('QueryID', value);
         }
         /**
-        * * Field Name: RoleName
-        * * Display Name: Role Name
-        * * SQL Data Type: nvarchar(50)
-        * * Related Entity/Foreign Key: Roles (vwRoles.Name)
+        * * Field Name: RoleID
+        * * Display Name: Role ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Roles (vwRoles.ID)
         */
-        get RoleName(): string {  
-            return this.Get('RoleName');
+        get RoleID(): string {  
+            return this.Get('RoleID');
         }
-        set RoleName(value: string) {
-            this.Set('RoleName', value);
+        set RoleID(value: string) {
+            this.Set('RoleID', value);
         }
         /**
         * * Field Name: __mj_CreatedAt
@@ -12654,13 +13005,13 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: EmbeddingModelID
         * * Display Name: Embedding Model ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: AI Models (vwAIModels.ID)
         */
-        get EmbeddingModelID(): number {  
+        get EmbeddingModelID(): string {  
             return this.Get('EmbeddingModelID');
         }
-        set EmbeddingModelID(value: number) {
+        set EmbeddingModelID(value: string) {
             this.Set('EmbeddingModelID', value);
         }
         /**
@@ -12796,6 +13147,18 @@ import { RegisterClass } from "@memberjunction/global";
             return this.Get('__mj_UpdatedAt');
         }
         
+        /**
+        * * Field Name: ID_
+        * * Display Name: ID_
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
+        */
+        get ID_(): string {  
+            return this.Get('ID_');
+        }
+        set ID_(value: string) {
+            this.Set('ID_', value);
+        }
 
     }
         
@@ -13048,6 +13411,18 @@ import { RegisterClass } from "@memberjunction/global";
             return this.Get('__mj_UpdatedAt');
         }
         
+        /**
+        * * Field Name: ID_
+        * * Display Name: ID_
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
+        */
+        get ID_(): string {  
+            return this.Get('ID_');
+        }
+        set ID_(value: string) {
+            this.Set('ID_', value);
+        }
 
     }
         
@@ -13343,13 +13718,13 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: AIModelID
         * * Display Name: AIModel ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: AI Models (vwAIModels.ID)
         */
-        get AIModelID(): number {  
+        get AIModelID(): string {  
             return this.Get('AIModelID');
         }
-        set AIModelID(value: number) {
+        set AIModelID(value: string) {
             this.Set('AIModelID', value);
         }
         /**
@@ -13398,6 +13773,18 @@ import { RegisterClass } from "@memberjunction/global";
             return this.Get('__mj_UpdatedAt');
         }
         
+        /**
+        * * Field Name: ID_
+        * * Display Name: ID_
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
+        */
+        get ID_(): string {  
+            return this.Get('ID_');
+        }
+        set ID_(value: string) {
+            this.Set('ID_', value);
+        }
         /**
         * * Field Name: Entity
         * * Display Name: Entity
@@ -13740,6 +14127,18 @@ import { RegisterClass } from "@memberjunction/global";
         }
         
         /**
+        * * Field Name: ID_
+        * * Display Name: ID_
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
+        */
+        get ID_(): string {  
+            return this.Get('ID_');
+        }
+        set ID_(value: string) {
+            this.Set('ID_', value);
+        }
+        /**
         * * Field Name: User
         * * Display Name: User
         * * SQL Data Type: nvarchar(100)
@@ -13868,6 +14267,18 @@ import { RegisterClass } from "@memberjunction/global";
         }
         
         /**
+        * * Field Name: ID_
+        * * Display Name: ID_
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
+        */
+        get ID_(): string {  
+            return this.Get('ID_');
+        }
+        set ID_(value: string) {
+            this.Set('ID_', value);
+        }
+        /**
         * * Field Name: Parent
         * * Display Name: Parent
         * * SQL Data Type: nvarchar(100)
@@ -13993,6 +14404,18 @@ import { RegisterClass } from "@memberjunction/global";
         }
         
         /**
+        * * Field Name: ID_
+        * * Display Name: ID_
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
+        */
+        get ID_(): string {  
+            return this.Get('ID_');
+        }
+        set ID_(value: string) {
+            this.Set('ID_', value);
+        }
+        /**
         * * Field Name: Parent
         * * Display Name: Parent
         * * SQL Data Type: nvarchar(100)
@@ -14117,6 +14540,18 @@ import { RegisterClass } from "@memberjunction/global";
             return this.Get('__mj_UpdatedAt');
         }
         
+        /**
+        * * Field Name: ID_
+        * * Display Name: ID_
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
+        */
+        get ID_(): string {  
+            return this.Get('ID_');
+        }
+        set ID_(value: string) {
+            this.Set('ID_', value);
+        }
         /**
         * * Field Name: Parent
         * * Display Name: Parent
@@ -14276,6 +14711,18 @@ import { RegisterClass } from "@memberjunction/global";
             return this.Get('__mj_UpdatedAt');
         }
         
+        /**
+        * * Field Name: ID_
+        * * Display Name: ID_
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
+        */
+        get ID_(): string {  
+            return this.Get('ID_');
+        }
+        set ID_(value: string) {
+            this.Set('ID_', value);
+        }
 
     }
         
@@ -14419,6 +14866,18 @@ import { RegisterClass } from "@memberjunction/global";
         }
         
         /**
+        * * Field Name: ID_
+        * * Display Name: ID_
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
+        */
+        get ID_(): string {  
+            return this.Get('ID_');
+        }
+        set ID_(value: string) {
+            this.Set('ID_', value);
+        }
+        /**
         * * Field Name: Provider
         * * Display Name: Provider
         * * SQL Data Type: nvarchar(50)
@@ -14531,6 +14990,18 @@ import { RegisterClass } from "@memberjunction/global";
             return this.Get('__mj_UpdatedAt');
         }
         
+        /**
+        * * Field Name: ID_
+        * * Display Name: ID_
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
+        */
+        get ID_(): string {  
+            return this.Get('ID_');
+        }
+        set ID_(value: string) {
+            this.Set('ID_', value);
+        }
         /**
         * * Field Name: Parent
         * * Display Name: Parent
@@ -15521,6 +15992,18 @@ import { RegisterClass } from "@memberjunction/global";
         }
         
         /**
+        * * Field Name: ID_
+        * * Display Name: ID_
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
+        */
+        get ID_(): string {  
+            return this.Get('ID_');
+        }
+        set ID_(value: string) {
+            this.Set('ID_', value);
+        }
+        /**
         * * Field Name: Entity
         * * Display Name: Entity
         * * SQL Data Type: nvarchar(255)
@@ -15723,6 +16206,18 @@ import { RegisterClass } from "@memberjunction/global";
             return this.Get('__mj_UpdatedAt');
         }
         
+        /**
+        * * Field Name: ID_
+        * * Display Name: ID_
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
+        */
+        get ID_(): string {  
+            return this.Get('ID_');
+        }
+        set ID_(value: string) {
+            this.Set('ID_', value);
+        }
 
     }
         
@@ -16249,16 +16744,16 @@ import { RegisterClass } from "@memberjunction/global";
             this.Set('ActionID', value);
         }
         /**
-        * * Field Name: AuthorizationName
-        * * Display Name: Authorization Name
-        * * SQL Data Type: nvarchar(100)
-        * * Related Entity/Foreign Key: Authorizations (vwAuthorizations.Name)
+        * * Field Name: AuthorizationID
+        * * Display Name: Authorization ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Authorizations (vwAuthorizations.ID)
         */
-        get AuthorizationName(): string {  
-            return this.Get('AuthorizationName');
+        get AuthorizationID(): string {  
+            return this.Get('AuthorizationID');
         }
-        set AuthorizationName(value: string) {
-            this.Set('AuthorizationName', value);
+        set AuthorizationID(value: string) {
+            this.Set('AuthorizationID', value);
         }
         /**
         * * Field Name: Comments
@@ -16398,6 +16893,18 @@ import { RegisterClass } from "@memberjunction/global";
             return this.Get('__mj_UpdatedAt');
         }
         
+        /**
+        * * Field Name: ID_
+        * * Display Name: ID_
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
+        */
+        get ID_(): string {  
+            return this.Get('ID_');
+        }
+        set ID_(value: string) {
+            this.Set('ID_', value);
+        }
 
     }
         
@@ -17834,6 +18341,18 @@ import { RegisterClass } from "@memberjunction/global";
             return this.Get('__mj_UpdatedAt');
         }
         
+        /**
+        * * Field Name: ID_
+        * * Display Name: ID_
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
+        */
+        get ID_(): string {  
+            return this.Get('ID_');
+        }
+        set ID_(value: string) {
+            this.Set('ID_', value);
+        }
 
     }
         
@@ -18093,6 +18612,18 @@ import { RegisterClass } from "@memberjunction/global";
             return this.Get('__mj_UpdatedAt');
         }
         
+        /**
+        * * Field Name: ID_
+        * * Display Name: ID_
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
+        */
+        get ID_(): string {  
+            return this.Get('ID_');
+        }
+        set ID_(value: string) {
+            this.Set('ID_', value);
+        }
 
     }
         
@@ -18259,6 +18790,18 @@ import { RegisterClass } from "@memberjunction/global";
         }
         
         /**
+        * * Field Name: ID_
+        * * Display Name: ID_
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
+        */
+        get ID_(): string {  
+            return this.Get('ID_');
+        }
+        set ID_(value: string) {
+            this.Set('ID_', value);
+        }
+        /**
         * * Field Name: User
         * * Display Name: User
         * * SQL Data Type: nvarchar(100)
@@ -18393,6 +18936,18 @@ import { RegisterClass } from "@memberjunction/global";
             return this.Get('__mj_UpdatedAt');
         }
         
+        /**
+        * * Field Name: ID_
+        * * Display Name: ID_
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
+        */
+        get ID_(): string {  
+            return this.Get('ID_');
+        }
+        set ID_(value: string) {
+            this.Set('ID_', value);
+        }
         /**
         * * Field Name: CommunicationProvider
         * * Display Name: Communication Provider
@@ -18747,6 +19302,18 @@ import { RegisterClass } from "@memberjunction/global";
             return this.Get('__mj_UpdatedAt');
         }
         
+        /**
+        * * Field Name: ID_
+        * * Display Name: ID_
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
+        */
+        get ID_(): string {  
+            return this.Get('ID_');
+        }
+        set ID_(value: string) {
+            this.Set('ID_', value);
+        }
 
     }
         
@@ -18920,6 +19487,18 @@ import { RegisterClass } from "@memberjunction/global";
         }
         
         /**
+        * * Field Name: ID_
+        * * Display Name: ID_
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
+        */
+        get ID_(): string {  
+            return this.Get('ID_');
+        }
+        set ID_(value: string) {
+            this.Set('ID_', value);
+        }
+        /**
         * * Field Name: Category
         * * Display Name: Category
         * * SQL Data Type: nvarchar(255)
@@ -19059,6 +19638,18 @@ import { RegisterClass } from "@memberjunction/global";
             return this.Get('__mj_UpdatedAt');
         }
         
+        /**
+        * * Field Name: ID_
+        * * Display Name: ID_
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
+        */
+        get ID_(): string {  
+            return this.Get('ID_');
+        }
+        set ID_(value: string) {
+            this.Set('ID_', value);
+        }
         /**
         * * Field Name: Parent
         * * Display Name: Parent
@@ -19585,6 +20176,18 @@ import { RegisterClass } from "@memberjunction/global";
             return this.Get('__mj_UpdatedAt');
         }
         
+        /**
+        * * Field Name: ID_
+        * * Display Name: ID_
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
+        */
+        get ID_(): string {  
+            return this.Get('ID_');
+        }
+        set ID_(value: string) {
+            this.Set('ID_', value);
+        }
 
     }
         
@@ -19696,6 +20299,18 @@ import { RegisterClass } from "@memberjunction/global";
         }
         
         /**
+        * * Field Name: ID_
+        * * Display Name: ID_
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
+        */
+        get ID_(): string {  
+            return this.Get('ID_');
+        }
+        set ID_(value: string) {
+            this.Set('ID_', value);
+        }
+        /**
         * * Field Name: SourceEntity
         * * Display Name: Source Entity
         * * SQL Data Type: nvarchar(255)
@@ -19800,6 +20415,18 @@ import { RegisterClass } from "@memberjunction/global";
             return this.Get('__mj_UpdatedAt');
         }
         
+        /**
+        * * Field Name: ID_
+        * * Display Name: ID_
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
+        */
+        get ID_(): string {  
+            return this.Get('ID_');
+        }
+        set ID_(value: string) {
+            this.Set('ID_', value);
+        }
 
     }
         
@@ -19952,6 +20579,18 @@ import { RegisterClass } from "@memberjunction/global";
             return this.Get('__mj_UpdatedAt');
         }
         
+        /**
+        * * Field Name: ID_
+        * * Display Name: ID_
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
+        */
+        get ID_(): string {  
+            return this.Get('ID_');
+        }
+        set ID_(value: string) {
+            this.Set('ID_', value);
+        }
         /**
         * * Field Name: RecommendationProvider
         * * Display Name: Recommendation Provider
@@ -20215,6 +20854,18 @@ import { RegisterClass } from "@memberjunction/global";
         }
         
         /**
+        * * Field Name: ID_
+        * * Display Name: ID_
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
+        */
+        get ID_(): string {  
+            return this.Get('ID_');
+        }
+        set ID_(value: string) {
+            this.Set('ID_', value);
+        }
+        /**
         * * Field Name: Entity
         * * Display Name: Entity
         * * SQL Data Type: nvarchar(255)
@@ -20473,6 +21124,18 @@ import { RegisterClass } from "@memberjunction/global";
         }
         
         /**
+        * * Field Name: ID_
+        * * Display Name: ID_
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
+        */
+        get ID_(): string {  
+            return this.Get('ID_');
+        }
+        set ID_(value: string) {
+            this.Set('ID_', value);
+        }
+        /**
         * * Field Name: User
         * * Display Name: User
         * * SQL Data Type: nvarchar(100)
@@ -20721,6 +21384,18 @@ import { RegisterClass } from "@memberjunction/global";
             return this.Get('__mj_UpdatedAt');
         }
         
+        /**
+        * * Field Name: ID_
+        * * Display Name: ID_
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
+        */
+        get ID_(): string {  
+            return this.Get('ID_');
+        }
+        set ID_(value: string) {
+            this.Set('ID_', value);
+        }
 
     }
         

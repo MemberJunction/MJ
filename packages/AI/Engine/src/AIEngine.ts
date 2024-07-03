@@ -8,8 +8,8 @@ import { AIActionEntity, AIModelActionEntity, AIModelEntityExtended, EntityAIAct
 
 
 export class AIActionParams {
-    actionId: number
-    modelId: number
+    actionId: string
+    modelId: string
     modelName?: string
     systemPrompt?: string
     userPrompt?: string

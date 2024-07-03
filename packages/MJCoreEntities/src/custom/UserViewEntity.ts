@@ -436,7 +436,7 @@ export class ViewInfo {
         const md = new Metadata();
         const result = await rv.RunView({
             EntityName: 'User Views',
-            ExtraFilter: `UserID = ${contextUser ? contextUser.ID : md.CurrentUser.ID}
+            ExtraFilter: `UserID = '${contextUser ? contextUser.ID : md.CurrentUser.ID}'
                          ${entityId ? ` AND EntityID = '${entityId}'` : ''}`
         });
         const rd = result?.Results as Array<any>;
