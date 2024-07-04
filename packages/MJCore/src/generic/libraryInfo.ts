@@ -4,6 +4,7 @@ import { BaseInfo } from "./baseInfo"
  * Metadata about a single library that's available for code generation or other purposes.
  */
 export class LibraryInfo extends BaseInfo {
+    public ID: string = null;
     /**
      * Name of the library - used for import statements and within package.json
      */

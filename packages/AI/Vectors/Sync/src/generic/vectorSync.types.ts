@@ -1,6 +1,6 @@
 export type VectorSyncRequest = {
     entityID: string;
-    entityDocumentID?: number;
+    entityDocumentID?: string;
     /**
      * The number of records to be vectorized and inserted
      * into the vector database at a time

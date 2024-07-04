@@ -53,7 +53,7 @@ export class SingleListDetailComponent implements OnInit {
             const listRunViewResult: RunViewResult = await rv.RunView({
                 EntityName: 'Lists',
                 ResultType: 'entity_object',
-                ExtraFilter: `ID = ${listID}`
+                ExtraFilter: `ID = '${listID}'`
             }, md.CurrentUser);
 
             if(!listRunViewResult.Success || listRunViewResult.Results.length === 0){
@@ -75,7 +75,7 @@ export class SingleListDetailComponent implements OnInit {
             const runViewResult: RunViewResult = await rv.RunView({
                 EntityName: 'List Details',
                 ResultType: 'entity_object',
-                ExtraFilter: `ListID = ${listID}`
+                ExtraFilter: `ListID = '${listID}'`
             }, md.CurrentUser);
 
             if(!runViewResult.Success){

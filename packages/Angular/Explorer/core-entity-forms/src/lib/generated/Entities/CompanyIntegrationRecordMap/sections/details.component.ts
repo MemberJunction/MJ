@@ -13,7 +13,7 @@ import { CompanyIntegrationRecordMapEntity } from '@memberjunction/core-entities
             [record]="record"
             [ShowLabel]="true"
             FieldName="CompanyIntegrationID"
-            Type="numerictextbox"
+            Type="textbox"
             [EditMode]="EditMode"
             LinkType="Record"
             LinkComponentType="Search"

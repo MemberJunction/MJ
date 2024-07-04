@@ -1,6 +1,6 @@
 import { Component, OnInit } from '@angular/core';
 import { ActivatedRoute, NavigationEnd, Router } from '@angular/router';
-import { BaseEntity } from '@memberjunction/core';
+import { BaseEntity, Metadata } from '@memberjunction/core';
 import { ApplicationEntity, ApplicationEntityEntity, RoleEntity, UserEntity } from '@memberjunction/core-entities';
 import { filter } from 'rxjs/operators';
 
@@ -26,6 +26,7 @@ export class SettingsComponent implements OnInit {
   public selectedRoleID: string = '';
   public selectedUserID: string = "";
   public selectedApplicationName: string = '';
+  public selectedApplicationID: string = '';
 
   public options = [
     { label: 'Users', value: SettingsItem.Users },
@@ -83,6 +84,8 @@ export class SettingsComponent implements OnInit {
         break;
       case 'application':
         this.selectedApplicationName = segments.length > 2 ? segments[2] : '';
+        const md = new Metadata();
+        this.selectedApplicationID = md.Applications.find(a => a.Name === this.selectedApplicationName)?.ID ?? '';
         this.selectItem(SettingsItem.Application, false);
         break;
       case 'users':

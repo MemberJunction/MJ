@@ -13,7 +13,7 @@ import { CompanyIntegrationRunAPILogEntity } from '@memberjunction/core-entities
             [record]="record"
             [ShowLabel]="true"
             FieldName="CompanyIntegrationRunID"
-            Type="numerictextbox"
+            Type="textbox"
             [EditMode]="EditMode"
             LinkType="Record"
             LinkComponentType="Search"

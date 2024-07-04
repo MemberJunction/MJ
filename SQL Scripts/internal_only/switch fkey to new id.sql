@@ -1,7 +1,9 @@
-DECLARE @TableName NVARCHAR(128) = 'Workspace';
-DECLARE @ForeignKeyColumnName NVARCHAR(128) = 'UserID';
-DECLARE @ReferencedTableName NVARCHAR(128) = 'User';
-DECLARE @ReferencedPrimaryKeyColumnName NVARCHAR(128) = 'ID';
+
+
+DECLARE @TableName NVARCHAR(128) = 'Workflow';
+DECLARE @ForeignKeyColumnName NVARCHAR(128) = 'WorkflowEngineName';
+DECLARE @ReferencedTableName NVARCHAR(128) = 'WorkflowEngine';
+DECLARE @ReferencedPrimaryKeyColumnName NVARCHAR(128) = 'Name';
 
 DECLARE @SQL NVARCHAR(MAX);
 DECLARE @UpdateSQL NVARCHAR(MAX);
@@ -36,6 +38,6 @@ SET @TestSQL = 'SELECT
 				ON
 					tgt.[' + @NewColumnName + ']= src.ID_' ;
 EXEC sp_executesql @TestSQL;
-  
 
-   
+
+

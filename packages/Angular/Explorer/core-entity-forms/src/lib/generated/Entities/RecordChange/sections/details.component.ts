@@ -51,15 +51,6 @@ import { RecordChangeEntity } from '@memberjunction/core-entities';
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="IntegrationID"
-            Type="numerictextbox"
-            [EditMode]="EditMode"
-            LinkType="Record"
-            LinkComponentType="Search"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
             FieldName="ChangedAt"
             Type="datepicker"
             [EditMode]="EditMode"
@@ -95,8 +86,15 @@ import { RecordChangeEntity } from '@memberjunction/core-entities';
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
+            FieldName="ErrorLog"
+            Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
             FieldName="ReplayRunID"
-            Type="numerictextbox"
+            Type="textbox"
             [EditMode]="EditMode"
             LinkType="Record"
             LinkComponentType="Search"
@@ -104,9 +102,11 @@ import { RecordChangeEntity } from '@memberjunction/core-entities';
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="ErrorLog"
-            Type="textarea"
+            FieldName="IntegrationID"
+            Type="textbox"
             [EditMode]="EditMode"
+            LinkType="Record"
+            LinkComponentType="Search"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"

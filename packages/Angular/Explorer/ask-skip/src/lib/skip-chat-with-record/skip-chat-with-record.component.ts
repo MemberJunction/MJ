@@ -66,7 +66,7 @@ export class SkipChatWithRecordComponent implements AfterViewInit {
   protected _loaded: boolean = false;
   protected async LoadConversation() {
       if (!this._loaded) {
-          if (this._conversationId <= 0) {
+          if (this._conversationId.length === 0) {
               // let's try to lookup the conversation id
               this.mjChat.ShowWaitingIndicator = true;
               const rv = new RunView();
@@ -103,13 +103,13 @@ export class SkipChatWithRecordComponent implements AfterViewInit {
       }
   }
 
-  private _conversationId: number = 0;
+  private _conversationId: string = "";
   public async HandleChatMessageAdded(message: ChatMessage) {
       if (message.senderType === 'user') {
           // send messages to Skip from here using graphql
           try {
               this.mjChat.ShowWaitingIndicator = true;
-              const gql = `query ExecuteAskSkipRecordChatQuery($userQuestion: String!, $conversationId: Int!, $entityName: String!, $compositeKey: CompositeKeyInputType!) {
+              const gql = `query ExecuteAskSkipRecordChatQuery($userQuestion: String!, $conversationId: String!, $entityName: String!, $compositeKey: CompositeKeyInputType!) {
                   ExecuteAskSkipRecordChat(UserQuestion: $userQuestion, ConversationId: $conversationId, EntityName: $entityName, CompositeKey: $compositeKey) {
                       Success
                       Status
@@ -142,14 +142,14 @@ export class SkipChatWithRecordComponent implements AfterViewInit {
   }    
   
   public async HandleClearChat() {
-      if (this._conversationId > 0) {
+      if (this._conversationId.length > 0) {
           this.mjChat.ShowWaitingIndicator = true;
           // first get rid of all conversation details, but don't kill the conversation itself, no need
           const md = new Metadata();
           const rv = new RunView();
           const result = await rv.RunView({
               EntityName: "Conversation Details",
-              ExtraFilter: "ConversationID=" + this._conversationId,
+              ExtraFilter: "ConversationID='" + this._conversationId + "'",
               ResultType: 'entity_object'
           });
           if (result && result.Success) {
@@ -165,7 +165,7 @@ export class SkipChatWithRecordComponent implements AfterViewInit {
                 // we have a data context for the conversation, so let's delete it, starting with the items
                 const resultDCI = await rv.RunView({
                     EntityName: "Data Context Items",
-                    ExtraFilter: "DataContextID=" + this._conversationId,
+                    ExtraFilter: "DataContextID='" + this._conversationId + "'",
                     ResultType: 'entity_object'
                 });
                 for (const dciEntity of resultDCI.Results) {
@@ -187,7 +187,7 @@ export class SkipChatWithRecordComponent implements AfterViewInit {
             
             await tg.Submit();
 
-            this._conversationId = 0;
+            this._conversationId = "";
             this.mjChat.ClearAllMessages();
           }
           this.mjChat.ShowWaitingIndicator = false;

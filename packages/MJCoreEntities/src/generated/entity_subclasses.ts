@@ -16,7 +16,7 @@ import { RegisterClass } from "@memberjunction/global";
     export class CompanyEntity extends BaseEntity {
         /**
         * Loads the Companies record from the database
-        * @param ID: number - primary key value to load the Companies record.
+        * @param ID: string - primary key value to load the Companies record.
         * @param EntityRelationshipsToLoad - (optional) the relationships to load
         * @returns {Promise<boolean>} - true if successful, false otherwise
         * @public
@@ -25,7 +25,7 @@ import { RegisterClass } from "@memberjunction/global";
         * @method
         * @override
         */      
-        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+        public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
             const compositeKey: CompositeKey = new CompositeKey();
             compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -33,9 +33,10 @@ import { RegisterClass } from "@memberjunction/global";
         
             /**
         * * Field Name: ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
         */
-        get ID(): number {  
+        get ID(): string {  
             return this.Get('ID');
         }
         
@@ -111,18 +112,6 @@ import { RegisterClass } from "@memberjunction/global";
             return this.Get('__mj_UpdatedAt');
         }
         
-        /**
-        * * Field Name: ID_
-        * * Display Name: ID_
-        * * SQL Data Type: uniqueidentifier
-        * * Default Value: newsequentialid()
-        */
-        get ID_(): string {  
-            return this.Get('ID_');
-        }
-        set ID_(value: string) {
-            this.Set('ID_', value);
-        }
 
     }
         
@@ -141,7 +130,7 @@ import { RegisterClass } from "@memberjunction/global";
     export class EmployeeEntity extends BaseEntity {
         /**
         * Loads the Employees record from the database
-        * @param ID: number - primary key value to load the Employees record.
+        * @param ID: string - primary key value to load the Employees record.
         * @param EntityRelationshipsToLoad - (optional) the relationships to load
         * @returns {Promise<boolean>} - true if successful, false otherwise
         * @public
@@ -150,7 +139,7 @@ import { RegisterClass } from "@memberjunction/global";
         * @method
         * @override
         */      
-        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+        public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
             const compositeKey: CompositeKey = new CompositeKey();
             compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -158,9 +147,10 @@ import { RegisterClass } from "@memberjunction/global";
         
             /**
         * * Field Name: ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
         */
-        get ID(): number {  
+        get ID(): string {  
             return this.Get('ID');
         }
         
@@ -195,6 +185,30 @@ import { RegisterClass } from "@memberjunction/global";
         }
         set LastName(value: string) {
             this.Set('LastName', value);
+        }
+        /**
+        * * Field Name: CompanyID
+        * * Display Name: Company ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Companies (vwCompanies.ID)
+        */
+        get CompanyID(): string {  
+            return this.Get('CompanyID');
+        }
+        set CompanyID(value: string) {
+            this.Set('CompanyID', value);
+        }
+        /**
+        * * Field Name: SupervisorID
+        * * Display Name: Supervisor ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Employees (vwEmployees.ID)
+        */
+        get SupervisorID(): string | null {  
+            return this.Get('SupervisorID');
+        }
+        set SupervisorID(value: string | null) {
+            this.Set('SupervisorID', value);
         }
         /**
         * * Field Name: Title
@@ -238,30 +252,6 @@ import { RegisterClass } from "@memberjunction/global";
             this.Set('Active', value);
         }
         /**
-        * * Field Name: CompanyID
-        * * Display Name: Company ID
-        * * SQL Data Type: int
-        * * Related Entity/Foreign Key: Companies (vwCompanies.ID)
-        */
-        get CompanyID(): number {  
-            return this.Get('CompanyID');
-        }
-        set CompanyID(value: number) {
-            this.Set('CompanyID', value);
-        }
-        /**
-        * * Field Name: SupervisorID
-        * * Display Name: Supervisor ID
-        * * SQL Data Type: int
-        * * Related Entity/Foreign Key: Employees (vwEmployees.ID)
-        */
-        get SupervisorID(): number | null {  
-            return this.Get('SupervisorID');
-        }
-        set SupervisorID(value: number | null) {
-            this.Set('SupervisorID', value);
-        }
-        /**
         * * Field Name: __mj_CreatedAt
         * * Display Name: __mj _Created At
         * * SQL Data Type: datetimeoffset
@@ -281,18 +271,6 @@ import { RegisterClass } from "@memberjunction/global";
             return this.Get('__mj_UpdatedAt');
         }
         
-        /**
-        * * Field Name: ID_
-        * * Display Name: ID_
-        * * SQL Data Type: uniqueidentifier
-        * * Default Value: newsequentialid()
-        */
-        get ID_(): string {  
-            return this.Get('ID_');
-        }
-        set ID_(value: string) {
-            this.Set('ID_', value);
-        }
         /**
         * * Field Name: FirstLast
         * * Display Name: First Last
@@ -517,25 +495,25 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: EmployeeID
         * * Display Name: Employee ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Employees (vwEmployees.ID)
         */
-        get EmployeeID(): number {  
+        get EmployeeID(): string {  
             return this.Get('EmployeeID');
         }
-        set EmployeeID(value: number) {
+        set EmployeeID(value: string) {
             this.Set('EmployeeID', value);
         }
         /**
         * * Field Name: CompanyIntegrationID
         * * Display Name: Company Integration ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Company Integrations (vwCompanyIntegrations.ID)
         */
-        get CompanyIntegrationID(): number {  
+        get CompanyIntegrationID(): string {  
             return this.Get('CompanyIntegrationID');
         }
-        set CompanyIntegrationID(value: number) {
+        set CompanyIntegrationID(value: string) {
             this.Set('CompanyIntegrationID', value);
         }
         /**
@@ -638,13 +616,13 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: EmployeeID
         * * Display Name: Employee ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Employees (vwEmployees.ID)
         */
-        get EmployeeID(): number {  
+        get EmployeeID(): string {  
             return this.Get('EmployeeID');
         }
-        set EmployeeID(value: number) {
+        set EmployeeID(value: string) {
             this.Set('EmployeeID', value);
         }
         /**
@@ -745,25 +723,25 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: EmployeeID
         * * Display Name: Employee ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Employees (vwEmployees.ID)
         */
-        get EmployeeID(): number {  
+        get EmployeeID(): string {  
             return this.Get('EmployeeID');
         }
-        set EmployeeID(value: number) {
+        set EmployeeID(value: string) {
             this.Set('EmployeeID', value);
         }
         /**
         * * Field Name: SkillID
         * * Display Name: Skill ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Skills (vwSkills.ID)
         */
-        get SkillID(): number {  
+        get SkillID(): string {  
             return this.Get('SkillID');
         }
-        set SkillID(value: number) {
+        set SkillID(value: string) {
             this.Set('SkillID', value);
         }
         /**
@@ -919,7 +897,7 @@ import { RegisterClass } from "@memberjunction/global";
     export class SkillEntity extends BaseEntity {
         /**
         * Loads the Skills record from the database
-        * @param ID: number - primary key value to load the Skills record.
+        * @param ID: string - primary key value to load the Skills record.
         * @param EntityRelationshipsToLoad - (optional) the relationships to load
         * @returns {Promise<boolean>} - true if successful, false otherwise
         * @public
@@ -928,7 +906,7 @@ import { RegisterClass } from "@memberjunction/global";
         * @method
         * @override
         */      
-        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+        public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
             const compositeKey: CompositeKey = new CompositeKey();
             compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -960,9 +938,10 @@ import { RegisterClass } from "@memberjunction/global";
             
             /**
         * * Field Name: ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
         */
-        get ID(): number {  
+        get ID(): string {  
             return this.Get('ID');
         }
         
@@ -979,13 +958,13 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: ParentID
         * * Display Name: Parent
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Skills (vwSkills.ID)
         */
-        get ParentID(): number | null {  
+        get ParentID(): string | null {  
             return this.Get('ParentID');
         }
-        set ParentID(value: number | null) {
+        set ParentID(value: string | null) {
             this.Set('ParentID', value);
         }
         /**
@@ -1008,18 +987,6 @@ import { RegisterClass } from "@memberjunction/global";
             return this.Get('__mj_UpdatedAt');
         }
         
-        /**
-        * * Field Name: ID_
-        * * Display Name: ID_
-        * * SQL Data Type: uniqueidentifier
-        * * Default Value: newsequentialid()
-        */
-        get ID_(): string {  
-            return this.Get('ID_');
-        }
-        set ID_(value: string) {
-            this.Set('ID_', value);
-        }
         /**
         * * Field Name: Parent
         * * Display Name: Parent
@@ -1084,16 +1051,16 @@ import { RegisterClass } from "@memberjunction/global";
         }
         
         /**
-        * * Field Name: IntegrationName
-        * * Display Name: Integration Name
-        * * SQL Data Type: nvarchar(100)
-        * * Related Entity/Foreign Key: Integrations (vwIntegrations.Name)
+        * * Field Name: IntegrationID
+        * * Display Name: Integration ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Integrations (vwIntegrations.ID)
         */
-        get IntegrationName(): string {  
-            return this.Get('IntegrationName');
+        get IntegrationID(): string {  
+            return this.Get('IntegrationID');
         }
-        set IntegrationName(value: string) {
-            this.Set('IntegrationName', value);
+        set IntegrationID(value: string) {
+            this.Set('IntegrationID', value);
         }
         /**
         * * Field Name: EntityID
@@ -1110,12 +1077,24 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: URLFormat
         * * SQL Data Type: nvarchar(500)
+        * * Description: The URL Format for the given integration including the ability to include markup with fields from the integration
         */
         get URLFormat(): string {  
             return this.Get('URLFormat');
         }
         set URLFormat(value: string) {
             this.Set('URLFormat', value);
+        }
+        /**
+        * * Field Name: Comments
+        * * Display Name: Comments
+        * * SQL Data Type: nvarchar(MAX)
+        */
+        get Comments(): string | null {  
+            return this.Get('Comments');
+        }
+        set Comments(value: string | null) {
+            this.Set('Comments', value);
         }
         /**
         * * Field Name: __mj_CreatedAt
@@ -1135,15 +1114,6 @@ import { RegisterClass } from "@memberjunction/global";
         */
         get __mj_UpdatedAt(): Date {  
             return this.Get('__mj_UpdatedAt');
-        }
-        
-        /**
-        * * Field Name: IntegrationID
-        * * Display Name: Integration ID
-        * * SQL Data Type: int
-        */
-        get IntegrationID(): number {  
-            return this.Get('IntegrationID');
         }
         
         /**
@@ -1191,7 +1161,7 @@ import { RegisterClass } from "@memberjunction/global";
     export class IntegrationEntity extends BaseEntity {
         /**
         * Loads the Integrations record from the database
-        * @param ID: number - primary key value to load the Integrations record.
+        * @param ID: string - primary key value to load the Integrations record.
         * @param EntityRelationshipsToLoad - (optional) the relationships to load
         * @returns {Promise<boolean>} - true if successful, false otherwise
         * @public
@@ -1200,7 +1170,7 @@ import { RegisterClass } from "@memberjunction/global";
         * @method
         * @override
         */      
-        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+        public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
             const compositeKey: CompositeKey = new CompositeKey();
             compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -1219,14 +1189,6 @@ import { RegisterClass } from "@memberjunction/global";
         } 
             
             /**
-        * * Field Name: ID
-        * * SQL Data Type: int
-        */
-        get ID(): number {  
-            return this.Get('ID');
-        }
-        
-        /**
         * * Field Name: Name
         * * SQL Data Type: nvarchar(100)
         */
@@ -1324,17 +1286,14 @@ import { RegisterClass } from "@memberjunction/global";
         }
         
         /**
-        * * Field Name: ID_
-        * * Display Name: ID_
+        * * Field Name: ID
         * * SQL Data Type: uniqueidentifier
         * * Default Value: newsequentialid()
         */
-        get ID_(): string {  
-            return this.Get('ID_');
+        get ID(): string {  
+            return this.Get('ID');
         }
-        set ID_(value: string) {
-            this.Set('ID_', value);
-        }
+        
 
     }
         
@@ -1353,7 +1312,7 @@ import { RegisterClass } from "@memberjunction/global";
     export class CompanyIntegrationEntity extends BaseEntity {
         /**
         * Loads the Company Integrations record from the database
-        * @param ID: number - primary key value to load the Company Integrations record.
+        * @param ID: string - primary key value to load the Company Integrations record.
         * @param EntityRelationshipsToLoad - (optional) the relationships to load
         * @returns {Promise<boolean>} - true if successful, false otherwise
         * @public
@@ -1362,7 +1321,7 @@ import { RegisterClass } from "@memberjunction/global";
         * @method
         * @override
         */      
-        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+        public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
             const compositeKey: CompositeKey = new CompositeKey();
             compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -1382,35 +1341,36 @@ import { RegisterClass } from "@memberjunction/global";
             
             /**
         * * Field Name: ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
         */
-        get ID(): number {  
+        get ID(): string {  
             return this.Get('ID');
         }
         
         /**
-        * * Field Name: CompanyName
-        * * Display Name: Company Name
-        * * SQL Data Type: nvarchar(50)
-        * * Related Entity/Foreign Key: Companies (vwCompanies.Name)
+        * * Field Name: CompanyID
+        * * Display Name: Company ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Companies (vwCompanies.ID)
         */
-        get CompanyName(): string {  
-            return this.Get('CompanyName');
+        get CompanyID(): string {  
+            return this.Get('CompanyID');
         }
-        set CompanyName(value: string) {
-            this.Set('CompanyName', value);
+        set CompanyID(value: string) {
+            this.Set('CompanyID', value);
         }
         /**
-        * * Field Name: IntegrationName
-        * * Display Name: Integration Name
-        * * SQL Data Type: nvarchar(100)
-        * * Related Entity/Foreign Key: Integrations (vwIntegrations.Name)
+        * * Field Name: IntegrationID
+        * * Display Name: Integration ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Integrations (vwIntegrations.ID)
         */
-        get IntegrationName(): string {  
-            return this.Get('IntegrationName');
+        get IntegrationID(): string {  
+            return this.Get('IntegrationID');
         }
-        set IntegrationName(value: string) {
-            this.Set('IntegrationName', value);
+        set IntegrationID(value: string) {
+            this.Set('IntegrationID', value);
         }
         /**
         * * Field Name: IsActive
@@ -1543,36 +1503,6 @@ import { RegisterClass } from "@memberjunction/global";
         }
         
         /**
-        * * Field Name: ID_
-        * * Display Name: ID_
-        * * SQL Data Type: uniqueidentifier
-        * * Default Value: newsequentialid()
-        */
-        get ID_(): string {  
-            return this.Get('ID_');
-        }
-        set ID_(value: string) {
-            this.Set('ID_', value);
-        }
-        /**
-        * * Field Name: CompanyID
-        * * Display Name: Company ID
-        * * SQL Data Type: int
-        */
-        get CompanyID(): number {  
-            return this.Get('CompanyID');
-        }
-        
-        /**
-        * * Field Name: IntegrationID
-        * * Display Name: Integration ID
-        * * SQL Data Type: int
-        */
-        get IntegrationID(): number {  
-            return this.Get('IntegrationID');
-        }
-        
-        /**
         * * Field Name: Company
         * * SQL Data Type: nvarchar(50)
         */
@@ -1609,9 +1539,9 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: LastRunID
         * * Display Name: LastRun
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
         */
-        get LastRunID(): number | null {  
+        get LastRunID(): string | null {  
             return this.Get('LastRunID');
         }
         
@@ -3029,27 +2959,27 @@ import { RegisterClass } from "@memberjunction/global";
             this.Set('LinkedRecordType', value);
         }
         /**
-        * * Field Name: EmployeeID
-        * * Display Name: Employee
-        * * SQL Data Type: int
-        * * Related Entity/Foreign Key: Employees (vwEmployees.ID)
-        */
-        get EmployeeID(): number | null {  
-            return this.Get('EmployeeID');
-        }
-        set EmployeeID(value: number | null) {
-            this.Set('EmployeeID', value);
-        }
-        /**
         * * Field Name: LinkedEntityRecordID
         * * Display Name: Linked Entity Record ID
-        * * SQL Data Type: int
+        * * SQL Data Type: nvarchar(450)
         */
-        get LinkedEntityRecordID(): number | null {  
+        get LinkedEntityRecordID(): string | null {  
             return this.Get('LinkedEntityRecordID');
         }
-        set LinkedEntityRecordID(value: number | null) {
+        set LinkedEntityRecordID(value: string | null) {
             this.Set('LinkedEntityRecordID', value);
+        }
+        /**
+        * * Field Name: EmployeeID
+        * * Display Name: Employee
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Employees (vwEmployees.ID)
+        */
+        get EmployeeID(): string | null {  
+            return this.Get('EmployeeID');
+        }
+        set EmployeeID(value: string | null) {
+            this.Set('EmployeeID', value);
         }
         /**
         * * Field Name: __mj_CreatedAt
@@ -3403,14 +3333,13 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: DisplayComponentID
         * * Display Name: Display Component ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Entity Relationship Display Components (vwEntityRelationshipDisplayComponents.ID)
-        * * Description: If specified, this component will be used for displaying the relationship within the parent entity's form
         */
-        get DisplayComponentID(): number | null {  
+        get DisplayComponentID(): string | null {  
             return this.Get('DisplayComponentID');
         }
-        set DisplayComponentID(value: number | null) {
+        set DisplayComponentID(value: string | null) {
             this.Set('DisplayComponentID', value);
         }
         /**
@@ -3821,13 +3750,13 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: CategoryID
         * * Display Name: Category ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: User View Categories (vwUserViewCategories.ID)
         */
-        get CategoryID(): number | null {  
+        get CategoryID(): string | null {  
             return this.Get('CategoryID');
         }
-        set CategoryID(value: number | null) {
+        set CategoryID(value: string | null) {
             this.Set('CategoryID', value);
         }
         /**
@@ -4058,7 +3987,7 @@ import { RegisterClass } from "@memberjunction/global";
     export class CompanyIntegrationRunEntity extends BaseEntity {
         /**
         * Loads the Company Integration Runs record from the database
-        * @param ID: number - primary key value to load the Company Integration Runs record.
+        * @param ID: string - primary key value to load the Company Integration Runs record.
         * @param EntityRelationshipsToLoad - (optional) the relationships to load
         * @returns {Promise<boolean>} - true if successful, false otherwise
         * @public
@@ -4067,7 +3996,7 @@ import { RegisterClass } from "@memberjunction/global";
         * @method
         * @override
         */      
-        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+        public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
             const compositeKey: CompositeKey = new CompositeKey();
             compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -4087,22 +4016,23 @@ import { RegisterClass } from "@memberjunction/global";
             
             /**
         * * Field Name: ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
         */
-        get ID(): number {  
+        get ID(): string {  
             return this.Get('ID');
         }
         
         /**
         * * Field Name: CompanyIntegrationID
         * * Display Name: CompanyIntegration ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Company Integrations (vwCompanyIntegrations.ID)
         */
-        get CompanyIntegrationID(): number {  
+        get CompanyIntegrationID(): string {  
             return this.Get('CompanyIntegrationID');
         }
-        set CompanyIntegrationID(value: number) {
+        set CompanyIntegrationID(value: string) {
             this.Set('CompanyIntegrationID', value);
         }
         /**
@@ -4181,18 +4111,6 @@ import { RegisterClass } from "@memberjunction/global";
         }
         
         /**
-        * * Field Name: ID_
-        * * Display Name: ID_
-        * * SQL Data Type: uniqueidentifier
-        * * Default Value: newsequentialid()
-        */
-        get ID_(): string {  
-            return this.Get('ID_');
-        }
-        set ID_(value: string) {
-            this.Set('ID_', value);
-        }
-        /**
         * * Field Name: RunByUser
         * * Display Name: Run By User
         * * SQL Data Type: nvarchar(100)
@@ -4218,7 +4136,7 @@ import { RegisterClass } from "@memberjunction/global";
     export class CompanyIntegrationRunDetailEntity extends BaseEntity {
         /**
         * Loads the Company Integration Run Details record from the database
-        * @param ID: number - primary key value to load the Company Integration Run Details record.
+        * @param ID: string - primary key value to load the Company Integration Run Details record.
         * @param EntityRelationshipsToLoad - (optional) the relationships to load
         * @returns {Promise<boolean>} - true if successful, false otherwise
         * @public
@@ -4227,7 +4145,7 @@ import { RegisterClass } from "@memberjunction/global";
         * @method
         * @override
         */      
-        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+        public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
             const compositeKey: CompositeKey = new CompositeKey();
             compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -4247,22 +4165,23 @@ import { RegisterClass } from "@memberjunction/global";
             
             /**
         * * Field Name: ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
         */
-        get ID(): number {  
+        get ID(): string {  
             return this.Get('ID');
         }
         
         /**
         * * Field Name: CompanyIntegrationRunID
         * * Display Name: CompanyIntegrationRun ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Company Integration Runs (vwCompanyIntegrationRuns.ID)
         */
-        get CompanyIntegrationRunID(): number {  
+        get CompanyIntegrationRunID(): string {  
             return this.Get('CompanyIntegrationRunID');
         }
-        set CompanyIntegrationRunID(value: number) {
+        set CompanyIntegrationRunID(value: string) {
             this.Set('CompanyIntegrationRunID', value);
         }
         /**
@@ -4342,18 +4261,6 @@ import { RegisterClass } from "@memberjunction/global";
             return this.Get('__mj_UpdatedAt');
         }
         
-        /**
-        * * Field Name: ID_
-        * * Display Name: ID_
-        * * SQL Data Type: uniqueidentifier
-        * * Default Value: newsequentialid()
-        */
-        get ID_(): string {  
-            return this.Get('ID_');
-        }
-        set ID_(value: string) {
-            this.Set('ID_', value);
-        }
         /**
         * * Field Name: Entity
         * * SQL Data Type: nvarchar(255)
@@ -4436,25 +4343,25 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: CompanyIntegrationRunID
         * * Display Name: CompanyIntegrationRun ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Company Integration Runs (vwCompanyIntegrationRuns.ID)
         */
-        get CompanyIntegrationRunID(): number | null {  
+        get CompanyIntegrationRunID(): string | null {  
             return this.Get('CompanyIntegrationRunID');
         }
-        set CompanyIntegrationRunID(value: number | null) {
+        set CompanyIntegrationRunID(value: string | null) {
             this.Set('CompanyIntegrationRunID', value);
         }
         /**
         * * Field Name: CompanyIntegrationRunDetailID
         * * Display Name: CompanyIntegrationRunDetail ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Company Integration Run Details (vwCompanyIntegrationRunDetails.ID)
         */
-        get CompanyIntegrationRunDetailID(): number | null {  
+        get CompanyIntegrationRunDetailID(): string | null {  
             return this.Get('CompanyIntegrationRunDetailID');
         }
-        set CompanyIntegrationRunDetailID(value: number | null) {
+        set CompanyIntegrationRunDetailID(value: string | null) {
             this.Set('CompanyIntegrationRunDetailID', value);
         }
         /**
@@ -4557,7 +4464,7 @@ import { RegisterClass } from "@memberjunction/global";
     export class ApplicationEntity extends BaseEntity {
         /**
         * Loads the Applications record from the database
-        * @param ID: number - primary key value to load the Applications record.
+        * @param ID: string - primary key value to load the Applications record.
         * @param EntityRelationshipsToLoad - (optional) the relationships to load
         * @returns {Promise<boolean>} - true if successful, false otherwise
         * @public
@@ -4566,7 +4473,7 @@ import { RegisterClass } from "@memberjunction/global";
         * @method
         * @override
         */      
-        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+        public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
             const compositeKey: CompositeKey = new CompositeKey();
             compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -4574,15 +4481,16 @@ import { RegisterClass } from "@memberjunction/global";
         
             /**
         * * Field Name: ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
         */
-        get ID(): number {  
+        get ID(): string {  
             return this.Get('ID');
         }
         
         /**
         * * Field Name: Name
-        * * SQL Data Type: nvarchar(50)
+        * * SQL Data Type: nvarchar(100)
         */
         get Name(): string {  
             return this.Get('Name');
@@ -4645,18 +4553,6 @@ import { RegisterClass } from "@memberjunction/global";
             return this.Get('__mj_UpdatedAt');
         }
         
-        /**
-        * * Field Name: ID_
-        * * Display Name: ID_
-        * * SQL Data Type: uniqueidentifier
-        * * Default Value: newsequentialid()
-        */
-        get ID_(): string {  
-            return this.Get('ID_');
-        }
-        set ID_(value: string) {
-            this.Set('ID_', value);
-        }
 
     }
         
@@ -4700,16 +4596,16 @@ import { RegisterClass } from "@memberjunction/global";
         }
         
         /**
-        * * Field Name: ApplicationName
-        * * Display Name: Application Name
-        * * SQL Data Type: nvarchar(50)
-        * * Related Entity/Foreign Key: Applications (vwApplications.Name)
+        * * Field Name: ApplicationID
+        * * Display Name: Application ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Applications (vwApplications.ID)
         */
-        get ApplicationName(): string {  
-            return this.Get('ApplicationName');
+        get ApplicationID(): string {  
+            return this.Get('ApplicationID');
         }
-        set ApplicationName(value: string) {
-            this.Set('ApplicationName', value);
+        set ApplicationID(value: string) {
+            this.Set('ApplicationID', value);
         }
         /**
         * * Field Name: EntityID
@@ -4768,7 +4664,7 @@ import { RegisterClass } from "@memberjunction/global";
         
         /**
         * * Field Name: Application
-        * * SQL Data Type: nvarchar(50)
+        * * SQL Data Type: nvarchar(100)
         */
         get Application(): string {  
             return this.Get('Application');
@@ -5098,13 +4994,13 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: UserApplicationID
         * * Display Name: UserApplication ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: User Applications (vwUserApplications.ID)
         */
-        get UserApplicationID(): number {  
+        get UserApplicationID(): string {  
             return this.Get('UserApplicationID');
         }
-        set UserApplicationID(value: number) {
+        set UserApplicationID(value: string) {
             this.Set('UserApplicationID', value);
         }
         /**
@@ -5153,7 +5049,7 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: Application
         * * Display Name: Application
-        * * SQL Data Type: nvarchar(50)
+        * * SQL Data Type: nvarchar(100)
         */
         get Application(): string {  
             return this.Get('Application');
@@ -5194,7 +5090,7 @@ import { RegisterClass } from "@memberjunction/global";
     export class UserApplicationEntity extends BaseEntity {
         /**
         * Loads the User Applications record from the database
-        * @param ID: number - primary key value to load the User Applications record.
+        * @param ID: string - primary key value to load the User Applications record.
         * @param EntityRelationshipsToLoad - (optional) the relationships to load
         * @returns {Promise<boolean>} - true if successful, false otherwise
         * @public
@@ -5203,7 +5099,7 @@ import { RegisterClass } from "@memberjunction/global";
         * @method
         * @override
         */      
-        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+        public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
             const compositeKey: CompositeKey = new CompositeKey();
             compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -5211,9 +5107,10 @@ import { RegisterClass } from "@memberjunction/global";
         
             /**
         * * Field Name: ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
         */
-        get ID(): number {  
+        get ID(): string {  
             return this.Get('ID');
         }
         
@@ -5232,13 +5129,13 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: ApplicationID
         * * Display Name: Application ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Applications (vwApplications.ID)
         */
-        get ApplicationID(): number {  
+        get ApplicationID(): string {  
             return this.Get('ApplicationID');
         }
-        set ApplicationID(value: number) {
+        set ApplicationID(value: string) {
             this.Set('ApplicationID', value);
         }
         /**
@@ -5285,18 +5182,6 @@ import { RegisterClass } from "@memberjunction/global";
         }
         
         /**
-        * * Field Name: ID_
-        * * Display Name: ID_
-        * * SQL Data Type: uniqueidentifier
-        * * Default Value: newsequentialid()
-        */
-        get ID_(): string {  
-            return this.Get('ID_');
-        }
-        set ID_(value: string) {
-            this.Set('ID_', value);
-        }
-        /**
         * * Field Name: User
         * * Display Name: User
         * * SQL Data Type: nvarchar(100)
@@ -5308,7 +5193,7 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: Application
         * * Display Name: Application
-        * * SQL Data Type: nvarchar(50)
+        * * SQL Data Type: nvarchar(100)
         */
         get Application(): string {  
             return this.Get('Application');
@@ -5370,13 +5255,13 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: CompanyIntegrationRunID
         * * Display Name: Company Integration Run ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Company Integration Runs (vwCompanyIntegrationRuns.ID)
         */
-        get CompanyIntegrationRunID(): number {  
+        get CompanyIntegrationRunID(): string {  
             return this.Get('CompanyIntegrationRunID');
         }
-        set CompanyIntegrationRunID(value: number) {
+        set CompanyIntegrationRunID(value: string) {
             this.Set('CompanyIntegrationRunID', value);
         }
         /**
@@ -5481,7 +5366,7 @@ import { RegisterClass } from "@memberjunction/global";
     export class ListEntity extends BaseEntity {
         /**
         * Loads the Lists record from the database
-        * @param ID: number - primary key value to load the Lists record.
+        * @param ID: string - primary key value to load the Lists record.
         * @param EntityRelationshipsToLoad - (optional) the relationships to load
         * @returns {Promise<boolean>} - true if successful, false otherwise
         * @public
@@ -5490,7 +5375,7 @@ import { RegisterClass } from "@memberjunction/global";
         * @method
         * @override
         */      
-        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+        public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
             const compositeKey: CompositeKey = new CompositeKey();
             compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -5498,9 +5383,10 @@ import { RegisterClass } from "@memberjunction/global";
         
             /**
         * * Field Name: ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
         */
-        get ID(): number {  
+        get ID(): string {  
             return this.Get('ID');
         }
         
@@ -5574,13 +5460,13 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: CompanyIntegrationID
         * * Display Name: Company Integration ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Company Integrations (vwCompanyIntegrations.ID)
         */
-        get CompanyIntegrationID(): number | null {  
+        get CompanyIntegrationID(): string | null {  
             return this.Get('CompanyIntegrationID');
         }
-        set CompanyIntegrationID(value: number | null) {
+        set CompanyIntegrationID(value: string | null) {
             this.Set('CompanyIntegrationID', value);
         }
         /**
@@ -5603,18 +5489,6 @@ import { RegisterClass } from "@memberjunction/global";
             return this.Get('__mj_UpdatedAt');
         }
         
-        /**
-        * * Field Name: ID_
-        * * Display Name: ID_
-        * * SQL Data Type: uniqueidentifier
-        * * Default Value: newsequentialid()
-        */
-        get ID_(): string {  
-            return this.Get('ID_');
-        }
-        set ID_(value: string) {
-            this.Set('ID_', value);
-        }
         /**
         * * Field Name: Entity
         * * Display Name: Entity
@@ -5678,13 +5552,13 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: ListID
         * * Display Name: List ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Lists (vwLists.ID)
         */
-        get ListID(): number {  
+        get ListID(): string {  
             return this.Get('ListID');
         }
-        set ListID(value: number) {
+        set ListID(value: string) {
             this.Set('ListID', value);
         }
         /**
@@ -6034,21 +5908,21 @@ import { RegisterClass } from "@memberjunction/global";
         }
         
         /**
-        * * Field Name: WorkflowName
-        * * Display Name: Workflow Name
-        * * SQL Data Type: nvarchar(100)
-        * * Related Entity/Foreign Key: Workflows (vwWorkflows.Name)
+        * * Field Name: WorkflowID
+        * * Display Name: Workflow ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Workflows (vwWorkflows.ID)
         */
-        get WorkflowName(): string {  
-            return this.Get('WorkflowName');
+        get WorkflowID(): string {  
+            return this.Get('WorkflowID');
         }
-        set WorkflowName(value: string) {
-            this.Set('WorkflowName', value);
+        set WorkflowID(value: string) {
+            this.Set('WorkflowID', value);
         }
         /**
         * * Field Name: ExternalSystemRecordID
         * * Display Name: External System Record
-        * * SQL Data Type: nvarchar(100)
+        * * SQL Data Type: nvarchar(500)
         */
         get ExternalSystemRecordID(): string {  
             return this.Get('ExternalSystemRecordID');
@@ -6160,7 +6034,7 @@ import { RegisterClass } from "@memberjunction/global";
     export class WorkflowEntity extends BaseEntity {
         /**
         * Loads the Workflows record from the database
-        * @param ID: number - primary key value to load the Workflows record.
+        * @param ID: string - primary key value to load the Workflows record.
         * @param EntityRelationshipsToLoad - (optional) the relationships to load
         * @returns {Promise<boolean>} - true if successful, false otherwise
         * @public
@@ -6169,7 +6043,7 @@ import { RegisterClass } from "@memberjunction/global";
         * @method
         * @override
         */      
-        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+        public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
             const compositeKey: CompositeKey = new CompositeKey();
             compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -6189,9 +6063,10 @@ import { RegisterClass } from "@memberjunction/global";
             
             /**
         * * Field Name: ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
         */
-        get ID(): number {  
+        get ID(): string {  
             return this.Get('ID');
         }
         
@@ -6216,28 +6091,16 @@ import { RegisterClass } from "@memberjunction/global";
             this.Set('Description', value);
         }
         /**
-        * * Field Name: WorkflowEngineName
-        * * Display Name: Workflow Engine Name
-        * * SQL Data Type: nvarchar(100)
-        * * Related Entity/Foreign Key: Workflow Engines (vwWorkflowEngines.Name)
+        * * Field Name: WorkflowEngineID
+        * * Display Name: Workflow Engine ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Workflow Engines (vwWorkflowEngines.ID)
         */
-        get WorkflowEngineName(): string {  
-            return this.Get('WorkflowEngineName');
+        get WorkflowEngineID(): string {  
+            return this.Get('WorkflowEngineID');
         }
-        set WorkflowEngineName(value: string) {
-            this.Set('WorkflowEngineName', value);
-        }
-        /**
-        * * Field Name: CompanyName
-        * * Display Name: Company Name
-        * * SQL Data Type: nvarchar(50)
-        * * Related Entity/Foreign Key: Companies (vwCompanies.Name)
-        */
-        get CompanyName(): string {  
-            return this.Get('CompanyName');
-        }
-        set CompanyName(value: string) {
-            this.Set('CompanyName', value);
+        set WorkflowEngineID(value: string) {
+            this.Set('WorkflowEngineID', value);
         }
         /**
         * * Field Name: ExternalSystemRecordID
@@ -6328,18 +6191,6 @@ import { RegisterClass } from "@memberjunction/global";
         }
         
         /**
-        * * Field Name: ID_
-        * * Display Name: ID_
-        * * SQL Data Type: uniqueidentifier
-        * * Default Value: newsequentialid()
-        */
-        get ID_(): string {  
-            return this.Get('ID_');
-        }
-        set ID_(value: string) {
-            this.Set('ID_', value);
-        }
-        /**
         * * Field Name: AutoRunIntervalMinutes
         * * Display Name: Auto Run Interval Minutes
         * * SQL Data Type: int
@@ -6365,7 +6216,7 @@ import { RegisterClass } from "@memberjunction/global";
     export class WorkflowEngineEntity extends BaseEntity {
         /**
         * Loads the Workflow Engines record from the database
-        * @param ID: number - primary key value to load the Workflow Engines record.
+        * @param ID: string - primary key value to load the Workflow Engines record.
         * @param EntityRelationshipsToLoad - (optional) the relationships to load
         * @returns {Promise<boolean>} - true if successful, false otherwise
         * @public
@@ -6374,7 +6225,7 @@ import { RegisterClass } from "@memberjunction/global";
         * @method
         * @override
         */      
-        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+        public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
             const compositeKey: CompositeKey = new CompositeKey();
             compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -6394,9 +6245,10 @@ import { RegisterClass } from "@memberjunction/global";
             
             /**
         * * Field Name: ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
         */
-        get ID(): number {  
+        get ID(): string {  
             return this.Get('ID');
         }
         
@@ -6462,18 +6314,6 @@ import { RegisterClass } from "@memberjunction/global";
             return this.Get('__mj_UpdatedAt');
         }
         
-        /**
-        * * Field Name: ID_
-        * * Display Name: ID_
-        * * SQL Data Type: uniqueidentifier
-        * * Default Value: newsequentialid()
-        */
-        get ID_(): string {  
-            return this.Get('ID_');
-        }
-        set ID_(value: string) {
-            this.Set('ID_', value);
-        }
 
     }
         
@@ -6599,19 +6439,6 @@ import { RegisterClass } from "@memberjunction/global";
             this.Set('Source', value);
         }
         /**
-        * * Field Name: IntegrationID
-        * * Display Name: Integration ID
-        * * SQL Data Type: int
-        * * Related Entity/Foreign Key: Integrations (vwIntegrations.ID)
-        * * Description: If Source=External, this field can optionally specify which integration created the change, if known
-        */
-        get IntegrationID(): number | null {  
-            return this.Get('IntegrationID');
-        }
-        set IntegrationID(value: number | null) {
-            this.Set('IntegrationID', value);
-        }
-        /**
         * * Field Name: ChangedAt
         * * Display Name: Changed At
         * * SQL Data Type: datetimeoffset
@@ -6678,19 +6505,6 @@ import { RegisterClass } from "@memberjunction/global";
             this.Set('Status', value);
         }
         /**
-        * * Field Name: ReplayRunID
-        * * Display Name: Replay Run ID
-        * * SQL Data Type: int
-        * * Related Entity/Foreign Key: Record Change Replay Runs (vwRecordChangeReplayRuns.ID)
-        * * Description: For external changes only, this run ID is the link to the replay run that the change record was part of
-        */
-        get ReplayRunID(): number | null {  
-            return this.Get('ReplayRunID');
-        }
-        set ReplayRunID(value: number | null) {
-            this.Set('ReplayRunID', value);
-        }
-        /**
         * * Field Name: ErrorLog
         * * Display Name: Error Log
         * * SQL Data Type: nvarchar(MAX)
@@ -6700,6 +6514,30 @@ import { RegisterClass } from "@memberjunction/global";
         }
         set ErrorLog(value: string | null) {
             this.Set('ErrorLog', value);
+        }
+        /**
+        * * Field Name: ReplayRunID
+        * * Display Name: Replay Run ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Record Change Replay Runs (vwRecordChangeReplayRuns.ID)
+        */
+        get ReplayRunID(): string | null {  
+            return this.Get('ReplayRunID');
+        }
+        set ReplayRunID(value: string | null) {
+            this.Set('ReplayRunID', value);
+        }
+        /**
+        * * Field Name: IntegrationID
+        * * Display Name: Integration ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Integrations (vwIntegrations.ID)
+        */
+        get IntegrationID(): string | null {  
+            return this.Get('IntegrationID');
+        }
+        set IntegrationID(value: string | null) {
+            this.Set('IntegrationID', value);
         }
         /**
         * * Field Name: Comments
@@ -6857,7 +6695,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: Role
         * * Display Name: Role
         * * SQL Data Type: nvarchar(50)
-        * * Default Value: null
         */
         get Role(): string {  
             return this.Get('Role');
@@ -8518,7 +8355,7 @@ import { RegisterClass } from "@memberjunction/global";
     export class QueueTypeEntity extends BaseEntity {
         /**
         * Loads the Queue Types record from the database
-        * @param ID: number - primary key value to load the Queue Types record.
+        * @param ID: string - primary key value to load the Queue Types record.
         * @param EntityRelationshipsToLoad - (optional) the relationships to load
         * @returns {Promise<boolean>} - true if successful, false otherwise
         * @public
@@ -8527,7 +8364,7 @@ import { RegisterClass } from "@memberjunction/global";
         * @method
         * @override
         */      
-        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+        public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
             const compositeKey: CompositeKey = new CompositeKey();
             compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -8560,9 +8397,10 @@ import { RegisterClass } from "@memberjunction/global";
             /**
         * * Field Name: ID
         * * Display Name: ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
         */
-        get ID(): number {  
+        get ID(): string {  
             return this.Get('ID');
         }
         
@@ -8642,18 +8480,6 @@ import { RegisterClass } from "@memberjunction/global";
             return this.Get('__mj_UpdatedAt');
         }
         
-        /**
-        * * Field Name: ID_
-        * * Display Name: ID_
-        * * SQL Data Type: uniqueidentifier
-        * * Default Value: newsequentialid()
-        */
-        get ID_(): string {  
-            return this.Get('ID_');
-        }
-        set ID_(value: string) {
-            this.Set('ID_', value);
-        }
 
     }
         
@@ -8672,7 +8498,7 @@ import { RegisterClass } from "@memberjunction/global";
     export class QueueEntity extends BaseEntity {
         /**
         * Loads the Queues record from the database
-        * @param ID: number - primary key value to load the Queues record.
+        * @param ID: string - primary key value to load the Queues record.
         * @param EntityRelationshipsToLoad - (optional) the relationships to load
         * @returns {Promise<boolean>} - true if successful, false otherwise
         * @public
@@ -8681,7 +8507,7 @@ import { RegisterClass } from "@memberjunction/global";
         * @method
         * @override
         */      
-        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+        public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
             const compositeKey: CompositeKey = new CompositeKey();
             compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -8702,9 +8528,10 @@ import { RegisterClass } from "@memberjunction/global";
             /**
         * * Field Name: ID
         * * Display Name: ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
         */
-        get ID(): number {  
+        get ID(): string {  
             return this.Get('ID');
         }
         
@@ -8733,13 +8560,13 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: QueueTypeID
         * * Display Name: Queue Type ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Queue Types (vwQueueTypes.ID)
         */
-        get QueueTypeID(): number {  
+        get QueueTypeID(): string {  
             return this.Get('QueueTypeID');
         }
-        set QueueTypeID(value: number) {
+        set QueueTypeID(value: string) {
             this.Set('QueueTypeID', value);
         }
         /**
@@ -8908,18 +8735,6 @@ import { RegisterClass } from "@memberjunction/global";
         }
         
         /**
-        * * Field Name: ID_
-        * * Display Name: ID_
-        * * SQL Data Type: uniqueidentifier
-        * * Default Value: newsequentialid()
-        */
-        get ID_(): string {  
-            return this.Get('ID_');
-        }
-        set ID_(value: string) {
-            this.Set('ID_', value);
-        }
-        /**
         * * Field Name: QueueType
         * * Display Name: Queue Type
         * * SQL Data Type: nvarchar(50)
@@ -8985,13 +8800,13 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: QueueID
         * * Display Name: Queue ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Queues (vwQueues.ID)
         */
-        get QueueID(): number {  
+        get QueueID(): string {  
             return this.Get('QueueID');
         }
-        set QueueID(value: number) {
+        set QueueID(value: string) {
             this.Set('QueueID', value);
         }
         /**
@@ -9197,13 +9012,13 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: CategoryID
         * * Display Name: Category ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Dashboard Categories (vwDashboardCategories.ID)
         */
-        get CategoryID(): number | null {  
+        get CategoryID(): string | null {  
             return this.Get('CategoryID');
         }
-        set CategoryID(value: number | null) {
+        set CategoryID(value: string | null) {
             this.Set('CategoryID', value);
         }
         /**
@@ -9272,7 +9087,7 @@ import { RegisterClass } from "@memberjunction/global";
     export class OutputTriggerTypeEntity extends BaseEntity {
         /**
         * Loads the Output Trigger Types record from the database
-        * @param ID: number - primary key value to load the Output Trigger Types record.
+        * @param ID: string - primary key value to load the Output Trigger Types record.
         * @param EntityRelationshipsToLoad - (optional) the relationships to load
         * @returns {Promise<boolean>} - true if successful, false otherwise
         * @public
@@ -9281,7 +9096,7 @@ import { RegisterClass } from "@memberjunction/global";
         * @method
         * @override
         */      
-        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+        public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
             const compositeKey: CompositeKey = new CompositeKey();
             compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -9314,9 +9129,10 @@ import { RegisterClass } from "@memberjunction/global";
             /**
         * * Field Name: ID
         * * Display Name: ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
         */
-        get ID(): number {  
+        get ID(): string {  
             return this.Get('ID');
         }
         
@@ -9362,18 +9178,6 @@ import { RegisterClass } from "@memberjunction/global";
             return this.Get('__mj_UpdatedAt');
         }
         
-        /**
-        * * Field Name: ID_
-        * * Display Name: ID_
-        * * SQL Data Type: uniqueidentifier
-        * * Default Value: newsequentialid()
-        */
-        get ID_(): string {  
-            return this.Get('ID_');
-        }
-        set ID_(value: string) {
-            this.Set('ID_', value);
-        }
 
     }
         
@@ -9391,7 +9195,7 @@ import { RegisterClass } from "@memberjunction/global";
     export class OutputFormatTypeEntity extends BaseEntity {
         /**
         * Loads the Output Format Types record from the database
-        * @param ID: number - primary key value to load the Output Format Types record.
+        * @param ID: string - primary key value to load the Output Format Types record.
         * @param EntityRelationshipsToLoad - (optional) the relationships to load
         * @returns {Promise<boolean>} - true if successful, false otherwise
         * @public
@@ -9400,7 +9204,7 @@ import { RegisterClass } from "@memberjunction/global";
         * @method
         * @override
         */      
-        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+        public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
             const compositeKey: CompositeKey = new CompositeKey();
             compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -9433,9 +9237,10 @@ import { RegisterClass } from "@memberjunction/global";
             /**
         * * Field Name: ID
         * * Display Name: ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
         */
-        get ID(): number {  
+        get ID(): string {  
             return this.Get('ID');
         }
         
@@ -9492,18 +9297,6 @@ import { RegisterClass } from "@memberjunction/global";
             return this.Get('__mj_UpdatedAt');
         }
         
-        /**
-        * * Field Name: ID_
-        * * Display Name: ID_
-        * * SQL Data Type: uniqueidentifier
-        * * Default Value: newsequentialid()
-        */
-        get ID_(): string {  
-            return this.Get('ID_');
-        }
-        set ID_(value: string) {
-            this.Set('ID_', value);
-        }
 
     }
         
@@ -9521,7 +9314,7 @@ import { RegisterClass } from "@memberjunction/global";
     export class OutputDeliveryTypeEntity extends BaseEntity {
         /**
         * Loads the Output Delivery Types record from the database
-        * @param ID: number - primary key value to load the Output Delivery Types record.
+        * @param ID: string - primary key value to load the Output Delivery Types record.
         * @param EntityRelationshipsToLoad - (optional) the relationships to load
         * @returns {Promise<boolean>} - true if successful, false otherwise
         * @public
@@ -9530,7 +9323,7 @@ import { RegisterClass } from "@memberjunction/global";
         * @method
         * @override
         */      
-        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+        public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
             const compositeKey: CompositeKey = new CompositeKey();
             compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -9563,9 +9356,10 @@ import { RegisterClass } from "@memberjunction/global";
             /**
         * * Field Name: ID
         * * Display Name: ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
         */
-        get ID(): number {  
+        get ID(): string {  
             return this.Get('ID');
         }
         
@@ -9611,18 +9405,6 @@ import { RegisterClass } from "@memberjunction/global";
             return this.Get('__mj_UpdatedAt');
         }
         
-        /**
-        * * Field Name: ID_
-        * * Display Name: ID_
-        * * SQL Data Type: uniqueidentifier
-        * * Default Value: newsequentialid()
-        */
-        get ID_(): string {  
-            return this.Get('ID_');
-        }
-        set ID_(value: string) {
-            this.Set('ID_', value);
-        }
 
     }
         
@@ -9640,7 +9422,7 @@ import { RegisterClass } from "@memberjunction/global";
     export class ReportEntity extends BaseEntity {
         /**
         * Loads the Reports record from the database
-        * @param ID: number - primary key value to load the Reports record.
+        * @param ID: string - primary key value to load the Reports record.
         * @param EntityRelationshipsToLoad - (optional) the relationships to load
         * @returns {Promise<boolean>} - true if successful, false otherwise
         * @public
@@ -9649,7 +9431,7 @@ import { RegisterClass } from "@memberjunction/global";
         * @method
         * @override
         */      
-        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+        public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
             const compositeKey: CompositeKey = new CompositeKey();
             compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -9658,9 +9440,10 @@ import { RegisterClass } from "@memberjunction/global";
             /**
         * * Field Name: ID
         * * Display Name: ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
         */
-        get ID(): number {  
+        get ID(): string {  
             return this.Get('ID');
         }
         
@@ -9689,13 +9472,13 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: CategoryID
         * * Display Name: Category ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Report Categories (vwReportCategories.ID)
         */
-        get CategoryID(): number | null {  
+        get CategoryID(): string | null {  
             return this.Get('CategoryID');
         }
-        set CategoryID(value: number | null) {
+        set CategoryID(value: string | null) {
             this.Set('CategoryID', value);
         }
         /**
@@ -9730,37 +9513,37 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: ConversationID
         * * Display Name: Conversation ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Conversations (vwConversations.ID)
         */
-        get ConversationID(): number | null {  
+        get ConversationID(): string | null {  
             return this.Get('ConversationID');
         }
-        set ConversationID(value: number | null) {
+        set ConversationID(value: string | null) {
             this.Set('ConversationID', value);
         }
         /**
         * * Field Name: ConversationDetailID
         * * Display Name: Conversation Detail ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Conversation Details (vwConversationDetails.ID)
         */
-        get ConversationDetailID(): number | null {  
+        get ConversationDetailID(): string | null {  
             return this.Get('ConversationDetailID');
         }
-        set ConversationDetailID(value: number | null) {
+        set ConversationDetailID(value: string | null) {
             this.Set('ConversationDetailID', value);
         }
         /**
         * * Field Name: DataContextID
         * * Display Name: Data Context ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Data Contexts (vwDataContexts.ID)
         */
-        get DataContextID(): number | null {  
+        get DataContextID(): string | null {  
             return this.Get('DataContextID');
         }
-        set DataContextID(value: number | null) {
+        set DataContextID(value: string | null) {
             this.Set('DataContextID', value);
         }
         /**
@@ -9777,50 +9560,38 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: OutputTriggerTypeID
         * * Display Name: Output Trigger Type ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Output Trigger Types (vwOutputTriggerTypes.ID)
         */
-        get OutputTriggerTypeID(): number | null {  
+        get OutputTriggerTypeID(): string | null {  
             return this.Get('OutputTriggerTypeID');
         }
-        set OutputTriggerTypeID(value: number | null) {
+        set OutputTriggerTypeID(value: string | null) {
             this.Set('OutputTriggerTypeID', value);
         }
         /**
         * * Field Name: OutputFormatTypeID
         * * Display Name: Output Format Type ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Output Format Types (vwOutputFormatTypes.ID)
         */
-        get OutputFormatTypeID(): number | null {  
+        get OutputFormatTypeID(): string | null {  
             return this.Get('OutputFormatTypeID');
         }
-        set OutputFormatTypeID(value: number | null) {
+        set OutputFormatTypeID(value: string | null) {
             this.Set('OutputFormatTypeID', value);
         }
         /**
         * * Field Name: OutputDeliveryTypeID
         * * Display Name: Output Delivery Type ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Output Delivery Types (vwOutputDeliveryTypes.ID)
         */
-        get OutputDeliveryTypeID(): number | null {  
+        get OutputDeliveryTypeID(): string | null {  
             return this.Get('OutputDeliveryTypeID');
         }
-        set OutputDeliveryTypeID(value: number | null) {
+        set OutputDeliveryTypeID(value: string | null) {
             this.Set('OutputDeliveryTypeID', value);
-        }
-        /**
-        * * Field Name: OutputEventID
-        * * Display Name: Output Event ID
-        * * SQL Data Type: int
-        * * Related Entity/Foreign Key: Output Delivery Types (vwOutputDeliveryTypes.ID)
-        */
-        get OutputEventID(): number | null {  
-            return this.Get('OutputEventID');
-        }
-        set OutputEventID(value: number | null) {
-            this.Set('OutputEventID', value);
         }
         /**
         * * Field Name: OutputFrequency
@@ -9847,13 +9618,13 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: OutputWorkflowID
         * * Display Name: Output Workflow ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Workflows (vwWorkflows.ID)
         */
-        get OutputWorkflowID(): number | null {  
+        get OutputWorkflowID(): string | null {  
             return this.Get('OutputWorkflowID');
         }
-        set OutputWorkflowID(value: number | null) {
+        set OutputWorkflowID(value: string | null) {
             this.Set('OutputWorkflowID', value);
         }
         /**
@@ -9877,21 +9648,10 @@ import { RegisterClass } from "@memberjunction/global";
         }
         
         /**
-        * * Field Name: ID_
-        * * Display Name: ID_
-        * * SQL Data Type: uniqueidentifier
-        * * Default Value: newsequentialid()
-        */
-        get ID_(): string {  
-            return this.Get('ID_');
-        }
-        set ID_(value: string) {
-            this.Set('ID_', value);
-        }
-        /**
         * * Field Name: Category
         * * Display Name: Category
         * * SQL Data Type: nvarchar(100)
+        * * Default Value: null
         */
         get Category(): string | null {  
             return this.Get('Category');
@@ -9901,6 +9661,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: User
         * * Display Name: User
         * * SQL Data Type: nvarchar(100)
+        * * Default Value: null
         */
         get User(): string {  
             return this.Get('User');
@@ -9910,6 +9671,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: Conversation
         * * Display Name: Conversation
         * * SQL Data Type: nvarchar(255)
+        * * Default Value: null
         */
         get Conversation(): string | null {  
             return this.Get('Conversation');
@@ -9919,6 +9681,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: DataContext
         * * Display Name: Data Context
         * * SQL Data Type: nvarchar(255)
+        * * Default Value: null
         */
         get DataContext(): string | null {  
             return this.Get('DataContext');
@@ -9928,6 +9691,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: OutputTriggerType
         * * Display Name: Output Trigger Type
         * * SQL Data Type: nvarchar(255)
+        * * Default Value: null
         */
         get OutputTriggerType(): string | null {  
             return this.Get('OutputTriggerType');
@@ -9937,6 +9701,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: OutputFormatType
         * * Display Name: Output Format Type
         * * SQL Data Type: nvarchar(255)
+        * * Default Value: null
         */
         get OutputFormatType(): string | null {  
             return this.Get('OutputFormatType');
@@ -9946,24 +9711,17 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: OutputDeliveryType
         * * Display Name: Output Delivery Type
         * * SQL Data Type: nvarchar(255)
+        * * Default Value: null
         */
         get OutputDeliveryType(): string | null {  
             return this.Get('OutputDeliveryType');
         }
         
         /**
-        * * Field Name: OutputEvent
-        * * Display Name: Output Event
-        * * SQL Data Type: nvarchar(255)
-        */
-        get OutputEvent(): string | null {  
-            return this.Get('OutputEvent');
-        }
-        
-        /**
         * * Field Name: OutputWorkflow
         * * Display Name: Output Workflow
         * * SQL Data Type: nvarchar(100)
+        * * Default Value: null
         */
         get OutputWorkflow(): string | null {  
             return this.Get('OutputWorkflow');
@@ -10014,13 +9772,13 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: ReportID
         * * Display Name: Report ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Reports (vwReports.ID)
         */
-        get ReportID(): number {  
+        get ReportID(): string {  
             return this.Get('ReportID');
         }
-        set ReportID(value: number) {
+        set ReportID(value: string) {
             this.Set('ReportID', value);
         }
         /**
@@ -10040,10 +9798,10 @@ import { RegisterClass } from "@memberjunction/global";
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Users (vwUsers.ID)
         */
-        get UserID(): string | null {  
+        get UserID(): string {  
             return this.Get('UserID');
         }
-        set UserID(value: string | null) {
+        set UserID(value: string) {
             this.Set('UserID', value);
         }
         /**
@@ -10080,7 +9838,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: User
         * * SQL Data Type: nvarchar(100)
         */
-        get User(): string | null {  
+        get User(): string {  
             return this.Get('User');
         }
         
@@ -10101,7 +9859,7 @@ import { RegisterClass } from "@memberjunction/global";
     export class ResourceTypeEntity extends BaseEntity {
         /**
         * Loads the Resource Types record from the database
-        * @param ID: number - primary key value to load the Resource Types record.
+        * @param ID: string - primary key value to load the Resource Types record.
         * @param EntityRelationshipsToLoad - (optional) the relationships to load
         * @returns {Promise<boolean>} - true if successful, false otherwise
         * @public
@@ -10110,7 +9868,7 @@ import { RegisterClass } from "@memberjunction/global";
         * @method
         * @override
         */      
-        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+        public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
             const compositeKey: CompositeKey = new CompositeKey();
             compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -10143,9 +9901,10 @@ import { RegisterClass } from "@memberjunction/global";
             /**
         * * Field Name: ID
         * * Display Name: ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
         */
-        get ID(): number {  
+        get ID(): string {  
             return this.Get('ID');
         }
         
@@ -10226,18 +9985,6 @@ import { RegisterClass } from "@memberjunction/global";
         }
         
         /**
-        * * Field Name: ID_
-        * * Display Name: ID_
-        * * SQL Data Type: uniqueidentifier
-        * * Default Value: newsequentialid()
-        */
-        get ID_(): string {  
-            return this.Get('ID_');
-        }
-        set ID_(value: string) {
-            this.Set('ID_', value);
-        }
-        /**
         * * Field Name: Entity
         * * Display Name: Entity
         * * SQL Data Type: nvarchar(255)
@@ -10264,7 +10011,7 @@ import { RegisterClass } from "@memberjunction/global";
     export class TagEntity extends BaseEntity {
         /**
         * Loads the Tags record from the database
-        * @param ID: number - primary key value to load the Tags record.
+        * @param ID: string - primary key value to load the Tags record.
         * @param EntityRelationshipsToLoad - (optional) the relationships to load
         * @returns {Promise<boolean>} - true if successful, false otherwise
         * @public
@@ -10273,7 +10020,7 @@ import { RegisterClass } from "@memberjunction/global";
         * @method
         * @override
         */      
-        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+        public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
             const compositeKey: CompositeKey = new CompositeKey();
             compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -10306,9 +10053,10 @@ import { RegisterClass } from "@memberjunction/global";
             /**
         * * Field Name: ID
         * * Display Name: ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
         */
-        get ID(): number {  
+        get ID(): string {  
             return this.Get('ID');
         }
         
@@ -10322,6 +10070,18 @@ import { RegisterClass } from "@memberjunction/global";
         }
         set Name(value: string) {
             this.Set('Name', value);
+        }
+        /**
+        * * Field Name: ParentID
+        * * Display Name: Parent ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Tags (vwTags.ID)
+        */
+        get ParentID(): string | null {  
+            return this.Get('ParentID');
+        }
+        set ParentID(value: string | null) {
+            this.Set('ParentID', value);
         }
         /**
         * * Field Name: DisplayName
@@ -10346,18 +10106,6 @@ import { RegisterClass } from "@memberjunction/global";
             this.Set('Description', value);
         }
         /**
-        * * Field Name: ParentID
-        * * Display Name: Parent ID
-        * * SQL Data Type: int
-        * * Related Entity/Foreign Key: Tags (vwTags.ID)
-        */
-        get ParentID(): number | null {  
-            return this.Get('ParentID');
-        }
-        set ParentID(value: number | null) {
-            this.Set('ParentID', value);
-        }
-        /**
         * * Field Name: __mj_CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetimeoffset
@@ -10377,18 +10125,6 @@ import { RegisterClass } from "@memberjunction/global";
             return this.Get('__mj_UpdatedAt');
         }
         
-        /**
-        * * Field Name: ID_
-        * * Display Name: ID_
-        * * SQL Data Type: uniqueidentifier
-        * * Default Value: newsequentialid()
-        */
-        get ID_(): string {  
-            return this.Get('ID_');
-        }
-        set ID_(value: string) {
-            this.Set('ID_', value);
-        }
         /**
         * * Field Name: Parent
         * * Display Name: Parent
@@ -10456,13 +10192,13 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: TagID
         * * Display Name: Tag ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Tags (vwTags.ID)
         */
-        get TagID(): number {  
+        get TagID(): string {  
             return this.Get('TagID');
         }
-        set TagID(value: number) {
+        set TagID(value: string) {
             this.Set('TagID', value);
         }
         /**
@@ -10544,7 +10280,7 @@ import { RegisterClass } from "@memberjunction/global";
     export class WorkspaceEntity extends BaseEntity {
         /**
         * Loads the Workspaces record from the database
-        * @param ID: number - primary key value to load the Workspaces record.
+        * @param ID: string - primary key value to load the Workspaces record.
         * @param EntityRelationshipsToLoad - (optional) the relationships to load
         * @returns {Promise<boolean>} - true if successful, false otherwise
         * @public
@@ -10553,7 +10289,7 @@ import { RegisterClass } from "@memberjunction/global";
         * @method
         * @override
         */      
-        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+        public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
             const compositeKey: CompositeKey = new CompositeKey();
             compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -10562,9 +10298,10 @@ import { RegisterClass } from "@memberjunction/global";
             /**
         * * Field Name: ID
         * * Display Name: ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
         */
-        get ID(): number {  
+        get ID(): string {  
             return this.Get('ID');
         }
         
@@ -10622,18 +10359,6 @@ import { RegisterClass } from "@memberjunction/global";
             return this.Get('__mj_UpdatedAt');
         }
         
-        /**
-        * * Field Name: ID_
-        * * Display Name: ID_
-        * * SQL Data Type: uniqueidentifier
-        * * Default Value: newsequentialid()
-        */
-        get ID_(): string {  
-            return this.Get('ID_');
-        }
-        set ID_(value: string) {
-            this.Set('ID_', value);
-        }
         /**
         * * Field Name: User
         * * Display Name: User
@@ -10711,25 +10436,25 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: WorkSpaceID
         * * Display Name: Work Space ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Workspaces (vwWorkspaces.ID)
         */
-        get WorkSpaceID(): number {  
+        get WorkSpaceID(): string {  
             return this.Get('WorkSpaceID');
         }
-        set WorkSpaceID(value: number) {
+        set WorkSpaceID(value: string) {
             this.Set('WorkSpaceID', value);
         }
         /**
         * * Field Name: ResourceTypeID
         * * Display Name: Resource Type ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Resource Types (vwResourceTypes.ID)
         */
-        get ResourceTypeID(): number {  
+        get ResourceTypeID(): string {  
             return this.Get('ResourceTypeID');
         }
-        set ResourceTypeID(value: number) {
+        set ResourceTypeID(value: string) {
             this.Set('ResourceTypeID', value);
         }
         /**
@@ -10821,7 +10546,7 @@ import { RegisterClass } from "@memberjunction/global";
     export class DatasetEntity extends BaseEntity {
         /**
         * Loads the Datasets record from the database
-        * @param ID: number - primary key value to load the Datasets record.
+        * @param ID: string - primary key value to load the Datasets record.
         * @param EntityRelationshipsToLoad - (optional) the relationships to load
         * @returns {Promise<boolean>} - true if successful, false otherwise
         * @public
@@ -10830,7 +10555,7 @@ import { RegisterClass } from "@memberjunction/global";
         * @method
         * @override
         */      
-        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+        public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
             const compositeKey: CompositeKey = new CompositeKey();
             compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -10863,16 +10588,17 @@ import { RegisterClass } from "@memberjunction/global";
             /**
         * * Field Name: ID
         * * Display Name: ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
         */
-        get ID(): number {  
+        get ID(): string {  
             return this.Get('ID');
         }
         
         /**
         * * Field Name: Name
         * * Display Name: Name
-        * * SQL Data Type: nvarchar(50)
+        * * SQL Data Type: nvarchar(100)
         */
         get Name(): string {  
             return this.Get('Name');
@@ -10911,18 +10637,6 @@ import { RegisterClass } from "@memberjunction/global";
             return this.Get('__mj_UpdatedAt');
         }
         
-        /**
-        * * Field Name: ID_
-        * * Display Name: ID_
-        * * SQL Data Type: uniqueidentifier
-        * * Default Value: newsequentialid()
-        */
-        get ID_(): string {  
-            return this.Get('ID_');
-        }
-        set ID_(value: string) {
-            this.Set('ID_', value);
-        }
 
     }
         
@@ -11002,16 +10716,16 @@ import { RegisterClass } from "@memberjunction/global";
             this.Set('Code', value);
         }
         /**
-        * * Field Name: DatasetName
-        * * Display Name: Dataset Name
-        * * SQL Data Type: nvarchar(50)
-        * * Related Entity/Foreign Key: Datasets (vwDatasets.Name)
+        * * Field Name: DatasetID
+        * * Display Name: Dataset ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Datasets (vwDatasets.ID)
         */
-        get DatasetName(): string {  
-            return this.Get('DatasetName');
+        get DatasetID(): string {  
+            return this.Get('DatasetID');
         }
-        set DatasetName(value: string) {
-            this.Set('DatasetName', value);
+        set DatasetID(value: string) {
+            this.Set('DatasetID', value);
         }
         /**
         * * Field Name: Sequence
@@ -11116,7 +10830,7 @@ import { RegisterClass } from "@memberjunction/global";
     export class ConversationDetailEntity extends BaseEntity {
         /**
         * Loads the Conversation Details record from the database
-        * @param ID: number - primary key value to load the Conversation Details record.
+        * @param ID: string - primary key value to load the Conversation Details record.
         * @param EntityRelationshipsToLoad - (optional) the relationships to load
         * @returns {Promise<boolean>} - true if successful, false otherwise
         * @public
@@ -11125,7 +10839,7 @@ import { RegisterClass } from "@memberjunction/global";
         * @method
         * @override
         */      
-        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+        public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
             const compositeKey: CompositeKey = new CompositeKey();
             compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -11134,22 +10848,23 @@ import { RegisterClass } from "@memberjunction/global";
             /**
         * * Field Name: ID
         * * Display Name: ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
         */
-        get ID(): number {  
+        get ID(): string {  
             return this.Get('ID');
         }
         
         /**
         * * Field Name: ConversationID
         * * Display Name: Conversation ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Conversations (vwConversations.ID)
         */
-        get ConversationID(): number {  
+        get ConversationID(): string {  
             return this.Get('ConversationID');
         }
-        set ConversationID(value: number) {
+        set ConversationID(value: string) {
             this.Set('ConversationID', value);
         }
         /**
@@ -11235,18 +10950,6 @@ import { RegisterClass } from "@memberjunction/global";
         }
         
         /**
-        * * Field Name: ID_
-        * * Display Name: ID_
-        * * SQL Data Type: uniqueidentifier
-        * * Default Value: newsequentialid()
-        */
-        get ID_(): string {  
-            return this.Get('ID_');
-        }
-        set ID_(value: string) {
-            this.Set('ID_', value);
-        }
-        /**
         * * Field Name: Conversation
         * * Display Name: Conversation
         * * SQL Data Type: nvarchar(255)
@@ -11272,7 +10975,7 @@ import { RegisterClass } from "@memberjunction/global";
     export class ConversationEntity extends BaseEntity {
         /**
         * Loads the Conversations record from the database
-        * @param ID: number - primary key value to load the Conversations record.
+        * @param ID: string - primary key value to load the Conversations record.
         * @param EntityRelationshipsToLoad - (optional) the relationships to load
         * @returns {Promise<boolean>} - true if successful, false otherwise
         * @public
@@ -11281,7 +10984,7 @@ import { RegisterClass } from "@memberjunction/global";
         * @method
         * @override
         */      
-        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+        public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
             const compositeKey: CompositeKey = new CompositeKey();
             compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -11290,9 +10993,10 @@ import { RegisterClass } from "@memberjunction/global";
             /**
         * * Field Name: ID
         * * Display Name: ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
         */
-        get ID(): number {  
+        get ID(): string {  
             return this.Get('ID');
         }
         
@@ -11391,12 +11095,13 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: DataContextID
         * * Display Name: Data Context ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Data Contexts (vwDataContexts.ID)
         */
-        get DataContextID(): number | null {  
+        get DataContextID(): string | null {  
             return this.Get('DataContextID');
         }
-        set DataContextID(value: number | null) {
+        set DataContextID(value: string | null) {
             this.Set('DataContextID', value);
         }
         /**
@@ -11419,18 +11124,6 @@ import { RegisterClass } from "@memberjunction/global";
             return this.Get('__mj_UpdatedAt');
         }
         
-        /**
-        * * Field Name: ID_
-        * * Display Name: ID_
-        * * SQL Data Type: uniqueidentifier
-        * * Default Value: newsequentialid()
-        */
-        get ID_(): string {  
-            return this.Get('ID_');
-        }
-        set ID_(value: string) {
-            this.Set('ID_', value);
-        }
         /**
         * * Field Name: User
         * * Display Name: User
@@ -11528,13 +11221,13 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: ResourceTypeID
         * * Display Name: Resource Type ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Resource Types (vwResourceTypes.ID)
         */
-        get ResourceTypeID(): number | null {  
+        get ResourceTypeID(): string | null {  
             return this.Get('ResourceTypeID');
         }
-        set ResourceTypeID(value: number | null) {
+        set ResourceTypeID(value: string | null) {
             this.Set('ResourceTypeID', value);
         }
         /**
@@ -11796,13 +11489,13 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: CompanyIntegrationID
         * * Display Name: Company Integration ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Company Integrations (vwCompanyIntegrations.ID)
         */
-        get CompanyIntegrationID(): number {  
+        get CompanyIntegrationID(): string {  
             return this.Get('CompanyIntegrationID');
         }
-        set CompanyIntegrationID(value: number) {
+        set CompanyIntegrationID(value: string) {
             this.Set('CompanyIntegrationID', value);
         }
         /**
@@ -11885,7 +11578,7 @@ import { RegisterClass } from "@memberjunction/global";
     export class RecordMergeLogEntity extends BaseEntity {
         /**
         * Loads the Record Merge Logs record from the database
-        * @param ID: number - primary key value to load the Record Merge Logs record.
+        * @param ID: string - primary key value to load the Record Merge Logs record.
         * @param EntityRelationshipsToLoad - (optional) the relationships to load
         * @returns {Promise<boolean>} - true if successful, false otherwise
         * @public
@@ -11894,7 +11587,7 @@ import { RegisterClass } from "@memberjunction/global";
         * @method
         * @override
         */      
-        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+        public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
             const compositeKey: CompositeKey = new CompositeKey();
             compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -11915,9 +11608,10 @@ import { RegisterClass } from "@memberjunction/global";
             /**
         * * Field Name: ID
         * * Display Name: ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
         */
-        get ID(): number {  
+        get ID(): string {  
             return this.Get('ID');
         }
         
@@ -11936,7 +11630,7 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: SurvivingRecordID
         * * Display Name: Surviving Record ID
-        * * SQL Data Type: nvarchar(255)
+        * * SQL Data Type: nvarchar(450)
         */
         get SurvivingRecordID(): string {  
             return this.Get('SurvivingRecordID');
@@ -12068,18 +11762,6 @@ import { RegisterClass } from "@memberjunction/global";
         }
         
         /**
-        * * Field Name: ID_
-        * * Display Name: ID_
-        * * SQL Data Type: uniqueidentifier
-        * * Default Value: newsequentialid()
-        */
-        get ID_(): string {  
-            return this.Get('ID_');
-        }
-        set ID_(value: string) {
-            this.Set('ID_', value);
-        }
-        /**
         * * Field Name: Entity
         * * Display Name: Entity
         * * SQL Data Type: nvarchar(255)
@@ -12154,13 +11836,13 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: RecordMergeLogID
         * * Display Name: Record Merge Log ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Record Merge Logs (vwRecordMergeLogs.ID)
         */
-        get RecordMergeLogID(): number {  
+        get RecordMergeLogID(): string {  
             return this.Get('RecordMergeLogID');
         }
-        set RecordMergeLogID(value: number) {
+        set RecordMergeLogID(value: string) {
             this.Set('RecordMergeLogID', value);
         }
         /**
@@ -12279,13 +11961,13 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: QueryID
         * * Display Name: Query ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Queries (vwQueries.ID)
         */
-        get QueryID(): number {  
+        get QueryID(): string {  
             return this.Get('QueryID');
         }
-        set QueryID(value: number) {
+        set QueryID(value: string) {
             this.Set('QueryID', value);
         }
         /**
@@ -12469,7 +12151,7 @@ import { RegisterClass } from "@memberjunction/global";
     export class QueryCategoryEntity extends BaseEntity {
         /**
         * Loads the Query Categories record from the database
-        * @param ID: number - primary key value to load the Query Categories record.
+        * @param ID: string - primary key value to load the Query Categories record.
         * @param EntityRelationshipsToLoad - (optional) the relationships to load
         * @returns {Promise<boolean>} - true if successful, false otherwise
         * @public
@@ -12478,7 +12160,7 @@ import { RegisterClass } from "@memberjunction/global";
         * @method
         * @override
         */      
-        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+        public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
             const compositeKey: CompositeKey = new CompositeKey();
             compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -12487,9 +12169,10 @@ import { RegisterClass } from "@memberjunction/global";
             /**
         * * Field Name: ID
         * * Display Name: ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
         */
-        get ID(): number {  
+        get ID(): string {  
             return this.Get('ID');
         }
         
@@ -12507,13 +12190,13 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: ParentID
         * * Display Name: Parent ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Query Categories (vwQueryCategories.ID)
         */
-        get ParentID(): number | null {  
+        get ParentID(): string | null {  
             return this.Get('ParentID');
         }
-        set ParentID(value: number | null) {
+        set ParentID(value: string | null) {
             this.Set('ParentID', value);
         }
         /**
@@ -12560,18 +12243,6 @@ import { RegisterClass } from "@memberjunction/global";
         }
         
         /**
-        * * Field Name: ID_
-        * * Display Name: ID_
-        * * SQL Data Type: uniqueidentifier
-        * * Default Value: newsequentialid()
-        */
-        get ID_(): string {  
-            return this.Get('ID_');
-        }
-        set ID_(value: string) {
-            this.Set('ID_', value);
-        }
-        /**
         * * Field Name: Parent
         * * Display Name: Parent
         * * SQL Data Type: nvarchar(50)
@@ -12607,7 +12278,7 @@ import { RegisterClass } from "@memberjunction/global";
     export class QueryEntity extends BaseEntity {
         /**
         * Loads the Queries record from the database
-        * @param ID: number - primary key value to load the Queries record.
+        * @param ID: string - primary key value to load the Queries record.
         * @param EntityRelationshipsToLoad - (optional) the relationships to load
         * @returns {Promise<boolean>} - true if successful, false otherwise
         * @public
@@ -12616,7 +12287,7 @@ import { RegisterClass } from "@memberjunction/global";
         * @method
         * @override
         */      
-        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+        public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
             const compositeKey: CompositeKey = new CompositeKey();
             compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -12637,9 +12308,10 @@ import { RegisterClass } from "@memberjunction/global";
             /**
         * * Field Name: ID
         * * Display Name: ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
         */
-        get ID(): number {  
+        get ID(): string {  
             return this.Get('ID');
         }
         
@@ -12653,6 +12325,18 @@ import { RegisterClass } from "@memberjunction/global";
         }
         set Name(value: string) {
             this.Set('Name', value);
+        }
+        /**
+        * * Field Name: CategoryID
+        * * Display Name: Category ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Query Categories (vwQueryCategories.ID)
+        */
+        get CategoryID(): string | null {  
+            return this.Get('CategoryID');
+        }
+        set CategoryID(value: string | null) {
+            this.Set('CategoryID', value);
         }
         /**
         * * Field Name: UserQuestion
@@ -12675,18 +12359,6 @@ import { RegisterClass } from "@memberjunction/global";
         }
         set Description(value: string | null) {
             this.Set('Description', value);
-        }
-        /**
-        * * Field Name: CategoryID
-        * * Display Name: Category ID
-        * * SQL Data Type: int
-        * * Related Entity/Foreign Key: Query Categories (vwQueryCategories.ID)
-        */
-        get CategoryID(): number | null {  
-            return this.Get('CategoryID');
-        }
-        set CategoryID(value: number | null) {
-            this.Set('CategoryID', value);
         }
         /**
         * * Field Name: SQL
@@ -12796,18 +12468,6 @@ import { RegisterClass } from "@memberjunction/global";
         }
         
         /**
-        * * Field Name: ID_
-        * * Display Name: ID_
-        * * SQL Data Type: uniqueidentifier
-        * * Default Value: newsequentialid()
-        */
-        get ID_(): string {  
-            return this.Get('ID_');
-        }
-        set ID_(value: string) {
-            this.Set('ID_', value);
-        }
-        /**
         * * Field Name: Category
         * * Display Name: Category
         * * SQL Data Type: nvarchar(50)
@@ -12873,13 +12533,13 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: QueryID
         * * Display Name: Query ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Queries (vwQueries.ID)
         */
-        get QueryID(): number {  
+        get QueryID(): string {  
             return this.Get('QueryID');
         }
-        set QueryID(value: number) {
+        set QueryID(value: string) {
             this.Set('QueryID', value);
         }
         /**
@@ -12993,13 +12653,13 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: VectorDatabaseID
         * * Display Name: Vector Database ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Vector Databases (vwVectorDatabases.ID)
         */
-        get VectorDatabaseID(): number {  
+        get VectorDatabaseID(): string {  
             return this.Get('VectorDatabaseID');
         }
-        set VectorDatabaseID(value: number) {
+        set VectorDatabaseID(value: string) {
             this.Set('VectorDatabaseID', value);
         }
         /**
@@ -13069,7 +12729,7 @@ import { RegisterClass } from "@memberjunction/global";
     export class EntityDocumentTypeEntity extends BaseEntity {
         /**
         * Loads the Entity Document Types record from the database
-        * @param ID: number - primary key value to load the Entity Document Types record.
+        * @param ID: string - primary key value to load the Entity Document Types record.
         * @param EntityRelationshipsToLoad - (optional) the relationships to load
         * @returns {Promise<boolean>} - true if successful, false otherwise
         * @public
@@ -13078,7 +12738,7 @@ import { RegisterClass } from "@memberjunction/global";
         * @method
         * @override
         */      
-        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+        public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
             const compositeKey: CompositeKey = new CompositeKey();
             compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -13099,9 +12759,10 @@ import { RegisterClass } from "@memberjunction/global";
             /**
         * * Field Name: ID
         * * Display Name: ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
         */
-        get ID(): number {  
+        get ID(): string {  
             return this.Get('ID');
         }
         
@@ -13147,18 +12808,6 @@ import { RegisterClass } from "@memberjunction/global";
             return this.Get('__mj_UpdatedAt');
         }
         
-        /**
-        * * Field Name: ID_
-        * * Display Name: ID_
-        * * SQL Data Type: uniqueidentifier
-        * * Default Value: newsequentialid()
-        */
-        get ID_(): string {  
-            return this.Get('ID_');
-        }
-        set ID_(value: string) {
-            this.Set('ID_', value);
-        }
 
     }
         
@@ -13216,13 +12865,13 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: EntityDocumentID
         * * Display Name: Entity Document ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Entity Documents (vwEntityDocuments.ID)
         */
-        get EntityDocumentID(): number {  
+        get EntityDocumentID(): string {  
             return this.Get('EntityDocumentID');
         }
-        set EntityDocumentID(value: number) {
+        set EntityDocumentID(value: string) {
             this.Set('EntityDocumentID', value);
         }
         /**
@@ -13311,7 +12960,7 @@ import { RegisterClass } from "@memberjunction/global";
     export class VectorDatabaseEntity extends BaseEntity {
         /**
         * Loads the Vector Databases record from the database
-        * @param ID: number - primary key value to load the Vector Databases record.
+        * @param ID: string - primary key value to load the Vector Databases record.
         * @param EntityRelationshipsToLoad - (optional) the relationships to load
         * @returns {Promise<boolean>} - true if successful, false otherwise
         * @public
@@ -13320,7 +12969,7 @@ import { RegisterClass } from "@memberjunction/global";
         * @method
         * @override
         */      
-        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+        public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
             const compositeKey: CompositeKey = new CompositeKey();
             compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -13341,9 +12990,10 @@ import { RegisterClass } from "@memberjunction/global";
             /**
         * * Field Name: ID
         * * Display Name: ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
         */
-        get ID(): number {  
+        get ID(): string {  
             return this.Get('ID');
         }
         
@@ -13411,18 +13061,6 @@ import { RegisterClass } from "@memberjunction/global";
             return this.Get('__mj_UpdatedAt');
         }
         
-        /**
-        * * Field Name: ID_
-        * * Display Name: ID_
-        * * SQL Data Type: uniqueidentifier
-        * * Default Value: newsequentialid()
-        */
-        get ID_(): string {  
-            return this.Get('ID_');
-        }
-        set ID_(value: string) {
-            this.Set('ID_', value);
-        }
 
     }
         
@@ -13492,13 +13130,25 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: RecordID
         * * Display Name: Record ID
-        * * SQL Data Type: nvarchar(255)
+        * * SQL Data Type: nvarchar(450)
         */
         get RecordID(): string {  
             return this.Get('RecordID');
         }
         set RecordID(value: string) {
             this.Set('RecordID', value);
+        }
+        /**
+        * * Field Name: EntityDocumentID
+        * * Display Name: Entity Document ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Entity Documents (vwEntityDocuments.ID)
+        */
+        get EntityDocumentID(): string {  
+            return this.Get('EntityDocumentID');
+        }
+        set EntityDocumentID(value: string) {
+            this.Set('EntityDocumentID', value);
         }
         /**
         * * Field Name: DocumentText
@@ -13557,18 +13207,6 @@ import { RegisterClass } from "@memberjunction/global";
             this.Set('EntityRecordUpdatedAt', value);
         }
         /**
-        * * Field Name: EntityDocumentID
-        * * Display Name: Entity Document ID
-        * * SQL Data Type: int
-        * * Related Entity/Foreign Key: Entity Documents (vwEntityDocuments.ID)
-        */
-        get EntityDocumentID(): number {  
-            return this.Get('EntityDocumentID');
-        }
-        set EntityDocumentID(value: number) {
-            this.Set('EntityDocumentID', value);
-        }
-        /**
         * * Field Name: __mj_CreatedAt
         * * Display Name: __mj _Created At
         * * SQL Data Type: datetimeoffset
@@ -13605,7 +13243,7 @@ import { RegisterClass } from "@memberjunction/global";
     export class EntityDocumentEntity extends BaseEntity {
         /**
         * Loads the Entity Documents record from the database
-        * @param ID: number - primary key value to load the Entity Documents record.
+        * @param ID: string - primary key value to load the Entity Documents record.
         * @param EntityRelationshipsToLoad - (optional) the relationships to load
         * @returns {Promise<boolean>} - true if successful, false otherwise
         * @public
@@ -13614,7 +13252,7 @@ import { RegisterClass } from "@memberjunction/global";
         * @method
         * @override
         */      
-        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+        public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
             const compositeKey: CompositeKey = new CompositeKey();
             compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -13635,9 +13273,10 @@ import { RegisterClass } from "@memberjunction/global";
             /**
         * * Field Name: ID
         * * Display Name: ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
         */
-        get ID(): number {  
+        get ID(): string {  
             return this.Get('ID');
         }
         
@@ -13653,6 +13292,18 @@ import { RegisterClass } from "@memberjunction/global";
             this.Set('Name', value);
         }
         /**
+        * * Field Name: TypeID
+        * * Display Name: Type ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Entity Document Types (vwEntityDocumentTypes.ID)
+        */
+        get TypeID(): string {  
+            return this.Get('TypeID');
+        }
+        set TypeID(value: string) {
+            this.Set('TypeID', value);
+        }
+        /**
         * * Field Name: EntityID
         * * Display Name: Entity ID
         * * SQL Data Type: uniqueidentifier
@@ -13665,16 +13316,16 @@ import { RegisterClass } from "@memberjunction/global";
             this.Set('EntityID', value);
         }
         /**
-        * * Field Name: TypeID
-        * * Display Name: Type ID
-        * * SQL Data Type: int
-        * * Related Entity/Foreign Key: Entity Document Types (vwEntityDocumentTypes.ID)
+        * * Field Name: VectorDatabaseID
+        * * Display Name: Vector Database ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Vector Databases (vwVectorDatabases.ID)
         */
-        get TypeID(): number {  
-            return this.Get('TypeID');
+        get VectorDatabaseID(): string {  
+            return this.Get('VectorDatabaseID');
         }
-        set TypeID(value: number) {
-            this.Set('TypeID', value);
+        set VectorDatabaseID(value: string) {
+            this.Set('VectorDatabaseID', value);
         }
         /**
         * * Field Name: Status
@@ -13702,18 +13353,6 @@ import { RegisterClass } from "@memberjunction/global";
         }
         set Template(value: string | null) {
             this.Set('Template', value);
-        }
-        /**
-        * * Field Name: VectorDatabaseID
-        * * Display Name: Vector Database ID
-        * * SQL Data Type: int
-        * * Related Entity/Foreign Key: Vector Databases (vwVectorDatabases.ID)
-        */
-        get VectorDatabaseID(): number {  
-            return this.Get('VectorDatabaseID');
-        }
-        set VectorDatabaseID(value: number) {
-            this.Set('VectorDatabaseID', value);
         }
         /**
         * * Field Name: AIModelID
@@ -13774,17 +13413,14 @@ import { RegisterClass } from "@memberjunction/global";
         }
         
         /**
-        * * Field Name: ID_
-        * * Display Name: ID_
-        * * SQL Data Type: uniqueidentifier
-        * * Default Value: newsequentialid()
+        * * Field Name: Type
+        * * Display Name: Type
+        * * SQL Data Type: nvarchar(100)
         */
-        get ID_(): string {  
-            return this.Get('ID_');
+        get Type(): string {  
+            return this.Get('Type');
         }
-        set ID_(value: string) {
-            this.Set('ID_', value);
-        }
+        
         /**
         * * Field Name: Entity
         * * Display Name: Entity
@@ -13792,15 +13428,6 @@ import { RegisterClass } from "@memberjunction/global";
         */
         get Entity(): string {  
             return this.Get('Entity');
-        }
-        
-        /**
-        * * Field Name: Type
-        * * Display Name: Type
-        * * SQL Data Type: nvarchar(100)
-        */
-        get Type(): string {  
-            return this.Get('Type');
         }
         
 
@@ -13849,14 +13476,13 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: DataContextID
         * * Display Name: Data Context ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Data Contexts (vwDataContexts.ID)
-        * * Description: Foreign key to the DataContext table
         */
-        get DataContextID(): number {  
+        get DataContextID(): string {  
             return this.Get('DataContextID');
         }
-        set DataContextID(value: number) {
+        set DataContextID(value: string) {
             this.Set('DataContextID', value);
         }
         /**
@@ -13893,14 +13519,13 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: QueryID
         * * Display Name: Query ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Queries (vwQueries.ID)
-        * * Description: Only used if Type='query'
         */
-        get QueryID(): number | null {  
+        get QueryID(): string | null {  
             return this.Get('QueryID');
         }
-        set QueryID(value: number | null) {
+        set QueryID(value: string | null) {
             this.Set('QueryID', value);
         }
         /**
@@ -14037,7 +13662,7 @@ import { RegisterClass } from "@memberjunction/global";
     export class DataContextEntity extends BaseEntity {
         /**
         * Loads the Data Contexts record from the database
-        * @param ID: number - primary key value to load the Data Contexts record.
+        * @param ID: string - primary key value to load the Data Contexts record.
         * @param EntityRelationshipsToLoad - (optional) the relationships to load
         * @returns {Promise<boolean>} - true if successful, false otherwise
         * @public
@@ -14046,7 +13671,7 @@ import { RegisterClass } from "@memberjunction/global";
         * @method
         * @override
         */      
-        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+        public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
             const compositeKey: CompositeKey = new CompositeKey();
             compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -14055,9 +13680,10 @@ import { RegisterClass } from "@memberjunction/global";
             /**
         * * Field Name: ID
         * * Display Name: ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
         */
-        get ID(): number {  
+        get ID(): string {  
             return this.Get('ID');
         }
         
@@ -14127,18 +13753,6 @@ import { RegisterClass } from "@memberjunction/global";
         }
         
         /**
-        * * Field Name: ID_
-        * * Display Name: ID_
-        * * SQL Data Type: uniqueidentifier
-        * * Default Value: newsequentialid()
-        */
-        get ID_(): string {  
-            return this.Get('ID_');
-        }
-        set ID_(value: string) {
-            this.Set('ID_', value);
-        }
-        /**
         * * Field Name: User
         * * Display Name: User
         * * SQL Data Type: nvarchar(100)
@@ -14164,7 +13778,7 @@ import { RegisterClass } from "@memberjunction/global";
     export class UserViewCategoryEntity extends BaseEntity {
         /**
         * Loads the User View Categories record from the database
-        * @param ID: number - primary key value to load the User View Categories record.
+        * @param ID: string - primary key value to load the User View Categories record.
         * @param EntityRelationshipsToLoad - (optional) the relationships to load
         * @returns {Promise<boolean>} - true if successful, false otherwise
         * @public
@@ -14173,7 +13787,7 @@ import { RegisterClass } from "@memberjunction/global";
         * @method
         * @override
         */      
-        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+        public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
             const compositeKey: CompositeKey = new CompositeKey();
             compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -14182,9 +13796,10 @@ import { RegisterClass } from "@memberjunction/global";
             /**
         * * Field Name: ID
         * * Display Name: ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
         */
-        get ID(): number {  
+        get ID(): string {  
             return this.Get('ID');
         }
         
@@ -14213,13 +13828,13 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: ParentID
         * * Display Name: Parent ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: User View Categories (vwUserViewCategories.ID)
         */
-        get ParentID(): number | null {  
+        get ParentID(): string | null {  
             return this.Get('ParentID');
         }
-        set ParentID(value: number | null) {
+        set ParentID(value: string | null) {
             this.Set('ParentID', value);
         }
         /**
@@ -14267,18 +13882,6 @@ import { RegisterClass } from "@memberjunction/global";
         }
         
         /**
-        * * Field Name: ID_
-        * * Display Name: ID_
-        * * SQL Data Type: uniqueidentifier
-        * * Default Value: newsequentialid()
-        */
-        get ID_(): string {  
-            return this.Get('ID_');
-        }
-        set ID_(value: string) {
-            this.Set('ID_', value);
-        }
-        /**
         * * Field Name: Parent
         * * Display Name: Parent
         * * SQL Data Type: nvarchar(100)
@@ -14313,7 +13916,7 @@ import { RegisterClass } from "@memberjunction/global";
     export class DashboardCategoryEntity extends BaseEntity {
         /**
         * Loads the Dashboard Categories record from the database
-        * @param ID: number - primary key value to load the Dashboard Categories record.
+        * @param ID: string - primary key value to load the Dashboard Categories record.
         * @param EntityRelationshipsToLoad - (optional) the relationships to load
         * @returns {Promise<boolean>} - true if successful, false otherwise
         * @public
@@ -14322,7 +13925,7 @@ import { RegisterClass } from "@memberjunction/global";
         * @method
         * @override
         */      
-        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+        public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
             const compositeKey: CompositeKey = new CompositeKey();
             compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -14331,9 +13934,10 @@ import { RegisterClass } from "@memberjunction/global";
             /**
         * * Field Name: ID
         * * Display Name: ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
         */
-        get ID(): number {  
+        get ID(): string {  
             return this.Get('ID');
         }
         
@@ -14362,13 +13966,13 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: ParentID
         * * Display Name: Parent ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Dashboard Categories (vwDashboardCategories.ID)
         */
-        get ParentID(): number | null {  
+        get ParentID(): string | null {  
             return this.Get('ParentID');
         }
-        set ParentID(value: number | null) {
+        set ParentID(value: string | null) {
             this.Set('ParentID', value);
         }
         /**
@@ -14403,18 +14007,6 @@ import { RegisterClass } from "@memberjunction/global";
             return this.Get('__mj_UpdatedAt');
         }
         
-        /**
-        * * Field Name: ID_
-        * * Display Name: ID_
-        * * SQL Data Type: uniqueidentifier
-        * * Default Value: newsequentialid()
-        */
-        get ID_(): string {  
-            return this.Get('ID_');
-        }
-        set ID_(value: string) {
-            this.Set('ID_', value);
-        }
         /**
         * * Field Name: Parent
         * * Display Name: Parent
@@ -14450,7 +14042,7 @@ import { RegisterClass } from "@memberjunction/global";
     export class ReportCategoryEntity extends BaseEntity {
         /**
         * Loads the Report Categories record from the database
-        * @param ID: number - primary key value to load the Report Categories record.
+        * @param ID: string - primary key value to load the Report Categories record.
         * @param EntityRelationshipsToLoad - (optional) the relationships to load
         * @returns {Promise<boolean>} - true if successful, false otherwise
         * @public
@@ -14459,7 +14051,7 @@ import { RegisterClass } from "@memberjunction/global";
         * @method
         * @override
         */      
-        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+        public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
             const compositeKey: CompositeKey = new CompositeKey();
             compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -14468,9 +14060,10 @@ import { RegisterClass } from "@memberjunction/global";
             /**
         * * Field Name: ID
         * * Display Name: ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
         */
-        get ID(): number {  
+        get ID(): string {  
             return this.Get('ID');
         }
         
@@ -14499,13 +14092,13 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: ParentID
         * * Display Name: Parent ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Report Categories (vwReportCategories.ID)
         */
-        get ParentID(): number | null {  
+        get ParentID(): string | null {  
             return this.Get('ParentID');
         }
-        set ParentID(value: number | null) {
+        set ParentID(value: string | null) {
             this.Set('ParentID', value);
         }
         /**
@@ -14541,18 +14134,6 @@ import { RegisterClass } from "@memberjunction/global";
         }
         
         /**
-        * * Field Name: ID_
-        * * Display Name: ID_
-        * * SQL Data Type: uniqueidentifier
-        * * Default Value: newsequentialid()
-        */
-        get ID_(): string {  
-            return this.Get('ID_');
-        }
-        set ID_(value: string) {
-            this.Set('ID_', value);
-        }
-        /**
         * * Field Name: Parent
         * * Display Name: Parent
         * * SQL Data Type: nvarchar(100)
@@ -14587,7 +14168,7 @@ import { RegisterClass } from "@memberjunction/global";
     export class FileStorageProviderEntity extends BaseEntity {
         /**
         * Loads the File Storage Providers record from the database
-        * @param ID: number - primary key value to load the File Storage Providers record.
+        * @param ID: string - primary key value to load the File Storage Providers record.
         * @param EntityRelationshipsToLoad - (optional) the relationships to load
         * @returns {Promise<boolean>} - true if successful, false otherwise
         * @public
@@ -14596,7 +14177,7 @@ import { RegisterClass } from "@memberjunction/global";
         * @method
         * @override
         */      
-        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+        public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
             const compositeKey: CompositeKey = new CompositeKey();
             compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -14617,9 +14198,10 @@ import { RegisterClass } from "@memberjunction/global";
             /**
         * * Field Name: ID
         * * Display Name: ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
         */
-        get ID(): number {  
+        get ID(): string {  
             return this.Get('ID');
         }
         
@@ -14711,18 +14293,6 @@ import { RegisterClass } from "@memberjunction/global";
             return this.Get('__mj_UpdatedAt');
         }
         
-        /**
-        * * Field Name: ID_
-        * * Display Name: ID_
-        * * SQL Data Type: uniqueidentifier
-        * * Default Value: newsequentialid()
-        */
-        get ID_(): string {  
-            return this.Get('ID_');
-        }
-        set ID_(value: string) {
-            this.Set('ID_', value);
-        }
 
     }
         
@@ -14740,7 +14310,7 @@ import { RegisterClass } from "@memberjunction/global";
     export class FileEntity extends BaseEntity {
         /**
         * Loads the Files record from the database
-        * @param ID: number - primary key value to load the Files record.
+        * @param ID: string - primary key value to load the Files record.
         * @param EntityRelationshipsToLoad - (optional) the relationships to load
         * @returns {Promise<boolean>} - true if successful, false otherwise
         * @public
@@ -14749,7 +14319,7 @@ import { RegisterClass } from "@memberjunction/global";
         * @method
         * @override
         */      
-        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+        public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
             const compositeKey: CompositeKey = new CompositeKey();
             compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -14758,9 +14328,10 @@ import { RegisterClass } from "@memberjunction/global";
             /**
         * * Field Name: ID
         * * Display Name: ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
         */
-        get ID(): number {  
+        get ID(): string {  
             return this.Get('ID');
         }
         
@@ -14787,15 +14358,27 @@ import { RegisterClass } from "@memberjunction/global";
             this.Set('Description', value);
         }
         /**
+        * * Field Name: CategoryID
+        * * Display Name: Category ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: File Categories (vwFileCategories.ID)
+        */
+        get CategoryID(): string | null {  
+            return this.Get('CategoryID');
+        }
+        set CategoryID(value: string | null) {
+            this.Set('CategoryID', value);
+        }
+        /**
         * * Field Name: ProviderID
         * * Display Name: Provider ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: File Storage Providers (vwFileStorageProviders.ID)
         */
-        get ProviderID(): number {  
+        get ProviderID(): string {  
             return this.Get('ProviderID');
         }
-        set ProviderID(value: number) {
+        set ProviderID(value: string) {
             this.Set('ProviderID', value);
         }
         /**
@@ -14819,18 +14402,6 @@ import { RegisterClass } from "@memberjunction/global";
         }
         set ProviderKey(value: string | null) {
             this.Set('ProviderKey', value);
-        }
-        /**
-        * * Field Name: CategoryID
-        * * Display Name: Category ID
-        * * SQL Data Type: int
-        * * Related Entity/Foreign Key: File Categories (vwFileCategories.ID)
-        */
-        get CategoryID(): number | null {  
-            return this.Get('CategoryID');
-        }
-        set CategoryID(value: number | null) {
-            this.Set('CategoryID', value);
         }
         /**
         * * Field Name: Status
@@ -14866,17 +14437,14 @@ import { RegisterClass } from "@memberjunction/global";
         }
         
         /**
-        * * Field Name: ID_
-        * * Display Name: ID_
-        * * SQL Data Type: uniqueidentifier
-        * * Default Value: newsequentialid()
+        * * Field Name: Category
+        * * Display Name: Category
+        * * SQL Data Type: nvarchar(255)
         */
-        get ID_(): string {  
-            return this.Get('ID_');
+        get Category(): string | null {  
+            return this.Get('Category');
         }
-        set ID_(value: string) {
-            this.Set('ID_', value);
-        }
+        
         /**
         * * Field Name: Provider
         * * Display Name: Provider
@@ -14884,15 +14452,6 @@ import { RegisterClass } from "@memberjunction/global";
         */
         get Provider(): string {  
             return this.Get('Provider');
-        }
-        
-        /**
-        * * Field Name: Category
-        * * Display Name: Category
-        * * SQL Data Type: nvarchar(255)
-        */
-        get Category(): string | null {  
-            return this.Get('Category');
         }
         
 
@@ -14912,7 +14471,7 @@ import { RegisterClass } from "@memberjunction/global";
     export class FileCategoryEntity extends BaseEntity {
         /**
         * Loads the File Categories record from the database
-        * @param ID: number - primary key value to load the File Categories record.
+        * @param ID: string - primary key value to load the File Categories record.
         * @param EntityRelationshipsToLoad - (optional) the relationships to load
         * @returns {Promise<boolean>} - true if successful, false otherwise
         * @public
@@ -14921,7 +14480,7 @@ import { RegisterClass } from "@memberjunction/global";
         * @method
         * @override
         */      
-        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+        public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
             const compositeKey: CompositeKey = new CompositeKey();
             compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -14930,9 +14489,10 @@ import { RegisterClass } from "@memberjunction/global";
             /**
         * * Field Name: ID
         * * Display Name: ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
         */
-        get ID(): number {  
+        get ID(): string {  
             return this.Get('ID');
         }
         
@@ -14948,6 +14508,18 @@ import { RegisterClass } from "@memberjunction/global";
             this.Set('Name', value);
         }
         /**
+        * * Field Name: ParentID
+        * * Display Name: Parent ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: File Categories (vwFileCategories.ID)
+        */
+        get ParentID(): string | null {  
+            return this.Get('ParentID');
+        }
+        set ParentID(value: string | null) {
+            this.Set('ParentID', value);
+        }
+        /**
         * * Field Name: Description
         * * Display Name: Description
         * * SQL Data Type: nvarchar(MAX)
@@ -14957,18 +14529,6 @@ import { RegisterClass } from "@memberjunction/global";
         }
         set Description(value: string | null) {
             this.Set('Description', value);
-        }
-        /**
-        * * Field Name: ParentID
-        * * Display Name: Parent ID
-        * * SQL Data Type: int
-        * * Related Entity/Foreign Key: File Categories (vwFileCategories.ID)
-        */
-        get ParentID(): number | null {  
-            return this.Get('ParentID');
-        }
-        set ParentID(value: number | null) {
-            this.Set('ParentID', value);
         }
         /**
         * * Field Name: __mj_CreatedAt
@@ -14990,18 +14550,6 @@ import { RegisterClass } from "@memberjunction/global";
             return this.Get('__mj_UpdatedAt');
         }
         
-        /**
-        * * Field Name: ID_
-        * * Display Name: ID_
-        * * SQL Data Type: uniqueidentifier
-        * * Default Value: newsequentialid()
-        */
-        get ID_(): string {  
-            return this.Get('ID_');
-        }
-        set ID_(value: string) {
-            this.Set('ID_', value);
-        }
         /**
         * * Field Name: Parent
         * * Display Name: Parent
@@ -15068,13 +14616,13 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: FileID
         * * Display Name: File ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Files (vwFiles.ID)
         */
-        get FileID(): number {  
+        get FileID(): string {  
             return this.Get('FileID');
         }
-        set FileID(value: number) {
+        set FileID(value: string) {
             this.Set('FileID', value);
         }
         /**
@@ -15382,13 +14930,13 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: DuplicateRunDetailID
         * * Display Name: Duplicate Run Detail ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Duplicate Run Details (vwDuplicateRunDetails.ID)
         */
-        get DuplicateRunDetailID(): number {  
+        get DuplicateRunDetailID(): string {  
             return this.Get('DuplicateRunDetailID');
         }
-        set DuplicateRunDetailID(value: number) {
+        set DuplicateRunDetailID(value: string) {
             this.Set('DuplicateRunDetailID', value);
         }
         /**
@@ -15474,6 +15022,18 @@ import { RegisterClass } from "@memberjunction/global";
             this.Set('ApprovalStatus', value);
         }
         /**
+        * * Field Name: RecordMergeLogID
+        * * Display Name: Record Merge Log ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Record Merge Logs (vwRecordMergeLogs.ID)
+        */
+        get RecordMergeLogID(): string | null {  
+            return this.Get('RecordMergeLogID');
+        }
+        set RecordMergeLogID(value: string | null) {
+            this.Set('RecordMergeLogID', value);
+        }
+        /**
         * * Field Name: MergeStatus
         * * Display Name: Merge Status
         * * SQL Data Type: nvarchar(20)
@@ -15501,18 +15061,6 @@ import { RegisterClass } from "@memberjunction/global";
         }
         set MergedAt(value: Date) {
             this.Set('MergedAt', value);
-        }
-        /**
-        * * Field Name: RecordMergeLogID
-        * * Display Name: Record Merge Log ID
-        * * SQL Data Type: int
-        * * Related Entity/Foreign Key: Record Merge Logs (vwRecordMergeLogs.ID)
-        */
-        get RecordMergeLogID(): number | null {  
-            return this.Get('RecordMergeLogID');
-        }
-        set RecordMergeLogID(value: number | null) {
-            this.Set('RecordMergeLogID', value);
         }
         /**
         * * Field Name: __mj_CreatedAt
@@ -15591,13 +15139,13 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: EntityDocumentID
         * * Display Name: Entity Document ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Entity Documents (vwEntityDocuments.ID)
         */
-        get EntityDocumentID(): number {  
+        get EntityDocumentID(): string {  
             return this.Get('EntityDocumentID');
         }
-        set EntityDocumentID(value: number) {
+        set EntityDocumentID(value: string) {
             this.Set('EntityDocumentID', value);
         }
         /**
@@ -15807,7 +15355,7 @@ import { RegisterClass } from "@memberjunction/global";
     export class DuplicateRunEntity extends BaseEntity {
         /**
         * Loads the Duplicate Runs record from the database
-        * @param ID: number - primary key value to load the Duplicate Runs record.
+        * @param ID: string - primary key value to load the Duplicate Runs record.
         * @param EntityRelationshipsToLoad - (optional) the relationships to load
         * @returns {Promise<boolean>} - true if successful, false otherwise
         * @public
@@ -15816,7 +15364,7 @@ import { RegisterClass } from "@memberjunction/global";
         * @method
         * @override
         */      
-        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+        public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
             const compositeKey: CompositeKey = new CompositeKey();
             compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -15837,9 +15385,10 @@ import { RegisterClass } from "@memberjunction/global";
             /**
         * * Field Name: ID
         * * Display Name: ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
         */
-        get ID(): number {  
+        get ID(): string {  
             return this.Get('ID');
         }
         
@@ -15866,6 +15415,18 @@ import { RegisterClass } from "@memberjunction/global";
         }
         set StartedByUserID(value: string) {
             this.Set('StartedByUserID', value);
+        }
+        /**
+        * * Field Name: SourceListID
+        * * Display Name: Source List ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Lists (vwLists.ID)
+        */
+        get SourceListID(): string {  
+            return this.Get('SourceListID');
+        }
+        set SourceListID(value: string) {
+            this.Set('SourceListID', value);
         }
         /**
         * * Field Name: StartedAt
@@ -15960,18 +15521,6 @@ import { RegisterClass } from "@memberjunction/global";
             this.Set('ProcessingErrorMessage', value);
         }
         /**
-        * * Field Name: SourceListID
-        * * Display Name: Source List ID
-        * * SQL Data Type: int
-        * * Related Entity/Foreign Key: Lists (vwLists.ID)
-        */
-        get SourceListID(): number {  
-            return this.Get('SourceListID');
-        }
-        set SourceListID(value: number) {
-            this.Set('SourceListID', value);
-        }
-        /**
         * * Field Name: __mj_CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetimeoffset
@@ -15992,18 +15541,6 @@ import { RegisterClass } from "@memberjunction/global";
         }
         
         /**
-        * * Field Name: ID_
-        * * Display Name: ID_
-        * * SQL Data Type: uniqueidentifier
-        * * Default Value: newsequentialid()
-        */
-        get ID_(): string {  
-            return this.Get('ID_');
-        }
-        set ID_(value: string) {
-            this.Set('ID_', value);
-        }
-        /**
         * * Field Name: Entity
         * * Display Name: Entity
         * * SQL Data Type: nvarchar(255)
@@ -16022,21 +15559,21 @@ import { RegisterClass } from "@memberjunction/global";
         }
         
         /**
-        * * Field Name: ApprovedByUser
-        * * Display Name: Approved By User
-        * * SQL Data Type: nvarchar(100)
-        */
-        get ApprovedByUser(): string | null {  
-            return this.Get('ApprovedByUser');
-        }
-        
-        /**
         * * Field Name: SourceList
         * * Display Name: Source List
         * * SQL Data Type: nvarchar(100)
         */
         get SourceList(): string {  
             return this.Get('SourceList');
+        }
+        
+        /**
+        * * Field Name: ApprovedByUser
+        * * Display Name: Approved By User
+        * * SQL Data Type: nvarchar(100)
+        */
+        get ApprovedByUser(): string | null {  
+            return this.Get('ApprovedByUser');
         }
         
 
@@ -16056,7 +15593,7 @@ import { RegisterClass } from "@memberjunction/global";
     export class DuplicateRunDetailEntity extends BaseEntity {
         /**
         * Loads the Duplicate Run Details record from the database
-        * @param ID: number - primary key value to load the Duplicate Run Details record.
+        * @param ID: string - primary key value to load the Duplicate Run Details record.
         * @param EntityRelationshipsToLoad - (optional) the relationships to load
         * @returns {Promise<boolean>} - true if successful, false otherwise
         * @public
@@ -16065,7 +15602,7 @@ import { RegisterClass } from "@memberjunction/global";
         * @method
         * @override
         */      
-        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+        public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
             const compositeKey: CompositeKey = new CompositeKey();
             compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -16086,22 +15623,23 @@ import { RegisterClass } from "@memberjunction/global";
             /**
         * * Field Name: ID
         * * Display Name: ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
         */
-        get ID(): number {  
+        get ID(): string {  
             return this.Get('ID');
         }
         
         /**
         * * Field Name: DuplicateRunID
         * * Display Name: Duplicate Run ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Duplicate Runs (vwDuplicateRuns.ID)
         */
-        get DuplicateRunID(): number {  
+        get DuplicateRunID(): string {  
             return this.Get('DuplicateRunID');
         }
-        set DuplicateRunID(value: number) {
+        set DuplicateRunID(value: string) {
             this.Set('DuplicateRunID', value);
         }
         /**
@@ -16206,18 +15744,6 @@ import { RegisterClass } from "@memberjunction/global";
             return this.Get('__mj_UpdatedAt');
         }
         
-        /**
-        * * Field Name: ID_
-        * * Display Name: ID_
-        * * SQL Data Type: uniqueidentifier
-        * * Default Value: newsequentialid()
-        */
-        get ID_(): string {  
-            return this.Get('ID_');
-        }
-        set ID_(value: string) {
-            this.Set('ID_', value);
-        }
 
     }
         
@@ -16261,16 +15787,16 @@ import { RegisterClass } from "@memberjunction/global";
         }
         
         /**
-        * * Field Name: ApplicationName
-        * * Display Name: Application Name
-        * * SQL Data Type: nvarchar(50)
-        * * Related Entity/Foreign Key: Applications (vwApplications.Name)
+        * * Field Name: ApplicationID
+        * * Display Name: Application ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Applications (vwApplications.ID)
         */
-        get ApplicationName(): string {  
-            return this.Get('ApplicationName');
+        get ApplicationID(): string {  
+            return this.Get('ApplicationID');
         }
-        set ApplicationName(value: string) {
-            this.Set('ApplicationName', value);
+        set ApplicationID(value: string) {
+            this.Set('ApplicationID', value);
         }
         /**
         * * Field Name: Name
@@ -16632,13 +16158,13 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: InvocationTypeID
         * * Display Name: Invocation Type ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Entity Action Invocation Types (vwEntityActionInvocationTypes.ID)
         */
-        get InvocationTypeID(): number {  
+        get InvocationTypeID(): string {  
             return this.Get('InvocationTypeID');
         }
-        set InvocationTypeID(value: number) {
+        set InvocationTypeID(value: string) {
             this.Set('InvocationTypeID', value);
         }
         /**
@@ -16813,7 +16339,7 @@ import { RegisterClass } from "@memberjunction/global";
     export class EntityActionInvocationTypeEntity extends BaseEntity {
         /**
         * Loads the Entity Action Invocation Types record from the database
-        * @param ID: number - primary key value to load the Entity Action Invocation Types record.
+        * @param ID: string - primary key value to load the Entity Action Invocation Types record.
         * @param EntityRelationshipsToLoad - (optional) the relationships to load
         * @returns {Promise<boolean>} - true if successful, false otherwise
         * @public
@@ -16822,7 +16348,7 @@ import { RegisterClass } from "@memberjunction/global";
         * @method
         * @override
         */      
-        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+        public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
             const compositeKey: CompositeKey = new CompositeKey();
             compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -16831,9 +16357,10 @@ import { RegisterClass } from "@memberjunction/global";
             /**
         * * Field Name: ID
         * * Display Name: ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
         */
-        get ID(): number {  
+        get ID(): string {  
             return this.Get('ID');
         }
         
@@ -16893,18 +16420,6 @@ import { RegisterClass } from "@memberjunction/global";
             return this.Get('__mj_UpdatedAt');
         }
         
-        /**
-        * * Field Name: ID_
-        * * Display Name: ID_
-        * * SQL Data Type: uniqueidentifier
-        * * Default Value: newsequentialid()
-        */
-        get ID_(): string {  
-            return this.Get('ID_');
-        }
-        set ID_(value: string) {
-            this.Set('ID_', value);
-        }
 
     }
         
@@ -18144,13 +17659,13 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: LibraryID
         * * Display Name: Library ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Libraries (vwLibraries.ID)
         */
-        get LibraryID(): number {  
+        get LibraryID(): string {  
             return this.Get('LibraryID');
         }
-        set LibraryID(value: number) {
+        set LibraryID(value: string) {
             this.Set('LibraryID', value);
         }
         /**
@@ -18221,7 +17736,7 @@ import { RegisterClass } from "@memberjunction/global";
     export class LibraryEntity extends BaseEntity {
         /**
         * Loads the Libraries record from the database
-        * @param ID: number - primary key value to load the Libraries record.
+        * @param ID: string - primary key value to load the Libraries record.
         * @param EntityRelationshipsToLoad - (optional) the relationships to load
         * @returns {Promise<boolean>} - true if successful, false otherwise
         * @public
@@ -18230,7 +17745,7 @@ import { RegisterClass } from "@memberjunction/global";
         * @method
         * @override
         */      
-        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+        public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
             const compositeKey: CompositeKey = new CompositeKey();
             compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -18251,9 +17766,10 @@ import { RegisterClass } from "@memberjunction/global";
             /**
         * * Field Name: ID
         * * Display Name: ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
         */
-        get ID(): number {  
+        get ID(): string {  
             return this.Get('ID');
         }
         
@@ -18341,18 +17857,6 @@ import { RegisterClass } from "@memberjunction/global";
             return this.Get('__mj_UpdatedAt');
         }
         
-        /**
-        * * Field Name: ID_
-        * * Display Name: ID_
-        * * SQL Data Type: uniqueidentifier
-        * * Default Value: newsequentialid()
-        */
-        get ID_(): string {  
-            return this.Get('ID_');
-        }
-        set ID_(value: string) {
-            this.Set('ID_', value);
-        }
 
     }
         
@@ -18491,7 +17995,7 @@ import { RegisterClass } from "@memberjunction/global";
     export class CommunicationProviderEntity extends BaseEntity {
         /**
         * Loads the Communication Providers record from the database
-        * @param ID: number - primary key value to load the Communication Providers record.
+        * @param ID: string - primary key value to load the Communication Providers record.
         * @param EntityRelationshipsToLoad - (optional) the relationships to load
         * @returns {Promise<boolean>} - true if successful, false otherwise
         * @public
@@ -18500,7 +18004,7 @@ import { RegisterClass } from "@memberjunction/global";
         * @method
         * @override
         */      
-        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+        public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
             const compositeKey: CompositeKey = new CompositeKey();
             compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -18521,9 +18025,10 @@ import { RegisterClass } from "@memberjunction/global";
             /**
         * * Field Name: ID
         * * Display Name: ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
         */
-        get ID(): number {  
+        get ID(): string {  
             return this.Get('ID');
         }
         
@@ -18612,18 +18117,6 @@ import { RegisterClass } from "@memberjunction/global";
             return this.Get('__mj_UpdatedAt');
         }
         
-        /**
-        * * Field Name: ID_
-        * * Display Name: ID_
-        * * SQL Data Type: uniqueidentifier
-        * * Default Value: newsequentialid()
-        */
-        get ID_(): string {  
-            return this.Get('ID_');
-        }
-        set ID_(value: string) {
-            this.Set('ID_', value);
-        }
 
     }
         
@@ -18642,7 +18135,7 @@ import { RegisterClass } from "@memberjunction/global";
     export class CommunicationRunEntity extends BaseEntity {
         /**
         * Loads the Communication Runs record from the database
-        * @param ID: number - primary key value to load the Communication Runs record.
+        * @param ID: string - primary key value to load the Communication Runs record.
         * @param EntityRelationshipsToLoad - (optional) the relationships to load
         * @returns {Promise<boolean>} - true if successful, false otherwise
         * @public
@@ -18651,7 +18144,7 @@ import { RegisterClass } from "@memberjunction/global";
         * @method
         * @override
         */      
-        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+        public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
             const compositeKey: CompositeKey = new CompositeKey();
             compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -18672,9 +18165,10 @@ import { RegisterClass } from "@memberjunction/global";
             /**
         * * Field Name: ID
         * * Display Name: ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
         */
-        get ID(): number {  
+        get ID(): string {  
             return this.Get('ID');
         }
         
@@ -18790,18 +18284,6 @@ import { RegisterClass } from "@memberjunction/global";
         }
         
         /**
-        * * Field Name: ID_
-        * * Display Name: ID_
-        * * SQL Data Type: uniqueidentifier
-        * * Default Value: newsequentialid()
-        */
-        get ID_(): string {  
-            return this.Get('ID_');
-        }
-        set ID_(value: string) {
-            this.Set('ID_', value);
-        }
-        /**
         * * Field Name: User
         * * Display Name: User
         * * SQL Data Type: nvarchar(100)
@@ -18828,7 +18310,7 @@ import { RegisterClass } from "@memberjunction/global";
     export class CommunicationProviderMessageTypeEntity extends BaseEntity {
         /**
         * Loads the Communication Provider Message Types record from the database
-        * @param ID: number - primary key value to load the Communication Provider Message Types record.
+        * @param ID: string - primary key value to load the Communication Provider Message Types record.
         * @param EntityRelationshipsToLoad - (optional) the relationships to load
         * @returns {Promise<boolean>} - true if successful, false otherwise
         * @public
@@ -18837,7 +18319,7 @@ import { RegisterClass } from "@memberjunction/global";
         * @method
         * @override
         */      
-        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+        public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
             const compositeKey: CompositeKey = new CompositeKey();
             compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -18846,34 +18328,35 @@ import { RegisterClass } from "@memberjunction/global";
             /**
         * * Field Name: ID
         * * Display Name: ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
         */
-        get ID(): number {  
+        get ID(): string {  
             return this.Get('ID');
         }
         
         /**
         * * Field Name: CommunicationProviderID
         * * Display Name: Communication Provider ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Communication Providers (vwCommunicationProviders.ID)
         */
-        get CommunicationProviderID(): number {  
+        get CommunicationProviderID(): string {  
             return this.Get('CommunicationProviderID');
         }
-        set CommunicationProviderID(value: number) {
+        set CommunicationProviderID(value: string) {
             this.Set('CommunicationProviderID', value);
         }
         /**
         * * Field Name: CommunicationBaseMessageTypeID
         * * Display Name: Communication Base Message Type ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Communication Base Message Types (vwCommunicationBaseMessageTypes.ID)
         */
-        get CommunicationBaseMessageTypeID(): number {  
+        get CommunicationBaseMessageTypeID(): string {  
             return this.Get('CommunicationBaseMessageTypeID');
         }
-        set CommunicationBaseMessageTypeID(value: number) {
+        set CommunicationBaseMessageTypeID(value: string) {
             this.Set('CommunicationBaseMessageTypeID', value);
         }
         /**
@@ -18936,18 +18419,6 @@ import { RegisterClass } from "@memberjunction/global";
             return this.Get('__mj_UpdatedAt');
         }
         
-        /**
-        * * Field Name: ID_
-        * * Display Name: ID_
-        * * SQL Data Type: uniqueidentifier
-        * * Default Value: newsequentialid()
-        */
-        get ID_(): string {  
-            return this.Get('ID_');
-        }
-        set ID_(value: string) {
-            this.Set('ID_', value);
-        }
         /**
         * * Field Name: CommunicationProvider
         * * Display Name: Communication Provider
@@ -19024,37 +18495,37 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: CommunicationProviderID
         * * Display Name: Communication Provider ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Communication Providers (vwCommunicationProviders.ID)
         */
-        get CommunicationProviderID(): number {  
+        get CommunicationProviderID(): string {  
             return this.Get('CommunicationProviderID');
         }
-        set CommunicationProviderID(value: number) {
+        set CommunicationProviderID(value: string) {
             this.Set('CommunicationProviderID', value);
         }
         /**
         * * Field Name: CommunicationProviderMessageTypeID
         * * Display Name: Communication Provider Message Type ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Communication Provider Message Types (vwCommunicationProviderMessageTypes.ID)
         */
-        get CommunicationProviderMessageTypeID(): number {  
+        get CommunicationProviderMessageTypeID(): string {  
             return this.Get('CommunicationProviderMessageTypeID');
         }
-        set CommunicationProviderMessageTypeID(value: number) {
+        set CommunicationProviderMessageTypeID(value: string) {
             this.Set('CommunicationProviderMessageTypeID', value);
         }
         /**
         * * Field Name: CommunicationRunID
         * * Display Name: Communication Run ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Communication Runs (vwCommunicationRuns.ID)
         */
-        get CommunicationRunID(): number | null {  
+        get CommunicationRunID(): string | null {  
             return this.Get('CommunicationRunID');
         }
-        set CommunicationRunID(value: number | null) {
+        set CommunicationRunID(value: string | null) {
             this.Set('CommunicationRunID', value);
         }
         /**
@@ -19184,7 +18655,7 @@ import { RegisterClass } from "@memberjunction/global";
     export class CommunicationBaseMessageTypeEntity extends BaseEntity {
         /**
         * Loads the Communication Base Message Types record from the database
-        * @param ID: number - primary key value to load the Communication Base Message Types record.
+        * @param ID: string - primary key value to load the Communication Base Message Types record.
         * @param EntityRelationshipsToLoad - (optional) the relationships to load
         * @returns {Promise<boolean>} - true if successful, false otherwise
         * @public
@@ -19193,7 +18664,7 @@ import { RegisterClass } from "@memberjunction/global";
         * @method
         * @override
         */      
-        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+        public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
             const compositeKey: CompositeKey = new CompositeKey();
             compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -19214,9 +18685,10 @@ import { RegisterClass } from "@memberjunction/global";
             /**
         * * Field Name: ID
         * * Display Name: ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
         */
-        get ID(): number {  
+        get ID(): string {  
             return this.Get('ID');
         }
         
@@ -19302,18 +18774,6 @@ import { RegisterClass } from "@memberjunction/global";
             return this.Get('__mj_UpdatedAt');
         }
         
-        /**
-        * * Field Name: ID_
-        * * Display Name: ID_
-        * * SQL Data Type: uniqueidentifier
-        * * Default Value: newsequentialid()
-        */
-        get ID_(): string {  
-            return this.Get('ID_');
-        }
-        set ID_(value: string) {
-            this.Set('ID_', value);
-        }
 
     }
         
@@ -19332,7 +18792,7 @@ import { RegisterClass } from "@memberjunction/global";
     export class TemplateEntity extends BaseEntity {
         /**
         * Loads the Templates record from the database
-        * @param ID: number - primary key value to load the Templates record.
+        * @param ID: string - primary key value to load the Templates record.
         * @param EntityRelationshipsToLoad - (optional) the relationships to load
         * @returns {Promise<boolean>} - true if successful, false otherwise
         * @public
@@ -19341,7 +18801,7 @@ import { RegisterClass } from "@memberjunction/global";
         * @method
         * @override
         */      
-        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+        public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
             const compositeKey: CompositeKey = new CompositeKey();
             compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -19362,9 +18822,10 @@ import { RegisterClass } from "@memberjunction/global";
             /**
         * * Field Name: ID
         * * Display Name: ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
         */
-        get ID(): number {  
+        get ID(): string {  
             return this.Get('ID');
         }
         
@@ -19393,6 +18854,18 @@ import { RegisterClass } from "@memberjunction/global";
             this.Set('Description', value);
         }
         /**
+        * * Field Name: CategoryID
+        * * Display Name: Category ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Template Categories (vwTemplateCategories.ID)
+        */
+        get CategoryID(): string | null {  
+            return this.Get('CategoryID');
+        }
+        set CategoryID(value: string | null) {
+            this.Set('CategoryID', value);
+        }
+        /**
         * * Field Name: UserPrompt
         * * Display Name: User Prompt
         * * SQL Data Type: nvarchar(MAX)
@@ -19403,19 +18876,6 @@ import { RegisterClass } from "@memberjunction/global";
         }
         set UserPrompt(value: string | null) {
             this.Set('UserPrompt', value);
-        }
-        /**
-        * * Field Name: CategoryID
-        * * Display Name: Category ID
-        * * SQL Data Type: int
-        * * Related Entity/Foreign Key: Template Categories (vwTemplateCategories.ID)
-        * * Description: Optional, Category that this template is part of
-        */
-        get CategoryID(): number | null {  
-            return this.Get('CategoryID');
-        }
-        set CategoryID(value: number | null) {
-            this.Set('CategoryID', value);
         }
         /**
         * * Field Name: UserID
@@ -19487,18 +18947,6 @@ import { RegisterClass } from "@memberjunction/global";
         }
         
         /**
-        * * Field Name: ID_
-        * * Display Name: ID_
-        * * SQL Data Type: uniqueidentifier
-        * * Default Value: newsequentialid()
-        */
-        get ID_(): string {  
-            return this.Get('ID_');
-        }
-        set ID_(value: string) {
-            this.Set('ID_', value);
-        }
-        /**
         * * Field Name: Category
         * * Display Name: Category
         * * SQL Data Type: nvarchar(255)
@@ -19534,7 +18982,7 @@ import { RegisterClass } from "@memberjunction/global";
     export class TemplateCategoryEntity extends BaseEntity {
         /**
         * Loads the Template Categories record from the database
-        * @param ID: number - primary key value to load the Template Categories record.
+        * @param ID: string - primary key value to load the Template Categories record.
         * @param EntityRelationshipsToLoad - (optional) the relationships to load
         * @returns {Promise<boolean>} - true if successful, false otherwise
         * @public
@@ -19543,7 +18991,7 @@ import { RegisterClass } from "@memberjunction/global";
         * @method
         * @override
         */      
-        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+        public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
             const compositeKey: CompositeKey = new CompositeKey();
             compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -19564,9 +19012,10 @@ import { RegisterClass } from "@memberjunction/global";
             /**
         * * Field Name: ID
         * * Display Name: ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
         */
-        get ID(): number {  
+        get ID(): string {  
             return this.Get('ID');
         }
         
@@ -19597,13 +19046,13 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: ParentID
         * * Display Name: Parent ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Template Categories (vwTemplateCategories.ID)
         */
-        get ParentID(): number | null {  
+        get ParentID(): string | null {  
             return this.Get('ParentID');
         }
-        set ParentID(value: number | null) {
+        set ParentID(value: string | null) {
             this.Set('ParentID', value);
         }
         /**
@@ -19638,18 +19087,6 @@ import { RegisterClass } from "@memberjunction/global";
             return this.Get('__mj_UpdatedAt');
         }
         
-        /**
-        * * Field Name: ID_
-        * * Display Name: ID_
-        * * SQL Data Type: uniqueidentifier
-        * * Default Value: newsequentialid()
-        */
-        get ID_(): string {  
-            return this.Get('ID_');
-        }
-        set ID_(value: string) {
-            this.Set('ID_', value);
-        }
         /**
         * * Field Name: Parent
         * * Display Name: Parent
@@ -19726,25 +19163,25 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: TemplateID
         * * Display Name: Template ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Templates (vwTemplates.ID)
         */
-        get TemplateID(): number {  
+        get TemplateID(): string {  
             return this.Get('TemplateID');
         }
-        set TemplateID(value: number) {
+        set TemplateID(value: string) {
             this.Set('TemplateID', value);
         }
         /**
         * * Field Name: TypeID
         * * Display Name: Type ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Template Content Types (vwTemplateContentTypes.ID)
         */
-        get TypeID(): number {  
+        get TypeID(): string {  
             return this.Get('TypeID');
         }
-        set TypeID(value: number) {
+        set TypeID(value: string) {
             this.Set('TypeID', value);
         }
         /**
@@ -19880,14 +19317,13 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: TemplateID
         * * Display Name: Template ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Templates (vwTemplates.ID)
-        * * Description: ID of the template this parameter belongs to
         */
-        get TemplateID(): number {  
+        get TemplateID(): string {  
             return this.Get('TemplateID');
         }
-        set TemplateID(value: number) {
+        set TemplateID(value: string) {
             this.Set('TemplateID', value);
         }
         /**
@@ -20074,7 +19510,7 @@ import { RegisterClass } from "@memberjunction/global";
     export class TemplateContentTypeEntity extends BaseEntity {
         /**
         * Loads the Template Content Types record from the database
-        * @param ID: number - primary key value to load the Template Content Types record.
+        * @param ID: string - primary key value to load the Template Content Types record.
         * @param EntityRelationshipsToLoad - (optional) the relationships to load
         * @returns {Promise<boolean>} - true if successful, false otherwise
         * @public
@@ -20083,7 +19519,7 @@ import { RegisterClass } from "@memberjunction/global";
         * @method
         * @override
         */      
-        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+        public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
             const compositeKey: CompositeKey = new CompositeKey();
             compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -20104,9 +19540,10 @@ import { RegisterClass } from "@memberjunction/global";
             /**
         * * Field Name: ID
         * * Display Name: ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
         */
-        get ID(): number {  
+        get ID(): string {  
             return this.Get('ID');
         }
         
@@ -20176,18 +19613,6 @@ import { RegisterClass } from "@memberjunction/global";
             return this.Get('__mj_UpdatedAt');
         }
         
-        /**
-        * * Field Name: ID_
-        * * Display Name: ID_
-        * * SQL Data Type: uniqueidentifier
-        * * Default Value: newsequentialid()
-        */
-        get ID_(): string {  
-            return this.Get('ID_');
-        }
-        set ID_(value: string) {
-            this.Set('ID_', value);
-        }
 
     }
         
@@ -20206,7 +19631,7 @@ import { RegisterClass } from "@memberjunction/global";
     export class RecommendationEntity extends BaseEntity {
         /**
         * Loads the Recommendations record from the database
-        * @param ID: number - primary key value to load the Recommendations record.
+        * @param ID: string - primary key value to load the Recommendations record.
         * @param EntityRelationshipsToLoad - (optional) the relationships to load
         * @returns {Promise<boolean>} - true if successful, false otherwise
         * @public
@@ -20215,7 +19640,7 @@ import { RegisterClass } from "@memberjunction/global";
         * @method
         * @override
         */      
-        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+        public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
             const compositeKey: CompositeKey = new CompositeKey();
             compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -20236,22 +19661,23 @@ import { RegisterClass } from "@memberjunction/global";
             /**
         * * Field Name: ID
         * * Display Name: ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
         */
-        get ID(): number {  
+        get ID(): string {  
             return this.Get('ID');
         }
         
         /**
         * * Field Name: RecommendationRunID
         * * Display Name: Recommendation Run ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Recommendation Runs (vwRecommendationRuns.ID)
         */
-        get RecommendationRunID(): number {  
+        get RecommendationRunID(): string {  
             return this.Get('RecommendationRunID');
         }
-        set RecommendationRunID(value: number) {
+        set RecommendationRunID(value: string) {
             this.Set('RecommendationRunID', value);
         }
         /**
@@ -20299,18 +19725,6 @@ import { RegisterClass } from "@memberjunction/global";
         }
         
         /**
-        * * Field Name: ID_
-        * * Display Name: ID_
-        * * SQL Data Type: uniqueidentifier
-        * * Default Value: newsequentialid()
-        */
-        get ID_(): string {  
-            return this.Get('ID_');
-        }
-        set ID_(value: string) {
-            this.Set('ID_', value);
-        }
-        /**
         * * Field Name: SourceEntity
         * * Display Name: Source Entity
         * * SQL Data Type: nvarchar(255)
@@ -20337,7 +19751,7 @@ import { RegisterClass } from "@memberjunction/global";
     export class RecommendationProviderEntity extends BaseEntity {
         /**
         * Loads the Recommendation Providers record from the database
-        * @param ID: number - primary key value to load the Recommendation Providers record.
+        * @param ID: string - primary key value to load the Recommendation Providers record.
         * @param EntityRelationshipsToLoad - (optional) the relationships to load
         * @returns {Promise<boolean>} - true if successful, false otherwise
         * @public
@@ -20346,7 +19760,7 @@ import { RegisterClass } from "@memberjunction/global";
         * @method
         * @override
         */      
-        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+        public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
             const compositeKey: CompositeKey = new CompositeKey();
             compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -20367,9 +19781,10 @@ import { RegisterClass } from "@memberjunction/global";
             /**
         * * Field Name: ID
         * * Display Name: ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
         */
-        get ID(): number {  
+        get ID(): string {  
             return this.Get('ID');
         }
         
@@ -20415,18 +19830,6 @@ import { RegisterClass } from "@memberjunction/global";
             return this.Get('__mj_UpdatedAt');
         }
         
-        /**
-        * * Field Name: ID_
-        * * Display Name: ID_
-        * * SQL Data Type: uniqueidentifier
-        * * Default Value: newsequentialid()
-        */
-        get ID_(): string {  
-            return this.Get('ID_');
-        }
-        set ID_(value: string) {
-            this.Set('ID_', value);
-        }
 
     }
         
@@ -20445,7 +19848,7 @@ import { RegisterClass } from "@memberjunction/global";
     export class RecommendationRunEntity extends BaseEntity {
         /**
         * Loads the Recommendation Runs record from the database
-        * @param ID: number - primary key value to load the Recommendation Runs record.
+        * @param ID: string - primary key value to load the Recommendation Runs record.
         * @param EntityRelationshipsToLoad - (optional) the relationships to load
         * @returns {Promise<boolean>} - true if successful, false otherwise
         * @public
@@ -20454,7 +19857,7 @@ import { RegisterClass } from "@memberjunction/global";
         * @method
         * @override
         */      
-        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+        public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
             const compositeKey: CompositeKey = new CompositeKey();
             compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -20475,22 +19878,23 @@ import { RegisterClass } from "@memberjunction/global";
             /**
         * * Field Name: ID
         * * Display Name: ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
         */
-        get ID(): number {  
+        get ID(): string {  
             return this.Get('ID');
         }
         
         /**
         * * Field Name: RecommendationProviderID
         * * Display Name: Recommendation Provider ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Recommendation Providers (vwRecommendationProviders.ID)
         */
-        get RecommendationProviderID(): number {  
+        get RecommendationProviderID(): string {  
             return this.Get('RecommendationProviderID');
         }
-        set RecommendationProviderID(value: number) {
+        set RecommendationProviderID(value: string) {
             this.Set('RecommendationProviderID', value);
         }
         /**
@@ -20580,18 +19984,6 @@ import { RegisterClass } from "@memberjunction/global";
         }
         
         /**
-        * * Field Name: ID_
-        * * Display Name: ID_
-        * * SQL Data Type: uniqueidentifier
-        * * Default Value: newsequentialid()
-        */
-        get ID_(): string {  
-            return this.Get('ID_');
-        }
-        set ID_(value: string) {
-            this.Set('ID_', value);
-        }
-        /**
         * * Field Name: RecommendationProvider
         * * Display Name: Recommendation Provider
         * * SQL Data Type: nvarchar(255)
@@ -20667,13 +20059,13 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: RecommendationID
         * * Display Name: Recommendation ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Recommendations (vwRecommendations.ID)
         */
-        get RecommendationID(): number {  
+        get RecommendationID(): string {  
             return this.Get('RecommendationID');
         }
-        set RecommendationID(value: number) {
+        set RecommendationID(value: string) {
             this.Set('RecommendationID', value);
         }
         /**
@@ -20691,7 +20083,7 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: DestinationEntityRecordID
         * * Display Name: Destination Entity Record ID
-        * * SQL Data Type: nvarchar(MAX)
+        * * SQL Data Type: nvarchar(450)
         * * Description: The record ID of the destination entity
         */
         get DestinationEntityRecordID(): string {  
@@ -20759,7 +20151,7 @@ import { RegisterClass } from "@memberjunction/global";
     export class EntityCommunicationMessageTypeEntity extends BaseEntity {
         /**
         * Loads the Entity Communication Message Types record from the database
-        * @param ID: number - primary key value to load the Entity Communication Message Types record.
+        * @param ID: string - primary key value to load the Entity Communication Message Types record.
         * @param EntityRelationshipsToLoad - (optional) the relationships to load
         * @returns {Promise<boolean>} - true if successful, false otherwise
         * @public
@@ -20768,7 +20160,7 @@ import { RegisterClass } from "@memberjunction/global";
         * @method
         * @override
         */      
-        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+        public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
             const compositeKey: CompositeKey = new CompositeKey();
             compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -20789,9 +20181,10 @@ import { RegisterClass } from "@memberjunction/global";
             /**
         * * Field Name: ID
         * * Display Name: ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
         */
-        get ID(): number {  
+        get ID(): string {  
             return this.Get('ID');
         }
         
@@ -20810,14 +20203,13 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: BaseMessageTypeID
         * * Display Name: Base Message Type ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Communication Base Message Types (vwCommunicationBaseMessageTypes.ID)
-        * * Description: ID of the communication base message type
         */
-        get BaseMessageTypeID(): number {  
+        get BaseMessageTypeID(): string {  
             return this.Get('BaseMessageTypeID');
         }
-        set BaseMessageTypeID(value: number) {
+        set BaseMessageTypeID(value: string) {
             this.Set('BaseMessageTypeID', value);
         }
         /**
@@ -20853,18 +20245,6 @@ import { RegisterClass } from "@memberjunction/global";
             return this.Get('__mj_UpdatedAt');
         }
         
-        /**
-        * * Field Name: ID_
-        * * Display Name: ID_
-        * * SQL Data Type: uniqueidentifier
-        * * Default Value: newsequentialid()
-        */
-        get ID_(): string {  
-            return this.Get('ID_');
-        }
-        set ID_(value: string) {
-            this.Set('ID_', value);
-        }
         /**
         * * Field Name: Entity
         * * Display Name: Entity
@@ -20941,14 +20321,13 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: EntityCommunicationMessageTypeID
         * * Display Name: Entity Communication Message Type ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Entity Communication Message Types (vwEntityCommunicationMessageTypes.ID)
-        * * Description: ID of the entity communication message type
         */
-        get EntityCommunicationMessageTypeID(): number {  
+        get EntityCommunicationMessageTypeID(): string {  
             return this.Get('EntityCommunicationMessageTypeID');
         }
-        set EntityCommunicationMessageTypeID(value: number) {
+        set EntityCommunicationMessageTypeID(value: string) {
             this.Set('EntityCommunicationMessageTypeID', value);
         }
         /**
@@ -21013,7 +20392,7 @@ import { RegisterClass } from "@memberjunction/global";
     export class RecordChangeReplayRunEntity extends BaseEntity {
         /**
         * Loads the Record Change Replay Runs record from the database
-        * @param ID: number - primary key value to load the Record Change Replay Runs record.
+        * @param ID: string - primary key value to load the Record Change Replay Runs record.
         * @param EntityRelationshipsToLoad - (optional) the relationships to load
         * @returns {Promise<boolean>} - true if successful, false otherwise
         * @public
@@ -21022,7 +20401,7 @@ import { RegisterClass } from "@memberjunction/global";
         * @method
         * @override
         */      
-        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+        public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
             const compositeKey: CompositeKey = new CompositeKey();
             compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -21043,9 +20422,10 @@ import { RegisterClass } from "@memberjunction/global";
             /**
         * * Field Name: ID
         * * Display Name: ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
         */
-        get ID(): number {  
+        get ID(): string {  
             return this.Get('ID');
         }
         
@@ -21124,18 +20504,6 @@ import { RegisterClass } from "@memberjunction/global";
         }
         
         /**
-        * * Field Name: ID_
-        * * Display Name: ID_
-        * * SQL Data Type: uniqueidentifier
-        * * Default Value: newsequentialid()
-        */
-        get ID_(): string {  
-            return this.Get('ID_');
-        }
-        set ID_(value: string) {
-            this.Set('ID_', value);
-        }
-        /**
         * * Field Name: User
         * * Display Name: User
         * * SQL Data Type: nvarchar(100)
@@ -21213,13 +20581,13 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: LibraryID
         * * Display Name: Library ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Libraries (vwLibraries.ID)
         */
-        get LibraryID(): number {  
+        get LibraryID(): string {  
             return this.Get('LibraryID');
         }
-        set LibraryID(value: number) {
+        set LibraryID(value: string) {
             this.Set('LibraryID', value);
         }
         /**
@@ -21289,7 +20657,7 @@ import { RegisterClass } from "@memberjunction/global";
     export class EntityRelationshipDisplayComponentEntity extends BaseEntity {
         /**
         * Loads the Entity Relationship Display Components record from the database
-        * @param ID: number - primary key value to load the Entity Relationship Display Components record.
+        * @param ID: string - primary key value to load the Entity Relationship Display Components record.
         * @param EntityRelationshipsToLoad - (optional) the relationships to load
         * @returns {Promise<boolean>} - true if successful, false otherwise
         * @public
@@ -21298,7 +20666,7 @@ import { RegisterClass } from "@memberjunction/global";
         * @method
         * @override
         */      
-        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+        public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
             const compositeKey: CompositeKey = new CompositeKey();
             compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -21319,9 +20687,10 @@ import { RegisterClass } from "@memberjunction/global";
             /**
         * * Field Name: ID
         * * Display Name: ID
-        * * SQL Data Type: int
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
         */
-        get ID(): number {  
+        get ID(): string {  
             return this.Get('ID');
         }
         
@@ -21384,18 +20753,6 @@ import { RegisterClass } from "@memberjunction/global";
             return this.Get('__mj_UpdatedAt');
         }
         
-        /**
-        * * Field Name: ID_
-        * * Display Name: ID_
-        * * SQL Data Type: uniqueidentifier
-        * * Default Value: newsequentialid()
-        */
-        get ID_(): string {  
-            return this.Get('ID_');
-        }
-        set ID_(value: string) {
-            this.Set('ID_', value);
-        }
 
     }
         

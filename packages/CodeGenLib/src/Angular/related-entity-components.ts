@@ -146,7 +146,7 @@ export abstract class RelatedEntityDisplayComponentGeneratorBase {
      */
     public static async GetComponent(relationshipInfo: EntityRelationshipInfo, contextUser: UserInfo, ...params: any[]): Promise<RelatedEntityDisplayComponentGeneratorBase> {
         let key = "UserViewGrid"; // default key/name of component
-        if (relationshipInfo.DisplayComponentID && relationshipInfo.DisplayComponentID > 0) {
+        if (relationshipInfo.DisplayComponentID && relationshipInfo.DisplayComponentID.length > 0) {
             // get the component from the component info provided
             await TypeTablesCache.Instance.Config(false, contextUser);
             const component = TypeTablesCache.Instance.EntityRelationshipDisplayComponents.find(x => x.ID === relationshipInfo.DisplayComponentID);

@@ -6,7 +6,7 @@ import { FileCategoryResolver as FileCategoryResolverBase, FileCategory_ } from 
 
 export class FileResolver extends FileCategoryResolverBase {
   @Mutation(() => FileCategory_)
-  async DeleteFileCategory(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext) {
+  async DeleteFileCategory(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext) {
     const key = new CompositeKey();
     key.LoadFromSingleKeyValuePair('ID', ID);
     if (!(await this.BeforeDelete(dataSource, key))) {

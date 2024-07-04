@@ -11,14 +11,14 @@ import { TemplateEntityExtended, TemplateRenderResult, TemplateEngineBase } from
 export class TemplateEntityLoader extends nunjucks.Loader {
     public async: true; // tell nunjucks this is an async loader
 
-    private templates: { [templateId: number]: TemplateEntityExtended } = {};
+    private templates: { [templateId: string]: TemplateEntityExtended } = {};
 
     /**
      * Add a new template to the loader
      * @param templateId 
      * @param template 
      */
-    public AddTemplate(templateId: number, template: TemplateEntityExtended) {
+    public AddTemplate(templateId: string, template: TemplateEntityExtended) {
         this.templates[templateId] = template;
     }
 

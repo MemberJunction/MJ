@@ -21,8 +21,8 @@ import { CreateFileInput, FileResolver as FileResolverBase, File_, UpdateFileInp
 
 @InputType()
 export class CreateUploadURLInput {
-  @Field(() => Int)
-  FileID: number;
+  @Field(() => String)
+  FileID: string;
 }
 
 @ObjectType()
@@ -122,7 +122,7 @@ export class FileResolver extends FileResolverBase {
   }
 
   @Mutation(() => File_)
-  async DeleteFile(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+  async DeleteFile(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
     const md = new Metadata();
     const userInfo = this.GetUserFromPayload(userPayload);
 

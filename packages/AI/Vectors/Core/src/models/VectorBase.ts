@@ -62,7 +62,7 @@ export class VectorBase {
         return model;
     }
 
-    protected getVectorDatabase(id?: number): VectorDatabaseEntity {
+    protected getVectorDatabase(id?: string): VectorDatabaseEntity {
         if(AIEngine.VectorDatabases.length > 0){
             if(id){
                 let vectorDB = AIEngine.VectorDatabases.find(vd => vd.ID === id);

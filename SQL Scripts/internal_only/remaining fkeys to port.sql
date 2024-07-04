@@ -29,3 +29,7 @@ WHERE
     AND TYPE_NAME(c.user_type_id) <> 'UNIQUEIDENTIFIER'
 ORDER BY 
 	rt.Name, t.Name
+
+
+
+

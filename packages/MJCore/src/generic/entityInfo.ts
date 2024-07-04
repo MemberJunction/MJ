@@ -75,7 +75,7 @@ export class EntityRelationshipInfo extends BaseInfo  {
     DisplayIconType: 'Related Entity Icon'| 'Custom' | 'None' = 'Related Entity Icon'
     DisplayIcon: string = null
     DisplayUserViewID: string = null
-    DisplayComponentID: number = null
+    DisplayComponentID: string = null
     DisplayComponentConfiguration: string = null
     __mj_CreatedAt: Date = null
     __mj_UpdatedAt: Date = null
@@ -1166,7 +1166,7 @@ export class RecordMergeResult {
     /**
      * The ID of the log record for the merge operation
      */
-    RecordMergeLogID: number | null
+    RecordMergeLogID: string | null
     /**
      * The details of the merge operation, including the status of each record that was merged
      */

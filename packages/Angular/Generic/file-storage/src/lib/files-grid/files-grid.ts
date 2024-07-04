@@ -38,7 +38,7 @@ const downloadFromUrl = async (url: string, fileName: string, contentType?: stri
 };
 
 const FileDownloadQuery = gql`
-  query FileDownloadUrl($FileID: Int!) {
+  query FileDownloadUrl($FileID: String!) {
     File(ID: $FileID) {
       ContentType
       DownloadUrl

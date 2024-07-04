@@ -19,6 +19,15 @@ import { EntityDocumentEntity } from '@memberjunction/core-entities';
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
+            FieldName="TypeID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            LinkType="Record"
+            LinkComponentType="Search"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
             FieldName="EntityID"
             Type="textbox"
             [EditMode]="EditMode"
@@ -28,8 +37,8 @@ import { EntityDocumentEntity } from '@memberjunction/core-entities';
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="TypeID"
-            Type="numerictextbox"
+            FieldName="VectorDatabaseID"
+            Type="textbox"
             [EditMode]="EditMode"
             LinkType="Record"
             LinkComponentType="Search"
@@ -47,15 +56,6 @@ import { EntityDocumentEntity } from '@memberjunction/core-entities';
             FieldName="Template"
             Type="textarea"
             [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="VectorDatabaseID"
-            Type="numerictextbox"
-            [EditMode]="EditMode"
-            LinkType="Record"
-            LinkComponentType="Search"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -97,7 +97,7 @@ import { EntityDocumentEntity } from '@memberjunction/core-entities';
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="ID_"
+            FieldName="Type"
             Type="textbox"
             [EditMode]="EditMode"
         ></mj-form-field>
@@ -105,13 +105,6 @@ import { EntityDocumentEntity } from '@memberjunction/core-entities';
             [record]="record"
             [ShowLabel]="true"
             FieldName="Entity"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="Type"
             Type="textbox"
             [EditMode]="EditMode"
         ></mj-form-field>

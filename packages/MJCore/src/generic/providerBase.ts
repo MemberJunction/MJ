@@ -178,8 +178,8 @@ export abstract class ProviderBase implements IMetadataProvider {
 
                 // Post Process the Applications, because we want to handle the sub-objects properly.
                 simpleMetadata.AllApplications = simpleMetadata.Applications.map((a: any) => {
-                    a.ApplicationEntities = simpleMetadata.ApplicationEntities.filter((ae: any) => ae.ApplicationName.trim().toLowerCase() === a.Name.trim().toLowerCase())
-                    a.ApplicationSettings = simpleMetadata.ApplicationSettings.filter((as: any) => as.ApplicationName.trim().toLowerCase() === a.Name.trim().toLowerCase())
+                    a.ApplicationEntities = simpleMetadata.ApplicationEntities.filter((ae: any) => ae.ApplicationID === a.ID)
+                    a.ApplicationSettings = simpleMetadata.ApplicationSettings.filter((as: any) => as.ApplicationID === a.ID)
                     return new ApplicationInfo(a, this);
                 });
 

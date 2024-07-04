@@ -3,7 +3,7 @@ import { IRunReportProvider, RunReportResult } from './interfaces';
 import { UserInfo } from './securityInfo';
 
 export type RunReportParams = {
-    ReportID: number
+    ReportID: string
 }
 
 /**
