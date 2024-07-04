@@ -36,7 +36,7 @@ export class DataContextItem {
     /**
      * QueryID - the ID of the query in the system, only used if type = 'query'
      */
-    QueryID?: number;
+    QueryID?: string;
 
     /**
      * The name of the view, query, or entity in the system. Not used with type='single_record' or type='sql'  
@@ -455,7 +455,7 @@ export class DataContext {
     /**
      * The ID of the data context in the system
      */
-    ID!: number;
+    ID!: string;
 
     /**
      * The object holding all the metadata for the data context - this only is in place automatically if you called the `LoadMetadata` method
@@ -516,9 +516,9 @@ export class DataContext {
      * @param DataContextID - the ID of the data context to load
      * @param contextUser - the user that is requesting the data context (only required on server side operations, or if you want a different user's permissions to be used for the data context load)
      */
-    public async LoadMetadata(DataContextID: number, contextUser?: UserInfo): Promise<boolean> {
+    public async LoadMetadata(DataContextID: string, contextUser?: UserInfo): Promise<boolean> {
         try {
-            if (!DataContextID || DataContextID <= 0)
+            if (!DataContextID || DataContextID.length === 0)
                 throw new Error(`Data Context ID not set or invalid`);
 
             const md = new Metadata();
@@ -614,7 +614,7 @@ export class DataContext {
      */
     public async SaveItems(contextUser?: UserInfo, persistItemData: boolean = false): Promise<boolean> {
         try {
-            if (!this.ID || this.ID <= 0)
+            if (!this.ID || this.ID.length === 0)
                 throw new Error(`Data Context ID not set or invalid`);
 
             const md = new Metadata();
@@ -691,7 +691,7 @@ export class DataContext {
      */
     public async LoadData(dataSource: any, forceRefresh: boolean = false, loadRelatedDataOnSingleRecords: boolean = false, maxRecordsPerRelationship: number = 0, contextUser?: UserInfo): Promise<boolean> {
         try {
-            if (!this.ID || this.ID <= 0)
+            if (!this.ID || this.ID.length === 0)
                 throw new Error(`Data Context ID not set or invalid`);
 
             let bSuccess: boolean = true;
@@ -723,7 +723,7 @@ export class DataContext {
      * @param contextUser - the user that is requesting the data context (only required on server side operations, or if you want a different user's permissions to be used for the data context load)
      * @returns 
      */
-    public async Load(DataContextID: number, dataSource: any, forceRefresh: boolean = false, loadRelatedDataOnSingleRecords: boolean = false, maxRecordsPerRelationship: number = 0, contextUser?: UserInfo): Promise<boolean> {
+    public async Load(DataContextID: string, dataSource: any, forceRefresh: boolean = false, loadRelatedDataOnSingleRecords: boolean = false, maxRecordsPerRelationship: number = 0, contextUser?: UserInfo): Promise<boolean> {
         // load the metadata and THEN the data afterwards
         return await this.LoadMetadata(DataContextID, contextUser) && await this.LoadData(dataSource, forceRefresh, loadRelatedDataOnSingleRecords, maxRecordsPerRelationship, contextUser);
     }

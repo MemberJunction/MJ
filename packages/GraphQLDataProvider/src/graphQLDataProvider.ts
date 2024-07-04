@@ -173,7 +173,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
     /**************************************************************************/
     public async RunQuery(params: RunQueryParams, contextUser?: UserInfo): Promise<RunQueryResult> {
         const query = gql`
-        query GetQueryDataQuery ($QueryID: Int!) {
+        query GetQueryDataQuery ($QueryID: String!) {
             GetQueryData(QueryID: $QueryID) {
                 Success
                 Results
@@ -183,8 +183,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             }
         }`
 
-        const queryId = typeof params.QueryID === 'string' ? parseInt(params.QueryID) : params.QueryID;
-        const result = await GraphQLDataProvider.ExecuteGQL(query, {QueryID: queryId} );
+        const result = await GraphQLDataProvider.ExecuteGQL(query, {QueryID: params.QueryID} );
         if (result && result.GetQueryData)
             return {
                 QueryID: params.QueryID,
@@ -571,7 +570,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 Success: false,
                 OverallStatus: e && e.message ? e.message : e,
                 RecordStatus: [],
-                RecordMergeLogID: -1,
+                RecordMergeLogID: "",
                 Request: request,
             }
             throw (e)
@@ -958,7 +957,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         }
         else {
             return {
-                DatasetID: 0,
+                DatasetID: "",
                 DatasetName: datasetName,
                 Success: false,
                 Status: 'Unknown',
@@ -992,7 +991,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         }
         else {
             return {
-                DatasetID: 0,
+                DatasetID: "",
                 DatasetName: datasetName,
                 Success: false,
                 Status: 'Unknown',

@@ -182,7 +182,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
                 // get other variaables from params
                 const extraFilter: string = params.ExtraFilter
                 const userSearchString: string = params.UserSearchString;
-                const excludeUserViewRunID: number = params.ExcludeUserViewRunID;
+                const excludeUserViewRunID: string = params.ExcludeUserViewRunID;
                 const overrideExcludeFilter: string = params.OverrideExcludeFilter;
                 const saveViewResults: boolean = params.SaveViewResults;
 
@@ -204,7 +204,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
                 let countSQL = topSQL && topSQL.length > 0 ? `SELECT COUNT(*) AS TotalRowCount FROM [${entityInfo.SchemaName}].${entityInfo.BaseView}` : null;
                 let whereSQL: string = '';
                 let bHasWhere: boolean = false;
-                let userViewRunID: number = 0;
+                let userViewRunID: string = "";
 
                 // The view may have a where clause that is part of the view definition. If so, we need to add it to the SQL
                 if (viewEntity?.WhereClause && viewEntity?.WhereClause.length > 0) {
@@ -245,7 +245,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
                 
                 // now, check for an exclude UserViewRunID, or exclusion of ALL prior runs
                 // if provided, we need to exclude the records that were part of that run (or all prior runs)
-                if ((excludeUserViewRunID && excludeUserViewRunID > 0) || 
+                if ((excludeUserViewRunID && excludeUserViewRunID.length > 0) || 
                     (params.ExcludeDataFromAllPriorViewRuns === true) ) {
                     
                     let sExcludeSQL: string = `ID NOT IN (SELECT RecordID FROM [${this.MJCoreSchemaName}].vwUserViewRunDetails WHERE EntityID='${viewEntity.EntityID}' AND` 
@@ -363,7 +363,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
                 RowCount: 0,
                 TotalRowCount: 0,
                 Results: [],
-                UserViewRunID: 0,
+                UserViewRunID: "",
                 ExecutionTime: exceptionStopTime.getTime()-startTime.getTime(),
                 Success: false,
                 ErrorMessage: e.message
@@ -458,7 +458,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
         return fieldList; // sometimes nothing is in the list and the caller will just use *
     }
 
-    protected async executeSQLForUserViewRunLogging(viewId: number, entityBaseView: string, whereSQL: string, orderBySQL: string, user: UserInfo): Promise<{ executeViewSQL: string, runID: number }> {
+    protected async executeSQLForUserViewRunLogging(viewId: number, entityBaseView: string, whereSQL: string, orderBySQL: string, user: UserInfo): Promise<{ executeViewSQL: string, runID: string }> {
         const entityInfo = this.Entities.find((e) => e.BaseView.trim().toLowerCase() === entityBaseView.trim().toLowerCase());
         const sSQL = `
             DECLARE @ViewIDList TABLE ( ID NVARCHAR(255) );
@@ -466,7 +466,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
             EXEC [${this.MJCoreSchemaName}].spCreateUserViewRunWithDetail(${viewId},${user.Email}, @ViewIDLIst)
             `
         const runIDResult = await this._dataSource.query(sSQL);
-        const runID: number = runIDResult[0].UserViewRunID;
+        const runID: string = runIDResult[0].UserViewRunID;
         const sRetSQL: string = `SELECT * FROM [${entityInfo.SchemaName}].${entityBaseView} WHERE ${entityInfo.FirstPrimaryKey.Name} IN 
                                     (SELECT RecordID FROM [${this.MJCoreSchemaName}].vwUserViewRunDetails WHERE UserViewRunID=${runID})
                                  ${orderBySQL && orderBySQL.length > 0 ? ' ORDER BY ' + orderBySQL : ''}`
@@ -1696,7 +1696,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
                     INNER JOIN 
                         [${this.MJCoreSchemaName}].vwDatasetItems di 
                     ON
-                        d.Name = di.DatasetName
+                        d.ID = di.DatasetID
                     INNER JOIN 
                         [${this.MJCoreSchemaName}].vwEntities e 
                     ON
@@ -1765,7 +1765,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
         }
         else {
             return { 
-                DatasetID: 0,
+                DatasetID: "",
                 DatasetName: '',
                 Success: false,
                 Status: 'No Dataset or Items found for DatasetName: ' + datasetName,
@@ -1787,7 +1787,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
             INNER JOIN 
                 [${this.MJCoreSchemaName}].vwDatasetItems di 
             ON
-                d.Name = di.DatasetName
+                d.ID = di.DatasetID
             INNER JOIN
                 [${this.MJCoreSchemaName}].vwEntities e
             ON
@@ -1856,7 +1856,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
         }
         else {
             return { 
-                DatasetID: 0,
+                DatasetID: "",
                 DatasetName: '',
                 Success: false,
                 Status: 'No Dataset or Items found for DatasetName: ' + datasetName, 

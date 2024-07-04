@@ -177,10 +177,10 @@ export class ManageMetadataBase {
     * @param md 
     * @returns 
     */
-   protected async manageEntityRelationships(ds: DataSource, excludeSchemas: string[], md: Metadata): Promise<boolean> {
+   protected async manageEntityRelationships(ds: DataSource, excludeSchemas: string[], md: Metadata, batchItems: number = 5): Promise<boolean> {
       let bResult: boolean = true;
-      bResult = bResult && await this.manageManyToManyEntityRelationships(ds, excludeSchemas);
-      bResult = bResult && await this.manageOneToManyEntityRelationships(ds, excludeSchemas, md);
+      bResult = bResult && await this.manageManyToManyEntityRelationships(ds, excludeSchemas, batchItems);
+      bResult = bResult && await this.manageOneToManyEntityRelationships(ds, excludeSchemas, md, batchItems);
       return bResult;
    }
    
@@ -191,7 +191,7 @@ export class ManageMetadataBase {
     * @param md 
     * @returns 
     */
-   protected async manageOneToManyEntityRelationships(ds: DataSource, excludeSchemas: string[],  md: Metadata): Promise<boolean> {
+   protected async manageOneToManyEntityRelationships(ds: DataSource, excludeSchemas: string[],  md: Metadata, batchItems: number = 5): Promise<boolean> {
       // the way this works is that we look for entities in our catalog and we look for 
       // foreign keys in those entities. For example, if we saw an entity called Persons and that entity
       // had a foreign key linking to an entity called Organizations via a field called OrganizationID, then we would create a relationship
@@ -219,29 +219,46 @@ export class ManageMetadataBase {
          // Get the relationship counts for each entity
          const sSQLRelationshipCount = `SELECT EntityID, COUNT(*) AS Count FROM ${mj_core_schema()}.EntityRelationship GROUP BY EntityID`;
          const relationshipCounts = await ds.query(sSQLRelationshipCount);
+
          const relationshipCountMap = new Map<number, number>();
          for (const rc of relationshipCounts) {
             relationshipCountMap.set(rc.EntityID, rc.Count);
          }
 
-         // now loop through all of our fkey fields
-         for (const f of entityFields) {
-            // for each field determine if an existing relationship exists, if not, create it
-            const sSQLRelationship = `SELECT * FROM ${mj_core_schema()}.EntityRelationship WHERE EntityID='${f.RelatedEntityID}' AND RelatedEntityID='${f.EntityID}'`;
-            const relationships = await ds.query(sSQLRelationship);
-            if (relationships && relationships.length === 0) {
-               // no relationship exists, so create it
-               const e = md.Entities.find(e => e.ID === f.EntityID)
-               // calculate the sequence by getting the count of existing relationships for the entity and adding 1 and then increment the count for future inserts in this loop
-               const relCount = relationshipCountMap.get(f.EntityID) ? relationshipCountMap.get(f.EntityID) : 0;
-               const sequence = relCount + 1;
-               const sSQLInsert = `INSERT INTO ${mj_core_schema()}.EntityRelationship (EntityID, RelatedEntityID, RelatedEntityJoinField, Type, BundleInAPI, DisplayInForm, DisplayName, Sequence) 
-                                       VALUES ('${f.RelatedEntityID}', '${f.EntityID}', '${f.Name}', 'One To Many', 1, 1, '${e.Name}', ${sequence})`;
-               // now update the map for the relationship count
-               relationshipCountMap.set(f.EntityID, sequence);                                       
-               await ds.query(sSQLInsert);
-            }
+         // get all relationships in one query for performance improvement
+         const sSQLRelationship = `SELECT * FROM ${mj_core_schema()}.EntityRelationship`;
+         const allRelationships = await ds.query(sSQLRelationship);
+
+
+         // Function to process a batch of entity fields
+         const processBatch = async (batch: any[]) => {
+            let batchSQL = '';
+            batch.forEach((f) => {
+               // for each field determine if an existing relationship exists, if not, create it
+               const relationships = allRelationships.filter(r => r.EntityID===f.RelatedEntityID && r.RelatedEntityID===f.EntityID);
+               if (relationships && relationships.length === 0) {
+                  // no relationship exists, so create it
+                  const e = md.Entities.find(e => e.ID === f.EntityID)
+                  // calculate the sequence by getting the count of existing relationships for the entity and adding 1 and then increment the count for future inserts in this loop
+                  const relCount = relationshipCountMap.get(f.EntityID) ? relationshipCountMap.get(f.EntityID) : 0;
+                  const sequence = relCount + 1;
+                  batchSQL += `INSERT INTO ${mj_core_schema()}.EntityRelationship (EntityID, RelatedEntityID, RelatedEntityJoinField, Type, BundleInAPI, DisplayInForm, DisplayName, Sequence) 
+                                          VALUES ('${f.RelatedEntityID}', '${f.EntityID}', '${f.Name}', 'One To Many', 1, 1, '${e.Name}', ${sequence});
+                              `;
+                  // now update the map for the relationship count
+                  relationshipCountMap.set(f.EntityID, sequence);                                       
+               }
+            });
+            if (batchSQL.length > 0)
+               await ds.query(batchSQL);
+         };
+
+         // Split entityFields into batches and process each batch
+         for (let i = 0; i < entityFields.length; i += batchItems) {
+               const batch = entityFields.slice(i, i + batchItems);
+               await processBatch(batch);
          }
+
          return true;
       }
       catch (e) {
@@ -258,7 +275,7 @@ export class ManageMetadataBase {
     * @param excludeSchemas 
     * @returns 
     */
-   protected async manageManyToManyEntityRelationships(ds: DataSource, excludeSchemas: string[]): Promise<boolean> {
+   protected async manageManyToManyEntityRelationships(ds: DataSource, excludeSchemas: string[], batchItems: number = 5): Promise<boolean> {
       return true; // not implemented for now, require the admin to manually create these relationships
    }
    

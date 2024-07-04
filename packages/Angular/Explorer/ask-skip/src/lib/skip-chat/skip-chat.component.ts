@@ -30,7 +30,7 @@ export class SkipChatComponent implements OnInit, AfterViewInit, AfterViewChecke
   @Input() public ShowConversationList: boolean = true;
   @Input() public AllowNewConversations: boolean = true;
   @Input() public Title: string = "Ask Skip"
-  @Input() public DataContextID: number = 0;
+  @Input() public DataContextID: string = "";
   @Input() public LinkedEntity: string = '';
   @Input() public LinkedEntityCompositeKey: CompositeKey = new CompositeKey();
   @Input() public ShowDataContextButton: boolean = true;
@@ -56,8 +56,8 @@ export class SkipChatComponent implements OnInit, AfterViewInit, AfterViewChecke
 
   private _messageInProgress: boolean = false;
   private refreshOnAttach: boolean = false;
-  private _conversationsInProgress: { [key: number]: any } = {};
-  private _conversationsToReload: { [key: number]: boolean } = {};
+  private _conversationsInProgress: { [key: string]: any } = {};
+  private _conversationsToReload: { [key: string]: boolean } = {};
   public _conversationLoadComplete: boolean = false;
   private _temporaryMessage: ConversationDetailEntity | undefined;
   private _intersectionObserver: IntersectionObserver | undefined;
@@ -114,7 +114,7 @@ export class SkipChatComponent implements OnInit, AfterViewInit, AfterViewChecke
             return;
           }
           
-          const obj: {type?: string, status?: string, conversationID?: number, message?: string} = event.args;
+          const obj: {type?: string, status?: string, conversationID?: string, message?: string} = event.args;
           if (obj.type?.trim().toLowerCase() === 'askskip' && obj.status?.trim().toLowerCase() === 'ok') {
             if(obj.conversationID && this._conversationsInProgress[obj.conversationID]){
               if(obj.conversationID === this.SelectedConversation?.ID) {
@@ -275,7 +275,7 @@ export class SkipChatComponent implements OnInit, AfterViewInit, AfterViewChecke
                 this._loaded = true; // do this once
                 const conversationId = params.conversationId;
                 if (conversationId) {
-                  this.loadConversations(parseInt(conversationId, 10)); // Load the conversation based on the conversationId
+                  this.loadConversations(conversationId); // Load the conversation based on the conversationId
                 } else {
                   this.loadConversations();
                 }
@@ -320,7 +320,7 @@ export class SkipChatComponent implements OnInit, AfterViewInit, AfterViewChecke
     this.loadConversations();
   }
   
-  protected async loadConversations(conversationIdToLoad: number | undefined = undefined) {
+  protected async loadConversations(conversationIdToLoad: string | undefined = undefined) {
     let cachedConversations = MJGlobal.Instance.ObjectCache.Find<ConversationEntity[]>('Conversations');
     if (!cachedConversations) {
       // load up from the database as we don't have any cached conversations
@@ -540,7 +540,7 @@ export class SkipChatComponent implements OnInit, AfterViewInit, AfterViewChecke
       this._processingStatus[conversation.ID] = true;
       this.SelectedConversation = conversation;
       this.SetSelectedConversationUser();
-      this.DataContextID = conversation.DataContextID ? conversation.DataContextID : 0;
+      this.DataContextID = conversation.DataContextID ? conversation.DataContextID : "";
     
       const convoAny = <any>conversation;
       if (convoAny._DataContext) {
@@ -606,7 +606,7 @@ export class SkipChatComponent implements OnInit, AfterViewInit, AfterViewChecke
     }
   }
 
-  protected scrollToConversation(conversationId: number): void {
+  protected scrollToConversation(conversationId: string): void {
     if (this.conversationList) {
       const convoElement = this.conversationList.element.nativeElement
       const itemIndex = this.Conversations.findIndex(c => c.ID === conversationId);
@@ -666,7 +666,7 @@ export class SkipChatComponent implements OnInit, AfterViewInit, AfterViewChecke
 
   async sendPrompt(val: string) {
 
-    const convoID: number = this.SelectedConversation ? this.SelectedConversation.ID : -1;
+    const convoID: string = this.SelectedConversation ? this.SelectedConversation.ID : "";
     if(this._conversationsInProgress[convoID]){
       // don't allow sending another message if we're in the midst of sending one 
       return;
@@ -895,7 +895,7 @@ export class SkipChatComponent implements OnInit, AfterViewInit, AfterViewChecke
     }
   }  
 
-  protected async GetCreateDataContextID(): Promise<number> {
+  protected async GetCreateDataContextID(): Promise<string> {
     // temporary hack for now, we will have more functionality to do robust UX around DataCOntext viewing and editing soon
     // and get rid of this
     if (!this.DataContextID && this.SelectedConversation) {
@@ -969,9 +969,9 @@ export class SkipChatComponent implements OnInit, AfterViewInit, AfterViewChecke
   }
 
 
-  async ExecuteAskSkipQuery(question: string, dataContextId: number, SelectedConversation: ConversationEntity | undefined) {
+  async ExecuteAskSkipQuery(question: string, dataContextId: string, SelectedConversation: ConversationEntity | undefined) {
     try {
-      const gql = `query ExecuteAskSkipAnalysisQuery($userQuestion: String!, $dataContextId: Int!, $conversationId: Int!) {
+      const gql = `query ExecuteAskSkipAnalysisQuery($userQuestion: String!, $dataContextId: String!, $conversationId: String!) {
         ExecuteAskSkipAnalysisQuery(UserQuestion: $userQuestion, DataContextId: $dataContextId, ConversationId: $conversationId) {
           Success
           Status
@@ -983,7 +983,7 @@ export class SkipChatComponent implements OnInit, AfterViewInit, AfterViewChecke
       }`
       const result = await GraphQLDataProvider.ExecuteGQL(gql, { 
           userQuestion: question, 
-          conversationId: SelectedConversation ? SelectedConversation.ID : 0,
+          conversationId: SelectedConversation ? SelectedConversation.ID : "",
           dataContextId: dataContextId
         });
 
@@ -1001,14 +1001,14 @@ export class SkipChatComponent implements OnInit, AfterViewInit, AfterViewChecke
     }
   }
 
-  protected async DeleteConversation(ConversationID: number) {
+  protected async DeleteConversation(ConversationID: string) {
     const md = new Metadata();
     const convEntity = <ConversationEntity>await md.GetEntityObject('Conversations');
     await convEntity.Load(ConversationID);
     return await convEntity.Delete();
   }
 
-  private _processingStatus: { [key: number]: any } = {};
+  private _processingStatus: { [key: string]: any } = {};
   protected IsSkipProcessing(Conversation: ConversationEntity): boolean {
     if (this._processingStatus[Conversation.ID]) {
       return this._processingStatus[Conversation.ID];
@@ -1053,8 +1053,7 @@ export class SkipChatComponent implements OnInit, AfterViewInit, AfterViewChecke
     
     this.paramsSubscription = this.route.params.subscribe(params => {
       const convoIDParam = params.conversationId;
-      const conversationID: number | undefined = convoIDParam ? parseInt(convoIDParam) : undefined;
-      this.loadConversations(conversationID);
+      this.loadConversations(convoIDParam);
     });
   }
 }

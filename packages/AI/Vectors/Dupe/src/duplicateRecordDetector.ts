@@ -212,7 +212,7 @@ export class DuplicateRecordDetector extends VectorBase {
         return duplicateRun;
     }
 
-    private async createDuplicateRunDetailRecords(recordIDs: CompositeKey[], duplicateRunID: number): Promise<DuplicateRunDetailEntity[]> {
+    private async createDuplicateRunDetailRecords(recordIDs: CompositeKey[], duplicateRunID: string): Promise<DuplicateRunDetailEntity[]> {
         let results: DuplicateRunDetailEntity[] = [];
         const md: Metadata = new Metadata();
         for(const recordID of recordIDs){
@@ -231,7 +231,7 @@ export class DuplicateRecordDetector extends VectorBase {
         return results;
     }
 
-    private async createDuplicateRunDetailRecordsByListID(listID: number, duplicateRunID: number): Promise<DuplicateRunDetailEntity[]> {
+    private async createDuplicateRunDetailRecordsByListID(listID: string, duplicateRunID: string): Promise<DuplicateRunDetailEntity[]> {
         let results: DuplicateRunDetailEntity[] = [];
         const viewResults = await super.RunView.RunView({ 
             EntityName: 'List Details', 
@@ -277,7 +277,7 @@ export class DuplicateRecordDetector extends VectorBase {
         return list;
     }
 
-    private async getDuplicateRunEntity(DupeRunID: number): Promise<DuplicateRunEntity> {
+    private async getDuplicateRunEntity(DupeRunID: string): Promise<DuplicateRunEntity> {
         const md: Metadata = new Metadata();
         let dupeRun: DuplicateRunEntity = await md.GetEntityObject<DuplicateRunEntity>('Duplicate Runs');
         dupeRun.ContextCurrentUser = super.CurrentUser;
@@ -315,7 +315,7 @@ export class DuplicateRecordDetector extends VectorBase {
         return list;
     }
 
-    private async createDuplicateRunDetailMatchesForRecord(DuplicateRunDetailID: number, duplicateResult: PotentialDuplicateResult): Promise<DuplicateRunDetailMatchEntity[]> {
+    private async createDuplicateRunDetailMatchesForRecord(DuplicateRunDetailID: string, duplicateResult: PotentialDuplicateResult): Promise<DuplicateRunDetailMatchEntity[]> {
         const md: Metadata = new Metadata();
         let matchRecords: DuplicateRunDetailMatchEntity[] = [];
         for(const dupe of duplicateResult.Duplicates){

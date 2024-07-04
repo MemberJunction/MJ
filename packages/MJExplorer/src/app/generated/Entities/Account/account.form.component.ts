@@ -4,7 +4,6 @@ import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { LoadAccountDetailsComponent } from "./sections/details.component"
 import { UserViewGridComponent } from "@memberjunction/ng-user-view-grid"
-import { TimelineComponent } from "@memberjunction/ng-timeline"
 
 @RegisterClass(BaseFormComponent, 'Accounts') // Tell MemberJunction about this class
 @Component({

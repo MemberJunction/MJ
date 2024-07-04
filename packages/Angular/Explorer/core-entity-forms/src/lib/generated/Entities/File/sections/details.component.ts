@@ -26,8 +26,17 @@ import { FileEntity } from '@memberjunction/core-entities';
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
+            FieldName="CategoryID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            LinkType="Record"
+            LinkComponentType="Search"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
             FieldName="ProviderID"
-            Type="numerictextbox"
+            Type="textbox"
             [EditMode]="EditMode"
             LinkType="Record"
             LinkComponentType="Search"
@@ -45,15 +54,6 @@ import { FileEntity } from '@memberjunction/core-entities';
             FieldName="ProviderKey"
             Type="textarea"
             [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="CategoryID"
-            Type="numerictextbox"
-            [EditMode]="EditMode"
-            LinkType="Record"
-            LinkComponentType="Search"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -79,7 +79,7 @@ import { FileEntity } from '@memberjunction/core-entities';
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="ID_"
+            FieldName="Category"
             Type="textbox"
             [EditMode]="EditMode"
         ></mj-form-field>
@@ -87,13 +87,6 @@ import { FileEntity } from '@memberjunction/core-entities';
             [record]="record"
             [ShowLabel]="true"
             FieldName="Provider"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="Category"
             Type="textbox"
             [EditMode]="EditMode"
         ></mj-form-field>

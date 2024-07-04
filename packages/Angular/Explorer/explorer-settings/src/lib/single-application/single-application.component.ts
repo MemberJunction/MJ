@@ -11,7 +11,7 @@ import { EntityFormDialogComponent } from '@memberjunction/ng-entity-form-dialog
   styleUrls: ['./single-application.component.css']
 })
 export class SingleApplicationComponent implements OnInit {
-  @Input() ApplicationName!: string;
+  @Input() ApplicationID!: string;
 
   @ViewChild('entityForm') entityFormComponent!: EntityFormDialogComponent;
 
@@ -29,16 +29,16 @@ export class SingleApplicationComponent implements OnInit {
   }
 
   protected async Refresh() {
-    if (this.ApplicationName && this.ApplicationName.length > 0) {
+    if (this.ApplicationID && this.ApplicationID.length > 0) {
       this.isLoading = true;
       const md = new Metadata();
-      let a = md.Applications.find(a => a.Name === this.ApplicationName);
+      let a = md.Applications.find(a => a.ID === this.ApplicationID);
       if (!a) {
         // sometime we are creating a new role, so attempt to refresh our metadata
         await md.Refresh();
-        a = md.Applications.find(aa => aa.Name === this.ApplicationName);
+        a = md.Applications.find(aa => aa.ID === this.ApplicationID);
         if (!a)
-          throw new Error(`Application ${this.ApplicationName} not found`);
+          throw new Error(`Application ID: ${this.ApplicationID} not found`);
       }
       this.Record = await md.GetEntityObject<ApplicationEntity>('Applications');
       await this.Record.Load(a.ID);      

@@ -64,23 +64,23 @@ export class TaskBase {
 
 export abstract class QueueBase  {  
   private _queue: TaskBase[] = [];
-  private _queueTypeId: number;
+  private _queueTypeId: string;
   protected _contextUser: UserInfo
   private _maxTasks: number = 3; // move to metadata or config param
   private _checkInterval: number = 250; // move to metadata or config param
   private _queueRecord: QueueEntity
 
-  constructor(QueueRecord: QueueEntity, QueueTypeID: number, ContextUser: UserInfo) {
+  constructor(QueueRecord: QueueEntity, QueueTypeID: string, ContextUser: UserInfo) {
     this._queueRecord = QueueRecord;
     this._queueTypeId = QueueTypeID;
     this._contextUser = ContextUser;
   }
  
-  public get QueueID(): number {
+  public get QueueID(): string {
     return this._queueRecord.ID;
   }
 
-  public get QueueTypeID(): number {
+  public get QueueTypeID(): string {
     return this._queueTypeId;
   }
 

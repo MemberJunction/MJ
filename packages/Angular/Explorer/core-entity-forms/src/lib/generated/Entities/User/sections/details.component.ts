@@ -69,18 +69,18 @@ import { UserEntity } from '@memberjunction/core-entities';
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="EmployeeID"
-            Type="numerictextbox"
+            FieldName="LinkedEntityRecordID"
+            Type="textarea"
             [EditMode]="EditMode"
-            LinkType="Record"
-            LinkComponentType="Search"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="LinkedEntityRecordID"
-            Type="numerictextbox"
+            FieldName="EmployeeID"
+            Type="textbox"
             [EditMode]="EditMode"
+            LinkType="Record"
+            LinkComponentType="Search"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"

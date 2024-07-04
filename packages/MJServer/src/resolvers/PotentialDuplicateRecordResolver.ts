@@ -24,8 +24,8 @@ export class PotentialDuplicateRequestType extends PotentialDuplicateRequest {
   @Field(() => Int, { nullable: true })
   ProbabilityScore: number;
   
-  @Field(() => Int)
-  ListID: number;
+  @Field(() => String)
+  ListID: string;
 }
 
 @ObjectType()

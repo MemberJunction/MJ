@@ -1,16 +1,16 @@
-/*
 
-DECLARE @TableName NVARCHAR(128) = 'AuditLogType';
-DECLARE @ForeignKeyColumnName NVARCHAR(128) = 'ParentID';
-DECLARE @ReferencedTableName NVARCHAR(128) = 'AuditLogType';
-DECLARE @ReferencedPrimaryKeyColumnName NVARCHAR(128) = 'ID';
+
+DECLARE @TableName NVARCHAR(128) = 'Workflow';
+DECLARE @ForeignKeyColumnName NVARCHAR(128) = 'WorkflowEngineName';
+DECLARE @ReferencedTableName NVARCHAR(128) = 'WorkflowEngine';
+DECLARE @ReferencedPrimaryKeyColumnName NVARCHAR(128) = 'Name';
 
 DECLARE @SQL NVARCHAR(MAX);
 DECLARE @UpdateSQL NVARCHAR(MAX);
 DECLARE @NewColumnName NVARCHAR(128);
 
 -- Construct the new column name by appending an underscore
-SET @NewColumnName = 'ParentID_';--@ForeignKeyColumnName + '_';
+SET @NewColumnName = @ForeignKeyColumnName + '_';
 
 -- Construct the SQL statement to add the new column
 SET @SQL = 'ALTER TABLE [__mj].[' + @TableName + '] ADD [' + @NewColumnName + '] UNIQUEIDENTIFIER';
@@ -38,6 +38,6 @@ SET @TestSQL = 'SELECT
 				ON
 					tgt.[' + @NewColumnName + ']= src.ID_' ;
 EXEC sp_executesql @TestSQL;
- 
 
-*/
+
+

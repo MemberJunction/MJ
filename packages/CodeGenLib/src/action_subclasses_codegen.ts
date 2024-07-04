@@ -16,7 +16,7 @@ export class ActionSubClassGeneratorBase {
 
     protected getAllActionLibrariesAndUsedItems(actions: ActionEntityServerEntity[]) {
         // get all of the libraries from the combination of distinct libraries from all of the actions we have here
-        const allActionLibraries: {Library: string, LibraryID: number, ItemsUsedArray: string[]}[] = [];
+        const allActionLibraries: {Library: string, LibraryID: string, ItemsUsedArray: string[]}[] = [];
         actions.forEach(action => {
             action.Libraries.forEach(lib => {
                 if (!allActionLibraries.find(l => l.LibraryID === lib.LibraryID)) {

@@ -246,8 +246,6 @@ CREATE VIEW [__mj].vwCompanyIntegrations
 AS
 SELECT 
   ci.*,
-  c.ID CompanyID,
-  i.ID IntegrationID,
   c.Name Company,
   i.Name Integration,
   i.ClassName DriverClassName,
@@ -258,9 +256,9 @@ SELECT
 FROM 
   __mj.CompanyIntegration ci
 INNER JOIN
-  __mj.Company c ON ci.CompanyName = c.Name
+  __mj.Company c ON ci.CompanyID = c.ID
 INNER JOIN
-  __mj.Integration i ON ci.IntegrationName = i.Name
+  __mj.Integration i ON ci.IntegrationID = i.ID
 LEFT OUTER JOIN
   __mj.CompanyIntegrationRun cir 
 ON 
@@ -274,14 +272,22 @@ CREATE VIEW [__mj].vwCompanyIntegrationRuns
 AS
 SELECT
    cir.*,
-   ci.CompanyName Company,
-   ci.IntegrationName Integration
+   c.Name Company,
+   i.Name Integration
 FROM
    __mj.CompanyIntegrationRun cir
 INNER JOIN
    __mj.CompanyIntegration ci
 ON
    cir.CompanyIntegrationID = ci.ID
+INNER JOIN
+   __mj.Company c
+ON
+   ci.CompanyID = c.ID
+INNER JOIN
+   __mj.Integration i
+ON
+   ci.IntegrationID = i.ID
 GO
 
 DROP VIEW IF EXISTS [__mj].vwCompanyIntegrationRunDetails
@@ -350,7 +356,6 @@ CREATE VIEW [__mj].vwIntegrationURLFormats
 AS
 SELECT 
 	iuf.*,
-	i.ID IntegrationID,
 	i.Name Integration,
 	i.NavigationBaseURL,
 	i.NavigationBaseURL + iuf.URLFormat FullURLFormat
@@ -359,7 +364,7 @@ FROM
 INNER JOIN
 	__mj.Integration i
 ON
-	iuf.IntegrationName = i.Name
+	iuf.IntegrationID = i.ID
 GO
 
 DROP VIEW IF EXISTS [__mj].vwUsers
@@ -381,8 +386,7 @@ LEFT OUTER JOIN
 ON
 	u.EmployeeID = e.ID
 
-GO
-
+GO 
 
 
 
@@ -474,7 +478,7 @@ FROM
 INNER JOIN
    __mj.Application a
 ON
-   ae.ApplicationName = a.Name
+   ae.ApplicationID = a.ID
 INNER JOIN
    [__mj].vwEntities e
 ON
@@ -510,13 +514,17 @@ AS
 SELECT 
   wr.*,
   w.Name Workflow,
-  w.WorkflowEngineName
+  we.Name WorkflowEngineName
 FROM
   __mj.WorkflowRun wr
 INNER JOIN
   [__mj].vwWorkflows w
 ON
-  wr.WorkflowName = w.Name
+  wr.WorkflowID = w.ID
+INNER JOIN
+  __mj.WorkflowEngine we
+ON
+  w.WorkflowEngineID = we.ID
 GO
   
 
@@ -1156,7 +1164,7 @@ GO
 DROP PROC IF EXISTS [__mj].[spDeleteConversation]
 GO
 CREATE PROCEDURE [__mj].[spDeleteConversation]
-    @ID INT
+    @ID uniqueidentifier
 AS  
 BEGIN
     SET NOCOUNT ON;
@@ -1194,13 +1202,14 @@ GO
 DROP PROC IF EXISTS [__mj].[spCreateCompanyIntegrationRun]
 GO
 CREATE PROC [__mj].[spCreateCompanyIntegrationRun]
-@CompanyIntegrationID AS INT,
+@CompanyIntegrationID AS uniqueidentifier,
 @RunByUserID AS uniqueidentifier,
 @StartedAt AS DATETIMEOFFSET(7) = NULL, 
 @Comments AS NVARCHAR(MAX) = NULL,
 @TotalRecords INT = NULL,
-@NewID AS INT OUTPUT
+@NewID AS uniqueidentifier OUTPUT
 AS
+DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
 INSERT INTO __mj.CompanyIntegrationRun
 (  
   CompanyIntegrationID,
@@ -1209,6 +1218,7 @@ INSERT INTO __mj.CompanyIntegrationRun
   TotalRecords,
   Comments
 )
+OUTPUT INSERTED.[ID] INTO @InsertedRow
 VALUES
 (
   @CompanyIntegrationID,
@@ -1218,13 +1228,13 @@ VALUES
   @Comments 
 )
 
-SELECT @NewID = SCOPE_IDENTITY()
+SELECT @NewID=ID FROM @InsertedRow
 GO
 
 DROP PROC IF EXISTS [__mj].[spCreateCompanyIntegrationRunAPILog]
 GO
 CREATE PROC [__mj].[spCreateCompanyIntegrationRunAPILog]
-(@CompanyIntegrationRunID INT, @RequestMethod NVARCHAR(12), @URL NVARCHAR(MAX), @Parameters NVARCHAR(MAX)=NULL, @IsSuccess BIT)
+(@CompanyIntegrationRunID uniqueidentifier, @RequestMethod NVARCHAR(12), @URL NVARCHAR(MAX), @Parameters NVARCHAR(MAX)=NULL, @IsSuccess BIT)
 AS
 INSERT INTO [__mj].[CompanyIntegrationRunAPILog]
            ([CompanyIntegrationRunID]
@@ -1246,16 +1256,17 @@ DROP PROC IF EXISTS [__mj].[spCreateErrorLog]
 GO
 CREATE PROC [__mj].[spCreateErrorLog]
 (
-@CompanyIntegrationRunID AS INT = NULL,
-@CompanyIntegrationRunDetailID AS INT = NULL,
+@CompanyIntegrationRunID AS uniqueidentifier = NULL,
+@CompanyIntegrationRunDetailID AS uniqueidentifier = NULL,
 @Code AS NCHAR(20) = NULL,
 @Status AS NVARCHAR(10) = NULL,
 @Category AS NVARCHAR(20) = NULL,
 @Message AS NVARCHAR(MAX) = NULL,
 @Details AS NVARCHAR(MAX) = NULL,
-@ErrorLogID AS INT OUTPUT
+@ErrorLogID AS uniqueidentifier OUTPUT
 )
 AS
+DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
 
 
 INSERT INTO [__mj].[ErrorLog]
@@ -1266,6 +1277,7 @@ INSERT INTO [__mj].[ErrorLog]
 		   ,[Category]
            ,[Message]
 		   ,[Details])
+    OUTPUT INSERTED.[ID] INTO @InsertedRow
      VALUES
            (@CompanyIntegrationRunID,
            @CompanyIntegrationRunDetailID,
@@ -1276,7 +1288,7 @@ INSERT INTO [__mj].[ErrorLog]
 		   @Details)
 
 	--Get the ID of the new ErrorLog record
-	SELECT @ErrorLogID = SCOPE_IDENTITY()
+  SELECT @ErrorLogID=ID FROM @InsertedRow
 GO
 
 DROP PROC IF EXISTS [__mj].[spUpdateEntityFieldRelatedEntityNameFieldMap] 
@@ -1335,7 +1347,7 @@ SELECT
 FROM
 	__mj.CompanyIntegration ci
 JOIN __mj.Integration i
-	ON i.Name = ci.IntegrationName
+	ON i.ID = ci.IntegrationID
 WHERE 
 	i.Name = @IntegrationName
 	AND ci.ExternalSystemID = @ExternalSystemID

@@ -49,6 +49,7 @@ export class ApplicationEntityInfo extends BaseInfo {
  * Information about an application
  */
 export class ApplicationInfo extends BaseInfo {
+    ID: string = null
     Name: string = null
     Description: string = null
     Icon: string = null

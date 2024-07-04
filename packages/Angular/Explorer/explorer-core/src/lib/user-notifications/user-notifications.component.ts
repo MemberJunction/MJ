@@ -55,7 +55,7 @@ export class UserNotificationsComponent implements AfterViewInit {
     let url: string[] = [];
     let queryString = '';
     if (notification.ResourceRecordID && notification.ResourceRecordID > 0 && 
-        notification.ResourceTypeID && notification.ResourceTypeID > 0) {
+        notification.ResourceTypeID && notification.ResourceTypeID.length > 0) {
       // we have a resource here, like a Report, Dashboard, etc
       // we can generate a url to navigate to it
       const rt = this.sharedService.ResourceTypeByID(notification.ResourceTypeID);

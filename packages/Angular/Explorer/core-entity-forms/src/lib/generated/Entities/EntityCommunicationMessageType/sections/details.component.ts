@@ -22,7 +22,7 @@ import { EntityCommunicationMessageTypeEntity } from '@memberjunction/core-entit
             [record]="record"
             [ShowLabel]="true"
             FieldName="BaseMessageTypeID"
-            Type="numerictextbox"
+            Type="textbox"
             [EditMode]="EditMode"
             LinkType="Record"
             LinkComponentType="Dropdown"
@@ -45,13 +45,6 @@ import { EntityCommunicationMessageTypeEntity } from '@memberjunction/core-entit
             [record]="record"
             [ShowLabel]="true"
             FieldName="__mj_UpdatedAt"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="ID_"
             Type="textbox"
             [EditMode]="EditMode"
         ></mj-form-field>

@@ -375,7 +375,7 @@ export type RunViewResult<T = any> = {
     /**
      * The newly created UserViews.ID value - only provided if RunViewParams.SaveViewResults=true
      */
-    UserViewRunID?: number;
+    UserViewRunID?: string;
     /**
      * Number of rows returned in the Results[] array
      */
@@ -403,7 +403,7 @@ export interface IRunViewProvider {
 }
 
 export type RunQueryResult = {
-    QueryID: number;
+    QueryID: string;
     Success: boolean;
     Results: any[];
     RowCount: number;
@@ -418,7 +418,7 @@ export interface IRunQueryProvider {
 }
 
 export type RunReportResult = {
-    ReportID: number;
+    ReportID: string;
     Success: boolean;
     Results: any[];
     RowCount: number;
@@ -433,7 +433,7 @@ export interface IRunReportProvider {
 }
 
 export type DatasetResultType = {
-    DatasetID: number;
+    DatasetID: string;
     DatasetName: string;
     Success: boolean;
     Status: string;
@@ -444,7 +444,7 @@ export type DatasetResultType = {
 export type DatasetItemResultType = {
     Code: string;
     EntityName: string;
-    EntityID: number;
+    EntityID: string;
     Results: any[];
 }
 
@@ -454,7 +454,7 @@ export type DatasetItemFilterType = {
 }
 
 export type DatasetStatusResultType = {
-    DatasetID: number;
+    DatasetID: string;
     DatasetName: string;
     Success: boolean;
     Status: string;
