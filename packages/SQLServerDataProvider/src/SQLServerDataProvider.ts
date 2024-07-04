@@ -450,7 +450,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
                 });
                 // the below shouldn't happen as the pkey fields should always be included by now, but make SURE...
                 for (const ef of entityInfo.PrimaryKeys) {
-                    if (fieldList.find(f => f.Name.trim().toLowerCase() === ef.Name.toLowerCase()) === undefined)
+                    if (fieldList.find(f => f.Name?.trim().toLowerCase() === ef.Name?.toLowerCase()) === undefined)
                         fieldList.push(ef); // always include the primary key fields in view run time field list
                 }    
             }

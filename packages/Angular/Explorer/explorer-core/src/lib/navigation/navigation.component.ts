@@ -611,7 +611,7 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
     let url: string = '/resource';
     switch (rt?.Name.toLowerCase().trim()) {
       case 'user views':
-        if (data.ResourceRecordID && !isNaN(data.ResourceRecordID) && data.ResourceRecordID > 0) {
+        if (data.ResourceRecordID) {
           url += `/view/${data.ResourceRecordID}`;
         }
         else if (data.Configuration?.Entity) {
@@ -775,14 +775,14 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
       const md = new Metadata();
       let wsItem: WorkspaceItemEntity;
       if (!tab.workspaceItem) {
-        wsItem = <WorkspaceItemEntity>await md.GetEntityObject('Workspace Items');
+        wsItem = await md.GetEntityObject<WorkspaceItemEntity>('Workspace Items');
         if (tab.data.ID && !isNaN(tab.data.ID) && tab.data.ID > 0)
           await wsItem.Load(tab.data.ID);
         else {
           wsItem.NewRecord();
 
           wsItem.Name = tab.data.Name ? tab.data.Name : tab.data.ResourceType + ' Record:' + tab.data.ResourceRecordID;
-          wsItem.WorkSpaceID = this.workSpace.ID;
+          wsItem.WorkspaceID = this.workSpace.ID;
           wsItem.ResourceTypeID = tab.data?.ResourceTypeID;
         }
         tab.workspaceItem = wsItem;
