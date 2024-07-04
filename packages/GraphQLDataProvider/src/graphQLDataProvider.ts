@@ -143,7 +143,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
     /**************************************************************************/
     public async RunReport(params: RunReportParams, contextUser?: UserInfo): Promise<RunReportResult> {
         const query = gql`
-        query GetReportDataQuery ($ReportID: Int!) {
+        query GetReportDataQuery ($ReportID: String!) {
             GetReportData(ReportID: $ReportID) {
                 Success
                 Results
