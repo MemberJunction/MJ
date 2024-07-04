@@ -295,7 +295,7 @@ import { RecordChangeReplayRunDetailsComponent, LoadRecordChangeReplayRunDetails
 import { LibraryItemDetailsComponent, LoadLibraryItemDetailsComponent } from "./Entities/LibraryItem/sections/details.component"
 import { EntityRelationshipDisplayComponentDetailsComponent, LoadEntityRelationshipDisplayComponentDetailsComponent } from "./Entities/EntityRelationshipDisplayComponent/sections/details.component"
 import { EntityActionParamDetailsComponent, LoadEntityActionParamDetailsComponent } from "./Entities/EntityActionParam/sections/details.component"
-   
+import { JoinGridModule } from "@memberjunction/ng-join-grid"   
 
 @NgModule({
 declarations: [
@@ -564,7 +564,8 @@ imports: [
     ContainerDirectivesModule,
     DropDownListModule,
     ComboBoxModule,
-    UserViewGridModule
+    UserViewGridModule,
+    JoinGridModule
 ],
 exports: [
 ]

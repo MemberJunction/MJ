@@ -20,7 +20,7 @@ export function LoadViewResource() {
 export class UserViewResource extends BaseResourceComponent {
     async GetResourceDisplayName(data: ResourceData): Promise<string> {
         const md = new Metadata();
-        if (data.ResourceRecordID > 0) {
+        if (data.ResourceRecordID?.length > 0) {
             let compositeKey: CompositeKey = new CompositeKey([{FieldName: "ID", Value: data.ResourceRecordID}]);
             const name = await md.GetEntityRecordName('User Views', compositeKey);
             return name ? name : 'View: ' + data.ResourceRecordID;

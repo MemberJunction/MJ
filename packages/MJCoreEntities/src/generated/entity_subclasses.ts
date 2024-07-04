@@ -10434,16 +10434,16 @@ import { RegisterClass } from "@memberjunction/global";
             this.Set('Description', value);
         }
         /**
-        * * Field Name: WorkSpaceID
-        * * Display Name: Work Space ID
+        * * Field Name: WorkspaceID
+        * * Display Name: Workspace ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Workspaces (vwWorkspaces.ID)
         */
-        get WorkSpaceID(): string {  
-            return this.Get('WorkSpaceID');
+        get WorkspaceID(): string {  
+            return this.Get('WorkspaceID');
         }
-        set WorkSpaceID(value: string) {
-            this.Set('WorkSpaceID', value);
+        set WorkspaceID(value: string) {
+            this.Set('WorkspaceID', value);
         }
         /**
         * * Field Name: ResourceTypeID
@@ -10511,12 +10511,12 @@ import { RegisterClass } from "@memberjunction/global";
         }
         
         /**
-        * * Field Name: WorkSpace
-        * * Display Name: Work Space
+        * * Field Name: Workspace
+        * * Display Name: Workspace
         * * SQL Data Type: nvarchar(255)
         */
-        get WorkSpace(): string {  
-            return this.Get('WorkSpace');
+        get Workspace(): string {  
+            return this.Get('Workspace');
         }
         
         /**

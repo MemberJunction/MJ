@@ -26,7 +26,7 @@ import { WorkspaceItemEntity } from '@memberjunction/core-entities';
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="WorkSpaceID"
+            FieldName="WorkspaceID"
             Type="textbox"
             [EditMode]="EditMode"
             LinkType="Record"
@@ -79,7 +79,7 @@ import { WorkspaceItemEntity } from '@memberjunction/core-entities';
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="WorkSpace"
+            FieldName="Workspace"
             Type="textbox"
             [EditMode]="EditMode"
         ></mj-form-field>
