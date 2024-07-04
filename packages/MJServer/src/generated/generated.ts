@@ -2,7 +2,7 @@
 * ALL ENTITIES - TypeGraphQL Type Class Definition - AUTO GENERATED FILE
 * Generated Entities and Resolvers for Server
 * 
-* GENERATED: 7/3/2024, 11:02:48 PM
+* GENERATED: 7/4/2024, 1:22:41 AM
 * 
 *   >>> DO NOT MODIFY THIS FILE!!!!!!!!!!!!
 *   >>> YOUR CHANGES WILL BE OVERWRITTEN
@@ -128,8 +128,8 @@ export class RunCompanyViewResult {
     @Field(() => [Company_])
     Results: Company_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -394,8 +394,8 @@ export class RunEmployeeViewResult {
     @Field(() => [Employee_])
     Results: Employee_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -600,8 +600,8 @@ export class RunUserFavoriteViewResult {
     @Field(() => [UserFavorite_])
     Results: UserFavorite_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -736,8 +736,8 @@ export class RunEmployeeCompanyIntegrationViewResult {
     @Field(() => [EmployeeCompanyIntegration_])
     Results: EmployeeCompanyIntegration_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -848,8 +848,8 @@ export class RunEmployeeRoleViewResult {
     @Field(() => [EmployeeRole_])
     Results: EmployeeRole_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -960,8 +960,8 @@ export class RunEmployeeSkillViewResult {
     @Field(() => [EmployeeSkill_])
     Results: EmployeeSkill_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -1115,8 +1115,8 @@ export class RunRoleViewResult {
     @Field(() => [Role_])
     Results: Role_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -1277,8 +1277,8 @@ export class RunSkillViewResult {
     @Field(() => [Skill_])
     Results: Skill_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -1425,8 +1425,8 @@ export class RunIntegrationURLFormatViewResult {
     @Field(() => [IntegrationURLFormat_])
     Results: IntegrationURLFormat_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -1583,8 +1583,8 @@ export class RunIntegrationViewResult {
     @Field(() => [Integration_])
     Results: Integration_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -1831,8 +1831,8 @@ export class RunCompanyIntegrationViewResult {
     @Field(() => [CompanyIntegration_])
     Results: CompanyIntegration_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -2284,8 +2284,8 @@ export class RunEntityFieldViewResult {
     @Field(() => [EntityField_])
     Results: EntityField_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -2945,8 +2945,8 @@ export class RunEntityViewResult {
     @Field(() => [Entity_])
     Results: Entity_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -3575,8 +3575,8 @@ export class RunUserViewResult {
     @Field(() => [User_])
     Results: User_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -4163,8 +4163,8 @@ export class RunEntityRelationshipViewResult {
     @Field(() => [EntityRelationship_])
     Results: EntityRelationship_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -4345,8 +4345,8 @@ export class RunUserRecordLogViewResult {
     @Field(() => [UserRecordLog_])
     Results: UserRecordLog_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -4636,8 +4636,8 @@ export class RunUserViewViewResult {
     @Field(() => [UserView_])
     Results: UserView_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -4830,8 +4830,8 @@ export class RunCompanyIntegrationRunViewResult {
     @Field(() => [CompanyIntegrationRun_])
     Results: CompanyIntegrationRun_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -5004,8 +5004,8 @@ export class RunCompanyIntegrationRunDetailViewResult {
     @Field(() => [CompanyIntegrationRunDetail_])
     Results: CompanyIntegrationRunDetail_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -5160,8 +5160,8 @@ export class RunErrorLogViewResult {
     @Field(() => [ErrorLog_])
     Results: ErrorLog_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -5308,8 +5308,8 @@ export class RunApplicationViewResult {
     @Field(() => [Application_])
     Results: Application_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -5515,8 +5515,8 @@ export class RunApplicationEntityViewResult {
     @Field(() => [ApplicationEntity_])
     Results: ApplicationEntity_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -5751,8 +5751,8 @@ export class RunEntityPermissionViewResult {
     @Field(() => [EntityPermission_])
     Results: EntityPermission_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -5916,8 +5916,8 @@ export class RunUserApplicationEntityViewResult {
     @Field(() => [UserApplicationEntity_])
     Results: UserApplicationEntity_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -6081,8 +6081,8 @@ export class RunUserApplicationViewResult {
     @Field(() => [UserApplication_])
     Results: UserApplication_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -6237,8 +6237,8 @@ export class RunCompanyIntegrationRunAPILogViewResult {
     @Field(() => [CompanyIntegrationRunAPILog_])
     Results: CompanyIntegrationRunAPILog_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -6421,8 +6421,8 @@ export class RunListViewResult {
     @Field(() => [List_])
     Results: List_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -6586,8 +6586,8 @@ export class RunListDetailViewResult {
     @Field(() => [ListDetail_])
     Results: ListDetail_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -6743,8 +6743,8 @@ export class RunUserViewRunViewResult {
     @Field(() => [UserViewRun_])
     Results: UserViewRun_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -6889,8 +6889,8 @@ export class RunUserViewRunDetailViewResult {
     @Field(() => [UserViewRunDetail_])
     Results: UserViewRunDetail_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -7041,8 +7041,8 @@ export class RunWorkflowRunViewResult {
     @Field(() => [WorkflowRun_])
     Results: WorkflowRun_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -7197,8 +7197,8 @@ export class RunWorkflowViewResult {
     @Field(() => [Workflow_])
     Results: Workflow_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -7337,8 +7337,8 @@ export class RunWorkflowEngineViewResult {
     @Field(() => [WorkflowEngine_])
     Results: WorkflowEngine_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -7593,8 +7593,8 @@ export class RunRecordChangeViewResult {
     @Field(() => [RecordChange_])
     Results: RecordChange_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -7712,8 +7712,8 @@ export class RunUserRoleViewResult {
     @Field(() => [UserRole_])
     Results: UserRole_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -7820,8 +7820,8 @@ export class RunRowLevelSecurityFilterViewResult {
     @Field(() => [RowLevelSecurityFilter_])
     Results: RowLevelSecurityFilter_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -8014,8 +8014,8 @@ export class RunAuditLogViewResult {
     @Field(() => [AuditLog_])
     Results: AuditLog_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -8140,8 +8140,8 @@ export class RunAuthorizationViewResult {
     @Field(() => [Authorization_])
     Results: Authorization_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -8272,8 +8272,8 @@ export class RunAuthorizationRoleViewResult {
     @Field(() => [AuthorizationRole_])
     Results: AuthorizationRole_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -8377,8 +8377,8 @@ export class RunAuditLogTypeViewResult {
     @Field(() => [AuditLogType_])
     Results: AuditLogType_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -8531,8 +8531,8 @@ export class RunEntityFieldValueViewResult {
     @Field(() => [EntityFieldValue_])
     Results: EntityFieldValue_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -8746,8 +8746,8 @@ export class RunAIModelViewResult {
     @Field(() => [AIModel_])
     Results: AIModel_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -8967,8 +8967,8 @@ export class RunAIActionViewResult {
     @Field(() => [AIAction_])
     Results: AIAction_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -9144,8 +9144,8 @@ export class RunAIModelActionViewResult {
     @Field(() => [AIModelAction_])
     Results: AIModelAction_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -9400,8 +9400,8 @@ export class RunEntityAIActionViewResult {
     @Field(() => [EntityAIAction_])
     Results: EntityAIAction_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -9546,8 +9546,8 @@ export class RunAIModelTypeViewResult {
     @Field(() => [AIModelType_])
     Results: AIModelType_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -9679,8 +9679,8 @@ export class RunQueueTypeViewResult {
     @Field(() => [QueueType_])
     Results: QueueType_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -9943,8 +9943,8 @@ export class RunQueueViewResult {
     @Field(() => [Queue_])
     Results: Queue_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -10150,8 +10150,8 @@ export class RunQueueTaskViewResult {
     @Field(() => [QueueTask_])
     Results: QueueTask_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -10316,8 +10316,8 @@ export class RunDashboardViewResult {
     @Field(() => [Dashboard_])
     Results: Dashboard_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -10422,8 +10422,8 @@ export class RunOutputTriggerTypeViewResult {
     @Field(() => [OutputTriggerType_])
     Results: OutputTriggerType_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -10515,8 +10515,8 @@ export class RunOutputFormatTypeViewResult {
     @Field(() => [OutputFormatType_])
     Results: OutputFormatType_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -10605,8 +10605,8 @@ export class RunOutputDeliveryTypeViewResult {
     @Field(() => [OutputDeliveryType_])
     Results: OutputDeliveryType_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -10888,8 +10888,8 @@ export class RunReportViewResult {
     @Field(() => [Report_])
     Results: Report_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -11049,8 +11049,8 @@ export class RunReportSnapshotViewResult {
     @Field(() => [ReportSnapshot_])
     Results: ReportSnapshot_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -11174,8 +11174,8 @@ export class RunResourceTypeViewResult {
     @Field(() => [ResourceType_])
     Results: ResourceType_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -11287,8 +11287,8 @@ export class RunTagViewResult {
     @Field(() => [Tag_])
     Results: Tag_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -11395,8 +11395,8 @@ export class RunTaggedItemViewResult {
     @Field(() => [TaggedItem_])
     Results: TaggedItem_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -11523,8 +11523,8 @@ export class RunWorkspaceViewResult {
     @Field(() => [Workspace_])
     Results: Workspace_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -11619,7 +11619,7 @@ export class WorkspaceItem_ {
           
     @Field() 
     @MaxLength(16)
-    WorkSpaceID: string;
+    WorkspaceID: string;
           
     @Field() 
     @MaxLength(16)
@@ -11645,7 +11645,7 @@ export class WorkspaceItem_ {
           
     @Field() 
     @MaxLength(510)
-    WorkSpace: string;
+    Workspace: string;
           
     @Field() 
     @MaxLength(510)
@@ -11665,7 +11665,7 @@ export class CreateWorkspaceItemInput {
     Description?: string;
 
     @Field()
-    WorkSpaceID: string;
+    WorkspaceID: string;
 
     @Field()
     ResourceTypeID: string;
@@ -11696,7 +11696,7 @@ export class UpdateWorkspaceItemInput {
     Description?: string;
 
     @Field()
-    WorkSpaceID: string;
+    WorkspaceID: string;
 
     @Field()
     ResourceTypeID: string;
@@ -11722,8 +11722,8 @@ export class RunWorkspaceItemViewResult {
     @Field(() => [WorkspaceItem_])
     Results: WorkspaceItem_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -11828,8 +11828,8 @@ export class RunDatasetViewResult {
     @Field(() => [Dataset_])
     Results: Dataset_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -11937,8 +11937,8 @@ export class RunDatasetItemViewResult {
     @Field(() => [DatasetItem_])
     Results: DatasetItem_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -12093,8 +12093,8 @@ export class RunConversationDetailViewResult {
     @Field(() => [ConversationDetail_])
     Results: ConversationDetail_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -12319,8 +12319,8 @@ export class RunConversationViewResult {
     @Field(() => [Conversation_])
     Results: Conversation_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -12535,8 +12535,8 @@ export class RunUserNotificationViewResult {
     @Field(() => [UserNotification_])
     Results: UserNotification_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -12688,8 +12688,8 @@ export class RunSchemaInfoViewResult {
     @Field(() => [SchemaInfo_])
     Results: SchemaInfo_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -12842,8 +12842,8 @@ export class RunCompanyIntegrationRecordMapViewResult {
     @Field(() => [CompanyIntegrationRecordMap_])
     Results: CompanyIntegrationRecordMap_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -13064,8 +13064,8 @@ export class RunRecordMergeLogViewResult {
     @Field(() => [RecordMergeLog_])
     Results: RecordMergeLog_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -13229,8 +13229,8 @@ export class RunRecordMergeDeletionLogViewResult {
     @Field(() => [RecordMergeDeletionLog_])
     Results: RecordMergeDeletionLog_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -13461,8 +13461,8 @@ export class RunQueryFieldViewResult {
     @Field(() => [QueryField_])
     Results: QueryField_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -13624,8 +13624,8 @@ export class RunQueryCategoryViewResult {
     @Field(() => [QueryCategory_])
     Results: QueryCategory_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -13871,8 +13871,8 @@ export class RunQueryViewResult {
     @Field(() => [Query_])
     Results: Query_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -14025,8 +14025,8 @@ export class RunQueryPermissionViewResult {
     @Field(() => [QueryPermission_])
     Results: QueryPermission_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -14185,8 +14185,8 @@ export class RunVectorIndexViewResult {
     @Field(() => [VectorIndex_])
     Results: VectorIndex_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -14325,8 +14325,8 @@ export class RunEntityDocumentTypeViewResult {
     @Field(() => [EntityDocumentType_])
     Results: EntityDocumentType_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -14487,8 +14487,8 @@ export class RunEntityDocumentRunViewResult {
     @Field(() => [EntityDocumentRun_])
     Results: EntityDocumentRun_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -14642,8 +14642,8 @@ export class RunVectorDatabaseViewResult {
     @Field(() => [VectorDatabase_])
     Results: VectorDatabase_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -14846,8 +14846,8 @@ export class RunEntityRecordDocumentViewResult {
     @Field(() => [EntityRecordDocument_])
     Results: EntityRecordDocument_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -15060,8 +15060,8 @@ export class RunEntityDocumentViewResult {
     @Field(() => [EntityDocument_])
     Results: EntityDocument_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -15298,8 +15298,8 @@ export class RunDataContextItemViewResult {
     @Field(() => [DataContextItem_])
     Results: DataContextItem_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -15466,8 +15466,8 @@ export class RunDataContextViewResult {
     @Field(() => [DataContext_])
     Results: DataContext_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -15669,8 +15669,8 @@ export class RunUserViewCategoryViewResult {
     @Field(() => [UserViewCategory_])
     Results: UserViewCategory_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -15854,8 +15854,8 @@ export class RunDashboardCategoryViewResult {
     @Field(() => [DashboardCategory_])
     Results: DashboardCategory_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -16039,8 +16039,8 @@ export class RunReportCategoryViewResult {
     @Field(() => [ReportCategory_])
     Results: ReportCategory_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -16231,8 +16231,8 @@ export class RunFileStorageProviderViewResult {
     @Field(() => [FileStorageProvider_])
     Results: FileStorageProvider_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -16429,8 +16429,8 @@ export class RunFileViewResult {
     @Field(() => [File_])
     Results: File_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -16592,8 +16592,8 @@ export class RunFileCategoryViewResult {
     @Field(() => [FileCategory_])
     Results: FileCategory_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -16762,8 +16762,8 @@ export class RunFileEntityRecordLinkViewResult {
     @Field(() => [FileEntityRecordLink_])
     Results: FileEntityRecordLink_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -16951,8 +16951,8 @@ export class RunVersionInstallationViewResult {
     @Field(() => [VersionInstallation_])
     Results: VersionInstallation_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -17160,8 +17160,8 @@ export class RunDuplicateRunDetailMatchViewResult {
     @Field(() => [DuplicateRunDetailMatch_])
     Results: DuplicateRunDetailMatch_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -17312,8 +17312,8 @@ export class RunEntityDocumentSettingViewResult {
     @Field(() => [EntityDocumentSetting_])
     Results: EntityDocumentSetting_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -17464,8 +17464,8 @@ export class RunEntitySettingViewResult {
     @Field(() => [EntitySetting_])
     Results: EntitySetting_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -17691,8 +17691,8 @@ export class RunDuplicateRunViewResult {
     @Field(() => [DuplicateRun_])
     Results: DuplicateRun_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -17879,8 +17879,8 @@ export class RunDuplicateRunDetailViewResult {
     @Field(() => [DuplicateRunDetail_])
     Results: DuplicateRunDetail_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -18035,8 +18035,8 @@ export class RunApplicationSettingViewResult {
     @Field(() => [ApplicationSetting_])
     Results: ApplicationSetting_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -18200,8 +18200,8 @@ export class RunActionCategoryViewResult {
     @Field(() => [ActionCategory_])
     Results: ActionCategory_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -18379,8 +18379,8 @@ export class RunEntityActionViewResult {
     @Field(() => [EntityAction_])
     Results: EntityAction_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -18553,8 +18553,8 @@ export class RunEntityActionInvocationViewResult {
     @Field(() => [EntityActionInvocation_])
     Results: EntityActionInvocation_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -18702,8 +18702,8 @@ export class RunActionAuthorizationViewResult {
     @Field(() => [ActionAuthorization_])
     Results: ActionAuthorization_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -18849,8 +18849,8 @@ export class RunEntityActionInvocationTypeViewResult {
     @Field(() => [EntityActionInvocationType_])
     Results: EntityActionInvocationType_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -19153,8 +19153,8 @@ export class RunActionViewResult {
     @Field(() => [Action_])
     Results: Action_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -19364,8 +19364,8 @@ export class RunEntityActionFilterViewResult {
     @Field(() => [EntityActionFilter_])
     Results: EntityActionFilter_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -19519,8 +19519,8 @@ export class RunActionFilterViewResult {
     @Field(() => [ActionFilter_])
     Results: ActionFilter_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -19665,8 +19665,8 @@ export class RunActionContextTypeViewResult {
     @Field(() => [ActionContextType_])
     Results: ActionContextType_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -19831,8 +19831,8 @@ export class RunActionResultCodeViewResult {
     @Field(() => [ActionResultCode_])
     Results: ActionResultCode_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -19985,8 +19985,8 @@ export class RunActionContextViewResult {
     @Field(() => [ActionContext_])
     Results: ActionContext_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -20177,8 +20177,8 @@ export class RunActionExecutionLogViewResult {
     @Field(() => [ActionExecutionLog_])
     Results: ActionExecutionLog_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -20376,8 +20376,8 @@ export class RunActionParamViewResult {
     @Field(() => [ActionParam_])
     Results: ActionParam_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -20537,8 +20537,8 @@ export class RunActionLibraryViewResult {
     @Field(() => [ActionLibrary_])
     Results: ActionLibrary_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -20706,8 +20706,8 @@ export class RunLibraryViewResult {
     @Field(() => [Library_])
     Results: Library_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -20877,8 +20877,8 @@ export class RunListCategoryViewResult {
     @Field(() => [ListCategory_])
     Results: ListCategory_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -21056,8 +21056,8 @@ export class RunCommunicationProviderViewResult {
     @Field(() => [CommunicationProvider_])
     Results: CommunicationProvider_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -21257,8 +21257,8 @@ export class RunCommunicationRunViewResult {
     @Field(() => [CommunicationRun_])
     Results: CommunicationRun_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -21435,8 +21435,8 @@ export class RunCommunicationProviderMessageTypeViewResult {
     @Field(() => [CommunicationProviderMessageType_])
     Results: CommunicationProviderMessageType_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -21645,8 +21645,8 @@ export class RunCommunicationLogViewResult {
     @Field(() => [CommunicationLog_])
     Results: CommunicationLog_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -21807,8 +21807,8 @@ export class RunCommunicationBaseMessageTypeViewResult {
     @Field(() => [CommunicationBaseMessageType_])
     Results: CommunicationBaseMessageType_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -22024,8 +22024,8 @@ export class RunTemplateViewResult {
     @Field(() => [Template_])
     Results: Template_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -22203,8 +22203,8 @@ export class RunTemplateCategoryViewResult {
     @Field(() => [TemplateCategory_])
     Results: TemplateCategory_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -22384,8 +22384,8 @@ export class RunTemplateContentViewResult {
     @Field(() => [TemplateContent_])
     Results: TemplateContent_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -22608,8 +22608,8 @@ export class RunTemplateParamViewResult {
     @Field(() => [TemplateParam_])
     Results: TemplateParam_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -22750,8 +22750,8 @@ export class RunTemplateContentTypeViewResult {
     @Field(() => [TemplateContentType_])
     Results: TemplateContentType_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -22904,8 +22904,8 @@ export class RunRecommendationViewResult {
     @Field(() => [Recommendation_])
     Results: Recommendation_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -23044,8 +23044,8 @@ export class RunRecommendationProviderViewResult {
     @Field(() => [RecommendationProvider_])
     Results: RecommendationProvider_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -23232,8 +23232,8 @@ export class RunRecommendationRunViewResult {
     @Field(() => [RecommendationRun_])
     Results: RecommendationRun_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -23393,8 +23393,8 @@ export class RunRecommendationItemViewResult {
     @Field(() => [RecommendationItem_])
     Results: RecommendationItem_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -23543,8 +23543,8 @@ export class RunEntityCommunicationMessageTypeViewResult {
     @Field(() => [EntityCommunicationMessageType_])
     Results: EntityCommunicationMessageType_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -23690,8 +23690,8 @@ export class RunEntityCommunicationFieldViewResult {
     @Field(() => [EntityCommunicationField_])
     Results: EntityCommunicationField_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -23847,8 +23847,8 @@ export class RunRecordChangeReplayRunViewResult {
     @Field(() => [RecordChangeReplayRun_])
     Results: RecordChangeReplayRun_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -23999,8 +23999,8 @@ export class RunLibraryItemViewResult {
     @Field(() => [LibraryItem_])
     Results: LibraryItem_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -24141,8 +24141,8 @@ export class RunEntityRelationshipDisplayComponentViewResult {
     @Field(() => [EntityRelationshipDisplayComponent_])
     Results: EntityRelationshipDisplayComponent_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -24311,8 +24311,8 @@ export class RunEntityActionParamViewResult {
     @Field(() => [EntityActionParam_])
     Results: EntityActionParam_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;

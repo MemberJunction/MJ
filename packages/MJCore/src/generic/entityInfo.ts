@@ -468,7 +468,6 @@ export class EntityFieldInfo extends BaseInfo {
      * Returns true if the field is a "special" field (see list below) and is handled inside the DB layer and should be ignored in validation by the BaseEntity architecture
      * Also, we skip validation if we have a field that is:
      *  - the primary key
-     *  - a uniqueidentifier 
      *  - an autoincrement field
      *  - the field is virtual
      *  - the field is readonly
@@ -479,7 +478,6 @@ export class EntityFieldInfo extends BaseInfo {
 
         return this.IsSpecialDateField ||
                this.IsPrimaryKey ||
-               this.Type.trim().toLowerCase() === 'uniqueidentifier' ||
                this.AutoIncrement === true ||
                this.IsVirtual === true ||
                this.ReadOnly === true;

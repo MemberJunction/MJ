@@ -4,8 +4,8 @@ import { LogError, Metadata } from '@memberjunction/core';
 
 @ObjectType()
 export class DatasetResultType {
-  @Field(() => Int)
-  DatasetID: number;
+  @Field(() => String)
+  DatasetID: string;
 
   @Field(() => String)
   DatasetName: string;
@@ -65,8 +65,8 @@ export class DatasetResolverExtended {
 
 @ObjectType()
 export class DatasetStatusResultType {
-  @Field(() => Int)
-  DatasetID: number;
+  @Field(() => String)
+  DatasetID: string;
 
   @Field(() => String)
   DatasetName: string;

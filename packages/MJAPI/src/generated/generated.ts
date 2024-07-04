@@ -2,7 +2,7 @@
 * ALL ENTITIES - TypeGraphQL Type Class Definition - AUTO GENERATED FILE
 * Generated Entities and Resolvers for Server
 * 
-* GENERATED: 7/3/2024, 11:02:48 PM
+* GENERATED: 7/4/2024, 1:22:41 AM
 * 
 *   >>> DO NOT MODIFY THIS FILE!!!!!!!!!!!!
 *   >>> YOUR CHANGES WILL BE OVERWRITTEN
@@ -139,8 +139,8 @@ export class RunThreadDetailViewResult {
     @Field(() => [ThreadDetail_])
     Results: ThreadDetail_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -253,8 +253,8 @@ export class RunThreadViewResult {
     @Field(() => [Thread_])
     Results: Thread_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -402,8 +402,8 @@ export class RunIndustryViewResult {
     @Field(() => [Industry_])
     Results: Industry_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -550,8 +550,8 @@ export class RunContactRoleViewResult {
     @Field(() => [ContactRole_])
     Results: ContactRole_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -716,8 +716,8 @@ export class RunContactLevelViewResult {
     @Field(() => [ContactLevel_])
     Results: ContactLevel_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -1156,8 +1156,8 @@ export class RunAccountViewResult {
     @Field(() => [Account_])
     Results: Account_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -1591,8 +1591,8 @@ export class RunContactViewResult {
     @Field(() => [Contact_])
     Results: Contact_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -1747,8 +1747,8 @@ export class RunDealStageViewResult {
     @Field(() => [DealStage_])
     Results: DealStage_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -2036,8 +2036,8 @@ export class RunActivityViewResult {
     @Field(() => [Activity_])
     Results: Activity_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -2178,8 +2178,8 @@ export class RunDealForecastCategoryViewResult {
     @Field(() => [DealForecastCategory_])
     Results: DealForecastCategory_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -2553,8 +2553,8 @@ export class RunDealViewResult {
     @Field(() => [Deal_])
     Results: Deal_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -2703,8 +2703,8 @@ export class RunDealTypeViewResult {
     @Field(() => [DealType_])
     Results: DealType_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -2964,8 +2964,8 @@ export class RunInvoiceViewResult {
     @Field(() => [Invoice_])
     Results: Invoice_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -3086,8 +3086,8 @@ export class RunActivityAttachmentViewResult {
     @Field(() => [ActivityAttachment_])
     Results: ActivityAttachment_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -3275,8 +3275,8 @@ export class RunPaymentTermsTypeViewResult {
     @Field(() => [PaymentTermsType_])
     Results: PaymentTermsType_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -3415,8 +3415,8 @@ export class RunInvoiceStatusTypeViewResult {
     @Field(() => [InvoiceStatusType_])
     Results: InvoiceStatusType_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -8953,8 +8953,8 @@ export class RunSalesLineItemViewResult {
     @Field(() => [SalesLineItem_])
     Results: SalesLineItem_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -12561,8 +12561,8 @@ export class RunSalesTransactionViewResult {
     @Field(() => [SalesTransaction_])
     Results: SalesTransaction_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -13782,8 +13782,8 @@ export class RunCustomerAddress__client_financeViewResult {
     @Field(() => [CustomerAddress__client_finance_])
     Results: CustomerAddress__client_finance_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -14888,8 +14888,8 @@ export class RunItem__client_financeViewResult {
     @Field(() => [Item__client_finance_])
     Results: Item__client_finance_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -16727,8 +16727,8 @@ export class RunCustomer__client_financeViewResult {
     @Field(() => [Customer__client_finance_])
     Results: Customer__client_finance_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -16913,8 +16913,8 @@ export class RunOrganizationLinkViewResult {
     @Field(() => [OrganizationLink_])
     Results: OrganizationLink_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -17116,8 +17116,8 @@ export class RunPersonLinkViewResult {
     @Field(() => [PersonLink_])
     Results: PersonLink_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -20130,8 +20130,8 @@ export class RunAccount__client_crmViewResult {
     @Field(() => [Account__client_crm_])
     Results: Account__client_crm_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -20348,8 +20348,8 @@ export class RunStringMapViewResult {
     @Field(() => [StringMap_])
     Results: StringMap_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -20879,8 +20879,8 @@ export class RunProductPriceLevelViewResult {
     @Field(() => [ProductPriceLevel_])
     Results: ProductPriceLevel_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -21639,8 +21639,8 @@ export class Runclient_membershipViewResult {
     @Field(() => [client_membership_])
     Results: client_membership_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -26449,8 +26449,8 @@ export class RunContact__client_crmViewResult {
     @Field(() => [Contact__client_crm_])
     Results: Contact__client_crm_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -26900,8 +26900,8 @@ export class RunUoMViewResult {
     @Field(() => [UoM_])
     Results: UoM_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -29072,8 +29072,8 @@ export class RunSalesOrderViewResult {
     @Field(() => [SalesOrder_])
     Results: SalesOrder_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -30053,8 +30053,8 @@ export class RunSalesOrderDetailViewResult {
     @Field(() => [SalesOrderDetail_])
     Results: SalesOrderDetail_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -31787,8 +31787,8 @@ export class RunProductViewResult {
     @Field(() => [Product_])
     Results: Product_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -33024,8 +33024,8 @@ export class RunCustomerAddressViewResult {
     @Field(() => [CustomerAddress_])
     Results: CustomerAddress_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -38554,8 +38554,8 @@ export class RunSalesLineItem__client_membershipViewResult {
     @Field(() => [SalesLineItem__client_membership_])
     Results: SalesLineItem__client_membership_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -39663,8 +39663,8 @@ export class RunItemViewResult {
     @Field(() => [Item_])
     Results: Item_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -41513,8 +41513,8 @@ export class RunCustomerViewResult {
     @Field(() => [Customer_])
     Results: Customer_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -45153,8 +45153,8 @@ export class RunSalesTransaction__client_membershipViewResult {
     @Field(() => [SalesTransaction__client_membership_])
     Results: SalesTransaction__client_membership_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;

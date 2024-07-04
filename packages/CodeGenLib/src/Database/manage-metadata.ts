@@ -1194,60 +1194,58 @@ export class ManageMetadataBase {
                LogError(`   >>>> WARNING: Entity name already exists, so using ${newEntityName} instead. If you did not intend for this, please rename the ${newEntity.SchemaName}.${newEntity.TableName} table in the database.`)
             }
    
-            // get the next entity ID
-            const params = [newEntity.SchemaName];
-            const sSQLNewEntityID = `EXEC [${mj_core_schema()}].spGetNextEntityID @SchemaName=@0`;
-            const newEntityIDRaw = await ds.query(sSQLNewEntityID, params);
-            const newEntityID = newEntityIDRaw && newEntityIDRaw.length > 0 ? newEntityIDRaw[0].NextID : null;
-            if (newEntityID && newEntityID > 0) {
-               const isNewSchema = await this.isSchemaNew(ds, newEntity.SchemaName);
-               const sSQLInsert = this.createNewEntityInsertSQL(newEntityID, newEntityName, newEntity, suffix);
-               await ds.query(sSQLInsert);
-               // if we get here we created a new entity safely, otherwise we get exception
-   
-               // add it to the new entity list
-               ManageMetadataBase.newEntityList.push(newEntityName);
-   
-               // next, check if this entity is in a schema that is new (e.g. no other entities have been added to this schema yet), if so and if 
-               // our config option is set to create new applications from new schemas, then create a new application for this schema
-               if (isNewSchema &&  configInfo.newSchemaDefaults.CreateNewApplicationWithSchemaName) {
-                  // new schema and config option is to create a new application from the schema name so do that
-                  
-                  if (!await this.applicationExists(ds, newEntity.SchemaName))
-                     await this.createNewApplication(ds, newEntity.SchemaName);                     
-               }          
-               else {
-                  // not a new schema, attempt to look up the application for this schema
-                  await this.getApplicationIDForSchema(ds, newEntity.SchemaName);
-               }        
-               // now we have an application ID, but make sure that we are configured to add this new entity to an application at all
-               if (configInfo.newEntityDefaults.AddToApplicationWithSchemaName) {
-                  // we should add this entity to the application
-                  const appName: string = newEntity.SchemaName === mj_core_schema() ? 'Admin' : newEntity.SchemaName; // for the __mj schema or whatever it is installed as for mj_core - we want to drop stuff into the admin app
-                  const sSQLInsertApplicationEntity = `INSERT INTO ${mj_core_schema()}.ApplicationEntity 
-                                                            (ApplicationName, EntityID, Sequence) VALUES 
-                                                            ('${appName}', ${newEntityID}, (SELECT ISNULL(MAX(Sequence),0)+1 FROM ${mj_core_schema()}.ApplicationEntity WHERE ApplicationName = '${appName}'))`;
-                  await ds.query(sSQLInsertApplicationEntity);
-               }
-   
-               // next up, we need to check if we're configured to add permissions for new entities, and if so, add them
-               if (configInfo.newEntityDefaults.PermissionDefaults && configInfo.newEntityDefaults.PermissionDefaults.AutoAddPermissionsForNewEntities) {
-                  // we are asked to add permissions for new entities, so do that by looping through the permissions and adding them
-                  const permissions = configInfo.newEntityDefaults.PermissionDefaults.Permissions;
-                  for (const p of permissions) {
+            const isNewSchema = await this.isSchemaNew(ds, newEntity.SchemaName);
+            const sSQLInsert = this.createNewEntityInsertSQL(newEntityName, newEntity, suffix);
+            const newEntityResult = await ds.query(sSQLInsert);
+            const newEntityID = newEntityResult && newEntityResult.length > 0 ? newEntityResult[0].ID : null;
+            if (!newEntityID) 
+               throw new Error(`Failed to create new entity ${newEntityName} for table ${newEntity.SchemaName}.${newEntity.TableName}`);
+
+            // if we get here we created a new entity safely, otherwise we get exception
+
+            // add it to the new entity list
+            ManageMetadataBase.newEntityList.push(newEntityName);
+
+            // next, check if this entity is in a schema that is new (e.g. no other entities have been added to this schema yet), if so and if 
+            // our config option is set to create new applications from new schemas, then create a new application for this schema
+            if (isNewSchema &&  configInfo.newSchemaDefaults.CreateNewApplicationWithSchemaName) {
+               // new schema and config option is to create a new application from the schema name so do that
+               
+               if (!await this.applicationExists(ds, newEntity.SchemaName))
+                  await this.createNewApplication(ds, newEntity.SchemaName);                     
+            }          
+            else {
+               // not a new schema, attempt to look up the application for this schema
+               await this.getApplicationIDForSchema(ds, newEntity.SchemaName);
+            }        
+            // now we have an application ID, but make sure that we are configured to add this new entity to an application at all
+            if (configInfo.newEntityDefaults.AddToApplicationWithSchemaName) {
+               // we should add this entity to the application
+               const appName: string = newEntity.SchemaName === mj_core_schema() ? 'Admin' : newEntity.SchemaName; // for the __mj schema or whatever it is installed as for mj_core - we want to drop stuff into the admin app
+               const sSQLInsertApplicationEntity = `INSERT INTO ${mj_core_schema()}.ApplicationEntity 
+                                                         (ApplicationName, EntityID, Sequence) VALUES 
+                                                         ('${appName}', '${newEntityID}', (SELECT ISNULL(MAX(Sequence),0)+1 FROM ${mj_core_schema()}.ApplicationEntity WHERE ApplicationName = '${appName}'))`;
+               await ds.query(sSQLInsertApplicationEntity);
+            }
+
+            // next up, we need to check if we're configured to add permissions for new entities, and if so, add them
+            if (configInfo.newEntityDefaults.PermissionDefaults && configInfo.newEntityDefaults.PermissionDefaults.AutoAddPermissionsForNewEntities) {
+               // we are asked to add permissions for new entities, so do that by looping through the permissions and adding them
+               const permissions = configInfo.newEntityDefaults.PermissionDefaults.Permissions;
+               for (const p of permissions) {
+                  const RoleID = md.Roles.find(r => r.Name === p.RoleName)?.ID;
+                  if (RoleID) {
                      const sSQLInsertPermission = `INSERT INTO ${mj_core_schema()}.EntityPermission 
-                                                            (EntityID, RoleName, CanRead, CanCreate, CanUpdate, CanDelete) VALUES 
-                                                            (${newEntityID}, '${p.RoleName}', ${p.CanRead ? 1 : 0}, ${p.CanCreate ? 1 : 0}, ${p.CanUpdate ? 1 : 0}, ${p.CanDelete ? 1 : 0})`;
+                                                   (EntityID, RoleID, CanRead, CanCreate, CanUpdate, CanDelete) VALUES 
+                                                   ('${newEntityID}', '${RoleID}', ${p.CanRead ? 1 : 0}, ${p.CanCreate ? 1 : 0}, ${p.CanUpdate ? 1 : 0}, ${p.CanDelete ? 1 : 0})`;
                      await ds.query(sSQLInsertPermission);
                   }
+                  else 
+                     LogError(`   >>>> ERROR: Unable to find Role ID for role ${p.RoleName} to add permissions for new entity ${newEntityName}`);
                }
-   
-               LogStatus(`   Created new entity ${newEntityName} for table ${newEntity.SchemaName}.${newEntity.TableName}`)
             }
-            else {
-               LogError(`ERROR: Unable to get next entity ID for ${newEntity.SchemaName}.${newEntity.TableName} - it is possible that the schema has reached its MAX Id, 
-                              check the Schema Info entity for this schema to see if all ID values have been allocated.`)
-            }
+
+            LogStatus(`   Created new entity ${newEntityName} for table ${newEntity.SchemaName}.${newEntity.TableName}`)
          }
          else {
             LogStatus(`   Skipping new entity ${newEntity.TableName} because it doesn't qualify to be created. Reason: ${validationMessage}`)
@@ -1284,11 +1282,12 @@ export class ManageMetadataBase {
       return result && result.length > 0 ? result[0].ID : null;
    }
    
-   protected createNewEntityInsertSQL(newEntityID: number, newEntityName: string, newEntity: any, newEntitySuffix: string): string {
+   protected createNewEntityInsertSQL(newEntityName: string, newEntity: any, newEntitySuffix: string): string {
       const newEntityDefaults = configInfo.newEntityDefaults;
       const newEntityDescriptionEscaped = newEntity.Description ? `'${newEntity.Description.replace(/'/g, "''")}` : null;
-      const sSQLInsert = `INSERT INTO [${mj_core_schema()}].Entity (
-         ID, 
+      const sSQLInsert = `    
+      DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
+      INSERT INTO [${mj_core_schema()}].Entity (
          Name, 
          Description,
          NameSuffix,
@@ -1305,9 +1304,9 @@ export class ManageMetadataBase {
          ${newEntityDefaults.AllowUpdateAPI === undefined ? '' : ', AllowUpdateAPI'}
          ${newEntityDefaults.AllowDeleteAPI === undefined ? '' : ', AllowDeleteAPI'}
          ${newEntityDefaults.UserViewMaxRows === undefined ? '' : ', UserViewMaxRows'}
-        ) 
-        VALUES (
-         ${newEntityID},
+      ) 
+      OUTPUT INSERTED.[ID] INTO @InsertedRow
+      VALUES (
          '${newEntityName}', 
          ${newEntityDescriptionEscaped ? newEntityDescriptionEscaped : 'NULL' /*if no description, then null*/},
          ${newEntitySuffix && newEntitySuffix.length > 0 ? `'${newEntitySuffix}'` : 'NULL'},
@@ -1324,7 +1323,9 @@ export class ManageMetadataBase {
          ${newEntityDefaults.AllowUpdateAPI === undefined ? '' : ', ' + (newEntityDefaults.AllowUpdateAPI ? '1' : '0')}
          ${newEntityDefaults.AllowDeleteAPI === undefined ? '' : ', ' + (newEntityDefaults.AllowDeleteAPI ? '1' : '0')}
          ${newEntityDefaults.UserViewMaxRows === undefined ? '' : ', ' + (newEntityDefaults.UserViewMaxRows)}
-        )`;
+      )
+      SELECT * FROM [__mj].vwEntities WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
+   `;
    
       return sSQLInsert;
    }

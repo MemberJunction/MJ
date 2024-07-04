@@ -1687,7 +1687,6 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
     
     public async GetDatasetByName(datasetName: string, itemFilters?: DatasetItemFilterType[]): Promise<DatasetResultType> {
         const sSQL = `SELECT 
-                        d.ID DatasetID,
                         di.*,
                         e.BaseView EntityBaseView,
                         e.SchemaName EntitySchemaName
@@ -1756,7 +1755,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
 
             return {
                 DatasetID: items[0].DatasetID,
-                DatasetName: items[0].DatasetName,
+                DatasetName: datasetName,
                 Success: bSuccess,
                 Status: '',
                 LatestUpdateDate: latestUpdateDate,
@@ -1766,7 +1765,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
         else {
             return { 
                 DatasetID: "",
-                DatasetName: '',
+                DatasetName: datasetName,
                 Success: false,
                 Status: 'No Dataset or Items found for DatasetName: ' + datasetName,
                 LatestUpdateDate: null, 
@@ -1778,7 +1777,6 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
     public async GetDatasetStatusByName(datasetName: string, itemFilters?: DatasetItemFilterType[]): Promise<DatasetStatusResultType> {
         const sSQL = `
             SELECT 
-                d.ID DatasetID,
                 di.*,
                 e.BaseView EntityBaseView,
                 e.SchemaName EntitySchemaName 
@@ -1836,7 +1834,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
     
                 return {
                     DatasetID: items[0].DatasetID,
-                    DatasetName: items[0].DatasetName,
+                    DatasetName: datasetName,
                     Success: true,
                     Status: '',
                     LatestUpdateDate: latestUpdateDate,
@@ -1846,7 +1844,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
             else {
                 return {
                     DatasetID: items[0].DatasetID,
-                    DatasetName: items[0].DatasetName,
+                    DatasetName: datasetName,
                     Success: false,
                     Status: 'No update dates found for DatasetName: ' + datasetName,
                     LatestUpdateDate: null,
@@ -1857,7 +1855,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
         else {
             return { 
                 DatasetID: "",
-                DatasetName: '',
+                DatasetName: datasetName,
                 Success: false,
                 Status: 'No Dataset or Items found for DatasetName: ' + datasetName, 
                 EntityUpdateDates: null,

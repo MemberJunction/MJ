@@ -255,7 +255,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                     innerParams.AuditLogDescription = params.AuditLogDescription;
                 
                 if (!dynamicView) {
-                    innerParams.ExcludeUserViewRunID = params.ExcludeUserViewRunID ? params.ExcludeUserViewRunID : -1;
+                    innerParams.ExcludeUserViewRunID = params.ExcludeUserViewRunID ? params.ExcludeUserViewRunID : "";
                     innerParams.ExcludeDataFromAllPriorViewRuns = params.ExcludeDataFromAllPriorViewRuns ? params.ExcludeDataFromAllPriorViewRuns : false;
                     innerParams.OverrideExcludeFilter = params.OverrideExcludeFilter ? params.OverrideExcludeFilter : '';
                     innerParams.SaveViewResults = params.SaveViewResults ? params.SaveViewResults : false;
@@ -599,7 +599,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             const mutationName = `${type}${entity.EntityInfo.ClassName}`
 
             // only pass along writable fields, AND the PKEY value if this is an update
-            const filteredFields = entity.Fields.filter(f => f.SQLType.trim().toLowerCase() !== 'uniqueidentifier' && (f.ReadOnly === false || (f.IsPrimaryKey && entity.IsSaved) ));
+            const filteredFields = entity.Fields.filter(f => !f.ReadOnly || (f.IsPrimaryKey && entity.IsSaved));
             const inner = `                ${mutationName}(input: $input) {
                 ${entity.Fields.map(f => {
                     if (f.Name.trim().toLowerCase().startsWith('__mj_'))
