@@ -143,7 +143,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
     /**************************************************************************/
     public async RunReport(params: RunReportParams, contextUser?: UserInfo): Promise<RunReportResult> {
         const query = gql`
-        query GetReportDataQuery ($ReportID: Int!) {
+        query GetReportDataQuery ($ReportID: String!) {
             GetReportData(ReportID: $ReportID) {
                 Success
                 Results
@@ -173,7 +173,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
     /**************************************************************************/
     public async RunQuery(params: RunQueryParams, contextUser?: UserInfo): Promise<RunQueryResult> {
         const query = gql`
-        query GetQueryDataQuery ($QueryID: Int!) {
+        query GetQueryDataQuery ($QueryID: String!) {
             GetQueryData(QueryID: $QueryID) {
                 Success
                 Results
@@ -183,8 +183,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             }
         }`
 
-        const queryId = typeof params.QueryID === 'string' ? parseInt(params.QueryID) : params.QueryID;
-        const result = await GraphQLDataProvider.ExecuteGQL(query, {QueryID: queryId} );
+        const result = await GraphQLDataProvider.ExecuteGQL(query, {QueryID: params.QueryID} );
         if (result && result.GetQueryData)
             return {
                 QueryID: params.QueryID,
@@ -256,7 +255,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                     innerParams.AuditLogDescription = params.AuditLogDescription;
                 
                 if (!dynamicView) {
-                    innerParams.ExcludeUserViewRunID = params.ExcludeUserViewRunID ? params.ExcludeUserViewRunID : -1;
+                    innerParams.ExcludeUserViewRunID = params.ExcludeUserViewRunID ? params.ExcludeUserViewRunID : "";
                     innerParams.ExcludeDataFromAllPriorViewRuns = params.ExcludeDataFromAllPriorViewRuns ? params.ExcludeDataFromAllPriorViewRuns : false;
                     innerParams.OverrideExcludeFilter = params.OverrideExcludeFilter ? params.OverrideExcludeFilter : '';
                     innerParams.SaveViewResults = params.SaveViewResults ? params.SaveViewResults : false;
@@ -570,7 +569,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 Success: false,
                 OverallStatus: e && e.message ? e.message : e,
                 RecordStatus: [],
-                RecordMergeLogID: -1,
+                RecordMergeLogID: "",
                 Request: request,
             }
             throw (e)
@@ -599,7 +598,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             const mutationName = `${type}${entity.EntityInfo.ClassName}`
 
             // only pass along writable fields, AND the PKEY value if this is an update
-            const filteredFields = entity.Fields.filter(f => f.SQLType.trim().toLowerCase() !== 'uniqueidentifier' && (f.ReadOnly === false || (f.IsPrimaryKey && entity.IsSaved) ));
+            const filteredFields = entity.Fields.filter(f => !f.ReadOnly || (f.IsPrimaryKey && entity.IsSaved));
             const inner = `                ${mutationName}(input: $input) {
                 ${entity.Fields.map(f => {
                     if (f.Name.trim().toLowerCase().startsWith('__mj_'))
@@ -957,7 +956,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         }
         else {
             return {
-                DatasetID: 0,
+                DatasetID: "",
                 DatasetName: datasetName,
                 Success: false,
                 Status: 'Unknown',
@@ -991,7 +990,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         }
         else {
             return {
-                DatasetID: 0,
+                DatasetID: "",
                 DatasetName: datasetName,
                 Success: false,
                 Status: 'Unknown',

@@ -185,7 +185,7 @@ export class ResolverBase {
     extraFilter: string,
     orderBy: string,
     userSearchString: string,
-    excludeUserViewRunID: number | undefined,
+    excludeUserViewRunID: string | undefined,
     overrideExcludeFilter: string | undefined,
     saveViewResults: boolean | undefined,
     fields: string[] | undefined,

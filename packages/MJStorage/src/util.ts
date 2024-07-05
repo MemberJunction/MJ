@@ -12,7 +12,7 @@ import { FileStorageBase } from './generic/FileStorageBase';
  * @returns A promise that resolves to an object with the updated input and the upload URL.
  */
 export const createUploadUrl = async <
-  TInput extends { ID: number; Name: string; ProviderID: number; ContentType?: string; ProviderKey?: string }
+  TInput extends { ID: string; Name: string; ProviderID: string; ContentType?: string; ProviderKey?: string }
 >(
   providerEntity: FileStorageProviderEntity,
   input: TInput

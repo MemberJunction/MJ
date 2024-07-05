@@ -18,7 +18,7 @@ export class SkipWindowComponent  {
   @Input() public ShowConversationList: boolean = false;
   @Input() public AllowNewConversations: boolean = false;
   @Input() public Title: string = "Ask Skip"
-  @Input() public DataContextID: number = 0;
+  @Input() public DataContextID: string = "";
   @Input() public LinkedEntity: string = '';
   @Input() public LinkedEntityCompositeKey: CompositeKey = new CompositeKey();
   @Input() public ShowDataContextButton: boolean = true;

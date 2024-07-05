@@ -30,6 +30,15 @@ import { DuplicateRunEntity } from '@memberjunction/core-entities';
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
+            FieldName="SourceListID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            LinkType="Record"
+            LinkComponentType="Search"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
             FieldName="StartedAt"
             Type="datepicker"
             [EditMode]="EditMode"
@@ -81,15 +90,6 @@ import { DuplicateRunEntity } from '@memberjunction/core-entities';
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="SourceListID"
-            Type="numerictextbox"
-            [EditMode]="EditMode"
-            LinkType="Record"
-            LinkComponentType="Search"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
             FieldName="__mj_CreatedAt"
             Type="textbox"
             [EditMode]="EditMode"
@@ -98,13 +98,6 @@ import { DuplicateRunEntity } from '@memberjunction/core-entities';
             [record]="record"
             [ShowLabel]="true"
             FieldName="__mj_UpdatedAt"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="ID_"
             Type="textbox"
             [EditMode]="EditMode"
         ></mj-form-field>
@@ -125,14 +118,14 @@ import { DuplicateRunEntity } from '@memberjunction/core-entities';
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="ApprovedByUser"
+            FieldName="SourceList"
             Type="textbox"
             [EditMode]="EditMode"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="SourceList"
+            FieldName="ApprovedByUser"
             Type="textbox"
             [EditMode]="EditMode"
         ></mj-form-field>

@@ -13,7 +13,7 @@ import { ReportSnapshotEntity } from '@memberjunction/core-entities';
             [record]="record"
             [ShowLabel]="true"
             FieldName="ReportID"
-            Type="numerictextbox"
+            Type="textbox"
             [EditMode]="EditMode"
             LinkType="Record"
             LinkComponentType="Search"

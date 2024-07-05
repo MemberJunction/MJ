@@ -29,9 +29,9 @@ import { DataContext } from '@memberjunction/data-context';
 })
 export class SkipDynamicReportComponent {
     @Input() SkipData: SkipAPIAnalysisCompleteResponse | undefined;
-    @Input() ConversationID: number | null = null;
+    @Input() ConversationID: string | null = null;
     @Input() ConversationName: string | null = null;    
-    @Input() ConversationDetailID: number | null = null;
+    @Input() ConversationDetailID: string | null = null;
     @Input() DataContext!: DataContext;
     @Input() AllowDrillDown: boolean = true;
 }

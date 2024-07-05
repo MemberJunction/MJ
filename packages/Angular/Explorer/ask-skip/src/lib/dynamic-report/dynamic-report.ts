@@ -22,9 +22,9 @@ import { MJTabStripComponent, TabEvent } from '@memberjunction/ng-tabstrip';
 export class DynamicReportComponent implements AfterViewInit, AfterViewChecked {
   @Input() ShowDetailsTab: boolean = false;
   @Input() ShowCreateReportButton: boolean = false;
-  @Input() ConversationID: number | null = null; 
+  @Input() ConversationID: string | null = null; 
   @Input() ConversationName: string | null = null;
-  @Input() ConversationDetailID: number | null = null;
+  @Input() ConversationDetailID: string | null = null;
   @Input() DataContext!: DataContext;
   @Input() ReportEntity?: ReportEntity;
   @Input() LayoutMode: 'linear' | 'tabs' = 'tabs';
@@ -38,9 +38,9 @@ export class DynamicReportComponent implements AfterViewInit, AfterViewChecked {
 
   constructor (public sharedService: SharedService, private router: Router, private cdRef: ChangeDetectorRef) {}
 
-  public matchingReportID: number | null = null;
+  public matchingReportID: string | null = null;
   public matchingReportName: string | null = null;
-  private static _reportCache: {reportId: number, conversationId: number, reportName: string, conversationDetailId: number}[] = [];
+  private static _reportCache: {reportId: string, conversationId: string, reportName: string, conversationDetailId: string}[] = [];
   private _loaded: boolean = false;
   async RefreshMatchingReport() {
     if (this.SkipData && !this._loaded && this.ConversationDetailID && this.ConversationID) {
@@ -80,7 +80,7 @@ export class DynamicReportComponent implements AfterViewInit, AfterViewChecked {
   }
 
   public clickMatchingReport() {
-    if (this.matchingReportID !== null && this.matchingReportID > 0) {
+    if (this.matchingReportID !== null && this.matchingReportID.length > 0) {
       // navigate to the report
       this.router.navigate(['resource', 'report', this.matchingReportID])
     }
@@ -196,9 +196,9 @@ export class DynamicReportComponent implements AfterViewInit, AfterViewChecked {
     }
   }
 
-  protected async graphQLCreateNewReport(): Promise<{ReportID: number, ReportName: string, Success: boolean, ErrorMessage: string}> {
+  protected async graphQLCreateNewReport(): Promise<{ReportID: string, ReportName: string, Success: boolean, ErrorMessage: string}> {
     // do this via a single gql call to make it faster than doing operation via standard objects since it is a multi-step operation
-    const mutation = `mutation CreateReportFromConversationDetailIDMutation ($ConversationDetailID: Int!) {
+    const mutation = `mutation CreateReportFromConversationDetailIDMutation ($ConversationDetailID: String!) {
       CreateReportFromConversationDetailID(ConversationDetailID: $ConversationDetailID) {
         ReportID
         ReportName
@@ -215,15 +215,15 @@ export class DynamicReportComponent implements AfterViewInit, AfterViewChecked {
       return {
         Success: false,
         ErrorMessage: 'Failed to execute',
-        ReportID: -1,
+        ReportID: "",
         ReportName: ''
       }
   }
 
   public async doRefreshReport() {
     try {
-      if (this.ReportEntity && this.ReportEntity.ID > 0) {
-        const gql = `query ExecuteAskSkipRunScript($dataContextId: Int!, $scriptText: String!) {
+      if (this.ReportEntity && this.ReportEntity.ID.length > 0) {
+        const gql = `query ExecuteAskSkipRunScript($dataContextId: String!, $scriptText: String!) {
           ExecuteAskSkipRunScript(DataContextId: $dataContextId, ScriptText: $scriptText) {
             Success
             Status

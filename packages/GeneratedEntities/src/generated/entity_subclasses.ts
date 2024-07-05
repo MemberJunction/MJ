@@ -1530,7 +1530,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: EmployeeID
         * * Display Name: Employee ID
         * * SQL Data Type: int
-        * * Related Entity/Foreign Key: Employees (vwEmployees.ID)
         */
         get EmployeeID(): number | null {  
             return this.Get('EmployeeID');
@@ -1634,7 +1633,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CompanyIntegrationID
         * * Display Name: Company Integration ID
         * * SQL Data Type: int
-        * * Related Entity/Foreign Key: Company Integrations (vwCompanyIntegrations.ID)
         */
         get CompanyIntegrationID(): number {  
             return this.Get('CompanyIntegrationID');
@@ -1923,7 +1921,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CompanyIntegrationID
         * * Display Name: Company Integration ID
         * * SQL Data Type: int
-        * * Related Entity/Foreign Key: Company Integrations (vwCompanyIntegrations.ID)
         */
         get CompanyIntegrationID(): number {  
             return this.Get('CompanyIntegrationID');
@@ -2025,7 +2022,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: EmployeeID
         * * Display Name: Employee ID
         * * SQL Data Type: int
-        * * Related Entity/Foreign Key: Employees (vwEmployees.ID)
         */
         get EmployeeID(): number | null {  
             return this.Get('EmployeeID');
@@ -2485,7 +2481,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CompanyIntegrationID
         * * Display Name: Company Integration ID
         * * SQL Data Type: int
-        * * Related Entity/Foreign Key: Company Integrations (vwCompanyIntegrations.ID)
         */
         get CompanyIntegrationID(): number {  
             return this.Get('CompanyIntegrationID');
@@ -2824,7 +2819,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CompanyIntegrationID
         * * Display Name: Company Integration ID
         * * SQL Data Type: int
-        * * Related Entity/Foreign Key: Company Integrations (vwCompanyIntegrations.ID)
         */
         get CompanyIntegrationID(): number | null {  
             return this.Get('CompanyIntegrationID');

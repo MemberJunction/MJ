@@ -41,8 +41,8 @@ export class RunViewByIDInput {
   @Field(() => String, { nullable: true })
   UserSearchString: string;
 
-  @Field(() => Int, { nullable: true, description: 'Pass in a UserViewRun ID value to exclude all records from that run from results' })
-  ExcludeUserViewRunID?: number;
+  @Field(() => String, { nullable: true, description: 'Pass in a UserViewRun ID value to exclude all records from that run from results' })
+  ExcludeUserViewRunID?: string;
 
   @Field(() => String, {
     nullable: true,
@@ -130,8 +130,8 @@ export class RunViewByNameInput {
   @Field(() => String, { nullable: true })
   UserSearchString: string;
 
-  @Field(() => Int, { nullable: true, description: 'Pass in a UserViewRun ID value to exclude all records from that run from results' })
-  ExcludeUserViewRunID?: number;
+  @Field(() => String, { nullable: true, description: 'Pass in a UserViewRun ID value to exclude all records from that run from results' })
+  ExcludeUserViewRunID?: string;
 
   @Field(() => String, {
     nullable: true,
@@ -218,8 +218,8 @@ export class RunDynamicViewInput {
   @Field(() => String, { nullable: true })
   UserSearchString: string;
 
-  @Field(() => Int, { nullable: true, description: 'Pass in a UserViewRun ID value to exclude all records from that run from results' })
-  ExcludeUserViewRunID?: number;
+  @Field(() => String, { nullable: true, description: 'Pass in a UserViewRun ID value to exclude all records from that run from results' })
+  ExcludeUserViewRunID?: string;
 
   @Field(() => String, {
     nullable: true,

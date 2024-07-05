@@ -19,7 +19,7 @@ import { DatasetItemEntity } from '@memberjunction/core-entities';
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="DatasetName"
+            FieldName="DatasetID"
             Type="textbox"
             [EditMode]="EditMode"
             LinkType="Record"

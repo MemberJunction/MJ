@@ -13,7 +13,7 @@ import { CommunicationProviderMessageTypeEntity } from '@memberjunction/core-ent
             [record]="record"
             [ShowLabel]="true"
             FieldName="CommunicationProviderID"
-            Type="numerictextbox"
+            Type="textbox"
             [EditMode]="EditMode"
             LinkType="Record"
             LinkComponentType="Dropdown"
@@ -22,7 +22,7 @@ import { CommunicationProviderMessageTypeEntity } from '@memberjunction/core-ent
             [record]="record"
             [ShowLabel]="true"
             FieldName="CommunicationBaseMessageTypeID"
-            Type="numerictextbox"
+            Type="textbox"
             [EditMode]="EditMode"
             LinkType="Record"
             LinkComponentType="Dropdown"
@@ -59,13 +59,6 @@ import { CommunicationProviderMessageTypeEntity } from '@memberjunction/core-ent
             [record]="record"
             [ShowLabel]="true"
             FieldName="__mj_UpdatedAt"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="ID_"
             Type="textbox"
             [EditMode]="EditMode"
         ></mj-form-field>

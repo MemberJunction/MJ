@@ -75,7 +75,7 @@ export class EntityRelationshipInfo extends BaseInfo  {
     DisplayIconType: 'Related Entity Icon'| 'Custom' | 'None' = 'Related Entity Icon'
     DisplayIcon: string = null
     DisplayUserViewID: string = null
-    DisplayComponentID: number = null
+    DisplayComponentID: string = null
     DisplayComponentConfiguration: string = null
     __mj_CreatedAt: Date = null
     __mj_UpdatedAt: Date = null
@@ -468,7 +468,6 @@ export class EntityFieldInfo extends BaseInfo {
      * Returns true if the field is a "special" field (see list below) and is handled inside the DB layer and should be ignored in validation by the BaseEntity architecture
      * Also, we skip validation if we have a field that is:
      *  - the primary key
-     *  - a uniqueidentifier 
      *  - an autoincrement field
      *  - the field is virtual
      *  - the field is readonly
@@ -479,7 +478,6 @@ export class EntityFieldInfo extends BaseInfo {
 
         return this.IsSpecialDateField ||
                this.IsPrimaryKey ||
-               this.Type.trim().toLowerCase() === 'uniqueidentifier' ||
                this.AutoIncrement === true ||
                this.IsVirtual === true ||
                this.ReadOnly === true;
@@ -1166,7 +1164,7 @@ export class RecordMergeResult {
     /**
      * The ID of the log record for the merge operation
      */
-    RecordMergeLogID: number | null
+    RecordMergeLogID: string | null
     /**
      * The details of the merge operation, including the status of each record that was merged
      */

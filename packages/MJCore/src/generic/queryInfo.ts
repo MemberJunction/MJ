@@ -6,9 +6,10 @@ import { Metadata } from "./metadata";
  * Metadata about a single stored query in the database.
  */
 export class QueryInfo extends BaseInfo {
+    public ID: string = null
     public Name: string = null
     public Description: string  = null
-    public CategoryID: number = null
+    public CategoryID: string = null
     public SQL: string = null
     public OriginalSQL: string = null
     public Feedback: string = null
@@ -55,8 +56,9 @@ export class QueryInfo extends BaseInfo {
 }
 
 export class QueryCategoryInfo extends BaseInfo {
+    public ID: string = null
     public Name: string = null
-    public ParentID: number = null
+    public ParentID: string = null
     public Description: string = null
     __mj_CreatedAt: Date = null
     __mj_UpdatedAt: Date = null
@@ -82,7 +84,7 @@ export class QueryCategoryInfo extends BaseInfo {
 
 export class QueryFieldInfo extends BaseInfo {
     Name: string = null
-    QueryID: number = null
+    QueryID: string = null
     Description: string = null
     Sequence: number = null
     /**
@@ -123,7 +125,7 @@ export class QueryFieldInfo extends BaseInfo {
 
 
 export class QueryPermissionInfo extends BaseInfo {
-    public QueryID: number = null
+    public QueryID: string = null
     public RoleName: string = null
 
     // virtual fields - returned by the database VIEW

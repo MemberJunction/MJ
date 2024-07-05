@@ -4,7 +4,7 @@ export type EntitySyncConfig = {
     /**
      * The ID of the entity document to use
      */
-    EntityDocumentID: number;
+    EntityDocumentID: string;
     /**
      * The time, in seconds, inbetween each run
      */
