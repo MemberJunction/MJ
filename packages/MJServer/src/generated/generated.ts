@@ -2,7 +2,7 @@
 * ALL ENTITIES - TypeGraphQL Type Class Definition - AUTO GENERATED FILE
 * Generated Entities and Resolvers for Server
 * 
-* GENERATED: 7/4/2024, 1:22:41 AM
+* GENERATED: 7/5/2024, 9:36:27 PM
 * 
 *   >>> DO NOT MODIFY THIS FILE!!!!!!!!!!!!
 *   >>> YOUR CHANGES WILL BE OVERWRITTEN
@@ -3309,6 +3309,10 @@ export class EntityResolverBase extends ResolverBase {
 @ObjectType({ description: 'A list of all users who have or had access to the system' })
 export class User_ {  
     @Field() 
+    @MaxLength(16)
+    ID: string;
+          
+    @Field() 
     @MaxLength(200)
     Name: string;
           
@@ -3340,6 +3344,10 @@ export class User_ {
     LinkedRecordType: string;
           
     @Field({nullable: true}) 
+    @MaxLength(16)
+    LinkedEntityID?: string;
+          
+    @Field({nullable: true}) 
     @MaxLength(900)
     LinkedEntityRecordID?: string;
           
@@ -3354,14 +3362,6 @@ export class User_ {
     @Field() 
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-          
-    @Field({nullable: true}) 
-    @MaxLength(16)
-    LinkedEntityID?: string;
-          
-    @Field() 
-    @MaxLength(16)
-    ID: string;
           
     @Field({nullable: true}) 
     @MaxLength(202)
@@ -3512,13 +3512,13 @@ export class CreateUserInput {
     LinkedRecordType: string;
 
     @Field({ nullable: true })
+    LinkedEntityID?: string;
+
+    @Field({ nullable: true })
     LinkedEntityRecordID?: string;
 
     @Field({ nullable: true })
     EmployeeID?: string;
-
-    @Field({ nullable: true })
-    LinkedEntityID?: string;
 }
     
         
@@ -3527,6 +3527,9 @@ export class CreateUserInput {
 //****************************************************************************
 @InputType()
 export class UpdateUserInput {
+    @Field()
+    ID: string;
+
     @Field()
     Name: string;
 
@@ -3552,16 +3555,13 @@ export class UpdateUserInput {
     LinkedRecordType: string;
 
     @Field({ nullable: true })
+    LinkedEntityID?: string;
+
+    @Field({ nullable: true })
     LinkedEntityRecordID?: string;
 
     @Field({ nullable: true })
     EmployeeID?: string;
-
-    @Field({ nullable: true })
-    LinkedEntityID?: string;
-
-    @Field()
-    ID: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -14940,7 +14940,8 @@ export class EntityDocument_ {
     Status: string;
           
     @Field({nullable: true}) 
-    Template?: string;
+    @MaxLength(16)
+    TemplateID?: string;
           
     @Field() 
     @MaxLength(16)
@@ -15000,7 +15001,7 @@ export class CreateEntityDocumentInput {
     Status: string;
 
     @Field({ nullable: true })
-    Template?: string;
+    TemplateID?: string;
 
     @Field()
     AIModelID: string;
@@ -15037,7 +15038,7 @@ export class UpdateEntityDocumentInput {
     Status: string;
 
     @Field({ nullable: true })
-    Template?: string;
+    TemplateID?: string;
 
     @Field()
     AIModelID: string;
@@ -21947,6 +21948,9 @@ export class Template_ {
     @Field(() => [mj_core_schema_server_object_types.TemplateParam_])
     TemplateParamsArray: mj_core_schema_server_object_types.TemplateParam_[]; // Link to TemplateParams
     
+    @Field(() => [mj_core_schema_server_object_types.EntityDocument_])
+    EntityDocumentsArray: mj_core_schema_server_object_types.EntityDocument_[]; // Link to EntityDocuments
+    
 }
         
 //****************************************************************************
@@ -22081,6 +22085,14 @@ export class TemplateResolver extends ResolverBase {
         this.CheckUserReadPermissions('Template Params', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwTemplateParams] WHERE [TemplateID]='${template_.ID}' ` + this.getRowLevelSecurityWhereClause('Template Params', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Template Params', await dataSource.query(sSQL));
+        return result;
+    }
+          
+    @FieldResolver(() => [mj_core_schema_server_object_types.EntityDocument_])
+    async EntityDocumentsArray(@Root() template_: Template_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Entity Documents', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityDocuments] WHERE [TemplateID]='${template_.ID}' ` + this.getRowLevelSecurityWhereClause('Entity Documents', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Entity Documents', await dataSource.query(sSQL));
         return result;
     }
         

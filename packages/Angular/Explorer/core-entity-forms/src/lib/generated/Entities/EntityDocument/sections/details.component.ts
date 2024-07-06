@@ -53,9 +53,11 @@ import { EntityDocumentEntity } from '@memberjunction/core-entities';
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="Template"
-            Type="textarea"
+            FieldName="TemplateID"
+            Type="textbox"
             [EditMode]="EditMode"
+            LinkType="Record"
+            LinkComponentType="Search"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
