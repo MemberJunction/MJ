@@ -2,6 +2,236 @@ import { BaseEntity, KeyValuePair, EntitySaveOptions, CompositeKey } from "@memb
 import { RegisterClass } from "@memberjunction/global";
     
     /**
+     * Scheduled Actions - strongly typed entity sub-class
+     * * Schema: __mj
+     * * Base Table: ScheduledAction
+     * * Base View: vwScheduledActions
+     * * @description Track scheduled actions and their details
+     * * Primary Key: ID
+     * @extends {BaseEntity}
+     * @class
+     * @public
+     */
+    @RegisterClass(BaseEntity, 'Scheduled Actions')
+    export class ScheduledActionEntity extends BaseEntity {
+        /**
+        * Loads the Scheduled Actions record from the database
+        * @param ID: string - primary key value to load the Scheduled Actions record.
+        * @param EntityRelationshipsToLoad - (optional) the relationships to load
+        * @returns {Promise<boolean>} - true if successful, false otherwise
+        * @public
+        * @async
+        * @memberof ScheduledActionEntity
+        * @method
+        * @override
+        */      
+        public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+        }
+        
+            /**
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
+        */
+        get ID(): string {  
+            return this.Get('ID');
+        }
+        
+        /**
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(255)
+        */
+        get Name(): string {  
+            return this.Get('Name');
+        }
+        set Name(value: string) {
+            this.Set('Name', value);
+        }
+        /**
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        */
+        get Description(): string | null {  
+            return this.Get('Description');
+        }
+        set Description(value: string | null) {
+            this.Set('Description', value);
+        }
+        /**
+        * * Field Name: CreatedByUserID
+        * * Display Name: Created By User ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Users (vwUsers.ID)
+        */
+        get CreatedByUserID(): string {  
+            return this.Get('CreatedByUserID');
+        }
+        set CreatedByUserID(value: string) {
+            this.Set('CreatedByUserID', value);
+        }
+        /**
+        * * Field Name: ActionID
+        * * Display Name: Action ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Actions (vwActions.ID)
+        */
+        get ActionID(): string {  
+            return this.Get('ActionID');
+        }
+        set ActionID(value: string) {
+            this.Set('ActionID', value);
+        }
+        /**
+        * * Field Name: Type
+        * * Display Name: Type
+        * * SQL Data Type: nvarchar(20)
+        * * Value List Type: List
+        * * Possible Values 
+        *   * Daily
+        *   * Weekly
+        *   * Monthly
+        *   * Yearly
+        *   * Custom
+        * * Description: Type of the scheduled action (Daily, Weekly, Monthly, Yearly, Custom)
+        */
+        get Type(): 'Daily' | 'Weekly' | 'Monthly' | 'Yearly' | 'Custom' {  
+            return this.Get('Type');
+        }
+        set Type(value: 'Daily' | 'Weekly' | 'Monthly' | 'Yearly' | 'Custom') {
+            this.Set('Type', value);
+        }
+        /**
+        * * Field Name: CronExpression
+        * * Display Name: Cron Expression
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Cron expression defining the schedule, automatically maintained by the system unless Type is Custom, in which case the user directly sets this
+        */
+        get CronExpression(): string | null {  
+            return this.Get('CronExpression');
+        }
+        set CronExpression(value: string | null) {
+            this.Set('CronExpression', value);
+        }
+        /**
+        * * Field Name: Timezone
+        * * Display Name: Timezone
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Timezone for the scheduled action, if not specified defaults to UTC/Z
+        */
+        get Timezone(): string {  
+            return this.Get('Timezone');
+        }
+        set Timezone(value: string) {
+            this.Set('Timezone', value);
+        }
+        /**
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Pending
+        * * Value List Type: List
+        * * Possible Values 
+        *   * Pending
+        *   * Active
+        *   * Disabled
+        *   * Expired
+        * * Description: Status of the scheduled action (Pending, Active, Disabled, Expired)
+        */
+        get Status(): 'Pending' | 'Active' | 'Disabled' | 'Expired' {  
+            return this.Get('Status');
+        }
+        set Status(value: 'Pending' | 'Active' | 'Disabled' | 'Expired') {
+            this.Set('Status', value);
+        }
+        /**
+        * * Field Name: IntervalDays
+        * * Display Name: Interval Days
+        * * SQL Data Type: int
+        * * Description: Interval in days for the scheduled action
+        */
+        get IntervalDays(): number | null {  
+            return this.Get('IntervalDays');
+        }
+        set IntervalDays(value: number | null) {
+            this.Set('IntervalDays', value);
+        }
+        /**
+        * * Field Name: DayOfWeek
+        * * Display Name: Day Of Week
+        * * SQL Data Type: nvarchar(20)
+        * * Description: Day of the week for the scheduled action
+        */
+        get DayOfWeek(): string | null {  
+            return this.Get('DayOfWeek');
+        }
+        set DayOfWeek(value: string | null) {
+            this.Set('DayOfWeek', value);
+        }
+        /**
+        * * Field Name: DayOfMonth
+        * * Display Name: Day Of Month
+        * * SQL Data Type: int
+        * * Description: Day of the month for the scheduled action
+        */
+        get DayOfMonth(): number | null {  
+            return this.Get('DayOfMonth');
+        }
+        set DayOfMonth(value: number | null) {
+            this.Set('DayOfMonth', value);
+        }
+        /**
+        * * Field Name: Month
+        * * Display Name: Month
+        * * SQL Data Type: nvarchar(20)
+        * * Description: Month for the scheduled action
+        */
+        get Month(): string | null {  
+            return this.Get('Month');
+        }
+        set Month(value: string | null) {
+            this.Set('Month', value);
+        }
+        /**
+        * * Field Name: CustomCronExpression
+        * * Display Name: Custom Cron Expression
+        * * SQL Data Type: nvarchar(255)
+        */
+        get CustomCronExpression(): string | null {  
+            return this.Get('CustomCronExpression');
+        }
+        set CustomCronExpression(value: string | null) {
+            this.Set('CustomCronExpression', value);
+        }
+        /**
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
+        */
+        get __mj_CreatedAt(): Date {  
+            return this.Get('__mj_CreatedAt');
+        }
+        
+        /**
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
+        */
+        get __mj_UpdatedAt(): Date {  
+            return this.Get('__mj_UpdatedAt');
+        }
+        
+
+    }
+        
+    /**
      * Companies - strongly typed entity sub-class
      * * Schema: __mj
      * * Base Table: Company

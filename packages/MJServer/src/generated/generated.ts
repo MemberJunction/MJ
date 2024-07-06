@@ -2,7 +2,7 @@
 * ALL ENTITIES - TypeGraphQL Type Class Definition - AUTO GENERATED FILE
 * Generated Entities and Resolvers for Server
 * 
-* GENERATED: 7/5/2024, 9:36:27 PM
+* GENERATED: 7/6/2024, 10:05:23 AM
 * 
 *   >>> DO NOT MODIFY THIS FILE!!!!!!!!!!!!
 *   >>> YOUR CHANGES WILL BE OVERWRITTEN
@@ -20,8 +20,251 @@ import { mj_core_schema } from '../config';
 
 import * as mj_core_schema_server_object_types from '@memberjunction/server'
 
-import { CompanyEntity, EmployeeEntity, UserFavoriteEntity, EmployeeCompanyIntegrationEntity, EmployeeRoleEntity, EmployeeSkillEntity, RoleEntity, SkillEntity, IntegrationURLFormatEntity, IntegrationEntity, CompanyIntegrationEntity, EntityFieldEntity, EntityEntity, UserEntity, EntityRelationshipEntity, UserRecordLogEntity, UserViewEntity, CompanyIntegrationRunEntity, CompanyIntegrationRunDetailEntity, ErrorLogEntity, ApplicationEntity, ApplicationEntityEntity, EntityPermissionEntity, UserApplicationEntityEntity, UserApplicationEntity, CompanyIntegrationRunAPILogEntity, ListEntity, ListDetailEntity, UserViewRunEntity, UserViewRunDetailEntity, WorkflowRunEntity, WorkflowEntity, WorkflowEngineEntity, RecordChangeEntity, UserRoleEntity, RowLevelSecurityFilterEntity, AuditLogEntity, AuthorizationEntity, AuthorizationRoleEntity, AuditLogTypeEntity, EntityFieldValueEntity, AIModelEntity, AIActionEntity, AIModelActionEntity, EntityAIActionEntity, AIModelTypeEntity, QueueTypeEntity, QueueEntity, QueueTaskEntity, DashboardEntity, OutputTriggerTypeEntity, OutputFormatTypeEntity, OutputDeliveryTypeEntity, ReportEntity, ReportSnapshotEntity, ResourceTypeEntity, TagEntity, TaggedItemEntity, WorkspaceEntity, WorkspaceItemEntity, DatasetEntity, DatasetItemEntity, ConversationDetailEntity, ConversationEntity, UserNotificationEntity, SchemaInfoEntity, CompanyIntegrationRecordMapEntity, RecordMergeLogEntity, RecordMergeDeletionLogEntity, QueryFieldEntity, QueryCategoryEntity, QueryEntity, QueryPermissionEntity, VectorIndexEntity, EntityDocumentTypeEntity, EntityDocumentRunEntity, VectorDatabaseEntity, EntityRecordDocumentEntity, EntityDocumentEntity, DataContextItemEntity, DataContextEntity, UserViewCategoryEntity, DashboardCategoryEntity, ReportCategoryEntity, FileStorageProviderEntity, FileEntity, FileCategoryEntity, FileEntityRecordLinkEntity, VersionInstallationEntity, DuplicateRunDetailMatchEntity, EntityDocumentSettingEntity, EntitySettingEntity, DuplicateRunEntity, DuplicateRunDetailEntity, ApplicationSettingEntity, ActionCategoryEntity, EntityActionEntity, EntityActionInvocationEntity, ActionAuthorizationEntity, EntityActionInvocationTypeEntity, ActionEntity, EntityActionFilterEntity, ActionFilterEntity, ActionContextTypeEntity, ActionResultCodeEntity, ActionContextEntity, ActionExecutionLogEntity, ActionParamEntity, ActionLibraryEntity, LibraryEntity, ListCategoryEntity, CommunicationProviderEntity, CommunicationRunEntity, CommunicationProviderMessageTypeEntity, CommunicationLogEntity, CommunicationBaseMessageTypeEntity, TemplateEntity, TemplateCategoryEntity, TemplateContentEntity, TemplateParamEntity, TemplateContentTypeEntity, RecommendationEntity, RecommendationProviderEntity, RecommendationRunEntity, RecommendationItemEntity, EntityCommunicationMessageTypeEntity, EntityCommunicationFieldEntity, RecordChangeReplayRunEntity, LibraryItemEntity, EntityRelationshipDisplayComponentEntity, EntityActionParamEntity } from '@memberjunction/core-entities';
+import { ScheduledActionEntity, CompanyEntity, EmployeeEntity, UserFavoriteEntity, EmployeeCompanyIntegrationEntity, EmployeeRoleEntity, EmployeeSkillEntity, RoleEntity, SkillEntity, IntegrationURLFormatEntity, IntegrationEntity, CompanyIntegrationEntity, EntityFieldEntity, EntityEntity, UserEntity, EntityRelationshipEntity, UserRecordLogEntity, UserViewEntity, CompanyIntegrationRunEntity, CompanyIntegrationRunDetailEntity, ErrorLogEntity, ApplicationEntity, ApplicationEntityEntity, EntityPermissionEntity, UserApplicationEntityEntity, UserApplicationEntity, CompanyIntegrationRunAPILogEntity, ListEntity, ListDetailEntity, UserViewRunEntity, UserViewRunDetailEntity, WorkflowRunEntity, WorkflowEntity, WorkflowEngineEntity, RecordChangeEntity, UserRoleEntity, RowLevelSecurityFilterEntity, AuditLogEntity, AuthorizationEntity, AuthorizationRoleEntity, AuditLogTypeEntity, EntityFieldValueEntity, AIModelEntity, AIActionEntity, AIModelActionEntity, EntityAIActionEntity, AIModelTypeEntity, QueueTypeEntity, QueueEntity, QueueTaskEntity, DashboardEntity, OutputTriggerTypeEntity, OutputFormatTypeEntity, OutputDeliveryTypeEntity, ReportEntity, ReportSnapshotEntity, ResourceTypeEntity, TagEntity, TaggedItemEntity, WorkspaceEntity, WorkspaceItemEntity, DatasetEntity, DatasetItemEntity, ConversationDetailEntity, ConversationEntity, UserNotificationEntity, SchemaInfoEntity, CompanyIntegrationRecordMapEntity, RecordMergeLogEntity, RecordMergeDeletionLogEntity, QueryFieldEntity, QueryCategoryEntity, QueryEntity, QueryPermissionEntity, VectorIndexEntity, EntityDocumentTypeEntity, EntityDocumentRunEntity, VectorDatabaseEntity, EntityRecordDocumentEntity, EntityDocumentEntity, DataContextItemEntity, DataContextEntity, UserViewCategoryEntity, DashboardCategoryEntity, ReportCategoryEntity, FileStorageProviderEntity, FileEntity, FileCategoryEntity, FileEntityRecordLinkEntity, VersionInstallationEntity, DuplicateRunDetailMatchEntity, EntityDocumentSettingEntity, EntitySettingEntity, DuplicateRunEntity, DuplicateRunDetailEntity, ApplicationSettingEntity, ActionCategoryEntity, EntityActionEntity, EntityActionInvocationEntity, ActionAuthorizationEntity, EntityActionInvocationTypeEntity, ActionEntity, EntityActionFilterEntity, ActionFilterEntity, ActionContextTypeEntity, ActionResultCodeEntity, ActionContextEntity, ActionExecutionLogEntity, ActionParamEntity, ActionLibraryEntity, LibraryEntity, ListCategoryEntity, CommunicationProviderEntity, CommunicationRunEntity, CommunicationProviderMessageTypeEntity, CommunicationLogEntity, CommunicationBaseMessageTypeEntity, TemplateEntity, TemplateCategoryEntity, TemplateContentEntity, TemplateParamEntity, TemplateContentTypeEntity, RecommendationEntity, RecommendationProviderEntity, RecommendationRunEntity, RecommendationItemEntity, EntityCommunicationMessageTypeEntity, EntityCommunicationFieldEntity, RecordChangeReplayRunEntity, LibraryItemEntity, EntityRelationshipDisplayComponentEntity, EntityActionParamEntity } from '@memberjunction/core-entities';
     
+
+//****************************************************************************
+// ENTITY CLASS for Scheduled Actions
+//****************************************************************************
+@ObjectType({ description: 'Track scheduled actions and their details' })
+export class ScheduledAction_ {  
+    @Field() 
+    @MaxLength(16)
+    ID: string;
+          
+    @Field() 
+    @MaxLength(510)
+    Name: string;
+          
+    @Field({nullable: true}) 
+    Description?: string;
+          
+    @Field() 
+    @MaxLength(16)
+    CreatedByUserID: string;
+          
+    @Field() 
+    @MaxLength(16)
+    ActionID: string;
+          
+    @Field({description: 'Type of the scheduled action (Daily, Weekly, Monthly, Yearly, Custom)'}) 
+    @MaxLength(40)
+    Type: string;
+          
+    @Field({nullable: true, description: 'Cron expression defining the schedule, automatically maintained by the system unless Type is Custom, in which case the user directly sets this'}) 
+    @MaxLength(200)
+    CronExpression?: string;
+          
+    @Field({description: 'Timezone for the scheduled action, if not specified defaults to UTC/Z'}) 
+    @MaxLength(200)
+    Timezone: string;
+          
+    @Field({description: 'Status of the scheduled action (Pending, Active, Disabled, Expired)'}) 
+    @MaxLength(40)
+    Status: string;
+          
+    @Field(() => Int, {nullable: true, description: 'Interval in days for the scheduled action'}) 
+    IntervalDays?: number;
+          
+    @Field({nullable: true, description: 'Day of the week for the scheduled action'}) 
+    @MaxLength(40)
+    DayOfWeek?: string;
+          
+    @Field(() => Int, {nullable: true, description: 'Day of the month for the scheduled action'}) 
+    DayOfMonth?: number;
+          
+    @Field({nullable: true, description: 'Month for the scheduled action'}) 
+    @MaxLength(40)
+    Month?: string;
+          
+    @Field({nullable: true}) 
+    @MaxLength(510)
+    CustomCronExpression?: string;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
+        
+}
+        
+//****************************************************************************
+// INPUT TYPE for Scheduled Actions   
+//****************************************************************************
+@InputType()
+export class CreateScheduledActionInput {
+    @Field()
+    Name: string;
+
+    @Field({ nullable: true })
+    Description?: string;
+
+    @Field()
+    CreatedByUserID: string;
+
+    @Field()
+    ActionID: string;
+
+    @Field()
+    Type: string;
+
+    @Field({ nullable: true })
+    CronExpression?: string;
+
+    @Field()
+    Timezone: string;
+
+    @Field()
+    Status: string;
+
+    @Field(() => Int, { nullable: true })
+    IntervalDays?: number;
+
+    @Field({ nullable: true })
+    DayOfWeek?: string;
+
+    @Field(() => Int, { nullable: true })
+    DayOfMonth?: number;
+
+    @Field({ nullable: true })
+    Month?: string;
+
+    @Field({ nullable: true })
+    CustomCronExpression?: string;
+}
+    
+        
+//****************************************************************************
+// INPUT TYPE for Scheduled Actions   
+//****************************************************************************
+@InputType()
+export class UpdateScheduledActionInput {
+    @Field()
+    ID: string;
+
+    @Field()
+    Name: string;
+
+    @Field({ nullable: true })
+    Description?: string;
+
+    @Field()
+    CreatedByUserID: string;
+
+    @Field()
+    ActionID: string;
+
+    @Field()
+    Type: string;
+
+    @Field({ nullable: true })
+    CronExpression?: string;
+
+    @Field()
+    Timezone: string;
+
+    @Field()
+    Status: string;
+
+    @Field(() => Int, { nullable: true })
+    IntervalDays?: number;
+
+    @Field({ nullable: true })
+    DayOfWeek?: string;
+
+    @Field(() => Int, { nullable: true })
+    DayOfMonth?: number;
+
+    @Field({ nullable: true })
+    Month?: string;
+
+    @Field({ nullable: true })
+    CustomCronExpression?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
+//****************************************************************************
+// RESOLVER for Scheduled Actions
+//****************************************************************************
+@ObjectType()
+export class RunScheduledActionViewResult {
+    @Field(() => [ScheduledAction_])
+    Results: ScheduledAction_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(ScheduledAction_)
+export class ScheduledActionResolver extends ResolverBase {
+    @Query(() => RunScheduledActionViewResult)
+    async RunScheduledActionViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunScheduledActionViewResult)
+    async RunScheduledActionViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunScheduledActionViewResult)
+    async RunScheduledActionDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        input.EntityName = 'Scheduled Actions';
+        return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
+    }
+    @Query(() => ScheduledAction_, { nullable: true })
+    async ScheduledAction(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ScheduledAction_ | null> {
+        this.CheckUserReadPermissions('Scheduled Actions', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwScheduledActions] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Scheduled Actions', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Scheduled Actions', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
+    }
+    
+    @Mutation(() => ScheduledAction_)
+    async CreateScheduledAction(
+        @Arg('input', () => CreateScheduledActionInput) input: CreateScheduledActionInput,
+        @Ctx() { dataSource, userPayload }: AppContext, 
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.CreateRecord('Scheduled Actions', input, dataSource, userPayload, pubSub)
+    }
+        
+    @Mutation(() => ScheduledAction_)
+    async UpdateScheduledAction(
+        @Arg('input', () => UpdateScheduledActionInput) input: UpdateScheduledActionInput,
+        @Ctx() { dataSource, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.UpdateRecord('Scheduled Actions', input, dataSource, userPayload, pubSub);
+    }
+    
+    @Mutation(() => ScheduledAction_)
+    async DeleteScheduledAction(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Scheduled Actions', key, options, dataSource, userPayload, pubSub);
+    }
+    
+}
 
 //****************************************************************************
 // ENTITY CLASS for Companies
@@ -3480,6 +3723,9 @@ export class User_ {
     @Field(() => [mj_core_schema_server_object_types.ListCategory_])
     ListCategoriesArray: mj_core_schema_server_object_types.ListCategory_[]; // Link to ListCategories
     
+    @Field(() => [mj_core_schema_server_object_types.ScheduledAction_])
+    ScheduledActionsArray: mj_core_schema_server_object_types.ScheduledAction_[]; // Link to ScheduledActions
+    
 }
         
 //****************************************************************************
@@ -3872,6 +4118,14 @@ export class UserResolverBase extends ResolverBase {
         this.CheckUserReadPermissions('List Categories', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwListCategories] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('List Categories', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('List Categories', await dataSource.query(sSQL));
+        return result;
+    }
+          
+    @FieldResolver(() => [mj_core_schema_server_object_types.ScheduledAction_])
+    async ScheduledActionsArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Scheduled Actions', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwScheduledActions] WHERE [CreatedByUserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('Scheduled Actions', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Scheduled Actions', await dataSource.query(sSQL));
         return result;
     }
         
@@ -19014,6 +19268,9 @@ export class Action_ {
     @Field(() => [mj_core_schema_server_object_types.ActionLibrary_])
     ActionLibrariesArray: mj_core_schema_server_object_types.ActionLibrary_[]; // Link to ActionLibraries
     
+    @Field(() => [mj_core_schema_server_object_types.ScheduledAction_])
+    ScheduledActionsArray: mj_core_schema_server_object_types.ScheduledAction_[]; // Link to ScheduledActions
+    
     @Field(() => [mj_core_schema_server_object_types.ActionResultCode_])
     ActionResultCodesArray: mj_core_schema_server_object_types.ActionResultCode_[]; // Link to ActionResultCodes
     
@@ -19211,6 +19468,14 @@ export class ActionResolver extends ResolverBase {
         this.CheckUserReadPermissions('Action Libraries', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionLibraries] WHERE [ActionID]='${action_.ID}' ` + this.getRowLevelSecurityWhereClause('Action Libraries', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Action Libraries', await dataSource.query(sSQL));
+        return result;
+    }
+          
+    @FieldResolver(() => [mj_core_schema_server_object_types.ScheduledAction_])
+    async ScheduledActionsArray(@Root() action_: Action_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Scheduled Actions', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwScheduledActions] WHERE [ActionID]='${action_.ID}' ` + this.getRowLevelSecurityWhereClause('Scheduled Actions', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Scheduled Actions', await dataSource.query(sSQL));
         return result;
     }
           
