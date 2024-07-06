@@ -64,6 +64,21 @@
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
+                    <mj-tab Name="Scheduled Actions" 
+                        [Visible]="record.IsSaved" 
+                        [Props]="{EntityRelationshipID: '2F05DA9F-A83B-EF11-86D4-0022481D1B23'}">
+                        Scheduled Actions
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Scheduled Actions')"  
+                            [NewRecordValues]="NewRecordValues('Scheduled Actions')"
+                            [AllowLoad]="IsCurrentTab('Scheduled Actions')"  
+                            [EditMode]="GridEditMode()"  
+                            [BottomMargin]="GridBottomMargin">
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
                     <mj-tab Name="Result Codes" 
                         [Visible]="record.IsSaved" 
                         [Props]="{EntityRelationshipID: '23D9B49F-51A7-48A6-BD14-78F56792B2B3'}">
