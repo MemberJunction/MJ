@@ -4,6 +4,7 @@
   "license": "ISC",
   "workspaces": [
     "packages/*",
+    "packages/Actions/*",
     "packages/AI/*",
     "packages/AI/Providers/*",
     "packages/AI/Recommendations/*",
