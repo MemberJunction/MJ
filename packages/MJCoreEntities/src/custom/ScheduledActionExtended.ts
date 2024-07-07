@@ -1,5 +1,5 @@
 import { EntitySaveOptions } from "@memberjunction/core";
-import { ScheduledActionEntity } from "../generated/entity_subclasses";
+import { ScheduledActionEntity, ScheduledActionParamEntity } from "../generated/entity_subclasses";
 
 export class ScheduledActionEntityExtended extends ScheduledActionEntity {
     public override async Save(options?: EntitySaveOptions): Promise<boolean> {
@@ -22,5 +22,13 @@ export class ScheduledActionEntityExtended extends ScheduledActionEntity {
         // does the cronexpression need to use the Timezone field we have?
         
         return await super.Save(options);
+    }
+
+    private _params: ScheduledActionParamEntity[] = [];
+    public get Params(): ScheduledActionParamEntity[] {
+        return this._params;
+    }
+    public set Params(value: ScheduledActionParamEntity[]) {
+        this._params = value;
     }
 }

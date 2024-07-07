@@ -232,6 +232,129 @@ import { RegisterClass } from "@memberjunction/global";
     }
         
     /**
+     * Scheduled Action Params - strongly typed entity sub-class
+     * * Schema: __mj
+     * * Base Table: ScheduledActionParam
+     * * Base View: vwScheduledActionParams
+     * * Primary Key: ID
+     * @extends {BaseEntity}
+     * @class
+     * @public
+     */
+    @RegisterClass(BaseEntity, 'Scheduled Action Params')
+    export class ScheduledActionParamEntity extends BaseEntity {
+        /**
+        * Loads the Scheduled Action Params record from the database
+        * @param ID: string - primary key value to load the Scheduled Action Params record.
+        * @param EntityRelationshipsToLoad - (optional) the relationships to load
+        * @returns {Promise<boolean>} - true if successful, false otherwise
+        * @public
+        * @async
+        * @memberof ScheduledActionParamEntity
+        * @method
+        * @override
+        */      
+        public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+        }
+        
+            /**
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
+        */
+        get ID(): string {  
+            return this.Get('ID');
+        }
+        
+        /**
+        * * Field Name: ScheduledActionID
+        * * Display Name: Scheduled Action ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Scheduled Actions (vwScheduledActions.ID)
+        */
+        get ScheduledActionID(): string {  
+            return this.Get('ScheduledActionID');
+        }
+        set ScheduledActionID(value: string) {
+            this.Set('ScheduledActionID', value);
+        }
+        /**
+        * * Field Name: ActionParamID
+        * * Display Name: Action Param ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Action Params (vwActionParams.ID)
+        */
+        get ActionParamID(): string {  
+            return this.Get('ActionParamID');
+        }
+        set ActionParamID(value: string) {
+            this.Set('ActionParamID', value);
+        }
+        /**
+        * * Field Name: ValueType
+        * * Display Name: Value Type
+        * * SQL Data Type: nvarchar(20)
+        * * Value List Type: List
+        * * Possible Values 
+        *   * Static
+        *   * SQL Statement
+        */
+        get ValueType(): 'Static' | 'SQL Statement' {  
+            return this.Get('ValueType');
+        }
+        set ValueType(value: 'Static' | 'SQL Statement') {
+            this.Set('ValueType', value);
+        }
+        /**
+        * * Field Name: Value
+        * * Display Name: Value
+        * * SQL Data Type: nvarchar(MAX)
+        */
+        get Value(): string | null {  
+            return this.Get('Value');
+        }
+        set Value(value: string | null) {
+            this.Set('Value', value);
+        }
+        /**
+        * * Field Name: Comments
+        * * Display Name: Comments
+        * * SQL Data Type: nvarchar(MAX)
+        */
+        get Comments(): string | null {  
+            return this.Get('Comments');
+        }
+        set Comments(value: string | null) {
+            this.Set('Comments', value);
+        }
+        /**
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
+        */
+        get __mj_CreatedAt(): Date {  
+            return this.Get('__mj_CreatedAt');
+        }
+        
+        /**
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
+        */
+        get __mj_UpdatedAt(): Date {  
+            return this.Get('__mj_UpdatedAt');
+        }
+        
+
+    }
+        
+    /**
      * Companies - strongly typed entity sub-class
      * * Schema: __mj
      * * Base Table: Company
