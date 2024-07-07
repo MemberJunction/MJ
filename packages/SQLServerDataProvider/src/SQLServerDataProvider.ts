@@ -189,6 +189,9 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
                 if (params.IgnoreMaxRows === true) {
                     // do nothing, leave it blank, this structure is here to make the code easier to read
                 }
+                else if (params.OffsetRows !== undefined) {
+                  // do nothing, since pagination is incompatible with TOP
+                }
                 else if (params.MaxRows && params.MaxRows > 0 && typeof params.OffsetRows !== 'number') {
                     // user provided a max rows, so we use that
                     topSQL = 'TOP ' + params.MaxRows;
@@ -293,8 +296,10 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
                 // figure out the sorting for the view
                 // first check params.OrderBy, that takes first priority
                 // if that's not provided, then we check the view definition for its SortState
+                // next check for pagination via params.OffsetRows and default to order by null
                 // if that's not provided we do NOT sort
-                const orderBy: string = params.OrderBy ? params.OrderBy : (viewEntity ? viewEntity.OrderByClause : '');
+                const orderBy: string =
+                  params.OrderBy ?? viewEntity?.OrderByClause ?? params.OffsetRows !== undefined ? '(SELECT NULL)' : '';
 
                 // if we're saving the view results, we need to wrap the entire SQL statement
                 if (viewEntity?.ID && viewEntity?.ID > 0 && saveViewResults && user) {
@@ -315,11 +320,8 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
 
                 // if we have an OffsetRows, we need to add that to the viewSQL
                 // this allows paging of the results, but is only stable if the results are ordered
-                if (typeof params.OffsetRows === 'number' && params.OffsetRows > 0) {
-                    viewSQL += ` OFFSET ${params.OffsetRows} ROWS`;
-                    if (params.MaxRows && params.MaxRows > 0) {
-                        viewSQL += ` FETCH NEXT ${params.MaxRows} ROWS ONLY`;
-                    }
+                if (params.OffsetRows !== undefined && params.MaxRows) {
+                    viewSQL += ` OFFSET ${Math.max(0, params.OffsetRows)} ROWS FETCH NEXT ${Math.max(0, params.MaxRows)} ROWS ONLY`;
                 }
 
                 // now we can run the viewSQL, but only do this if the ResultType !== 'count_only', otherwise we don't need to run the viewSQL
@@ -591,9 +593,6 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
         const entityInfo = this.Entities.find((e) => e.Name === entityName);
         if (!contextUser)
             throw new Error(`contextUser is null`);
-
-    // if ID is system user sentinel value, then we're running as the system user and we can skip the permission check
-    if (contextUser.ID === Number.MIN_SAFE_INTEGER) return;        
 
         // first check permissions, the logged in user must have read permissions on the entity to run the view
         if (entityInfo) {

@@ -60,15 +60,14 @@ export class VectorBase {
       throw new Error(`Entity with ID ${entityID} not found.`);
     }
 
-    const rvResult = await this._runView.RunView<BaseEntity>(
-      {
-        EntityName: entity.Name,
-        ResultType: 'entity_object',
-        MaxRows: pageSize,
-        OffsetRows: (pageNumber - 1) * pageSize,
-      },
-      this.CurrentUser
-    );
+    const params = {
+      EntityName: entity.Name,
+      ResultType: 'entity_object' as const,
+      MaxRows: pageSize,
+      OffsetRows: Math.max(0, (pageNumber - 1) * pageSize),
+    };
+
+    const rvResult = await this._runView.RunView<BaseEntity>(params, this.CurrentUser);
 
     if (!rvResult.Success) {
       throw new Error(rvResult.ErrorMessage);

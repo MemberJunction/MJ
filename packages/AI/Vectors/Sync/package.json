@@ -11,6 +11,7 @@
   "scripts": {
     "start": "ts-node-dev src/index.ts",
     "build": "tsc",
+    "watch": "tsc -w",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "author": "MemberJunction.com",

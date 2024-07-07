@@ -11,6 +11,8 @@ import { VectorSyncRequest } from '../generic/vectorSync.types';
 import { BatchWorker } from './BatchWorker';
 import { EntityDocumentCache } from './EntityDocumentCache';
 import { PagedRecords } from './PagedRecords';
+import { resolve } from 'node:path';
+import { PassThrough } from 'node:stream';
 
 export type ArchiveWorkerContext = {
   executionId: number;
@@ -47,35 +49,47 @@ export class EntityVectorSyncer extends VectorBase {
 
     //small number in the hopes we dont hit embedding token limits
     const pageSize: number = 2;
-    let pageNumber = 0;
 
     const dataStream = new PagedRecords();
-    const annotator = new BatchWorker({ workerFile: './annotationWorker.js', batchSize: 4, concurrencyLimit: 2 });
-    const archiver = new BatchWorker({
-      workerFile: './archiveWorker.js',
-      batchSize: 4,
-      workerContext: {
-        executionId: Date.now(),
-        entity,
-        entityDocument,
-      },
+    const workerContext = { executionId: Date.now(), entity, entityDocument };
+    const annotator = new BatchWorker({
+      workerFile: resolve(__dirname, 'workers/annotationWorker.js'),
+      batchSize: 3,
+      concurrencyLimit: 2,
+      workerContext,
     });
+    const archiver = new BatchWorker({ workerFile: resolve(__dirname, 'workers/archiveWorker.js'), batchSize: 4, workerContext });
 
-    // we'll need to await this at the end
-    const pipelinePromise = pipeline(dataStream, annotator, archiver);
+    const getData = async () => {
+      let pageNumber = 0;
+      let hasMore = true;
+      while (hasMore) {
+        console.log('-- fetching page:', pageNumber);
+        const recordsPage: Array<BaseEntity> = await super.pageRecordsByEntityID(request.entityID, { pageNumber, pageSize });
+        console.log('page fetched', recordsPage.length);
+        const items = recordsPage.map((e) => e.GetAll());
+        console.log('adding page to data stream', items);
+        console.table(items);
+        dataStream.addPage(items);
+        if (recordsPage.length < pageSize) {
+          hasMore = false;
+          break;
+        }
+        // testing onlny
+        if (pageNumber > 3) {
+          hasMore = false;
+          break;
+        }
+        pageNumber++;
+      }
+      dataStream.endStream();
+    };
 
-    let recordsPage: Array<BaseEntity> = await super.pageRecordsByEntityID(request.entityID, { pageNumber, pageSize });
-    dataStream.addPage(recordsPage);
-    while (recordsPage.length === pageSize /* for testing only */ && pageNumber < 3) {
-      pageNumber++;
-      recordsPage = await super.pageRecordsByEntityID(request.entityID, { pageNumber, pageSize });
-      dataStream.addPage(recordsPage);
-    }
-    dataStream.endStream();
+    // page data asynchrounously and add to the data stream
+    getData();
 
-    await pipelinePromise;
-
-    // page through the results until there are no more, adding each page to the page queue
+    console.log('Starting pipeline');
+    await pipeline(dataStream, annotator, archiver, new PassThrough({ objectMode: true }));
 
     // const chunks: BaseEntity[][] = this.chunkArray(allrecords, batchSize);
     // LogStatus(`Processing ${allrecords.length} records in ${chunks.length} chunks of ${batchSize} records each`);
@@ -301,6 +315,7 @@ export class EntityVectorSyncer extends VectorBase {
         return null;
       }
     } catch (err) {
+      console.error(JSON.stringify(err));
       LogError(err);
       return null;
     }

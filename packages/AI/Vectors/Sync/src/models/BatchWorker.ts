@@ -58,7 +58,7 @@ export class BatchWorker<TRecord = Record<string, unknown>, TContext = Record<st
   _next() {
     if (this._queue.length > 0 && this._running < this._concurrencyLimit) {
       const task = this._queue.shift();
-      task && task();
+      task && task().then(() => this._next());
     }
   }
 
