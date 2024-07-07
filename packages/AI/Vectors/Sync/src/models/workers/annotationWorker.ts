@@ -1,12 +1,11 @@
-const { parentPort, threadId, workerData } = require('node:worker_threads');
+import { parentPort, threadId, workerData } from 'node:worker_threads';
+import type { ArchiveWorkerContext } from '../entityVectorSync';
+import type { WorkerData } from '../BatchWorker';
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 async function main() {
-  /**
-   * @type {import('../BatchWorker.js').WorkerData<{ executionId: string }, Record<string, unknown>>}
-   */
-  const { batch, context } = workerData;
+  const { batch, context } = workerData as WorkerData<ArchiveWorkerContext>;
   const startTime = Date.now();
   console.log('\t##### Annotator started #####', { threadId, now: Date.now() % 10_000, elapsed: Date.now() - context.executionId });
 

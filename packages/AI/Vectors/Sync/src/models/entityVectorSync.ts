@@ -20,6 +20,12 @@ export type ArchiveWorkerContext = {
   entityDocument: EntityDocumentEntity;
 };
 
+export type AnnotateWorkerContext = {
+  executionId: number;
+  entity: BaseEntity;
+  entityDocument: EntityDocumentEntity;
+};
+
 export class EntityVectorSyncer extends VectorBase {
   _startTime: Date;
   _endTime: Date;
@@ -64,12 +70,8 @@ export class EntityVectorSyncer extends VectorBase {
       let pageNumber = 0;
       let hasMore = true;
       while (hasMore) {
-        console.log('-- fetching page:', pageNumber);
         const recordsPage: Array<BaseEntity> = await super.pageRecordsByEntityID(request.entityID, { pageNumber, pageSize });
-        console.log('page fetched', recordsPage.length);
         const items = recordsPage.map((e) => e.GetAll());
-        console.log('adding page to data stream', items);
-        console.table(items);
         dataStream.addPage(items);
         if (recordsPage.length < pageSize) {
           hasMore = false;

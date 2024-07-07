@@ -1,22 +1,16 @@
-const { parentPort, threadId, workerData } = require('node:worker_threads');
-const { resolve } = require('node:path');
-const { writeFileSync } = require('node:fs');
+import { parentPort, threadId, workerData } from 'node:worker_threads';
+import { resolve } from 'node:path';
+import { writeFileSync } from 'node:fs';
+import type { ArchiveWorkerContext } from '../entityVectorSync'
+import type { WorkerData } from '../BatchWorker';
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-/**
- * @typedef {import('../entityVectorSync').ArchiveWorkerContext} ArchiveWorkerContext
- * @typedef {import('../BatchWorker').WorkerData<ArchiveWorkerContext>} WorkerData
- */
-
 async function main() {
-  /**
-   * @type WorkerData
-   */
-  const { batch, context } = workerData;
+  const { batch, context } = workerData as WorkerData<ArchiveWorkerContext>;
   const startTime = Date.now();
   console.log('\t##### Archiver started #####', { threadId, now: Date.now() % 10_000, elapsed: Date.now() - context.executionId });
-  const filename = resolve(__dirname, `archived_${context.executionId}_${threadId}.log`);
+  const filename = resolve(`archived_${context.executionId}_${threadId}.log`);
   console.log(`Archiving ${batch.length} records to ${filename}`);
   await sleep(Math.random() * 1300 + 600); // simulate an API call to storage service
   writeFileSync(filename, batch.map((row) => JSON.stringify(row)).join('\n'));

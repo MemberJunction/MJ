@@ -18,9 +18,8 @@
     "noFallthroughCasesInSwitch": true,
     "allowSyntheticDefaultImports": true,
     "emitDecoratorMetadata": true,
-    "skipLibCheck": true,
-    "allowJs": true
+    "skipLibCheck": true
   },
   "exclude": ["node_modules"],
-  "include": ["./src/**/*.ts", "./src/**/workers/*.js"]
+  "include": ["./src/**/*.ts"]
 }
