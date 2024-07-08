@@ -262,7 +262,6 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 }
 
                 const fieldList = this.getViewRunTimeFieldList(e, viewEntity, params, dynamicView);
-           
                 const query = gql`
                     query RunViewQuery ($input: ${paramType}!) {
                     ${qName}(input: $input) {
