@@ -69,6 +69,15 @@ import { UserEntity } from '@memberjunction/core-entities';
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
+            FieldName="LinkedEntityID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            LinkType="Record"
+            LinkComponentType="Search"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
             FieldName="LinkedEntityRecordID"
             Type="textarea"
             [EditMode]="EditMode"
@@ -95,15 +104,6 @@ import { UserEntity } from '@memberjunction/core-entities';
             FieldName="__mj_UpdatedAt"
             Type="textbox"
             [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="LinkedEntityID"
-            Type="textbox"
-            [EditMode]="EditMode"
-            LinkType="Record"
-            LinkComponentType="Search"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"

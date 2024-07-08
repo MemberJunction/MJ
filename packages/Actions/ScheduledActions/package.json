@@ -1,7 +1,7 @@
 {
-  "name": "@memberjunction/core-actions",
+  "name": "@memberjunction/scheduled-actions",
   "version": "1.8.1",
-  "description": "Library of generated and custom actions for the core MemberJunction framework. This library is maintained by MemberJunction and includes actions for use within the framework itself.",
+  "description": "Scheduled Actions allow a system administrator to take any action defined in MemberJunction and schedule it for recurring or one-time future execution.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": [
@@ -23,6 +23,7 @@
     "@memberjunction/core": "1.8.1",
     "@memberjunction/core-entities": "1.8.1",
     "@memberjunction/actions": "1.8.1",
-    "@memberjunction/communication-engine": "1.8.1"
+    "@memberjunction/sqlserver-dataprovider": "1.8.1",
+    "cron-parser": "^4.9.0"
   }
 }

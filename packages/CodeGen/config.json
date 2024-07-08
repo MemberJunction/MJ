@@ -18,7 +18,7 @@
         },
         {
             "name": "skip_database_generation",
-            "value": true
+            "value": false
         }
     ],
     "logging": {
@@ -178,7 +178,7 @@
         },
         {
             "type": "CoreActionSubclasses",
-            "directory": "../CoreActions/src/generated"
+            "directory": "../Actions/CoreActions/src/generated"
         },
         {
             "type": "ActionSubclasses",
@@ -217,7 +217,7 @@
             "when": "after"
         },
         {
-            "workingDirectory": "../CoreActions",
+            "workingDirectory": "../Actions/CoreActions",
             "command": "npm",
             "args": [
                 "run",

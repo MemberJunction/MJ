@@ -1,11 +1,11 @@
 import { Component, Input } from '@angular/core';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormSectionComponent } from '@memberjunction/ng-base-forms';
-import { EntityDocumentEntity } from '@memberjunction/core-entities';
+import { ScheduledActionEntity } from '@memberjunction/core-entities';
 
-@RegisterClass(BaseFormSectionComponent, 'Entity Documents.details') // Tell MemberJunction about this class 
+@RegisterClass(BaseFormSectionComponent, 'Scheduled Actions.details') // Tell MemberJunction about this class 
 @Component({
-    selector: 'gen-entitydocument-form-details',
+    selector: 'gen-scheduledaction-form-details',
     styleUrls: ['../../../../../shared/form-styles.css'],
     template: `<div *ngIf="this.record">
     <div class="record-form">
@@ -19,7 +19,14 @@ import { EntityDocumentEntity } from '@memberjunction/core-entities';
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="TypeID"
+            FieldName="Description"
+            Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="CreatedByUserID"
             Type="textbox"
             [EditMode]="EditMode"
             LinkType="Record"
@@ -28,7 +35,7 @@ import { EntityDocumentEntity } from '@memberjunction/core-entities';
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="EntityID"
+            FieldName="ActionID"
             Type="textbox"
             [EditMode]="EditMode"
             LinkType="Record"
@@ -37,11 +44,23 @@ import { EntityDocumentEntity } from '@memberjunction/core-entities';
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="VectorDatabaseID"
+            FieldName="Type"
+            Type="dropdownlist"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="CronExpression"
             Type="textbox"
             [EditMode]="EditMode"
-            LinkType="Record"
-            LinkComponentType="Search"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Timezone"
+            Type="textbox"
+            [EditMode]="EditMode"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -53,33 +72,36 @@ import { EntityDocumentEntity } from '@memberjunction/core-entities';
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="TemplateID"
-            Type="textbox"
-            [EditMode]="EditMode"
-            LinkType="Record"
-            LinkComponentType="Search"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="AIModelID"
-            Type="textbox"
-            [EditMode]="EditMode"
-            LinkType="Record"
-            LinkComponentType="Search"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="PotentialMatchThreshold"
+            FieldName="IntervalDays"
             Type="numerictextbox"
             [EditMode]="EditMode"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="AbsoluteMatchThreshold"
+            FieldName="DayOfWeek"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="DayOfMonth"
             Type="numerictextbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Month"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="CustomCronExpression"
+            Type="textarea"
             [EditMode]="EditMode"
         ></mj-form-field>
         <mj-form-field 
@@ -96,31 +118,17 @@ import { EntityDocumentEntity } from '@memberjunction/core-entities';
             Type="textbox"
             [EditMode]="EditMode"
         ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="Type"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="Entity"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
 
     </div>
 </div>
     `
 })
-export class EntityDocumentDetailsComponent extends BaseFormSectionComponent {
-    @Input() override record!: EntityDocumentEntity;
+export class ScheduledActionDetailsComponent extends BaseFormSectionComponent {
+    @Input() override record!: ScheduledActionEntity;
     @Input() override EditMode: boolean = false;
 }
 
-export function LoadEntityDocumentDetailsComponent() {
+export function LoadScheduledActionDetailsComponent() {
     // does nothing, but called in order to prevent tree-shaking from eliminating this component from the build
 }
       
