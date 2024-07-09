@@ -10,26 +10,26 @@ import { UserFavorite_, UserFavoriteResolverBase } from '../generated/generated'
 //****************************************************************************
 @InputType()
 export class UserFavoriteSearchParams {
-  @Field(() => Int)
-  EntityID: number;
+  @Field(() => String)
+  EntityID: string;
 
   @Field(() => CompositeKeyInputType)
   CompositeKey: CompositeKeyInputType;
 
-  @Field(() => Int)
-  UserID: number;
+  @Field(() => String)
+  UserID: string;
 }
 
 @InputType()
 export class UserFavoriteSetParams {
-  @Field(() => Int)
-  EntityID: number;
+  @Field(() => String)
+  EntityID: string;
 
   @Field(() => CompositeKeyInputType)
   CompositeKey: CompositeKeyInputType;
 
-  @Field(() => Int)
-  UserID: number;
+  @Field(() => String)
+  UserID: string;
 
   @Field(() => Boolean)
   IsFavorite: boolean;

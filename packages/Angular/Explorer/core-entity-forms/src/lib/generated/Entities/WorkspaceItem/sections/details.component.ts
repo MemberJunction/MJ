@@ -26,8 +26,8 @@ import { WorkspaceItemEntity } from '@memberjunction/core-entities';
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="WorkSpaceID"
-            Type="numerictextbox"
+            FieldName="WorkspaceID"
+            Type="textbox"
             [EditMode]="EditMode"
             LinkType="Record"
             LinkComponentType="Search"
@@ -36,7 +36,7 @@ import { WorkspaceItemEntity } from '@memberjunction/core-entities';
             [record]="record"
             [ShowLabel]="true"
             FieldName="ResourceTypeID"
-            Type="numerictextbox"
+            Type="textbox"
             [EditMode]="EditMode"
             LinkType="Record"
             LinkComponentType="Search"
@@ -79,7 +79,7 @@ import { WorkspaceItemEntity } from '@memberjunction/core-entities';
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="WorkSpace"
+            FieldName="Workspace"
             Type="textbox"
             [EditMode]="EditMode"
         ></mj-form-field>

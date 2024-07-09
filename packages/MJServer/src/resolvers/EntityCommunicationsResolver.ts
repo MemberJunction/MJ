@@ -168,7 +168,7 @@ export class RunEntityCommunicationResultType {
 @Resolver(RunEntityCommunicationResultType)
 export class ReportResolver { 
   @Query(() => RunEntityCommunicationResultType)
-  async RunEntityCommunicationByViewID( @Arg('entityID', () => Int) entityID: number, 
+  async RunEntityCommunicationByViewID( @Arg('entityID', () => String) entityID: string, 
                                                @Arg('runViewByIDInput', () => RunViewByIDInput) runViewByIDInput: RunViewByIDInput, 
                                                @Arg('providerName', () => String) providerName: string, 
                                                @Arg('providerMessageTypeName', () => String) providerMessageTypeName: string, 

@@ -250,8 +250,8 @@ export class Run${entity.BaseTableCodeName}ViewResult {
     @Field(() => [${serverGraphQLTypeName}])
     Results: ${serverGraphQLTypeName}[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;

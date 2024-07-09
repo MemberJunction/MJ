@@ -18,7 +18,7 @@ export class VectorBase {
     public get CurrentUser(): UserInfo { return this._currentUser; }
     public set CurrentUser(user: UserInfo) { this._currentUser = user; }
 
-    protected async getRecordsByEntityID(entityID: number, recordIDs?: CompositeKey[]): Promise<BaseEntity[]> {
+    protected async getRecordsByEntityID(entityID: string, recordIDs?: CompositeKey[]): Promise<BaseEntity[]> {
         const md = new Metadata();
         const entity = md.Entities.find(e => e.ID === entityID);
         if (!entity){
@@ -47,14 +47,13 @@ export class VectorBase {
         }).join("\n OR ");
     }
 
-    protected getAIModel(id?: number): AIModelEntityExtended {
-        /*elim this hardcoding by adding virtual field for Type to AI Models entity*/
+    protected getAIModel(id?: string): AIModelEntityExtended {
         let model: AIModelEntityExtended;
         if(id){
-            model = AIEngine.Models.find(m => m.AIModelTypeID === 3 && m.ID === id);
+            model = AIEngine.Models.find(m => m.AIModelType === "Embeddings" && m.ID === id);
         }
         else{
-            model = AIEngine.Models.find(m => m.AIModelTypeID === 3);
+            model = AIEngine.Models.find(m => m.AIModelType === "Embeddings");
         }
 
         if(!model){
@@ -63,7 +62,7 @@ export class VectorBase {
         return model;
     }
 
-    protected getVectorDatabase(id?: number): VectorDatabaseEntity {
+    protected getVectorDatabase(id?: string): VectorDatabaseEntity {
         if(AIEngine.VectorDatabases.length > 0){
             if(id){
                 let vectorDB = AIEngine.VectorDatabases.find(vd => vd.ID === id);

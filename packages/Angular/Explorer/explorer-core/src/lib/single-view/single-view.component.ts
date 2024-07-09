@@ -16,7 +16,7 @@ import { SharedService } from '@memberjunction/ng-shared';
 export class SingleViewComponent implements AfterViewInit, OnInit  {
   @ViewChild(UserViewGridWithAnalysisComponent, {static: true}) viewGridWithAnalysis!: UserViewGridWithAnalysisComponent;
 
-  @Input() public viewId: number | null = null;
+  @Input() public viewId: string | null = null;
   @Input() public viewName: string| null = null;
   @Input() public selectedView: UserViewEntity | null = null;
   @Input() public extraFilter: string | null = null;
@@ -92,7 +92,7 @@ export class SingleViewComponent implements AfterViewInit, OnInit  {
 
   public async LoadView(viewInfo: UserViewEntity) {
     // load up the view
-    if (viewInfo && viewInfo.ID && viewInfo.ID > 0)
+    if (viewInfo && viewInfo.ID && viewInfo.ID.length > 0)
       this.selectedView = viewInfo
       await this.viewGridWithAnalysis.Refresh({
         ViewEntity: viewInfo,

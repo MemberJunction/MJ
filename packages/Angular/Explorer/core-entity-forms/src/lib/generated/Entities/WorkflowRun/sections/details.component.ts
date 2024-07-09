@@ -12,7 +12,7 @@ import { WorkflowRunEntity } from '@memberjunction/core-entities';
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="WorkflowName"
+            FieldName="WorkflowID"
             Type="textbox"
             [EditMode]="EditMode"
             LinkType="Record"
@@ -22,7 +22,7 @@ import { WorkflowRunEntity } from '@memberjunction/core-entities';
             [record]="record"
             [ShowLabel]="true"
             FieldName="ExternalSystemRecordID"
-            Type="textbox"
+            Type="textarea"
             [EditMode]="EditMode"
         ></mj-form-field>
         <mj-form-field 

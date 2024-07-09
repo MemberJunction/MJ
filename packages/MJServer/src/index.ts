@@ -42,7 +42,6 @@ export * from './directives';
 export * from './entitySubclasses/userViewEntity.server';
 export * from './entitySubclasses/entityPermissions.server';
 export * from './entitySubclasses/DuplicateRunEntity.server';
-export * from './entitySubclasses/EntityBehavior.server';
 export * from './types';
 export { TokenExpiredError } from './auth';
 

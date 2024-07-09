@@ -5,7 +5,7 @@
                         [disabled]="isCreatingReport"
                         class="create-report-button">Create Report</button>
     <div *ngIf="matchingReportID!==null" class="report-link" (click)="clickMatchingReport()">Report: {{matchingReportName}} (ID: {{matchingReportID}}) Created From This Message</div>
-    @if (ReportEntity && ReportEntity.ID > 0) {
+    @if (ReportEntity && ReportEntity.ID.length > 0) {
       <div class="report-tab-toolbar">
         <kendo-button (click)="doRefreshReport()">Refresh</kendo-button>
       </div>  

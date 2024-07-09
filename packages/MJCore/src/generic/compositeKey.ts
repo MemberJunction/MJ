@@ -298,6 +298,10 @@ export class FieldValueCollection {
  * Composite keys are used to represent database keys and can include one or more key value pairs.
  */
 export class CompositeKey extends FieldValueCollection {
+    constructor(keyValuePairs?: KeyValuePair[]) {
+        super(keyValuePairs);
+    }
+
     /**
     * Utility function to compare this composite key to another
     * @param compositeKey the composite key to compare against

@@ -12,7 +12,8 @@ import { BaseEntity, IEntityDataProvider, IMetadataProvider, IRunViewProvider, P
          StripStopWords, RecordDependency, RecordMergeRequest, RecordMergeResult, RecordMergeDetailResult, EntityDependency, KeyValuePair, IRunQueryProvider, RunQueryResult, PotentialDuplicateRequest, PotentialDuplicateResponse, LogStatus,
          CompositeKey,
          EntityDeleteOptions,
-         BaseEntityResult} from "@memberjunction/core";
+         BaseEntityResult,
+         Metadata} from "@memberjunction/core";
 
 import { AuditLogEntity, DuplicateRunEntity, EntityAIActionEntity, ListEntity, RecordMergeDeletionLogEntity, RecordMergeLogEntity, UserFavoriteEntity, UserViewEntityExtended, ViewInfo } from '@memberjunction/core-entities'
 import { AIEngine, EntityAIActionParams } from "@memberjunction/aiengine";
@@ -155,7 +156,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
                 let viewEntity: any = null, entityInfo: EntityInfo = null;
                 if (params.ViewEntity) 
                     viewEntity = params.ViewEntity;
-                else if (params.ViewID && params.ViewID > 0) 
+                else if (params.ViewID && params.ViewID.length > 0) 
                     viewEntity = await ViewInfo.GetViewEntity(params.ViewID, contextUser);
                 else if (params.ViewName && params.ViewName.length > 0) 
                     viewEntity = await ViewInfo.GetViewEntityByName(params.ViewName, contextUser);
@@ -181,7 +182,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
                 // get other variaables from params
                 const extraFilter: string = params.ExtraFilter
                 const userSearchString: string = params.UserSearchString;
-                const excludeUserViewRunID: number = params.ExcludeUserViewRunID;
+                const excludeUserViewRunID: string = params.ExcludeUserViewRunID;
                 const overrideExcludeFilter: string = params.OverrideExcludeFilter;
                 const saveViewResults: boolean = params.SaveViewResults;
 
@@ -203,7 +204,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
                 let countSQL = topSQL && topSQL.length > 0 ? `SELECT COUNT(*) AS TotalRowCount FROM [${entityInfo.SchemaName}].${entityInfo.BaseView}` : null;
                 let whereSQL: string = '';
                 let bHasWhere: boolean = false;
-                let userViewRunID: number = 0;
+                let userViewRunID: string = "";
 
                 // The view may have a where clause that is part of the view definition. If so, we need to add it to the SQL
                 if (viewEntity?.WhereClause && viewEntity?.WhereClause.length > 0) {
@@ -244,10 +245,10 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
                 
                 // now, check for an exclude UserViewRunID, or exclusion of ALL prior runs
                 // if provided, we need to exclude the records that were part of that run (or all prior runs)
-                if ((excludeUserViewRunID && excludeUserViewRunID > 0) || 
+                if ((excludeUserViewRunID && excludeUserViewRunID.length > 0) || 
                     (params.ExcludeDataFromAllPriorViewRuns === true) ) {
                     
-                    let sExcludeSQL: string = `ID NOT IN (SELECT RecordID FROM [${this.MJCoreSchemaName}].vwUserViewRunDetails WHERE EntityID=${viewEntity.EntityID} AND` 
+                    let sExcludeSQL: string = `ID NOT IN (SELECT RecordID FROM [${this.MJCoreSchemaName}].vwUserViewRunDetails WHERE EntityID='${viewEntity.EntityID}' AND` 
                     if (params.ExcludeDataFromAllPriorViewRuns === true)
                         sExcludeSQL += ` UserViewID=${viewEntity.ID})`; // exclude ALL prior runs for this view, we do NOT need to also add the UserViewRunID even if it was provided because this will automatically filter that out too
                     else
@@ -362,7 +363,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
                 RowCount: 0,
                 TotalRowCount: 0,
                 Results: [],
-                UserViewRunID: 0,
+                UserViewRunID: "",
                 ExecutionTime: exceptionStopTime.getTime()-startTime.getTime(),
                 Success: false,
                 ErrorMessage: e.message
@@ -449,7 +450,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
                 });
                 // the below shouldn't happen as the pkey fields should always be included by now, but make SURE...
                 for (const ef of entityInfo.PrimaryKeys) {
-                    if (fieldList.find(f => f.Name.trim().toLowerCase() === ef.Name.toLowerCase()) === undefined)
+                    if (fieldList.find(f => f.Name?.trim().toLowerCase() === ef.Name?.toLowerCase()) === undefined)
                         fieldList.push(ef); // always include the primary key fields in view run time field list
                 }    
             }
@@ -457,7 +458,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
         return fieldList; // sometimes nothing is in the list and the caller will just use *
     }
 
-    protected async executeSQLForUserViewRunLogging(viewId: number, entityBaseView: string, whereSQL: string, orderBySQL: string, user: UserInfo): Promise<{ executeViewSQL: string, runID: number }> {
+    protected async executeSQLForUserViewRunLogging(viewId: number, entityBaseView: string, whereSQL: string, orderBySQL: string, user: UserInfo): Promise<{ executeViewSQL: string, runID: string }> {
         const entityInfo = this.Entities.find((e) => e.BaseView.trim().toLowerCase() === entityBaseView.trim().toLowerCase());
         const sSQL = `
             DECLARE @ViewIDList TABLE ( ID NVARCHAR(255) );
@@ -465,7 +466,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
             EXEC [${this.MJCoreSchemaName}].spCreateUserViewRunWithDetail(${viewId},${user.Email}, @ViewIDLIst)
             `
         const runIDResult = await this._dataSource.query(sSQL);
-        const runID: number = runIDResult[0].UserViewRunID;
+        const runID: string = runIDResult[0].UserViewRunID;
         const sRetSQL: string = `SELECT * FROM [${entityInfo.SchemaName}].${entityBaseView} WHERE ${entityInfo.FirstPrimaryKey.Name} IN 
                                     (SELECT RecordID FROM [${this.MJCoreSchemaName}].vwUserViewRunDetails WHERE UserViewRunID=${runID})
                                  ${orderBySQL && orderBySQL.length > 0 ? ' ORDER BY ' + orderBySQL : ''}`
@@ -530,12 +531,11 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
                 sUserSearchSQL = '(' + sUserSearchSQL + ')'; // wrap the entire search string in parens
         }
 
-
         return sUserSearchSQL;
     }
 
     
-    public async createAuditLogRecord(user: UserInfo, authorizationName: string | null, auditLogTypeName: string, status: string, details: string | null, entityId: number, recordId: any | null, auditLogDescription: string | null): Promise<AuditLogEntity> {
+    public async createAuditLogRecord(user: UserInfo, authorizationName: string | null, auditLogTypeName: string, status: string, details: string | null, entityId: string, recordId: any | null, auditLogDescription: string | null): Promise<AuditLogEntity> {
         try {
             const authorization = authorizationName ? this.Authorizations.find((a) => a?.Name?.trim().toLowerCase() === authorizationName.trim().toLowerCase()) : null;
             const auditLogType = auditLogTypeName ? this.AuditLogTypes.find((a) => a?.Name?.trim().toLowerCase() === auditLogTypeName.trim().toLowerCase()) : null;
@@ -548,7 +548,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
             const auditLog = await this.GetEntityObject<AuditLogEntity>('Audit Logs', user); // must pass user context on back end as we're not authenticated the same way as the front end
             auditLog.NewRecord();
             auditLog.UserID = user.ID;
-            auditLog.Set('AuditLogTypeName', auditLogType.Name) // weak typing to get around read-only property
+            auditLog.AuditLogTypeID = auditLogType.ID;
             if (status?.trim().toLowerCase() === 'success')
                 auditLog.Status = 'Success'
             else    
@@ -558,7 +558,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
             auditLog.RecordID = recordId;
 
             if (authorization)
-                auditLog.AuthorizationName = authorization.Name;
+                auditLog.AuthorizationID = authorization.ID;
 
             if (details)
                 auditLog.Details = details;
@@ -604,14 +604,14 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
         return ProviderType.Database;
     }
 
-    public async GetRecordFavoriteStatus(userId: number, entityName: string, CompositeKey: CompositeKey): Promise<boolean> {
+    public async GetRecordFavoriteStatus(userId: string, entityName: string, CompositeKey: CompositeKey): Promise<boolean> {
         const id = await this.GetRecordFavoriteID(userId, entityName, CompositeKey);
         return id !== null;
     }
 
-    public async GetRecordFavoriteID(userId: number, entityName: string, CompositeKey: CompositeKey): Promise<number | null> {
+    public async GetRecordFavoriteID(userId: string, entityName: string, CompositeKey: CompositeKey): Promise<string | null> {
         try {
-            const sSQL = `SELECT ID FROM [${this.MJCoreSchemaName}].vwUserFavorites WHERE UserID=${userId} AND Entity='${entityName}' AND RecordID='${CompositeKey.Values()}'`
+            const sSQL = `SELECT ID FROM [${this.MJCoreSchemaName}].vwUserFavorites WHERE UserID='${userId}' AND Entity='${entityName}' AND RecordID='${CompositeKey.Values()}'`
             const result = await this.ExecuteSQL(sSQL);
             if (result && result.length > 0)
                 return result[0].ID;
@@ -624,7 +624,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
         }
     }
 
-    public async SetRecordFavoriteStatus(userId: number, entityName: string, CompositeKey: CompositeKey, isFavorite: boolean, contextUser: UserInfo): Promise<void> {
+    public async SetRecordFavoriteStatus(userId: string, entityName: string, CompositeKey: CompositeKey, isFavorite: boolean, contextUser: UserInfo): Promise<void> {
         try {
             const currentFavoriteId = await this.GetRecordFavoriteID(userId, entityName, CompositeKey);
             if ((currentFavoriteId === null && isFavorite === false) ||
@@ -789,6 +789,10 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
     }
 
     public async MergeRecords(request: RecordMergeRequest, contextUser?: UserInfo): Promise<RecordMergeResult> {
+        const e = this.Entities.find(e=>e.Name.trim().toLowerCase() === request.EntityName.trim().toLowerCase());
+        if (!e || !e.AllowRecordMerge)
+            throw new Error(`Entity ${request.EntityName} does not allow record merging, check the AllowRecordMerge property in the entity metadata`);
+
         const result: RecordMergeResult = {
             Success: false,
             RecordMergeLogID: null,
@@ -1323,7 +1327,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
             const quotes = wrapRecordIdInQuotes ? "'" : '';
             const sSQL = `EXEC [${this.MJCoreSchemaName}].spCreateRecordChange_Internal @EntityName='${entityName}', 
                                                                                         @RecordID=${quotes}${recordID}${quotes}, 
-                                                                                        @UserID=${user.ID},
+                                                                                        @UserID='${user.ID}',
                                                                                         @Type='${type}',
                                                                                         @ChangesJSON='${changesJSON}', 
                                                                                         @ChangesDescription='${oldData && newData ? this.CreateUserDescriptionOfChanges(changes) : !oldData ? 'Record Created' : 'Record Deleted'}', 
@@ -1682,7 +1686,6 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
     
     public async GetDatasetByName(datasetName: string, itemFilters?: DatasetItemFilterType[]): Promise<DatasetResultType> {
         const sSQL = `SELECT 
-                        d.ID DatasetID,
                         di.*,
                         e.BaseView EntityBaseView,
                         e.SchemaName EntitySchemaName
@@ -1691,7 +1694,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
                     INNER JOIN 
                         [${this.MJCoreSchemaName}].vwDatasetItems di 
                     ON
-                        d.Name = di.DatasetName
+                        d.ID = di.DatasetID
                     INNER JOIN 
                         [${this.MJCoreSchemaName}].vwEntities e 
                     ON
@@ -1751,7 +1754,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
 
             return {
                 DatasetID: items[0].DatasetID,
-                DatasetName: items[0].DatasetName,
+                DatasetName: datasetName,
                 Success: bSuccess,
                 Status: '',
                 LatestUpdateDate: latestUpdateDate,
@@ -1760,8 +1763,8 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
         }
         else {
             return { 
-                DatasetID: 0,
-                DatasetName: '',
+                DatasetID: "",
+                DatasetName: datasetName,
                 Success: false,
                 Status: 'No Dataset or Items found for DatasetName: ' + datasetName,
                 LatestUpdateDate: null, 
@@ -1773,7 +1776,6 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
     public async GetDatasetStatusByName(datasetName: string, itemFilters?: DatasetItemFilterType[]): Promise<DatasetStatusResultType> {
         const sSQL = `
             SELECT 
-                d.ID DatasetID,
                 di.*,
                 e.BaseView EntityBaseView,
                 e.SchemaName EntitySchemaName 
@@ -1782,7 +1784,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
             INNER JOIN 
                 [${this.MJCoreSchemaName}].vwDatasetItems di 
             ON
-                d.Name = di.DatasetName
+                d.ID = di.DatasetID
             INNER JOIN
                 [${this.MJCoreSchemaName}].vwEntities e
             ON
@@ -1805,7 +1807,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
                     if (filter) 
                         filterSQL = ' WHERE ' + filter.Filter;
                 }
-                const itemSQL = `SELECT MAX(${item.DateFieldToCheck}) AS UpdateDate, ${item.EntityID} AS EntityID, '${item.Entity}' AS EntityName FROM [${item.EntitySchemaName}].[${item.EntityBaseView}]${filterSQL}`;
+                const itemSQL = `SELECT MAX(${item.DateFieldToCheck}) AS UpdateDate, '${item.EntityID}' AS EntityID, '${item.Entity}' AS EntityName FROM [${item.EntitySchemaName}].[${item.EntityBaseView}]${filterSQL}`;
                 combinedSQL += itemSQL;
                 if (index < items.length - 1) {
                     combinedSQL += ' UNION ALL ';
@@ -1831,7 +1833,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
     
                 return {
                     DatasetID: items[0].DatasetID,
-                    DatasetName: items[0].DatasetName,
+                    DatasetName: datasetName,
                     Success: true,
                     Status: '',
                     LatestUpdateDate: latestUpdateDate,
@@ -1841,7 +1843,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
             else {
                 return {
                     DatasetID: items[0].DatasetID,
-                    DatasetName: items[0].DatasetName,
+                    DatasetName: datasetName,
                     Success: false,
                     Status: 'No update dates found for DatasetName: ' + datasetName,
                     LatestUpdateDate: null,
@@ -1851,8 +1853,8 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
         }
         else {
             return { 
-                DatasetID: 0,
-                DatasetName: '',
+                DatasetID: "",
+                DatasetName: datasetName,
                 Success: false,
                 Status: 'No Dataset or Items found for DatasetName: ' + datasetName, 
                 EntityUpdateDates: null,
@@ -1931,7 +1933,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
     protected async GetCurrentUserMetadata(): Promise<UserInfo> {
         const user = await this.ExecuteSQL(`SELECT * FROM [${this.MJCoreSchemaName}].vwUsers WHERE Email='${this._currentUserEmail}'`);
         if (user && user.length === 1) {
-            const userRoles = await this.ExecuteSQL(`SELECT * FROM [${this.MJCoreSchemaName}].vwUserRoles WHERE UserID=${user[0].ID}`)
+            const userRoles = await this.ExecuteSQL(`SELECT * FROM [${this.MJCoreSchemaName}].vwUserRoles WHERE UserID='${user[0].ID}'`)
             return new UserInfo(this, 
                 {
                     ...user[0],

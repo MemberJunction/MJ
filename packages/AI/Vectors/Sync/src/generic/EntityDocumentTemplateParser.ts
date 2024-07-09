@@ -9,7 +9,7 @@ export abstract class EntityDocumentTemplateParserBase {
     public static ClearCache() {
         EntityDocumentTemplateParserBase.__cache = {};
     }
-    public static CreateCacheKey(EntityID: number, EntityRecordPrimaryKey: string, Content: string): string {
+    public static CreateCacheKey(EntityID: string, EntityRecordPrimaryKey: string, Content: string): string {
         return `${EntityID}___${EntityRecordPrimaryKey}___${Content}`;
     } 
 
@@ -27,7 +27,7 @@ export abstract class EntityDocumentTemplateParserBase {
      * @param ContextUser - the current user
      * @returns the evaluated value of the template incorporating fields and function call(s), if any.
      */
-    public async Parse(Template: string, EntityID: number, EntityRecord: any, ContextUser: UserInfo): Promise<string> {
+    public async Parse(Template: string, EntityID: string, EntityRecord: any, ContextUser: UserInfo): Promise<string> {
 
         if(!ContextUser){
             throw new Error('ContextUser is required to parse the template');
@@ -74,7 +74,7 @@ export abstract class EntityDocumentTemplateParserBase {
         return resolvedTemplate;
     }
 
-    protected async evalSingleArgument (argument: string, entityID: number, entityRecord: any, ContextUser: UserInfo): Promise<string> {
+    protected async evalSingleArgument (argument: string, entityID: string, entityRecord: any, ContextUser: UserInfo): Promise<string> {
         const funcMatch = argument.match(/(\w+)\(([^)]*)\)/);
         if (funcMatch) {
             const [, funcName, paramsString] = funcMatch;
@@ -127,7 +127,7 @@ export class EntityDocumentTemplateParser extends EntityDocumentTemplateParserBa
      * @param entityDocumentName 
      * @returns 
      */
-    protected async Relationship(entityID: number, entityRecord: any, ContextUser: UserInfo, relationshipName: string, maxRows: number, entityDocumentName: string): Promise<string> {
+    protected async Relationship(entityID: string, entityRecord: any, ContextUser: UserInfo, relationshipName: string, maxRows: number, entityDocumentName: string): Promise<string> {
         // super inefficient handling to start, we'll optimize this later to call the related stuff in batch
         const md = new Metadata();
         const vectorSyncer: EntityVectorSyncer = new EntityVectorSyncer();

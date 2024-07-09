@@ -3,7 +3,7 @@ import { IRunQueryProvider, RunQueryResult } from './interfaces';
 import { UserInfo } from './securityInfo';
 
 export type RunQueryParams = {
-    QueryID: number
+    QueryID: string
 }
 
 /**

@@ -11,14 +11,14 @@ import { TemplateEntityExtended, TemplateRenderResult, TemplateEngineBase } from
 export class TemplateEntityLoader extends nunjucks.Loader {
     public async: true; // tell nunjucks this is an async loader
 
-    private templates: { [templateId: number]: TemplateEntityExtended } = {};
+    private templates: { [templateId: string]: TemplateEntityExtended } = {};
 
     /**
      * Add a new template to the loader
      * @param templateId 
      * @param template 
      */
-    public AddTemplate(templateId: number, template: TemplateEntityExtended) {
+    public AddTemplate(templateId: string, template: TemplateEntityExtended) {
         this.templates[templateId] = template;
     }
 
@@ -80,7 +80,7 @@ export class TemplateEngineServer extends TemplateEngineBase {
     /**
      * Cache for templates that have been created by nunjucks so we don't have to create them over and over
      */
-    private _templateCache: Map<number, any> = new Map<number, any>();
+    private _templateCache: Map<string, any> = new Map<string, any>();
 
     public AddTemplate(templateEntity: TemplateEntityExtended) {
         this._templateLoader.AddTemplate(templateEntity.ID, templateEntity);
@@ -135,7 +135,7 @@ export class TemplateEngineServer extends TemplateEngineBase {
      * @param templateId 
      * @param templateText 
      */
-    protected getNunjucksTemplate(templateContentId: number, templateText: string): any {
+    protected getNunjucksTemplate(templateContentId: string, templateText: string): any {
         let template = this._templateCache.get(templateContentId);
         if (!template) {
             template = new nunjucks.Template(templateText, this._nunjucksEnv);

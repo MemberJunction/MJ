@@ -16,24 +16,9 @@
                         </mj-form-section>
                     </mj-tab-body>
                     
-                    <mj-tab Name="Sales Orders" 
-                        [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: 217}">
-                        Sales Orders
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Sales Orders')"  
-                            [NewRecordValues]="NewRecordValues('Sales Orders')"
-                            [AllowLoad]="IsCurrentTab('Sales Orders')"  
-                            [EditMode]="GridEditMode()"  
-                            [BottomMargin]="GridBottomMargin">
-                        </mj-user-view-grid>                    
-                    </mj-tab-body>
-
                     <mj-tab Name="Contacts__client_crm" 
                         [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: 218}">
+                        [Props]="{EntityRelationshipID: 'FD7FB672-D3B2-447F-A95F-03794D51E8AB'}">
                         Contacts__client_crm
                     </mj-tab>
                     <mj-tab-body>
@@ -41,6 +26,21 @@
                             [Params]="BuildRelationshipViewParamsByEntityName('Contacts__client_crm')"  
                             [NewRecordValues]="NewRecordValues('Contacts__client_crm')"
                             [AllowLoad]="IsCurrentTab('Contacts__client_crm')"  
+                            [EditMode]="GridEditMode()"  
+                            [BottomMargin]="GridBottomMargin">
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Sales Orders" 
+                        [Visible]="record.IsSaved" 
+                        [Props]="{EntityRelationshipID: '2EFBEA4A-0E5D-4265-9CEA-AD677BC823C9'}">
+                        Sales Orders
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Sales Orders')"  
+                            [NewRecordValues]="NewRecordValues('Sales Orders')"
+                            [AllowLoad]="IsCurrentTab('Sales Orders')"  
                             [EditMode]="GridEditMode()"  
                             [BottomMargin]="GridBottomMargin">
                         </mj-user-view-grid>                    

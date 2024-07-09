@@ -14,7 +14,7 @@ export type RunViewParams = {
     /**
      * optional - ID of the UserView record to run, if provided, ViewName is ignored
      */
-    ViewID?: number
+    ViewID?: string
     /**
      * optional - Name of the UserView record to run, if you are using this, make sure to use a naming convention 
      * so that your view names are unique. For example use a prefix like __Entity_View_ etc so that you're 
@@ -58,7 +58,7 @@ export type RunViewParams = {
      * This is useful if you want to run a particular view over time and exclude a specific prior run's resulting data set. If you
      * want to exclude ALL data returned from ALL prior runs, use the ExcludeDataFromAllPriorViewRuns property instead.
      */
-    ExcludeUserViewRunID?: number
+    ExcludeUserViewRunID?: string
     /**
      * optional - if set to true, the resulting data will filter out ANY records that were ever returned by this view, when the SaveViewResults property was set to true.
      * This is useful if you want to run a particular view over time and make sure the results returned each time are new to the view.

@@ -9,7 +9,7 @@ import { QueryGridComponent } from '@memberjunction/ng-query-grid';
   styleUrls: ['./single-query.component.css']
 })
 export class SingleQueryComponent implements OnInit {
-  @Input() queryId!: number;  
+  @Input() queryId!: string;  
   @Output() public loadComplete: EventEmitter<any> = new EventEmitter<any>();
   @Output() public loadStarted: EventEmitter<any> = new EventEmitter<any>();
 

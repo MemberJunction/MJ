@@ -15,7 +15,7 @@ export class SkipChatWithRecordWindowComponent  {
   // Pass through properties to the chat component
   @Input() AllowSend: boolean = true;
   @Input() public Title: string = "Chat with Record"
-  @Input() public LinkedEntityID: number = 0; 
+  @Input() public LinkedEntityID: string = ""; 
   @Input() public LinkedEntityPrimaryKey: CompositeKey = new CompositeKey();
 
   @Input() public WindowOpened: boolean = true;

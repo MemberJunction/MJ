@@ -18,19 +18,19 @@ export class ApplicationEntityEntity_Ext extends ApplicationEntityEntity {
     this._selected = value;
   }
 
-  private _applicationName: string = '';
-  public get SavedApplicationName(): string {
-    return this._applicationName;
+  private _applicationID: string = '';
+  public get SavedApplicationID(): string {
+    return this._applicationID;
   }
-  public set SavedApplicationName(value: string) {
-    this._applicationName = value;
+  public set SavedApplicationID(value: string) {
+    this._applicationID = value;
   }
 
-  private _entityID: number = 0;
-  public get SavedEntityID(): number {
+  private _entityID: string = "";
+  public get SavedEntityID(): string {
     return this._entityID;
   }
-  public set SavedEntityID(value: number) {
+  public set SavedEntityID(value: string) {
     this._entityID = value;
   }
 }
@@ -46,11 +46,11 @@ export class ApplicationEntitiesGridComponent implements OnInit, OnChanges {
   /**
    * The name of the application we are working with, required if Mode is 'Applications'
    */
-  @Input() ApplicationName!: string;
+  @Input() ApplicationID!: string;
     /**
      * The ID of the entity we are working with, required if Mode is 'Entities'
      */
-  @Input() EntityID!: number;
+  @Input() EntityID!: string;
   public isLoading: boolean = false;
   public rows: ApplicationEntityEntity_Ext[] = [];
   @Input() public Mode: 'Applications' | 'Entities' = 'Applications';
@@ -77,8 +77,8 @@ export class ApplicationEntitiesGridComponent implements OnInit, OnChanges {
   }
   async Refresh() {  
     if (this.Mode === 'Applications') 
-        if (!this.ApplicationName || this.ApplicationName.length === 0 || !this.ApplicationRecord) 
-            throw new Error("ApplicationName and ApplicationRecord are required when Mode is 'Applications'")
+        if (!this.ApplicationID || this.ApplicationID.length === 0 || !this.ApplicationRecord) 
+            throw new Error("ApplicationID and ApplicationRecord are required when Mode is 'Applications'")
     if (this.Mode === 'Entities')
         if (!this.EntityID || !this.EntityRecord) 
             throw new Error("EntityID and EntityRecord are required when Mode is 'Entities'")
@@ -87,7 +87,7 @@ export class ApplicationEntitiesGridComponent implements OnInit, OnChanges {
     this.isLoading = true
 
     const rv = new RunView();
-    const filter: string = this.Mode === 'Applications' ? `Application='${this.ApplicationName}'` : `EntityID=${this.EntityID}`;
+    const filter: string = this.Mode === 'Applications' ? `ApplicationID='${this.ApplicationID}'` : `EntityID='${this.EntityID}'`;
     const result = await rv.RunView({
         EntityName: 'Application Entities',
         ExtraFilter: filter,
@@ -99,7 +99,7 @@ export class ApplicationEntitiesGridComponent implements OnInit, OnChanges {
         existing.forEach(ae => {
             ae.Selected = true // flip this on for all records that come from the DB
             ae.SavedEntityID = ae.EntityID; // stash this in an extra property so we can later set it if we have a delete operation
-            ae.SavedApplicationName = ae.Application; // stash this in an extra property so we can later set it if we have a delete operation
+            ae.SavedApplicationID = ae.ApplicationID; // stash this in an extra property so we can later set it if we have a delete operation
         }); 
 
         if (this.Mode === 'Applications') {
@@ -111,9 +111,9 @@ export class ApplicationEntitiesGridComponent implements OnInit, OnChanges {
 
                 ae.DefaultForNewUser = false; // not used anywhere
                 
-                ae.ApplicationName = this.ApplicationName;
-                ae.Set('Application', this.ApplicationName); // use weak typing to get around the readonly property
-                ae.SavedApplicationName = this.ApplicationName; // stash this in an extra property so we can later set it if we have a delete operation
+                ae.ApplicationID = this.ApplicationID;
+                ae.Set('Application', this.ApplicationRecord?.Name); // use weak typing to get around the readonly property
+                ae.SavedApplicationID = this.ApplicationID; // stash this in an extra property so we can later set it if we have a delete operation
 
                 ae.EntityID = e.ID;
                 ae.SavedEntityID = e.ID; // stash this in an extra property so we can later set it if we have a delete operation
@@ -132,13 +132,13 @@ export class ApplicationEntitiesGridComponent implements OnInit, OnChanges {
                 ae.NewRecord();
                 ae.Sequence = 1000; // default value, isn't used anywhere 
 
-                ae.ApplicationName = a.Name;
+                ae.ApplicationID = a.ID;
                 ae.Set('Application', a.Name); // use weak typing to get around the readonly property
-                ae.SavedApplicationName = a.Name; // stash this in an extra property so we can later set it if we have a delete operation
+                ae.SavedApplicationID = a.ID; // stash this in an extra property so we can later set it if we have a delete operation
 
                 ae.EntityID = this.EntityID;
                 ae.SavedEntityID = this.EntityID; // stash this in an extra property so we can later set it if we have a delete operation
-                ae.Set('Entity', this.EntityRecord!.Name); // use weak typing to get around the readonly property
+                ae.Set('Entity', this.EntityRecord?.Name); // use weak typing to get around the readonly property
 
                 existing.push(ae);
             }            
@@ -175,9 +175,10 @@ export class ApplicationEntitiesGridComponent implements OnInit, OnChanges {
       if (await tg.Submit()) {
         // for any items in the above that were deleted, we would have had the ApplicationName/Application and Entity property wiped out so we need to go check to see if we have a null ID and if so, copy the values back in
         this.rows.forEach(r => {
-          if (r.Application === null || r.ApplicationName === null) {
-            r.Set('Application', r.SavedApplicationName); // get around the read-only property
-            r.ApplicationName = r.SavedApplicationName
+          if (r.Application === null || r.ApplicationID === null) {
+            const a = md.Applications.find(aa => aa.ID === r.SavedApplicationID);
+            r.Set('Application', a?.Name); // get around the read-only property
+            r.ApplicationID = r.SavedApplicationID
           }
           if (r.Entity === null || r.EntityID === null) {
             r.EntityID = r.SavedEntityID; // get around the read-only property
@@ -225,9 +226,9 @@ export class ApplicationEntitiesGridComponent implements OnInit, OnChanges {
 
   protected IsReallyDirty(ae: ApplicationEntityEntity_Ext): boolean {
     // logic is simple, if we are in the database, but the checkbox is not checked (or vice versa), then we are dirty
-    if (ae.Selected && ae.ID > 0)
+    if (ae.Selected && ae.IsSaved)
       return false; // if we are in the database and the checkbox is checked, we are not dirty
-    else if (!ae.Selected && ae.ID > 0)
+    else if (!ae.Selected && ae.IsSaved)
       return true; // if we are in the database and the checkbox is not checked, we are dirty because we'd have to be removed
     else if (ae.Selected)
       return true; // if we are NOT in the database and the checkbox is checked, we are dirty because we'd have to be added

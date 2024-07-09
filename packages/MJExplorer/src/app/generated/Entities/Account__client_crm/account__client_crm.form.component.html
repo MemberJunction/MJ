@@ -16,54 +16,9 @@
                         </mj-form-section>
                     </mj-tab-body>
                     
-                    <mj-tab Name="Accounts__client_crm" 
-                        [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: 212}">
-                        Accounts__client_crm
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Accounts__client_crm')"  
-                            [NewRecordValues]="NewRecordValues('Accounts__client_crm')"
-                            [AllowLoad]="IsCurrentTab('Accounts__client_crm')"  
-                            [EditMode]="GridEditMode()"  
-                            [BottomMargin]="GridBottomMargin">
-                        </mj-user-view-grid>                    
-                    </mj-tab-body>
-
-                    <mj-tab Name="Person Links" 
-                        [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: 213}">
-                        Person Links
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Person Links')"  
-                            [NewRecordValues]="NewRecordValues('Person Links')"
-                            [AllowLoad]="IsCurrentTab('Person Links')"  
-                            [EditMode]="GridEditMode()"  
-                            [BottomMargin]="GridBottomMargin">
-                        </mj-user-view-grid>                    
-                    </mj-tab-body>
-
-                    <mj-tab Name="Contacts__client_crm" 
-                        [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: 214}">
-                        Contacts__client_crm
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Contacts__client_crm')"  
-                            [NewRecordValues]="NewRecordValues('Contacts__client_crm')"
-                            [AllowLoad]="IsCurrentTab('Contacts__client_crm')"  
-                            [EditMode]="GridEditMode()"  
-                            [BottomMargin]="GridBottomMargin">
-                        </mj-user-view-grid>                    
-                    </mj-tab-body>
-
                     <mj-tab Name="Products" 
                         [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: 215}">
+                        [Props]="{EntityRelationshipID: 'E9B20450-37D0-440D-B2E2-08452EDE5FAE'}">
                         Products
                     </mj-tab>
                     <mj-tab-body>
@@ -76,9 +31,54 @@
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
+                    <mj-tab Name="Accounts__client_crm" 
+                        [Visible]="record.IsSaved" 
+                        [Props]="{EntityRelationshipID: '1BA5DC96-63E7-490C-8347-3749B5150F14'}">
+                        Accounts__client_crm
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Accounts__client_crm')"  
+                            [NewRecordValues]="NewRecordValues('Accounts__client_crm')"
+                            [AllowLoad]="IsCurrentTab('Accounts__client_crm')"  
+                            [EditMode]="GridEditMode()"  
+                            [BottomMargin]="GridBottomMargin">
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Contacts__client_crm" 
+                        [Visible]="record.IsSaved" 
+                        [Props]="{EntityRelationshipID: '1863C8DC-2A7C-4B75-8918-A10B644EA869'}">
+                        Contacts__client_crm
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Contacts__client_crm')"  
+                            [NewRecordValues]="NewRecordValues('Contacts__client_crm')"
+                            [AllowLoad]="IsCurrentTab('Contacts__client_crm')"  
+                            [EditMode]="GridEditMode()"  
+                            [BottomMargin]="GridBottomMargin">
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Person Links" 
+                        [Visible]="record.IsSaved" 
+                        [Props]="{EntityRelationshipID: '168DA941-1338-445D-907D-D6445F516EC4'}">
+                        Person Links
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Person Links')"  
+                            [NewRecordValues]="NewRecordValues('Person Links')"
+                            [AllowLoad]="IsCurrentTab('Person Links')"  
+                            [EditMode]="GridEditMode()"  
+                            [BottomMargin]="GridBottomMargin">
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
                     <mj-tab Name="Organization Links" 
                         [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: 216}">
+                        [Props]="{EntityRelationshipID: '2C083B36-55DA-4413-8BC8-F44B1EF1905A'}">
                         Organization Links
                     </mj-tab>
                     <mj-tab-body>

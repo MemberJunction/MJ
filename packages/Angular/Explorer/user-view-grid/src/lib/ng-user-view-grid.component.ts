@@ -26,7 +26,7 @@ import { EntityCommunicationParams } from '@memberjunction/entity-communications
 
 
 export type GridRowClickedEvent = {
-  entityId: number;
+  entityId: string;
   entityName: string;
   CompositeKey: CompositeKey;
 }
@@ -150,11 +150,11 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
     return this._pendingRecords;
   }
 
-  public get ViewID(): number {
+  public get ViewID(): string {
     if (this.Params && this.Params.ViewID)
       return this.Params.ViewID;
     else
-      return 0;
+      return "";
   }
 
   /**
@@ -690,7 +690,7 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
       }
       else if (!params.ViewEntity && (params.ViewID || params.ViewName)) {
         // this is NOT a dyamic view as we got either the ViewID or ViewName, so we can get the ViewEntity
-        if (params.ViewID && params.ViewID > 0) {
+        if (params.ViewID && params.ViewID.length > 0) {
           this._viewEntity = <UserViewEntityExtended>await ViewInfo.GetViewEntity(params.ViewID); 
         }
         else if (params.ViewName) {
@@ -1165,7 +1165,7 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
 
     const rvResult: RunViewResult = await rv.RunView({
       EntityName: 'Lists',
-      ExtraFilter: `UserID = ${md.CurrentUser.ID} AND EntityID = ${this._entityInfo.ID}`,
+      ExtraFilter: `UserID = '${md.CurrentUser.ID}' AND EntityID = '${this._entityInfo.ID}'`,
       ResultType: 'entity_object'
     });
 

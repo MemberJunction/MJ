@@ -4,7 +4,7 @@ export type EntitySyncConfig = {
     /**
      * The ID of the entity document to use
      */
-    EntityDocumentID: number;
+    EntityDocumentID: string;
     /**
      * The time, in seconds, inbetween each run
      */
@@ -30,7 +30,7 @@ export type EntitySyncConfig = {
      */
     VectorIndexID: number,
     /**
-     * The ID of the vector databse to use
+     * The ID of the vector database to use
      */
     VectorID: number
 }

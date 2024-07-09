@@ -131,9 +131,9 @@ export class ResolverBase {
       if (!entity) throw new Error(`Entity ${viewInput.EntityName} not found in metadata`);
 
       const viewInfo: UserViewEntity = {
-        ID: -1,
+        ID: "",
         Entity: viewInput.EntityName,
-        EntityID: entity.ID as number,
+        EntityID: entity.ID,
         EntityBaseView: entity.BaseView as string,
       } as UserViewEntity; // only providing a few bits of data here, but it's enough to get the view to run
 
@@ -182,7 +182,7 @@ export class ResolverBase {
     extraFilter: string,
     orderBy: string,
     userSearchString: string,
-    excludeUserViewRunID: number | undefined,
+    excludeUserViewRunID: string | undefined,
     overrideExcludeFilter: string | undefined,
     saveViewResults: boolean | undefined,
     fields: string[] | undefined,
@@ -289,7 +289,7 @@ export class ResolverBase {
     auditLogTypeName: string,
     status: string,
     details: string | null,
-    entityId: number,
+    entityId: string,
     recordId: any | null
   ): Promise<any> {
     try {
@@ -306,9 +306,10 @@ export class ResolverBase {
       const auditLog = await md.GetEntityObject<AuditLogEntity>('Audit Logs', userInfo); // must pass user context on back end as we're not authenticated the same way as the front end
       auditLog.NewRecord();
       auditLog.UserID = userInfo.ID;
-      auditLog.AuditLogTypeName = auditLogType.Name;
+      auditLog.AuditLogTypeID = auditLogType.ID;
 
-      if (authorization) auditLog.AuthorizationName = authorization.Name;
+      if (authorization) 
+        auditLog.AuthorizationID = authorization.ID;
 
       if (status?.trim().toLowerCase() === 'success') auditLog.Status = 'Success';
       else auditLog.Status = 'Failed';

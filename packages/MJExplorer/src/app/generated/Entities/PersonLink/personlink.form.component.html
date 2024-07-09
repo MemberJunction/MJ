@@ -16,9 +16,24 @@
                         </mj-form-section>
                     </mj-tab-body>
                     
+                    <mj-tab Name="GP General Sales Transactions" 
+                        [Visible]="record.IsSaved" 
+                        [Props]="{EntityRelationshipID: '19F64D62-BC5D-419F-9E35-05FC6B3CA55D'}">
+                        GP General Sales Transactions
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Sales Transactions')"  
+                            [NewRecordValues]="NewRecordValues('Sales Transactions')"
+                            [AllowLoad]="IsCurrentTab('GP General Sales Transactions')"  
+                            [EditMode]="GridEditMode()"  
+                            [BottomMargin]="GridBottomMargin">
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
                     <mj-tab Name="Customer Addresses" 
                         [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: 270}">
+                        [Props]="{EntityRelationshipID: '33CAEA5B-BEE0-4999-B178-0C3DCFA20507'}">
                         Customer Addresses
                     </mj-tab>
                     <mj-tab-body>
@@ -33,7 +48,7 @@
 
                     <mj-tab Name="Customer Addresses" 
                         [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: 271}">
+                        [Props]="{EntityRelationshipID: '0B8ECAB0-52ED-49D1-BFD4-579E8BF6359D'}">
                         Customer Addresses
                     </mj-tab>
                     <mj-tab-body>
@@ -46,39 +61,9 @@
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
-                    <mj-tab Name="MemberShips" 
-                        [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: 272}">
-                        MemberShips
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Demo Keys')"  
-                            [NewRecordValues]="NewRecordValues('Demo Keys')"
-                            [AllowLoad]="IsCurrentTab('MemberShips')"  
-                            [EditMode]="GridEditMode()"  
-                            [BottomMargin]="GridBottomMargin">
-                        </mj-user-view-grid>                    
-                    </mj-tab-body>
-
-                    <mj-tab Name="Organization Links" 
-                        [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: 273}">
-                        Organization Links
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Organization Links')"  
-                            [NewRecordValues]="NewRecordValues('Organization Links')"
-                            [AllowLoad]="IsCurrentTab('Organization Links')"  
-                            [EditMode]="GridEditMode()"  
-                            [BottomMargin]="GridBottomMargin">
-                        </mj-user-view-grid>                    
-                    </mj-tab-body>
-
                     <mj-tab Name="GP Membership Sales Transactions" 
                         [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: 274}">
+                        [Props]="{EntityRelationshipID: '210D81BA-BE20-4D72-B2A0-808E300A1F96'}">
                         GP Membership Sales Transactions
                     </mj-tab>
                     <mj-tab-body>
@@ -91,16 +76,31 @@
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
-                    <mj-tab Name="GP General Sales Transactions" 
+                    <mj-tab Name="Organization Links" 
                         [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: 275}">
-                        GP General Sales Transactions
+                        [Props]="{EntityRelationshipID: 'F3D30C42-3492-44DF-B23B-B91FEA9C6BEA'}">
+                        Organization Links
                     </mj-tab>
                     <mj-tab-body>
                         <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Sales Transactions')"  
-                            [NewRecordValues]="NewRecordValues('Sales Transactions')"
-                            [AllowLoad]="IsCurrentTab('GP General Sales Transactions')"  
+                            [Params]="BuildRelationshipViewParamsByEntityName('Organization Links')"  
+                            [NewRecordValues]="NewRecordValues('Organization Links')"
+                            [AllowLoad]="IsCurrentTab('Organization Links')"  
+                            [EditMode]="GridEditMode()"  
+                            [BottomMargin]="GridBottomMargin">
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="MemberShips" 
+                        [Visible]="record.IsSaved" 
+                        [Props]="{EntityRelationshipID: '26FDAE82-DBDD-44D9-B34B-F5BD555FDF90'}">
+                        MemberShips
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Demo Keys')"  
+                            [NewRecordValues]="NewRecordValues('Demo Keys')"
+                            [AllowLoad]="IsCurrentTab('MemberShips')"  
                             [EditMode]="GridEditMode()"  
                             [BottomMargin]="GridBottomMargin">
                         </mj-user-view-grid>                    

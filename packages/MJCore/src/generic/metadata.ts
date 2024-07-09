@@ -66,7 +66,7 @@ export class Metadata {
      * @param entityID 
      * @returns 
      */
-    public EntityByID(entityID: number): EntityInfo {
+    public EntityByID(entityID: string): EntityInfo {
         return this.Entities.find(e => e.ID === entityID);
     }
 
@@ -114,7 +114,7 @@ export class Metadata {
      * @param entityName 
      * @returns 
      */
-    public EntityIDFromName(entityName: string): number {
+    public EntityIDFromName(entityName: string): string {
         let entity = this.Entities.find(e => e.Name == entityName);
         if (entity != null)
             return entity.ID;
@@ -127,7 +127,7 @@ export class Metadata {
      * @param entityID 
      * @returns 
      */
-    public EntityNameFromID(entityID: number): string {
+    public EntityNameFromID(entityID: string): string {
         let entity = this.Entities.find(e => e.ID == entityID);
         if(entity){
             return entity.Name;
@@ -142,7 +142,7 @@ export class Metadata {
      * Helper function to return an EntityInfo from an Entity ID
      * @param entityID
      */
-    public EntityFromEntityID(entityID: number): EntityInfo | null {
+    public EntityFromEntityID(entityID: string): EntityInfo | null {
         let entity = this.Entities.find(e => e.ID == entityID);
         if(entity){
             return entity;
@@ -160,7 +160,7 @@ export class Metadata {
      * @param primaryKey 
      * @returns 
      */
-    public async GetRecordFavoriteStatus(userId: number, entityName: string, primaryKey: CompositeKey): Promise<boolean> {
+    public async GetRecordFavoriteStatus(userId: string, entityName: string, primaryKey: CompositeKey): Promise<boolean> {
         return await Metadata.Provider.GetRecordFavoriteStatus(userId, entityName, primaryKey);
     }
 
@@ -172,7 +172,7 @@ export class Metadata {
      * @param isFavorite 
      * @param contextUser 
      */
-    public async SetRecordFavoriteStatus(userId: number, entityName: string, primaryKey: CompositeKey, isFavorite: boolean, contextUser: UserInfo = null) {
+    public async SetRecordFavoriteStatus(userId: string, entityName: string, primaryKey: CompositeKey, isFavorite: boolean, contextUser: UserInfo = null) {
         await Metadata.Provider.SetRecordFavoriteStatus(userId, entityName, primaryKey, isFavorite, contextUser);
     }
 
@@ -222,7 +222,11 @@ export class Metadata {
      * @returns 
      */
     public async MergeRecords(request: RecordMergeRequest, contextUser?: UserInfo): Promise<RecordMergeResult> {
-        return await Metadata.Provider.MergeRecords(request, contextUser);
+        const e = this.EntityByName(request.EntityName);
+        if (e.AllowRecordMerge)
+            return await Metadata.Provider.MergeRecords(request, contextUser);
+        else
+            throw new Error(`Entity ${request.EntityName} does not allow record merging, check the AllowRecordMerge property in the entity metadata`);
     }
 
     /**

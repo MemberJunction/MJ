@@ -23,20 +23,20 @@ export class UserRoleEntity_Ext extends UserRoleEntity {
     this._userName = value;
   }
 
-  private _userID: number = 0;
-  public get SavedUserID(): number {
+  private _userID: string = "";
+  public get SavedUserID(): string {
     return this._userID;
   }
-  public set SavedUserID(value: number) {
+  public set SavedUserID(value: string) {
     this._userID = value;
   }
 
-  private _savedRoleName: string = '';
-  public get SavedRoleName(): string {
-    return this._savedRoleName;
+  private _savedRoleID: string = '';
+  public get SavedRoleID(): string {
+    return this._savedRoleID;
   }
-  public set SavedRoleName(value: string) {
-    this._savedRoleName = value;
+  public set SavedRoleID(value: string) {
+    this._savedRoleID = value;
   }
 }
  
@@ -46,7 +46,7 @@ export class UserRoleEntity_Ext extends UserRoleEntity {
   styleUrls: ['./single-role.component.css']
 })
 export class SingleRoleComponent implements OnInit {
-  @Input() RoleName!: string;
+  @Input() RoleID!: string;
 
   @ViewChild('entityForm') entityFormComponent!: EntityFormDialogComponent;
 
@@ -67,13 +67,13 @@ export class SingleRoleComponent implements OnInit {
   protected async Refresh() {
     this.isLoading = true;
     const md = new Metadata();
-    let r = md.Roles.find(r => r.Name === this.RoleName);
+    let r = md.Roles.find(r => r.ID === this.RoleID);
     if (!r) {
       // sometime we are creating a new role, so attempt to refresh our metadata
       await md.Refresh();
-      r = md.Roles.find(r => r.Name === this.RoleName);
+      r = md.Roles.find(r => r.ID === this.RoleID);
       if (!r)
-        throw new Error(`Role ${this.RoleName} not found`);
+        throw new Error(`Role ${this.RoleID} not found`);
     }
 
     this.RoleRecord = await md.GetEntityObject<RoleEntity>('Roles');

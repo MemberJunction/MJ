@@ -12,20 +12,20 @@ LoadPineconeVectorDB();
 
 @InputType()
 export class PotentialDuplicateRequestType extends PotentialDuplicateRequest {
-  @Field(() => Int)
-  EntityID: number;
+  @Field(() => String)
+  EntityID: string;
 
   @Field(() => [CompositeKeyInputType])
   RecordIDs: CompositeKey[];
 
-  @Field(() => Int, { nullable: true })
-  EntityDocumentID: number;
+  @Field(() => String, { nullable: true })
+  EntityDocumentID: string;
 
   @Field(() => Int, { nullable: true })
   ProbabilityScore: number;
   
-  @Field(() => Int)
-  ListID: number;
+  @Field(() => String)
+  ListID: string;
 }
 
 @ObjectType()
@@ -39,8 +39,8 @@ export class PotentialDuplicateType extends PotentialDuplicate {
 
 @ObjectType()
 export class PotentialDuplicateResultType extends PotentialDuplicateResult {
-  @Field(() => Int, { nullable: true })
-  EntityID: number;
+  @Field(() => String, { nullable: true })
+  EntityID: string;
 
   @Field(() => [PotentialDuplicateType])
   Duplicates: PotentialDuplicateType[];
@@ -48,8 +48,8 @@ export class PotentialDuplicateResultType extends PotentialDuplicateResult {
   @Field(() => CompositeKeyOutputType)
   RecordPrimaryKeys: CompositeKey;
 
-  @Field(() => [Int])
-  DuplicateRunDetailMatchRecordIDs: number[];
+  @Field(() => [String])
+  DuplicateRunDetailMatchRecordIDs: string[];
 }
 
 @ObjectType()

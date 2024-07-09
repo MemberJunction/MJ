@@ -1,6 +1,6 @@
 import { Component, OnInit } from '@angular/core';
 import { ActivatedRoute, NavigationEnd, Router } from '@angular/router';
-import { BaseEntity } from '@memberjunction/core';
+import { BaseEntity, Metadata } from '@memberjunction/core';
 import { ApplicationEntity, ApplicationEntityEntity, RoleEntity, UserEntity } from '@memberjunction/core-entities';
 import { filter } from 'rxjs/operators';
 
@@ -23,9 +23,10 @@ export class SettingsComponent implements OnInit {
   public currentItem: SettingsItem = SettingsItem.Users;
   public baseRoute: string = '/settings';
 
-  public selectedRoleName: string = '';
-  public selectedUserID: number = 0;
+  public selectedRoleID: string = '';
+  public selectedUserID: string = "";
   public selectedApplicationName: string = '';
+  public selectedApplicationID: string = '';
 
   public options = [
     { label: 'Users', value: SettingsItem.Users },
@@ -83,20 +84,22 @@ export class SettingsComponent implements OnInit {
         break;
       case 'application':
         this.selectedApplicationName = segments.length > 2 ? segments[2] : '';
+        const md = new Metadata();
+        this.selectedApplicationID = md.Applications.find(a => a.Name === this.selectedApplicationName)?.ID ?? '';
         this.selectItem(SettingsItem.Application, false);
         break;
       case 'users':
         this.selectItem(SettingsItem.Users, false);
         break;
       case 'user':
-        this.selectedUserID = segments.length > 2 ? parseInt(segments[2]) : 0;
+        this.selectedUserID = segments.length > 2 ? segments[2] : "";
         this.selectItem(SettingsItem.User, false);
         break;
       case 'roles':
         this.selectItem(SettingsItem.Roles, false);
         break;
       case 'role':
-        this.selectedRoleName = segments.length > 2 ? segments[2] : '';
+        this.selectedRoleID = segments.length > 2 ? segments[2] : '';
         this.selectItem(SettingsItem.Role, false);
         break;
       default:
@@ -108,10 +111,10 @@ export class SettingsComponent implements OnInit {
     this.selectRoute('/settings/application', (<ApplicationEntity>a).Name);
   }
   public selectRole(r: BaseEntity) {
-    this.selectRoute('/settings/role', (<RoleEntity>r).Name);
+    this.selectRoute('/settings/role', (<RoleEntity>r).ID);
   }
-  public selectUser(r: BaseEntity) {
-    this.selectRoute('/settings/user', (<UserEntity>r).ID);
+  public selectUser(u: BaseEntity) {
+    this.selectRoute('/settings/user', (<UserEntity>u).ID);
   }
   public selectRoute(route: string, value: any) {
     this.router.navigate([route, value]);    

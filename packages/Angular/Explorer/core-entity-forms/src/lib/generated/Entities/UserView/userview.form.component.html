@@ -16,16 +16,16 @@
                         </mj-form-section>
                     </mj-tab-body>
                     
-                    <mj-tab Name="Entity Relationships" 
+                    <mj-tab Name="Data Context Items" 
                         [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: 86}">
-                        Entity Relationships
+                        [Props]="{EntityRelationshipID: '46D89A92-C714-4E78-BF62-59602688FA40'}">
+                        Data Context Items
                     </mj-tab>
                     <mj-tab-body>
                         <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Entity Relationships')"  
-                            [NewRecordValues]="NewRecordValues('Entity Relationships')"
-                            [AllowLoad]="IsCurrentTab('Entity Relationships')"  
+                            [Params]="BuildRelationshipViewParamsByEntityName('Data Context Items')"  
+                            [NewRecordValues]="NewRecordValues('Data Context Items')"
+                            [AllowLoad]="IsCurrentTab('Data Context Items')"  
                             [EditMode]="GridEditMode()"  
                             [BottomMargin]="GridBottomMargin">
                         </mj-user-view-grid>                    
@@ -33,7 +33,7 @@
 
                     <mj-tab Name="User View Runs" 
                         [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: 87}">
+                        [Props]="{EntityRelationshipID: '2B8B0E26-410D-49EC-9B11-855F0203BDF6'}">
                         User View Runs
                     </mj-tab>
                     <mj-tab-body>
@@ -46,16 +46,16 @@
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
-                    <mj-tab Name="Data Context Items" 
+                    <mj-tab Name="Entity Relationships" 
                         [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: 172}">
-                        Data Context Items
+                        [Props]="{EntityRelationshipID: 'F55F183D-0522-40C8-8D45-C6F3943B24C7'}">
+                        Entity Relationships
                     </mj-tab>
                     <mj-tab-body>
                         <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Data Context Items')"  
-                            [NewRecordValues]="NewRecordValues('Data Context Items')"
-                            [AllowLoad]="IsCurrentTab('Data Context Items')"  
+                            [Params]="BuildRelationshipViewParamsByEntityName('Entity Relationships')"  
+                            [NewRecordValues]="NewRecordValues('Entity Relationships')"
+                            [AllowLoad]="IsCurrentTab('Entity Relationships')"  
                             [EditMode]="GridEditMode()"  
                             [BottomMargin]="GridBottomMargin">
                         </mj-user-view-grid>                    

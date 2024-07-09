@@ -144,7 +144,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
     /**************************************************************************/
     public async RunReport(params: RunReportParams, contextUser?: UserInfo): Promise<RunReportResult> {
         const query = gql`
-        query GetReportDataQuery ($ReportID: Int!) {
+        query GetReportDataQuery ($ReportID: String!) {
             GetReportData(ReportID: $ReportID) {
                 Success
                 Results
@@ -174,7 +174,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
     /**************************************************************************/
     public async RunQuery(params: RunQueryParams, contextUser?: UserInfo): Promise<RunQueryResult> {
         const query = gql`
-        query GetQueryDataQuery ($QueryID: Int!) {
+        query GetQueryDataQuery ($QueryID: String!) {
             GetQueryData(QueryID: $QueryID) {
                 Success
                 Results
@@ -184,8 +184,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             }
         }`
 
-        const queryId = typeof params.QueryID === 'string' ? parseInt(params.QueryID) : params.QueryID;
-        const result = await GraphQLDataProvider.ExecuteGQL(query, {QueryID: queryId} );
+        const result = await GraphQLDataProvider.ExecuteGQL(query, {QueryID: params.QueryID} );
         if (result && result.GetQueryData)
             return {
                 QueryID: params.QueryID,
@@ -257,14 +256,13 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                     innerParams.AuditLogDescription = params.AuditLogDescription;
 
                 if (!dynamicView) {
-                    innerParams.ExcludeUserViewRunID = params.ExcludeUserViewRunID ? params.ExcludeUserViewRunID : -1;
+                    innerParams.ExcludeUserViewRunID = params.ExcludeUserViewRunID ? params.ExcludeUserViewRunID : "";
                     innerParams.ExcludeDataFromAllPriorViewRuns = params.ExcludeDataFromAllPriorViewRuns ? params.ExcludeDataFromAllPriorViewRuns : false;
                     innerParams.OverrideExcludeFilter = params.OverrideExcludeFilter ? params.OverrideExcludeFilter : '';
                     innerParams.SaveViewResults = params.SaveViewResults ? params.SaveViewResults : false;
                 }
 
                 const fieldList = this.getViewRunTimeFieldList(e, viewEntity, params, dynamicView);
-
                 const query = gql`
                     query RunViewQuery ($input: ${paramType}!) {
                     ${qName}(input: $input) {
@@ -372,7 +370,12 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 // Now: include the fields that are part of the view definition
                 v.Columns.forEach(c => {
                     if (c.hidden === false && !fieldList.find(item => item.trim().toLowerCase() === c.EntityField?.Name.trim().toLowerCase())) { // don't include hidden fields and don't include the pkey field again
-                      fieldList.push(mapper.MapFieldName(c.EntityField.CodeName));
+                        if (!c.EntityField) {
+                            // this can happen if a field was previously included in a view, but is no longer part of the entity
+                            // simply don't include it in the field list
+                        }
+                        else
+                            fieldList.push(mapper.MapFieldName(c.EntityField.CodeName));
                     }
                 });
             }
@@ -509,6 +512,10 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
     }
 
     public async MergeRecords(request: RecordMergeRequest): Promise<RecordMergeResult> {
+        const e = this.Entities.find(e=>e.Name.trim().toLowerCase() === request.EntityName.trim().toLowerCase());
+        if (!e || !e.AllowRecordMerge)
+            throw new Error(`Entity ${request.EntityName} does not allow record merging, check the AllowRecordMerge property in the entity metadata`);
+
         try {
             // execute the gql query to get the dependencies
             const mutation = gql`mutation MergeRecordsMutation ($request: RecordMergeRequest!) {
@@ -556,7 +563,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 Success: false,
                 OverallStatus: e && e.message ? e.message : e,
                 RecordStatus: [],
-                RecordMergeLogID: -1,
+                RecordMergeLogID: "",
                 Request: request,
             }
             throw (e)
@@ -585,7 +592,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             const mutationName = `${type}${entity.EntityInfo.ClassName}`
 
             // only pass along writable fields, AND the PKEY value if this is an update
-            const filteredFields = entity.Fields.filter(f => f.SQLType.trim().toLowerCase() !== 'uniqueidentifier' && (f.ReadOnly === false || (f.IsPrimaryKey && entity.IsSaved) ));
+            const filteredFields = entity.Fields.filter(f => !f.ReadOnly || (f.IsPrimaryKey && entity.IsSaved));
             const mapper = new FieldMapper();
             const inner = `                ${mutationName}(input: $input) {
                 ${entity.Fields.map(f => mapper.MapFieldName(f.CodeName)).join("\n                    ")}
@@ -860,9 +867,20 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 // no transaction just go for it
                 const d = await GraphQLDataProvider.ExecuteGQL(query, vars)
                 if (d && d[queryName]) {
+                    const data = d[queryName];
                     for (let key of entity.PrimaryKey.KeyValuePairs) {
-                        if (key.Value !== d[queryName][key.FieldName])
-                            throw new Error ('Missing primary key value in server Delete response: ' + key.FieldName);
+                        // we want to now compare key.Value against data[key.FieldName]
+                        let returnedVal = data[key.FieldName];
+                        let originalVal = key.Value;
+                        // we want to ignore types so we should convert numbers to strings for the comparison
+                        if (typeof originalVal === 'number')
+                            originalVal = originalVal.toString();
+                        if (typeof returnedVal === 'number')
+                            returnedVal = returnedVal.toString();
+                        // now compare the two values
+                        if (originalVal !== returnedVal) {
+                            throw new Error (`Primary key value mismatch in server Delete response. Field: ${key.FieldName}, Original: ${originalVal}, Returned: ${returnedVal}`);
+                        }
                     }
                     result.Success = true;
                     result.EndedAt = new Date(); // done processing
@@ -913,7 +931,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         }
         else {
             return {
-                DatasetID: 0,
+                DatasetID: "",
                 DatasetName: datasetName,
                 Success: false,
                 Status: 'Unknown',
@@ -947,7 +965,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         }
         else {
             return {
-                DatasetID: 0,
+                DatasetID: "",
                 DatasetName: datasetName,
                 Success: false,
                 Status: 'Unknown',
@@ -961,7 +979,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         return new GraphQLTransactionGroup();
     }
 
-    public async GetRecordFavoriteStatus(userId: number, entityName: string, primaryKey: CompositeKey): Promise<boolean> {
+    public async GetRecordFavoriteStatus(userId: string, entityName: string, primaryKey: CompositeKey): Promise<boolean> {
         const valResult = primaryKey.Validate();
         if (!valResult.IsValid)
             return false;
@@ -988,7 +1006,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             return data.GetRecordFavoriteStatus.IsFavorite;
     }
 
-    public async SetRecordFavoriteStatus(userId: number, entityName: string, primaryKey: CompositeKey, isFavorite: boolean, contextUser: UserInfo): Promise<void> {
+    public async SetRecordFavoriteStatus(userId: string, entityName: string, primaryKey: CompositeKey, isFavorite: boolean, contextUser: UserInfo): Promise<void> {
         const e = this.Entities.find(e => e.Name === entityName)
         if (!e){
             throw new Error(`Entity ${entityName} not found in metadata`);

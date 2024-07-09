@@ -41,7 +41,7 @@ export class SkipSingleMessageComponent implements AfterViewInit {
     private static _detailHtml: any = {};
 
     private GetHtmlFromCache(detail: ConversationDetailEntity): string | null {
-        if (detail.ID !== null && detail.ID !== undefined && detail.ID > 0 && SkipSingleMessageComponent._detailHtml[detail.ID] !== undefined && SkipSingleMessageComponent._detailHtml[detail.ID] !== null) {
+        if (detail.ID !== null && detail.ID !== undefined && detail.ID.length > 0 && SkipSingleMessageComponent._detailHtml[detail.ID] !== undefined && SkipSingleMessageComponent._detailHtml[detail.ID] !== null) {
             // use cached HTML details for SAVED conversation details, don't do for NEW ONes where ID is null
             return SkipSingleMessageComponent._detailHtml[detail.ID];
         }
@@ -50,7 +50,7 @@ export class SkipSingleMessageComponent implements AfterViewInit {
     }
     private CacheHtml(detail: ConversationDetailEntity, html: string) {
         // only cache it if it's a saved detail if it is for a new one don't bother yet...
-        if (detail.ID !== null && detail.ID !== undefined && detail.ID > 0)
+        if (detail.ID !== null && detail.ID !== undefined && detail.ID.length > 0)
             SkipSingleMessageComponent._detailHtml[detail.ID] = html; 
     }
 
@@ -72,7 +72,7 @@ export class SkipSingleMessageComponent implements AfterViewInit {
     private _cachedMessage: string | null = null;
     public get Message(): string {
       if (this._cachedMessage === null) {
-        if (this.ConversationDetailRecord.ID > 0 && this.ConversationDetailRecord.Role.trim().toLowerCase() === 'ai') {
+        if (this.ConversationDetailRecord.ID.length > 0 && this.ConversationDetailRecord.Role.trim().toLowerCase() === 'ai') {
           const resultObject = <SkipAPIResponse>JSON.parse(this.ConversationDetailRecord.Message);
     
           if (resultObject.success) {
@@ -125,7 +125,7 @@ export class SkipSingleMessageComponent implements AfterViewInit {
     protected AddReportToConversation() {
       const detail = this.ConversationDetailRecord;
 
-      if (detail.ID > 0 && detail.Role.trim().toLowerCase() === 'ai' ) {
+      if (detail.ID.length > 0 && detail.Role.trim().toLowerCase() === 'ai' ) {
         const resultObject = <SkipAPIResponse>JSON.parse(detail.Message);
   
         if (resultObject.success) {
@@ -159,7 +159,7 @@ export class SkipSingleMessageComponent implements AfterViewInit {
     }
     public GetMessageRowCssClass(): string {
         if (this.ConversationDetailRecord.Role.trim().toLowerCase() === 'ai') {
-          if (this.ConversationDetailRecord.ID > 0)
+          if (this.ConversationDetailRecord.ID.length > 0)
             return 'ai-message';
           else
             return 'ai-message-in-progress';

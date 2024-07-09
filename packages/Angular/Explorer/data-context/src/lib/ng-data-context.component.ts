@@ -9,7 +9,7 @@ import { DataContextEntity } from '@memberjunction/core-entities';
 })
 export class DataContextComponent implements OnInit {
   public showloader: boolean = false;
-  @Input() dataContextId!: number;
+  @Input() dataContextId!: string;
   public dataContextRecord?: DataContextEntity;
 
   dataContextItems: any = [];
@@ -21,7 +21,7 @@ export class DataContextComponent implements OnInit {
     }
   }
 
-  async LoadDataContext(dataContextId: number) {
+  async LoadDataContext(dataContextId: string) {
     if (dataContextId) {
       const md = new Metadata();
       this.dataContextRecord = await md.GetEntityObject<DataContextEntity>("Data Contexts");

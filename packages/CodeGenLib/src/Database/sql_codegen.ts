@@ -593,6 +593,9 @@ export class SQLCodeGenBase {
         const relatedFieldsString: string = await this.generateBaseViewRelatedFieldsString(ds, entity.Fields);
         const relatedFieldsJoinString: string = this.generateBaseViewJoins(entity.Fields);
         const permissions: string = this.generateViewPermissions(entity);
+        const whereClause: string = entity.DeleteType === 'Soft' ? `WHERE 
+    ${baseTableFirstChar}.[${EntityInfo.DeletedAtFieldName}] IS NULL
+` : '';
         return `
 ------------------------------------------------------------
 ----- BASE VIEW FOR ENTITY:      ${entity.Name}
@@ -609,7 +612,7 @@ SELECT
     ${baseTableFirstChar}.*${relatedFieldsString.length > 0 ? ',' : ''}${relatedFieldsString}
 FROM
     [${entity.SchemaName}].[${entity.BaseTable}] AS ${baseTableFirstChar}${relatedFieldsJoinString ? '\n' + relatedFieldsJoinString : ''}
-GO${permissions}
+${whereClause}GO${permissions}
     `
     }
     
@@ -727,21 +730,45 @@ GO${permissions}
     
     protected generateSPCreate(entity: EntityInfo): string {
         const spName: string = entity.spCreate ? entity.spCreate : `spCreate${entity.ClassName}`;
-        const efString: string = this.createEntityFieldsParamString(entity.Fields, !entity.FirstPrimaryKey.AutoIncrement);
+        const firstKey = entity.FirstPrimaryKey;
+        const primaryKeyAutomatic: boolean = firstKey.AutoIncrement || (firstKey.Type.toLowerCase().trim() === 'uniqueidentifier' && firstKey.DefaultValue && firstKey.DefaultValue.trim().length > 0);
+        const efString: string = this.createEntityFieldsParamString(entity.Fields, !primaryKeyAutomatic);
         const permissions: string = this.generateSPPermissions(entity, spName, SPType.Create);
     
-        let primaryKeyInsertValue = '';
+        let preInsertCode = '';
+        let outputCode = '';
         let selectInsertedRecord = '';
         let additionalFieldList = '';
         let additionalValueList = '';
         if (entity.FirstPrimaryKey.AutoIncrement) {
             selectInsertedRecord = `SELECT * FROM [${entity.SchemaName}].[${entity.BaseView}] WHERE [${entity.FirstPrimaryKey.Name}] = SCOPE_IDENTITY()`;
         } else if (entity.FirstPrimaryKey.Type.toLowerCase().trim() === 'uniqueidentifier') {
-            primaryKeyInsertValue = `DECLARE @newId UNIQUEIDENTIFIER = NEWID();\n    SET @${entity.FirstPrimaryKey.Name} = @newId;\n`;
-            additionalFieldList = ',\n            [' + entity.FirstPrimaryKey.CodeName + ']';
-            additionalValueList = ',\n            @newId';
-    
-            selectInsertedRecord = `SELECT * FROM [${entity.SchemaName}].[${entity.BaseView}] WHERE [${entity.FirstPrimaryKey.Name}] = @newId`;
+            // our primary key is a uniqueidentifier. Two scenarios exist for this:
+            // 1) The default value is specified in the database (usually either NEWID() or NEWSEQUENTIALID()). 
+            // 2) No default value is specified, so we need to generate a new GUID in the stored procedure using NEWID() --- NewSequentialID() is not allowed in a stored procedure, only usable as a default value.
+
+            // so, first check to see if there is a default value for the field or not
+            const hasDefaultValue = entity.FirstPrimaryKey.DefaultValue && entity.FirstPrimaryKey.DefaultValue.trim().length > 0;
+            // if we have a default value, then we do NOT want to insert a new value, let the database use the default
+            if (hasDefaultValue) {
+                // in this situation, we DO have a default value, so we do NOT insert a new value, we let the database use the default
+                // however, we need to do some extra preprocessing to use the OUTPUT from the INSERT statement and return the record that was
+                // just created, that is how we get the newly created GUID that was the default value
+                preInsertCode = `DECLARE @InsertedRow TABLE ([${entity.FirstPrimaryKey.Name}] UNIQUEIDENTIFIER)`;
+                outputCode = `OUTPUT INSERTED.[${entity.FirstPrimaryKey.Name}] INTO @InsertedRow
+    `
+                selectInsertedRecord = `SELECT * FROM [${entity.SchemaName}].[${entity.BaseView}] WHERE [${entity.FirstPrimaryKey.Name}] = (SELECT [${entity.FirstPrimaryKey.Name}] FROM @InsertedRow)`;    
+            }
+            else {
+                // we have no default value, so we use NEWID() to generate a new GUID and we manually insert it into the table
+                // as part of the sproc
+                preInsertCode = `DECLARE @newId UNIQUEIDENTIFIER = NEWID();\n    SET @${entity.FirstPrimaryKey.Name} = @newId;\n`;
+
+                additionalFieldList = ',\n            [' + entity.FirstPrimaryKey.Name + ']';
+                additionalValueList = ',\n            @newId';
+        
+                selectInsertedRecord = `SELECT * FROM [${entity.SchemaName}].[${entity.BaseView}] WHERE [${entity.FirstPrimaryKey.Name}] = @newId`;    
+            }
         } else {
             selectInsertedRecord = `SELECT * FROM [${entity.SchemaName}].[${entity.BaseView}] WHERE `;
             let isFirst = true;
@@ -765,13 +792,13 @@ CREATE PROCEDURE [${entity.SchemaName}].[${spName}]
 AS
 BEGIN
     SET NOCOUNT ON;
-    ${primaryKeyInsertValue}
+    ${preInsertCode}
     INSERT INTO 
     [${entity.SchemaName}].[${entity.BaseTable}]
         (
             ${this.createEntityFieldsInsertString(entity, entity.Fields, '')}${additionalFieldList}
         )
-    VALUES
+    ${outputCode}VALUES
         (
             ${this.createEntityFieldsInsertString(entity, entity.Fields, '@')}${additionalValueList}
         )
@@ -886,15 +913,18 @@ ${updatedAtTrigger}
             if ((!ef.IsPrimaryKey || !autoGeneratedPrimaryKey) && 
                 ef.IsVirtual === false && 
                 ef.AllowUpdateAPI && 
-                ef.AutoIncrement === false && 
-                ef.Type.trim().toLowerCase() !== 'uniqueidentifier') {
+                ef.AutoIncrement === false) {
                 if (!isFirst) 
                     sOutput += ',\n            '
                 else
                     isFirst = false;
     
-                if (prefix !== '' && ef.IsSpecialDateField )
-                    sOutput += `GETUTCDATE()`;
+                if (prefix !== '' && ef.IsSpecialDateField) {
+                    if (ef.IsCreatedAtField || ef.IsUpdatedAtField)
+                        sOutput += `GETUTCDATE()`; // we set the inserted row value to the current date for created and updated at fields
+                    else
+                        sOutput += `NULL`; // we don't set the deleted at field on an insert, only on a delete
+                }
                 else {
                     let sVal = prefix + (prefix !== '' ? ef.CodeName : ef.Name); // if we have a prefix, then we need to use the CodeName, otherwise we use the actual field name
                     if (!prefix || prefix.length === 0)
@@ -916,8 +946,7 @@ ${updatedAtTrigger}
                 !ef.IsVirtual && 
                 ef.AllowUpdateAPI && 
                 !ef.AutoIncrement && 
-                !ef.IsSpecialDateField && 
-                ef.Type.toLowerCase().trim() !== 'uniqueidentifier') {
+                !ef.IsSpecialDateField) {
                 if (!isFirst) 
                     sOutput += ',\n        '
                 else
@@ -945,6 +974,24 @@ ${updatedAtTrigger}
                 sSelect += ', ';
             sSelect += `@${k.CodeName} AS [${k.Name}]`;        
         }
+
+        // next up, create the delete code which is based on the type of delete the entity is set to
+        // start off by creating the where clause first and then prepend the delete or update statement to it
+        let deleteCode: string = `    WHERE 
+        ${entity.PrimaryKeys.map(k => `[${k.Name}] = @${k.CodeName}`).join(' AND ')}
+`
+        if (entity.DeleteType === 'Hard') {
+            deleteCode =`    DELETE FROM 
+        [${entity.SchemaName}].[${entity.BaseTable}]
+${deleteCode}`
+        }
+        else {
+            deleteCode = `    UPDATE
+        [${entity.SchemaName}].[${entity.BaseTable}]
+    SET
+        ${EntityInfo.DeletedAtFieldName} = GETUTCDATE()
+${deleteCode}        AND ${EntityInfo.DeletedAtFieldName} IS NULL -- don't update the record if it's already been deleted via a soft delete`
+        }
     
         return `
 ------------------------------------------------------------
@@ -959,10 +1006,7 @@ AS
 BEGIN
     SET NOCOUNT ON;${sCascadeDeletes}
 
-    DELETE FROM 
-        [${entity.SchemaName}].[${entity.BaseTable}]
-    WHERE 
-        ${entity.PrimaryKeys.map(k => `[${k.Name}] = @${k.CodeName}`).join(' AND ')}
+${deleteCode}
 
     SELECT ${sSelect} -- Return the primary key to indicate we successfully deleted the record
 END
