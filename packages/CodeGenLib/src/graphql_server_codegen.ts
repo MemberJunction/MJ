@@ -18,10 +18,10 @@ export class GraphQLServerGeneratorBase {
     generatedEntitiesImportLibrary: string,
     excludeRelatedEntitiesExternalToSchema: boolean
   ): boolean {
-    const isCoreEntities = generatedEntitiesImportLibrary.trim().toLowerCase() === '@memberjunction/core-entities';
+    const isInternal = generatedEntitiesImportLibrary.trim().toLowerCase().startsWith('@memberjunction/');
     let sRet: string = '';
     try {
-      sRet = this.generateAllEntitiesServerFileHeader(entities, generatedEntitiesImportLibrary, isCoreEntities);
+      sRet = this.generateAllEntitiesServerFileHeader(entities, generatedEntitiesImportLibrary, isInternal);
 
       for (let i: number = 0; i < entities.length; ++i) {
         sRet += this.generateServerEntityString(entities[i], false, generatedEntitiesImportLibrary, excludeRelatedEntitiesExternalToSchema);
@@ -50,7 +50,7 @@ export class GraphQLServerGeneratorBase {
     generatedEntitiesImportLibrary: string,
     excludeRelatedEntitiesExternalToSchema: boolean
   ): string {
-    const isCoreEntities = generatedEntitiesImportLibrary.trim().toLowerCase() === '@memberjunction/core-entities';
+    const isInternal = generatedEntitiesImportLibrary.trim().toLowerCase() === '@memberjunction/core-entities';
     let sEntityOutput: string = '';
     try {
       const md = new Metadata();
@@ -79,7 +79,7 @@ export class GraphQLServerGeneratorBase {
           if (!excludeRelatedEntitiesExternalToSchema || re.SchemaName === entity.SchemaName) {
             // only include the relationship if either we are NOT excluding related entities external to the schema
             // or if the related entity is in the same schema as the current entity
-            sEntityOutput += this.generateServerRelationship(md, entity.RelatedEntities[j], isCoreEntities);
+            sEntityOutput += this.generateServerRelationship(md, entity.RelatedEntities[j], isInternal);
           }
         } else {
           sEntityOutput += `// Relationship to ${r.RelatedEntity} is not included in the API because it is not marked as IncludeInAPI\n`;
@@ -93,7 +93,7 @@ export class GraphQLServerGeneratorBase {
         entity,
         serverGraphQLTypeName,
         excludeRelatedEntitiesExternalToSchema,
-        isCoreEntities
+        isInternal
       );
     } catch (err) {
       logError(err);
@@ -102,7 +102,7 @@ export class GraphQLServerGeneratorBase {
     }
   }
 
-  public generateAllEntitiesServerFileHeader(entities: EntityInfo[], importLibrary: string, isCoreEntities: boolean): string {
+  public generateAllEntitiesServerFileHeader(entities: EntityInfo[], importLibrary: string, isInternal: boolean): string {
     let sRet: string = `/********************************************************************************
 * ALL ENTITIES - TypeGraphQL Type Class Definition - AUTO GENERATED FILE
 * Generated Entities and Resolvers for Server
@@ -122,7 +122,7 @@ import { Metadata, EntityPermissionType, CompositeKey } from '@memberjunction/co
 import { MaxLength } from 'class-validator';
 import { DataSource } from 'typeorm';
 ${
-  isCoreEntities
+  isInternal
     ? `import { mj_core_schema } from '../config';\n`
     : `import * as mj_core_schema_server_object_types from '@memberjunction/server'`
 }
@@ -233,9 +233,9 @@ export class ${serverGraphQLTypeName} {`;
     }
   }
 
-  protected generateServerRelationship(md: Metadata, r: EntityRelationshipInfo, isCoreEntities: boolean): string {
+  protected generateServerRelationship(md: Metadata, r: EntityRelationshipInfo, isInternal: boolean): string {
     const re = md.Entities.find((e) => e.Name.toLowerCase() === r.RelatedEntity.toLowerCase());
-    const classPackagePrefix: string = re.SchemaName === mjCoreSchema && !isCoreEntities ? 'mj_core_schema_server_object_types.' : '';
+    const classPackagePrefix: string = re.SchemaName === mjCoreSchema && !isInternal ? 'mj_core_schema_server_object_types.' : '';
     const relatedClassName = classPackagePrefix + r.RelatedEntityBaseTableCodeName;
 
     if (r.Type.toLowerCase().trim() == 'one to many') {
@@ -256,7 +256,7 @@ export class ${serverGraphQLTypeName} {`;
     entity: EntityInfo,
     serverGraphQLTypeName: string,
     excludeRelatedEntitiesExternalToSchema: boolean,
-    isCoreEntities: boolean
+    isInternal: boolean
   ): string {
     const md = new Metadata();
     let sRet = '';
@@ -360,7 +360,7 @@ export class ${entity.BaseTableCodeName}Resolver${entity.CustomResolverAPI ? 'Ba
             // only include the relationship if either we are NOT excluding related entities external to the schema
             // or if the related entity is in the same schema as the current entity
             if (r.Type.toLowerCase().trim() == 'many to many') sRet += this.generateManyToManyFieldResolver(entity, r);
-            else sRet += this.generateOneToManyFieldResolver(entity, r, isCoreEntities);
+            else sRet += this.generateOneToManyFieldResolver(entity, r, isInternal);
           }
         } else {
           sRet += `// Relationship to ${r.RelatedEntity} is not included in the API because it is not marked as IncludeInAPI\n`;
@@ -501,7 +501,7 @@ export class ${classPrefix}${entity.BaseTableCodeName}Input {`;
     return sRet;
   }
 
-  protected generateOneToManyFieldResolver(entity: EntityInfo, r: EntityRelationshipInfo, isCoreEntities: boolean): string {
+  protected generateOneToManyFieldResolver(entity: EntityInfo, r: EntityRelationshipInfo, isInternal: boolean): string {
     const md = new Metadata();
     const re = md.Entities.find((e) => e.Name.toLowerCase() == r.RelatedEntity.toLowerCase());
     const instanceName = entity.BaseTableCodeName.toLowerCase() + this.GraphQLTypeSuffix;
@@ -530,7 +530,7 @@ export class ${classPrefix}${entity.BaseTableCodeName}Input {`;
     }
 
     const quotes = filterField.NeedsQuotes ? "'" : '';
-    const serverPackagePrefix = re.SchemaName === mjCoreSchema && !isCoreEntities ? 'mj_core_schema_server_object_types.' : '';
+    const serverPackagePrefix = re.SchemaName === mjCoreSchema && !isInternal ? 'mj_core_schema_server_object_types.' : '';
     const serverClassName = serverPackagePrefix + r.RelatedEntityBaseTableCodeName + this.GraphQLTypeSuffix;
     return `
     @FieldResolver(() => [${serverClassName}])
