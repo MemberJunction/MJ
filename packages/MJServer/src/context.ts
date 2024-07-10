@@ -1,6 +1,6 @@
 import { IncomingMessage } from 'http';
 import * as url from 'url';
-import { JwtPayload, VerifyOptions, decode, verify } from 'jsonwebtoken';
+import { default as jwt } from 'jsonwebtoken';
 import 'reflect-metadata';
 import { Subject, firstValueFrom } from 'rxjs';
 import { AuthenticationError, AuthorizationError } from 'type-graphql';
@@ -11,21 +11,13 @@ import { userEmailMap } from './config';
 import { UserPayload } from './types';
 import { TokenExpiredError } from './auth';
 
-const verifyAsync = async (
-  issuer: string,
-  options: VerifyOptions,
-  token: string
-): Promise<JwtPayload> =>
+const verifyAsync = async (issuer: string, options: jwt.VerifyOptions, token: string): Promise<jwt.JwtPayload> =>
   new Promise((resolve, reject) => {
-    verify(token, getSigningKeys(issuer), options, (err, jwt) => {
+    jwt.verify(token, getSigningKeys(issuer), options, (err, jwt) => {
       if (jwt && typeof jwt !== 'string' && !err) {
         const payload = jwt.payload ?? jwt;
 
-        console.log(
-          `Valid token: ${payload.name} (${
-            payload.email ? payload.email : payload.preferred_username
-          })`
-        ); // temporary fix to check preferred_username if email is not present
+        console.log(`Valid token: ${payload.name} (${payload.email ? payload.email : payload.preferred_username})`); // temporary fix to check preferred_username if email is not present
         resolve(payload);
       } else {
         console.warn('Invalid token');
@@ -48,12 +40,12 @@ export const getUserPayload = async (
       throw new AuthenticationError('Missing token');
     }
 
-    const payload = decode(token);
+    const payload = jwt.decode(token);
     if (!payload || typeof payload === 'string') {
       throw new AuthenticationError('Invalid token payload');
     }
 
-    const expiryDate = new Date( (payload.exp ?? 0) * 1000);
+    const expiryDate = new Date((payload.exp ?? 0) * 1000);
     if (expiryDate.getTime() <= Date.now()) {
       throw new TokenExpiredError(expiryDate);
     }
@@ -69,19 +61,16 @@ export const getUserPayload = async (
       authCache.set(token, true);
     }
 
-    const email = payload?.email
-      ? userEmailMap[payload?.email] ?? payload?.email
-      : payload?.preferred_username; // temporary fix to check preferred_username if email is not present
+    const email = payload?.email ? userEmailMap[payload?.email] ?? payload?.email : payload?.preferred_username; // temporary fix to check preferred_username if email is not present
     const fullName = payload?.name;
     const firstName = payload?.given_name || fullName?.split(' ')[0];
     const lastName = payload?.family_name || fullName?.split(' ')[1] || fullName?.split(' ')[0];
     const userRecord = await verifyUserRecord(email, firstName, lastName, requestDomain, dataSource);
 
     if (!userRecord) {
-      console.error(`User ${email} not found`); 
+      console.error(`User ${email} not found`);
       throw new AuthorizationError();
-    }
-    else if (!userRecord.IsActive) {
+    } else if (!userRecord.IsActive) {
       console.error(`User ${email} found but inactive`);
       throw new AuthorizationError();
     }
@@ -91,9 +80,7 @@ export const getUserPayload = async (
     console.error(e);
     if (e instanceof TokenExpiredError) {
       throw e;
-    }
-    else
-      return {} as UserPayload;
+    } else return {} as UserPayload;
   }
 };
 
@@ -103,17 +90,22 @@ export const contextFunction =
     await firstValueFrom(setupComplete$); // wait for setup to complete before processing the request
 
     const sessionIdRaw = req.headers['x-session-id'];
-    const requestDomain = url.parse(req.headers.origin || '')
+    const requestDomain = url.parse(req.headers.origin || '');
     const sessionId = sessionIdRaw ? sessionIdRaw.toString() : '';
     const bearerToken = req.headers.authorization ?? '';
 
-    const userPayload = await getUserPayload(bearerToken, sessionId, dataSource, requestDomain?.hostname ? requestDomain.hostname : undefined);
+    const userPayload = await getUserPayload(
+      bearerToken,
+      sessionId,
+      dataSource,
+      requestDomain?.hostname ? requestDomain.hostname : undefined
+    );
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const operationName: string| undefined = (req as any).body?.operationName;
+    const operationName: string | undefined = (req as any).body?.operationName;
     if (operationName !== 'IntrospectionQuery') {
       console.log({ operationName });
-    } 
+    }
 
     return { dataSource, userPayload };
   };

@@ -2,21 +2,15 @@
   "name": "@memberjunction/server",
   "version": "1.8.1",
   "description": "MemberJunction: This project provides API access via GraphQL to the common data store.",
-  "main": "dist/index.js",
-  "types": "src/index.ts",
+  "main": "./dist/index.js",
+  "types": "./src/index.ts",
+  "type": "module",
   "author": "MemberJunction.com",
   "license": "ISC",
   "scripts": {
-    "clean": "rimraf dist",
     "build": "tsc",
-    "watch": "tsc -w",
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "lint:eslint": "eslint \"**/*.{ts,js,}\" --max-warnings=0",
-    "lint:tsc": "tsc --noemit",
-    "lint": "concurrently \"npm:lint:eslint\" \"npm:lint:tsc\"",
-    "pretty": "prettier --write \"**/*.{ts,js,}\"",
-    "codegen": "cpy --flat ../codegen/output/entities/*.ts src/entities",
-    "postcodegen": "npm run pretty"
+    "bundle": "tsc -noEmit && pkgroll --sourcemap --minify",
+    "watch": "tsc -w"
   },
   "dependencies": {
     "@apollo/server": "^4.9.1",
@@ -71,12 +65,7 @@
     "zod": "^3.23.4"
   },
   "devDependencies": {
-    "concurrently": "8.2.2",
-    "cpy-cli": "^5.0.0",
-    "prettier": "^3.3.1",
-    "rimraf": "5.0.7",
-    "ts-node": "^10.9.2",
-    "ts-node-dev": "^2.0.0",
+    "pkgroll": "2.1.1",
     "typescript": "^5.4.5"
   }
 }

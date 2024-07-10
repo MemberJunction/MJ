@@ -15,19 +15,19 @@ export class FieldMapper {
    * Creates a new FieldMapper instance.
    * @param fieldMap An optional field map to use for mapping fields. If not provided, the default field map will be used.
    */
-  constructor(fieldMap?: Record<string, string>) {
-    this._fieldMap = fieldMap;
-  }
+  constructor() {}
 
   /**
    * Maps fields from one name to another mutating the object in place.
    * @param obj The object to mutate
    */
-  public MapFields(obj: Record<string, unknown>) {
-    for (const k in obj) {
-      if (k in this._fieldMap) {
-        obj[this._fieldMap[k]] = obj[k];
-        delete obj[k];
+  public MapFields(obj?: Record<string, unknown>) {
+    if (obj) {
+      for (const k in obj) {
+        if (k in this._fieldMap) {
+          obj[this._fieldMap[k]] = obj[k];
+          delete obj[k];
+        }
       }
     }
     return obj;

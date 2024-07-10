@@ -1,101 +1,104 @@
 /********************************************************************************
 * ALL ENTITIES - TypeGraphQL Type Class Definition - AUTO GENERATED FILE
 * Generated Entities and Resolvers for Server
-* 
+*
 * GENERATED: 7/6/2024, 9:47:29 PM
-* 
+*
 *   >>> DO NOT MODIFY THIS FILE!!!!!!!!!!!!
 *   >>> YOUR CHANGES WILL BE OVERWRITTEN
 *   >>> THE NEXT TIME THIS FILE IS GENERATED
-* 
+*
 **********************************************************************************/
-import { Arg, Ctx, Int, Query, Resolver, Field, Float, ObjectType, FieldResolver, Root, InputType, Mutation, 
-            PubSub, PubSubEngine, ResolverBase, RunViewByIDInput, RunViewByNameInput, RunDynamicViewInput,
-            AppContext, KeyValuePairInput, DeleteOptionsInput } from '@memberjunction/server';
+import { Arg, Ctx, Int, Query, Resolver, Field, Float, ObjectType, FieldResolver, Root, InputType, Mutation, PubSub, PubSubEngine}  from 'type-graphql';
+import { ResolverBase } from '../generic/ResolverBase';
+import { RunViewByIDInput, RunViewByNameInput, RunDynamicViewInput } from '../generic/RunViewResolver';
+import { AppContext} from '../types';
+import { KeyValuePairInput } from '../generic/KeyValuePairInput';
+import { DeleteOptionsInput } from '../generic/DeleteOptionsInput';
 import { Metadata, EntityPermissionType, CompositeKey } from '@memberjunction/core'
 
 import { MaxLength } from 'class-validator';
 import { DataSource } from 'typeorm';
 import { mj_core_schema } from '../config';
 
-import * as mj_core_schema_server_object_types from '@memberjunction/server'
+// import * as mj_core_schema_server_object_types from '../index'
 
 import { ScheduledActionEntity, ScheduledActionParamEntity, CompanyEntity, EmployeeEntity, UserFavoriteEntity, EmployeeCompanyIntegrationEntity, EmployeeRoleEntity, EmployeeSkillEntity, RoleEntity, SkillEntity, IntegrationURLFormatEntity, IntegrationEntity, CompanyIntegrationEntity, EntityFieldEntity, EntityEntity, UserEntity, EntityRelationshipEntity, UserRecordLogEntity, UserViewEntity, CompanyIntegrationRunEntity, CompanyIntegrationRunDetailEntity, ErrorLogEntity, ApplicationEntity, ApplicationEntityEntity, EntityPermissionEntity, UserApplicationEntityEntity, UserApplicationEntity, CompanyIntegrationRunAPILogEntity, ListEntity, ListDetailEntity, UserViewRunEntity, UserViewRunDetailEntity, WorkflowRunEntity, WorkflowEntity, WorkflowEngineEntity, RecordChangeEntity, UserRoleEntity, RowLevelSecurityFilterEntity, AuditLogEntity, AuthorizationEntity, AuthorizationRoleEntity, AuditLogTypeEntity, EntityFieldValueEntity, AIModelEntity, AIActionEntity, AIModelActionEntity, EntityAIActionEntity, AIModelTypeEntity, QueueTypeEntity, QueueEntity, QueueTaskEntity, DashboardEntity, OutputTriggerTypeEntity, OutputFormatTypeEntity, OutputDeliveryTypeEntity, ReportEntity, ReportSnapshotEntity, ResourceTypeEntity, TagEntity, TaggedItemEntity, WorkspaceEntity, WorkspaceItemEntity, DatasetEntity, DatasetItemEntity, ConversationDetailEntity, ConversationEntity, UserNotificationEntity, SchemaInfoEntity, CompanyIntegrationRecordMapEntity, RecordMergeLogEntity, RecordMergeDeletionLogEntity, QueryFieldEntity, QueryCategoryEntity, QueryEntity, QueryPermissionEntity, VectorIndexEntity, EntityDocumentTypeEntity, EntityDocumentRunEntity, VectorDatabaseEntity, EntityRecordDocumentEntity, EntityDocumentEntity, DataContextItemEntity, DataContextEntity, UserViewCategoryEntity, DashboardCategoryEntity, ReportCategoryEntity, FileStorageProviderEntity, FileEntity, FileCategoryEntity, FileEntityRecordLinkEntity, VersionInstallationEntity, DuplicateRunDetailMatchEntity, EntityDocumentSettingEntity, EntitySettingEntity, DuplicateRunEntity, DuplicateRunDetailEntity, ApplicationSettingEntity, ActionCategoryEntity, EntityActionEntity, EntityActionInvocationEntity, ActionAuthorizationEntity, EntityActionInvocationTypeEntity, ActionEntity, EntityActionFilterEntity, ActionFilterEntity, ActionContextTypeEntity, ActionResultCodeEntity, ActionContextEntity, ActionExecutionLogEntity, ActionParamEntity, ActionLibraryEntity, LibraryEntity, ListCategoryEntity, CommunicationProviderEntity, CommunicationRunEntity, CommunicationProviderMessageTypeEntity, CommunicationLogEntity, CommunicationBaseMessageTypeEntity, TemplateEntity, TemplateCategoryEntity, TemplateContentEntity, TemplateParamEntity, TemplateContentTypeEntity, RecommendationEntity, RecommendationProviderEntity, RecommendationRunEntity, RecommendationItemEntity, EntityCommunicationMessageTypeEntity, EntityCommunicationFieldEntity, RecordChangeReplayRunEntity, LibraryItemEntity, EntityRelationshipDisplayComponentEntity, EntityActionParamEntity } from '@memberjunction/core-entities';
-    
+
 
 //****************************************************************************
 // ENTITY CLASS for Scheduled Actions
 //****************************************************************************
 @ObjectType({ description: 'Track scheduled actions and their details' })
-export class ScheduledAction_ {  
-    @Field() 
+export class ScheduledAction_ {
+    @Field()
     @MaxLength(16)
     ID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(510)
     Name: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     Description?: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     CreatedByUserID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     ActionID: string;
-          
-    @Field({description: 'Type of the scheduled action (Daily, Weekly, Monthly, Yearly, Custom)'}) 
+
+    @Field({description: 'Type of the scheduled action (Daily, Weekly, Monthly, Yearly, Custom)'})
     @MaxLength(40)
     Type: string;
-          
-    @Field({nullable: true, description: 'Cron expression defining the schedule, automatically maintained by the system unless Type is Custom, in which case the user directly sets this'}) 
+
+    @Field({nullable: true, description: 'Cron expression defining the schedule, automatically maintained by the system unless Type is Custom, in which case the user directly sets this'})
     @MaxLength(200)
     CronExpression?: string;
-          
-    @Field({description: 'Timezone for the scheduled action, if not specified defaults to UTC/Z'}) 
+
+    @Field({description: 'Timezone for the scheduled action, if not specified defaults to UTC/Z'})
     @MaxLength(200)
     Timezone: string;
-          
-    @Field({description: 'Status of the scheduled action (Pending, Active, Disabled, Expired)'}) 
+
+    @Field({description: 'Status of the scheduled action (Pending, Active, Disabled, Expired)'})
     @MaxLength(40)
     Status: string;
-          
-    @Field(() => Int, {nullable: true, description: 'Interval in days for the scheduled action'}) 
+
+    @Field(() => Int, {nullable: true, description: 'Interval in days for the scheduled action'})
     IntervalDays?: number;
-          
-    @Field({nullable: true, description: 'Day of the week for the scheduled action'}) 
+
+    @Field({nullable: true, description: 'Day of the week for the scheduled action'})
     @MaxLength(40)
     DayOfWeek?: string;
-          
-    @Field(() => Int, {nullable: true, description: 'Day of the month for the scheduled action'}) 
+
+    @Field(() => Int, {nullable: true, description: 'Day of the month for the scheduled action'})
     DayOfMonth?: number;
-          
-    @Field({nullable: true, description: 'Month for the scheduled action'}) 
+
+    @Field({nullable: true, description: 'Month for the scheduled action'})
     @MaxLength(40)
     Month?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(510)
     CustomCronExpression?: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__CreatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-        
-    @Field(() => [mj_core_schema_server_object_types.ScheduledActionParam_])
-    ScheduledActionParamsArray: mj_core_schema_server_object_types.ScheduledActionParam_[]; // Link to ScheduledActionParams
-    
+
+    @Field(() => [ScheduledActionParam_])
+    ScheduledActionParamsArray: ScheduledActionParam_[]; // Link to ScheduledActionParams
+
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for Scheduled Actions   
+// INPUT TYPE for Scheduled Actions
 //****************************************************************************
 @InputType()
 export class CreateScheduledActionInput {
@@ -138,10 +141,10 @@ export class CreateScheduledActionInput {
     @Field({ nullable: true })
     CustomCronExpression?: string;
 }
-    
-        
+
+
 //****************************************************************************
-// INPUT TYPE for Scheduled Actions   
+// INPUT TYPE for Scheduled Actions
 //****************************************************************************
 @InputType()
 export class UpdateScheduledActionInput {
@@ -190,7 +193,7 @@ export class UpdateScheduledActionInput {
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
 }
-    
+
 //****************************************************************************
 // RESOLVER for Scheduled Actions
 //****************************************************************************
@@ -242,24 +245,24 @@ export class ScheduledActionResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Scheduled Actions', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-      
-    @FieldResolver(() => [mj_core_schema_server_object_types.ScheduledActionParam_])
+
+    @FieldResolver(() => [ScheduledActionParam_])
     async ScheduledActionParamsArray(@Root() scheduledaction_: ScheduledAction_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Scheduled Action Params', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwScheduledActionParams] WHERE [ScheduledActionID]='${scheduledaction_.ID}' ` + this.getRowLevelSecurityWhereClause('Scheduled Action Params', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Scheduled Action Params', await dataSource.query(sSQL));
         return result;
     }
-        
+
     @Mutation(() => ScheduledAction_)
     async CreateScheduledAction(
         @Arg('input', () => CreateScheduledActionInput) input: CreateScheduledActionInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
+        @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.CreateRecord('Scheduled Actions', input, dataSource, userPayload, pubSub)
     }
-        
+
     @Mutation(() => ScheduledAction_)
     async UpdateScheduledAction(
         @Arg('input', () => UpdateScheduledActionInput) input: UpdateScheduledActionInput,
@@ -268,54 +271,54 @@ export class ScheduledActionResolver extends ResolverBase {
     ) {
         return this.UpdateRecord('Scheduled Actions', input, dataSource, userPayload, pubSub);
     }
-    
+
     @Mutation(() => ScheduledAction_)
     async DeleteScheduledAction(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Scheduled Actions', key, options, dataSource, userPayload, pubSub);
     }
-    
+
 }
 
 //****************************************************************************
 // ENTITY CLASS for Scheduled Action Params
 //****************************************************************************
 @ObjectType()
-export class ScheduledActionParam_ {  
-    @Field() 
+export class ScheduledActionParam_ {
+    @Field()
     @MaxLength(16)
     ID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     ScheduledActionID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     ActionParamID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(40)
     ValueType: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     Value?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     Comments?: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__CreatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-        
+
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for Scheduled Action Params   
+// INPUT TYPE for Scheduled Action Params
 //****************************************************************************
 @InputType()
 export class CreateScheduledActionParamInput {
@@ -334,10 +337,10 @@ export class CreateScheduledActionParamInput {
     @Field({ nullable: true })
     Comments?: string;
 }
-    
-        
+
+
 //****************************************************************************
-// INPUT TYPE for Scheduled Action Params   
+// INPUT TYPE for Scheduled Action Params
 //****************************************************************************
 @InputType()
 export class UpdateScheduledActionParamInput {
@@ -362,7 +365,7 @@ export class UpdateScheduledActionParamInput {
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
 }
-    
+
 //****************************************************************************
 // RESOLVER for Scheduled Action Params
 //****************************************************************************
@@ -414,16 +417,16 @@ export class ScheduledActionParamResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Scheduled Action Params', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-    
+
     @Mutation(() => ScheduledActionParam_)
     async CreateScheduledActionParam(
         @Arg('input', () => CreateScheduledActionParamInput) input: CreateScheduledActionParamInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
+        @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.CreateRecord('Scheduled Action Params', input, dataSource, userPayload, pubSub)
     }
-        
+
     @Mutation(() => ScheduledActionParam_)
     async UpdateScheduledActionParam(
         @Arg('input', () => UpdateScheduledActionParamInput) input: UpdateScheduledActionParamInput,
@@ -432,65 +435,65 @@ export class ScheduledActionParamResolver extends ResolverBase {
     ) {
         return this.UpdateRecord('Scheduled Action Params', input, dataSource, userPayload, pubSub);
     }
-    
+
     @Mutation(() => ScheduledActionParam_)
     async DeleteScheduledActionParam(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Scheduled Action Params', key, options, dataSource, userPayload, pubSub);
     }
-    
+
 }
 
 //****************************************************************************
 // ENTITY CLASS for Companies
 //****************************************************************************
 @ObjectType({ description: 'A list of organizational units within your business. These can be subsidiaries or divisions or other units. Companies are used to organizae employee records and also for separating integrations if you have multiple integrations of the same type of system.' })
-export class Company_ {  
-    @Field() 
+export class Company_ {
+    @Field()
     @MaxLength(16)
     ID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(100)
     Name: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(400)
     Description: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(200)
     Website?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(1000)
     LogoURL?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(510)
     Domain?: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__CreatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-        
-    @Field(() => [mj_core_schema_server_object_types.Workflow_])
-    WorkflowsArray: mj_core_schema_server_object_types.Workflow_[]; // Link to Workflows
-    
-    @Field(() => [mj_core_schema_server_object_types.CompanyIntegration_])
-    CompanyIntegrationsArray: mj_core_schema_server_object_types.CompanyIntegration_[]; // Link to CompanyIntegrations
-    
-    @Field(() => [mj_core_schema_server_object_types.Employee_])
-    EmployeesArray: mj_core_schema_server_object_types.Employee_[]; // Link to Employees
-    
+
+    @Field(() => [Workflow_])
+    WorkflowsArray: Workflow_[]; // Link to Workflows
+
+    @Field(() => [CompanyIntegration_])
+    CompanyIntegrationsArray: CompanyIntegration_[]; // Link to CompanyIntegrations
+
+    @Field(() => [Employee_])
+    EmployeesArray: Employee_[]; // Link to Employees
+
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for Companies   
+// INPUT TYPE for Companies
 //****************************************************************************
 @InputType()
 export class CreateCompanyInput {
@@ -509,10 +512,10 @@ export class CreateCompanyInput {
     @Field({ nullable: true })
     Domain?: string;
 }
-    
-        
+
+
 //****************************************************************************
-// INPUT TYPE for Companies   
+// INPUT TYPE for Companies
 //****************************************************************************
 @InputType()
 export class UpdateCompanyInput {
@@ -537,7 +540,7 @@ export class UpdateCompanyInput {
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
 }
-    
+
 //****************************************************************************
 // RESOLVER for Companies
 //****************************************************************************
@@ -589,7 +592,7 @@ export class CompanyResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Companies', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-    
+
     @Query(() => [Company_])
     async AllCompanies(@Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Companies', userPayload);
@@ -597,40 +600,40 @@ export class CompanyResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Companies', await dataSource.query(sSQL));
         return result;
     }
-      
-    @FieldResolver(() => [mj_core_schema_server_object_types.Workflow_])
+
+    @FieldResolver(() => [Workflow_])
     async WorkflowsArray(@Root() company_: Company_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Workflows', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwWorkflows] WHERE [CompanyName]='${company_.ID}' ` + this.getRowLevelSecurityWhereClause('Workflows', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Workflows', await dataSource.query(sSQL));
         return result;
     }
-          
-    @FieldResolver(() => [mj_core_schema_server_object_types.CompanyIntegration_])
+
+    @FieldResolver(() => [CompanyIntegration_])
     async CompanyIntegrationsArray(@Root() company_: Company_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Company Integrations', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwCompanyIntegrations] WHERE [CompanyName]='${company_.ID}' ` + this.getRowLevelSecurityWhereClause('Company Integrations', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Company Integrations', await dataSource.query(sSQL));
         return result;
     }
-          
-    @FieldResolver(() => [mj_core_schema_server_object_types.Employee_])
+
+    @FieldResolver(() => [Employee_])
     async EmployeesArray(@Root() company_: Company_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Employees', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEmployees] WHERE [CompanyID]='${company_.ID}' ` + this.getRowLevelSecurityWhereClause('Employees', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Employees', await dataSource.query(sSQL));
         return result;
     }
-        
+
     @Mutation(() => Company_)
     async CreateCompany(
         @Arg('input', () => CreateCompanyInput) input: CreateCompanyInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
+        @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.CreateRecord('Companies', input, dataSource, userPayload, pubSub)
     }
-        
+
     @Mutation(() => Company_)
     async UpdateCompany(
         @Arg('input', () => UpdateCompanyInput) input: UpdateCompanyInput,
@@ -639,106 +642,106 @@ export class CompanyResolver extends ResolverBase {
     ) {
         return this.UpdateRecord('Companies', input, dataSource, userPayload, pubSub);
     }
-    
+
     @Mutation(() => Company_)
     async DeleteCompany(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Companies', key, options, dataSource, userPayload, pubSub);
     }
-    
+
 }
 
 //****************************************************************************
 // ENTITY CLASS for Employees
 //****************************************************************************
 @ObjectType({ description: 'A list of employees across all units of your organization' })
-export class Employee_ {  
-    @Field() 
+export class Employee_ {
+    @Field()
     @MaxLength(16)
     ID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     BCMID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(60)
     FirstName: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(100)
     LastName: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     CompanyID: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(16)
     SupervisorID?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(100)
     Title?: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(200)
     Email: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(40)
     Phone?: string;
-          
-    @Field(() => Boolean) 
+
+    @Field(() => Boolean)
     Active: boolean;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__CreatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(162)
     FirstLast?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(162)
     Supervisor?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(60)
     SupervisorFirstName?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(100)
     SupervisorLastName?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(200)
     SupervisorEmail?: string;
-        
-    @Field(() => [mj_core_schema_server_object_types.User_])
-    UsersArray: mj_core_schema_server_object_types.User_[]; // Link to Users
-    
-    @Field(() => [mj_core_schema_server_object_types.EmployeeSkill_])
-    EmployeeSkillsArray: mj_core_schema_server_object_types.EmployeeSkill_[]; // Link to EmployeeSkills
-    
-    @Field(() => [mj_core_schema_server_object_types.EmployeeCompanyIntegration_])
-    EmployeeCompanyIntegrationsArray: mj_core_schema_server_object_types.EmployeeCompanyIntegration_[]; // Link to EmployeeCompanyIntegrations
-    
-    @Field(() => [mj_core_schema_server_object_types.Employee_])
-    EmployeesArray: mj_core_schema_server_object_types.Employee_[]; // Link to Employees
-    
-    @Field(() => [mj_core_schema_server_object_types.EmployeeRole_])
-    EmployeeRolesArray: mj_core_schema_server_object_types.EmployeeRole_[]; // Link to EmployeeRoles
-    
+
+    @Field(() => [User_])
+    UsersArray: User_[]; // Link to Users
+
+    @Field(() => [EmployeeSkill_])
+    EmployeeSkillsArray: EmployeeSkill_[]; // Link to EmployeeSkills
+
+    @Field(() => [EmployeeCompanyIntegration_])
+    EmployeeCompanyIntegrationsArray: EmployeeCompanyIntegration_[]; // Link to EmployeeCompanyIntegrations
+
+    @Field(() => [Employee_])
+    EmployeesArray: Employee_[]; // Link to Employees
+
+    @Field(() => [EmployeeRole_])
+    EmployeeRolesArray: EmployeeRole_[]; // Link to EmployeeRoles
+
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for Employees   
+// INPUT TYPE for Employees
 //****************************************************************************
 @InputType()
 export class CreateEmployeeInput {
@@ -766,10 +769,10 @@ export class CreateEmployeeInput {
     @Field(() => Boolean)
     Active: boolean;
 }
-    
-        
+
+
 //****************************************************************************
-// INPUT TYPE for Employees   
+// INPUT TYPE for Employees
 //****************************************************************************
 @InputType()
 export class UpdateEmployeeInput {
@@ -803,7 +806,7 @@ export class UpdateEmployeeInput {
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
 }
-    
+
 //****************************************************************************
 // RESOLVER for Employees
 //****************************************************************************
@@ -855,7 +858,7 @@ export class EmployeeResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Employees', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-    
+
     @Query(() => [Employee_])
     async AllEmployees(@Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Employees', userPayload);
@@ -863,56 +866,56 @@ export class EmployeeResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Employees', await dataSource.query(sSQL));
         return result;
     }
-      
-    @FieldResolver(() => [mj_core_schema_server_object_types.User_])
+
+    @FieldResolver(() => [User_])
     async UsersArray(@Root() employee_: Employee_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Users', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwUsers] WHERE [EmployeeID]='${employee_.ID}' ` + this.getRowLevelSecurityWhereClause('Users', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Users', await dataSource.query(sSQL));
         return result;
     }
-          
-    @FieldResolver(() => [mj_core_schema_server_object_types.EmployeeSkill_])
+
+    @FieldResolver(() => [EmployeeSkill_])
     async EmployeeSkillsArray(@Root() employee_: Employee_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Employee Skills', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEmployeeSkills] WHERE [EmployeeID]='${employee_.ID}' ` + this.getRowLevelSecurityWhereClause('Employee Skills', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Employee Skills', await dataSource.query(sSQL));
         return result;
     }
-          
-    @FieldResolver(() => [mj_core_schema_server_object_types.EmployeeCompanyIntegration_])
+
+    @FieldResolver(() => [EmployeeCompanyIntegration_])
     async EmployeeCompanyIntegrationsArray(@Root() employee_: Employee_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Employee Company Integrations', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEmployeeCompanyIntegrations] WHERE [EmployeeID]='${employee_.ID}' ` + this.getRowLevelSecurityWhereClause('Employee Company Integrations', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Employee Company Integrations', await dataSource.query(sSQL));
         return result;
     }
-          
-    @FieldResolver(() => [mj_core_schema_server_object_types.Employee_])
+
+    @FieldResolver(() => [Employee_])
     async EmployeesArray(@Root() employee_: Employee_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Employees', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEmployees] WHERE [SupervisorID]='${employee_.ID}' ` + this.getRowLevelSecurityWhereClause('Employees', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Employees', await dataSource.query(sSQL));
         return result;
     }
-          
-    @FieldResolver(() => [mj_core_schema_server_object_types.EmployeeRole_])
+
+    @FieldResolver(() => [EmployeeRole_])
     async EmployeeRolesArray(@Root() employee_: Employee_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Employee Roles', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEmployeeRoles] WHERE [EmployeeID]='${employee_.ID}' ` + this.getRowLevelSecurityWhereClause('Employee Roles', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Employee Roles', await dataSource.query(sSQL));
         return result;
     }
-        
+
     @Mutation(() => Employee_)
     async CreateEmployee(
         @Arg('input', () => CreateEmployeeInput) input: CreateEmployeeInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
+        @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.CreateRecord('Employees', input, dataSource, userPayload, pubSub)
     }
-        
+
     @Mutation(() => Employee_)
     async UpdateEmployee(
         @Arg('input', () => UpdateEmployeeInput) input: UpdateEmployeeInput,
@@ -921,60 +924,60 @@ export class EmployeeResolver extends ResolverBase {
     ) {
         return this.UpdateRecord('Employees', input, dataSource, userPayload, pubSub);
     }
-    
+
     @Mutation(() => Employee_)
     async DeleteEmployee(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Employees', key, options, dataSource, userPayload, pubSub);
     }
-    
+
 }
 
 //****************************************************************************
 // ENTITY CLASS for User Favorites
 //****************************************************************************
 @ObjectType({ description: 'Records that each user can mark as a favorite for easy access' })
-export class UserFavorite_ {  
-    @Field() 
+export class UserFavorite_ {
+    @Field()
     @MaxLength(16)
     ID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     UserID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     EntityID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(900)
     RecordID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__CreatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(510)
     Entity: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(510)
     EntityBaseTable: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(510)
     EntityBaseView: string;
-        
+
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for User Favorites   
+// INPUT TYPE for User Favorites
 //****************************************************************************
 @InputType()
 export class CreateUserFavoriteInput {
@@ -987,10 +990,10 @@ export class CreateUserFavoriteInput {
     @Field()
     RecordID: string;
 }
-    
-        
+
+
 //****************************************************************************
-// INPUT TYPE for User Favorites   
+// INPUT TYPE for User Favorites
 //****************************************************************************
 @InputType()
 export class UpdateUserFavoriteInput {
@@ -1009,7 +1012,7 @@ export class UpdateUserFavoriteInput {
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
 }
-    
+
 //****************************************************************************
 // RESOLVER for User Favorites
 //****************************************************************************
@@ -1061,16 +1064,16 @@ export class UserFavoriteResolverBase extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('User Favorites', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-    
+
     @Mutation(() => UserFavorite_)
     async CreateUserFavorite(
         @Arg('input', () => CreateUserFavoriteInput) input: CreateUserFavoriteInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
+        @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.CreateRecord('User Favorites', input, dataSource, userPayload, pubSub)
     }
-        
+
     @Mutation(() => UserFavorite_)
     async UpdateUserFavorite(
         @Arg('input', () => UpdateUserFavoriteInput) input: UpdateUserFavoriteInput,
@@ -1079,51 +1082,51 @@ export class UserFavoriteResolverBase extends ResolverBase {
     ) {
         return this.UpdateRecord('User Favorites', input, dataSource, userPayload, pubSub);
     }
-    
+
     @Mutation(() => UserFavorite_)
     async DeleteUserFavorite(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('User Favorites', key, options, dataSource, userPayload, pubSub);
     }
-    
+
 }
 
 //****************************************************************************
 // ENTITY CLASS for Employee Company Integrations
 //****************************************************************************
 @ObjectType()
-export class EmployeeCompanyIntegration_ {  
-    @Field() 
+export class EmployeeCompanyIntegration_ {
+    @Field()
     @MaxLength(16)
     ID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     EmployeeID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     CompanyIntegrationID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(1500)
     ExternalSystemRecordID: string;
-          
-    @Field(() => Boolean) 
+
+    @Field(() => Boolean)
     IsActive: boolean;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__CreatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-        
+
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for Employee Company Integrations   
+// INPUT TYPE for Employee Company Integrations
 //****************************************************************************
 @InputType()
 export class UpdateEmployeeCompanyIntegrationInput {
@@ -1145,7 +1148,7 @@ export class UpdateEmployeeCompanyIntegrationInput {
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
 }
-    
+
 //****************************************************************************
 // RESOLVER for Employee Company Integrations
 //****************************************************************************
@@ -1197,7 +1200,7 @@ export class EmployeeCompanyIntegrationResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Employee Company Integrations', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-    
+
     @Mutation(() => EmployeeCompanyIntegration_)
     async UpdateEmployeeCompanyIntegration(
         @Arg('input', () => UpdateEmployeeCompanyIntegrationInput) input: UpdateEmployeeCompanyIntegrationInput,
@@ -1206,42 +1209,42 @@ export class EmployeeCompanyIntegrationResolver extends ResolverBase {
     ) {
         return this.UpdateRecord('Employee Company Integrations', input, dataSource, userPayload, pubSub);
     }
-    
+
 }
 
 //****************************************************************************
 // ENTITY CLASS for Employee Roles
 //****************************************************************************
 @ObjectType()
-export class EmployeeRole_ {  
-    @Field() 
+export class EmployeeRole_ {
+    @Field()
     @MaxLength(16)
     ID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     EmployeeID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     RoleID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__CreatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(100)
     Role: string;
-        
+
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for Employee Roles   
+// INPUT TYPE for Employee Roles
 //****************************************************************************
 @InputType()
 export class UpdateEmployeeRoleInput {
@@ -1257,7 +1260,7 @@ export class UpdateEmployeeRoleInput {
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
 }
-    
+
 //****************************************************************************
 // RESOLVER for Employee Roles
 //****************************************************************************
@@ -1309,7 +1312,7 @@ export class EmployeeRoleResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Employee Roles', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-    
+
     @Mutation(() => EmployeeRole_)
     async UpdateEmployeeRole(
         @Arg('input', () => UpdateEmployeeRoleInput) input: UpdateEmployeeRoleInput,
@@ -1318,42 +1321,42 @@ export class EmployeeRoleResolver extends ResolverBase {
     ) {
         return this.UpdateRecord('Employee Roles', input, dataSource, userPayload, pubSub);
     }
-    
+
 }
 
 //****************************************************************************
 // ENTITY CLASS for Employee Skills
 //****************************************************************************
 @ObjectType()
-export class EmployeeSkill_ {  
-    @Field() 
+export class EmployeeSkill_ {
+    @Field()
     @MaxLength(16)
     ID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     EmployeeID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     SkillID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__CreatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(100)
     Skill: string;
-        
+
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for Employee Skills   
+// INPUT TYPE for Employee Skills
 //****************************************************************************
 @InputType()
 export class UpdateEmployeeSkillInput {
@@ -1369,7 +1372,7 @@ export class UpdateEmployeeSkillInput {
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
 }
-    
+
 //****************************************************************************
 // RESOLVER for Employee Skills
 //****************************************************************************
@@ -1421,7 +1424,7 @@ export class EmployeeSkillResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Employee Skills', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-    
+
     @Mutation(() => EmployeeSkill_)
     async UpdateEmployeeSkill(
         @Arg('input', () => UpdateEmployeeSkillInput) input: UpdateEmployeeSkillInput,
@@ -1430,60 +1433,60 @@ export class EmployeeSkillResolver extends ResolverBase {
     ) {
         return this.UpdateRecord('Employee Skills', input, dataSource, userPayload, pubSub);
     }
-    
+
 }
 
 //****************************************************************************
 // ENTITY CLASS for Roles
 //****************************************************************************
 @ObjectType({ description: 'Roles are used for security administration and can have zero to many Users as members' })
-export class Role_ {  
-    @Field() 
+export class Role_ {
+    @Field()
     @MaxLength(16)
     ID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(100)
     Name: string;
-          
-    @Field({nullable: true, description: 'Description of the role'}) 
+
+    @Field({nullable: true, description: 'Description of the role'})
     Description?: string;
-          
-    @Field({nullable: true, description: 'The unique ID of the role in the directory being used for authentication, for example an ID in Azure.'}) 
+
+    @Field({nullable: true, description: 'The unique ID of the role in the directory being used for authentication, for example an ID in Azure.'})
     @MaxLength(500)
     DirectoryID?: string;
-          
-    @Field({nullable: true, description: 'The name of the role in the database, this is used for auto-generating permission statements by CodeGen'}) 
+
+    @Field({nullable: true, description: 'The name of the role in the database, this is used for auto-generating permission statements by CodeGen'})
     @MaxLength(500)
     SQLName?: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__CreatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-        
-    @Field(() => [mj_core_schema_server_object_types.UserRole_])
-    UserRolesArray: mj_core_schema_server_object_types.UserRole_[]; // Link to UserRoles
-    
-    @Field(() => [mj_core_schema_server_object_types.AuthorizationRole_])
-    AuthorizationRolesArray: mj_core_schema_server_object_types.AuthorizationRole_[]; // Link to AuthorizationRoles
-    
-    @Field(() => [mj_core_schema_server_object_types.EntityPermission_])
-    EntityPermissionsArray: mj_core_schema_server_object_types.EntityPermission_[]; // Link to EntityPermissions
-    
-    @Field(() => [mj_core_schema_server_object_types.QueryPermission_])
-    QueryPermissionsArray: mj_core_schema_server_object_types.QueryPermission_[]; // Link to QueryPermissions
-    
-    @Field(() => [mj_core_schema_server_object_types.EmployeeRole_])
-    EmployeeRolesArray: mj_core_schema_server_object_types.EmployeeRole_[]; // Link to EmployeeRoles
-    
+
+    @Field(() => [UserRole_])
+    UserRolesArray: UserRole_[]; // Link to UserRoles
+
+    @Field(() => [AuthorizationRole_])
+    AuthorizationRolesArray: AuthorizationRole_[]; // Link to AuthorizationRoles
+
+    @Field(() => [EntityPermission_])
+    EntityPermissionsArray: EntityPermission_[]; // Link to EntityPermissions
+
+    @Field(() => [QueryPermission_])
+    QueryPermissionsArray: QueryPermission_[]; // Link to QueryPermissions
+
+    @Field(() => [EmployeeRole_])
+    EmployeeRolesArray: EmployeeRole_[]; // Link to EmployeeRoles
+
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for Roles   
+// INPUT TYPE for Roles
 //****************************************************************************
 @InputType()
 export class CreateRoleInput {
@@ -1499,10 +1502,10 @@ export class CreateRoleInput {
     @Field({ nullable: true })
     SQLName?: string;
 }
-    
-        
+
+
 //****************************************************************************
-// INPUT TYPE for Roles   
+// INPUT TYPE for Roles
 //****************************************************************************
 @InputType()
 export class UpdateRoleInput {
@@ -1524,7 +1527,7 @@ export class UpdateRoleInput {
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
 }
-    
+
 //****************************************************************************
 // RESOLVER for Roles
 //****************************************************************************
@@ -1576,7 +1579,7 @@ export class RoleResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Roles', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-    
+
     @Query(() => [Role_])
     async AllRoles(@Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Roles', userPayload);
@@ -1584,56 +1587,56 @@ export class RoleResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Roles', await dataSource.query(sSQL));
         return result;
     }
-      
-    @FieldResolver(() => [mj_core_schema_server_object_types.UserRole_])
+
+    @FieldResolver(() => [UserRole_])
     async UserRolesArray(@Root() role_: Role_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('User Roles', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwUserRoles] WHERE [RoleName]='${role_.ID}' ` + this.getRowLevelSecurityWhereClause('User Roles', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('User Roles', await dataSource.query(sSQL));
         return result;
     }
-          
-    @FieldResolver(() => [mj_core_schema_server_object_types.AuthorizationRole_])
+
+    @FieldResolver(() => [AuthorizationRole_])
     async AuthorizationRolesArray(@Root() role_: Role_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Authorization Roles', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAuthorizationRoles] WHERE [RoleName]='${role_.ID}' ` + this.getRowLevelSecurityWhereClause('Authorization Roles', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Authorization Roles', await dataSource.query(sSQL));
         return result;
     }
-          
-    @FieldResolver(() => [mj_core_schema_server_object_types.EntityPermission_])
+
+    @FieldResolver(() => [EntityPermission_])
     async EntityPermissionsArray(@Root() role_: Role_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entity Permissions', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityPermissions] WHERE [RoleName]='${role_.ID}' ` + this.getRowLevelSecurityWhereClause('Entity Permissions', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Entity Permissions', await dataSource.query(sSQL));
         return result;
     }
-          
-    @FieldResolver(() => [mj_core_schema_server_object_types.QueryPermission_])
+
+    @FieldResolver(() => [QueryPermission_])
     async QueryPermissionsArray(@Root() role_: Role_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Query Permissions', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwQueryPermissions] WHERE [RoleName]='${role_.ID}' ` + this.getRowLevelSecurityWhereClause('Query Permissions', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Query Permissions', await dataSource.query(sSQL));
         return result;
     }
-          
-    @FieldResolver(() => [mj_core_schema_server_object_types.EmployeeRole_])
+
+    @FieldResolver(() => [EmployeeRole_])
     async EmployeeRolesArray(@Root() role_: Role_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Employee Roles', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEmployeeRoles] WHERE [RoleID]='${role_.ID}' ` + this.getRowLevelSecurityWhereClause('Employee Roles', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Employee Roles', await dataSource.query(sSQL));
         return result;
     }
-        
+
     @Mutation(() => Role_)
     async CreateRole(
         @Arg('input', () => CreateRoleInput) input: CreateRoleInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
+        @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.CreateRecord('Roles', input, dataSource, userPayload, pubSub)
     }
-        
+
     @Mutation(() => Role_)
     async UpdateRole(
         @Arg('input', () => UpdateRoleInput) input: UpdateRoleInput,
@@ -1642,50 +1645,50 @@ export class RoleResolver extends ResolverBase {
     ) {
         return this.UpdateRecord('Roles', input, dataSource, userPayload, pubSub);
     }
-    
+
     @Mutation(() => Role_)
     async DeleteRole(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Roles', key, options, dataSource, userPayload, pubSub);
     }
-    
+
 }
 
 //****************************************************************************
 // ENTITY CLASS for Skills
 //****************************************************************************
 @ObjectType({ description: 'A hierarchical list of possible skills that are linked to Employees and can also be linked to any other entity' })
-export class Skill_ {  
-    @Field() 
+export class Skill_ {
+    @Field()
     @MaxLength(16)
     ID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(100)
     Name: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(16)
     ParentID?: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__CreatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(100)
     Parent?: string;
-        
-    @Field(() => [mj_core_schema_server_object_types.EmployeeSkill_])
-    EmployeeSkillsArray: mj_core_schema_server_object_types.EmployeeSkill_[]; // Link to EmployeeSkills
-    
-    @Field(() => [mj_core_schema_server_object_types.Skill_])
-    SkillsArray: mj_core_schema_server_object_types.Skill_[]; // Link to Skills
-    
+
+    @Field(() => [EmployeeSkill_])
+    EmployeeSkillsArray: EmployeeSkill_[]; // Link to EmployeeSkills
+
+    @Field(() => [Skill_])
+    SkillsArray: Skill_[]; // Link to Skills
+
 }
 //****************************************************************************
 // RESOLVER for Skills
@@ -1738,7 +1741,7 @@ export class SkillResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Skills', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-    
+
     @Query(() => [Skill_])
     async AllSkills(@Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Skills', userPayload);
@@ -1746,73 +1749,73 @@ export class SkillResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Skills', await dataSource.query(sSQL));
         return result;
     }
-      
-    @FieldResolver(() => [mj_core_schema_server_object_types.EmployeeSkill_])
+
+    @FieldResolver(() => [EmployeeSkill_])
     async EmployeeSkillsArray(@Root() skill_: Skill_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Employee Skills', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEmployeeSkills] WHERE [SkillID]='${skill_.ID}' ` + this.getRowLevelSecurityWhereClause('Employee Skills', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Employee Skills', await dataSource.query(sSQL));
         return result;
     }
-          
-    @FieldResolver(() => [mj_core_schema_server_object_types.Skill_])
+
+    @FieldResolver(() => [Skill_])
     async SkillsArray(@Root() skill_: Skill_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Skills', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwSkills] WHERE [ParentID]='${skill_.ID}' ` + this.getRowLevelSecurityWhereClause('Skills', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Skills', await dataSource.query(sSQL));
         return result;
     }
-        
+
 }
 
 //****************************************************************************
 // ENTITY CLASS for Integration URL Formats
 //****************************************************************************
 @ObjectType({ description: 'Used to generate web links for end users to easily access resources in a source system. URL Formats support templating to inject various field values at run-time to take a user directly to a resource in a source system.' })
-export class IntegrationURLFormat_ {  
-    @Field() 
+export class IntegrationURLFormat_ {
+    @Field()
     @MaxLength(16)
     ID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     IntegrationID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     EntityID: string;
-          
-    @Field({description: 'The URL Format for the given integration including the ability to include markup with fields from the integration'}) 
+
+    @Field({description: 'The URL Format for the given integration including the ability to include markup with fields from the integration'})
     @MaxLength(1000)
     URLFormat: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     Comments?: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__CreatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(200)
     Integration: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(1000)
     NavigationBaseURL?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(2000)
     FullURLFormat?: string;
-        
+
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for Integration URL Formats   
+// INPUT TYPE for Integration URL Formats
 //****************************************************************************
 @InputType()
 export class UpdateIntegrationURLFormatInput {
@@ -1834,7 +1837,7 @@ export class UpdateIntegrationURLFormatInput {
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
 }
-    
+
 //****************************************************************************
 // RESOLVER for Integration URL Formats
 //****************************************************************************
@@ -1886,7 +1889,7 @@ export class IntegrationURLFormatResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Integration URL Formats', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-    
+
     @Query(() => [IntegrationURLFormat_])
     async AllIntegrationURLFormats(@Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Integration URL Formats', userPayload);
@@ -1894,7 +1897,7 @@ export class IntegrationURLFormatResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Integration URL Formats', await dataSource.query(sSQL));
         return result;
     }
-    
+
     @Mutation(() => IntegrationURLFormat_)
     async UpdateIntegrationURLFormat(
         @Arg('input', () => UpdateIntegrationURLFormatInput) input: UpdateIntegrationURLFormatInput,
@@ -1903,65 +1906,65 @@ export class IntegrationURLFormatResolver extends ResolverBase {
     ) {
         return this.UpdateRecord('Integration URL Formats', input, dataSource, userPayload, pubSub);
     }
-    
+
 }
 
 //****************************************************************************
 // ENTITY CLASS for Integrations
 //****************************************************************************
 @ObjectType({ description: 'Catalog of all integrations that have been configured in the system.' })
-export class Integration_ {  
-    @Field() 
+export class Integration_ {
+    @Field()
     @MaxLength(200)
     Name: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(510)
     Description?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(1000)
     NavigationBaseURL?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(200)
     ClassName?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(200)
     ImportPath?: string;
-          
-    @Field(() => Int) 
+
+    @Field(() => Int)
     BatchMaxRequestCount: number;
-          
-    @Field(() => Int) 
+
+    @Field(() => Int)
     BatchRequestWaitTime: number;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__CreatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     ID: string;
-        
-    @Field(() => [mj_core_schema_server_object_types.IntegrationURLFormat_])
-    IntegrationURLFormatsArray: mj_core_schema_server_object_types.IntegrationURLFormat_[]; // Link to IntegrationURLFormats
-    
-    @Field(() => [mj_core_schema_server_object_types.CompanyIntegration_])
-    CompanyIntegrationsArray: mj_core_schema_server_object_types.CompanyIntegration_[]; // Link to CompanyIntegrations
-    
-    @Field(() => [mj_core_schema_server_object_types.RecordChange_])
-    RecordChangesArray: mj_core_schema_server_object_types.RecordChange_[]; // Link to RecordChanges
-    
+
+    @Field(() => [IntegrationURLFormat_])
+    IntegrationURLFormatsArray: IntegrationURLFormat_[]; // Link to IntegrationURLFormats
+
+    @Field(() => [CompanyIntegration_])
+    CompanyIntegrationsArray: CompanyIntegration_[]; // Link to CompanyIntegrations
+
+    @Field(() => [RecordChange_])
+    RecordChangesArray: RecordChange_[]; // Link to RecordChanges
+
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for Integrations   
+// INPUT TYPE for Integrations
 //****************************************************************************
 @InputType()
 export class UpdateIntegrationInput {
@@ -1992,7 +1995,7 @@ export class UpdateIntegrationInput {
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
 }
-    
+
 //****************************************************************************
 // RESOLVER for Integrations
 //****************************************************************************
@@ -2044,7 +2047,7 @@ export class IntegrationResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Integrations', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-    
+
     @Query(() => [Integration_])
     async AllIntegrations(@Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Integrations', userPayload);
@@ -2052,31 +2055,31 @@ export class IntegrationResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Integrations', await dataSource.query(sSQL));
         return result;
     }
-      
-    @FieldResolver(() => [mj_core_schema_server_object_types.IntegrationURLFormat_])
+
+    @FieldResolver(() => [IntegrationURLFormat_])
     async IntegrationURLFormatsArray(@Root() integration_: Integration_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Integration URL Formats', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwIntegrationURLFormats] WHERE [IntegrationID]='${integration_.ID}' ` + this.getRowLevelSecurityWhereClause('Integration URL Formats', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Integration URL Formats', await dataSource.query(sSQL));
         return result;
     }
-          
-    @FieldResolver(() => [mj_core_schema_server_object_types.CompanyIntegration_])
+
+    @FieldResolver(() => [CompanyIntegration_])
     async CompanyIntegrationsArray(@Root() integration_: Integration_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Company Integrations', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwCompanyIntegrations] WHERE [IntegrationName]='${integration_.ID}' ` + this.getRowLevelSecurityWhereClause('Company Integrations', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Company Integrations', await dataSource.query(sSQL));
         return result;
     }
-          
-    @FieldResolver(() => [mj_core_schema_server_object_types.RecordChange_])
+
+    @FieldResolver(() => [RecordChange_])
     async RecordChangesArray(@Root() integration_: Integration_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Record Changes', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwRecordChanges] WHERE [IntegrationID]='${integration_.ID}' ` + this.getRowLevelSecurityWhereClause('Record Changes', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Record Changes', await dataSource.query(sSQL));
         return result;
     }
-        
+
     @Mutation(() => Integration_)
     async UpdateIntegration(
         @Arg('input', () => UpdateIntegrationInput) input: UpdateIntegrationInput,
@@ -2085,116 +2088,116 @@ export class IntegrationResolver extends ResolverBase {
     ) {
         return this.UpdateRecord('Integrations', input, dataSource, userPayload, pubSub);
     }
-    
+
 }
 
 //****************************************************************************
 // ENTITY CLASS for Company Integrations
 //****************************************************************************
 @ObjectType({ description: 'Links individual company records to specific integrations' })
-export class CompanyIntegration_ {  
-    @Field() 
+export class CompanyIntegration_ {
+    @Field()
     @MaxLength(16)
     ID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     CompanyID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     IntegrationID: string;
-          
-    @Field(() => Boolean, {nullable: true}) 
+
+    @Field(() => Boolean, {nullable: true})
     IsActive?: boolean;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(510)
     AccessToken?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(510)
     RefreshToken?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(8)
     TokenExpirationDate?: Date;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(510)
     APIKey?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(200)
     ExternalSystemID?: string;
-          
-    @Field(() => Boolean) 
+
+    @Field(() => Boolean)
     IsExternalSystemReadOnly: boolean;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(510)
     ClientID?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(510)
     ClientSecret?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(510)
     CustomAttribute1?: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__CreatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(100)
     Company: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(200)
     Integration: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(200)
     DriverClassName?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(200)
     DriverImportPath?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(16)
     LastRunID?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(8)
     LastRunStartedAt?: Date;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(8)
     LastRunEndedAt?: Date;
-        
-    @Field(() => [mj_core_schema_server_object_types.CompanyIntegrationRecordMap_])
-    CompanyIntegrationRecordMapsArray: mj_core_schema_server_object_types.CompanyIntegrationRecordMap_[]; // Link to CompanyIntegrationRecordMaps
-    
-    @Field(() => [mj_core_schema_server_object_types.List_])
-    ListsArray: mj_core_schema_server_object_types.List_[]; // Link to Lists
-    
-    @Field(() => [mj_core_schema_server_object_types.CompanyIntegrationRun_])
-    CompanyIntegrationRunsArray: mj_core_schema_server_object_types.CompanyIntegrationRun_[]; // Link to CompanyIntegrationRuns
-    
-    @Field(() => [mj_core_schema_server_object_types.EmployeeCompanyIntegration_])
-    EmployeeCompanyIntegrationsArray: mj_core_schema_server_object_types.EmployeeCompanyIntegration_[]; // Link to EmployeeCompanyIntegrations
-    
+
+    @Field(() => [CompanyIntegrationRecordMap_])
+    CompanyIntegrationRecordMapsArray: CompanyIntegrationRecordMap_[]; // Link to CompanyIntegrationRecordMaps
+
+    @Field(() => [List_])
+    ListsArray: List_[]; // Link to Lists
+
+    @Field(() => [CompanyIntegrationRun_])
+    CompanyIntegrationRunsArray: CompanyIntegrationRun_[]; // Link to CompanyIntegrationRuns
+
+    @Field(() => [EmployeeCompanyIntegration_])
+    EmployeeCompanyIntegrationsArray: EmployeeCompanyIntegration_[]; // Link to EmployeeCompanyIntegrations
+
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for Company Integrations   
+// INPUT TYPE for Company Integrations
 //****************************************************************************
 @InputType()
 export class UpdateCompanyIntegrationInput {
@@ -2240,7 +2243,7 @@ export class UpdateCompanyIntegrationInput {
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
 }
-    
+
 //****************************************************************************
 // RESOLVER for Company Integrations
 //****************************************************************************
@@ -2292,39 +2295,39 @@ export class CompanyIntegrationResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Company Integrations', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-      
-    @FieldResolver(() => [mj_core_schema_server_object_types.CompanyIntegrationRecordMap_])
+
+    @FieldResolver(() => [CompanyIntegrationRecordMap_])
     async CompanyIntegrationRecordMapsArray(@Root() companyintegration_: CompanyIntegration_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Company Integration Record Maps', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwCompanyIntegrationRecordMaps] WHERE [CompanyIntegrationID]='${companyintegration_.ID}' ` + this.getRowLevelSecurityWhereClause('Company Integration Record Maps', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Company Integration Record Maps', await dataSource.query(sSQL));
         return result;
     }
-          
-    @FieldResolver(() => [mj_core_schema_server_object_types.List_])
+
+    @FieldResolver(() => [List_])
     async ListsArray(@Root() companyintegration_: CompanyIntegration_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Lists', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwLists] WHERE [CompanyIntegrationID]='${companyintegration_.ID}' ` + this.getRowLevelSecurityWhereClause('Lists', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Lists', await dataSource.query(sSQL));
         return result;
     }
-          
-    @FieldResolver(() => [mj_core_schema_server_object_types.CompanyIntegrationRun_])
+
+    @FieldResolver(() => [CompanyIntegrationRun_])
     async CompanyIntegrationRunsArray(@Root() companyintegration_: CompanyIntegration_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Company Integration Runs', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwCompanyIntegrationRuns] WHERE [CompanyIntegrationID]='${companyintegration_.ID}' ` + this.getRowLevelSecurityWhereClause('Company Integration Runs', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Company Integration Runs', await dataSource.query(sSQL));
         return result;
     }
-          
-    @FieldResolver(() => [mj_core_schema_server_object_types.EmployeeCompanyIntegration_])
+
+    @FieldResolver(() => [EmployeeCompanyIntegration_])
     async EmployeeCompanyIntegrationsArray(@Root() companyintegration_: CompanyIntegration_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Employee Company Integrations', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEmployeeCompanyIntegrations] WHERE [CompanyIntegrationID]='${companyintegration_.ID}' ` + this.getRowLevelSecurityWhereClause('Employee Company Integrations', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Employee Company Integrations', await dataSource.query(sSQL));
         return result;
     }
-        
+
     @Mutation(() => CompanyIntegration_)
     async UpdateCompanyIntegration(
         @Arg('input', () => UpdateCompanyIntegrationInput) input: UpdateCompanyIntegrationInput,
@@ -2333,200 +2336,200 @@ export class CompanyIntegrationResolver extends ResolverBase {
     ) {
         return this.UpdateRecord('Company Integrations', input, dataSource, userPayload, pubSub);
     }
-    
+
 }
 
 //****************************************************************************
 // ENTITY CLASS for Entity Fields
 //****************************************************************************
 @ObjectType({ description: 'List of all fields within each entity with metadata about each field' })
-export class EntityField_ {  
-    @Field() 
+export class EntityField_ {
+    @Field()
     @MaxLength(16)
     ID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     EntityID: string;
-          
-    @Field(() => Int, {description: 'Display order of the field within the entity'}) 
+
+    @Field(() => Int, {description: 'Display order of the field within the entity'})
     Sequence: number;
-          
-    @Field({description: 'Name of the field within the database table'}) 
+
+    @Field({description: 'Name of the field within the database table'})
     @MaxLength(510)
     Name: string;
-          
-    @Field({nullable: true, description: 'A user friendly alternative to the field name'}) 
+
+    @Field({nullable: true, description: 'A user friendly alternative to the field name'})
     @MaxLength(510)
     DisplayName?: string;
-          
-    @Field({nullable: true, description: 'Descriptive text explaining the purpose of the field'}) 
+
+    @Field({nullable: true, description: 'Descriptive text explaining the purpose of the field'})
     Description?: string;
-          
-    @Field(() => Boolean, {description: 'When set to 1 (default), whenever a description is modified in the column within the underlying view (first choice) or table (second choice), the Description column in the entity field definition will be automatically updated. If you never set metadata in the database directly, you can leave this alone. However, if you have metadata set in the database level for description, and you want to provide a DIFFERENT description in this entity field definition, turn this bit off and then set the Description field and future CodeGen runs will NOT override the Description field here.'}) 
+
+    @Field(() => Boolean, {description: 'When set to 1 (default), whenever a description is modified in the column within the underlying view (first choice) or table (second choice), the Description column in the entity field definition will be automatically updated. If you never set metadata in the database directly, you can leave this alone. However, if you have metadata set in the database level for description, and you want to provide a DIFFERENT description in this entity field definition, turn this bit off and then set the Description field and future CodeGen runs will NOT override the Description field here.'})
     AutoUpdateDescription: boolean;
-          
-    @Field(() => Boolean, {description: 'Indicates if the field is part of the primary key for the entity (auto maintained by CodeGen)'}) 
+
+    @Field(() => Boolean, {description: 'Indicates if the field is part of the primary key for the entity (auto maintained by CodeGen)'})
     IsPrimaryKey: boolean;
-          
-    @Field(() => Boolean, {description: 'Indicates if the field must have unique values within the entity.'}) 
+
+    @Field(() => Boolean, {description: 'Indicates if the field must have unique values within the entity.'})
     IsUnique: boolean;
-          
-    @Field({nullable: true, description: 'Used for generating custom tabs in the generated forms, only utilized if GeneratedFormSection=Category'}) 
+
+    @Field({nullable: true, description: 'Used for generating custom tabs in the generated forms, only utilized if GeneratedFormSection=Category'})
     @MaxLength(510)
     Category?: string;
-          
-    @Field({description: 'SQL Data type (auto maintained by CodeGen)'}) 
+
+    @Field({description: 'SQL Data type (auto maintained by CodeGen)'})
     @MaxLength(200)
     Type: string;
-          
-    @Field(() => Int, {nullable: true, description: 'SQL data length (auto maintained by CodeGen)'}) 
+
+    @Field(() => Int, {nullable: true, description: 'SQL data length (auto maintained by CodeGen)'})
     Length?: number;
-          
-    @Field(() => Int, {nullable: true, description: 'SQL precision (auto maintained by CodeGen)'}) 
+
+    @Field(() => Int, {nullable: true, description: 'SQL precision (auto maintained by CodeGen)'})
     Precision?: number;
-          
-    @Field(() => Int, {nullable: true, description: 'SQL scale (auto maintained by CodeGen)'}) 
+
+    @Field(() => Int, {nullable: true, description: 'SQL scale (auto maintained by CodeGen)'})
     Scale?: number;
-          
-    @Field(() => Boolean, {description: 'Does the column allow null or not (auto maintained by CodeGen)'}) 
+
+    @Field(() => Boolean, {description: 'Does the column allow null or not (auto maintained by CodeGen)'})
     AllowsNull: boolean;
-          
-    @Field({nullable: true, description: 'If a default value is defined for the field it is stored here (auto maintained by CodeGen)'}) 
+
+    @Field({nullable: true, description: 'If a default value is defined for the field it is stored here (auto maintained by CodeGen)'})
     @MaxLength(510)
     DefaultValue?: string;
-          
-    @Field(() => Boolean, {description: 'If this field automatically increments within the table, this field is set to 1 (auto maintained by CodeGen)'}) 
+
+    @Field(() => Boolean, {description: 'If this field automatically increments within the table, this field is set to 1 (auto maintained by CodeGen)'})
     AutoIncrement: boolean;
-          
-    @Field({description: 'Possible Values of None, List, ListOrUserEntry - the last option meaning that the list of possible values are options, but a user can enter anything else desired too.'}) 
+
+    @Field({description: 'Possible Values of None, List, ListOrUserEntry - the last option meaning that the list of possible values are options, but a user can enter anything else desired too.'})
     @MaxLength(40)
     ValueListType: string;
-          
-    @Field({nullable: true, description: 'Defines extended behaviors for a field such as for Email, Web URLs, Code, etc.'}) 
+
+    @Field({nullable: true, description: 'Defines extended behaviors for a field such as for Email, Web URLs, Code, etc.'})
     @MaxLength(100)
     ExtendedType?: string;
-          
-    @Field({nullable: true, description: 'The type of code associated with this field. Only used when the ExtendedType field is set to "Code"'}) 
+
+    @Field({nullable: true, description: 'The type of code associated with this field. Only used when the ExtendedType field is set to "Code"'})
     @MaxLength(100)
     CodeType?: string;
-          
-    @Field(() => Boolean, {description: 'If set to 1, this field will be included by default in any new view created by a user.'}) 
+
+    @Field(() => Boolean, {description: 'If set to 1, this field will be included by default in any new view created by a user.'})
     DefaultInView: boolean;
-          
-    @Field({nullable: true, description: 'NULL'}) 
+
+    @Field({nullable: true, description: 'NULL'})
     ViewCellTemplate?: string;
-          
-    @Field(() => Int, {nullable: true, description: 'Determines the default width for this field when included in a view'}) 
+
+    @Field(() => Int, {nullable: true, description: 'Determines the default width for this field when included in a view'})
     DefaultColumnWidth?: number;
-          
-    @Field(() => Boolean, {description: 'If set to 1, this field will be considered updateable by the API and object model. For this field to have effect, the column type must be updateable (e.g. not part of the primary key and not auto-increment)'}) 
+
+    @Field(() => Boolean, {description: 'If set to 1, this field will be considered updateable by the API and object model. For this field to have effect, the column type must be updateable (e.g. not part of the primary key and not auto-increment)'})
     AllowUpdateAPI: boolean;
-          
-    @Field(() => Boolean, {description: 'If set to 1, and if AllowUpdateAPI=1, the field can be edited within a view when the view is in edit mode.'}) 
+
+    @Field(() => Boolean, {description: 'If set to 1, and if AllowUpdateAPI=1, the field can be edited within a view when the view is in edit mode.'})
     AllowUpdateInView: boolean;
-          
-    @Field(() => Boolean, {description: 'If set to 1, this column will be included in user search queries for both traditional and full text search'}) 
+
+    @Field(() => Boolean, {description: 'If set to 1, this column will be included in user search queries for both traditional and full text search'})
     IncludeInUserSearchAPI: boolean;
-          
-    @Field(() => Boolean, {description: 'If set to 1, CodeGen will automatically generate a Full Text Catalog/Index in the database and include this field in the search index.'}) 
+
+    @Field(() => Boolean, {description: 'If set to 1, CodeGen will automatically generate a Full Text Catalog/Index in the database and include this field in the search index.'})
     FullTextSearchEnabled: boolean;
-          
-    @Field({nullable: true, description: 'NULL'}) 
+
+    @Field({nullable: true, description: 'NULL'})
     @MaxLength(1000)
     UserSearchParamFormatAPI?: string;
-          
-    @Field(() => Boolean, {description: 'If set to 1, this field will be included in the generated form by CodeGen. If set to 0, this field will be excluded from the generated form. For custom forms, this field has no effect as the layout is controlled independently.'}) 
+
+    @Field(() => Boolean, {description: 'If set to 1, this field will be included in the generated form by CodeGen. If set to 0, this field will be excluded from the generated form. For custom forms, this field has no effect as the layout is controlled independently.'})
     IncludeInGeneratedForm: boolean;
-          
-    @Field({description: 'When set to Top, the field will be placed in a "top area" on the top of a generated form and visible regardless of which tab is displayed. When set to "category" Options: Top, Category, Details'}) 
+
+    @Field({description: 'When set to Top, the field will be placed in a "top area" on the top of a generated form and visible regardless of which tab is displayed. When set to "category" Options: Top, Category, Details'})
     @MaxLength(20)
     GeneratedFormSection: string;
-          
-    @Field(() => Boolean, {description: 'NULL'}) 
+
+    @Field(() => Boolean, {description: 'NULL'})
     IsVirtual: boolean;
-          
-    @Field(() => Boolean, {description: 'If set to 1, this column will be used as the "Name" field for the entity and will be used to display the name of the record in various places in the UI.'}) 
+
+    @Field(() => Boolean, {description: 'If set to 1, this column will be used as the "Name" field for the entity and will be used to display the name of the record in various places in the UI.'})
     IsNameField: boolean;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(16)
     RelatedEntityID?: string;
-          
-    @Field({nullable: true, description: 'Name of the field in the Related Entity that this field links to (auto maintained by CodeGen)'}) 
+
+    @Field({nullable: true, description: 'Name of the field in the Related Entity that this field links to (auto maintained by CodeGen)'})
     @MaxLength(510)
     RelatedEntityFieldName?: string;
-          
-    @Field(() => Boolean, {description: 'If set to 1, the "Name" field of the Related Entity will be included in this entity as a virtual field'}) 
+
+    @Field(() => Boolean, {description: 'If set to 1, the "Name" field of the Related Entity will be included in this entity as a virtual field'})
     IncludeRelatedEntityNameFieldInBaseView: boolean;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(510)
     RelatedEntityNameFieldMap?: string;
-          
-    @Field({description: 'Controls the generated form in the MJ Explorer UI - defaults to a search box, other option is a drop down. Possible values are Search and Dropdown'}) 
+
+    @Field({description: 'Controls the generated form in the MJ Explorer UI - defaults to a search box, other option is a drop down. Possible values are Search and Dropdown'})
     @MaxLength(40)
     RelatedEntityDisplayType: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__CreatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(510)
     Entity: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(510)
     SchemaName: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(510)
     BaseTable: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(510)
     BaseView: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     EntityCodeName?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     EntityClassName?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(510)
     RelatedEntity?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(510)
     RelatedEntitySchemaName?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(510)
     RelatedEntityBaseTable?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(510)
     RelatedEntityBaseView?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     RelatedEntityCodeName?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     RelatedEntityClassName?: string;
-        
-    @Field(() => [mj_core_schema_server_object_types.EntityFieldValue_])
-    EntityFieldValuesArray: mj_core_schema_server_object_types.EntityFieldValue_[]; // Link to EntityFieldValues
-    
+
+    @Field(() => [EntityFieldValue_])
+    EntityFieldValuesArray: EntityFieldValue_[]; // Link to EntityFieldValues
+
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for Entity Fields   
+// INPUT TYPE for Entity Fields
 //****************************************************************************
 @InputType()
 export class CreateEntityFieldInput {
@@ -2605,10 +2608,10 @@ export class CreateEntityFieldInput {
     @Field()
     RelatedEntityDisplayType: string;
 }
-    
-        
+
+
 //****************************************************************************
-// INPUT TYPE for Entity Fields   
+// INPUT TYPE for Entity Fields
 //****************************************************************************
 @InputType()
 export class UpdateEntityFieldInput {
@@ -2693,7 +2696,7 @@ export class UpdateEntityFieldInput {
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
 }
-    
+
 //****************************************************************************
 // RESOLVER for Entity Fields
 //****************************************************************************
@@ -2745,7 +2748,7 @@ export class EntityFieldResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Entity Fields', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-    
+
     @Query(() => [EntityField_])
     async AllEntityFields(@Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entity Fields', userPayload);
@@ -2753,24 +2756,24 @@ export class EntityFieldResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Entity Fields', await dataSource.query(sSQL));
         return result;
     }
-      
-    @FieldResolver(() => [mj_core_schema_server_object_types.EntityFieldValue_])
+
+    @FieldResolver(() => [EntityFieldValue_])
     async EntityFieldValuesArray(@Root() entityfield_: EntityField_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entity Field Values', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityFieldValues] WHERE [EntityFieldID]='${entityfield_.ID}' ` + this.getRowLevelSecurityWhereClause('Entity Field Values', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Entity Field Values', await dataSource.query(sSQL));
         return result;
     }
-        
+
     @Mutation(() => EntityField_)
     async CreateEntityField(
         @Arg('input', () => CreateEntityFieldInput) input: CreateEntityFieldInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
+        @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.CreateRecord('Entity Fields', input, dataSource, userPayload, pubSub)
     }
-        
+
     @Mutation(() => EntityField_)
     async UpdateEntityField(
         @Arg('input', () => UpdateEntityFieldInput) input: UpdateEntityFieldInput,
@@ -2779,313 +2782,313 @@ export class EntityFieldResolver extends ResolverBase {
     ) {
         return this.UpdateRecord('Entity Fields', input, dataSource, userPayload, pubSub);
     }
-    
+
     @Mutation(() => EntityField_)
     async DeleteEntityField(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Entity Fields', key, options, dataSource, userPayload, pubSub);
     }
-    
+
 }
 
 //****************************************************************************
 // ENTITY CLASS for Entities
 //****************************************************************************
 @ObjectType({ description: 'Catalog of all entities across all schemas' })
-export class Entity_ {  
-    @Field() 
+export class Entity_ {
+    @Field()
     @MaxLength(16)
     ID: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(16)
     ParentID?: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(510)
     Name: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(510)
     NameSuffix?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     Description?: string;
-          
-    @Field(() => Boolean, {description: 'When set to 1 (default), whenever a description is modified in the underlying view (first choice) or table (second choice), the Description column in the entity definition will be automatically updated. If you never set metadata in the database directly, you can leave this alone. However, if you have metadata set in the database level for description, and you want to provide a DIFFERENT description in this entity definition, turn this bit off and then set the Description field and future CodeGen runs will NOT override the Description field here.'}) 
+
+    @Field(() => Boolean, {description: 'When set to 1 (default), whenever a description is modified in the underlying view (first choice) or table (second choice), the Description column in the entity definition will be automatically updated. If you never set metadata in the database directly, you can leave this alone. However, if you have metadata set in the database level for description, and you want to provide a DIFFERENT description in this entity definition, turn this bit off and then set the Description field and future CodeGen runs will NOT override the Description field here.'})
     AutoUpdateDescription: boolean;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(510)
     BaseTable: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(510)
     BaseView: string;
-          
-    @Field(() => Boolean, {description: 'When set to 0, CodeGen no longer generates a base view for the entity.'}) 
+
+    @Field(() => Boolean, {description: 'When set to 0, CodeGen no longer generates a base view for the entity.'})
     BaseViewGenerated: boolean;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(510)
     SchemaName: string;
-          
-    @Field(() => Boolean) 
+
+    @Field(() => Boolean)
     VirtualEntity: boolean;
-          
-    @Field(() => Boolean, {description: 'When set to 1, changes made via the MemberJunction architecture will result in tracking records being created in the RecordChange table. In addition, when turned on CodeGen will ensure that your table has two fields: __mj_CreatedAt and __mj_UpdatedAt which are special fields used in conjunction with the RecordChange table to track changes to rows in your entity.'}) 
+
+    @Field(() => Boolean, {description: 'When set to 1, changes made via the MemberJunction architecture will result in tracking records being created in the RecordChange table. In addition, when turned on CodeGen will ensure that your table has two fields: __mj_CreatedAt and __mj_UpdatedAt which are special fields used in conjunction with the RecordChange table to track changes to rows in your entity.'})
     TrackRecordChanges: boolean;
-          
-    @Field(() => Boolean, {description: 'When set to 1, accessing a record by an end-user will result in an Audit Log record being created'}) 
+
+    @Field(() => Boolean, {description: 'When set to 1, accessing a record by an end-user will result in an Audit Log record being created'})
     AuditRecordAccess: boolean;
-          
-    @Field(() => Boolean, {description: 'When set to 1, users running a view against this entity will result in an Audit Log record being created.'}) 
+
+    @Field(() => Boolean, {description: 'When set to 1, users running a view against this entity will result in an Audit Log record being created.'})
     AuditViewRuns: boolean;
-          
-    @Field(() => Boolean, {description: 'If set to 0, the entity will not be available at all in the GraphQL API or the object model.'}) 
+
+    @Field(() => Boolean, {description: 'If set to 0, the entity will not be available at all in the GraphQL API or the object model.'})
     IncludeInAPI: boolean;
-          
-    @Field(() => Boolean, {description: 'If set to 1, a GraphQL query will be enabled that allows access to all rows in the entity.'}) 
+
+    @Field(() => Boolean, {description: 'If set to 1, a GraphQL query will be enabled that allows access to all rows in the entity.'})
     AllowAllRowsAPI: boolean;
-          
-    @Field(() => Boolean, {description: 'Global flag controlling if updates are allowed for any user, or not. If set to 1, a GraqhQL mutation and stored procedure are created. Permissions are still required to perform the action but if this flag is set to 0, no user will be able to perform the action.'}) 
+
+    @Field(() => Boolean, {description: 'Global flag controlling if updates are allowed for any user, or not. If set to 1, a GraqhQL mutation and stored procedure are created. Permissions are still required to perform the action but if this flag is set to 0, no user will be able to perform the action.'})
     AllowUpdateAPI: boolean;
-          
-    @Field(() => Boolean, {description: 'Global flag controlling if creates are allowed for any user, or not. If set to 1, a GraqhQL mutation and stored procedure are created. Permissions are still required to perform the action but if this flag is set to 0, no user will be able to perform the action.'}) 
+
+    @Field(() => Boolean, {description: 'Global flag controlling if creates are allowed for any user, or not. If set to 1, a GraqhQL mutation and stored procedure are created. Permissions are still required to perform the action but if this flag is set to 0, no user will be able to perform the action.'})
     AllowCreateAPI: boolean;
-          
-    @Field(() => Boolean, {description: 'Global flag controlling if deletes are allowed for any user, or not. If set to 1, a GraqhQL mutation and stored procedure are created. Permissions are still required to perform the action but if this flag is set to 0, no user will be able to perform the action.'}) 
+
+    @Field(() => Boolean, {description: 'Global flag controlling if deletes are allowed for any user, or not. If set to 1, a GraqhQL mutation and stored procedure are created. Permissions are still required to perform the action but if this flag is set to 0, no user will be able to perform the action.'})
     AllowDeleteAPI: boolean;
-          
-    @Field(() => Boolean, {description: 'Set to 1 if a custom resolver has been created for the entity.'}) 
+
+    @Field(() => Boolean, {description: 'Set to 1 if a custom resolver has been created for the entity.'})
     CustomResolverAPI: boolean;
-          
-    @Field(() => Boolean, {description: 'Enabling this bit will result in search being possible at the API and UI layers'}) 
+
+    @Field(() => Boolean, {description: 'Enabling this bit will result in search being possible at the API and UI layers'})
     AllowUserSearchAPI: boolean;
-          
-    @Field(() => Boolean) 
+
+    @Field(() => Boolean)
     FullTextSearchEnabled: boolean;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(510)
     FullTextCatalog?: string;
-          
-    @Field(() => Boolean) 
+
+    @Field(() => Boolean)
     FullTextCatalogGenerated: boolean;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(510)
     FullTextIndex?: string;
-          
-    @Field(() => Boolean) 
+
+    @Field(() => Boolean)
     FullTextIndexGenerated: boolean;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(510)
     FullTextSearchFunction?: string;
-          
-    @Field(() => Boolean) 
+
+    @Field(() => Boolean)
     FullTextSearchFunctionGenerated: boolean;
-          
-    @Field(() => Int, {nullable: true}) 
+
+    @Field(() => Int, {nullable: true})
     UserViewMaxRows?: number;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(510)
     spCreate?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(510)
     spUpdate?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(510)
     spDelete?: string;
-          
-    @Field(() => Boolean) 
+
+    @Field(() => Boolean)
     spCreateGenerated: boolean;
-          
-    @Field(() => Boolean) 
+
+    @Field(() => Boolean)
     spUpdateGenerated: boolean;
-          
-    @Field(() => Boolean) 
+
+    @Field(() => Boolean)
     spDeleteGenerated: boolean;
-          
-    @Field(() => Boolean, {description: 'When set to 1, the deleted spDelete will pre-process deletion to related entities that have 1:M cardinality with this entity. This does not have effect if spDeleteGenerated = 0'}) 
+
+    @Field(() => Boolean, {description: 'When set to 1, the deleted spDelete will pre-process deletion to related entities that have 1:M cardinality with this entity. This does not have effect if spDeleteGenerated = 0'})
     CascadeDeletes: boolean;
-          
-    @Field({description: 'Hard deletes physically remove rows from the underlying BaseTable. Soft deletes do not remove rows but instead mark the row as deleted by using the special field __mj_DeletedAt which will automatically be added to the entity\'s basetable by the CodeGen tool.'}) 
+
+    @Field({description: 'Hard deletes physically remove rows from the underlying BaseTable. Soft deletes do not remove rows but instead mark the row as deleted by using the special field __mj_DeletedAt which will automatically be added to the entity\'s basetable by the CodeGen tool.'})
     @MaxLength(20)
     DeleteType: string;
-          
-    @Field(() => Boolean, {description: 'This field must be turned on in order to enable merging of records for the entity. For AllowRecordMerge to be turned on, AllowDeleteAPI must be set to 1, and DeleteType must be set to Soft'}) 
+
+    @Field(() => Boolean, {description: 'This field must be turned on in order to enable merging of records for the entity. For AllowRecordMerge to be turned on, AllowDeleteAPI must be set to 1, and DeleteType must be set to Soft'})
     AllowRecordMerge: boolean;
-          
-    @Field({nullable: true, description: 'When specified, this stored procedure is used to find matching records in this particular entity. The convention is to pass in the primary key(s) columns for the given entity to the procedure and the return will be zero to many rows where there is a column for each primary key field(s) and a ProbabilityScore (numeric(1,12)) column that has a 0 to 1 value of the probability of a match.'}) 
+
+    @Field({nullable: true, description: 'When specified, this stored procedure is used to find matching records in this particular entity. The convention is to pass in the primary key(s) columns for the given entity to the procedure and the return will be zero to many rows where there is a column for each primary key field(s) and a ProbabilityScore (numeric(1,12)) column that has a 0 to 1 value of the probability of a match.'})
     @MaxLength(510)
     spMatch?: string;
-          
-    @Field({description: 'When another entity links to this entity with a foreign key, this is the default component type that will be used in the UI. CodeGen will populate the RelatedEntityDisplayType column in the Entity Fields entity with whatever is provided here whenever a new foreign key is detected by CodeGen. The selection can be overridden on a per-foreign-key basis in each row of the Entity Fields entity.'}) 
+
+    @Field({description: 'When another entity links to this entity with a foreign key, this is the default component type that will be used in the UI. CodeGen will populate the RelatedEntityDisplayType column in the Entity Fields entity with whatever is provided here whenever a new foreign key is detected by CodeGen. The selection can be overridden on a per-foreign-key basis in each row of the Entity Fields entity.'})
     @MaxLength(40)
     RelationshipDefaultDisplayType: string;
-          
-    @Field(() => Boolean) 
+
+    @Field(() => Boolean)
     UserFormGenerated: boolean;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(510)
     EntityObjectSubclassName?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(510)
     EntityObjectSubclassImport?: string;
-          
-    @Field({nullable: true, description: 'Used to specify a field within the entity that in turn contains the field name that will be used for record-level communication preferences. For example in a hypothetical entity called Contacts, say there is a field called PreferredComm and that field had possible values of Email1, SMS, and Phone, and those value in turn corresponded to field names in the entity. Each record in the Contacts entity could have a specific preference for which field would be used for communication. The MJ Communication Framework will use this information when available, as a priority ahead of the data in the Entity Communication Fields entity which is entity-level and not record-level.'}) 
+
+    @Field({nullable: true, description: 'Used to specify a field within the entity that in turn contains the field name that will be used for record-level communication preferences. For example in a hypothetical entity called Contacts, say there is a field called PreferredComm and that field had possible values of Email1, SMS, and Phone, and those value in turn corresponded to field names in the entity. Each record in the Contacts entity could have a specific preference for which field would be used for communication. The MJ Communication Framework will use this information when available, as a priority ahead of the data in the Entity Communication Fields entity which is entity-level and not record-level.'})
     @MaxLength(510)
     PreferredCommunicationField?: string;
-          
-    @Field({nullable: true, description: 'Optional, specify an icon (CSS Class) for each entity for display in the UI'}) 
+
+    @Field({nullable: true, description: 'Optional, specify an icon (CSS Class) for each entity for display in the UI'})
     @MaxLength(1000)
     Icon?: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__CreatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     CodeName?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     ClassName?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     BaseTableCodeName?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(510)
     ParentEntity?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(510)
     ParentBaseTable?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(510)
     ParentBaseView?: string;
-        
-    @Field(() => [mj_core_schema_server_object_types.AuditLog_])
-    AuditLogsArray: mj_core_schema_server_object_types.AuditLog_[]; // Link to AuditLogs
-    
-    @Field(() => [mj_core_schema_server_object_types.TemplateParam_])
-    TemplateParamsArray: mj_core_schema_server_object_types.TemplateParam_[]; // Link to TemplateParams
-    
-    @Field(() => [mj_core_schema_server_object_types.DatasetItem_])
-    DatasetItemsArray: mj_core_schema_server_object_types.DatasetItem_[]; // Link to DatasetItems
-    
-    @Field(() => [mj_core_schema_server_object_types.User_])
-    UsersArray: mj_core_schema_server_object_types.User_[]; // Link to Users
-    
-    @Field(() => [mj_core_schema_server_object_types.CompanyIntegrationRecordMap_])
-    CompanyIntegrationRecordMapsArray: mj_core_schema_server_object_types.CompanyIntegrationRecordMap_[]; // Link to CompanyIntegrationRecordMaps
-    
-    @Field(() => [mj_core_schema_server_object_types.Entity_])
-    EntitiesArray: mj_core_schema_server_object_types.Entity_[]; // Link to Entities
-    
-    @Field(() => [mj_core_schema_server_object_types.UserViewCategory_])
-    UserViewCategoriesArray: mj_core_schema_server_object_types.UserViewCategory_[]; // Link to UserViewCategories
-    
-    @Field(() => [mj_core_schema_server_object_types.EntityAIAction_])
-    EntityAIActionsArray: mj_core_schema_server_object_types.EntityAIAction_[]; // Link to EntityAIActions
-    
-    @Field(() => [mj_core_schema_server_object_types.EntityAction_])
-    EntityActionsArray: mj_core_schema_server_object_types.EntityAction_[]; // Link to EntityActions
-    
-    @Field(() => [mj_core_schema_server_object_types.Conversation_])
-    ConversationsArray: mj_core_schema_server_object_types.Conversation_[]; // Link to Conversations
-    
-    @Field(() => [mj_core_schema_server_object_types.DuplicateRun_])
-    DuplicateRunsArray: mj_core_schema_server_object_types.DuplicateRun_[]; // Link to DuplicateRuns
-    
-    @Field(() => [mj_core_schema_server_object_types.TaggedItem_])
-    TaggedItemsArray: mj_core_schema_server_object_types.TaggedItem_[]; // Link to TaggedItems
-    
-    @Field(() => [mj_core_schema_server_object_types.RecordMergeLog_])
-    RecordMergeLogsArray: mj_core_schema_server_object_types.RecordMergeLog_[]; // Link to RecordMergeLogs
-    
-    @Field(() => [mj_core_schema_server_object_types.UserApplicationEntity_])
-    UserApplicationEntitiesArray: mj_core_schema_server_object_types.UserApplicationEntity_[]; // Link to UserApplicationEntities
-    
-    @Field(() => [mj_core_schema_server_object_types.QueryField_])
-    QueryFieldsArray: mj_core_schema_server_object_types.QueryField_[]; // Link to QueryFields
-    
-    @Field(() => [mj_core_schema_server_object_types.UserView_])
-    UserViewsArray: mj_core_schema_server_object_types.UserView_[]; // Link to UserViews
-    
-    @Field(() => [mj_core_schema_server_object_types.RecommendationItem_])
-    RecommendationItemsArray: mj_core_schema_server_object_types.RecommendationItem_[]; // Link to RecommendationItems
-    
-    @Field(() => [mj_core_schema_server_object_types.EntityPermission_])
-    EntityPermissionsArray: mj_core_schema_server_object_types.EntityPermission_[]; // Link to EntityPermissions
-    
-    @Field(() => [mj_core_schema_server_object_types.List_])
-    ListsArray: mj_core_schema_server_object_types.List_[]; // Link to Lists
-    
-    @Field(() => [mj_core_schema_server_object_types.UserRecordLog_])
-    UserRecordLogsArray: mj_core_schema_server_object_types.UserRecordLog_[]; // Link to UserRecordLogs
-    
-    @Field(() => [mj_core_schema_server_object_types.EntityDocument_])
-    EntityDocumentsArray: mj_core_schema_server_object_types.EntityDocument_[]; // Link to EntityDocuments
-    
-    @Field(() => [mj_core_schema_server_object_types.Recommendation_])
-    RecommendationsArray: mj_core_schema_server_object_types.Recommendation_[]; // Link to Recommendations
-    
-    @Field(() => [mj_core_schema_server_object_types.FileEntityRecordLink_])
-    FileEntityRecordLinksArray: mj_core_schema_server_object_types.FileEntityRecordLink_[]; // Link to FileEntityRecordLinks
-    
-    @Field(() => [mj_core_schema_server_object_types.EntitySetting_])
-    EntitySettingsArray: mj_core_schema_server_object_types.EntitySetting_[]; // Link to EntitySettings
-    
-    @Field(() => [mj_core_schema_server_object_types.EntityRelationship_])
-    EntityRelationshipsArray: mj_core_schema_server_object_types.EntityRelationship_[]; // Link to EntityRelationships
-    
-    @Field(() => [mj_core_schema_server_object_types.CompanyIntegrationRunDetail_])
-    CompanyIntegrationRunDetailsArray: mj_core_schema_server_object_types.CompanyIntegrationRunDetail_[]; // Link to CompanyIntegrationRunDetails
-    
-    @Field(() => [mj_core_schema_server_object_types.DataContextItem_])
-    DataContextItemsArray: mj_core_schema_server_object_types.DataContextItem_[]; // Link to DataContextItems
-    
-    @Field(() => [mj_core_schema_server_object_types.IntegrationURLFormat_])
-    IntegrationURLFormatsArray: mj_core_schema_server_object_types.IntegrationURLFormat_[]; // Link to IntegrationURLFormats
-    
-    @Field(() => [mj_core_schema_server_object_types.EntityField_])
-    EntityFieldsArray: mj_core_schema_server_object_types.EntityField_[]; // Link to EntityFields
-    
-    @Field(() => [mj_core_schema_server_object_types.UserFavorite_])
-    UserFavoritesArray: mj_core_schema_server_object_types.UserFavorite_[]; // Link to UserFavorites
-    
-    @Field(() => [mj_core_schema_server_object_types.EntityCommunicationMessageType_])
-    EntityCommunicationMessageTypesArray: mj_core_schema_server_object_types.EntityCommunicationMessageType_[]; // Link to EntityCommunicationMessageTypes
-    
-    @Field(() => [mj_core_schema_server_object_types.EntityRecordDocument_])
-    EntityRecordDocumentsArray: mj_core_schema_server_object_types.EntityRecordDocument_[]; // Link to EntityRecordDocuments
-    
-    @Field(() => [mj_core_schema_server_object_types.RecordChange_])
-    RecordChangesArray: mj_core_schema_server_object_types.RecordChange_[]; // Link to RecordChanges
-    
-    @Field(() => [mj_core_schema_server_object_types.ApplicationEntity_])
-    ApplicationEntitiesArray: mj_core_schema_server_object_types.ApplicationEntity_[]; // Link to ApplicationEntities
-    
-    @Field(() => [mj_core_schema_server_object_types.ResourceType_])
-    ResourceTypesArray: mj_core_schema_server_object_types.ResourceType_[]; // Link to ResourceTypes
-    
+
+    @Field(() => [AuditLog_])
+    AuditLogsArray: AuditLog_[]; // Link to AuditLogs
+
+    @Field(() => [TemplateParam_])
+    TemplateParamsArray: TemplateParam_[]; // Link to TemplateParams
+
+    @Field(() => [DatasetItem_])
+    DatasetItemsArray: DatasetItem_[]; // Link to DatasetItems
+
+    @Field(() => [User_])
+    UsersArray: User_[]; // Link to Users
+
+    @Field(() => [CompanyIntegrationRecordMap_])
+    CompanyIntegrationRecordMapsArray: CompanyIntegrationRecordMap_[]; // Link to CompanyIntegrationRecordMaps
+
+    @Field(() => [Entity_])
+    EntitiesArray: Entity_[]; // Link to Entities
+
+    @Field(() => [UserViewCategory_])
+    UserViewCategoriesArray: UserViewCategory_[]; // Link to UserViewCategories
+
+    @Field(() => [EntityAIAction_])
+    EntityAIActionsArray: EntityAIAction_[]; // Link to EntityAIActions
+
+    @Field(() => [EntityAction_])
+    EntityActionsArray: EntityAction_[]; // Link to EntityActions
+
+    @Field(() => [Conversation_])
+    ConversationsArray: Conversation_[]; // Link to Conversations
+
+    @Field(() => [DuplicateRun_])
+    DuplicateRunsArray: DuplicateRun_[]; // Link to DuplicateRuns
+
+    @Field(() => [TaggedItem_])
+    TaggedItemsArray: TaggedItem_[]; // Link to TaggedItems
+
+    @Field(() => [RecordMergeLog_])
+    RecordMergeLogsArray: RecordMergeLog_[]; // Link to RecordMergeLogs
+
+    @Field(() => [UserApplicationEntity_])
+    UserApplicationEntitiesArray: UserApplicationEntity_[]; // Link to UserApplicationEntities
+
+    @Field(() => [QueryField_])
+    QueryFieldsArray: QueryField_[]; // Link to QueryFields
+
+    @Field(() => [UserView_])
+    UserViewsArray: UserView_[]; // Link to UserViews
+
+    @Field(() => [RecommendationItem_])
+    RecommendationItemsArray: RecommendationItem_[]; // Link to RecommendationItems
+
+    @Field(() => [EntityPermission_])
+    EntityPermissionsArray: EntityPermission_[]; // Link to EntityPermissions
+
+    @Field(() => [List_])
+    ListsArray: List_[]; // Link to Lists
+
+    @Field(() => [UserRecordLog_])
+    UserRecordLogsArray: UserRecordLog_[]; // Link to UserRecordLogs
+
+    @Field(() => [EntityDocument_])
+    EntityDocumentsArray: EntityDocument_[]; // Link to EntityDocuments
+
+    @Field(() => [Recommendation_])
+    RecommendationsArray: Recommendation_[]; // Link to Recommendations
+
+    @Field(() => [FileEntityRecordLink_])
+    FileEntityRecordLinksArray: FileEntityRecordLink_[]; // Link to FileEntityRecordLinks
+
+    @Field(() => [EntitySetting_])
+    EntitySettingsArray: EntitySetting_[]; // Link to EntitySettings
+
+    @Field(() => [EntityRelationship_])
+    EntityRelationshipsArray: EntityRelationship_[]; // Link to EntityRelationships
+
+    @Field(() => [CompanyIntegrationRunDetail_])
+    CompanyIntegrationRunDetailsArray: CompanyIntegrationRunDetail_[]; // Link to CompanyIntegrationRunDetails
+
+    @Field(() => [DataContextItem_])
+    DataContextItemsArray: DataContextItem_[]; // Link to DataContextItems
+
+    @Field(() => [IntegrationURLFormat_])
+    IntegrationURLFormatsArray: IntegrationURLFormat_[]; // Link to IntegrationURLFormats
+
+    @Field(() => [EntityField_])
+    EntityFieldsArray: EntityField_[]; // Link to EntityFields
+
+    @Field(() => [UserFavorite_])
+    UserFavoritesArray: UserFavorite_[]; // Link to UserFavorites
+
+    @Field(() => [EntityCommunicationMessageType_])
+    EntityCommunicationMessageTypesArray: EntityCommunicationMessageType_[]; // Link to EntityCommunicationMessageTypes
+
+    @Field(() => [EntityRecordDocument_])
+    EntityRecordDocumentsArray: EntityRecordDocument_[]; // Link to EntityRecordDocuments
+
+    @Field(() => [RecordChange_])
+    RecordChangesArray: RecordChange_[]; // Link to RecordChanges
+
+    @Field(() => [ApplicationEntity_])
+    ApplicationEntitiesArray: ApplicationEntity_[]; // Link to ApplicationEntities
+
+    @Field(() => [ResourceType_])
+    ResourceTypesArray: ResourceType_[]; // Link to ResourceTypes
+
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for Entities   
+// INPUT TYPE for Entities
 //****************************************************************************
 @InputType()
 export class CreateEntityInput {
@@ -3215,10 +3218,10 @@ export class CreateEntityInput {
     @Field({ nullable: true })
     Icon?: string;
 }
-    
-        
+
+
 //****************************************************************************
-// INPUT TYPE for Entities   
+// INPUT TYPE for Entities
 //****************************************************************************
 @InputType()
 export class UpdateEntityInput {
@@ -3354,7 +3357,7 @@ export class UpdateEntityInput {
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
 }
-    
+
 //****************************************************************************
 // RESOLVER for Entities
 //****************************************************************************
@@ -3406,7 +3409,7 @@ export class EntityResolverBase extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Entities', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-    
+
     @Query(() => [Entity_])
     async AllEntities(@Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entities', userPayload);
@@ -3414,296 +3417,296 @@ export class EntityResolverBase extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Entities', await dataSource.query(sSQL));
         return result;
     }
-      
-    @FieldResolver(() => [mj_core_schema_server_object_types.AuditLog_])
+
+    @FieldResolver(() => [AuditLog_])
     async AuditLogsArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Audit Logs', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAuditLogs] WHERE [EntityID]='${entity_.ID}' ` + this.getRowLevelSecurityWhereClause('Audit Logs', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Audit Logs', await dataSource.query(sSQL));
         return result;
     }
-          
-    @FieldResolver(() => [mj_core_schema_server_object_types.TemplateParam_])
+
+    @FieldResolver(() => [TemplateParam_])
     async TemplateParamsArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Template Params', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwTemplateParams] WHERE [EntityID]='${entity_.ID}' ` + this.getRowLevelSecurityWhereClause('Template Params', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Template Params', await dataSource.query(sSQL));
         return result;
     }
-          
-    @FieldResolver(() => [mj_core_schema_server_object_types.DatasetItem_])
+
+    @FieldResolver(() => [DatasetItem_])
     async DatasetItemsArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Dataset Items', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwDatasetItems] WHERE [EntityID]='${entity_.ID}' ` + this.getRowLevelSecurityWhereClause('Dataset Items', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Dataset Items', await dataSource.query(sSQL));
         return result;
     }
-          
-    @FieldResolver(() => [mj_core_schema_server_object_types.User_])
+
+    @FieldResolver(() => [User_])
     async UsersArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Users', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwUsers] WHERE [LinkedEntityID]='${entity_.ID}' ` + this.getRowLevelSecurityWhereClause('Users', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Users', await dataSource.query(sSQL));
         return result;
     }
-          
-    @FieldResolver(() => [mj_core_schema_server_object_types.CompanyIntegrationRecordMap_])
+
+    @FieldResolver(() => [CompanyIntegrationRecordMap_])
     async CompanyIntegrationRecordMapsArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Company Integration Record Maps', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwCompanyIntegrationRecordMaps] WHERE [EntityID]='${entity_.ID}' ` + this.getRowLevelSecurityWhereClause('Company Integration Record Maps', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Company Integration Record Maps', await dataSource.query(sSQL));
         return result;
     }
-          
-    @FieldResolver(() => [mj_core_schema_server_object_types.Entity_])
+
+    @FieldResolver(() => [Entity_])
     async EntitiesArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entities', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntities] WHERE [ParentID]='${entity_.ID}' ` + this.getRowLevelSecurityWhereClause('Entities', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Entities', await dataSource.query(sSQL));
         return result;
     }
-          
-    @FieldResolver(() => [mj_core_schema_server_object_types.UserViewCategory_])
+
+    @FieldResolver(() => [UserViewCategory_])
     async UserViewCategoriesArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('User View Categories', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwUserViewCategories] WHERE [EntityID]='${entity_.ID}' ` + this.getRowLevelSecurityWhereClause('User View Categories', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('User View Categories', await dataSource.query(sSQL));
         return result;
     }
-          
-    @FieldResolver(() => [mj_core_schema_server_object_types.EntityAIAction_])
+
+    @FieldResolver(() => [EntityAIAction_])
     async EntityAIActionsArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entity AI Actions', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityAIActions] WHERE [EntityID]='${entity_.ID}' ` + this.getRowLevelSecurityWhereClause('Entity AI Actions', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Entity AI Actions', await dataSource.query(sSQL));
         return result;
     }
-          
-    @FieldResolver(() => [mj_core_schema_server_object_types.EntityAction_])
+
+    @FieldResolver(() => [EntityAction_])
     async EntityActionsArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entity Actions', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityActions] WHERE [EntityID]='${entity_.ID}' ` + this.getRowLevelSecurityWhereClause('Entity Actions', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Entity Actions', await dataSource.query(sSQL));
         return result;
     }
-          
-    @FieldResolver(() => [mj_core_schema_server_object_types.Conversation_])
+
+    @FieldResolver(() => [Conversation_])
     async ConversationsArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Conversations', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwConversations] WHERE [LinkedEntityID]='${entity_.ID}' ` + this.getRowLevelSecurityWhereClause('Conversations', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Conversations', await dataSource.query(sSQL));
         return result;
     }
-          
-    @FieldResolver(() => [mj_core_schema_server_object_types.DuplicateRun_])
+
+    @FieldResolver(() => [DuplicateRun_])
     async DuplicateRunsArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Duplicate Runs', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwDuplicateRuns] WHERE [EntityID]='${entity_.ID}' ` + this.getRowLevelSecurityWhereClause('Duplicate Runs', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Duplicate Runs', await dataSource.query(sSQL));
         return result;
     }
-          
-    @FieldResolver(() => [mj_core_schema_server_object_types.TaggedItem_])
+
+    @FieldResolver(() => [TaggedItem_])
     async TaggedItemsArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Tagged Items', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwTaggedItems] WHERE [EntityID]='${entity_.ID}' ` + this.getRowLevelSecurityWhereClause('Tagged Items', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Tagged Items', await dataSource.query(sSQL));
         return result;
     }
-          
-    @FieldResolver(() => [mj_core_schema_server_object_types.RecordMergeLog_])
+
+    @FieldResolver(() => [RecordMergeLog_])
     async RecordMergeLogsArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Record Merge Logs', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwRecordMergeLogs] WHERE [EntityID]='${entity_.ID}' ` + this.getRowLevelSecurityWhereClause('Record Merge Logs', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Record Merge Logs', await dataSource.query(sSQL));
         return result;
     }
-          
-    @FieldResolver(() => [mj_core_schema_server_object_types.UserApplicationEntity_])
+
+    @FieldResolver(() => [UserApplicationEntity_])
     async UserApplicationEntitiesArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('User Application Entities', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwUserApplicationEntities] WHERE [EntityID]='${entity_.ID}' ` + this.getRowLevelSecurityWhereClause('User Application Entities', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('User Application Entities', await dataSource.query(sSQL));
         return result;
     }
-          
-    @FieldResolver(() => [mj_core_schema_server_object_types.QueryField_])
+
+    @FieldResolver(() => [QueryField_])
     async QueryFieldsArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Query Fields', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwQueryFields] WHERE [SourceEntityID]='${entity_.ID}' ` + this.getRowLevelSecurityWhereClause('Query Fields', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Query Fields', await dataSource.query(sSQL));
         return result;
     }
-          
-    @FieldResolver(() => [mj_core_schema_server_object_types.UserView_])
+
+    @FieldResolver(() => [UserView_])
     async UserViewsArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('User Views', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwUserViews] WHERE [EntityID]='${entity_.ID}' ` + this.getRowLevelSecurityWhereClause('User Views', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('User Views', await dataSource.query(sSQL));
         return result;
     }
-          
-    @FieldResolver(() => [mj_core_schema_server_object_types.RecommendationItem_])
+
+    @FieldResolver(() => [RecommendationItem_])
     async RecommendationItemsArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Recommendation Items', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwRecommendationItems] WHERE [DestinationEntityID]='${entity_.ID}' ` + this.getRowLevelSecurityWhereClause('Recommendation Items', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Recommendation Items', await dataSource.query(sSQL));
         return result;
     }
-          
-    @FieldResolver(() => [mj_core_schema_server_object_types.EntityPermission_])
+
+    @FieldResolver(() => [EntityPermission_])
     async EntityPermissionsArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entity Permissions', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityPermissions] WHERE [EntityID]='${entity_.ID}' ` + this.getRowLevelSecurityWhereClause('Entity Permissions', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Entity Permissions', await dataSource.query(sSQL));
         return result;
     }
-          
-    @FieldResolver(() => [mj_core_schema_server_object_types.List_])
+
+    @FieldResolver(() => [List_])
     async ListsArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Lists', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwLists] WHERE [EntityID]='${entity_.ID}' ` + this.getRowLevelSecurityWhereClause('Lists', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Lists', await dataSource.query(sSQL));
         return result;
     }
-          
-    @FieldResolver(() => [mj_core_schema_server_object_types.UserRecordLog_])
+
+    @FieldResolver(() => [UserRecordLog_])
     async UserRecordLogsArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('User Record Logs', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwUserRecordLogs] WHERE [EntityID]='${entity_.ID}' ` + this.getRowLevelSecurityWhereClause('User Record Logs', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('User Record Logs', await dataSource.query(sSQL));
         return result;
     }
-          
-    @FieldResolver(() => [mj_core_schema_server_object_types.EntityDocument_])
+
+    @FieldResolver(() => [EntityDocument_])
     async EntityDocumentsArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entity Documents', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityDocuments] WHERE [EntityID]='${entity_.ID}' ` + this.getRowLevelSecurityWhereClause('Entity Documents', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Entity Documents', await dataSource.query(sSQL));
         return result;
     }
-          
-    @FieldResolver(() => [mj_core_schema_server_object_types.Recommendation_])
+
+    @FieldResolver(() => [Recommendation_])
     async RecommendationsArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Recommendations', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwRecommendations] WHERE [SourceEntityID]='${entity_.ID}' ` + this.getRowLevelSecurityWhereClause('Recommendations', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Recommendations', await dataSource.query(sSQL));
         return result;
     }
-          
-    @FieldResolver(() => [mj_core_schema_server_object_types.FileEntityRecordLink_])
+
+    @FieldResolver(() => [FileEntityRecordLink_])
     async FileEntityRecordLinksArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('File Entity Record Links', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwFileEntityRecordLinks] WHERE [EntityID]='${entity_.ID}' ` + this.getRowLevelSecurityWhereClause('File Entity Record Links', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('File Entity Record Links', await dataSource.query(sSQL));
         return result;
     }
-          
-    @FieldResolver(() => [mj_core_schema_server_object_types.EntitySetting_])
+
+    @FieldResolver(() => [EntitySetting_])
     async EntitySettingsArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entity Settings', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntitySettings] WHERE [EntityID]='${entity_.ID}' ` + this.getRowLevelSecurityWhereClause('Entity Settings', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Entity Settings', await dataSource.query(sSQL));
         return result;
     }
-          
-    @FieldResolver(() => [mj_core_schema_server_object_types.EntityRelationship_])
+
+    @FieldResolver(() => [EntityRelationship_])
     async EntityRelationshipsArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entity Relationships', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityRelationships] WHERE [EntityID]='${entity_.ID}' ` + this.getRowLevelSecurityWhereClause('Entity Relationships', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Entity Relationships', await dataSource.query(sSQL));
         return result;
     }
-          
-    @FieldResolver(() => [mj_core_schema_server_object_types.CompanyIntegrationRunDetail_])
+
+    @FieldResolver(() => [CompanyIntegrationRunDetail_])
     async CompanyIntegrationRunDetailsArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Company Integration Run Details', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwCompanyIntegrationRunDetails] WHERE [EntityID]='${entity_.ID}' ` + this.getRowLevelSecurityWhereClause('Company Integration Run Details', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Company Integration Run Details', await dataSource.query(sSQL));
         return result;
     }
-          
-    @FieldResolver(() => [mj_core_schema_server_object_types.DataContextItem_])
+
+    @FieldResolver(() => [DataContextItem_])
     async DataContextItemsArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Data Context Items', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwDataContextItems] WHERE [EntityID]='${entity_.ID}' ` + this.getRowLevelSecurityWhereClause('Data Context Items', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Data Context Items', await dataSource.query(sSQL));
         return result;
     }
-          
-    @FieldResolver(() => [mj_core_schema_server_object_types.IntegrationURLFormat_])
+
+    @FieldResolver(() => [IntegrationURLFormat_])
     async IntegrationURLFormatsArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Integration URL Formats', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwIntegrationURLFormats] WHERE [EntityID]='${entity_.ID}' ` + this.getRowLevelSecurityWhereClause('Integration URL Formats', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Integration URL Formats', await dataSource.query(sSQL));
         return result;
     }
-          
-    @FieldResolver(() => [mj_core_schema_server_object_types.EntityField_])
+
+    @FieldResolver(() => [EntityField_])
     async EntityFieldsArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entity Fields', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityFields] WHERE [EntityID]='${entity_.ID}' ` + this.getRowLevelSecurityWhereClause('Entity Fields', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Entity Fields', await dataSource.query(sSQL));
         return result;
     }
-          
-    @FieldResolver(() => [mj_core_schema_server_object_types.UserFavorite_])
+
+    @FieldResolver(() => [UserFavorite_])
     async UserFavoritesArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('User Favorites', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwUserFavorites] WHERE [EntityID]='${entity_.ID}' ` + this.getRowLevelSecurityWhereClause('User Favorites', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('User Favorites', await dataSource.query(sSQL));
         return result;
     }
-          
-    @FieldResolver(() => [mj_core_schema_server_object_types.EntityCommunicationMessageType_])
+
+    @FieldResolver(() => [EntityCommunicationMessageType_])
     async EntityCommunicationMessageTypesArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entity Communication Message Types', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityCommunicationMessageTypes] WHERE [EntityID]='${entity_.ID}' ` + this.getRowLevelSecurityWhereClause('Entity Communication Message Types', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Entity Communication Message Types', await dataSource.query(sSQL));
         return result;
     }
-          
-    @FieldResolver(() => [mj_core_schema_server_object_types.EntityRecordDocument_])
+
+    @FieldResolver(() => [EntityRecordDocument_])
     async EntityRecordDocumentsArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entity Record Documents', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityRecordDocuments] WHERE [EntityID]='${entity_.ID}' ` + this.getRowLevelSecurityWhereClause('Entity Record Documents', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Entity Record Documents', await dataSource.query(sSQL));
         return result;
     }
-          
-    @FieldResolver(() => [mj_core_schema_server_object_types.RecordChange_])
+
+    @FieldResolver(() => [RecordChange_])
     async RecordChangesArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Record Changes', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwRecordChanges] WHERE [EntityID]='${entity_.ID}' ` + this.getRowLevelSecurityWhereClause('Record Changes', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Record Changes', await dataSource.query(sSQL));
         return result;
     }
-          
-    @FieldResolver(() => [mj_core_schema_server_object_types.ApplicationEntity_])
+
+    @FieldResolver(() => [ApplicationEntity_])
     async ApplicationEntitiesArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Application Entities', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwApplicationEntities] WHERE [EntityID]='${entity_.ID}' ` + this.getRowLevelSecurityWhereClause('Application Entities', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Application Entities', await dataSource.query(sSQL));
         return result;
     }
-          
-    @FieldResolver(() => [mj_core_schema_server_object_types.ResourceType_])
+
+    @FieldResolver(() => [ResourceType_])
     async ResourceTypesArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Resource Types', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwResourceTypes] WHERE [EntityID]='${entity_.ID}' ` + this.getRowLevelSecurityWhereClause('Resource Types', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Resource Types', await dataSource.query(sSQL));
         return result;
     }
-        
+
     @Mutation(() => Entity_)
     async CreateEntity(
         @Arg('input', () => CreateEntityInput) input: CreateEntityInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
+        @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.CreateRecord('Entities', input, dataSource, userPayload, pubSub)
     }
-        
+
     @Mutation(() => Entity_)
     async UpdateEntity(
         @Arg('input', () => UpdateEntityInput) input: UpdateEntityInput,
@@ -3712,199 +3715,199 @@ export class EntityResolverBase extends ResolverBase {
     ) {
         return this.UpdateRecord('Entities', input, dataSource, userPayload, pubSub);
     }
-    
+
     @Mutation(() => Entity_)
     async DeleteEntity(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Entities', key, options, dataSource, userPayload, pubSub);
     }
-    
+
 }
 
 //****************************************************************************
 // ENTITY CLASS for Users
 //****************************************************************************
 @ObjectType({ description: 'A list of all users who have or had access to the system' })
-export class User_ {  
-    @Field() 
+export class User_ {
+    @Field()
     @MaxLength(16)
     ID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(200)
     Name: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(100)
     FirstName?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(100)
     LastName?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(100)
     Title?: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(200)
     Email: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(30)
     Type: string;
-          
-    @Field(() => Boolean) 
+
+    @Field(() => Boolean)
     IsActive: boolean;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(20)
     LinkedRecordType: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(16)
     LinkedEntityID?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(900)
     LinkedEntityRecordID?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(16)
     EmployeeID?: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__CreatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(202)
     FirstLast?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(162)
     EmployeeFirstLast?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(200)
     EmployeeEmail?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(100)
     EmployeeTitle?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(162)
     EmployeeSupervisor?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(200)
     EmployeeSupervisorEmail?: string;
-        
-    @Field(() => [mj_core_schema_server_object_types.RecommendationRun_])
-    RecommendationRunsArray: mj_core_schema_server_object_types.RecommendationRun_[]; // Link to RecommendationRuns
-    
-    @Field(() => [mj_core_schema_server_object_types.UserApplication_])
-    UserApplicationsArray: mj_core_schema_server_object_types.UserApplication_[]; // Link to UserApplications
-    
-    @Field(() => [mj_core_schema_server_object_types.Dashboard_])
-    DashboardsArray: mj_core_schema_server_object_types.Dashboard_[]; // Link to Dashboards
-    
-    @Field(() => [mj_core_schema_server_object_types.RecordChange_])
-    RecordChangesArray: mj_core_schema_server_object_types.RecordChange_[]; // Link to RecordChanges
-    
-    @Field(() => [mj_core_schema_server_object_types.Report_])
-    ReportsArray: mj_core_schema_server_object_types.Report_[]; // Link to Reports
-    
-    @Field(() => [mj_core_schema_server_object_types.DashboardCategory_])
-    DashboardCategoriesArray: mj_core_schema_server_object_types.DashboardCategory_[]; // Link to DashboardCategories
-    
-    @Field(() => [mj_core_schema_server_object_types.Action_])
-    ActionsArray: mj_core_schema_server_object_types.Action_[]; // Link to Actions
-    
-    @Field(() => [mj_core_schema_server_object_types.QueryCategory_])
-    QueryCategoriesArray: mj_core_schema_server_object_types.QueryCategory_[]; // Link to QueryCategories
-    
-    @Field(() => [mj_core_schema_server_object_types.UserViewCategory_])
-    UserViewCategoriesArray: mj_core_schema_server_object_types.UserViewCategory_[]; // Link to UserViewCategories
-    
-    @Field(() => [mj_core_schema_server_object_types.DataContext_])
-    DataContextsArray: mj_core_schema_server_object_types.DataContext_[]; // Link to DataContexts
-    
-    @Field(() => [mj_core_schema_server_object_types.RecordMergeLog_])
-    RecordMergeLogsArray: mj_core_schema_server_object_types.RecordMergeLog_[]; // Link to RecordMergeLogs
-    
-    @Field(() => [mj_core_schema_server_object_types.CompanyIntegrationRun_])
-    CompanyIntegrationRunsArray: mj_core_schema_server_object_types.CompanyIntegrationRun_[]; // Link to CompanyIntegrationRuns
-    
-    @Field(() => [mj_core_schema_server_object_types.ReportCategory_])
-    ReportCategoriesArray: mj_core_schema_server_object_types.ReportCategory_[]; // Link to ReportCategories
-    
-    @Field(() => [mj_core_schema_server_object_types.RecordChangeReplayRun_])
-    RecordChangeReplayRunsArray: mj_core_schema_server_object_types.RecordChangeReplayRun_[]; // Link to RecordChangeReplayRuns
-    
-    @Field(() => [mj_core_schema_server_object_types.UserRole_])
-    UserRolesArray: mj_core_schema_server_object_types.UserRole_[]; // Link to UserRoles
-    
-    @Field(() => [mj_core_schema_server_object_types.UserViewRun_])
-    UserViewRunsArray: mj_core_schema_server_object_types.UserViewRun_[]; // Link to UserViewRuns
-    
-    @Field(() => [mj_core_schema_server_object_types.Workspace_])
-    WorkspacesArray: mj_core_schema_server_object_types.Workspace_[]; // Link to Workspaces
-    
-    @Field(() => [mj_core_schema_server_object_types.Conversation_])
-    ConversationsArray: mj_core_schema_server_object_types.Conversation_[]; // Link to Conversations
-    
-    @Field(() => [mj_core_schema_server_object_types.List_])
-    ListsArray: mj_core_schema_server_object_types.List_[]; // Link to Lists
-    
-    @Field(() => [mj_core_schema_server_object_types.CommunicationRun_])
-    CommunicationRunsArray: mj_core_schema_server_object_types.CommunicationRun_[]; // Link to CommunicationRuns
-    
-    @Field(() => [mj_core_schema_server_object_types.ActionExecutionLog_])
-    ActionExecutionLogsArray: mj_core_schema_server_object_types.ActionExecutionLog_[]; // Link to ActionExecutionLogs
-    
-    @Field(() => [mj_core_schema_server_object_types.AuditLog_])
-    AuditLogsArray: mj_core_schema_server_object_types.AuditLog_[]; // Link to AuditLogs
-    
-    @Field(() => [mj_core_schema_server_object_types.ReportSnapshot_])
-    ReportSnapshotsArray: mj_core_schema_server_object_types.ReportSnapshot_[]; // Link to ReportSnapshots
-    
-    @Field(() => [mj_core_schema_server_object_types.UserView_])
-    UserViewsArray: mj_core_schema_server_object_types.UserView_[]; // Link to UserViews
-    
-    @Field(() => [mj_core_schema_server_object_types.TemplateCategory_])
-    TemplateCategoriesArray: mj_core_schema_server_object_types.TemplateCategory_[]; // Link to TemplateCategories
-    
-    @Field(() => [mj_core_schema_server_object_types.DuplicateRun_])
-    DuplicateRunsArray: mj_core_schema_server_object_types.DuplicateRun_[]; // Link to DuplicateRuns
-    
-    @Field(() => [mj_core_schema_server_object_types.UserRecordLog_])
-    UserRecordLogsArray: mj_core_schema_server_object_types.UserRecordLog_[]; // Link to UserRecordLogs
-    
-    @Field(() => [mj_core_schema_server_object_types.UserNotification_])
-    UserNotificationsArray: mj_core_schema_server_object_types.UserNotification_[]; // Link to UserNotifications
-    
-    @Field(() => [mj_core_schema_server_object_types.Template_])
-    TemplatesArray: mj_core_schema_server_object_types.Template_[]; // Link to Templates
-    
-    @Field(() => [mj_core_schema_server_object_types.UserFavorite_])
-    UserFavoritesArray: mj_core_schema_server_object_types.UserFavorite_[]; // Link to UserFavorites
-    
-    @Field(() => [mj_core_schema_server_object_types.ListCategory_])
-    ListCategoriesArray: mj_core_schema_server_object_types.ListCategory_[]; // Link to ListCategories
-    
-    @Field(() => [mj_core_schema_server_object_types.ScheduledAction_])
-    ScheduledActionsArray: mj_core_schema_server_object_types.ScheduledAction_[]; // Link to ScheduledActions
-    
+
+    @Field(() => [RecommendationRun_])
+    RecommendationRunsArray: RecommendationRun_[]; // Link to RecommendationRuns
+
+    @Field(() => [UserApplication_])
+    UserApplicationsArray: UserApplication_[]; // Link to UserApplications
+
+    @Field(() => [Dashboard_])
+    DashboardsArray: Dashboard_[]; // Link to Dashboards
+
+    @Field(() => [RecordChange_])
+    RecordChangesArray: RecordChange_[]; // Link to RecordChanges
+
+    @Field(() => [Report_])
+    ReportsArray: Report_[]; // Link to Reports
+
+    @Field(() => [DashboardCategory_])
+    DashboardCategoriesArray: DashboardCategory_[]; // Link to DashboardCategories
+
+    @Field(() => [Action_])
+    ActionsArray: Action_[]; // Link to Actions
+
+    @Field(() => [QueryCategory_])
+    QueryCategoriesArray: QueryCategory_[]; // Link to QueryCategories
+
+    @Field(() => [UserViewCategory_])
+    UserViewCategoriesArray: UserViewCategory_[]; // Link to UserViewCategories
+
+    @Field(() => [DataContext_])
+    DataContextsArray: DataContext_[]; // Link to DataContexts
+
+    @Field(() => [RecordMergeLog_])
+    RecordMergeLogsArray: RecordMergeLog_[]; // Link to RecordMergeLogs
+
+    @Field(() => [CompanyIntegrationRun_])
+    CompanyIntegrationRunsArray: CompanyIntegrationRun_[]; // Link to CompanyIntegrationRuns
+
+    @Field(() => [ReportCategory_])
+    ReportCategoriesArray: ReportCategory_[]; // Link to ReportCategories
+
+    @Field(() => [RecordChangeReplayRun_])
+    RecordChangeReplayRunsArray: RecordChangeReplayRun_[]; // Link to RecordChangeReplayRuns
+
+    @Field(() => [UserRole_])
+    UserRolesArray: UserRole_[]; // Link to UserRoles
+
+    @Field(() => [UserViewRun_])
+    UserViewRunsArray: UserViewRun_[]; // Link to UserViewRuns
+
+    @Field(() => [Workspace_])
+    WorkspacesArray: Workspace_[]; // Link to Workspaces
+
+    @Field(() => [Conversation_])
+    ConversationsArray: Conversation_[]; // Link to Conversations
+
+    @Field(() => [List_])
+    ListsArray: List_[]; // Link to Lists
+
+    @Field(() => [CommunicationRun_])
+    CommunicationRunsArray: CommunicationRun_[]; // Link to CommunicationRuns
+
+    @Field(() => [ActionExecutionLog_])
+    ActionExecutionLogsArray: ActionExecutionLog_[]; // Link to ActionExecutionLogs
+
+    @Field(() => [AuditLog_])
+    AuditLogsArray: AuditLog_[]; // Link to AuditLogs
+
+    @Field(() => [ReportSnapshot_])
+    ReportSnapshotsArray: ReportSnapshot_[]; // Link to ReportSnapshots
+
+    @Field(() => [UserView_])
+    UserViewsArray: UserView_[]; // Link to UserViews
+
+    @Field(() => [TemplateCategory_])
+    TemplateCategoriesArray: TemplateCategory_[]; // Link to TemplateCategories
+
+    @Field(() => [DuplicateRun_])
+    DuplicateRunsArray: DuplicateRun_[]; // Link to DuplicateRuns
+
+    @Field(() => [UserRecordLog_])
+    UserRecordLogsArray: UserRecordLog_[]; // Link to UserRecordLogs
+
+    @Field(() => [UserNotification_])
+    UserNotificationsArray: UserNotification_[]; // Link to UserNotifications
+
+    @Field(() => [Template_])
+    TemplatesArray: Template_[]; // Link to Templates
+
+    @Field(() => [UserFavorite_])
+    UserFavoritesArray: UserFavorite_[]; // Link to UserFavorites
+
+    @Field(() => [ListCategory_])
+    ListCategoriesArray: ListCategory_[]; // Link to ListCategories
+
+    @Field(() => [ScheduledAction_])
+    ScheduledActionsArray: ScheduledAction_[]; // Link to ScheduledActions
+
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for Users   
+// INPUT TYPE for Users
 //****************************************************************************
 @InputType()
 export class CreateUserInput {
@@ -3941,10 +3944,10 @@ export class CreateUserInput {
     @Field({ nullable: true })
     EmployeeID?: string;
 }
-    
-        
+
+
 //****************************************************************************
-// INPUT TYPE for Users   
+// INPUT TYPE for Users
 //****************************************************************************
 @InputType()
 export class UpdateUserInput {
@@ -3987,7 +3990,7 @@ export class UpdateUserInput {
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
 }
-    
+
 //****************************************************************************
 // RESOLVER for Users
 //****************************************************************************
@@ -4039,7 +4042,7 @@ export class UserResolverBase extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Users', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-    
+
     @Query(() => [User_])
     async AllUsers(@Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Users', userPayload);
@@ -4047,272 +4050,272 @@ export class UserResolverBase extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Users', await dataSource.query(sSQL));
         return result;
     }
-      
-    @FieldResolver(() => [mj_core_schema_server_object_types.RecommendationRun_])
+
+    @FieldResolver(() => [RecommendationRun_])
     async RecommendationRunsArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Recommendation Runs', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwRecommendationRuns] WHERE [RunByUserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('Recommendation Runs', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Recommendation Runs', await dataSource.query(sSQL));
         return result;
     }
-          
-    @FieldResolver(() => [mj_core_schema_server_object_types.UserApplication_])
+
+    @FieldResolver(() => [UserApplication_])
     async UserApplicationsArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('User Applications', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwUserApplications] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('User Applications', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('User Applications', await dataSource.query(sSQL));
         return result;
     }
-          
-    @FieldResolver(() => [mj_core_schema_server_object_types.Dashboard_])
+
+    @FieldResolver(() => [Dashboard_])
     async DashboardsArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Dashboards', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwDashboards] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('Dashboards', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Dashboards', await dataSource.query(sSQL));
         return result;
     }
-          
-    @FieldResolver(() => [mj_core_schema_server_object_types.RecordChange_])
+
+    @FieldResolver(() => [RecordChange_])
     async RecordChangesArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Record Changes', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwRecordChanges] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('Record Changes', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Record Changes', await dataSource.query(sSQL));
         return result;
     }
-          
-    @FieldResolver(() => [mj_core_schema_server_object_types.Report_])
+
+    @FieldResolver(() => [Report_])
     async ReportsArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Reports', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwReports] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('Reports', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Reports', await dataSource.query(sSQL));
         return result;
     }
-          
-    @FieldResolver(() => [mj_core_schema_server_object_types.DashboardCategory_])
+
+    @FieldResolver(() => [DashboardCategory_])
     async DashboardCategoriesArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Dashboard Categories', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwDashboardCategories] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('Dashboard Categories', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Dashboard Categories', await dataSource.query(sSQL));
         return result;
     }
-          
-    @FieldResolver(() => [mj_core_schema_server_object_types.Action_])
+
+    @FieldResolver(() => [Action_])
     async ActionsArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Actions', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActions] WHERE [CodeApprovedByUserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('Actions', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Actions', await dataSource.query(sSQL));
         return result;
     }
-          
-    @FieldResolver(() => [mj_core_schema_server_object_types.QueryCategory_])
+
+    @FieldResolver(() => [QueryCategory_])
     async QueryCategoriesArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Query Categories', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwQueryCategories] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('Query Categories', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Query Categories', await dataSource.query(sSQL));
         return result;
     }
-          
-    @FieldResolver(() => [mj_core_schema_server_object_types.UserViewCategory_])
+
+    @FieldResolver(() => [UserViewCategory_])
     async UserViewCategoriesArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('User View Categories', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwUserViewCategories] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('User View Categories', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('User View Categories', await dataSource.query(sSQL));
         return result;
     }
-          
-    @FieldResolver(() => [mj_core_schema_server_object_types.DataContext_])
+
+    @FieldResolver(() => [DataContext_])
     async DataContextsArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Data Contexts', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwDataContexts] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('Data Contexts', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Data Contexts', await dataSource.query(sSQL));
         return result;
     }
-          
-    @FieldResolver(() => [mj_core_schema_server_object_types.RecordMergeLog_])
+
+    @FieldResolver(() => [RecordMergeLog_])
     async RecordMergeLogsArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Record Merge Logs', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwRecordMergeLogs] WHERE [InitiatedByUserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('Record Merge Logs', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Record Merge Logs', await dataSource.query(sSQL));
         return result;
     }
-          
-    @FieldResolver(() => [mj_core_schema_server_object_types.CompanyIntegrationRun_])
+
+    @FieldResolver(() => [CompanyIntegrationRun_])
     async CompanyIntegrationRunsArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Company Integration Runs', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwCompanyIntegrationRuns] WHERE [RunByUserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('Company Integration Runs', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Company Integration Runs', await dataSource.query(sSQL));
         return result;
     }
-          
-    @FieldResolver(() => [mj_core_schema_server_object_types.ReportCategory_])
+
+    @FieldResolver(() => [ReportCategory_])
     async ReportCategoriesArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Report Categories', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwReportCategories] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('Report Categories', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Report Categories', await dataSource.query(sSQL));
         return result;
     }
-          
-    @FieldResolver(() => [mj_core_schema_server_object_types.RecordChangeReplayRun_])
+
+    @FieldResolver(() => [RecordChangeReplayRun_])
     async RecordChangeReplayRunsArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Record Change Replay Runs', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwRecordChangeReplayRuns] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('Record Change Replay Runs', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Record Change Replay Runs', await dataSource.query(sSQL));
         return result;
     }
-          
-    @FieldResolver(() => [mj_core_schema_server_object_types.UserRole_])
+
+    @FieldResolver(() => [UserRole_])
     async UserRolesArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('User Roles', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwUserRoles] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('User Roles', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('User Roles', await dataSource.query(sSQL));
         return result;
     }
-          
-    @FieldResolver(() => [mj_core_schema_server_object_types.UserViewRun_])
+
+    @FieldResolver(() => [UserViewRun_])
     async UserViewRunsArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('User View Runs', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwUserViewRuns] WHERE [RunByUserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('User View Runs', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('User View Runs', await dataSource.query(sSQL));
         return result;
     }
-          
-    @FieldResolver(() => [mj_core_schema_server_object_types.Workspace_])
+
+    @FieldResolver(() => [Workspace_])
     async WorkspacesArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Workspaces', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwWorkspaces] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('Workspaces', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Workspaces', await dataSource.query(sSQL));
         return result;
     }
-          
-    @FieldResolver(() => [mj_core_schema_server_object_types.Conversation_])
+
+    @FieldResolver(() => [Conversation_])
     async ConversationsArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Conversations', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwConversations] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('Conversations', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Conversations', await dataSource.query(sSQL));
         return result;
     }
-          
-    @FieldResolver(() => [mj_core_schema_server_object_types.List_])
+
+    @FieldResolver(() => [List_])
     async ListsArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Lists', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwLists] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('Lists', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Lists', await dataSource.query(sSQL));
         return result;
     }
-          
-    @FieldResolver(() => [mj_core_schema_server_object_types.CommunicationRun_])
+
+    @FieldResolver(() => [CommunicationRun_])
     async CommunicationRunsArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Communication Runs', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwCommunicationRuns] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('Communication Runs', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Communication Runs', await dataSource.query(sSQL));
         return result;
     }
-          
-    @FieldResolver(() => [mj_core_schema_server_object_types.ActionExecutionLog_])
+
+    @FieldResolver(() => [ActionExecutionLog_])
     async ActionExecutionLogsArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Action Execution Logs', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionExecutionLogs] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('Action Execution Logs', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Action Execution Logs', await dataSource.query(sSQL));
         return result;
     }
-          
-    @FieldResolver(() => [mj_core_schema_server_object_types.AuditLog_])
+
+    @FieldResolver(() => [AuditLog_])
     async AuditLogsArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Audit Logs', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAuditLogs] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('Audit Logs', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Audit Logs', await dataSource.query(sSQL));
         return result;
     }
-          
-    @FieldResolver(() => [mj_core_schema_server_object_types.ReportSnapshot_])
+
+    @FieldResolver(() => [ReportSnapshot_])
     async ReportSnapshotsArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Report Snapshots', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwReportSnapshots] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('Report Snapshots', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Report Snapshots', await dataSource.query(sSQL));
         return result;
     }
-          
-    @FieldResolver(() => [mj_core_schema_server_object_types.UserView_])
+
+    @FieldResolver(() => [UserView_])
     async UserViewsArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('User Views', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwUserViews] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('User Views', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('User Views', await dataSource.query(sSQL));
         return result;
     }
-          
-    @FieldResolver(() => [mj_core_schema_server_object_types.TemplateCategory_])
+
+    @FieldResolver(() => [TemplateCategory_])
     async TemplateCategoriesArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Template Categories', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwTemplateCategories] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('Template Categories', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Template Categories', await dataSource.query(sSQL));
         return result;
     }
-          
-    @FieldResolver(() => [mj_core_schema_server_object_types.DuplicateRun_])
+
+    @FieldResolver(() => [DuplicateRun_])
     async DuplicateRunsArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Duplicate Runs', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwDuplicateRuns] WHERE [StartedByUserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('Duplicate Runs', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Duplicate Runs', await dataSource.query(sSQL));
         return result;
     }
-          
-    @FieldResolver(() => [mj_core_schema_server_object_types.UserRecordLog_])
+
+    @FieldResolver(() => [UserRecordLog_])
     async UserRecordLogsArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('User Record Logs', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwUserRecordLogs] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('User Record Logs', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('User Record Logs', await dataSource.query(sSQL));
         return result;
     }
-          
-    @FieldResolver(() => [mj_core_schema_server_object_types.UserNotification_])
+
+    @FieldResolver(() => [UserNotification_])
     async UserNotificationsArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('User Notifications', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwUserNotifications] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('User Notifications', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('User Notifications', await dataSource.query(sSQL));
         return result;
     }
-          
-    @FieldResolver(() => [mj_core_schema_server_object_types.Template_])
+
+    @FieldResolver(() => [Template_])
     async TemplatesArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Templates', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwTemplates] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('Templates', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Templates', await dataSource.query(sSQL));
         return result;
     }
-          
-    @FieldResolver(() => [mj_core_schema_server_object_types.UserFavorite_])
+
+    @FieldResolver(() => [UserFavorite_])
     async UserFavoritesArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('User Favorites', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwUserFavorites] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('User Favorites', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('User Favorites', await dataSource.query(sSQL));
         return result;
     }
-          
-    @FieldResolver(() => [mj_core_schema_server_object_types.ListCategory_])
+
+    @FieldResolver(() => [ListCategory_])
     async ListCategoriesArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('List Categories', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwListCategories] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('List Categories', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('List Categories', await dataSource.query(sSQL));
         return result;
     }
-          
-    @FieldResolver(() => [mj_core_schema_server_object_types.ScheduledAction_])
+
+    @FieldResolver(() => [ScheduledAction_])
     async ScheduledActionsArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Scheduled Actions', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwScheduledActions] WHERE [CreatedByUserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('Scheduled Actions', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Scheduled Actions', await dataSource.query(sSQL));
         return result;
     }
-        
+
     @Mutation(() => User_)
     async CreateUser(
         @Arg('input', () => CreateUserInput) input: CreateUserInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
+        @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.CreateRecord('Users', input, dataSource, userPayload, pubSub)
     }
-        
+
     @Mutation(() => User_)
     async UpdateUser(
         @Arg('input', () => UpdateUserInput) input: UpdateUserInput,
@@ -4321,144 +4324,144 @@ export class UserResolverBase extends ResolverBase {
     ) {
         return this.UpdateRecord('Users', input, dataSource, userPayload, pubSub);
     }
-    
+
     @Mutation(() => User_)
     async DeleteUser(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Users', key, options, dataSource, userPayload, pubSub);
     }
-    
+
 }
 
 //****************************************************************************
 // ENTITY CLASS for Entity Relationships
 //****************************************************************************
 @ObjectType({ description: 'Metadata about relationships between entities including display preferences for the UI' })
-export class EntityRelationship_ {  
-    @Field() 
+export class EntityRelationship_ {
+    @Field()
     @MaxLength(16)
     ID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     EntityID: string;
-          
-    @Field(() => Int, {description: 'Used for display order in generated forms and in other places in the UI where relationships for an entity are shown'}) 
+
+    @Field(() => Int, {description: 'Used for display order in generated forms and in other places in the UI where relationships for an entity are shown'})
     Sequence: number;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     RelatedEntityID: string;
-          
-    @Field(() => Boolean) 
+
+    @Field(() => Boolean)
     BundleInAPI: boolean;
-          
-    @Field(() => Boolean) 
+
+    @Field(() => Boolean)
     IncludeInParentAllQuery: boolean;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(40)
     Type: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(510)
     EntityKeyField?: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(510)
     RelatedEntityJoinField: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(510)
     JoinView?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(510)
     JoinEntityJoinField?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(510)
     JoinEntityInverseJoinField?: string;
-          
-    @Field(() => Boolean, {description: 'When unchecked the relationship will NOT be displayed on the generated form'}) 
+
+    @Field(() => Boolean, {description: 'When unchecked the relationship will NOT be displayed on the generated form'})
     DisplayInForm: boolean;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(100)
     DisplayLocation: string;
-          
-    @Field({nullable: true, description: 'Optional, when specified this value overrides the related entity name for the label on the tab'}) 
+
+    @Field({nullable: true, description: 'Optional, when specified this value overrides the related entity name for the label on the tab'})
     @MaxLength(510)
     DisplayName?: string;
-          
-    @Field({description: 'When Related Entity Icon - uses the icon from the related entity, if one exists. When Custom, uses the value in the DisplayIcon field in this record, and when None, no icon is displayed'}) 
+
+    @Field({description: 'When Related Entity Icon - uses the icon from the related entity, if one exists. When Custom, uses the value in the DisplayIcon field in this record, and when None, no icon is displayed'})
     @MaxLength(100)
     DisplayIconType: string;
-          
-    @Field({nullable: true, description: 'If specified, the icon '}) 
+
+    @Field({nullable: true, description: 'If specified, the icon '})
     @MaxLength(510)
     DisplayIcon?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(16)
     DisplayUserViewID?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(16)
     DisplayComponentID?: string;
-          
-    @Field({nullable: true, description: 'If DisplayComponentID is specified, this field can optionally be used to track component-specific and relationship-specific configuration details that will be used by CodeGen to provide to the display component selected.'}) 
+
+    @Field({nullable: true, description: 'If DisplayComponentID is specified, this field can optionally be used to track component-specific and relationship-specific configuration details that will be used by CodeGen to provide to the display component selected.'})
     DisplayComponentConfiguration?: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__CreatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(510)
     Entity: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(510)
     EntityBaseTable: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(510)
     EntityBaseView: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(510)
     RelatedEntity: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(510)
     RelatedEntityBaseTable: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(510)
     RelatedEntityBaseView: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     RelatedEntityClassName?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     RelatedEntityCodeName?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     RelatedEntityBaseTableCodeName?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(200)
     DisplayUserViewName?: string;
-        
+
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for Entity Relationships   
+// INPUT TYPE for Entity Relationships
 //****************************************************************************
 @InputType()
 export class CreateEntityRelationshipInput {
@@ -4516,10 +4519,10 @@ export class CreateEntityRelationshipInput {
     @Field({ nullable: true })
     DisplayComponentConfiguration?: string;
 }
-    
-        
+
+
 //****************************************************************************
-// INPUT TYPE for Entity Relationships   
+// INPUT TYPE for Entity Relationships
 //****************************************************************************
 @InputType()
 export class UpdateEntityRelationshipInput {
@@ -4583,7 +4586,7 @@ export class UpdateEntityRelationshipInput {
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
 }
-    
+
 //****************************************************************************
 // RESOLVER for Entity Relationships
 //****************************************************************************
@@ -4635,7 +4638,7 @@ export class EntityRelationshipResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Entity Relationships', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-    
+
     @Query(() => [EntityRelationship_])
     async AllEntityRelationships(@Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entity Relationships', userPayload);
@@ -4643,16 +4646,16 @@ export class EntityRelationshipResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Entity Relationships', await dataSource.query(sSQL));
         return result;
     }
-    
+
     @Mutation(() => EntityRelationship_)
     async CreateEntityRelationship(
         @Arg('input', () => CreateEntityRelationshipInput) input: CreateEntityRelationshipInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
+        @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.CreateRecord('Entity Relationships', input, dataSource, userPayload, pubSub)
     }
-        
+
     @Mutation(() => EntityRelationship_)
     async UpdateEntityRelationship(
         @Arg('input', () => UpdateEntityRelationshipInput) input: UpdateEntityRelationshipInput,
@@ -4661,83 +4664,83 @@ export class EntityRelationshipResolver extends ResolverBase {
     ) {
         return this.UpdateRecord('Entity Relationships', input, dataSource, userPayload, pubSub);
     }
-    
+
     @Mutation(() => EntityRelationship_)
     async DeleteEntityRelationship(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Entity Relationships', key, options, dataSource, userPayload, pubSub);
     }
-    
+
 }
 
 //****************************************************************************
 // ENTITY CLASS for User Record Logs
 //****************************************************************************
 @ObjectType()
-export class UserRecordLog_ {  
-    @Field() 
+export class UserRecordLog_ {
+    @Field()
     @MaxLength(16)
     ID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     UserID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     EntityID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(900)
     RecordID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(8)
     EarliestAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(8)
     LatestAt: Date;
-          
-    @Field(() => Int) 
+
+    @Field(() => Int)
     TotalCount: number;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__CreatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(510)
     Entity: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(200)
     UserName: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(202)
     UserFirstLast?: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(200)
     UserEmail: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(162)
     UserSupervisor?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(200)
     UserSupervisorEmail?: string;
-        
+
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for User Record Logs   
+// INPUT TYPE for User Record Logs
 //****************************************************************************
 @InputType()
 export class UpdateUserRecordLogInput {
@@ -4765,7 +4768,7 @@ export class UpdateUserRecordLogInput {
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
 }
-    
+
 //****************************************************************************
 // RESOLVER for User Record Logs
 //****************************************************************************
@@ -4817,7 +4820,7 @@ export class UserRecordLogResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('User Record Logs', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-    
+
     @Mutation(() => UserRecordLog_)
     async UpdateUserRecordLog(
         @Arg('input', () => UpdateUserRecordLogInput) input: UpdateUserRecordLogInput,
@@ -4826,118 +4829,118 @@ export class UserRecordLogResolver extends ResolverBase {
     ) {
         return this.UpdateRecord('User Record Logs', input, dataSource, userPayload, pubSub);
     }
-    
+
 }
 
 //****************************************************************************
 // ENTITY CLASS for User Views
 //****************************************************************************
 @ObjectType({ description: 'Views are sets of records within a given entity defined by filtering rules. Views can be used programatically to retrieve dynamic sets of data and in user interfaces like MJ Explorer for end-user consumption.' })
-export class UserView_ {  
-    @Field() 
+export class UserView_ {
+    @Field()
     @MaxLength(16)
     ID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     UserID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     EntityID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(200)
     Name: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     Description?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(16)
     CategoryID?: string;
-          
-    @Field(() => Boolean) 
+
+    @Field(() => Boolean)
     IsShared: boolean;
-          
-    @Field(() => Boolean) 
+
+    @Field(() => Boolean)
     IsDefault: boolean;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     GridState?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     FilterState?: string;
-          
-    @Field(() => Boolean) 
+
+    @Field(() => Boolean)
     CustomFilterState: boolean;
-          
-    @Field(() => Boolean) 
+
+    @Field(() => Boolean)
     SmartFilterEnabled: boolean;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     SmartFilterPrompt?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     SmartFilterWhereClause?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     SmartFilterExplanation?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     WhereClause?: string;
-          
-    @Field(() => Boolean) 
+
+    @Field(() => Boolean)
     CustomWhereClause: boolean;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     SortState?: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__CreatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(200)
     UserName: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(202)
     UserFirstLast?: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(200)
     UserEmail: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(30)
     UserType: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(510)
     Entity: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(510)
     EntityBaseView: string;
-        
-    @Field(() => [mj_core_schema_server_object_types.DataContextItem_])
-    DataContextItemsArray: mj_core_schema_server_object_types.DataContextItem_[]; // Link to DataContextItems
-    
-    @Field(() => [mj_core_schema_server_object_types.UserViewRun_])
-    UserViewRunsArray: mj_core_schema_server_object_types.UserViewRun_[]; // Link to UserViewRuns
-    
-    @Field(() => [mj_core_schema_server_object_types.EntityRelationship_])
-    EntityRelationshipsArray: mj_core_schema_server_object_types.EntityRelationship_[]; // Link to EntityRelationships
-    
+
+    @Field(() => [DataContextItem_])
+    DataContextItemsArray: DataContextItem_[]; // Link to DataContextItems
+
+    @Field(() => [UserViewRun_])
+    UserViewRunsArray: UserViewRun_[]; // Link to UserViewRuns
+
+    @Field(() => [EntityRelationship_])
+    EntityRelationshipsArray: EntityRelationship_[]; // Link to EntityRelationships
+
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for User Views   
+// INPUT TYPE for User Views
 //****************************************************************************
 @InputType()
 export class CreateUserViewInput {
@@ -4992,10 +4995,10 @@ export class CreateUserViewInput {
     @Field({ nullable: true })
     SortState?: string;
 }
-    
-        
+
+
 //****************************************************************************
-// INPUT TYPE for User Views   
+// INPUT TYPE for User Views
 //****************************************************************************
 @InputType()
 export class UpdateUserViewInput {
@@ -5056,7 +5059,7 @@ export class UpdateUserViewInput {
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
 }
-    
+
 //****************************************************************************
 // RESOLVER for User Views
 //****************************************************************************
@@ -5108,7 +5111,7 @@ export class UserViewResolverBase extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('User Views', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-    
+
     @Query(() => [UserView_])
     async AllUserViews(@Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('User Views', userPayload);
@@ -5116,40 +5119,40 @@ export class UserViewResolverBase extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('User Views', await dataSource.query(sSQL));
         return result;
     }
-      
-    @FieldResolver(() => [mj_core_schema_server_object_types.DataContextItem_])
+
+    @FieldResolver(() => [DataContextItem_])
     async DataContextItemsArray(@Root() userview_: UserView_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Data Context Items', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwDataContextItems] WHERE [ViewID]='${userview_.ID}' ` + this.getRowLevelSecurityWhereClause('Data Context Items', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Data Context Items', await dataSource.query(sSQL));
         return result;
     }
-          
-    @FieldResolver(() => [mj_core_schema_server_object_types.UserViewRun_])
+
+    @FieldResolver(() => [UserViewRun_])
     async UserViewRunsArray(@Root() userview_: UserView_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('User View Runs', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwUserViewRuns] WHERE [UserViewID]='${userview_.ID}' ` + this.getRowLevelSecurityWhereClause('User View Runs', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('User View Runs', await dataSource.query(sSQL));
         return result;
     }
-          
-    @FieldResolver(() => [mj_core_schema_server_object_types.EntityRelationship_])
+
+    @FieldResolver(() => [EntityRelationship_])
     async EntityRelationshipsArray(@Root() userview_: UserView_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entity Relationships', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityRelationships] WHERE [DisplayUserViewGUID]='${userview_.ID}' ` + this.getRowLevelSecurityWhereClause('Entity Relationships', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Entity Relationships', await dataSource.query(sSQL));
         return result;
     }
-        
+
     @Mutation(() => UserView_)
     async CreateUserView(
         @Arg('input', () => CreateUserViewInput) input: CreateUserViewInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
+        @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.CreateRecord('User Views', input, dataSource, userPayload, pubSub)
     }
-        
+
     @Mutation(() => UserView_)
     async UpdateUserView(
         @Arg('input', () => UpdateUserViewInput) input: UpdateUserViewInput,
@@ -5158,71 +5161,71 @@ export class UserViewResolverBase extends ResolverBase {
     ) {
         return this.UpdateRecord('User Views', input, dataSource, userPayload, pubSub);
     }
-    
+
     @Mutation(() => UserView_)
     async DeleteUserView(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('User Views', key, options, dataSource, userPayload, pubSub);
     }
-    
+
 }
 
 //****************************************************************************
 // ENTITY CLASS for Company Integration Runs
 //****************************************************************************
 @ObjectType()
-export class CompanyIntegrationRun_ {  
-    @Field() 
+export class CompanyIntegrationRun_ {
+    @Field()
     @MaxLength(16)
     ID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     CompanyIntegrationID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     RunByUserID: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(8)
     StartedAt?: Date;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(8)
     EndedAt?: Date;
-          
-    @Field(() => Int) 
+
+    @Field(() => Int)
     TotalRecords: number;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     Comments?: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__CreatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(200)
     RunByUser: string;
-        
-    @Field(() => [mj_core_schema_server_object_types.ErrorLog_])
-    ErrorLogsArray: mj_core_schema_server_object_types.ErrorLog_[]; // Link to ErrorLogs
-    
-    @Field(() => [mj_core_schema_server_object_types.CompanyIntegrationRunDetail_])
-    CompanyIntegrationRunDetailsArray: mj_core_schema_server_object_types.CompanyIntegrationRunDetail_[]; // Link to CompanyIntegrationRunDetails
-    
-    @Field(() => [mj_core_schema_server_object_types.CompanyIntegrationRunAPILog_])
-    CompanyIntegrationRunAPILogsArray: mj_core_schema_server_object_types.CompanyIntegrationRunAPILog_[]; // Link to CompanyIntegrationRunAPILogs
-    
+
+    @Field(() => [ErrorLog_])
+    ErrorLogsArray: ErrorLog_[]; // Link to ErrorLogs
+
+    @Field(() => [CompanyIntegrationRunDetail_])
+    CompanyIntegrationRunDetailsArray: CompanyIntegrationRunDetail_[]; // Link to CompanyIntegrationRunDetails
+
+    @Field(() => [CompanyIntegrationRunAPILog_])
+    CompanyIntegrationRunAPILogsArray: CompanyIntegrationRunAPILog_[]; // Link to CompanyIntegrationRunAPILogs
+
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for Company Integration Runs   
+// INPUT TYPE for Company Integration Runs
 //****************************************************************************
 @InputType()
 export class UpdateCompanyIntegrationRunInput {
@@ -5250,7 +5253,7 @@ export class UpdateCompanyIntegrationRunInput {
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
 }
-    
+
 //****************************************************************************
 // RESOLVER for Company Integration Runs
 //****************************************************************************
@@ -5302,31 +5305,31 @@ export class CompanyIntegrationRunResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Company Integration Runs', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-      
-    @FieldResolver(() => [mj_core_schema_server_object_types.ErrorLog_])
+
+    @FieldResolver(() => [ErrorLog_])
     async ErrorLogsArray(@Root() companyintegrationrun_: CompanyIntegrationRun_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Error Logs', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwErrorLogs] WHERE [CompanyIntegrationRunID]='${companyintegrationrun_.ID}' ` + this.getRowLevelSecurityWhereClause('Error Logs', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Error Logs', await dataSource.query(sSQL));
         return result;
     }
-          
-    @FieldResolver(() => [mj_core_schema_server_object_types.CompanyIntegrationRunDetail_])
+
+    @FieldResolver(() => [CompanyIntegrationRunDetail_])
     async CompanyIntegrationRunDetailsArray(@Root() companyintegrationrun_: CompanyIntegrationRun_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Company Integration Run Details', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwCompanyIntegrationRunDetails] WHERE [CompanyIntegrationRunID]='${companyintegrationrun_.ID}' ` + this.getRowLevelSecurityWhereClause('Company Integration Run Details', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Company Integration Run Details', await dataSource.query(sSQL));
         return result;
     }
-          
-    @FieldResolver(() => [mj_core_schema_server_object_types.CompanyIntegrationRunAPILog_])
+
+    @FieldResolver(() => [CompanyIntegrationRunAPILog_])
     async CompanyIntegrationRunAPILogsArray(@Root() companyintegrationrun_: CompanyIntegrationRun_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Company Integration Run API Logs', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwCompanyIntegrationRunAPILogs] WHERE [CompanyIntegrationRunID]='${companyintegrationrun_.ID}' ` + this.getRowLevelSecurityWhereClause('Company Integration Run API Logs', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Company Integration Run API Logs', await dataSource.query(sSQL));
         return result;
     }
-        
+
     @Mutation(() => CompanyIntegrationRun_)
     async UpdateCompanyIntegrationRun(
         @Arg('input', () => UpdateCompanyIntegrationRunInput) input: UpdateCompanyIntegrationRunInput,
@@ -5335,68 +5338,68 @@ export class CompanyIntegrationRunResolver extends ResolverBase {
     ) {
         return this.UpdateRecord('Company Integration Runs', input, dataSource, userPayload, pubSub);
     }
-    
+
 }
 
 //****************************************************************************
 // ENTITY CLASS for Company Integration Run Details
 //****************************************************************************
 @ObjectType()
-export class CompanyIntegrationRunDetail_ {  
-    @Field() 
+export class CompanyIntegrationRunDetail_ {
+    @Field()
     @MaxLength(16)
     ID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     CompanyIntegrationRunID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     EntityID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(900)
     RecordID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(40)
     Action: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(8)
     ExecutedAt: Date;
-          
-    @Field(() => Boolean) 
+
+    @Field(() => Boolean)
     IsSuccess: boolean;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__CreatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(510)
     Entity: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(8)
     RunStartedAt?: Date;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(8)
     RunEndedAt?: Date;
-        
-    @Field(() => [mj_core_schema_server_object_types.ErrorLog_])
-    ErrorLogsArray: mj_core_schema_server_object_types.ErrorLog_[]; // Link to ErrorLogs
-    
+
+    @Field(() => [ErrorLog_])
+    ErrorLogsArray: ErrorLog_[]; // Link to ErrorLogs
+
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for Company Integration Run Details   
+// INPUT TYPE for Company Integration Run Details
 //****************************************************************************
 @InputType()
 export class UpdateCompanyIntegrationRunDetailInput {
@@ -5424,7 +5427,7 @@ export class UpdateCompanyIntegrationRunDetailInput {
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
 }
-    
+
 //****************************************************************************
 // RESOLVER for Company Integration Run Details
 //****************************************************************************
@@ -5476,15 +5479,15 @@ export class CompanyIntegrationRunDetailResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Company Integration Run Details', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-      
-    @FieldResolver(() => [mj_core_schema_server_object_types.ErrorLog_])
+
+    @FieldResolver(() => [ErrorLog_])
     async ErrorLogsArray(@Root() companyintegrationrundetail_: CompanyIntegrationRunDetail_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Error Logs', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwErrorLogs] WHERE [CompanyIntegrationRunDetailID]='${companyintegrationrundetail_.ID}' ` + this.getRowLevelSecurityWhereClause('Error Logs', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Error Logs', await dataSource.query(sSQL));
         return result;
     }
-        
+
     @Mutation(() => CompanyIntegrationRunDetail_)
     async UpdateCompanyIntegrationRunDetail(
         @Arg('input', () => UpdateCompanyIntegrationRunDetailInput) input: UpdateCompanyIntegrationRunDetailInput,
@@ -5493,60 +5496,60 @@ export class CompanyIntegrationRunDetailResolver extends ResolverBase {
     ) {
         return this.UpdateRecord('Company Integration Run Details', input, dataSource, userPayload, pubSub);
     }
-    
+
 }
 
 //****************************************************************************
 // ENTITY CLASS for Error Logs
 //****************************************************************************
 @ObjectType()
-export class ErrorLog_ {  
-    @Field() 
+export class ErrorLog_ {
+    @Field()
     @MaxLength(16)
     ID: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(16)
     CompanyIntegrationRunID?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(16)
     CompanyIntegrationRunDetailID?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(40)
     Code?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     Message?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(100)
     CreatedBy?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(20)
     Status?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(40)
     Category?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     Details?: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__CreatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-        
+
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for Error Logs   
+// INPUT TYPE for Error Logs
 //****************************************************************************
 @InputType()
 export class UpdateErrorLogInput {
@@ -5580,7 +5583,7 @@ export class UpdateErrorLogInput {
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
 }
-    
+
 //****************************************************************************
 // RESOLVER for Error Logs
 //****************************************************************************
@@ -5632,7 +5635,7 @@ export class ErrorLogResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Error Logs', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-    
+
     @Mutation(() => ErrorLog_)
     async UpdateErrorLog(
         @Arg('input', () => UpdateErrorLogInput) input: UpdateErrorLogInput,
@@ -5641,53 +5644,53 @@ export class ErrorLogResolver extends ResolverBase {
     ) {
         return this.UpdateRecord('Error Logs', input, dataSource, userPayload, pubSub);
     }
-    
+
 }
 
 //****************************************************************************
 // ENTITY CLASS for Applications
 //****************************************************************************
 @ObjectType({ description: 'Applications are used to group entities in the user interface for ease of user access' })
-export class Application_ {  
-    @Field() 
+export class Application_ {
+    @Field()
     @MaxLength(16)
     ID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(200)
     Name: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     Description?: string;
-          
-    @Field({nullable: true, description: 'Specify the CSS class information for the display icon for each application.'}) 
+
+    @Field({nullable: true, description: 'Specify the CSS class information for the display icon for each application.'})
     @MaxLength(1000)
     Icon?: string;
-          
-    @Field(() => Boolean, {description: 'If turned on, when a new user first uses the MJ Explorer app, the application records with this turned on will have this application included in their selected application list.'}) 
+
+    @Field(() => Boolean, {description: 'If turned on, when a new user first uses the MJ Explorer app, the application records with this turned on will have this application included in their selected application list.'})
     DefaultForNewUser: boolean;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__CreatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-        
-    @Field(() => [mj_core_schema_server_object_types.ApplicationSetting_])
-    ApplicationSettingsArray: mj_core_schema_server_object_types.ApplicationSetting_[]; // Link to ApplicationSettings
-    
-    @Field(() => [mj_core_schema_server_object_types.UserApplication_])
-    UserApplicationsArray: mj_core_schema_server_object_types.UserApplication_[]; // Link to UserApplications
-    
-    @Field(() => [mj_core_schema_server_object_types.ApplicationEntity_])
-    ApplicationEntitiesArray: mj_core_schema_server_object_types.ApplicationEntity_[]; // Link to ApplicationEntities
-    
+
+    @Field(() => [ApplicationSetting_])
+    ApplicationSettingsArray: ApplicationSetting_[]; // Link to ApplicationSettings
+
+    @Field(() => [UserApplication_])
+    UserApplicationsArray: UserApplication_[]; // Link to UserApplications
+
+    @Field(() => [ApplicationEntity_])
+    ApplicationEntitiesArray: ApplicationEntity_[]; // Link to ApplicationEntities
+
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for Applications   
+// INPUT TYPE for Applications
 //****************************************************************************
 @InputType()
 export class CreateApplicationInput {
@@ -5703,10 +5706,10 @@ export class CreateApplicationInput {
     @Field(() => Boolean)
     DefaultForNewUser: boolean;
 }
-    
-        
+
+
 //****************************************************************************
-// INPUT TYPE for Applications   
+// INPUT TYPE for Applications
 //****************************************************************************
 @InputType()
 export class UpdateApplicationInput {
@@ -5728,7 +5731,7 @@ export class UpdateApplicationInput {
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
 }
-    
+
 //****************************************************************************
 // RESOLVER for Applications
 //****************************************************************************
@@ -5780,7 +5783,7 @@ export class ApplicationResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Applications', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-    
+
     @Query(() => [Application_])
     async AllApplications(@Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Applications', userPayload);
@@ -5788,40 +5791,40 @@ export class ApplicationResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Applications', await dataSource.query(sSQL));
         return result;
     }
-      
-    @FieldResolver(() => [mj_core_schema_server_object_types.ApplicationSetting_])
+
+    @FieldResolver(() => [ApplicationSetting_])
     async ApplicationSettingsArray(@Root() application_: Application_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Application Settings', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwApplicationSettings] WHERE [ApplicationID]='${application_.ID}' ` + this.getRowLevelSecurityWhereClause('Application Settings', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Application Settings', await dataSource.query(sSQL));
         return result;
     }
-          
-    @FieldResolver(() => [mj_core_schema_server_object_types.UserApplication_])
+
+    @FieldResolver(() => [UserApplication_])
     async UserApplicationsArray(@Root() application_: Application_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('User Applications', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwUserApplications] WHERE [ApplicationID]='${application_.ID}' ` + this.getRowLevelSecurityWhereClause('User Applications', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('User Applications', await dataSource.query(sSQL));
         return result;
     }
-          
-    @FieldResolver(() => [mj_core_schema_server_object_types.ApplicationEntity_])
+
+    @FieldResolver(() => [ApplicationEntity_])
     async ApplicationEntitiesArray(@Root() application_: Application_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Application Entities', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwApplicationEntities] WHERE [ApplicationID]='${application_.ID}' ` + this.getRowLevelSecurityWhereClause('Application Entities', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Application Entities', await dataSource.query(sSQL));
         return result;
     }
-        
+
     @Mutation(() => Application_)
     async CreateApplication(
         @Arg('input', () => CreateApplicationInput) input: CreateApplicationInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
+        @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.CreateRecord('Applications', input, dataSource, userPayload, pubSub)
     }
-        
+
     @Mutation(() => Application_)
     async UpdateApplication(
         @Arg('input', () => UpdateApplicationInput) input: UpdateApplicationInput,
@@ -5830,71 +5833,71 @@ export class ApplicationResolver extends ResolverBase {
     ) {
         return this.UpdateRecord('Applications', input, dataSource, userPayload, pubSub);
     }
-    
+
     @Mutation(() => Application_)
     async DeleteApplication(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Applications', key, options, dataSource, userPayload, pubSub);
     }
-    
+
 }
 
 //****************************************************************************
 // ENTITY CLASS for Application Entities
 //****************************************************************************
 @ObjectType({ description: 'List of entities within each application. An application can have any number of entities and an entity can be part of any number of applications.' })
-export class ApplicationEntity_ {  
-    @Field() 
+export class ApplicationEntity_ {
+    @Field()
     @MaxLength(16)
     ID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     ApplicationID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     EntityID: string;
-          
-    @Field(() => Int) 
+
+    @Field(() => Int)
     Sequence: number;
-          
-    @Field(() => Boolean, {description: 'When set to 1, the entity will be included by default for a new user when they first access the application in question'}) 
+
+    @Field(() => Boolean, {description: 'When set to 1, the entity will be included by default for a new user when they first access the application in question'})
     DefaultForNewUser: boolean;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__CreatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(200)
     Application: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(510)
     Entity: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(510)
     EntityBaseTable: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     EntityCodeName?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     EntityClassName?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     EntityBaseTableCodeName?: string;
-        
+
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for Application Entities   
+// INPUT TYPE for Application Entities
 //****************************************************************************
 @InputType()
 export class CreateApplicationEntityInput {
@@ -5910,10 +5913,10 @@ export class CreateApplicationEntityInput {
     @Field(() => Boolean)
     DefaultForNewUser: boolean;
 }
-    
-        
+
+
 //****************************************************************************
-// INPUT TYPE for Application Entities   
+// INPUT TYPE for Application Entities
 //****************************************************************************
 @InputType()
 export class UpdateApplicationEntityInput {
@@ -5935,7 +5938,7 @@ export class UpdateApplicationEntityInput {
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
 }
-    
+
 //****************************************************************************
 // RESOLVER for Application Entities
 //****************************************************************************
@@ -5987,16 +5990,16 @@ export class ApplicationEntityResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Application Entities', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-    
+
     @Mutation(() => ApplicationEntity_)
     async CreateApplicationEntity(
         @Arg('input', () => CreateApplicationEntityInput) input: CreateApplicationEntityInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
+        @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.CreateRecord('Application Entities', input, dataSource, userPayload, pubSub)
     }
-        
+
     @Mutation(() => ApplicationEntity_)
     async UpdateApplicationEntity(
         @Arg('input', () => UpdateApplicationEntityInput) input: UpdateApplicationEntityInput,
@@ -6005,96 +6008,96 @@ export class ApplicationEntityResolver extends ResolverBase {
     ) {
         return this.UpdateRecord('Application Entities', input, dataSource, userPayload, pubSub);
     }
-    
+
     @Mutation(() => ApplicationEntity_)
     async DeleteApplicationEntity(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Application Entities', key, options, dataSource, userPayload, pubSub);
     }
-    
+
 }
 
 //****************************************************************************
 // ENTITY CLASS for Entity Permissions
 //****************************************************************************
 @ObjectType({ description: 'Security settings for each entity' })
-export class EntityPermission_ {  
-    @Field() 
+export class EntityPermission_ {
+    @Field()
     @MaxLength(16)
     ID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     EntityID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     RoleID: string;
-          
-    @Field(() => Boolean) 
+
+    @Field(() => Boolean)
     CanCreate: boolean;
-          
-    @Field(() => Boolean) 
+
+    @Field(() => Boolean)
     CanRead: boolean;
-          
-    @Field(() => Boolean) 
+
+    @Field(() => Boolean)
     CanUpdate: boolean;
-          
-    @Field(() => Boolean) 
+
+    @Field(() => Boolean)
     CanDelete: boolean;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(16)
     ReadRLSFilterID?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(16)
     CreateRLSFilterID?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(16)
     UpdateRLSFilterID?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(16)
     DeleteRLSFilterID?: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__CreatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(510)
     Entity: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(500)
     RoleSQLName?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(200)
     CreateRLSFilter?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(200)
     ReadRLSFilter?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(200)
     UpdateRLSFilter?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(200)
     DeleteRLSFilter?: string;
-        
+
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for Entity Permissions   
+// INPUT TYPE for Entity Permissions
 //****************************************************************************
 @InputType()
 export class CreateEntityPermissionInput {
@@ -6128,10 +6131,10 @@ export class CreateEntityPermissionInput {
     @Field({ nullable: true })
     DeleteRLSFilterID?: string;
 }
-    
-        
+
+
 //****************************************************************************
-// INPUT TYPE for Entity Permissions   
+// INPUT TYPE for Entity Permissions
 //****************************************************************************
 @InputType()
 export class UpdateEntityPermissionInput {
@@ -6171,7 +6174,7 @@ export class UpdateEntityPermissionInput {
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
 }
-    
+
 //****************************************************************************
 // RESOLVER for Entity Permissions
 //****************************************************************************
@@ -6223,7 +6226,7 @@ export class EntityPermissionResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Entity Permissions', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-    
+
     @Query(() => [EntityPermission_])
     async AllEntityPermissions(@Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entity Permissions', userPayload);
@@ -6231,16 +6234,16 @@ export class EntityPermissionResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Entity Permissions', await dataSource.query(sSQL));
         return result;
     }
-    
+
     @Mutation(() => EntityPermission_)
     async CreateEntityPermission(
         @Arg('input', () => CreateEntityPermissionInput) input: CreateEntityPermissionInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
+        @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.CreateRecord('Entity Permissions', input, dataSource, userPayload, pubSub)
     }
-        
+
     @Mutation(() => EntityPermission_)
     async UpdateEntityPermission(
         @Arg('input', () => UpdateEntityPermissionInput) input: UpdateEntityPermissionInput,
@@ -6249,59 +6252,59 @@ export class EntityPermissionResolver extends ResolverBase {
     ) {
         return this.UpdateRecord('Entity Permissions', input, dataSource, userPayload, pubSub);
     }
-    
+
     @Mutation(() => EntityPermission_)
     async DeleteEntityPermission(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Entity Permissions', key, options, dataSource, userPayload, pubSub);
     }
-    
+
 }
 
 //****************************************************************************
 // ENTITY CLASS for User Application Entities
 //****************************************************************************
 @ObjectType()
-export class UserApplicationEntity_ {  
-    @Field() 
+export class UserApplicationEntity_ {
+    @Field()
     @MaxLength(16)
     ID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     UserApplicationID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     EntityID: string;
-          
-    @Field(() => Int) 
+
+    @Field(() => Int)
     Sequence: number;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__CreatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(200)
     Application: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(200)
     User: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(510)
     Entity: string;
-        
+
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for User Application Entities   
+// INPUT TYPE for User Application Entities
 //****************************************************************************
 @InputType()
 export class CreateUserApplicationEntityInput {
@@ -6314,10 +6317,10 @@ export class CreateUserApplicationEntityInput {
     @Field(() => Int)
     Sequence: number;
 }
-    
-        
+
+
 //****************************************************************************
-// INPUT TYPE for User Application Entities   
+// INPUT TYPE for User Application Entities
 //****************************************************************************
 @InputType()
 export class UpdateUserApplicationEntityInput {
@@ -6336,7 +6339,7 @@ export class UpdateUserApplicationEntityInput {
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
 }
-    
+
 //****************************************************************************
 // RESOLVER for User Application Entities
 //****************************************************************************
@@ -6388,16 +6391,16 @@ export class UserApplicationEntityResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('User Application Entities', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-    
+
     @Mutation(() => UserApplicationEntity_)
     async CreateUserApplicationEntity(
         @Arg('input', () => CreateUserApplicationEntityInput) input: CreateUserApplicationEntityInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
+        @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.CreateRecord('User Application Entities', input, dataSource, userPayload, pubSub)
     }
-        
+
     @Mutation(() => UserApplicationEntity_)
     async UpdateUserApplicationEntity(
         @Arg('input', () => UpdateUserApplicationEntityInput) input: UpdateUserApplicationEntityInput,
@@ -6406,61 +6409,61 @@ export class UserApplicationEntityResolver extends ResolverBase {
     ) {
         return this.UpdateRecord('User Application Entities', input, dataSource, userPayload, pubSub);
     }
-    
+
     @Mutation(() => UserApplicationEntity_)
     async DeleteUserApplicationEntity(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('User Application Entities', key, options, dataSource, userPayload, pubSub);
     }
-    
+
 }
 
 //****************************************************************************
 // ENTITY CLASS for User Applications
 //****************************************************************************
 @ObjectType()
-export class UserApplication_ {  
-    @Field() 
+export class UserApplication_ {
+    @Field()
     @MaxLength(16)
     ID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     UserID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     ApplicationID: string;
-          
-    @Field(() => Int) 
+
+    @Field(() => Int)
     Sequence: number;
-          
-    @Field(() => Boolean) 
+
+    @Field(() => Boolean)
     IsActive: boolean;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__CreatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(200)
     User: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(200)
     Application: string;
-        
-    @Field(() => [mj_core_schema_server_object_types.UserApplicationEntity_])
-    UserApplicationEntitiesArray: mj_core_schema_server_object_types.UserApplicationEntity_[]; // Link to UserApplicationEntities
-    
+
+    @Field(() => [UserApplicationEntity_])
+    UserApplicationEntitiesArray: UserApplicationEntity_[]; // Link to UserApplicationEntities
+
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for User Applications   
+// INPUT TYPE for User Applications
 //****************************************************************************
 @InputType()
 export class CreateUserApplicationInput {
@@ -6476,10 +6479,10 @@ export class CreateUserApplicationInput {
     @Field(() => Boolean)
     IsActive: boolean;
 }
-    
-        
+
+
 //****************************************************************************
-// INPUT TYPE for User Applications   
+// INPUT TYPE for User Applications
 //****************************************************************************
 @InputType()
 export class UpdateUserApplicationInput {
@@ -6501,7 +6504,7 @@ export class UpdateUserApplicationInput {
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
 }
-    
+
 //****************************************************************************
 // RESOLVER for User Applications
 //****************************************************************************
@@ -6553,24 +6556,24 @@ export class UserApplicationResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('User Applications', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-      
-    @FieldResolver(() => [mj_core_schema_server_object_types.UserApplicationEntity_])
+
+    @FieldResolver(() => [UserApplicationEntity_])
     async UserApplicationEntitiesArray(@Root() userapplication_: UserApplication_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('User Application Entities', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwUserApplicationEntities] WHERE [UserApplicationID]='${userapplication_.ID}' ` + this.getRowLevelSecurityWhereClause('User Application Entities', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('User Application Entities', await dataSource.query(sSQL));
         return result;
     }
-        
+
     @Mutation(() => UserApplication_)
     async CreateUserApplication(
         @Arg('input', () => CreateUserApplicationInput) input: CreateUserApplicationInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
+        @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.CreateRecord('User Applications', input, dataSource, userPayload, pubSub)
     }
-        
+
     @Mutation(() => UserApplication_)
     async UpdateUserApplication(
         @Arg('input', () => UpdateUserApplicationInput) input: UpdateUserApplicationInput,
@@ -6579,57 +6582,57 @@ export class UserApplicationResolver extends ResolverBase {
     ) {
         return this.UpdateRecord('User Applications', input, dataSource, userPayload, pubSub);
     }
-    
+
     @Mutation(() => UserApplication_)
     async DeleteUserApplication(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('User Applications', key, options, dataSource, userPayload, pubSub);
     }
-    
+
 }
 
 //****************************************************************************
 // ENTITY CLASS for Company Integration Run API Logs
 //****************************************************************************
 @ObjectType()
-export class CompanyIntegrationRunAPILog_ {  
-    @Field() 
+export class CompanyIntegrationRunAPILog_ {
+    @Field()
     @MaxLength(16)
     ID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     CompanyIntegrationRunID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(8)
     ExecutedAt: Date;
-          
-    @Field(() => Boolean) 
+
+    @Field(() => Boolean)
     IsSuccess: boolean;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(24)
     RequestMethod?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     URL?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     Parameters?: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__CreatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-        
+
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for Company Integration Run API Logs   
+// INPUT TYPE for Company Integration Run API Logs
 //****************************************************************************
 @InputType()
 export class UpdateCompanyIntegrationRunAPILogInput {
@@ -6657,7 +6660,7 @@ export class UpdateCompanyIntegrationRunAPILogInput {
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
 }
-    
+
 //****************************************************************************
 // RESOLVER for Company Integration Run API Logs
 //****************************************************************************
@@ -6709,7 +6712,7 @@ export class CompanyIntegrationRunAPILogResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Company Integration Run API Logs', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-    
+
     @Mutation(() => CompanyIntegrationRunAPILog_)
     async UpdateCompanyIntegrationRunAPILog(
         @Arg('input', () => UpdateCompanyIntegrationRunAPILogInput) input: UpdateCompanyIntegrationRunAPILogInput,
@@ -6718,71 +6721,71 @@ export class CompanyIntegrationRunAPILogResolver extends ResolverBase {
     ) {
         return this.UpdateRecord('Company Integration Run API Logs', input, dataSource, userPayload, pubSub);
     }
-    
+
 }
 
 //****************************************************************************
 // ENTITY CLASS for Lists
 //****************************************************************************
 @ObjectType({ description: 'Static lists are useful for controlling a set of data for a given entity. These can be used programatically for applications like logging and tracking long-running tasks and also by end users for tracking any particular list of records they want to directly control the set.' })
-export class List_ {  
-    @Field() 
+export class List_ {
+    @Field()
     @MaxLength(16)
     ID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(200)
     Name: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     Description?: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     EntityID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     UserID: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(16)
     CategoryID?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(200)
     ExternalSystemRecordID?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(16)
     CompanyIntegrationID?: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__CreatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(510)
     Entity: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(200)
     User: string;
-        
-    @Field(() => [mj_core_schema_server_object_types.ListDetail_])
-    ListDetailsArray: mj_core_schema_server_object_types.ListDetail_[]; // Link to ListDetails
-    
-    @Field(() => [mj_core_schema_server_object_types.DuplicateRun_])
-    DuplicateRunsArray: mj_core_schema_server_object_types.DuplicateRun_[]; // Link to DuplicateRuns
-    
+
+    @Field(() => [ListDetail_])
+    ListDetailsArray: ListDetail_[]; // Link to ListDetails
+
+    @Field(() => [DuplicateRun_])
+    DuplicateRunsArray: DuplicateRun_[]; // Link to DuplicateRuns
+
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for Lists   
+// INPUT TYPE for Lists
 //****************************************************************************
 @InputType()
 export class CreateListInput {
@@ -6807,10 +6810,10 @@ export class CreateListInput {
     @Field({ nullable: true })
     CompanyIntegrationID?: string;
 }
-    
-        
+
+
 //****************************************************************************
-// INPUT TYPE for Lists   
+// INPUT TYPE for Lists
 //****************************************************************************
 @InputType()
 export class UpdateListInput {
@@ -6841,7 +6844,7 @@ export class UpdateListInput {
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
 }
-    
+
 //****************************************************************************
 // RESOLVER for Lists
 //****************************************************************************
@@ -6893,32 +6896,32 @@ export class ListResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Lists', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-      
-    @FieldResolver(() => [mj_core_schema_server_object_types.ListDetail_])
+
+    @FieldResolver(() => [ListDetail_])
     async ListDetailsArray(@Root() list_: List_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('List Details', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwListDetails] WHERE [ListID]='${list_.ID}' ` + this.getRowLevelSecurityWhereClause('List Details', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('List Details', await dataSource.query(sSQL));
         return result;
     }
-          
-    @FieldResolver(() => [mj_core_schema_server_object_types.DuplicateRun_])
+
+    @FieldResolver(() => [DuplicateRun_])
     async DuplicateRunsArray(@Root() list_: List_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Duplicate Runs', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwDuplicateRuns] WHERE [SourceListID]='${list_.ID}' ` + this.getRowLevelSecurityWhereClause('Duplicate Runs', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Duplicate Runs', await dataSource.query(sSQL));
         return result;
     }
-        
+
     @Mutation(() => List_)
     async CreateList(
         @Arg('input', () => CreateListInput) input: CreateListInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
+        @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.CreateRecord('Lists', input, dataSource, userPayload, pubSub)
     }
-        
+
     @Mutation(() => List_)
     async UpdateList(
         @Arg('input', () => UpdateListInput) input: UpdateListInput,
@@ -6927,51 +6930,51 @@ export class ListResolver extends ResolverBase {
     ) {
         return this.UpdateRecord('Lists', input, dataSource, userPayload, pubSub);
     }
-    
+
     @Mutation(() => List_)
     async DeleteList(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Lists', key, options, dataSource, userPayload, pubSub);
     }
-    
+
 }
 
 //****************************************************************************
 // ENTITY CLASS for List Details
 //****************************************************************************
 @ObjectType({ description: 'Tracks the records within each list.' })
-export class ListDetail_ {  
-    @Field() 
+export class ListDetail_ {
+    @Field()
     @MaxLength(16)
     ID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     ListID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(890)
     RecordID: string;
-          
-    @Field(() => Int) 
+
+    @Field(() => Int)
     Sequence: number;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__CreatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(200)
     List: string;
-        
+
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for List Details   
+// INPUT TYPE for List Details
 //****************************************************************************
 @InputType()
 export class CreateListDetailInput {
@@ -6984,10 +6987,10 @@ export class CreateListDetailInput {
     @Field(() => Int)
     Sequence: number;
 }
-    
-        
+
+
 //****************************************************************************
-// INPUT TYPE for List Details   
+// INPUT TYPE for List Details
 //****************************************************************************
 @InputType()
 export class UpdateListDetailInput {
@@ -7006,7 +7009,7 @@ export class UpdateListDetailInput {
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
 }
-    
+
 //****************************************************************************
 // RESOLVER for List Details
 //****************************************************************************
@@ -7058,16 +7061,16 @@ export class ListDetailResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('List Details', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-    
+
     @Mutation(() => ListDetail_)
     async CreateListDetail(
         @Arg('input', () => CreateListDetailInput) input: CreateListDetailInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
+        @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.CreateRecord('List Details', input, dataSource, userPayload, pubSub)
     }
-        
+
     @Mutation(() => ListDetail_)
     async UpdateListDetail(
         @Arg('input', () => UpdateListDetailInput) input: UpdateListDetailInput,
@@ -7076,59 +7079,59 @@ export class ListDetailResolver extends ResolverBase {
     ) {
         return this.UpdateRecord('List Details', input, dataSource, userPayload, pubSub);
     }
-    
+
     @Mutation(() => ListDetail_)
     async DeleteListDetail(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('List Details', key, options, dataSource, userPayload, pubSub);
     }
-    
+
 }
 
 //****************************************************************************
 // ENTITY CLASS for User View Runs
 //****************************************************************************
 @ObjectType({ description: 'User Views can be logged when run to capture the date and user that ran the view as well as the output results.' })
-export class UserViewRun_ {  
-    @Field() 
+export class UserViewRun_ {
+    @Field()
     @MaxLength(16)
     ID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     UserViewID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(8)
     RunAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     RunByUserID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__CreatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(200)
     UserView: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(200)
     RunByUser: string;
-        
-    @Field(() => [mj_core_schema_server_object_types.UserViewRunDetail_])
-    UserViewRunDetailsArray: mj_core_schema_server_object_types.UserViewRunDetail_[]; // Link to UserViewRunDetails
-    
+
+    @Field(() => [UserViewRunDetail_])
+    UserViewRunDetailsArray: UserViewRunDetail_[]; // Link to UserViewRunDetails
+
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for User View Runs   
+// INPUT TYPE for User View Runs
 //****************************************************************************
 @InputType()
 export class CreateUserViewRunInput {
@@ -7141,10 +7144,10 @@ export class CreateUserViewRunInput {
     @Field()
     RunByUserID: string;
 }
-    
-        
+
+
 //****************************************************************************
-// INPUT TYPE for User View Runs   
+// INPUT TYPE for User View Runs
 //****************************************************************************
 @InputType()
 export class UpdateUserViewRunInput {
@@ -7163,7 +7166,7 @@ export class UpdateUserViewRunInput {
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
 }
-    
+
 //****************************************************************************
 // RESOLVER for User View Runs
 //****************************************************************************
@@ -7215,24 +7218,24 @@ export class UserViewRunResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('User View Runs', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-      
-    @FieldResolver(() => [mj_core_schema_server_object_types.UserViewRunDetail_])
+
+    @FieldResolver(() => [UserViewRunDetail_])
     async UserViewRunDetailsArray(@Root() userviewrun_: UserViewRun_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('User View Run Details', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwUserViewRunDetails] WHERE [UserViewRunID]='${userviewrun_.ID}' ` + this.getRowLevelSecurityWhereClause('User View Run Details', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('User View Run Details', await dataSource.query(sSQL));
         return result;
     }
-        
+
     @Mutation(() => UserViewRun_)
     async CreateUserViewRun(
         @Arg('input', () => CreateUserViewRunInput) input: CreateUserViewRunInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
+        @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.CreateRecord('User View Runs', input, dataSource, userPayload, pubSub)
     }
-        
+
     @Mutation(() => UserViewRun_)
     async UpdateUserViewRun(
         @Arg('input', () => UpdateUserViewRunInput) input: UpdateUserViewRunInput,
@@ -7241,46 +7244,46 @@ export class UserViewRunResolver extends ResolverBase {
     ) {
         return this.UpdateRecord('User View Runs', input, dataSource, userPayload, pubSub);
     }
-    
+
 }
 
 //****************************************************************************
 // ENTITY CLASS for User View Run Details
 //****************************************************************************
 @ObjectType({ description: 'Tracks the set of records that were included in each run of a given user view.' })
-export class UserViewRunDetail_ {  
-    @Field() 
+export class UserViewRunDetail_ {
+    @Field()
     @MaxLength(16)
     ID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     UserViewRunID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(900)
     RecordID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__CreatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     UserViewID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     EntityID: string;
-        
+
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for User View Run Details   
+// INPUT TYPE for User View Run Details
 //****************************************************************************
 @InputType()
 export class CreateUserViewRunDetailInput {
@@ -7290,10 +7293,10 @@ export class CreateUserViewRunDetailInput {
     @Field()
     RecordID: string;
 }
-    
-        
+
+
 //****************************************************************************
-// INPUT TYPE for User View Run Details   
+// INPUT TYPE for User View Run Details
 //****************************************************************************
 @InputType()
 export class UpdateUserViewRunDetailInput {
@@ -7309,7 +7312,7 @@ export class UpdateUserViewRunDetailInput {
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
 }
-    
+
 //****************************************************************************
 // RESOLVER for User View Run Details
 //****************************************************************************
@@ -7361,16 +7364,16 @@ export class UserViewRunDetailResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('User View Run Details', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-    
+
     @Mutation(() => UserViewRunDetail_)
     async CreateUserViewRunDetail(
         @Arg('input', () => CreateUserViewRunDetailInput) input: CreateUserViewRunDetailInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
+        @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.CreateRecord('User View Run Details', input, dataSource, userPayload, pubSub)
     }
-        
+
     @Mutation(() => UserViewRunDetail_)
     async UpdateUserViewRunDetail(
         @Arg('input', () => UpdateUserViewRunDetailInput) input: UpdateUserViewRunDetailInput,
@@ -7379,61 +7382,61 @@ export class UserViewRunDetailResolver extends ResolverBase {
     ) {
         return this.UpdateRecord('User View Run Details', input, dataSource, userPayload, pubSub);
     }
-    
+
 }
 
 //****************************************************************************
 // ENTITY CLASS for Workflow Runs
 //****************************************************************************
 @ObjectType()
-export class WorkflowRun_ {  
-    @Field() 
+export class WorkflowRun_ {
+    @Field()
     @MaxLength(16)
     ID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     WorkflowID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(1000)
     ExternalSystemRecordID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(8)
     StartedAt: Date;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(8)
     EndedAt?: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(20)
     Status: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     Results?: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__CreatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(200)
     Workflow: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(200)
     WorkflowEngineName: string;
-        
+
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for Workflow Runs   
+// INPUT TYPE for Workflow Runs
 //****************************************************************************
 @InputType()
 export class UpdateWorkflowRunInput {
@@ -7461,7 +7464,7 @@ export class UpdateWorkflowRunInput {
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
 }
-    
+
 //****************************************************************************
 // RESOLVER for Workflow Runs
 //****************************************************************************
@@ -7513,7 +7516,7 @@ export class WorkflowRunResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Workflow Runs', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-    
+
     @Mutation(() => WorkflowRun_)
     async UpdateWorkflowRun(
         @Arg('input', () => UpdateWorkflowRunInput) input: UpdateWorkflowRunInput,
@@ -7522,68 +7525,68 @@ export class WorkflowRunResolver extends ResolverBase {
     ) {
         return this.UpdateRecord('Workflow Runs', input, dataSource, userPayload, pubSub);
     }
-    
+
 }
 
 //****************************************************************************
 // ENTITY CLASS for Workflows
 //****************************************************************************
 @ObjectType()
-export class Workflow_ {  
-    @Field() 
+export class Workflow_ {
+    @Field()
     @MaxLength(16)
     ID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(200)
     Name: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     Description?: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     WorkflowEngineID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(200)
     ExternalSystemRecordID: string;
-          
-    @Field(() => Boolean, {description: 'If set to 1, the workflow will be run automatically on the interval specified by the AutoRunIntervalType and AutoRunInterval fields'}) 
+
+    @Field(() => Boolean, {description: 'If set to 1, the workflow will be run automatically on the interval specified by the AutoRunIntervalType and AutoRunInterval fields'})
     AutoRunEnabled: boolean;
-          
-    @Field({nullable: true, description: 'Minutes, Hours, Days, Weeks, Months, Years'}) 
+
+    @Field({nullable: true, description: 'Minutes, Hours, Days, Weeks, Months, Years'})
     @MaxLength(40)
     AutoRunIntervalUnits?: string;
-          
-    @Field(() => Int, {nullable: true, description: 'The interval, denominated in the units specified in the AutoRunIntervalUnits column, between auto runs of this workflow.'}) 
+
+    @Field(() => Int, {nullable: true, description: 'The interval, denominated in the units specified in the AutoRunIntervalUnits column, between auto runs of this workflow.'})
     AutoRunInterval?: number;
-          
-    @Field({nullable: true, description: 'If specified, this subclass key, via the ClassFactory, will be instantiated, to execute this workflow. If not specified the WorkflowBase class will be used by default.'}) 
+
+    @Field({nullable: true, description: 'If specified, this subclass key, via the ClassFactory, will be instantiated, to execute this workflow. If not specified the WorkflowBase class will be used by default.'})
     @MaxLength(400)
     SubclassName?: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__CreatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-          
-    @Field(() => Int, {nullable: true}) 
+
+    @Field(() => Int, {nullable: true})
     AutoRunIntervalMinutes?: number;
-        
-    @Field(() => [mj_core_schema_server_object_types.Report_])
-    ReportsArray: mj_core_schema_server_object_types.Report_[]; // Link to Reports
-    
-    @Field(() => [mj_core_schema_server_object_types.WorkflowRun_])
-    WorkflowRunsArray: mj_core_schema_server_object_types.WorkflowRun_[]; // Link to WorkflowRuns
-    
+
+    @Field(() => [Report_])
+    ReportsArray: Report_[]; // Link to Reports
+
+    @Field(() => [WorkflowRun_])
+    WorkflowRunsArray: WorkflowRun_[]; // Link to WorkflowRuns
+
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for Workflows   
+// INPUT TYPE for Workflows
 //****************************************************************************
 @InputType()
 export class UpdateWorkflowInput {
@@ -7617,7 +7620,7 @@ export class UpdateWorkflowInput {
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
 }
-    
+
 //****************************************************************************
 // RESOLVER for Workflows
 //****************************************************************************
@@ -7669,23 +7672,23 @@ export class WorkflowResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Workflows', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-      
-    @FieldResolver(() => [mj_core_schema_server_object_types.Report_])
+
+    @FieldResolver(() => [Report_])
     async ReportsArray(@Root() workflow_: Workflow_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Reports', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwReports] WHERE [OutputWorkflowID]='${workflow_.ID}' ` + this.getRowLevelSecurityWhereClause('Reports', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Reports', await dataSource.query(sSQL));
         return result;
     }
-          
-    @FieldResolver(() => [mj_core_schema_server_object_types.WorkflowRun_])
+
+    @FieldResolver(() => [WorkflowRun_])
     async WorkflowRunsArray(@Root() workflow_: Workflow_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Workflow Runs', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwWorkflowRuns] WHERE [WorkflowName]='${workflow_.ID}' ` + this.getRowLevelSecurityWhereClause('Workflow Runs', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Workflow Runs', await dataSource.query(sSQL));
         return result;
     }
-        
+
     @Mutation(() => Workflow_)
     async UpdateWorkflow(
         @Arg('input', () => UpdateWorkflowInput) input: UpdateWorkflowInput,
@@ -7694,48 +7697,48 @@ export class WorkflowResolver extends ResolverBase {
     ) {
         return this.UpdateRecord('Workflows', input, dataSource, userPayload, pubSub);
     }
-    
+
 }
 
 //****************************************************************************
 // ENTITY CLASS for Workflow Engines
 //****************************************************************************
 @ObjectType()
-export class WorkflowEngine_ {  
-    @Field() 
+export class WorkflowEngine_ {
+    @Field()
     @MaxLength(16)
     ID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(200)
     Name: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     Description?: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(1000)
     DriverPath: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(200)
     DriverClass: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__CreatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-        
-    @Field(() => [mj_core_schema_server_object_types.Workflow_])
-    WorkflowsArray: mj_core_schema_server_object_types.Workflow_[]; // Link to Workflows
-    
+
+    @Field(() => [Workflow_])
+    WorkflowsArray: Workflow_[]; // Link to Workflows
+
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for Workflow Engines   
+// INPUT TYPE for Workflow Engines
 //****************************************************************************
 @InputType()
 export class UpdateWorkflowEngineInput {
@@ -7757,7 +7760,7 @@ export class UpdateWorkflowEngineInput {
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
 }
-    
+
 //****************************************************************************
 // RESOLVER for Workflow Engines
 //****************************************************************************
@@ -7809,15 +7812,15 @@ export class WorkflowEngineResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Workflow Engines', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-      
-    @FieldResolver(() => [mj_core_schema_server_object_types.Workflow_])
+
+    @FieldResolver(() => [Workflow_])
     async WorkflowsArray(@Root() workflowengine_: WorkflowEngine_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Workflows', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwWorkflows] WHERE [WorkflowEngineName]='${workflowengine_.ID}' ` + this.getRowLevelSecurityWhereClause('Workflows', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Workflows', await dataSource.query(sSQL));
         return result;
     }
-        
+
     @Mutation(() => WorkflowEngine_)
     async UpdateWorkflowEngine(
         @Arg('input', () => UpdateWorkflowEngineInput) input: UpdateWorkflowEngineInput,
@@ -7826,93 +7829,93 @@ export class WorkflowEngineResolver extends ResolverBase {
     ) {
         return this.UpdateRecord('Workflow Engines', input, dataSource, userPayload, pubSub);
     }
-    
+
 }
 
 //****************************************************************************
 // ENTITY CLASS for Record Changes
 //****************************************************************************
 @ObjectType({ description: 'For entities that have TrackRecordChanges=1, Record Changes will store the history of all changes made within the system. For integrations you can directly add values here if you have inbound signals indicating records were changed in a source system. This entity only automatically captures Record Changes if they were made within the system.' })
-export class RecordChange_ {  
-    @Field() 
+export class RecordChange_ {
+    @Field()
     @MaxLength(16)
     ID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     EntityID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(1500)
     RecordID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     UserID: string;
-          
-    @Field({description: 'Create, Update, or Delete'}) 
+
+    @Field({description: 'Create, Update, or Delete'})
     @MaxLength(40)
     Type: string;
-          
-    @Field({description: 'Internal or External'}) 
+
+    @Field({description: 'Internal or External'})
     @MaxLength(40)
     Source: string;
-          
-    @Field({description: 'The date/time that the change occured.'}) 
+
+    @Field({description: 'The date/time that the change occured.'})
     @MaxLength(10)
     ChangedAt: Date;
-          
-    @Field({description: 'JSON structure that describes what was changed in a structured format.'}) 
+
+    @Field({description: 'JSON structure that describes what was changed in a structured format.'})
     ChangesJSON: string;
-          
-    @Field({description: 'A generated, human-readable description of what was changed.'}) 
+
+    @Field({description: 'A generated, human-readable description of what was changed.'})
     ChangesDescription: string;
-          
-    @Field({description: 'A complete snapshot of the record AFTER the change was applied in a JSON format that can be parsed.'}) 
+
+    @Field({description: 'A complete snapshot of the record AFTER the change was applied in a JSON format that can be parsed.'})
     FullRecordJSON: string;
-          
-    @Field({description: 'For internal record changes generated within MJ, the status is immediately Complete. For external changes that are detected, the workflow starts off as Pending, then In Progress and finally either Complete or Error'}) 
+
+    @Field({description: 'For internal record changes generated within MJ, the status is immediately Complete. For external changes that are detected, the workflow starts off as Pending, then In Progress and finally either Complete or Error'})
     @MaxLength(100)
     Status: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     ErrorLog?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(16)
     ReplayRunID?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(16)
     IntegrationID?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     Comments?: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     CreatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     UpdatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(510)
     Entity: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(200)
     User: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(200)
     Integration?: string;
-        
+
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for Record Changes   
+// INPUT TYPE for Record Changes
 //****************************************************************************
 @InputType()
 export class CreateRecordChangeInput {
@@ -7958,10 +7961,10 @@ export class CreateRecordChangeInput {
     @Field({ nullable: true })
     Comments?: string;
 }
-    
-        
+
+
 //****************************************************************************
-// INPUT TYPE for Record Changes   
+// INPUT TYPE for Record Changes
 //****************************************************************************
 @InputType()
 export class UpdateRecordChangeInput {
@@ -8013,7 +8016,7 @@ export class UpdateRecordChangeInput {
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
 }
-    
+
 //****************************************************************************
 // RESOLVER for Record Changes
 //****************************************************************************
@@ -8065,16 +8068,16 @@ export class RecordChangeResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Record Changes', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-    
+
     @Mutation(() => RecordChange_)
     async CreateRecordChange(
         @Arg('input', () => CreateRecordChangeInput) input: CreateRecordChangeInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
+        @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.CreateRecord('Record Changes', input, dataSource, userPayload, pubSub)
     }
-        
+
     @Mutation(() => RecordChange_)
     async UpdateRecordChange(
         @Arg('input', () => UpdateRecordChangeInput) input: UpdateRecordChangeInput,
@@ -8083,46 +8086,46 @@ export class RecordChangeResolver extends ResolverBase {
     ) {
         return this.UpdateRecord('Record Changes', input, dataSource, userPayload, pubSub);
     }
-    
+
 }
 
 //****************************************************************************
 // ENTITY CLASS for User Roles
 //****************************************************************************
 @ObjectType()
-export class UserRole_ {  
-    @Field() 
+export class UserRole_ {
+    @Field()
     @MaxLength(16)
     ID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     UserID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     RoleID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__CreatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(200)
     User: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(100)
     Role: string;
-        
+
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for User Roles   
+// INPUT TYPE for User Roles
 //****************************************************************************
 @InputType()
 export class CreateUserRoleInput {
@@ -8132,7 +8135,7 @@ export class CreateUserRoleInput {
     @Field()
     RoleID: string;
 }
-    
+
 //****************************************************************************
 // RESOLVER for User Roles
 //****************************************************************************
@@ -8184,7 +8187,7 @@ export class UserRoleResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('User Roles', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-    
+
     @Query(() => [UserRole_])
     async AllUserRoles(@Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('User Roles', userPayload);
@@ -8192,54 +8195,54 @@ export class UserRoleResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('User Roles', await dataSource.query(sSQL));
         return result;
     }
-    
+
     @Mutation(() => UserRole_)
     async CreateUserRole(
         @Arg('input', () => CreateUserRoleInput) input: CreateUserRoleInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
+        @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.CreateRecord('User Roles', input, dataSource, userPayload, pubSub)
     }
-        
+
     @Mutation(() => UserRole_)
     async DeleteUserRole(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('User Roles', key, options, dataSource, userPayload, pubSub);
     }
-    
+
 }
 
 //****************************************************************************
 // ENTITY CLASS for Row Level Security Filters
 //****************************************************************************
 @ObjectType()
-export class RowLevelSecurityFilter_ {  
-    @Field() 
+export class RowLevelSecurityFilter_ {
+    @Field()
     @MaxLength(16)
     ID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(200)
     Name: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     Description?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     FilterText?: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__CreatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-        
-    @Field(() => [mj_core_schema_server_object_types.EntityPermission_])
-    EntityPermissionsArray: mj_core_schema_server_object_types.EntityPermission_[]; // Link to EntityPermissions
-    
+
+    @Field(() => [EntityPermission_])
+    EntityPermissionsArray: EntityPermission_[]; // Link to EntityPermissions
+
 }
 //****************************************************************************
 // RESOLVER for Row Level Security Filters
@@ -8292,7 +8295,7 @@ export class RowLevelSecurityFilterResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Row Level Security Filters', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-    
+
     @Query(() => [RowLevelSecurityFilter_])
     async AllRowLevelSecurityFilters(@Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Row Level Security Filters', userPayload);
@@ -8300,76 +8303,76 @@ export class RowLevelSecurityFilterResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Row Level Security Filters', await dataSource.query(sSQL));
         return result;
     }
-      
-    @FieldResolver(() => [mj_core_schema_server_object_types.EntityPermission_])
+
+    @FieldResolver(() => [EntityPermission_])
     async EntityPermissionsArray(@Root() rowlevelsecurityfilter_: RowLevelSecurityFilter_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entity Permissions', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityPermissions] WHERE [ReadRLSFilterID]='${rowlevelsecurityfilter_.ID}' ` + this.getRowLevelSecurityWhereClause('Entity Permissions', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Entity Permissions', await dataSource.query(sSQL));
         return result;
     }
-        
+
 }
 
 //****************************************************************************
 // ENTITY CLASS for Audit Logs
 //****************************************************************************
 @ObjectType()
-export class AuditLog_ {  
-    @Field() 
+export class AuditLog_ {
+    @Field()
     @MaxLength(16)
     ID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     UserID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     AuditLogTypeID: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(16)
     AuthorizationID?: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(100)
     Status: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     Description?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     Details?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(16)
     EntityID?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(900)
     RecordID?: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__CreatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(200)
     User: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(510)
     Entity?: string;
-        
+
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for Audit Logs   
+// INPUT TYPE for Audit Logs
 //****************************************************************************
 @InputType()
 export class CreateAuditLogInput {
@@ -8397,10 +8400,10 @@ export class CreateAuditLogInput {
     @Field({ nullable: true })
     RecordID?: string;
 }
-    
-        
+
+
 //****************************************************************************
-// INPUT TYPE for Audit Logs   
+// INPUT TYPE for Audit Logs
 //****************************************************************************
 @InputType()
 export class UpdateAuditLogInput {
@@ -8434,7 +8437,7 @@ export class UpdateAuditLogInput {
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
 }
-    
+
 //****************************************************************************
 // RESOLVER for Audit Logs
 //****************************************************************************
@@ -8486,16 +8489,16 @@ export class AuditLogResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Audit Logs', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-    
+
     @Mutation(() => AuditLog_)
     async CreateAuditLog(
         @Arg('input', () => CreateAuditLogInput) input: CreateAuditLogInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
+        @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.CreateRecord('Audit Logs', input, dataSource, userPayload, pubSub)
     }
-        
+
     @Mutation(() => AuditLog_)
     async UpdateAuditLog(
         @Arg('input', () => UpdateAuditLogInput) input: UpdateAuditLogInput,
@@ -8504,62 +8507,62 @@ export class AuditLogResolver extends ResolverBase {
     ) {
         return this.UpdateRecord('Audit Logs', input, dataSource, userPayload, pubSub);
     }
-    
+
 }
 
 //****************************************************************************
 // ENTITY CLASS for Authorizations
 //****************************************************************************
 @ObjectType()
-export class Authorization_ {  
-    @Field() 
+export class Authorization_ {
+    @Field()
     @MaxLength(16)
     ID: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(16)
     ParentID?: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(200)
     Name: string;
-          
-    @Field(() => Boolean) 
+
+    @Field(() => Boolean)
     IsActive: boolean;
-          
-    @Field(() => Boolean, {description: 'When set to 1, Audit Log records are created whenever this authorization is invoked for a user'}) 
+
+    @Field(() => Boolean, {description: 'When set to 1, Audit Log records are created whenever this authorization is invoked for a user'})
     UseAuditLog: boolean;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     Description?: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__CreatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(200)
     Parent?: string;
-        
-    @Field(() => [mj_core_schema_server_object_types.AuthorizationRole_])
-    AuthorizationRolesArray: mj_core_schema_server_object_types.AuthorizationRole_[]; // Link to AuthorizationRoles
-    
-    @Field(() => [mj_core_schema_server_object_types.ActionAuthorization_])
-    ActionAuthorizationsArray: mj_core_schema_server_object_types.ActionAuthorization_[]; // Link to ActionAuthorizations
-    
-    @Field(() => [mj_core_schema_server_object_types.Authorization_])
-    AuthorizationsArray: mj_core_schema_server_object_types.Authorization_[]; // Link to Authorizations
-    
-    @Field(() => [mj_core_schema_server_object_types.AuditLog_])
-    AuditLogsArray: mj_core_schema_server_object_types.AuditLog_[]; // Link to AuditLogs
-    
-    @Field(() => [mj_core_schema_server_object_types.AuditLogType_])
-    AuditLogTypesArray: mj_core_schema_server_object_types.AuditLogType_[]; // Link to AuditLogTypes
-    
+
+    @Field(() => [AuthorizationRole_])
+    AuthorizationRolesArray: AuthorizationRole_[]; // Link to AuthorizationRoles
+
+    @Field(() => [ActionAuthorization_])
+    ActionAuthorizationsArray: ActionAuthorization_[]; // Link to ActionAuthorizations
+
+    @Field(() => [Authorization_])
+    AuthorizationsArray: Authorization_[]; // Link to Authorizations
+
+    @Field(() => [AuditLog_])
+    AuditLogsArray: AuditLog_[]; // Link to AuditLogs
+
+    @Field(() => [AuditLogType_])
+    AuditLogTypesArray: AuditLogType_[]; // Link to AuditLogTypes
+
 }
 //****************************************************************************
 // RESOLVER for Authorizations
@@ -8612,7 +8615,7 @@ export class AuthorizationResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Authorizations', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-    
+
     @Query(() => [Authorization_])
     async AllAuthorizations(@Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Authorizations', userPayload);
@@ -8620,78 +8623,78 @@ export class AuthorizationResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Authorizations', await dataSource.query(sSQL));
         return result;
     }
-      
-    @FieldResolver(() => [mj_core_schema_server_object_types.AuthorizationRole_])
+
+    @FieldResolver(() => [AuthorizationRole_])
     async AuthorizationRolesArray(@Root() authorization_: Authorization_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Authorization Roles', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAuthorizationRoles] WHERE [AuthorizationID]='${authorization_.ID}' ` + this.getRowLevelSecurityWhereClause('Authorization Roles', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Authorization Roles', await dataSource.query(sSQL));
         return result;
     }
-          
-    @FieldResolver(() => [mj_core_schema_server_object_types.ActionAuthorization_])
+
+    @FieldResolver(() => [ActionAuthorization_])
     async ActionAuthorizationsArray(@Root() authorization_: Authorization_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Action Authorizations', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionAuthorizations] WHERE [AuthorizationID]='${authorization_.ID}' ` + this.getRowLevelSecurityWhereClause('Action Authorizations', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Action Authorizations', await dataSource.query(sSQL));
         return result;
     }
-          
-    @FieldResolver(() => [mj_core_schema_server_object_types.Authorization_])
+
+    @FieldResolver(() => [Authorization_])
     async AuthorizationsArray(@Root() authorization_: Authorization_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Authorizations', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAuthorizations] WHERE [ParentID]='${authorization_.ID}' ` + this.getRowLevelSecurityWhereClause('Authorizations', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Authorizations', await dataSource.query(sSQL));
         return result;
     }
-          
-    @FieldResolver(() => [mj_core_schema_server_object_types.AuditLog_])
+
+    @FieldResolver(() => [AuditLog_])
     async AuditLogsArray(@Root() authorization_: Authorization_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Audit Logs', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAuditLogs] WHERE [AuthorizationName]='${authorization_.ID}' ` + this.getRowLevelSecurityWhereClause('Audit Logs', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Audit Logs', await dataSource.query(sSQL));
         return result;
     }
-          
-    @FieldResolver(() => [mj_core_schema_server_object_types.AuditLogType_])
+
+    @FieldResolver(() => [AuditLogType_])
     async AuditLogTypesArray(@Root() authorization_: Authorization_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Audit Log Types', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAuditLogTypes] WHERE [AuthorizationName]='${authorization_.ID}' ` + this.getRowLevelSecurityWhereClause('Audit Log Types', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Audit Log Types', await dataSource.query(sSQL));
         return result;
     }
-        
+
 }
 
 //****************************************************************************
 // ENTITY CLASS for Authorization Roles
 //****************************************************************************
 @ObjectType()
-export class AuthorizationRole_ {  
-    @Field() 
+export class AuthorizationRole_ {
+    @Field()
     @MaxLength(16)
     ID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     AuthorizationID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     RoleID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(20)
     Type: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__CreatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-        
+
 }
 //****************************************************************************
 // RESOLVER for Authorization Roles
@@ -8744,7 +8747,7 @@ export class AuthorizationRoleResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Authorization Roles', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-    
+
     @Query(() => [AuthorizationRole_])
     async AllAuthorizationRoles(@Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Authorization Roles', userPayload);
@@ -8752,51 +8755,51 @@ export class AuthorizationRoleResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Authorization Roles', await dataSource.query(sSQL));
         return result;
     }
-    
+
 }
 
 //****************************************************************************
 // ENTITY CLASS for Audit Log Types
 //****************************************************************************
 @ObjectType()
-export class AuditLogType_ {  
-    @Field() 
+export class AuditLogType_ {
+    @Field()
     @MaxLength(16)
     ID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(100)
     Name: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     Description?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(16)
     ParentID?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(16)
     AuthorizationID?: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__CreatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(100)
     Parent?: string;
-        
-    @Field(() => [mj_core_schema_server_object_types.AuditLogType_])
-    AuditLogTypesArray: mj_core_schema_server_object_types.AuditLogType_[]; // Link to AuditLogTypes
-    
-    @Field(() => [mj_core_schema_server_object_types.AuditLog_])
-    AuditLogsArray: mj_core_schema_server_object_types.AuditLog_[]; // Link to AuditLogs
-    
+
+    @Field(() => [AuditLogType_])
+    AuditLogTypesArray: AuditLogType_[]; // Link to AuditLogTypes
+
+    @Field(() => [AuditLog_])
+    AuditLogsArray: AuditLog_[]; // Link to AuditLogs
+
 }
 //****************************************************************************
 // RESOLVER for Audit Log Types
@@ -8849,7 +8852,7 @@ export class AuditLogTypeResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Audit Log Types', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-    
+
     @Query(() => [AuditLogType_])
     async AllAuditLogTypes(@Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Audit Log Types', userPayload);
@@ -8857,76 +8860,76 @@ export class AuditLogTypeResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Audit Log Types', await dataSource.query(sSQL));
         return result;
     }
-      
-    @FieldResolver(() => [mj_core_schema_server_object_types.AuditLogType_])
+
+    @FieldResolver(() => [AuditLogType_])
     async AuditLogTypesArray(@Root() auditlogtype_: AuditLogType_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Audit Log Types', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAuditLogTypes] WHERE [ParentID]='${auditlogtype_.ID}' ` + this.getRowLevelSecurityWhereClause('Audit Log Types', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Audit Log Types', await dataSource.query(sSQL));
         return result;
     }
-          
-    @FieldResolver(() => [mj_core_schema_server_object_types.AuditLog_])
+
+    @FieldResolver(() => [AuditLog_])
     async AuditLogsArray(@Root() auditlogtype_: AuditLogType_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Audit Logs', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAuditLogs] WHERE [AuditLogTypeName]='${auditlogtype_.ID}' ` + this.getRowLevelSecurityWhereClause('Audit Logs', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Audit Logs', await dataSource.query(sSQL));
         return result;
     }
-        
+
 }
 
 //****************************************************************************
 // ENTITY CLASS for Entity Field Values
 //****************************************************************************
 @ObjectType()
-export class EntityFieldValue_ {  
-    @Field() 
+export class EntityFieldValue_ {
+    @Field()
     @MaxLength(16)
     ID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     EntityFieldID: string;
-          
-    @Field(() => Int) 
+
+    @Field(() => Int)
     Sequence: number;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(510)
     Value: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(100)
     Code?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     Description?: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__CreatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(510)
     EntityField: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(510)
     Entity: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     EntityID: string;
-        
+
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for Entity Field Values   
+// INPUT TYPE for Entity Field Values
 //****************************************************************************
 @InputType()
 export class UpdateEntityFieldValueInput {
@@ -8951,7 +8954,7 @@ export class UpdateEntityFieldValueInput {
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
 }
-    
+
 //****************************************************************************
 // RESOLVER for Entity Field Values
 //****************************************************************************
@@ -9003,7 +9006,7 @@ export class EntityFieldValueResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Entity Field Values', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-    
+
     @Query(() => [EntityFieldValue_])
     async AllEntityFieldValues(@Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entity Field Values', userPayload);
@@ -9011,7 +9014,7 @@ export class EntityFieldValueResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Entity Field Values', await dataSource.query(sSQL));
         return result;
     }
-    
+
     @Mutation(() => EntityFieldValue_)
     async UpdateEntityFieldValue(
         @Arg('input', () => UpdateEntityFieldValueInput) input: UpdateEntityFieldValueInput,
@@ -9020,82 +9023,82 @@ export class EntityFieldValueResolver extends ResolverBase {
     ) {
         return this.UpdateRecord('Entity Field Values', input, dataSource, userPayload, pubSub);
     }
-    
+
 }
 
 //****************************************************************************
 // ENTITY CLASS for AI Models
 //****************************************************************************
 @ObjectType({ description: 'Catalog of all AI Models configured in the system' })
-export class AIModel_ {  
-    @Field() 
+export class AIModel_ {
+    @Field()
     @MaxLength(16)
     ID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(100)
     Name: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     Description?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(100)
     Vendor?: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     AIModelTypeID: string;
-          
-    @Field(() => Int, {nullable: true, description: 'A simplified power rank of each model for a given AI Model Type. For example, if we have GPT 3, GPT 3.5, and GPT 4, we would have a PowerRank of 1 for GPT3, 2 for GPT 3.5, and 3 for GPT 4. This can be used within model families like OpenAI or across all models. For example if you had Llama 2 in the mix which is similar to GPT 3.5 it would also have a PowerRank of 2. This can be used at runtime to pick the most/least powerful or compare model relative power.'}) 
+
+    @Field(() => Int, {nullable: true, description: 'A simplified power rank of each model for a given AI Model Type. For example, if we have GPT 3, GPT 3.5, and GPT 4, we would have a PowerRank of 1 for GPT3, 2 for GPT 3.5, and 3 for GPT 4. This can be used within model families like OpenAI or across all models. For example if you had Llama 2 in the mix which is similar to GPT 3.5 it would also have a PowerRank of 2. This can be used at runtime to pick the most/least powerful or compare model relative power.'})
     PowerRank?: number;
-          
-    @Field(() => Boolean) 
+
+    @Field(() => Boolean)
     IsActive: boolean;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(200)
     DriverClass?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(510)
     DriverImportPath?: string;
-          
-    @Field({nullable: true, description: 'The name of the model to use with API calls which might differ from the Name, if APIName is not provided, Name will be used for API calls'}) 
+
+    @Field({nullable: true, description: 'The name of the model to use with API calls which might differ from the Name, if APIName is not provided, Name will be used for API calls'})
     @MaxLength(200)
     APIName?: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__CreatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(100)
     AIModelType: string;
-        
-    @Field(() => [mj_core_schema_server_object_types.AIAction_])
-    AIActionsArray: mj_core_schema_server_object_types.AIAction_[]; // Link to AIActions
-    
-    @Field(() => [mj_core_schema_server_object_types.EntityDocument_])
-    EntityDocumentsArray: mj_core_schema_server_object_types.EntityDocument_[]; // Link to EntityDocuments
-    
-    @Field(() => [mj_core_schema_server_object_types.EntityAIAction_])
-    EntityAIActionsArray: mj_core_schema_server_object_types.EntityAIAction_[]; // Link to EntityAIActions
-    
-    @Field(() => [mj_core_schema_server_object_types.AIModelAction_])
-    AIModelActionsArray: mj_core_schema_server_object_types.AIModelAction_[]; // Link to AIModelActions
-    
-    @Field(() => [mj_core_schema_server_object_types.VectorIndex_])
-    VectorIndexesArray: mj_core_schema_server_object_types.VectorIndex_[]; // Link to VectorIndexes
-    
+
+    @Field(() => [AIAction_])
+    AIActionsArray: AIAction_[]; // Link to AIActions
+
+    @Field(() => [EntityDocument_])
+    EntityDocumentsArray: EntityDocument_[]; // Link to EntityDocuments
+
+    @Field(() => [EntityAIAction_])
+    EntityAIActionsArray: EntityAIAction_[]; // Link to EntityAIActions
+
+    @Field(() => [AIModelAction_])
+    AIModelActionsArray: AIModelAction_[]; // Link to AIModelActions
+
+    @Field(() => [VectorIndex_])
+    VectorIndexesArray: VectorIndex_[]; // Link to VectorIndexes
+
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for AI Models   
+// INPUT TYPE for AI Models
 //****************************************************************************
 @InputType()
 export class CreateAIModelInput {
@@ -9126,10 +9129,10 @@ export class CreateAIModelInput {
     @Field({ nullable: true })
     APIName?: string;
 }
-    
-        
+
+
 //****************************************************************************
-// INPUT TYPE for AI Models   
+// INPUT TYPE for AI Models
 //****************************************************************************
 @InputType()
 export class UpdateAIModelInput {
@@ -9166,7 +9169,7 @@ export class UpdateAIModelInput {
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
 }
-    
+
 //****************************************************************************
 // RESOLVER for AI Models
 //****************************************************************************
@@ -9218,7 +9221,7 @@ export class AIModelResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('AI Models', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-    
+
     @Query(() => [AIModel_])
     async AllAIModels(@Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('AI Models', userPayload);
@@ -9226,56 +9229,56 @@ export class AIModelResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('AI Models', await dataSource.query(sSQL));
         return result;
     }
-      
-    @FieldResolver(() => [mj_core_schema_server_object_types.AIAction_])
+
+    @FieldResolver(() => [AIAction_])
     async AIActionsArray(@Root() aimodel_: AIModel_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('AI Actions', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIActions] WHERE [DefaultModelID]='${aimodel_.ID}' ` + this.getRowLevelSecurityWhereClause('AI Actions', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('AI Actions', await dataSource.query(sSQL));
         return result;
     }
-          
-    @FieldResolver(() => [mj_core_schema_server_object_types.EntityDocument_])
+
+    @FieldResolver(() => [EntityDocument_])
     async EntityDocumentsArray(@Root() aimodel_: AIModel_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entity Documents', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityDocuments] WHERE [AIModelID]='${aimodel_.ID}' ` + this.getRowLevelSecurityWhereClause('Entity Documents', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Entity Documents', await dataSource.query(sSQL));
         return result;
     }
-          
-    @FieldResolver(() => [mj_core_schema_server_object_types.EntityAIAction_])
+
+    @FieldResolver(() => [EntityAIAction_])
     async EntityAIActionsArray(@Root() aimodel_: AIModel_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entity AI Actions', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityAIActions] WHERE [AIModelID]='${aimodel_.ID}' ` + this.getRowLevelSecurityWhereClause('Entity AI Actions', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Entity AI Actions', await dataSource.query(sSQL));
         return result;
     }
-          
-    @FieldResolver(() => [mj_core_schema_server_object_types.AIModelAction_])
+
+    @FieldResolver(() => [AIModelAction_])
     async AIModelActionsArray(@Root() aimodel_: AIModel_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('AI Model Actions', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIModelActions] WHERE [AIModelID]='${aimodel_.ID}' ` + this.getRowLevelSecurityWhereClause('AI Model Actions', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('AI Model Actions', await dataSource.query(sSQL));
         return result;
     }
-          
-    @FieldResolver(() => [mj_core_schema_server_object_types.VectorIndex_])
+
+    @FieldResolver(() => [VectorIndex_])
     async VectorIndexesArray(@Root() aimodel_: AIModel_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Vector Indexes', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwVectorIndexes] WHERE [EmbeddingModelID]='${aimodel_.ID}' ` + this.getRowLevelSecurityWhereClause('Vector Indexes', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Vector Indexes', await dataSource.query(sSQL));
         return result;
     }
-        
+
     @Mutation(() => AIModel_)
     async CreateAIModel(
         @Arg('input', () => CreateAIModelInput) input: CreateAIModelInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
+        @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.CreateRecord('AI Models', input, dataSource, userPayload, pubSub)
     }
-        
+
     @Mutation(() => AIModel_)
     async UpdateAIModel(
         @Arg('input', () => UpdateAIModelInput) input: UpdateAIModelInput,
@@ -9284,63 +9287,63 @@ export class AIModelResolver extends ResolverBase {
     ) {
         return this.UpdateRecord('AI Models', input, dataSource, userPayload, pubSub);
     }
-    
+
     @Mutation(() => AIModel_)
     async DeleteAIModel(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('AI Models', key, options, dataSource, userPayload, pubSub);
     }
-    
+
 }
 
 //****************************************************************************
 // ENTITY CLASS for AI Actions
 //****************************************************************************
 @ObjectType({ description: 'List of all actions that are possible across all AI Models' })
-export class AIAction_ {  
-    @Field() 
+export class AIAction_ {
+    @Field()
     @MaxLength(16)
     ID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(100)
     Name: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     Description?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     DefaultPrompt?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(16)
     DefaultModelID?: string;
-          
-    @Field(() => Boolean) 
+
+    @Field(() => Boolean)
     IsActive: boolean;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__CreatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(100)
     DefaultModel?: string;
-        
-    @Field(() => [mj_core_schema_server_object_types.AIModelAction_])
-    AIModelActionsArray: mj_core_schema_server_object_types.AIModelAction_[]; // Link to AIModelActions
-    
-    @Field(() => [mj_core_schema_server_object_types.EntityAIAction_])
-    EntityAIActionsArray: mj_core_schema_server_object_types.EntityAIAction_[]; // Link to EntityAIActions
-    
+
+    @Field(() => [AIModelAction_])
+    AIModelActionsArray: AIModelAction_[]; // Link to AIModelActions
+
+    @Field(() => [EntityAIAction_])
+    EntityAIActionsArray: EntityAIAction_[]; // Link to EntityAIActions
+
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for AI Actions   
+// INPUT TYPE for AI Actions
 //****************************************************************************
 @InputType()
 export class CreateAIActionInput {
@@ -9359,10 +9362,10 @@ export class CreateAIActionInput {
     @Field(() => Boolean)
     IsActive: boolean;
 }
-    
-        
+
+
 //****************************************************************************
-// INPUT TYPE for AI Actions   
+// INPUT TYPE for AI Actions
 //****************************************************************************
 @InputType()
 export class UpdateAIActionInput {
@@ -9387,7 +9390,7 @@ export class UpdateAIActionInput {
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
 }
-    
+
 //****************************************************************************
 // RESOLVER for AI Actions
 //****************************************************************************
@@ -9439,7 +9442,7 @@ export class AIActionResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('AI Actions', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-    
+
     @Query(() => [AIAction_])
     async AllAIActions(@Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('AI Actions', userPayload);
@@ -9447,32 +9450,32 @@ export class AIActionResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('AI Actions', await dataSource.query(sSQL));
         return result;
     }
-      
-    @FieldResolver(() => [mj_core_schema_server_object_types.AIModelAction_])
+
+    @FieldResolver(() => [AIModelAction_])
     async AIModelActionsArray(@Root() aiaction_: AIAction_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('AI Model Actions', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIModelActions] WHERE [AIActionID]='${aiaction_.ID}' ` + this.getRowLevelSecurityWhereClause('AI Model Actions', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('AI Model Actions', await dataSource.query(sSQL));
         return result;
     }
-          
-    @FieldResolver(() => [mj_core_schema_server_object_types.EntityAIAction_])
+
+    @FieldResolver(() => [EntityAIAction_])
     async EntityAIActionsArray(@Root() aiaction_: AIAction_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entity AI Actions', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityAIActions] WHERE [AIActionID]='${aiaction_.ID}' ` + this.getRowLevelSecurityWhereClause('Entity AI Actions', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Entity AI Actions', await dataSource.query(sSQL));
         return result;
     }
-        
+
     @Mutation(() => AIAction_)
     async CreateAIAction(
         @Arg('input', () => CreateAIActionInput) input: CreateAIActionInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
+        @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.CreateRecord('AI Actions', input, dataSource, userPayload, pubSub)
     }
-        
+
     @Mutation(() => AIAction_)
     async UpdateAIAction(
         @Arg('input', () => UpdateAIActionInput) input: UpdateAIActionInput,
@@ -9481,55 +9484,55 @@ export class AIActionResolver extends ResolverBase {
     ) {
         return this.UpdateRecord('AI Actions', input, dataSource, userPayload, pubSub);
     }
-    
+
     @Mutation(() => AIAction_)
     async DeleteAIAction(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('AI Actions', key, options, dataSource, userPayload, pubSub);
     }
-    
+
 }
 
 //****************************************************************************
 // ENTITY CLASS for AI Model Actions
 //****************************************************************************
 @ObjectType({ description: 'Tracks the actions supported by each AI Model' })
-export class AIModelAction_ {  
-    @Field() 
+export class AIModelAction_ {
+    @Field()
     @MaxLength(16)
     ID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     AIModelID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     AIActionID: string;
-          
-    @Field(() => Boolean) 
+
+    @Field(() => Boolean)
     IsActive: boolean;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__CreatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(100)
     AIModel: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(100)
     AIAction: string;
-        
+
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for AI Model Actions   
+// INPUT TYPE for AI Model Actions
 //****************************************************************************
 @InputType()
 export class CreateAIModelActionInput {
@@ -9542,10 +9545,10 @@ export class CreateAIModelActionInput {
     @Field(() => Boolean)
     IsActive: boolean;
 }
-    
-        
+
+
 //****************************************************************************
-// INPUT TYPE for AI Model Actions   
+// INPUT TYPE for AI Model Actions
 //****************************************************************************
 @InputType()
 export class UpdateAIModelActionInput {
@@ -9564,7 +9567,7 @@ export class UpdateAIModelActionInput {
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
 }
-    
+
 //****************************************************************************
 // RESOLVER for AI Model Actions
 //****************************************************************************
@@ -9616,7 +9619,7 @@ export class AIModelActionResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('AI Model Actions', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-    
+
     @Query(() => [AIModelAction_])
     async AllAIModelActions(@Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('AI Model Actions', userPayload);
@@ -9624,16 +9627,16 @@ export class AIModelActionResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('AI Model Actions', await dataSource.query(sSQL));
         return result;
     }
-    
+
     @Mutation(() => AIModelAction_)
     async CreateAIModelAction(
         @Arg('input', () => CreateAIModelActionInput) input: CreateAIModelActionInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
+        @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.CreateRecord('AI Model Actions', input, dataSource, userPayload, pubSub)
     }
-        
+
     @Mutation(() => AIModelAction_)
     async UpdateAIModelAction(
         @Arg('input', () => UpdateAIModelActionInput) input: UpdateAIModelActionInput,
@@ -9642,96 +9645,96 @@ export class AIModelActionResolver extends ResolverBase {
     ) {
         return this.UpdateRecord('AI Model Actions', input, dataSource, userPayload, pubSub);
     }
-    
+
     @Mutation(() => AIModelAction_)
     async DeleteAIModelAction(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('AI Model Actions', key, options, dataSource, userPayload, pubSub);
     }
-    
+
 }
 
 //****************************************************************************
 // ENTITY CLASS for Entity AI Actions
 //****************************************************************************
 @ObjectType({ description: 'Tracks the AI actions that should be invoked based on changes to records within a given entity.' })
-export class EntityAIAction_ {  
-    @Field() 
+export class EntityAIAction_ {
+    @Field()
     @MaxLength(16)
     ID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     EntityID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     AIModelID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     AIActionID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(510)
     Name: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     Prompt?: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(30)
     TriggerEvent: string;
-          
-    @Field() 
+
+    @Field()
     UserMessage: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(20)
     OutputType: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(100)
     OutputField?: string;
-          
-    @Field(() => Boolean) 
+
+    @Field(() => Boolean)
     SkipIfOutputFieldNotEmpty: boolean;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(16)
     OutputEntityID?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     Comments?: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__CreatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(510)
     Entity: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(100)
     AIModel: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(100)
     AIAction: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(510)
     OutputEntity?: string;
-        
+
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for Entity AI Actions   
+// INPUT TYPE for Entity AI Actions
 //****************************************************************************
 @InputType()
 export class CreateEntityAIActionInput {
@@ -9771,10 +9774,10 @@ export class CreateEntityAIActionInput {
     @Field({ nullable: true })
     Comments?: string;
 }
-    
-        
+
+
 //****************************************************************************
-// INPUT TYPE for Entity AI Actions   
+// INPUT TYPE for Entity AI Actions
 //****************************************************************************
 @InputType()
 export class UpdateEntityAIActionInput {
@@ -9820,7 +9823,7 @@ export class UpdateEntityAIActionInput {
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
 }
-    
+
 //****************************************************************************
 // RESOLVER for Entity AI Actions
 //****************************************************************************
@@ -9872,7 +9875,7 @@ export class EntityAIActionResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Entity AI Actions', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-    
+
     @Query(() => [EntityAIAction_])
     async AllEntityAIActions(@Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entity AI Actions', userPayload);
@@ -9880,16 +9883,16 @@ export class EntityAIActionResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Entity AI Actions', await dataSource.query(sSQL));
         return result;
     }
-    
+
     @Mutation(() => EntityAIAction_)
     async CreateEntityAIAction(
         @Arg('input', () => CreateEntityAIActionInput) input: CreateEntityAIActionInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
+        @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.CreateRecord('Entity AI Actions', input, dataSource, userPayload, pubSub)
     }
-        
+
     @Mutation(() => EntityAIAction_)
     async UpdateEntityAIAction(
         @Arg('input', () => UpdateEntityAIActionInput) input: UpdateEntityAIActionInput,
@@ -9898,46 +9901,46 @@ export class EntityAIActionResolver extends ResolverBase {
     ) {
         return this.UpdateRecord('Entity AI Actions', input, dataSource, userPayload, pubSub);
     }
-    
+
     @Mutation(() => EntityAIAction_)
     async DeleteEntityAIAction(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Entity AI Actions', key, options, dataSource, userPayload, pubSub);
     }
-    
+
 }
 
 //****************************************************************************
 // ENTITY CLASS for AI Model Types
 //****************************************************************************
 @ObjectType({ description: 'Types of AI Models' })
-export class AIModelType_ {  
-    @Field() 
+export class AIModelType_ {
+    @Field()
     @MaxLength(16)
     ID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(100)
     Name: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     Description?: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__CreatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-        
-    @Field(() => [mj_core_schema_server_object_types.AIModel_])
-    AIModelsArray: mj_core_schema_server_object_types.AIModel_[]; // Link to AIModels
-    
+
+    @Field(() => [AIModel_])
+    AIModelsArray: AIModel_[]; // Link to AIModels
+
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for AI Model Types   
+// INPUT TYPE for AI Model Types
 //****************************************************************************
 @InputType()
 export class CreateAIModelTypeInput {
@@ -9947,10 +9950,10 @@ export class CreateAIModelTypeInput {
     @Field({ nullable: true })
     Description?: string;
 }
-    
-        
+
+
 //****************************************************************************
-// INPUT TYPE for AI Model Types   
+// INPUT TYPE for AI Model Types
 //****************************************************************************
 @InputType()
 export class UpdateAIModelTypeInput {
@@ -9966,7 +9969,7 @@ export class UpdateAIModelTypeInput {
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
 }
-    
+
 //****************************************************************************
 // RESOLVER for AI Model Types
 //****************************************************************************
@@ -10018,7 +10021,7 @@ export class AIModelTypeResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('AI Model Types', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-    
+
     @Query(() => [AIModelType_])
     async AllAIModelTypes(@Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('AI Model Types', userPayload);
@@ -10026,24 +10029,24 @@ export class AIModelTypeResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('AI Model Types', await dataSource.query(sSQL));
         return result;
     }
-      
-    @FieldResolver(() => [mj_core_schema_server_object_types.AIModel_])
+
+    @FieldResolver(() => [AIModel_])
     async AIModelsArray(@Root() aimodeltype_: AIModelType_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('AI Models', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIModels] WHERE [AIModelTypeID]='${aimodeltype_.ID}' ` + this.getRowLevelSecurityWhereClause('AI Models', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('AI Models', await dataSource.query(sSQL));
         return result;
     }
-        
+
     @Mutation(() => AIModelType_)
     async CreateAIModelType(
         @Arg('input', () => CreateAIModelTypeInput) input: CreateAIModelTypeInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
+        @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.CreateRecord('AI Model Types', input, dataSource, userPayload, pubSub)
     }
-        
+
     @Mutation(() => AIModelType_)
     async UpdateAIModelType(
         @Arg('input', () => UpdateAIModelTypeInput) input: UpdateAIModelTypeInput,
@@ -10052,53 +10055,53 @@ export class AIModelTypeResolver extends ResolverBase {
     ) {
         return this.UpdateRecord('AI Model Types', input, dataSource, userPayload, pubSub);
     }
-    
+
     @Mutation(() => AIModelType_)
     async DeleteAIModelType(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('AI Model Types', key, options, dataSource, userPayload, pubSub);
     }
-    
+
 }
 
 //****************************************************************************
 // ENTITY CLASS for Queue Types
 //****************************************************************************
 @ObjectType()
-export class QueueType_ {  
-    @Field() 
+export class QueueType_ {
+    @Field()
     @MaxLength(16)
     ID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(100)
     Name: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     Description?: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(200)
     DriverClass: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(400)
     DriverImportPath?: string;
-          
-    @Field(() => Boolean) 
+
+    @Field(() => Boolean)
     IsActive: boolean;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__CreatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-        
-    @Field(() => [mj_core_schema_server_object_types.Queue_])
-    QueuesArray: mj_core_schema_server_object_types.Queue_[]; // Link to Queues
-    
+
+    @Field(() => [Queue_])
+    QueuesArray: Queue_[]; // Link to Queues
+
 }
 //****************************************************************************
 // RESOLVER for Queue Types
@@ -10151,106 +10154,106 @@ export class QueueTypeResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Queue Types', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-      
-    @FieldResolver(() => [mj_core_schema_server_object_types.Queue_])
+
+    @FieldResolver(() => [Queue_])
     async QueuesArray(@Root() queuetype_: QueueType_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Queues', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwQueues] WHERE [QueueTypeID]='${queuetype_.ID}' ` + this.getRowLevelSecurityWhereClause('Queues', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Queues', await dataSource.query(sSQL));
         return result;
     }
-        
+
 }
 
 //****************************************************************************
 // ENTITY CLASS for Queues
 //****************************************************************************
 @ObjectType({ description: 'Queues can be used to async execute long running tasks' })
-export class Queue_ {  
-    @Field() 
+export class Queue_ {
+    @Field()
     @MaxLength(16)
     ID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(100)
     Name: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     Description?: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     QueueTypeID: string;
-          
-    @Field(() => Boolean) 
+
+    @Field(() => Boolean)
     IsActive: boolean;
-          
-    @Field(() => Int, {nullable: true}) 
+
+    @Field(() => Int, {nullable: true})
     ProcessPID?: number;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(60)
     ProcessPlatform?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(30)
     ProcessVersion?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(200)
     ProcessCwd?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(100)
     ProcessIPAddress?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(100)
     ProcessMacAddress?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(50)
     ProcessOSName?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(20)
     ProcessOSVersion?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(100)
     ProcessHostName?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(50)
     ProcessUserID?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(100)
     ProcessUserName?: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(8)
     LastHeartbeat: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__CreatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(100)
     QueueType: string;
-        
-    @Field(() => [mj_core_schema_server_object_types.QueueTask_])
-    QueueTasksArray: mj_core_schema_server_object_types.QueueTask_[]; // Link to QueueTasks
-    
+
+    @Field(() => [QueueTask_])
+    QueueTasksArray: QueueTask_[]; // Link to QueueTasks
+
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for Queues   
+// INPUT TYPE for Queues
 //****************************************************************************
 @InputType()
 export class CreateQueueInput {
@@ -10302,10 +10305,10 @@ export class CreateQueueInput {
     @Field()
     LastHeartbeat: Date;
 }
-    
-        
+
+
 //****************************************************************************
-// INPUT TYPE for Queues   
+// INPUT TYPE for Queues
 //****************************************************************************
 @InputType()
 export class UpdateQueueInput {
@@ -10363,7 +10366,7 @@ export class UpdateQueueInput {
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
 }
-    
+
 //****************************************************************************
 // RESOLVER for Queues
 //****************************************************************************
@@ -10415,24 +10418,24 @@ export class QueueResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Queues', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-      
-    @FieldResolver(() => [mj_core_schema_server_object_types.QueueTask_])
+
+    @FieldResolver(() => [QueueTask_])
     async QueueTasksArray(@Root() queue_: Queue_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Queue Tasks', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwQueueTasks] WHERE [QueueID]='${queue_.ID}' ` + this.getRowLevelSecurityWhereClause('Queue Tasks', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Queue Tasks', await dataSource.query(sSQL));
         return result;
     }
-        
+
     @Mutation(() => Queue_)
     async CreateQueue(
         @Arg('input', () => CreateQueueInput) input: CreateQueueInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
+        @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.CreateRecord('Queues', input, dataSource, userPayload, pubSub)
     }
-        
+
     @Mutation(() => Queue_)
     async UpdateQueue(
         @Arg('input', () => UpdateQueueInput) input: UpdateQueueInput,
@@ -10441,65 +10444,65 @@ export class QueueResolver extends ResolverBase {
     ) {
         return this.UpdateRecord('Queues', input, dataSource, userPayload, pubSub);
     }
-    
+
 }
 
 //****************************************************************************
 // ENTITY CLASS for Queue Tasks
 //****************************************************************************
 @ObjectType()
-export class QueueTask_ {  
-    @Field() 
+export class QueueTask_ {
+    @Field()
     @MaxLength(16)
     ID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     QueueID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(20)
     Status: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(8)
     StartedAt?: Date;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(8)
     EndedAt?: Date;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     Data?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     Options?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     Output?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     ErrorMessage?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     Comments?: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__CreatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(100)
     Queue: string;
-        
+
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for Queue Tasks   
+// INPUT TYPE for Queue Tasks
 //****************************************************************************
 @InputType()
 export class CreateQueueTaskInput {
@@ -10530,10 +10533,10 @@ export class CreateQueueTaskInput {
     @Field({ nullable: true })
     Comments?: string;
 }
-    
-        
+
+
 //****************************************************************************
-// INPUT TYPE for Queue Tasks   
+// INPUT TYPE for Queue Tasks
 //****************************************************************************
 @InputType()
 export class UpdateQueueTaskInput {
@@ -10570,7 +10573,7 @@ export class UpdateQueueTaskInput {
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
 }
-    
+
 //****************************************************************************
 // RESOLVER for Queue Tasks
 //****************************************************************************
@@ -10622,16 +10625,16 @@ export class QueueTaskResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Queue Tasks', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-    
+
     @Mutation(() => QueueTask_)
     async CreateQueueTask(
         @Arg('input', () => CreateQueueTaskInput) input: CreateQueueTaskInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
+        @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.CreateRecord('Queue Tasks', input, dataSource, userPayload, pubSub)
     }
-        
+
     @Mutation(() => QueueTask_)
     async UpdateQueueTask(
         @Arg('input', () => UpdateQueueTaskInput) input: UpdateQueueTaskInput,
@@ -10640,56 +10643,56 @@ export class QueueTaskResolver extends ResolverBase {
     ) {
         return this.UpdateRecord('Queue Tasks', input, dataSource, userPayload, pubSub);
     }
-    
+
 }
 
 //****************************************************************************
 // ENTITY CLASS for Dashboards
 //****************************************************************************
 @ObjectType({ description: 'Dashboards are used to group resources into a single display pane for an end-user' })
-export class Dashboard_ {  
-    @Field() 
+export class Dashboard_ {
+    @Field()
     @MaxLength(16)
     ID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(510)
     Name: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     Description?: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     UserID: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(16)
     CategoryID?: string;
-          
-    @Field() 
+
+    @Field()
     UIConfigDetails: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__CreatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(200)
     User: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(200)
     Category?: string;
-        
+
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for Dashboards   
+// INPUT TYPE for Dashboards
 //****************************************************************************
 @InputType()
 export class CreateDashboardInput {
@@ -10708,10 +10711,10 @@ export class CreateDashboardInput {
     @Field()
     UIConfigDetails: string;
 }
-    
-        
+
+
 //****************************************************************************
-// INPUT TYPE for Dashboards   
+// INPUT TYPE for Dashboards
 //****************************************************************************
 @InputType()
 export class UpdateDashboardInput {
@@ -10736,7 +10739,7 @@ export class UpdateDashboardInput {
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
 }
-    
+
 //****************************************************************************
 // RESOLVER for Dashboards
 //****************************************************************************
@@ -10788,16 +10791,16 @@ export class DashboardResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Dashboards', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-    
+
     @Mutation(() => Dashboard_)
     async CreateDashboard(
         @Arg('input', () => CreateDashboardInput) input: CreateDashboardInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
+        @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.CreateRecord('Dashboards', input, dataSource, userPayload, pubSub)
     }
-        
+
     @Mutation(() => Dashboard_)
     async UpdateDashboard(
         @Arg('input', () => UpdateDashboardInput) input: UpdateDashboardInput,
@@ -10806,42 +10809,42 @@ export class DashboardResolver extends ResolverBase {
     ) {
         return this.UpdateRecord('Dashboards', input, dataSource, userPayload, pubSub);
     }
-    
+
     @Mutation(() => Dashboard_)
     async DeleteDashboard(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Dashboards', key, options, dataSource, userPayload, pubSub);
     }
-    
+
 }
 
 //****************************************************************************
 // ENTITY CLASS for Output Trigger Types
 //****************************************************************************
 @ObjectType()
-export class OutputTriggerType_ {  
-    @Field() 
+export class OutputTriggerType_ {
+    @Field()
     @MaxLength(16)
     ID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(510)
     Name: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     Description?: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__CreatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-        
-    @Field(() => [mj_core_schema_server_object_types.Report_])
-    ReportsArray: mj_core_schema_server_object_types.Report_[]; // Link to Reports
-    
+
+    @Field(() => [Report_])
+    ReportsArray: Report_[]; // Link to Reports
+
 }
 //****************************************************************************
 // RESOLVER for Output Trigger Types
@@ -10894,47 +10897,47 @@ export class OutputTriggerTypeResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Output Trigger Types', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-      
-    @FieldResolver(() => [mj_core_schema_server_object_types.Report_])
+
+    @FieldResolver(() => [Report_])
     async ReportsArray(@Root() outputtriggertype_: OutputTriggerType_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Reports', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwReports] WHERE [OutputTriggerTypeID]='${outputtriggertype_.ID}' ` + this.getRowLevelSecurityWhereClause('Reports', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Reports', await dataSource.query(sSQL));
         return result;
     }
-        
+
 }
 
 //****************************************************************************
 // ENTITY CLASS for Output Format Types
 //****************************************************************************
 @ObjectType()
-export class OutputFormatType_ {  
-    @Field() 
+export class OutputFormatType_ {
+    @Field()
     @MaxLength(16)
     ID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(510)
     Name: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     Description?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     DisplayFormat?: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__CreatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-        
-    @Field(() => [mj_core_schema_server_object_types.Report_])
-    ReportsArray: mj_core_schema_server_object_types.Report_[]; // Link to Reports
-    
+
+    @Field(() => [Report_])
+    ReportsArray: Report_[]; // Link to Reports
+
 }
 //****************************************************************************
 // RESOLVER for Output Format Types
@@ -10987,44 +10990,44 @@ export class OutputFormatTypeResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Output Format Types', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-      
-    @FieldResolver(() => [mj_core_schema_server_object_types.Report_])
+
+    @FieldResolver(() => [Report_])
     async ReportsArray(@Root() outputformattype_: OutputFormatType_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Reports', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwReports] WHERE [OutputFormatTypeID]='${outputformattype_.ID}' ` + this.getRowLevelSecurityWhereClause('Reports', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Reports', await dataSource.query(sSQL));
         return result;
     }
-        
+
 }
 
 //****************************************************************************
 // ENTITY CLASS for Output Delivery Types
 //****************************************************************************
 @ObjectType()
-export class OutputDeliveryType_ {  
-    @Field() 
+export class OutputDeliveryType_ {
+    @Field()
     @MaxLength(16)
     ID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(510)
     Name: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     Description?: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__CreatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-        
-    @Field(() => [mj_core_schema_server_object_types.Report_])
-    ReportsArray: mj_core_schema_server_object_types.Report_[]; // Link to Reports
-    
+
+    @Field(() => [Report_])
+    ReportsArray: Report_[]; // Link to Reports
+
 }
 //****************************************************************************
 // RESOLVER for Output Delivery Types
@@ -11077,131 +11080,131 @@ export class OutputDeliveryTypeResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Output Delivery Types', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-      
-    @FieldResolver(() => [mj_core_schema_server_object_types.Report_])
+
+    @FieldResolver(() => [Report_])
     async ReportsArray(@Root() outputdeliverytype_: OutputDeliveryType_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Reports', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwReports] WHERE [OutputDeliveryTypeID]='${outputdeliverytype_.ID}' ` + this.getRowLevelSecurityWhereClause('Reports', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Reports', await dataSource.query(sSQL));
         return result;
     }
-        
+
 }
 
 //****************************************************************************
 // ENTITY CLASS for Reports
 //****************************************************************************
 @ObjectType()
-export class Report_ {  
-    @Field() 
+export class Report_ {
+    @Field()
     @MaxLength(16)
     ID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(510)
     Name: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     Description?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(16)
     CategoryID?: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     UserID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(40)
     SharingScope: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(16)
     ConversationID?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(16)
     ConversationDetailID?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(16)
     DataContextID?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     Configuration?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(16)
     OutputTriggerTypeID?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(16)
     OutputFormatTypeID?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(16)
     OutputDeliveryTypeID?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(100)
     OutputFrequency?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(510)
     OutputTargetEmail?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(16)
     OutputWorkflowID?: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__CreatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(200)
     Category?: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(200)
     User: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(510)
     Conversation?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(510)
     DataContext?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(510)
     OutputTriggerType?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(510)
     OutputFormatType?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(510)
     OutputDeliveryType?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(200)
     OutputWorkflow?: string;
-        
-    @Field(() => [mj_core_schema_server_object_types.ReportSnapshot_])
-    ReportSnapshotsArray: mj_core_schema_server_object_types.ReportSnapshot_[]; // Link to ReportSnapshots
-    
+
+    @Field(() => [ReportSnapshot_])
+    ReportSnapshotsArray: ReportSnapshot_[]; // Link to ReportSnapshots
+
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for Reports   
+// INPUT TYPE for Reports
 //****************************************************************************
 @InputType()
 export class CreateReportInput {
@@ -11250,10 +11253,10 @@ export class CreateReportInput {
     @Field({ nullable: true })
     OutputWorkflowID?: string;
 }
-    
-        
+
+
 //****************************************************************************
-// INPUT TYPE for Reports   
+// INPUT TYPE for Reports
 //****************************************************************************
 @InputType()
 export class UpdateReportInput {
@@ -11308,7 +11311,7 @@ export class UpdateReportInput {
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
 }
-    
+
 //****************************************************************************
 // RESOLVER for Reports
 //****************************************************************************
@@ -11360,24 +11363,24 @@ export class ReportResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Reports', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-      
-    @FieldResolver(() => [mj_core_schema_server_object_types.ReportSnapshot_])
+
+    @FieldResolver(() => [ReportSnapshot_])
     async ReportSnapshotsArray(@Root() report_: Report_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Report Snapshots', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwReportSnapshots] WHERE [ReportID]='${report_.ID}' ` + this.getRowLevelSecurityWhereClause('Report Snapshots', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Report Snapshots', await dataSource.query(sSQL));
         return result;
     }
-        
+
     @Mutation(() => Report_)
     async CreateReport(
         @Arg('input', () => CreateReportInput) input: CreateReportInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
+        @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.CreateRecord('Reports', input, dataSource, userPayload, pubSub)
     }
-        
+
     @Mutation(() => Report_)
     async UpdateReport(
         @Arg('input', () => UpdateReportInput) input: UpdateReportInput,
@@ -11386,55 +11389,55 @@ export class ReportResolver extends ResolverBase {
     ) {
         return this.UpdateRecord('Reports', input, dataSource, userPayload, pubSub);
     }
-    
+
     @Mutation(() => Report_)
     async DeleteReport(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Reports', key, options, dataSource, userPayload, pubSub);
     }
-    
+
 }
 
 //****************************************************************************
 // ENTITY CLASS for Report Snapshots
 //****************************************************************************
 @ObjectType()
-export class ReportSnapshot_ {  
-    @Field() 
+export class ReportSnapshot_ {
+    @Field()
     @MaxLength(16)
     ID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     ReportID: string;
-          
-    @Field() 
+
+    @Field()
     ResultSet: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     UserID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__CreatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(510)
     Report: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(200)
     User: string;
-        
+
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for Report Snapshots   
+// INPUT TYPE for Report Snapshots
 //****************************************************************************
 @InputType()
 export class CreateReportSnapshotInput {
@@ -11447,10 +11450,10 @@ export class CreateReportSnapshotInput {
     @Field()
     UserID: string;
 }
-    
-        
+
+
 //****************************************************************************
-// INPUT TYPE for Report Snapshots   
+// INPUT TYPE for Report Snapshots
 //****************************************************************************
 @InputType()
 export class UpdateReportSnapshotInput {
@@ -11469,7 +11472,7 @@ export class UpdateReportSnapshotInput {
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
 }
-    
+
 //****************************************************************************
 // RESOLVER for Report Snapshots
 //****************************************************************************
@@ -11521,16 +11524,16 @@ export class ReportSnapshotResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Report Snapshots', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-    
+
     @Mutation(() => ReportSnapshot_)
     async CreateReportSnapshot(
         @Arg('input', () => CreateReportSnapshotInput) input: CreateReportSnapshotInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
+        @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.CreateRecord('Report Snapshots', input, dataSource, userPayload, pubSub)
     }
-        
+
     @Mutation(() => ReportSnapshot_)
     async UpdateReportSnapshot(
         @Arg('input', () => UpdateReportSnapshotInput) input: UpdateReportSnapshotInput,
@@ -11539,61 +11542,61 @@ export class ReportSnapshotResolver extends ResolverBase {
     ) {
         return this.UpdateRecord('Report Snapshots', input, dataSource, userPayload, pubSub);
     }
-    
+
     @Mutation(() => ReportSnapshot_)
     async DeleteReportSnapshot(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Report Snapshots', key, options, dataSource, userPayload, pubSub);
     }
-    
+
 }
 
 //****************************************************************************
 // ENTITY CLASS for Resource Types
 //****************************************************************************
 @ObjectType()
-export class ResourceType_ {  
-    @Field() 
+export class ResourceType_ {
+    @Field()
     @MaxLength(16)
     ID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(510)
     Name: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(510)
     DisplayName: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     Description?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(200)
     Icon?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(16)
     EntityID?: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__CreatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(510)
     Entity?: string;
-        
-    @Field(() => [mj_core_schema_server_object_types.WorkspaceItem_])
-    WorkspaceItemsArray: mj_core_schema_server_object_types.WorkspaceItem_[]; // Link to WorkspaceItems
-    
-    @Field(() => [mj_core_schema_server_object_types.UserNotification_])
-    UserNotificationsArray: mj_core_schema_server_object_types.UserNotification_[]; // Link to UserNotifications
-    
+
+    @Field(() => [WorkspaceItem_])
+    WorkspaceItemsArray: WorkspaceItem_[]; // Link to WorkspaceItems
+
+    @Field(() => [UserNotification_])
+    UserNotificationsArray: UserNotification_[]; // Link to UserNotifications
+
 }
 //****************************************************************************
 // RESOLVER for Resource Types
@@ -11646,67 +11649,67 @@ export class ResourceTypeResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Resource Types', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-      
-    @FieldResolver(() => [mj_core_schema_server_object_types.WorkspaceItem_])
+
+    @FieldResolver(() => [WorkspaceItem_])
     async WorkspaceItemsArray(@Root() resourcetype_: ResourceType_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Workspace Items', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwWorkspaceItems] WHERE [ResourceTypeID]='${resourcetype_.ID}' ` + this.getRowLevelSecurityWhereClause('Workspace Items', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Workspace Items', await dataSource.query(sSQL));
         return result;
     }
-          
-    @FieldResolver(() => [mj_core_schema_server_object_types.UserNotification_])
+
+    @FieldResolver(() => [UserNotification_])
     async UserNotificationsArray(@Root() resourcetype_: ResourceType_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('User Notifications', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwUserNotifications] WHERE [ResourceTypeID]='${resourcetype_.ID}' ` + this.getRowLevelSecurityWhereClause('User Notifications', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('User Notifications', await dataSource.query(sSQL));
         return result;
     }
-        
+
 }
 
 //****************************************************************************
 // ENTITY CLASS for Tags
 //****************************************************************************
 @ObjectType({ description: 'Tags are used to arbitrarily associate any record in any entity with addtional information.' })
-export class Tag_ {  
-    @Field() 
+export class Tag_ {
+    @Field()
     @MaxLength(16)
     ID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(510)
     Name: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(16)
     ParentID?: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(510)
     DisplayName: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     Description?: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__CreatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(510)
     Parent?: string;
-        
-    @Field(() => [mj_core_schema_server_object_types.Tag_])
-    TagsArray: mj_core_schema_server_object_types.Tag_[]; // Link to Tags
-    
-    @Field(() => [mj_core_schema_server_object_types.TaggedItem_])
-    TaggedItemsArray: mj_core_schema_server_object_types.TaggedItem_[]; // Link to TaggedItems
-    
+
+    @Field(() => [Tag_])
+    TagsArray: Tag_[]; // Link to Tags
+
+    @Field(() => [TaggedItem_])
+    TaggedItemsArray: TaggedItem_[]; // Link to TaggedItems
+
 }
 //****************************************************************************
 // RESOLVER for Tags
@@ -11759,62 +11762,62 @@ export class TagResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Tags', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-      
-    @FieldResolver(() => [mj_core_schema_server_object_types.Tag_])
+
+    @FieldResolver(() => [Tag_])
     async TagsArray(@Root() tag_: Tag_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Tags', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwTags] WHERE [ParentID]='${tag_.ID}' ` + this.getRowLevelSecurityWhereClause('Tags', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Tags', await dataSource.query(sSQL));
         return result;
     }
-          
-    @FieldResolver(() => [mj_core_schema_server_object_types.TaggedItem_])
+
+    @FieldResolver(() => [TaggedItem_])
     async TaggedItemsArray(@Root() tag_: Tag_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Tagged Items', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwTaggedItems] WHERE [TagID]='${tag_.ID}' ` + this.getRowLevelSecurityWhereClause('Tagged Items', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Tagged Items', await dataSource.query(sSQL));
         return result;
     }
-        
+
 }
 
 //****************************************************************************
 // ENTITY CLASS for Tagged Items
 //****************************************************************************
 @ObjectType({ description: 'Tracks the links between any record in any entity with Tags' })
-export class TaggedItem_ {  
-    @Field() 
+export class TaggedItem_ {
+    @Field()
     @MaxLength(16)
     ID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     TagID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     EntityID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(900)
     RecordID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__CreatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(510)
     Tag: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(510)
     Entity: string;
-        
+
 }
 //****************************************************************************
 // RESOLVER for Tagged Items
@@ -11867,48 +11870,48 @@ export class TaggedItemResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Tagged Items', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-    
+
 }
 
 //****************************************************************************
 // ENTITY CLASS for Workspaces
 //****************************************************************************
 @ObjectType({ description: 'A user can have one or more workspaces' })
-export class Workspace_ {  
-    @Field() 
+export class Workspace_ {
+    @Field()
     @MaxLength(16)
     ID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(510)
     Name: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     Description?: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     UserID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__CreatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(200)
     User: string;
-        
-    @Field(() => [mj_core_schema_server_object_types.WorkspaceItem_])
-    WorkspaceItemsArray: mj_core_schema_server_object_types.WorkspaceItem_[]; // Link to WorkspaceItems
-    
+
+    @Field(() => [WorkspaceItem_])
+    WorkspaceItemsArray: WorkspaceItem_[]; // Link to WorkspaceItems
+
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for Workspaces   
+// INPUT TYPE for Workspaces
 //****************************************************************************
 @InputType()
 export class CreateWorkspaceInput {
@@ -11921,10 +11924,10 @@ export class CreateWorkspaceInput {
     @Field()
     UserID: string;
 }
-    
-        
+
+
 //****************************************************************************
-// INPUT TYPE for Workspaces   
+// INPUT TYPE for Workspaces
 //****************************************************************************
 @InputType()
 export class UpdateWorkspaceInput {
@@ -11943,7 +11946,7 @@ export class UpdateWorkspaceInput {
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
 }
-    
+
 //****************************************************************************
 // RESOLVER for Workspaces
 //****************************************************************************
@@ -11995,24 +11998,24 @@ export class WorkspaceResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Workspaces', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-      
-    @FieldResolver(() => [mj_core_schema_server_object_types.WorkspaceItem_])
+
+    @FieldResolver(() => [WorkspaceItem_])
     async WorkspaceItemsArray(@Root() workspace_: Workspace_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Workspace Items', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwWorkspaceItems] WHERE [WorkSpaceID]='${workspace_.ID}' ` + this.getRowLevelSecurityWhereClause('Workspace Items', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Workspace Items', await dataSource.query(sSQL));
         return result;
     }
-        
+
     @Mutation(() => Workspace_)
     async CreateWorkspace(
         @Arg('input', () => CreateWorkspaceInput) input: CreateWorkspaceInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
+        @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.CreateRecord('Workspaces', input, dataSource, userPayload, pubSub)
     }
-        
+
     @Mutation(() => Workspace_)
     async UpdateWorkspace(
         @Arg('input', () => UpdateWorkspaceInput) input: UpdateWorkspaceInput,
@@ -12021,69 +12024,69 @@ export class WorkspaceResolver extends ResolverBase {
     ) {
         return this.UpdateRecord('Workspaces', input, dataSource, userPayload, pubSub);
     }
-    
+
     @Mutation(() => Workspace_)
     async DeleteWorkspace(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Workspaces', key, options, dataSource, userPayload, pubSub);
     }
-    
+
 }
 
 //****************************************************************************
 // ENTITY CLASS for Workspace Items
 //****************************************************************************
 @ObjectType({ description: 'Tracks the resources that are active within a given worksapce' })
-export class WorkspaceItem_ {  
-    @Field() 
+export class WorkspaceItem_ {
+    @Field()
     @MaxLength(16)
     ID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(510)
     Name: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     Description?: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     WorkspaceID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     ResourceTypeID: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(4000)
     ResourceRecordID?: string;
-          
-    @Field(() => Int) 
+
+    @Field(() => Int)
     Sequence: number;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     Configuration?: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__CreatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(510)
     Workspace: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(510)
     ResourceType: string;
-        
+
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for Workspace Items   
+// INPUT TYPE for Workspace Items
 //****************************************************************************
 @InputType()
 export class CreateWorkspaceItemInput {
@@ -12108,10 +12111,10 @@ export class CreateWorkspaceItemInput {
     @Field({ nullable: true })
     Configuration?: string;
 }
-    
-        
+
+
 //****************************************************************************
-// INPUT TYPE for Workspace Items   
+// INPUT TYPE for Workspace Items
 //****************************************************************************
 @InputType()
 export class UpdateWorkspaceItemInput {
@@ -12142,7 +12145,7 @@ export class UpdateWorkspaceItemInput {
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
 }
-    
+
 //****************************************************************************
 // RESOLVER for Workspace Items
 //****************************************************************************
@@ -12194,16 +12197,16 @@ export class WorkspaceItemResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Workspace Items', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-    
+
     @Mutation(() => WorkspaceItem_)
     async CreateWorkspaceItem(
         @Arg('input', () => CreateWorkspaceItemInput) input: CreateWorkspaceItemInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
+        @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.CreateRecord('Workspace Items', input, dataSource, userPayload, pubSub)
     }
-        
+
     @Mutation(() => WorkspaceItem_)
     async UpdateWorkspaceItem(
         @Arg('input', () => UpdateWorkspaceItemInput) input: UpdateWorkspaceItemInput,
@@ -12212,42 +12215,42 @@ export class WorkspaceItemResolver extends ResolverBase {
     ) {
         return this.UpdateRecord('Workspace Items', input, dataSource, userPayload, pubSub);
     }
-    
+
     @Mutation(() => WorkspaceItem_)
     async DeleteWorkspaceItem(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Workspace Items', key, options, dataSource, userPayload, pubSub);
     }
-    
+
 }
 
 //****************************************************************************
 // ENTITY CLASS for Datasets
 //****************************************************************************
 @ObjectType({ description: 'Cacheable sets of data that can span one or more items' })
-export class Dataset_ {  
-    @Field() 
+export class Dataset_ {
+    @Field()
     @MaxLength(16)
     ID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(200)
     Name: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     Description?: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__CreatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-        
-    @Field(() => [mj_core_schema_server_object_types.DatasetItem_])
-    DatasetItemsArray: mj_core_schema_server_object_types.DatasetItem_[]; // Link to DatasetItems
-    
+
+    @Field(() => [DatasetItem_])
+    DatasetItemsArray: DatasetItem_[]; // Link to DatasetItems
+
 }
 //****************************************************************************
 // RESOLVER for Datasets
@@ -12300,63 +12303,63 @@ export class DatasetResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Datasets', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-      
-    @FieldResolver(() => [mj_core_schema_server_object_types.DatasetItem_])
+
+    @FieldResolver(() => [DatasetItem_])
     async DatasetItemsArray(@Root() dataset_: Dataset_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Dataset Items', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwDatasetItems] WHERE [DatasetName]='${dataset_.ID}' ` + this.getRowLevelSecurityWhereClause('Dataset Items', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Dataset Items', await dataSource.query(sSQL));
         return result;
     }
-        
+
 }
 
 //****************************************************************************
 // ENTITY CLASS for Dataset Items
 //****************************************************************************
 @ObjectType({ description: 'A single item in a Dataset and can be sourced from multiple methods.' })
-export class DatasetItem_ {  
-    @Field() 
+export class DatasetItem_ {
+    @Field()
     @MaxLength(16)
     ID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(100)
     Code: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     DatasetID: string;
-          
-    @Field(() => Int) 
+
+    @Field(() => Int)
     Sequence: number;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     EntityID: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     WhereClause?: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(200)
     DateFieldToCheck: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     Description?: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__CreatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(510)
     Entity: string;
-        
+
 }
 //****************************************************************************
 // RESOLVER for Dataset Items
@@ -12409,58 +12412,58 @@ export class DatasetItemResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Dataset Items', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-    
+
 }
 
 //****************************************************************************
 // ENTITY CLASS for Conversation Details
 //****************************************************************************
 @ObjectType()
-export class ConversationDetail_ {  
-    @Field() 
+export class ConversationDetail_ {
+    @Field()
     @MaxLength(16)
     ID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     ConversationID: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(200)
     ExternalID?: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(40)
     Role: string;
-          
-    @Field() 
+
+    @Field()
     Message: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     Error?: string;
-          
-    @Field(() => Boolean) 
+
+    @Field(() => Boolean)
     HiddenToUser: boolean;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__CreatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(510)
     Conversation?: string;
-        
-    @Field(() => [mj_core_schema_server_object_types.Report_])
-    ReportsArray: mj_core_schema_server_object_types.Report_[]; // Link to Reports
-    
+
+    @Field(() => [Report_])
+    ReportsArray: Report_[]; // Link to Reports
+
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for Conversation Details   
+// INPUT TYPE for Conversation Details
 //****************************************************************************
 @InputType()
 export class CreateConversationDetailInput {
@@ -12482,10 +12485,10 @@ export class CreateConversationDetailInput {
     @Field(() => Boolean)
     HiddenToUser: boolean;
 }
-    
-        
+
+
 //****************************************************************************
-// INPUT TYPE for Conversation Details   
+// INPUT TYPE for Conversation Details
 //****************************************************************************
 @InputType()
 export class UpdateConversationDetailInput {
@@ -12513,7 +12516,7 @@ export class UpdateConversationDetailInput {
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
 }
-    
+
 //****************************************************************************
 // RESOLVER for Conversation Details
 //****************************************************************************
@@ -12565,24 +12568,24 @@ export class ConversationDetailResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Conversation Details', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-      
-    @FieldResolver(() => [mj_core_schema_server_object_types.Report_])
+
+    @FieldResolver(() => [Report_])
     async ReportsArray(@Root() conversationdetail_: ConversationDetail_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Reports', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwReports] WHERE [ConversationDetailID]='${conversationdetail_.ID}' ` + this.getRowLevelSecurityWhereClause('Reports', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Reports', await dataSource.query(sSQL));
         return result;
     }
-        
+
     @Mutation(() => ConversationDetail_)
     async CreateConversationDetail(
         @Arg('input', () => CreateConversationDetailInput) input: CreateConversationDetailInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
+        @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.CreateRecord('Conversation Details', input, dataSource, userPayload, pubSub)
     }
-        
+
     @Mutation(() => ConversationDetail_)
     async UpdateConversationDetail(
         @Arg('input', () => UpdateConversationDetailInput) input: UpdateConversationDetailInput,
@@ -12591,84 +12594,84 @@ export class ConversationDetailResolver extends ResolverBase {
     ) {
         return this.UpdateRecord('Conversation Details', input, dataSource, userPayload, pubSub);
     }
-    
+
     @Mutation(() => ConversationDetail_)
     async DeleteConversationDetail(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Conversation Details', key, options, dataSource, userPayload, pubSub);
     }
-    
+
 }
 
 //****************************************************************************
 // ENTITY CLASS for Conversations
 //****************************************************************************
 @ObjectType()
-export class Conversation_ {  
-    @Field() 
+export class Conversation_ {
+    @Field()
     @MaxLength(16)
     ID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     UserID: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(1000)
     ExternalID?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(510)
     Name?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     Description?: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(100)
     Type: string;
-          
-    @Field(() => Boolean) 
+
+    @Field(() => Boolean)
     IsArchived: boolean;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(16)
     LinkedEntityID?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(1000)
     LinkedRecordID?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(16)
     DataContextID?: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__CreatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(200)
     User: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(510)
     LinkedEntity?: string;
-        
-    @Field(() => [mj_core_schema_server_object_types.ConversationDetail_])
-    ConversationDetailsArray: mj_core_schema_server_object_types.ConversationDetail_[]; // Link to ConversationDetails
-    
-    @Field(() => [mj_core_schema_server_object_types.Report_])
-    ReportsArray: mj_core_schema_server_object_types.Report_[]; // Link to Reports
-    
+
+    @Field(() => [ConversationDetail_])
+    ConversationDetailsArray: ConversationDetail_[]; // Link to ConversationDetails
+
+    @Field(() => [Report_])
+    ReportsArray: Report_[]; // Link to Reports
+
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for Conversations   
+// INPUT TYPE for Conversations
 //****************************************************************************
 @InputType()
 export class CreateConversationInput {
@@ -12699,10 +12702,10 @@ export class CreateConversationInput {
     @Field({ nullable: true })
     DataContextID?: string;
 }
-    
-        
+
+
 //****************************************************************************
-// INPUT TYPE for Conversations   
+// INPUT TYPE for Conversations
 //****************************************************************************
 @InputType()
 export class UpdateConversationInput {
@@ -12739,7 +12742,7 @@ export class UpdateConversationInput {
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
 }
-    
+
 //****************************************************************************
 // RESOLVER for Conversations
 //****************************************************************************
@@ -12791,32 +12794,32 @@ export class ConversationResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Conversations', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-      
-    @FieldResolver(() => [mj_core_schema_server_object_types.ConversationDetail_])
+
+    @FieldResolver(() => [ConversationDetail_])
     async ConversationDetailsArray(@Root() conversation_: Conversation_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Conversation Details', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwConversationDetails] WHERE [ConversationID]='${conversation_.ID}' ` + this.getRowLevelSecurityWhereClause('Conversation Details', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Conversation Details', await dataSource.query(sSQL));
         return result;
     }
-          
-    @FieldResolver(() => [mj_core_schema_server_object_types.Report_])
+
+    @FieldResolver(() => [Report_])
     async ReportsArray(@Root() conversation_: Conversation_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Reports', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwReports] WHERE [ConversationID]='${conversation_.ID}' ` + this.getRowLevelSecurityWhereClause('Reports', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Reports', await dataSource.query(sSQL));
         return result;
     }
-        
+
     @Mutation(() => Conversation_)
     async CreateConversation(
         @Arg('input', () => CreateConversationInput) input: CreateConversationInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
+        @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.CreateRecord('Conversations', input, dataSource, userPayload, pubSub)
     }
-        
+
     @Mutation(() => Conversation_)
     async UpdateConversation(
         @Arg('input', () => UpdateConversationInput) input: UpdateConversationInput,
@@ -12825,72 +12828,72 @@ export class ConversationResolver extends ResolverBase {
     ) {
         return this.UpdateRecord('Conversations', input, dataSource, userPayload, pubSub);
     }
-    
+
     @Mutation(() => Conversation_)
     async DeleteConversation(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Conversations', key, options, dataSource, userPayload, pubSub);
     }
-    
+
 }
 
 //****************************************************************************
 // ENTITY CLASS for User Notifications
 //****************************************************************************
 @ObjectType()
-export class UserNotification_ {  
-    @Field() 
+export class UserNotification_ {
+    @Field()
     @MaxLength(16)
     ID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     UserID: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(510)
     Title?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     Message?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(16)
     ResourceTypeID?: string;
-          
-    @Field(() => Int, {nullable: true}) 
+
+    @Field(() => Int, {nullable: true})
     ResourceRecordID?: number;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     ResourceConfiguration?: string;
-          
-    @Field(() => Boolean) 
+
+    @Field(() => Boolean)
     Unread: boolean;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(8)
     ReadAt?: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__CreatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(200)
     User: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(510)
     ResourceType?: string;
-        
+
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for User Notifications   
+// INPUT TYPE for User Notifications
 //****************************************************************************
 @InputType()
 export class CreateUserNotificationInput {
@@ -12918,10 +12921,10 @@ export class CreateUserNotificationInput {
     @Field({ nullable: true })
     ReadAt?: Date;
 }
-    
-        
+
+
 //****************************************************************************
-// INPUT TYPE for User Notifications   
+// INPUT TYPE for User Notifications
 //****************************************************************************
 @InputType()
 export class UpdateUserNotificationInput {
@@ -12955,7 +12958,7 @@ export class UpdateUserNotificationInput {
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
 }
-    
+
 //****************************************************************************
 // RESOLVER for User Notifications
 //****************************************************************************
@@ -13007,16 +13010,16 @@ export class UserNotificationResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('User Notifications', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-    
+
     @Mutation(() => UserNotification_)
     async CreateUserNotification(
         @Arg('input', () => CreateUserNotificationInput) input: CreateUserNotificationInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
+        @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.CreateRecord('User Notifications', input, dataSource, userPayload, pubSub)
     }
-        
+
     @Mutation(() => UserNotification_)
     async UpdateUserNotification(
         @Arg('input', () => UpdateUserNotificationInput) input: UpdateUserNotificationInput,
@@ -13025,49 +13028,49 @@ export class UserNotificationResolver extends ResolverBase {
     ) {
         return this.UpdateRecord('User Notifications', input, dataSource, userPayload, pubSub);
     }
-    
+
     @Mutation(() => UserNotification_)
     async DeleteUserNotification(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('User Notifications', key, options, dataSource, userPayload, pubSub);
     }
-    
+
 }
 
 //****************************************************************************
 // ENTITY CLASS for Schema Info
 //****************************************************************************
 @ObjectType({ description: 'Tracks the schemas in the system and the ID ranges that are valid for entities within each schema.' })
-export class SchemaInfo_ {  
-    @Field() 
+export class SchemaInfo_ {
+    @Field()
     @MaxLength(16)
     ID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(100)
     SchemaName: string;
-          
-    @Field(() => Int) 
+
+    @Field(() => Int)
     EntityIDMin: number;
-          
-    @Field(() => Int) 
+
+    @Field(() => Int)
     EntityIDMax: number;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     Comments?: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__CreatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-        
+
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for Schema Info   
+// INPUT TYPE for Schema Info
 //****************************************************************************
 @InputType()
 export class CreateSchemaInfoInput {
@@ -13083,10 +13086,10 @@ export class CreateSchemaInfoInput {
     @Field({ nullable: true })
     Comments?: string;
 }
-    
-        
+
+
 //****************************************************************************
-// INPUT TYPE for Schema Info   
+// INPUT TYPE for Schema Info
 //****************************************************************************
 @InputType()
 export class UpdateSchemaInfoInput {
@@ -13108,7 +13111,7 @@ export class UpdateSchemaInfoInput {
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
 }
-    
+
 //****************************************************************************
 // RESOLVER for Schema Info
 //****************************************************************************
@@ -13160,16 +13163,16 @@ export class SchemaInfoResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Schema Info', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-    
+
     @Mutation(() => SchemaInfo_)
     async CreateSchemaInfo(
         @Arg('input', () => CreateSchemaInfoInput) input: CreateSchemaInfoInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
+        @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.CreateRecord('Schema Info', input, dataSource, userPayload, pubSub)
     }
-        
+
     @Mutation(() => SchemaInfo_)
     async UpdateSchemaInfo(
         @Arg('input', () => UpdateSchemaInfoInput) input: UpdateSchemaInfoInput,
@@ -13178,50 +13181,50 @@ export class SchemaInfoResolver extends ResolverBase {
     ) {
         return this.UpdateRecord('Schema Info', input, dataSource, userPayload, pubSub);
     }
-    
+
 }
 
 //****************************************************************************
 // ENTITY CLASS for Company Integration Record Maps
 //****************************************************************************
 @ObjectType()
-export class CompanyIntegrationRecordMap_ {  
-    @Field() 
+export class CompanyIntegrationRecordMap_ {
+    @Field()
     @MaxLength(16)
     ID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     CompanyIntegrationID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(1500)
     ExternalSystemRecordID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     EntityID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(1500)
     EntityRecordID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__CreatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(510)
     Entity: string;
-        
+
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for Company Integration Record Maps   
+// INPUT TYPE for Company Integration Record Maps
 //****************************************************************************
 @InputType()
 export class CreateCompanyIntegrationRecordMapInput {
@@ -13237,10 +13240,10 @@ export class CreateCompanyIntegrationRecordMapInput {
     @Field()
     EntityRecordID: string;
 }
-    
-        
+
+
 //****************************************************************************
-// INPUT TYPE for Company Integration Record Maps   
+// INPUT TYPE for Company Integration Record Maps
 //****************************************************************************
 @InputType()
 export class UpdateCompanyIntegrationRecordMapInput {
@@ -13262,7 +13265,7 @@ export class UpdateCompanyIntegrationRecordMapInput {
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
 }
-    
+
 //****************************************************************************
 // RESOLVER for Company Integration Record Maps
 //****************************************************************************
@@ -13314,16 +13317,16 @@ export class CompanyIntegrationRecordMapResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Company Integration Record Maps', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-    
+
     @Mutation(() => CompanyIntegrationRecordMap_)
     async CreateCompanyIntegrationRecordMap(
         @Arg('input', () => CreateCompanyIntegrationRecordMapInput) input: CreateCompanyIntegrationRecordMapInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
+        @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.CreateRecord('Company Integration Record Maps', input, dataSource, userPayload, pubSub)
     }
-        
+
     @Mutation(() => CompanyIntegrationRecordMap_)
     async UpdateCompanyIntegrationRecordMap(
         @Arg('input', () => UpdateCompanyIntegrationRecordMapInput) input: UpdateCompanyIntegrationRecordMapInput,
@@ -13332,82 +13335,82 @@ export class CompanyIntegrationRecordMapResolver extends ResolverBase {
     ) {
         return this.UpdateRecord('Company Integration Record Maps', input, dataSource, userPayload, pubSub);
     }
-    
+
 }
 
 //****************************************************************************
 // ENTITY CLASS for Record Merge Logs
 //****************************************************************************
 @ObjectType()
-export class RecordMergeLog_ {  
-    @Field() 
+export class RecordMergeLog_ {
+    @Field()
     @MaxLength(16)
     ID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     EntityID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(900)
     SurvivingRecordID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     InitiatedByUserID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(20)
     ApprovalStatus: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(16)
     ApprovedByUserID?: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(20)
     ProcessingStatus: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(8)
     ProcessingStartedAt: Date;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(8)
     ProcessingEndedAt?: Date;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     ProcessingLog?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     Comments?: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__CreatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(510)
     Entity: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(200)
     InitiatedByUser: string;
-        
-    @Field(() => [mj_core_schema_server_object_types.RecordMergeDeletionLog_])
-    RecordMergeDeletionLogsArray: mj_core_schema_server_object_types.RecordMergeDeletionLog_[]; // Link to RecordMergeDeletionLogs
-    
-    @Field(() => [mj_core_schema_server_object_types.DuplicateRunDetailMatch_])
-    DuplicateRunDetailMatchesArray: mj_core_schema_server_object_types.DuplicateRunDetailMatch_[]; // Link to DuplicateRunDetailMatches
-    
+
+    @Field(() => [RecordMergeDeletionLog_])
+    RecordMergeDeletionLogsArray: RecordMergeDeletionLog_[]; // Link to RecordMergeDeletionLogs
+
+    @Field(() => [DuplicateRunDetailMatch_])
+    DuplicateRunDetailMatchesArray: DuplicateRunDetailMatch_[]; // Link to DuplicateRunDetailMatches
+
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for Record Merge Logs   
+// INPUT TYPE for Record Merge Logs
 //****************************************************************************
 @InputType()
 export class CreateRecordMergeLogInput {
@@ -13441,10 +13444,10 @@ export class CreateRecordMergeLogInput {
     @Field({ nullable: true })
     Comments?: string;
 }
-    
-        
+
+
 //****************************************************************************
-// INPUT TYPE for Record Merge Logs   
+// INPUT TYPE for Record Merge Logs
 //****************************************************************************
 @InputType()
 export class UpdateRecordMergeLogInput {
@@ -13484,7 +13487,7 @@ export class UpdateRecordMergeLogInput {
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
 }
-    
+
 //****************************************************************************
 // RESOLVER for Record Merge Logs
 //****************************************************************************
@@ -13536,32 +13539,32 @@ export class RecordMergeLogResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Record Merge Logs', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-      
-    @FieldResolver(() => [mj_core_schema_server_object_types.RecordMergeDeletionLog_])
+
+    @FieldResolver(() => [RecordMergeDeletionLog_])
     async RecordMergeDeletionLogsArray(@Root() recordmergelog_: RecordMergeLog_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Record Merge Deletion Logs', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwRecordMergeDeletionLogs] WHERE [RecordMergeLogID]='${recordmergelog_.ID}' ` + this.getRowLevelSecurityWhereClause('Record Merge Deletion Logs', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Record Merge Deletion Logs', await dataSource.query(sSQL));
         return result;
     }
-          
-    @FieldResolver(() => [mj_core_schema_server_object_types.DuplicateRunDetailMatch_])
+
+    @FieldResolver(() => [DuplicateRunDetailMatch_])
     async DuplicateRunDetailMatchesArray(@Root() recordmergelog_: RecordMergeLog_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Duplicate Run Detail Matches', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwDuplicateRunDetailMatches] WHERE [RecordMergeLogID]='${recordmergelog_.ID}' ` + this.getRowLevelSecurityWhereClause('Duplicate Run Detail Matches', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Duplicate Run Detail Matches', await dataSource.query(sSQL));
         return result;
     }
-        
+
     @Mutation(() => RecordMergeLog_)
     async CreateRecordMergeLog(
         @Arg('input', () => CreateRecordMergeLogInput) input: CreateRecordMergeLogInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
+        @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.CreateRecord('Record Merge Logs', input, dataSource, userPayload, pubSub)
     }
-        
+
     @Mutation(() => RecordMergeLog_)
     async UpdateRecordMergeLog(
         @Arg('input', () => UpdateRecordMergeLogInput) input: UpdateRecordMergeLogInput,
@@ -13570,45 +13573,45 @@ export class RecordMergeLogResolver extends ResolverBase {
     ) {
         return this.UpdateRecord('Record Merge Logs', input, dataSource, userPayload, pubSub);
     }
-    
+
 }
 
 //****************************************************************************
 // ENTITY CLASS for Record Merge Deletion Logs
 //****************************************************************************
 @ObjectType()
-export class RecordMergeDeletionLog_ {  
-    @Field() 
+export class RecordMergeDeletionLog_ {
+    @Field()
     @MaxLength(16)
     ID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     RecordMergeLogID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(1500)
     DeletedRecordID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(20)
     Status: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     ProcessingLog?: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__CreatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-        
+
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for Record Merge Deletion Logs   
+// INPUT TYPE for Record Merge Deletion Logs
 //****************************************************************************
 @InputType()
 export class CreateRecordMergeDeletionLogInput {
@@ -13624,10 +13627,10 @@ export class CreateRecordMergeDeletionLogInput {
     @Field({ nullable: true })
     ProcessingLog?: string;
 }
-    
-        
+
+
 //****************************************************************************
-// INPUT TYPE for Record Merge Deletion Logs   
+// INPUT TYPE for Record Merge Deletion Logs
 //****************************************************************************
 @InputType()
 export class UpdateRecordMergeDeletionLogInput {
@@ -13649,7 +13652,7 @@ export class UpdateRecordMergeDeletionLogInput {
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
 }
-    
+
 //****************************************************************************
 // RESOLVER for Record Merge Deletion Logs
 //****************************************************************************
@@ -13701,16 +13704,16 @@ export class RecordMergeDeletionLogResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Record Merge Deletion Logs', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-    
+
     @Mutation(() => RecordMergeDeletionLog_)
     async CreateRecordMergeDeletionLog(
         @Arg('input', () => CreateRecordMergeDeletionLogInput) input: CreateRecordMergeDeletionLogInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
+        @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.CreateRecord('Record Merge Deletion Logs', input, dataSource, userPayload, pubSub)
     }
-        
+
     @Mutation(() => RecordMergeDeletionLog_)
     async UpdateRecordMergeDeletionLog(
         @Arg('input', () => UpdateRecordMergeDeletionLogInput) input: UpdateRecordMergeDeletionLogInput,
@@ -13719,80 +13722,80 @@ export class RecordMergeDeletionLogResolver extends ResolverBase {
     ) {
         return this.UpdateRecord('Record Merge Deletion Logs', input, dataSource, userPayload, pubSub);
     }
-    
+
 }
 
 //****************************************************************************
 // ENTITY CLASS for Query Fields
 //****************************************************************************
 @ObjectType()
-export class QueryField_ {  
-    @Field() 
+export class QueryField_ {
+    @Field()
     @MaxLength(16)
     ID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     QueryID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(510)
     Name: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     Description?: string;
-          
-    @Field(() => Int) 
+
+    @Field(() => Int)
     Sequence: number;
-          
-    @Field({description: 'The base type, not including parameters, in SQL. For example this field would be nvarchar or decimal, and wouldn\'t include type parameters. The SQLFullType field provides that information.'}) 
+
+    @Field({description: 'The base type, not including parameters, in SQL. For example this field would be nvarchar or decimal, and wouldn\'t include type parameters. The SQLFullType field provides that information.'})
     @MaxLength(100)
     SQLBaseType: string;
-          
-    @Field({description: 'The full SQL type for the field, for example datetime or nvarchar(10) etc.'}) 
+
+    @Field({description: 'The full SQL type for the field, for example datetime or nvarchar(10) etc.'})
     @MaxLength(200)
     SQLFullType: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(16)
     SourceEntityID?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(510)
     SourceFieldName?: string;
-          
-    @Field(() => Boolean) 
+
+    @Field(() => Boolean)
     IsComputed: boolean;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     ComputationDescription?: string;
-          
-    @Field(() => Boolean) 
+
+    @Field(() => Boolean)
     IsSummary: boolean;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     SummaryDescription?: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__CreatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(510)
     Query: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(510)
     SourceEntity?: string;
-        
+
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for Query Fields   
+// INPUT TYPE for Query Fields
 //****************************************************************************
 @InputType()
 export class CreateQueryFieldInput {
@@ -13832,10 +13835,10 @@ export class CreateQueryFieldInput {
     @Field({ nullable: true })
     SummaryDescription?: string;
 }
-    
-        
+
+
 //****************************************************************************
-// INPUT TYPE for Query Fields   
+// INPUT TYPE for Query Fields
 //****************************************************************************
 @InputType()
 export class UpdateQueryFieldInput {
@@ -13881,7 +13884,7 @@ export class UpdateQueryFieldInput {
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
 }
-    
+
 //****************************************************************************
 // RESOLVER for Query Fields
 //****************************************************************************
@@ -13933,16 +13936,16 @@ export class QueryFieldResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Query Fields', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-    
+
     @Mutation(() => QueryField_)
     async CreateQueryField(
         @Arg('input', () => CreateQueryFieldInput) input: CreateQueryFieldInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
+        @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.CreateRecord('Query Fields', input, dataSource, userPayload, pubSub)
     }
-        
+
     @Mutation(() => QueryField_)
     async UpdateQueryField(
         @Arg('input', () => UpdateQueryFieldInput) input: UpdateQueryFieldInput,
@@ -13951,59 +13954,59 @@ export class QueryFieldResolver extends ResolverBase {
     ) {
         return this.UpdateRecord('Query Fields', input, dataSource, userPayload, pubSub);
     }
-    
+
 }
 
 //****************************************************************************
 // ENTITY CLASS for Query Categories
 //****************************************************************************
 @ObjectType()
-export class QueryCategory_ {  
-    @Field() 
+export class QueryCategory_ {
+    @Field()
     @MaxLength(16)
     ID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(100)
     Name: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(16)
     ParentID?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     Description?: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     UserID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__CreatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(100)
     Parent?: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(200)
     User: string;
-        
-    @Field(() => [mj_core_schema_server_object_types.QueryCategory_])
-    QueryCategoriesArray: mj_core_schema_server_object_types.QueryCategory_[]; // Link to QueryCategories
-    
-    @Field(() => [mj_core_schema_server_object_types.Query_])
-    QueriesArray: mj_core_schema_server_object_types.Query_[]; // Link to Queries
-    
+
+    @Field(() => [QueryCategory_])
+    QueryCategoriesArray: QueryCategory_[]; // Link to QueryCategories
+
+    @Field(() => [Query_])
+    QueriesArray: Query_[]; // Link to Queries
+
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for Query Categories   
+// INPUT TYPE for Query Categories
 //****************************************************************************
 @InputType()
 export class CreateQueryCategoryInput {
@@ -14019,10 +14022,10 @@ export class CreateQueryCategoryInput {
     @Field()
     UserID: string;
 }
-    
-        
+
+
 //****************************************************************************
-// INPUT TYPE for Query Categories   
+// INPUT TYPE for Query Categories
 //****************************************************************************
 @InputType()
 export class UpdateQueryCategoryInput {
@@ -14044,7 +14047,7 @@ export class UpdateQueryCategoryInput {
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
 }
-    
+
 //****************************************************************************
 // RESOLVER for Query Categories
 //****************************************************************************
@@ -14096,32 +14099,32 @@ export class QueryCategoryResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Query Categories', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-      
-    @FieldResolver(() => [mj_core_schema_server_object_types.QueryCategory_])
+
+    @FieldResolver(() => [QueryCategory_])
     async QueryCategoriesArray(@Root() querycategory_: QueryCategory_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Query Categories', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwQueryCategories] WHERE [ParentID]='${querycategory_.ID}' ` + this.getRowLevelSecurityWhereClause('Query Categories', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Query Categories', await dataSource.query(sSQL));
         return result;
     }
-          
-    @FieldResolver(() => [mj_core_schema_server_object_types.Query_])
+
+    @FieldResolver(() => [Query_])
     async QueriesArray(@Root() querycategory_: QueryCategory_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Queries', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwQueries] WHERE [CategoryID]='${querycategory_.ID}' ` + this.getRowLevelSecurityWhereClause('Queries', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Queries', await dataSource.query(sSQL));
         return result;
     }
-        
+
     @Mutation(() => QueryCategory_)
     async CreateQueryCategory(
         @Arg('input', () => CreateQueryCategoryInput) input: CreateQueryCategoryInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
+        @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.CreateRecord('Query Categories', input, dataSource, userPayload, pubSub)
     }
-        
+
     @Mutation(() => QueryCategory_)
     async UpdateQueryCategory(
         @Arg('input', () => UpdateQueryCategoryInput) input: UpdateQueryCategoryInput,
@@ -14130,85 +14133,85 @@ export class QueryCategoryResolver extends ResolverBase {
     ) {
         return this.UpdateRecord('Query Categories', input, dataSource, userPayload, pubSub);
     }
-    
+
     @Mutation(() => QueryCategory_)
     async DeleteQueryCategory(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Query Categories', key, options, dataSource, userPayload, pubSub);
     }
-    
+
 }
 
 //****************************************************************************
 // ENTITY CLASS for Queries
 //****************************************************************************
 @ObjectType({ description: 'Catalog of stored queries. This is useful for any arbitrary query that is known to be performant and correct and can be reused. Queries can be viewed/run by a user, used programatically via RunQuery, and also used by AI systems for improved reliability instead of dynamically generated SQL. Queries can also improve security since they store the SQL instead of using dynamic SQL.' })
-export class Query_ {  
-    @Field() 
+export class Query_ {
+    @Field()
     @MaxLength(16)
     ID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(510)
     Name: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(16)
     CategoryID?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     UserQuestion?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     Description?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     SQL?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     TechnicalDescription?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     OriginalSQL?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     Feedback?: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(30)
     Status: string;
-          
-    @Field(() => Int, {nullable: true, description: 'Value indicating the quality of the query, higher values mean a better quality'}) 
+
+    @Field(() => Int, {nullable: true, description: 'Value indicating the quality of the query, higher values mean a better quality'})
     QualityRank?: number;
-          
-    @Field(() => Int, {nullable: true, description: 'Higher numbers indicate more execution overhead/time required. Useful for planning which queries to use in various scenarios.'}) 
+
+    @Field(() => Int, {nullable: true, description: 'Higher numbers indicate more execution overhead/time required. Useful for planning which queries to use in various scenarios.'})
     ExecutionCostRank?: number;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__CreatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(100)
     Category?: string;
-        
-    @Field(() => [mj_core_schema_server_object_types.QueryField_])
-    QueryFieldsArray: mj_core_schema_server_object_types.QueryField_[]; // Link to QueryFields
-    
-    @Field(() => [mj_core_schema_server_object_types.DataContextItem_])
-    DataContextItemsArray: mj_core_schema_server_object_types.DataContextItem_[]; // Link to DataContextItems
-    
-    @Field(() => [mj_core_schema_server_object_types.QueryPermission_])
-    QueryPermissionsArray: mj_core_schema_server_object_types.QueryPermission_[]; // Link to QueryPermissions
-    
+
+    @Field(() => [QueryField_])
+    QueryFieldsArray: QueryField_[]; // Link to QueryFields
+
+    @Field(() => [DataContextItem_])
+    DataContextItemsArray: DataContextItem_[]; // Link to DataContextItems
+
+    @Field(() => [QueryPermission_])
+    QueryPermissionsArray: QueryPermission_[]; // Link to QueryPermissions
+
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for Queries   
+// INPUT TYPE for Queries
 //****************************************************************************
 @InputType()
 export class CreateQueryInput {
@@ -14245,10 +14248,10 @@ export class CreateQueryInput {
     @Field(() => Int, { nullable: true })
     ExecutionCostRank?: number;
 }
-    
-        
+
+
 //****************************************************************************
-// INPUT TYPE for Queries   
+// INPUT TYPE for Queries
 //****************************************************************************
 @InputType()
 export class UpdateQueryInput {
@@ -14291,7 +14294,7 @@ export class UpdateQueryInput {
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
 }
-    
+
 //****************************************************************************
 // RESOLVER for Queries
 //****************************************************************************
@@ -14343,40 +14346,40 @@ export class QueryResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Queries', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-      
-    @FieldResolver(() => [mj_core_schema_server_object_types.QueryField_])
+
+    @FieldResolver(() => [QueryField_])
     async QueryFieldsArray(@Root() query_: Query_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Query Fields', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwQueryFields] WHERE [QueryID]='${query_.ID}' ` + this.getRowLevelSecurityWhereClause('Query Fields', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Query Fields', await dataSource.query(sSQL));
         return result;
     }
-          
-    @FieldResolver(() => [mj_core_schema_server_object_types.DataContextItem_])
+
+    @FieldResolver(() => [DataContextItem_])
     async DataContextItemsArray(@Root() query_: Query_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Data Context Items', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwDataContextItems] WHERE [QueryID]='${query_.ID}' ` + this.getRowLevelSecurityWhereClause('Data Context Items', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Data Context Items', await dataSource.query(sSQL));
         return result;
     }
-          
-    @FieldResolver(() => [mj_core_schema_server_object_types.QueryPermission_])
+
+    @FieldResolver(() => [QueryPermission_])
     async QueryPermissionsArray(@Root() query_: Query_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Query Permissions', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwQueryPermissions] WHERE [QueryID]='${query_.ID}' ` + this.getRowLevelSecurityWhereClause('Query Permissions', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Query Permissions', await dataSource.query(sSQL));
         return result;
     }
-        
+
     @Mutation(() => Query_)
     async CreateQuery(
         @Arg('input', () => CreateQueryInput) input: CreateQueryInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
+        @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.CreateRecord('Queries', input, dataSource, userPayload, pubSub)
     }
-        
+
     @Mutation(() => Query_)
     async UpdateQuery(
         @Arg('input', () => UpdateQueryInput) input: UpdateQueryInput,
@@ -14385,38 +14388,38 @@ export class QueryResolver extends ResolverBase {
     ) {
         return this.UpdateRecord('Queries', input, dataSource, userPayload, pubSub);
     }
-    
+
 }
 
 //****************************************************************************
 // ENTITY CLASS for Query Permissions
 //****************************************************************************
 @ObjectType()
-export class QueryPermission_ {  
-    @Field() 
+export class QueryPermission_ {
+    @Field()
     @MaxLength(16)
     ID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     QueryID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     RoleID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__CreatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-        
+
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for Query Permissions   
+// INPUT TYPE for Query Permissions
 //****************************************************************************
 @InputType()
 export class CreateQueryPermissionInput {
@@ -14426,10 +14429,10 @@ export class CreateQueryPermissionInput {
     @Field()
     RoleID: string;
 }
-    
-        
+
+
 //****************************************************************************
-// INPUT TYPE for Query Permissions   
+// INPUT TYPE for Query Permissions
 //****************************************************************************
 @InputType()
 export class UpdateQueryPermissionInput {
@@ -14445,7 +14448,7 @@ export class UpdateQueryPermissionInput {
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
 }
-    
+
 //****************************************************************************
 // RESOLVER for Query Permissions
 //****************************************************************************
@@ -14497,16 +14500,16 @@ export class QueryPermissionResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Query Permissions', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-    
+
     @Mutation(() => QueryPermission_)
     async CreateQueryPermission(
         @Arg('input', () => CreateQueryPermissionInput) input: CreateQueryPermissionInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
+        @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.CreateRecord('Query Permissions', input, dataSource, userPayload, pubSub)
     }
-        
+
     @Mutation(() => QueryPermission_)
     async UpdateQueryPermission(
         @Arg('input', () => UpdateQueryPermissionInput) input: UpdateQueryPermissionInput,
@@ -14515,56 +14518,56 @@ export class QueryPermissionResolver extends ResolverBase {
     ) {
         return this.UpdateRecord('Query Permissions', input, dataSource, userPayload, pubSub);
     }
-    
+
 }
 
 //****************************************************************************
 // ENTITY CLASS for Vector Indexes
 //****************************************************************************
 @ObjectType()
-export class VectorIndex_ {  
-    @Field() 
+export class VectorIndex_ {
+    @Field()
     @MaxLength(16)
     ID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(510)
     Name: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     Description?: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     VectorDatabaseID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     EmbeddingModelID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__CreatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(200)
     VectorDatabase: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(100)
     EmbeddingModel: string;
-        
-    @Field(() => [mj_core_schema_server_object_types.EntityRecordDocument_])
-    EntityRecordDocumentsArray: mj_core_schema_server_object_types.EntityRecordDocument_[]; // Link to EntityRecordDocuments
-    
+
+    @Field(() => [EntityRecordDocument_])
+    EntityRecordDocumentsArray: EntityRecordDocument_[]; // Link to EntityRecordDocuments
+
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for Vector Indexes   
+// INPUT TYPE for Vector Indexes
 //****************************************************************************
 @InputType()
 export class CreateVectorIndexInput {
@@ -14580,10 +14583,10 @@ export class CreateVectorIndexInput {
     @Field()
     EmbeddingModelID: string;
 }
-    
-        
+
+
 //****************************************************************************
-// INPUT TYPE for Vector Indexes   
+// INPUT TYPE for Vector Indexes
 //****************************************************************************
 @InputType()
 export class UpdateVectorIndexInput {
@@ -14605,7 +14608,7 @@ export class UpdateVectorIndexInput {
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
 }
-    
+
 //****************************************************************************
 // RESOLVER for Vector Indexes
 //****************************************************************************
@@ -14657,24 +14660,24 @@ export class VectorIndexResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Vector Indexes', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-      
-    @FieldResolver(() => [mj_core_schema_server_object_types.EntityRecordDocument_])
+
+    @FieldResolver(() => [EntityRecordDocument_])
     async EntityRecordDocumentsArray(@Root() vectorindex_: VectorIndex_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entity Record Documents', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityRecordDocuments] WHERE [VectorIndexID]='${vectorindex_.ID}' ` + this.getRowLevelSecurityWhereClause('Entity Record Documents', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Entity Record Documents', await dataSource.query(sSQL));
         return result;
     }
-        
+
     @Mutation(() => VectorIndex_)
     async CreateVectorIndex(
         @Arg('input', () => CreateVectorIndexInput) input: CreateVectorIndexInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
+        @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.CreateRecord('Vector Indexes', input, dataSource, userPayload, pubSub)
     }
-        
+
     @Mutation(() => VectorIndex_)
     async UpdateVectorIndex(
         @Arg('input', () => UpdateVectorIndexInput) input: UpdateVectorIndexInput,
@@ -14683,40 +14686,40 @@ export class VectorIndexResolver extends ResolverBase {
     ) {
         return this.UpdateRecord('Vector Indexes', input, dataSource, userPayload, pubSub);
     }
-    
+
 }
 
 //****************************************************************************
 // ENTITY CLASS for Entity Document Types
 //****************************************************************************
 @ObjectType()
-export class EntityDocumentType_ {  
-    @Field() 
+export class EntityDocumentType_ {
+    @Field()
     @MaxLength(16)
     ID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(200)
     Name: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     Description?: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__CreatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-        
-    @Field(() => [mj_core_schema_server_object_types.EntityDocument_])
-    EntityDocumentsArray: mj_core_schema_server_object_types.EntityDocument_[]; // Link to EntityDocuments
-    
+
+    @Field(() => [EntityDocument_])
+    EntityDocumentsArray: EntityDocument_[]; // Link to EntityDocuments
+
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for Entity Document Types   
+// INPUT TYPE for Entity Document Types
 //****************************************************************************
 @InputType()
 export class CreateEntityDocumentTypeInput {
@@ -14726,10 +14729,10 @@ export class CreateEntityDocumentTypeInput {
     @Field({ nullable: true })
     Description?: string;
 }
-    
-        
+
+
 //****************************************************************************
-// INPUT TYPE for Entity Document Types   
+// INPUT TYPE for Entity Document Types
 //****************************************************************************
 @InputType()
 export class UpdateEntityDocumentTypeInput {
@@ -14745,7 +14748,7 @@ export class UpdateEntityDocumentTypeInput {
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
 }
-    
+
 //****************************************************************************
 // RESOLVER for Entity Document Types
 //****************************************************************************
@@ -14797,24 +14800,24 @@ export class EntityDocumentTypeResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Entity Document Types', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-      
-    @FieldResolver(() => [mj_core_schema_server_object_types.EntityDocument_])
+
+    @FieldResolver(() => [EntityDocument_])
     async EntityDocumentsArray(@Root() entitydocumenttype_: EntityDocumentType_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entity Documents', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityDocuments] WHERE [TypeID]='${entitydocumenttype_.ID}' ` + this.getRowLevelSecurityWhereClause('Entity Documents', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Entity Documents', await dataSource.query(sSQL));
         return result;
     }
-        
+
     @Mutation(() => EntityDocumentType_)
     async CreateEntityDocumentType(
         @Arg('input', () => CreateEntityDocumentTypeInput) input: CreateEntityDocumentTypeInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
+        @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.CreateRecord('Entity Document Types', input, dataSource, userPayload, pubSub)
     }
-        
+
     @Mutation(() => EntityDocumentType_)
     async UpdateEntityDocumentType(
         @Arg('input', () => UpdateEntityDocumentTypeInput) input: UpdateEntityDocumentTypeInput,
@@ -14823,50 +14826,50 @@ export class EntityDocumentTypeResolver extends ResolverBase {
     ) {
         return this.UpdateRecord('Entity Document Types', input, dataSource, userPayload, pubSub);
     }
-    
+
 }
 
 //****************************************************************************
 // ENTITY CLASS for Entity Document Runs
 //****************************************************************************
 @ObjectType()
-export class EntityDocumentRun_ {  
-    @Field() 
+export class EntityDocumentRun_ {
+    @Field()
     @MaxLength(16)
     ID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     EntityDocumentID: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(8)
     StartedAt?: Date;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(8)
     EndedAt?: Date;
-          
-    @Field({description: 'Can be Pending, In Progress, Completed, or Failed'}) 
+
+    @Field({description: 'Can be Pending, In Progress, Completed, or Failed'})
     @MaxLength(30)
     Status: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__CreatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(500)
     EntityDocument: string;
-        
+
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for Entity Document Runs   
+// INPUT TYPE for Entity Document Runs
 //****************************************************************************
 @InputType()
 export class CreateEntityDocumentRunInput {
@@ -14882,10 +14885,10 @@ export class CreateEntityDocumentRunInput {
     @Field()
     Status: string;
 }
-    
-        
+
+
 //****************************************************************************
-// INPUT TYPE for Entity Document Runs   
+// INPUT TYPE for Entity Document Runs
 //****************************************************************************
 @InputType()
 export class UpdateEntityDocumentRunInput {
@@ -14907,7 +14910,7 @@ export class UpdateEntityDocumentRunInput {
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
 }
-    
+
 //****************************************************************************
 // RESOLVER for Entity Document Runs
 //****************************************************************************
@@ -14959,16 +14962,16 @@ export class EntityDocumentRunResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Entity Document Runs', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-    
+
     @Mutation(() => EntityDocumentRun_)
     async CreateEntityDocumentRun(
         @Arg('input', () => CreateEntityDocumentRunInput) input: CreateEntityDocumentRunInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
+        @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.CreateRecord('Entity Document Runs', input, dataSource, userPayload, pubSub)
     }
-        
+
     @Mutation(() => EntityDocumentRun_)
     async UpdateEntityDocumentRun(
         @Arg('input', () => UpdateEntityDocumentRunInput) input: UpdateEntityDocumentRunInput,
@@ -14977,51 +14980,51 @@ export class EntityDocumentRunResolver extends ResolverBase {
     ) {
         return this.UpdateRecord('Entity Document Runs', input, dataSource, userPayload, pubSub);
     }
-    
+
 }
 
 //****************************************************************************
 // ENTITY CLASS for Vector Databases
 //****************************************************************************
 @ObjectType()
-export class VectorDatabase_ {  
-    @Field() 
+export class VectorDatabase_ {
+    @Field()
     @MaxLength(16)
     ID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(200)
     Name: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     Description?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(510)
     DefaultURL?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(200)
     ClassKey?: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__CreatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-        
-    @Field(() => [mj_core_schema_server_object_types.EntityDocument_])
-    EntityDocumentsArray: mj_core_schema_server_object_types.EntityDocument_[]; // Link to EntityDocuments
-    
-    @Field(() => [mj_core_schema_server_object_types.VectorIndex_])
-    VectorIndexesArray: mj_core_schema_server_object_types.VectorIndex_[]; // Link to VectorIndexes
-    
+
+    @Field(() => [EntityDocument_])
+    EntityDocumentsArray: EntityDocument_[]; // Link to EntityDocuments
+
+    @Field(() => [VectorIndex_])
+    VectorIndexesArray: VectorIndex_[]; // Link to VectorIndexes
+
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for Vector Databases   
+// INPUT TYPE for Vector Databases
 //****************************************************************************
 @InputType()
 export class CreateVectorDatabaseInput {
@@ -15037,10 +15040,10 @@ export class CreateVectorDatabaseInput {
     @Field({ nullable: true })
     ClassKey?: string;
 }
-    
-        
+
+
 //****************************************************************************
-// INPUT TYPE for Vector Databases   
+// INPUT TYPE for Vector Databases
 //****************************************************************************
 @InputType()
 export class UpdateVectorDatabaseInput {
@@ -15062,7 +15065,7 @@ export class UpdateVectorDatabaseInput {
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
 }
-    
+
 //****************************************************************************
 // RESOLVER for Vector Databases
 //****************************************************************************
@@ -15114,32 +15117,32 @@ export class VectorDatabaseResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Vector Databases', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-      
-    @FieldResolver(() => [mj_core_schema_server_object_types.EntityDocument_])
+
+    @FieldResolver(() => [EntityDocument_])
     async EntityDocumentsArray(@Root() vectordatabase_: VectorDatabase_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entity Documents', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityDocuments] WHERE [ID]='${vectordatabase_.ID}' ` + this.getRowLevelSecurityWhereClause('Entity Documents', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Entity Documents', await dataSource.query(sSQL));
         return result;
     }
-          
-    @FieldResolver(() => [mj_core_schema_server_object_types.VectorIndex_])
+
+    @FieldResolver(() => [VectorIndex_])
     async VectorIndexesArray(@Root() vectordatabase_: VectorDatabase_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Vector Indexes', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwVectorIndexes] WHERE [VectorDatabaseID]='${vectordatabase_.ID}' ` + this.getRowLevelSecurityWhereClause('Vector Indexes', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Vector Indexes', await dataSource.query(sSQL));
         return result;
     }
-        
+
     @Mutation(() => VectorDatabase_)
     async CreateVectorDatabase(
         @Arg('input', () => CreateVectorDatabaseInput) input: CreateVectorDatabaseInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
+        @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.CreateRecord('Vector Databases', input, dataSource, userPayload, pubSub)
     }
-        
+
     @Mutation(() => VectorDatabase_)
     async UpdateVectorDatabase(
         @Arg('input', () => UpdateVectorDatabaseInput) input: UpdateVectorDatabaseInput,
@@ -15148,60 +15151,60 @@ export class VectorDatabaseResolver extends ResolverBase {
     ) {
         return this.UpdateRecord('Vector Databases', input, dataSource, userPayload, pubSub);
     }
-    
+
 }
 
 //****************************************************************************
 // ENTITY CLASS for Entity Record Documents
 //****************************************************************************
 @ObjectType()
-export class EntityRecordDocument_ {  
-    @Field() 
+export class EntityRecordDocument_ {
+    @Field()
     @MaxLength(16)
     ID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     EntityID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(900)
     RecordID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     EntityDocumentID: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     DocumentText?: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     VectorIndexID: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(100)
     VectorID?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     VectorJSON?: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(8)
     EntityRecordUpdatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__CreatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-        
+
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for Entity Record Documents   
+// INPUT TYPE for Entity Record Documents
 //****************************************************************************
 @InputType()
 export class CreateEntityRecordDocumentInput {
@@ -15229,10 +15232,10 @@ export class CreateEntityRecordDocumentInput {
     @Field()
     EntityRecordUpdatedAt: Date;
 }
-    
-        
+
+
 //****************************************************************************
-// INPUT TYPE for Entity Record Documents   
+// INPUT TYPE for Entity Record Documents
 //****************************************************************************
 @InputType()
 export class UpdateEntityRecordDocumentInput {
@@ -15266,7 +15269,7 @@ export class UpdateEntityRecordDocumentInput {
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
 }
-    
+
 //****************************************************************************
 // RESOLVER for Entity Record Documents
 //****************************************************************************
@@ -15318,16 +15321,16 @@ export class EntityRecordDocumentResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Entity Record Documents', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-    
+
     @Mutation(() => EntityRecordDocument_)
     async CreateEntityRecordDocument(
         @Arg('input', () => CreateEntityRecordDocumentInput) input: CreateEntityRecordDocumentInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
+        @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.CreateRecord('Entity Record Documents', input, dataSource, userPayload, pubSub)
     }
-        
+
     @Mutation(() => EntityRecordDocument_)
     async UpdateEntityRecordDocument(
         @Arg('input', () => UpdateEntityRecordDocumentInput) input: UpdateEntityRecordDocumentInput,
@@ -15336,81 +15339,81 @@ export class EntityRecordDocumentResolver extends ResolverBase {
     ) {
         return this.UpdateRecord('Entity Record Documents', input, dataSource, userPayload, pubSub);
     }
-    
+
 }
 
 //****************************************************************************
 // ENTITY CLASS for Entity Documents
 //****************************************************************************
 @ObjectType()
-export class EntityDocument_ {  
-    @Field() 
+export class EntityDocument_ {
+    @Field()
     @MaxLength(16)
     ID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(500)
     Name: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     TypeID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     EntityID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     VectorDatabaseID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(30)
     Status: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(16)
     TemplateID?: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     AIModelID: string;
-          
-    @Field(() => Float, {description: 'Value between 0 and 1 that determines what is considered a potential matching record. Value must be <= AbsoluteMatchThreshold. This is primarily used for duplicate detection but can be used for other applications as well where matching is relevant.'}) 
+
+    @Field(() => Float, {description: 'Value between 0 and 1 that determines what is considered a potential matching record. Value must be <= AbsoluteMatchThreshold. This is primarily used for duplicate detection but can be used for other applications as well where matching is relevant.'})
     PotentialMatchThreshold: number;
-          
-    @Field(() => Float, {description: 'Value between 0 and 1 that determines what is considered an absolute matching record. Value must be >= PotentialMatchThreshold. This is primarily used for duplicate detection but can be used for other applications as well where matching is relevant.'}) 
+
+    @Field(() => Float, {description: 'Value between 0 and 1 that determines what is considered an absolute matching record. Value must be >= PotentialMatchThreshold. This is primarily used for duplicate detection but can be used for other applications as well where matching is relevant.'})
     AbsoluteMatchThreshold: number;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__CreatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(200)
     Type: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(510)
     Entity: string;
-        
-    @Field(() => [mj_core_schema_server_object_types.EntityDocumentSetting_])
-    EntityDocumentSettingsArray: mj_core_schema_server_object_types.EntityDocumentSetting_[]; // Link to EntityDocumentSettings
-    
-    @Field(() => [mj_core_schema_server_object_types.EntityDocumentRun_])
-    EntityDocumentRunsArray: mj_core_schema_server_object_types.EntityDocumentRun_[]; // Link to EntityDocumentRuns
-    
-    @Field(() => [mj_core_schema_server_object_types.EntityRecordDocument_])
-    EntityRecordDocumentsArray: mj_core_schema_server_object_types.EntityRecordDocument_[]; // Link to EntityRecordDocuments
-    
+
+    @Field(() => [EntityDocumentSetting_])
+    EntityDocumentSettingsArray: EntityDocumentSetting_[]; // Link to EntityDocumentSettings
+
+    @Field(() => [EntityDocumentRun_])
+    EntityDocumentRunsArray: EntityDocumentRun_[]; // Link to EntityDocumentRuns
+
+    @Field(() => [EntityRecordDocument_])
+    EntityRecordDocumentsArray: EntityRecordDocument_[]; // Link to EntityRecordDocuments
+
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for Entity Documents   
+// INPUT TYPE for Entity Documents
 //****************************************************************************
 @InputType()
 export class CreateEntityDocumentInput {
@@ -15441,10 +15444,10 @@ export class CreateEntityDocumentInput {
     @Field(() => Float)
     AbsoluteMatchThreshold: number;
 }
-    
-        
+
+
 //****************************************************************************
-// INPUT TYPE for Entity Documents   
+// INPUT TYPE for Entity Documents
 //****************************************************************************
 @InputType()
 export class UpdateEntityDocumentInput {
@@ -15481,7 +15484,7 @@ export class UpdateEntityDocumentInput {
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
 }
-    
+
 //****************************************************************************
 // RESOLVER for Entity Documents
 //****************************************************************************
@@ -15533,40 +15536,40 @@ export class EntityDocumentResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Entity Documents', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-      
-    @FieldResolver(() => [mj_core_schema_server_object_types.EntityDocumentSetting_])
+
+    @FieldResolver(() => [EntityDocumentSetting_])
     async EntityDocumentSettingsArray(@Root() entitydocument_: EntityDocument_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entity Document Settings', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityDocumentSettings] WHERE [EntityDocumentID]='${entitydocument_.ID}' ` + this.getRowLevelSecurityWhereClause('Entity Document Settings', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Entity Document Settings', await dataSource.query(sSQL));
         return result;
     }
-          
-    @FieldResolver(() => [mj_core_schema_server_object_types.EntityDocumentRun_])
+
+    @FieldResolver(() => [EntityDocumentRun_])
     async EntityDocumentRunsArray(@Root() entitydocument_: EntityDocument_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entity Document Runs', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityDocumentRuns] WHERE [EntityDocumentID]='${entitydocument_.ID}' ` + this.getRowLevelSecurityWhereClause('Entity Document Runs', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Entity Document Runs', await dataSource.query(sSQL));
         return result;
     }
-          
-    @FieldResolver(() => [mj_core_schema_server_object_types.EntityRecordDocument_])
+
+    @FieldResolver(() => [EntityRecordDocument_])
     async EntityRecordDocumentsArray(@Root() entitydocument_: EntityDocument_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entity Record Documents', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityRecordDocuments] WHERE [EntityDocumentID]='${entitydocument_.ID}' ` + this.getRowLevelSecurityWhereClause('Entity Record Documents', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Entity Record Documents', await dataSource.query(sSQL));
         return result;
     }
-        
+
     @Mutation(() => EntityDocument_)
     async CreateEntityDocument(
         @Arg('input', () => CreateEntityDocumentInput) input: CreateEntityDocumentInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
+        @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.CreateRecord('Entity Documents', input, dataSource, userPayload, pubSub)
     }
-        
+
     @Mutation(() => EntityDocument_)
     async UpdateEntityDocument(
         @Arg('input', () => UpdateEntityDocumentInput) input: UpdateEntityDocumentInput,
@@ -15575,80 +15578,80 @@ export class EntityDocumentResolver extends ResolverBase {
     ) {
         return this.UpdateRecord('Entity Documents', input, dataSource, userPayload, pubSub);
     }
-    
+
 }
 
 //****************************************************************************
 // ENTITY CLASS for Data Context Items
 //****************************************************************************
 @ObjectType({ description: 'Data Context Items store information about each item within a Data Context. Each item stores a link to a view, query, or raw sql statement and can optionally cache the JSON representing the last run of that data object as well.' })
-export class DataContextItem_ {  
-    @Field() 
+export class DataContextItem_ {
+    @Field()
     @MaxLength(16)
     ID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     DataContextID: string;
-          
-    @Field({description: 'The type of the item, either "view", "query", "full_entity", "single_record", or "sql"'}) 
+
+    @Field({description: 'The type of the item, either "view", "query", "full_entity", "single_record", or "sql"'})
     @MaxLength(100)
     Type: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(16)
     ViewID?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(16)
     QueryID?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(16)
     EntityID?: string;
-          
-    @Field({nullable: true, description: 'The Primary Key value for the record, only used when Type=\'single_record\''}) 
+
+    @Field({nullable: true, description: 'The Primary Key value for the record, only used when Type=\'single_record\''})
     @MaxLength(900)
     RecordID?: string;
-          
-    @Field({nullable: true, description: 'Only used when Type=sql'}) 
+
+    @Field({nullable: true, description: 'Only used when Type=sql'})
     SQL?: string;
-          
-    @Field({nullable: true, description: 'Optionally used to cache results of an item. This can be used for performance optimization, and also for having snapshots of data for historical comparisons.'}) 
+
+    @Field({nullable: true, description: 'Optionally used to cache results of an item. This can be used for performance optimization, and also for having snapshots of data for historical comparisons.'})
     DataJSON?: string;
-          
-    @Field({nullable: true, description: 'If DataJSON is populated, this field will show the date the the data was captured'}) 
+
+    @Field({nullable: true, description: 'If DataJSON is populated, this field will show the date the the data was captured'})
     @MaxLength(8)
     LastRefreshedAt?: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__CreatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(510)
     DataContext: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(200)
     View?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(510)
     Query?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(510)
     Entity?: string;
-        
+
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for Data Context Items   
+// INPUT TYPE for Data Context Items
 //****************************************************************************
 @InputType()
 export class CreateDataContextItemInput {
@@ -15679,10 +15682,10 @@ export class CreateDataContextItemInput {
     @Field({ nullable: true })
     LastRefreshedAt?: Date;
 }
-    
-        
+
+
 //****************************************************************************
-// INPUT TYPE for Data Context Items   
+// INPUT TYPE for Data Context Items
 //****************************************************************************
 @InputType()
 export class UpdateDataContextItemInput {
@@ -15719,7 +15722,7 @@ export class UpdateDataContextItemInput {
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
 }
-    
+
 //****************************************************************************
 // RESOLVER for Data Context Items
 //****************************************************************************
@@ -15771,16 +15774,16 @@ export class DataContextItemResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Data Context Items', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-    
+
     @Mutation(() => DataContextItem_)
     async CreateDataContextItem(
         @Arg('input', () => CreateDataContextItemInput) input: CreateDataContextItemInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
+        @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.CreateRecord('Data Context Items', input, dataSource, userPayload, pubSub)
     }
-        
+
     @Mutation(() => DataContextItem_)
     async UpdateDataContextItem(
         @Arg('input', () => UpdateDataContextItemInput) input: UpdateDataContextItemInput,
@@ -15789,64 +15792,64 @@ export class DataContextItemResolver extends ResolverBase {
     ) {
         return this.UpdateRecord('Data Context Items', input, dataSource, userPayload, pubSub);
     }
-    
+
     @Mutation(() => DataContextItem_)
     async DeleteDataContextItem(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Data Context Items', key, options, dataSource, userPayload, pubSub);
     }
-    
+
 }
 
 //****************************************************************************
 // ENTITY CLASS for Data Contexts
 //****************************************************************************
 @ObjectType({ description: 'Data Contexts are a primitive within the MemberJunction architecture. They store information about data contexts which are groups of data including views, queries, or raw SQL statements. Data contexts can be used in conversations, reports and more.' })
-export class DataContext_ {  
-    @Field() 
+export class DataContext_ {
+    @Field()
     @MaxLength(16)
     ID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(510)
     Name: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     Description?: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     UserID: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(8)
     LastRefreshedAt?: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__CreatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(200)
     User: string;
-        
-    @Field(() => [mj_core_schema_server_object_types.Report_])
-    ReportsArray: mj_core_schema_server_object_types.Report_[]; // Link to Reports
-    
-    @Field(() => [mj_core_schema_server_object_types.DataContextItem_])
-    DataContextItemsArray: mj_core_schema_server_object_types.DataContextItem_[]; // Link to DataContextItems
-    
-    @Field(() => [mj_core_schema_server_object_types.Conversation_])
-    ConversationsArray: mj_core_schema_server_object_types.Conversation_[]; // Link to Conversations
-    
+
+    @Field(() => [Report_])
+    ReportsArray: Report_[]; // Link to Reports
+
+    @Field(() => [DataContextItem_])
+    DataContextItemsArray: DataContextItem_[]; // Link to DataContextItems
+
+    @Field(() => [Conversation_])
+    ConversationsArray: Conversation_[]; // Link to Conversations
+
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for Data Contexts   
+// INPUT TYPE for Data Contexts
 //****************************************************************************
 @InputType()
 export class CreateDataContextInput {
@@ -15862,10 +15865,10 @@ export class CreateDataContextInput {
     @Field({ nullable: true })
     LastRefreshedAt?: Date;
 }
-    
-        
+
+
 //****************************************************************************
-// INPUT TYPE for Data Contexts   
+// INPUT TYPE for Data Contexts
 //****************************************************************************
 @InputType()
 export class UpdateDataContextInput {
@@ -15887,7 +15890,7 @@ export class UpdateDataContextInput {
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
 }
-    
+
 //****************************************************************************
 // RESOLVER for Data Contexts
 //****************************************************************************
@@ -15939,40 +15942,40 @@ export class DataContextResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Data Contexts', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-      
-    @FieldResolver(() => [mj_core_schema_server_object_types.Report_])
+
+    @FieldResolver(() => [Report_])
     async ReportsArray(@Root() datacontext_: DataContext_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Reports', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwReports] WHERE [DataContextID]='${datacontext_.ID}' ` + this.getRowLevelSecurityWhereClause('Reports', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Reports', await dataSource.query(sSQL));
         return result;
     }
-          
-    @FieldResolver(() => [mj_core_schema_server_object_types.DataContextItem_])
+
+    @FieldResolver(() => [DataContextItem_])
     async DataContextItemsArray(@Root() datacontext_: DataContext_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Data Context Items', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwDataContextItems] WHERE [DataContextID]='${datacontext_.ID}' ` + this.getRowLevelSecurityWhereClause('Data Context Items', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Data Context Items', await dataSource.query(sSQL));
         return result;
     }
-          
-    @FieldResolver(() => [mj_core_schema_server_object_types.Conversation_])
+
+    @FieldResolver(() => [Conversation_])
     async ConversationsArray(@Root() datacontext_: DataContext_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Conversations', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwConversations] WHERE [DataContextID]='${datacontext_.ID}' ` + this.getRowLevelSecurityWhereClause('Conversations', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Conversations', await dataSource.query(sSQL));
         return result;
     }
-        
+
     @Mutation(() => DataContext_)
     async CreateDataContext(
         @Arg('input', () => CreateDataContextInput) input: CreateDataContextInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
+        @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.CreateRecord('Data Contexts', input, dataSource, userPayload, pubSub)
     }
-        
+
     @Mutation(() => DataContext_)
     async UpdateDataContext(
         @Arg('input', () => UpdateDataContextInput) input: UpdateDataContextInput,
@@ -15981,69 +15984,69 @@ export class DataContextResolver extends ResolverBase {
     ) {
         return this.UpdateRecord('Data Contexts', input, dataSource, userPayload, pubSub);
     }
-    
+
     @Mutation(() => DataContext_)
     async DeleteDataContext(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Data Contexts', key, options, dataSource, userPayload, pubSub);
     }
-    
+
 }
 
 //****************************************************************************
 // ENTITY CLASS for User View Categories
 //****************************************************************************
 @ObjectType()
-export class UserViewCategory_ {  
-    @Field() 
+export class UserViewCategory_ {
+    @Field()
     @MaxLength(16)
     ID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(200)
     Name: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     Description?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(16)
     ParentID?: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     EntityID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     UserID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__CreatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(200)
     Parent?: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(200)
     User: string;
-        
-    @Field(() => [mj_core_schema_server_object_types.UserViewCategory_])
-    UserViewCategoriesArray: mj_core_schema_server_object_types.UserViewCategory_[]; // Link to UserViewCategories
-    
-    @Field(() => [mj_core_schema_server_object_types.UserView_])
-    UserViewsArray: mj_core_schema_server_object_types.UserView_[]; // Link to UserViews
-    
+
+    @Field(() => [UserViewCategory_])
+    UserViewCategoriesArray: UserViewCategory_[]; // Link to UserViewCategories
+
+    @Field(() => [UserView_])
+    UserViewsArray: UserView_[]; // Link to UserViews
+
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for User View Categories   
+// INPUT TYPE for User View Categories
 //****************************************************************************
 @InputType()
 export class CreateUserViewCategoryInput {
@@ -16062,10 +16065,10 @@ export class CreateUserViewCategoryInput {
     @Field()
     UserID: string;
 }
-    
-        
+
+
 //****************************************************************************
-// INPUT TYPE for User View Categories   
+// INPUT TYPE for User View Categories
 //****************************************************************************
 @InputType()
 export class UpdateUserViewCategoryInput {
@@ -16090,7 +16093,7 @@ export class UpdateUserViewCategoryInput {
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
 }
-    
+
 //****************************************************************************
 // RESOLVER for User View Categories
 //****************************************************************************
@@ -16142,32 +16145,32 @@ export class UserViewCategoryResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('User View Categories', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-      
-    @FieldResolver(() => [mj_core_schema_server_object_types.UserViewCategory_])
+
+    @FieldResolver(() => [UserViewCategory_])
     async UserViewCategoriesArray(@Root() userviewcategory_: UserViewCategory_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('User View Categories', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwUserViewCategories] WHERE [ParentID]='${userviewcategory_.ID}' ` + this.getRowLevelSecurityWhereClause('User View Categories', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('User View Categories', await dataSource.query(sSQL));
         return result;
     }
-          
-    @FieldResolver(() => [mj_core_schema_server_object_types.UserView_])
+
+    @FieldResolver(() => [UserView_])
     async UserViewsArray(@Root() userviewcategory_: UserViewCategory_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('User Views', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwUserViews] WHERE [CategoryID]='${userviewcategory_.ID}' ` + this.getRowLevelSecurityWhereClause('User Views', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('User Views', await dataSource.query(sSQL));
         return result;
     }
-        
+
     @Mutation(() => UserViewCategory_)
     async CreateUserViewCategory(
         @Arg('input', () => CreateUserViewCategoryInput) input: CreateUserViewCategoryInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
+        @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.CreateRecord('User View Categories', input, dataSource, userPayload, pubSub)
     }
-        
+
     @Mutation(() => UserViewCategory_)
     async UpdateUserViewCategory(
         @Arg('input', () => UpdateUserViewCategoryInput) input: UpdateUserViewCategoryInput,
@@ -16176,65 +16179,65 @@ export class UserViewCategoryResolver extends ResolverBase {
     ) {
         return this.UpdateRecord('User View Categories', input, dataSource, userPayload, pubSub);
     }
-    
+
     @Mutation(() => UserViewCategory_)
     async DeleteUserViewCategory(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('User View Categories', key, options, dataSource, userPayload, pubSub);
     }
-    
+
 }
 
 //****************************************************************************
 // ENTITY CLASS for Dashboard Categories
 //****************************************************************************
 @ObjectType()
-export class DashboardCategory_ {  
-    @Field() 
+export class DashboardCategory_ {
+    @Field()
     @MaxLength(16)
     ID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(200)
     Name: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     Description?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(16)
     ParentID?: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     UserID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__CreatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(200)
     Parent?: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(200)
     User: string;
-        
-    @Field(() => [mj_core_schema_server_object_types.DashboardCategory_])
-    DashboardCategoriesArray: mj_core_schema_server_object_types.DashboardCategory_[]; // Link to DashboardCategories
-    
-    @Field(() => [mj_core_schema_server_object_types.Dashboard_])
-    DashboardsArray: mj_core_schema_server_object_types.Dashboard_[]; // Link to Dashboards
-    
+
+    @Field(() => [DashboardCategory_])
+    DashboardCategoriesArray: DashboardCategory_[]; // Link to DashboardCategories
+
+    @Field(() => [Dashboard_])
+    DashboardsArray: Dashboard_[]; // Link to Dashboards
+
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for Dashboard Categories   
+// INPUT TYPE for Dashboard Categories
 //****************************************************************************
 @InputType()
 export class CreateDashboardCategoryInput {
@@ -16250,10 +16253,10 @@ export class CreateDashboardCategoryInput {
     @Field()
     UserID: string;
 }
-    
-        
+
+
 //****************************************************************************
-// INPUT TYPE for Dashboard Categories   
+// INPUT TYPE for Dashboard Categories
 //****************************************************************************
 @InputType()
 export class UpdateDashboardCategoryInput {
@@ -16275,7 +16278,7 @@ export class UpdateDashboardCategoryInput {
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
 }
-    
+
 //****************************************************************************
 // RESOLVER for Dashboard Categories
 //****************************************************************************
@@ -16327,32 +16330,32 @@ export class DashboardCategoryResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Dashboard Categories', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-      
-    @FieldResolver(() => [mj_core_schema_server_object_types.DashboardCategory_])
+
+    @FieldResolver(() => [DashboardCategory_])
     async DashboardCategoriesArray(@Root() dashboardcategory_: DashboardCategory_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Dashboard Categories', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwDashboardCategories] WHERE [ParentID]='${dashboardcategory_.ID}' ` + this.getRowLevelSecurityWhereClause('Dashboard Categories', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Dashboard Categories', await dataSource.query(sSQL));
         return result;
     }
-          
-    @FieldResolver(() => [mj_core_schema_server_object_types.Dashboard_])
+
+    @FieldResolver(() => [Dashboard_])
     async DashboardsArray(@Root() dashboardcategory_: DashboardCategory_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Dashboards', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwDashboards] WHERE [CategoryID]='${dashboardcategory_.ID}' ` + this.getRowLevelSecurityWhereClause('Dashboards', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Dashboards', await dataSource.query(sSQL));
         return result;
     }
-        
+
     @Mutation(() => DashboardCategory_)
     async CreateDashboardCategory(
         @Arg('input', () => CreateDashboardCategoryInput) input: CreateDashboardCategoryInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
+        @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.CreateRecord('Dashboard Categories', input, dataSource, userPayload, pubSub)
     }
-        
+
     @Mutation(() => DashboardCategory_)
     async UpdateDashboardCategory(
         @Arg('input', () => UpdateDashboardCategoryInput) input: UpdateDashboardCategoryInput,
@@ -16361,65 +16364,65 @@ export class DashboardCategoryResolver extends ResolverBase {
     ) {
         return this.UpdateRecord('Dashboard Categories', input, dataSource, userPayload, pubSub);
     }
-    
+
     @Mutation(() => DashboardCategory_)
     async DeleteDashboardCategory(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Dashboard Categories', key, options, dataSource, userPayload, pubSub);
     }
-    
+
 }
 
 //****************************************************************************
 // ENTITY CLASS for Report Categories
 //****************************************************************************
 @ObjectType()
-export class ReportCategory_ {  
-    @Field() 
+export class ReportCategory_ {
+    @Field()
     @MaxLength(16)
     ID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(200)
     Name: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     Description?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(16)
     ParentID?: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     UserID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__CreatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(200)
     Parent?: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(200)
     User: string;
-        
-    @Field(() => [mj_core_schema_server_object_types.ReportCategory_])
-    ReportCategoriesArray: mj_core_schema_server_object_types.ReportCategory_[]; // Link to ReportCategories
-    
-    @Field(() => [mj_core_schema_server_object_types.Report_])
-    ReportsArray: mj_core_schema_server_object_types.Report_[]; // Link to Reports
-    
+
+    @Field(() => [ReportCategory_])
+    ReportCategoriesArray: ReportCategory_[]; // Link to ReportCategories
+
+    @Field(() => [Report_])
+    ReportsArray: Report_[]; // Link to Reports
+
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for Report Categories   
+// INPUT TYPE for Report Categories
 //****************************************************************************
 @InputType()
 export class CreateReportCategoryInput {
@@ -16435,10 +16438,10 @@ export class CreateReportCategoryInput {
     @Field()
     UserID: string;
 }
-    
-        
+
+
 //****************************************************************************
-// INPUT TYPE for Report Categories   
+// INPUT TYPE for Report Categories
 //****************************************************************************
 @InputType()
 export class UpdateReportCategoryInput {
@@ -16460,7 +16463,7 @@ export class UpdateReportCategoryInput {
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
 }
-    
+
 //****************************************************************************
 // RESOLVER for Report Categories
 //****************************************************************************
@@ -16512,32 +16515,32 @@ export class ReportCategoryResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Report Categories', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-      
-    @FieldResolver(() => [mj_core_schema_server_object_types.ReportCategory_])
+
+    @FieldResolver(() => [ReportCategory_])
     async ReportCategoriesArray(@Root() reportcategory_: ReportCategory_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Report Categories', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwReportCategories] WHERE [ParentID]='${reportcategory_.ID}' ` + this.getRowLevelSecurityWhereClause('Report Categories', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Report Categories', await dataSource.query(sSQL));
         return result;
     }
-          
-    @FieldResolver(() => [mj_core_schema_server_object_types.Report_])
+
+    @FieldResolver(() => [Report_])
     async ReportsArray(@Root() reportcategory_: ReportCategory_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Reports', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwReports] WHERE [CategoryID]='${reportcategory_.ID}' ` + this.getRowLevelSecurityWhereClause('Reports', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Reports', await dataSource.query(sSQL));
         return result;
     }
-        
+
     @Mutation(() => ReportCategory_)
     async CreateReportCategory(
         @Arg('input', () => CreateReportCategoryInput) input: CreateReportCategoryInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
+        @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.CreateRecord('Report Categories', input, dataSource, userPayload, pubSub)
     }
-        
+
     @Mutation(() => ReportCategory_)
     async UpdateReportCategory(
         @Arg('input', () => UpdateReportCategoryInput) input: UpdateReportCategoryInput,
@@ -16546,60 +16549,60 @@ export class ReportCategoryResolver extends ResolverBase {
     ) {
         return this.UpdateRecord('Report Categories', input, dataSource, userPayload, pubSub);
     }
-    
+
     @Mutation(() => ReportCategory_)
     async DeleteReportCategory(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Report Categories', key, options, dataSource, userPayload, pubSub);
     }
-    
+
 }
 
 //****************************************************************************
 // ENTITY CLASS for File Storage Providers
 //****************************************************************************
 @ObjectType()
-export class FileStorageProvider_ {  
-    @Field() 
+export class FileStorageProvider_ {
+    @Field()
     @MaxLength(16)
     ID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(100)
     Name: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     Description?: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(200)
     ServerDriverKey: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(200)
     ClientDriverKey: string;
-          
-    @Field(() => Int) 
+
+    @Field(() => Int)
     Priority: number;
-          
-    @Field(() => Boolean) 
+
+    @Field(() => Boolean)
     IsActive: boolean;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__CreatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-        
-    @Field(() => [mj_core_schema_server_object_types.File_])
-    FilesArray: mj_core_schema_server_object_types.File_[]; // Link to Files
-    
+
+    @Field(() => [File_])
+    FilesArray: File_[]; // Link to Files
+
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for File Storage Providers   
+// INPUT TYPE for File Storage Providers
 //****************************************************************************
 @InputType()
 export class CreateFileStorageProviderInput {
@@ -16621,10 +16624,10 @@ export class CreateFileStorageProviderInput {
     @Field(() => Boolean)
     IsActive: boolean;
 }
-    
-        
+
+
 //****************************************************************************
-// INPUT TYPE for File Storage Providers   
+// INPUT TYPE for File Storage Providers
 //****************************************************************************
 @InputType()
 export class UpdateFileStorageProviderInput {
@@ -16652,7 +16655,7 @@ export class UpdateFileStorageProviderInput {
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
 }
-    
+
 //****************************************************************************
 // RESOLVER for File Storage Providers
 //****************************************************************************
@@ -16704,24 +16707,24 @@ export class FileStorageProviderResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('File Storage Providers', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-      
-    @FieldResolver(() => [mj_core_schema_server_object_types.File_])
+
+    @FieldResolver(() => [File_])
     async FilesArray(@Root() filestorageprovider_: FileStorageProvider_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Files', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwFiles] WHERE [ProviderID]='${filestorageprovider_.ID}' ` + this.getRowLevelSecurityWhereClause('Files', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Files', await dataSource.query(sSQL));
         return result;
     }
-        
+
     @Mutation(() => FileStorageProvider_)
     async CreateFileStorageProvider(
         @Arg('input', () => CreateFileStorageProviderInput) input: CreateFileStorageProviderInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
+        @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.CreateRecord('File Storage Providers', input, dataSource, userPayload, pubSub)
     }
-        
+
     @Mutation(() => FileStorageProvider_)
     async UpdateFileStorageProvider(
         @Arg('input', () => UpdateFileStorageProviderInput) input: UpdateFileStorageProviderInput,
@@ -16730,68 +16733,68 @@ export class FileStorageProviderResolver extends ResolverBase {
     ) {
         return this.UpdateRecord('File Storage Providers', input, dataSource, userPayload, pubSub);
     }
-    
+
 }
 
 //****************************************************************************
 // ENTITY CLASS for Files
 //****************************************************************************
 @ObjectType()
-export class File_ {  
-    @Field() 
+export class File_ {
+    @Field()
     @MaxLength(16)
     ID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(1000)
     Name: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     Description?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(16)
     CategoryID?: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     ProviderID: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(100)
     ContentType?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(1000)
     ProviderKey?: string;
-          
-    @Field({description: 'Pending, Uploading, Uploaded, Deleting, Deleted'}) 
+
+    @Field({description: 'Pending, Uploading, Uploaded, Deleting, Deleted'})
     @MaxLength(40)
     Status: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__CreatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(510)
     Category?: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(100)
     Provider: string;
-        
-    @Field(() => [mj_core_schema_server_object_types.FileEntityRecordLink_])
-    FileEntityRecordLinksArray: mj_core_schema_server_object_types.FileEntityRecordLink_[]; // Link to FileEntityRecordLinks
-    
+
+    @Field(() => [FileEntityRecordLink_])
+    FileEntityRecordLinksArray: FileEntityRecordLink_[]; // Link to FileEntityRecordLinks
+
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for Files   
+// INPUT TYPE for Files
 //****************************************************************************
 @InputType()
 export class CreateFileInput {
@@ -16816,10 +16819,10 @@ export class CreateFileInput {
     @Field()
     Status: string;
 }
-    
-        
+
+
 //****************************************************************************
-// INPUT TYPE for Files   
+// INPUT TYPE for Files
 //****************************************************************************
 @InputType()
 export class UpdateFileInput {
@@ -16850,7 +16853,7 @@ export class UpdateFileInput {
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
 }
-    
+
 //****************************************************************************
 // RESOLVER for Files
 //****************************************************************************
@@ -16902,24 +16905,24 @@ export class FileResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Files', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-      
-    @FieldResolver(() => [mj_core_schema_server_object_types.FileEntityRecordLink_])
+
+    @FieldResolver(() => [FileEntityRecordLink_])
     async FileEntityRecordLinksArray(@Root() file_: File_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('File Entity Record Links', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwFileEntityRecordLinks] WHERE [FileID]='${file_.ID}' ` + this.getRowLevelSecurityWhereClause('File Entity Record Links', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('File Entity Record Links', await dataSource.query(sSQL));
         return result;
     }
-        
+
     @Mutation(() => File_)
     async CreateFile(
         @Arg('input', () => CreateFileInput) input: CreateFileInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
+        @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.CreateRecord('Files', input, dataSource, userPayload, pubSub)
     }
-        
+
     @Mutation(() => File_)
     async UpdateFile(
         @Arg('input', () => UpdateFileInput) input: UpdateFileInput,
@@ -16928,57 +16931,57 @@ export class FileResolver extends ResolverBase {
     ) {
         return this.UpdateRecord('Files', input, dataSource, userPayload, pubSub);
     }
-    
+
     @Mutation(() => File_)
     async DeleteFile(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Files', key, options, dataSource, userPayload, pubSub);
     }
-    
+
 }
 
 //****************************************************************************
 // ENTITY CLASS for File Categories
 //****************************************************************************
 @ObjectType()
-export class FileCategory_ {  
-    @Field() 
+export class FileCategory_ {
+    @Field()
     @MaxLength(16)
     ID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(510)
     Name: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(16)
     ParentID?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     Description?: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__CreatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(510)
     Parent?: string;
-        
-    @Field(() => [mj_core_schema_server_object_types.File_])
-    FilesArray: mj_core_schema_server_object_types.File_[]; // Link to Files
-    
-    @Field(() => [mj_core_schema_server_object_types.FileCategory_])
-    FileCategoriesArray: mj_core_schema_server_object_types.FileCategory_[]; // Link to FileCategories
-    
+
+    @Field(() => [File_])
+    FilesArray: File_[]; // Link to Files
+
+    @Field(() => [FileCategory_])
+    FileCategoriesArray: FileCategory_[]; // Link to FileCategories
+
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for File Categories   
+// INPUT TYPE for File Categories
 //****************************************************************************
 @InputType()
 export class CreateFileCategoryInput {
@@ -16991,10 +16994,10 @@ export class CreateFileCategoryInput {
     @Field({ nullable: true })
     Description?: string;
 }
-    
-        
+
+
 //****************************************************************************
-// INPUT TYPE for File Categories   
+// INPUT TYPE for File Categories
 //****************************************************************************
 @InputType()
 export class UpdateFileCategoryInput {
@@ -17013,7 +17016,7 @@ export class UpdateFileCategoryInput {
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
 }
-    
+
 //****************************************************************************
 // RESOLVER for File Categories
 //****************************************************************************
@@ -17065,32 +17068,32 @@ export class FileCategoryResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('File Categories', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-      
-    @FieldResolver(() => [mj_core_schema_server_object_types.File_])
+
+    @FieldResolver(() => [File_])
     async FilesArray(@Root() filecategory_: FileCategory_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Files', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwFiles] WHERE [CategoryID]='${filecategory_.ID}' ` + this.getRowLevelSecurityWhereClause('Files', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Files', await dataSource.query(sSQL));
         return result;
     }
-          
-    @FieldResolver(() => [mj_core_schema_server_object_types.FileCategory_])
+
+    @FieldResolver(() => [FileCategory_])
     async FileCategoriesArray(@Root() filecategory_: FileCategory_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('File Categories', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwFileCategories] WHERE [ParentID]='${filecategory_.ID}' ` + this.getRowLevelSecurityWhereClause('File Categories', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('File Categories', await dataSource.query(sSQL));
         return result;
     }
-        
+
     @Mutation(() => FileCategory_)
     async CreateFileCategory(
         @Arg('input', () => CreateFileCategoryInput) input: CreateFileCategoryInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
+        @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.CreateRecord('File Categories', input, dataSource, userPayload, pubSub)
     }
-        
+
     @Mutation(() => FileCategory_)
     async UpdateFileCategory(
         @Arg('input', () => UpdateFileCategoryInput) input: UpdateFileCategoryInput,
@@ -17099,56 +17102,56 @@ export class FileCategoryResolver extends ResolverBase {
     ) {
         return this.UpdateRecord('File Categories', input, dataSource, userPayload, pubSub);
     }
-    
+
     @Mutation(() => FileCategory_)
     async DeleteFileCategory(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('File Categories', key, options, dataSource, userPayload, pubSub);
     }
-    
+
 }
 
 //****************************************************************************
 // ENTITY CLASS for File Entity Record Links
 //****************************************************************************
 @ObjectType()
-export class FileEntityRecordLink_ {  
-    @Field() 
+export class FileEntityRecordLink_ {
+    @Field()
     @MaxLength(16)
     ID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     FileID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     EntityID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(1500)
     RecordID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__CreatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(1000)
     File: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(510)
     Entity: string;
-        
+
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for File Entity Record Links   
+// INPUT TYPE for File Entity Record Links
 //****************************************************************************
 @InputType()
 export class CreateFileEntityRecordLinkInput {
@@ -17161,10 +17164,10 @@ export class CreateFileEntityRecordLinkInput {
     @Field()
     RecordID: string;
 }
-    
-        
+
+
 //****************************************************************************
-// INPUT TYPE for File Entity Record Links   
+// INPUT TYPE for File Entity Record Links
 //****************************************************************************
 @InputType()
 export class UpdateFileEntityRecordLinkInput {
@@ -17183,7 +17186,7 @@ export class UpdateFileEntityRecordLinkInput {
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
 }
-    
+
 //****************************************************************************
 // RESOLVER for File Entity Record Links
 //****************************************************************************
@@ -17235,16 +17238,16 @@ export class FileEntityRecordLinkResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('File Entity Record Links', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-    
+
     @Mutation(() => FileEntityRecordLink_)
     async CreateFileEntityRecordLink(
         @Arg('input', () => CreateFileEntityRecordLinkInput) input: CreateFileEntityRecordLinkInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
+        @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.CreateRecord('File Entity Record Links', input, dataSource, userPayload, pubSub)
     }
-        
+
     @Mutation(() => FileEntityRecordLink_)
     async UpdateFileEntityRecordLink(
         @Arg('input', () => UpdateFileEntityRecordLinkInput) input: UpdateFileEntityRecordLinkInput,
@@ -17253,61 +17256,61 @@ export class FileEntityRecordLinkResolver extends ResolverBase {
     ) {
         return this.UpdateRecord('File Entity Record Links', input, dataSource, userPayload, pubSub);
     }
-    
+
 }
 
 //****************************************************************************
 // ENTITY CLASS for Version Installations
 //****************************************************************************
 @ObjectType()
-export class VersionInstallation_ {  
-    @Field() 
+export class VersionInstallation_ {
+    @Field()
     @MaxLength(16)
     ID: string;
-          
-    @Field(() => Int) 
+
+    @Field(() => Int)
     MajorVersion: number;
-          
-    @Field(() => Int) 
+
+    @Field(() => Int)
     MinorVersion: number;
-          
-    @Field(() => Int) 
+
+    @Field(() => Int)
     PatchVersion: number;
-          
-    @Field({nullable: true, description: 'What type of installation was applied'}) 
+
+    @Field({nullable: true, description: 'What type of installation was applied'})
     @MaxLength(40)
     Type?: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(8)
     InstalledAt: Date;
-          
-    @Field({description: 'Pending, Complete, Failed'}) 
+
+    @Field({description: 'Pending, Complete, Failed'})
     @MaxLength(40)
     Status: string;
-          
-    @Field({nullable: true, description: 'Any logging that was saved from the installation process'}) 
+
+    @Field({nullable: true, description: 'Any logging that was saved from the installation process'})
     InstallLog?: string;
-          
-    @Field({nullable: true, description: 'Optional, comments the administrator wants to save for each installed version'}) 
+
+    @Field({nullable: true, description: 'Optional, comments the administrator wants to save for each installed version'})
     Comments?: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__CreatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(604)
     CompleteVersion?: string;
-        
+
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for Version Installations   
+// INPUT TYPE for Version Installations
 //****************************************************************************
 @InputType()
 export class CreateVersionInstallationInput {
@@ -17335,10 +17338,10 @@ export class CreateVersionInstallationInput {
     @Field({ nullable: true })
     Comments?: string;
 }
-    
-        
+
+
 //****************************************************************************
-// INPUT TYPE for Version Installations   
+// INPUT TYPE for Version Installations
 //****************************************************************************
 @InputType()
 export class UpdateVersionInstallationInput {
@@ -17372,7 +17375,7 @@ export class UpdateVersionInstallationInput {
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
 }
-    
+
 //****************************************************************************
 // RESOLVER for Version Installations
 //****************************************************************************
@@ -17424,16 +17427,16 @@ export class VersionInstallationResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Version Installations', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-    
+
     @Mutation(() => VersionInstallation_)
     async CreateVersionInstallation(
         @Arg('input', () => CreateVersionInstallationInput) input: CreateVersionInstallationInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
+        @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.CreateRecord('Version Installations', input, dataSource, userPayload, pubSub)
     }
-        
+
     @Mutation(() => VersionInstallation_)
     async UpdateVersionInstallation(
         @Arg('input', () => UpdateVersionInstallationInput) input: UpdateVersionInstallationInput,
@@ -17442,69 +17445,69 @@ export class VersionInstallationResolver extends ResolverBase {
     ) {
         return this.UpdateRecord('Version Installations', input, dataSource, userPayload, pubSub);
     }
-    
+
 }
 
 //****************************************************************************
 // ENTITY CLASS for Duplicate Run Detail Matches
 //****************************************************************************
 @ObjectType()
-export class DuplicateRunDetailMatch_ {  
-    @Field() 
+export class DuplicateRunDetailMatch_ {
+    @Field()
     @MaxLength(16)
     ID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     DuplicateRunDetailID: string;
-          
-    @Field({description: 'Either Vector or SP'}) 
+
+    @Field({description: 'Either Vector or SP'})
     @MaxLength(40)
     MatchSource: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(1000)
     MatchRecordID: string;
-          
-    @Field(() => Float, {description: 'Value between 0 and 1 designating the computed probability of a match'}) 
+
+    @Field(() => Float, {description: 'Value between 0 and 1 designating the computed probability of a match'})
     MatchProbability: number;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(8)
     MatchedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(40)
     Action: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(40)
     ApprovalStatus: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(16)
     RecordMergeLogID?: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(40)
     MergeStatus: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(8)
     MergedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__CreatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-        
+
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for Duplicate Run Detail Matches   
+// INPUT TYPE for Duplicate Run Detail Matches
 //****************************************************************************
 @InputType()
 export class CreateDuplicateRunDetailMatchInput {
@@ -17538,10 +17541,10 @@ export class CreateDuplicateRunDetailMatchInput {
     @Field()
     MergedAt: Date;
 }
-    
-        
+
+
 //****************************************************************************
-// INPUT TYPE for Duplicate Run Detail Matches   
+// INPUT TYPE for Duplicate Run Detail Matches
 //****************************************************************************
 @InputType()
 export class UpdateDuplicateRunDetailMatchInput {
@@ -17581,7 +17584,7 @@ export class UpdateDuplicateRunDetailMatchInput {
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
 }
-    
+
 //****************************************************************************
 // RESOLVER for Duplicate Run Detail Matches
 //****************************************************************************
@@ -17633,16 +17636,16 @@ export class DuplicateRunDetailMatchResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Duplicate Run Detail Matches', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-    
+
     @Mutation(() => DuplicateRunDetailMatch_)
     async CreateDuplicateRunDetailMatch(
         @Arg('input', () => CreateDuplicateRunDetailMatchInput) input: CreateDuplicateRunDetailMatchInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
+        @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.CreateRecord('Duplicate Run Detail Matches', input, dataSource, userPayload, pubSub)
     }
-        
+
     @Mutation(() => DuplicateRunDetailMatch_)
     async UpdateDuplicateRunDetailMatch(
         @Arg('input', () => UpdateDuplicateRunDetailMatchInput) input: UpdateDuplicateRunDetailMatchInput,
@@ -17651,48 +17654,48 @@ export class DuplicateRunDetailMatchResolver extends ResolverBase {
     ) {
         return this.UpdateRecord('Duplicate Run Detail Matches', input, dataSource, userPayload, pubSub);
     }
-    
+
 }
 
 //****************************************************************************
 // ENTITY CLASS for Entity Document Settings
 //****************************************************************************
 @ObjectType()
-export class EntityDocumentSetting_ {  
-    @Field() 
+export class EntityDocumentSetting_ {
+    @Field()
     @MaxLength(16)
     ID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     EntityDocumentID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(200)
     Name: string;
-          
-    @Field() 
+
+    @Field()
     Value: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     Comments?: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__CreatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(500)
     EntityDocument: string;
-        
+
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for Entity Document Settings   
+// INPUT TYPE for Entity Document Settings
 //****************************************************************************
 @InputType()
 export class CreateEntityDocumentSettingInput {
@@ -17708,10 +17711,10 @@ export class CreateEntityDocumentSettingInput {
     @Field({ nullable: true })
     Comments?: string;
 }
-    
-        
+
+
 //****************************************************************************
-// INPUT TYPE for Entity Document Settings   
+// INPUT TYPE for Entity Document Settings
 //****************************************************************************
 @InputType()
 export class UpdateEntityDocumentSettingInput {
@@ -17733,7 +17736,7 @@ export class UpdateEntityDocumentSettingInput {
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
 }
-    
+
 //****************************************************************************
 // RESOLVER for Entity Document Settings
 //****************************************************************************
@@ -17785,16 +17788,16 @@ export class EntityDocumentSettingResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Entity Document Settings', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-    
+
     @Mutation(() => EntityDocumentSetting_)
     async CreateEntityDocumentSetting(
         @Arg('input', () => CreateEntityDocumentSettingInput) input: CreateEntityDocumentSettingInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
+        @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.CreateRecord('Entity Document Settings', input, dataSource, userPayload, pubSub)
     }
-        
+
     @Mutation(() => EntityDocumentSetting_)
     async UpdateEntityDocumentSetting(
         @Arg('input', () => UpdateEntityDocumentSettingInput) input: UpdateEntityDocumentSettingInput,
@@ -17803,48 +17806,48 @@ export class EntityDocumentSettingResolver extends ResolverBase {
     ) {
         return this.UpdateRecord('Entity Document Settings', input, dataSource, userPayload, pubSub);
     }
-    
+
 }
 
 //****************************************************************************
 // ENTITY CLASS for Entity Settings
 //****************************************************************************
 @ObjectType()
-export class EntitySetting_ {  
-    @Field() 
+export class EntitySetting_ {
+    @Field()
     @MaxLength(16)
     ID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     EntityID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(200)
     Name: string;
-          
-    @Field() 
+
+    @Field()
     Value: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     Comments?: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__CreatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(510)
     Entity: string;
-        
+
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for Entity Settings   
+// INPUT TYPE for Entity Settings
 //****************************************************************************
 @InputType()
 export class CreateEntitySettingInput {
@@ -17860,10 +17863,10 @@ export class CreateEntitySettingInput {
     @Field({ nullable: true })
     Comments?: string;
 }
-    
-        
+
+
 //****************************************************************************
-// INPUT TYPE for Entity Settings   
+// INPUT TYPE for Entity Settings
 //****************************************************************************
 @InputType()
 export class UpdateEntitySettingInput {
@@ -17885,7 +17888,7 @@ export class UpdateEntitySettingInput {
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
 }
-    
+
 //****************************************************************************
 // RESOLVER for Entity Settings
 //****************************************************************************
@@ -17937,16 +17940,16 @@ export class EntitySettingResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Entity Settings', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-    
+
     @Mutation(() => EntitySetting_)
     async CreateEntitySetting(
         @Arg('input', () => CreateEntitySettingInput) input: CreateEntitySettingInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
+        @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.CreateRecord('Entity Settings', input, dataSource, userPayload, pubSub)
     }
-        
+
     @Mutation(() => EntitySetting_)
     async UpdateEntitySetting(
         @Arg('input', () => UpdateEntitySettingInput) input: UpdateEntitySettingInput,
@@ -17955,87 +17958,87 @@ export class EntitySettingResolver extends ResolverBase {
     ) {
         return this.UpdateRecord('Entity Settings', input, dataSource, userPayload, pubSub);
     }
-    
+
 }
 
 //****************************************************************************
 // ENTITY CLASS for Duplicate Runs
 //****************************************************************************
 @ObjectType()
-export class DuplicateRun_ {  
-    @Field() 
+export class DuplicateRun_ {
+    @Field()
     @MaxLength(16)
     ID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     EntityID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     StartedByUserID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     SourceListID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(8)
     StartedAt: Date;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(8)
     EndedAt?: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(40)
     ApprovalStatus: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     ApprovalComments?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(16)
     ApprovedByUserID?: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(40)
     ProcessingStatus: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     ProcessingErrorMessage?: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__CreatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(510)
     Entity: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(200)
     StartedByUser: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(200)
     SourceList: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(200)
     ApprovedByUser?: string;
-        
-    @Field(() => [mj_core_schema_server_object_types.DuplicateRunDetail_])
-    DuplicateRunDetailsArray: mj_core_schema_server_object_types.DuplicateRunDetail_[]; // Link to DuplicateRunDetails
-    
+
+    @Field(() => [DuplicateRunDetail_])
+    DuplicateRunDetailsArray: DuplicateRunDetail_[]; // Link to DuplicateRunDetails
+
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for Duplicate Runs   
+// INPUT TYPE for Duplicate Runs
 //****************************************************************************
 @InputType()
 export class CreateDuplicateRunInput {
@@ -18069,10 +18072,10 @@ export class CreateDuplicateRunInput {
     @Field({ nullable: true })
     ProcessingErrorMessage?: string;
 }
-    
-        
+
+
 //****************************************************************************
-// INPUT TYPE for Duplicate Runs   
+// INPUT TYPE for Duplicate Runs
 //****************************************************************************
 @InputType()
 export class UpdateDuplicateRunInput {
@@ -18112,7 +18115,7 @@ export class UpdateDuplicateRunInput {
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
 }
-    
+
 //****************************************************************************
 // RESOLVER for Duplicate Runs
 //****************************************************************************
@@ -18164,24 +18167,24 @@ export class DuplicateRunResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Duplicate Runs', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-      
-    @FieldResolver(() => [mj_core_schema_server_object_types.DuplicateRunDetail_])
+
+    @FieldResolver(() => [DuplicateRunDetail_])
     async DuplicateRunDetailsArray(@Root() duplicaterun_: DuplicateRun_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Duplicate Run Details', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwDuplicateRunDetails] WHERE [DuplicateRunID]='${duplicaterun_.ID}' ` + this.getRowLevelSecurityWhereClause('Duplicate Run Details', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Duplicate Run Details', await dataSource.query(sSQL));
         return result;
     }
-        
+
     @Mutation(() => DuplicateRun_)
     async CreateDuplicateRun(
         @Arg('input', () => CreateDuplicateRunInput) input: CreateDuplicateRunInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
+        @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.CreateRecord('Duplicate Runs', input, dataSource, userPayload, pubSub)
     }
-        
+
     @Mutation(() => DuplicateRun_)
     async UpdateDuplicateRun(
         @Arg('input', () => UpdateDuplicateRunInput) input: UpdateDuplicateRunInput,
@@ -18190,58 +18193,58 @@ export class DuplicateRunResolver extends ResolverBase {
     ) {
         return this.UpdateRecord('Duplicate Runs', input, dataSource, userPayload, pubSub);
     }
-    
+
 }
 
 //****************************************************************************
 // ENTITY CLASS for Duplicate Run Details
 //****************************************************************************
 @ObjectType()
-export class DuplicateRunDetail_ {  
-    @Field() 
+export class DuplicateRunDetail_ {
+    @Field()
     @MaxLength(16)
     ID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     DuplicateRunID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(1000)
     RecordID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(40)
     MatchStatus: string;
-          
-    @Field({nullable: true, description: 'If MatchStatus=Skipped, this field can be used to store the reason why the record was skipped'}) 
+
+    @Field({nullable: true, description: 'If MatchStatus=Skipped, this field can be used to store the reason why the record was skipped'})
     SkippedReason?: string;
-          
-    @Field({nullable: true, description: 'If MatchStatus=\'Error\' this field can be used to track the error from that phase of the process for logging/diagnostics.'}) 
+
+    @Field({nullable: true, description: 'If MatchStatus=\'Error\' this field can be used to track the error from that phase of the process for logging/diagnostics.'})
     MatchErrorMessage?: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(40)
     MergeStatus: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     MergeErrorMessage?: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__CreatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-        
-    @Field(() => [mj_core_schema_server_object_types.DuplicateRunDetailMatch_])
-    DuplicateRunDetailMatchesArray: mj_core_schema_server_object_types.DuplicateRunDetailMatch_[]; // Link to DuplicateRunDetailMatches
-    
+
+    @Field(() => [DuplicateRunDetailMatch_])
+    DuplicateRunDetailMatchesArray: DuplicateRunDetailMatch_[]; // Link to DuplicateRunDetailMatches
+
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for Duplicate Run Details   
+// INPUT TYPE for Duplicate Run Details
 //****************************************************************************
 @InputType()
 export class CreateDuplicateRunDetailInput {
@@ -18266,10 +18269,10 @@ export class CreateDuplicateRunDetailInput {
     @Field({ nullable: true })
     MergeErrorMessage?: string;
 }
-    
-        
+
+
 //****************************************************************************
-// INPUT TYPE for Duplicate Run Details   
+// INPUT TYPE for Duplicate Run Details
 //****************************************************************************
 @InputType()
 export class UpdateDuplicateRunDetailInput {
@@ -18300,7 +18303,7 @@ export class UpdateDuplicateRunDetailInput {
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
 }
-    
+
 //****************************************************************************
 // RESOLVER for Duplicate Run Details
 //****************************************************************************
@@ -18352,24 +18355,24 @@ export class DuplicateRunDetailResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Duplicate Run Details', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-      
-    @FieldResolver(() => [mj_core_schema_server_object_types.DuplicateRunDetailMatch_])
+
+    @FieldResolver(() => [DuplicateRunDetailMatch_])
     async DuplicateRunDetailMatchesArray(@Root() duplicaterundetail_: DuplicateRunDetail_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Duplicate Run Detail Matches', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwDuplicateRunDetailMatches] WHERE [DuplicateRunDetailID]='${duplicaterundetail_.ID}' ` + this.getRowLevelSecurityWhereClause('Duplicate Run Detail Matches', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Duplicate Run Detail Matches', await dataSource.query(sSQL));
         return result;
     }
-        
+
     @Mutation(() => DuplicateRunDetail_)
     async CreateDuplicateRunDetail(
         @Arg('input', () => CreateDuplicateRunDetailInput) input: CreateDuplicateRunDetailInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
+        @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.CreateRecord('Duplicate Run Details', input, dataSource, userPayload, pubSub)
     }
-        
+
     @Mutation(() => DuplicateRunDetail_)
     async UpdateDuplicateRunDetail(
         @Arg('input', () => UpdateDuplicateRunDetailInput) input: UpdateDuplicateRunDetailInput,
@@ -18378,44 +18381,44 @@ export class DuplicateRunDetailResolver extends ResolverBase {
     ) {
         return this.UpdateRecord('Duplicate Run Details', input, dataSource, userPayload, pubSub);
     }
-    
+
 }
 
 //****************************************************************************
 // ENTITY CLASS for Application Settings
 //****************************************************************************
 @ObjectType()
-export class ApplicationSetting_ {  
-    @Field() 
+export class ApplicationSetting_ {
+    @Field()
     @MaxLength(16)
     ID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     ApplicationID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(200)
     Name: string;
-          
-    @Field() 
+
+    @Field()
     Value: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     Comments?: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__CreatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-        
+
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for Application Settings   
+// INPUT TYPE for Application Settings
 //****************************************************************************
 @InputType()
 export class CreateApplicationSettingInput {
@@ -18431,10 +18434,10 @@ export class CreateApplicationSettingInput {
     @Field({ nullable: true })
     Comments?: string;
 }
-    
-        
+
+
 //****************************************************************************
-// INPUT TYPE for Application Settings   
+// INPUT TYPE for Application Settings
 //****************************************************************************
 @InputType()
 export class UpdateApplicationSettingInput {
@@ -18456,7 +18459,7 @@ export class UpdateApplicationSettingInput {
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
 }
-    
+
 //****************************************************************************
 // RESOLVER for Application Settings
 //****************************************************************************
@@ -18508,16 +18511,16 @@ export class ApplicationSettingResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Application Settings', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-    
+
     @Mutation(() => ApplicationSetting_)
     async CreateApplicationSetting(
         @Arg('input', () => CreateApplicationSettingInput) input: CreateApplicationSettingInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
+        @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.CreateRecord('Application Settings', input, dataSource, userPayload, pubSub)
     }
-        
+
     @Mutation(() => ApplicationSetting_)
     async UpdateApplicationSetting(
         @Arg('input', () => UpdateApplicationSettingInput) input: UpdateApplicationSettingInput,
@@ -18526,61 +18529,61 @@ export class ApplicationSettingResolver extends ResolverBase {
     ) {
         return this.UpdateRecord('Application Settings', input, dataSource, userPayload, pubSub);
     }
-    
+
     @Mutation(() => ApplicationSetting_)
     async DeleteApplicationSetting(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Application Settings', key, options, dataSource, userPayload, pubSub);
     }
-    
+
 }
 
 //****************************************************************************
 // ENTITY CLASS for Action Categories
 //****************************************************************************
 @ObjectType({ description: 'Organizes actions into categories, including name, description, and optional parent category for hierarchy.' })
-export class ActionCategory_ {  
-    @Field() 
+export class ActionCategory_ {
+    @Field()
     @MaxLength(16)
     ID: string;
-          
-    @Field({description: 'Name of the action category.'}) 
+
+    @Field({description: 'Name of the action category.'})
     @MaxLength(510)
     Name: string;
-          
-    @Field({nullable: true, description: 'Description of the action category.'}) 
+
+    @Field({nullable: true, description: 'Description of the action category.'})
     Description?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(16)
     ParentID?: string;
-          
-    @Field({description: 'Status of the action category (Pending, Active, Disabled).'}) 
+
+    @Field({description: 'Status of the action category (Pending, Active, Disabled).'})
     @MaxLength(40)
     Status: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__CreatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(510)
     Parent?: string;
-        
-    @Field(() => [mj_core_schema_server_object_types.ActionCategory_])
-    ActionCategoriesArray: mj_core_schema_server_object_types.ActionCategory_[]; // Link to ActionCategories
-    
-    @Field(() => [mj_core_schema_server_object_types.Action_])
-    ActionsArray: mj_core_schema_server_object_types.Action_[]; // Link to Actions
-    
+
+    @Field(() => [ActionCategory_])
+    ActionCategoriesArray: ActionCategory_[]; // Link to ActionCategories
+
+    @Field(() => [Action_])
+    ActionsArray: Action_[]; // Link to Actions
+
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for Action Categories   
+// INPUT TYPE for Action Categories
 //****************************************************************************
 @InputType()
 export class CreateActionCategoryInput {
@@ -18596,10 +18599,10 @@ export class CreateActionCategoryInput {
     @Field()
     Status: string;
 }
-    
-        
+
+
 //****************************************************************************
-// INPUT TYPE for Action Categories   
+// INPUT TYPE for Action Categories
 //****************************************************************************
 @InputType()
 export class UpdateActionCategoryInput {
@@ -18621,7 +18624,7 @@ export class UpdateActionCategoryInput {
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
 }
-    
+
 //****************************************************************************
 // RESOLVER for Action Categories
 //****************************************************************************
@@ -18673,32 +18676,32 @@ export class ActionCategoryResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Action Categories', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-      
-    @FieldResolver(() => [mj_core_schema_server_object_types.ActionCategory_])
+
+    @FieldResolver(() => [ActionCategory_])
     async ActionCategoriesArray(@Root() actioncategory_: ActionCategory_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Action Categories', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionCategories] WHERE [ParentID]='${actioncategory_.ID}' ` + this.getRowLevelSecurityWhereClause('Action Categories', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Action Categories', await dataSource.query(sSQL));
         return result;
     }
-          
-    @FieldResolver(() => [mj_core_schema_server_object_types.Action_])
+
+    @FieldResolver(() => [Action_])
     async ActionsArray(@Root() actioncategory_: ActionCategory_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Actions', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActions] WHERE [CategoryID]='${actioncategory_.ID}' ` + this.getRowLevelSecurityWhereClause('Actions', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Actions', await dataSource.query(sSQL));
         return result;
     }
-        
+
     @Mutation(() => ActionCategory_)
     async CreateActionCategory(
         @Arg('input', () => CreateActionCategoryInput) input: CreateActionCategoryInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
+        @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.CreateRecord('Action Categories', input, dataSource, userPayload, pubSub)
     }
-        
+
     @Mutation(() => ActionCategory_)
     async UpdateActionCategory(
         @Arg('input', () => UpdateActionCategoryInput) input: UpdateActionCategoryInput,
@@ -18707,65 +18710,65 @@ export class ActionCategoryResolver extends ResolverBase {
     ) {
         return this.UpdateRecord('Action Categories', input, dataSource, userPayload, pubSub);
     }
-    
+
     @Mutation(() => ActionCategory_)
     async DeleteActionCategory(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Action Categories', key, options, dataSource, userPayload, pubSub);
     }
-    
+
 }
 
 //****************************************************************************
 // ENTITY CLASS for Entity Actions
 //****************************************************************************
 @ObjectType({ description: 'Links entities to actions - this is the main place where you define the actions that part of, or available, for a given entity.' })
-export class EntityAction_ {  
-    @Field() 
+export class EntityAction_ {
+    @Field()
     @MaxLength(16)
     EntityID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     ActionID: string;
-          
-    @Field({description: 'Status of the entity action (Pending, Active, Disabled).'}) 
+
+    @Field({description: 'Status of the entity action (Pending, Active, Disabled).'})
     @MaxLength(40)
     Status: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__CreatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     ID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(510)
     Entity: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(850)
     Action: string;
-        
-    @Field(() => [mj_core_schema_server_object_types.EntityActionInvocation_])
-    EntityActionInvocationsArray: mj_core_schema_server_object_types.EntityActionInvocation_[]; // Link to EntityActionInvocations
-    
-    @Field(() => [mj_core_schema_server_object_types.EntityActionFilter_])
-    EntityActionFiltersArray: mj_core_schema_server_object_types.EntityActionFilter_[]; // Link to EntityActionFilters
-    
-    @Field(() => [mj_core_schema_server_object_types.EntityActionParam_])
-    EntityActionParamsArray: mj_core_schema_server_object_types.EntityActionParam_[]; // Link to EntityActionParams
-    
+
+    @Field(() => [EntityActionInvocation_])
+    EntityActionInvocationsArray: EntityActionInvocation_[]; // Link to EntityActionInvocations
+
+    @Field(() => [EntityActionFilter_])
+    EntityActionFiltersArray: EntityActionFilter_[]; // Link to EntityActionFilters
+
+    @Field(() => [EntityActionParam_])
+    EntityActionParamsArray: EntityActionParam_[]; // Link to EntityActionParams
+
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for Entity Actions   
+// INPUT TYPE for Entity Actions
 //****************************************************************************
 @InputType()
 export class CreateEntityActionInput {
@@ -18778,10 +18781,10 @@ export class CreateEntityActionInput {
     @Field()
     Status: string;
 }
-    
-        
+
+
 //****************************************************************************
-// INPUT TYPE for Entity Actions   
+// INPUT TYPE for Entity Actions
 //****************************************************************************
 @InputType()
 export class UpdateEntityActionInput {
@@ -18800,7 +18803,7 @@ export class UpdateEntityActionInput {
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
 }
-    
+
 //****************************************************************************
 // RESOLVER for Entity Actions
 //****************************************************************************
@@ -18852,40 +18855,40 @@ export class EntityActionResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Entity Actions', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-      
-    @FieldResolver(() => [mj_core_schema_server_object_types.EntityActionInvocation_])
+
+    @FieldResolver(() => [EntityActionInvocation_])
     async EntityActionInvocationsArray(@Root() entityaction_: EntityAction_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entity Action Invocations', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityActionInvocations] WHERE [EntityActionID]='${entityaction_.ID}' ` + this.getRowLevelSecurityWhereClause('Entity Action Invocations', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Entity Action Invocations', await dataSource.query(sSQL));
         return result;
     }
-          
-    @FieldResolver(() => [mj_core_schema_server_object_types.EntityActionFilter_])
+
+    @FieldResolver(() => [EntityActionFilter_])
     async EntityActionFiltersArray(@Root() entityaction_: EntityAction_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entity Action Filters', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityActionFilters] WHERE [EntityActionID]='${entityaction_.ID}' ` + this.getRowLevelSecurityWhereClause('Entity Action Filters', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Entity Action Filters', await dataSource.query(sSQL));
         return result;
     }
-          
-    @FieldResolver(() => [mj_core_schema_server_object_types.EntityActionParam_])
+
+    @FieldResolver(() => [EntityActionParam_])
     async EntityActionParamsArray(@Root() entityaction_: EntityAction_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entity Action Params', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityActionParams] WHERE [EntityActionID]='${entityaction_.ID}' ` + this.getRowLevelSecurityWhereClause('Entity Action Params', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Entity Action Params', await dataSource.query(sSQL));
         return result;
     }
-        
+
     @Mutation(() => EntityAction_)
     async CreateEntityAction(
         @Arg('input', () => CreateEntityActionInput) input: CreateEntityActionInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
+        @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.CreateRecord('Entity Actions', input, dataSource, userPayload, pubSub)
     }
-        
+
     @Mutation(() => EntityAction_)
     async UpdateEntityAction(
         @Arg('input', () => UpdateEntityActionInput) input: UpdateEntityActionInput,
@@ -18894,52 +18897,52 @@ export class EntityActionResolver extends ResolverBase {
     ) {
         return this.UpdateRecord('Entity Actions', input, dataSource, userPayload, pubSub);
     }
-    
+
     @Mutation(() => EntityAction_)
     async DeleteEntityAction(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Entity Actions', key, options, dataSource, userPayload, pubSub);
     }
-    
+
 }
 
 //****************************************************************************
 // ENTITY CLASS for Entity Action Invocations
 //****************************************************************************
 @ObjectType({ description: 'Links invocation types to entity actions – for example you might link a particular EntityAction to just “Create Record” and you might also have a second item in this table allowing the same Entity Action to be invoked from a User View or List, on demand.' })
-export class EntityActionInvocation_ {  
-    @Field() 
+export class EntityActionInvocation_ {
+    @Field()
     @MaxLength(16)
     ID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     EntityActionID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     InvocationTypeID: string;
-          
-    @Field({description: 'Status of the entity action invocation (Pending, Active, Disabled).'}) 
+
+    @Field({description: 'Status of the entity action invocation (Pending, Active, Disabled).'})
     @MaxLength(40)
     Status: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__CreatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(510)
     InvocationType: string;
-        
+
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for Entity Action Invocations   
+// INPUT TYPE for Entity Action Invocations
 //****************************************************************************
 @InputType()
 export class CreateEntityActionInvocationInput {
@@ -18952,10 +18955,10 @@ export class CreateEntityActionInvocationInput {
     @Field()
     Status: string;
 }
-    
-        
+
+
 //****************************************************************************
-// INPUT TYPE for Entity Action Invocations   
+// INPUT TYPE for Entity Action Invocations
 //****************************************************************************
 @InputType()
 export class UpdateEntityActionInvocationInput {
@@ -18974,7 +18977,7 @@ export class UpdateEntityActionInvocationInput {
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
 }
-    
+
 //****************************************************************************
 // RESOLVER for Entity Action Invocations
 //****************************************************************************
@@ -19026,16 +19029,16 @@ export class EntityActionInvocationResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Entity Action Invocations', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-    
+
     @Mutation(() => EntityActionInvocation_)
     async CreateEntityActionInvocation(
         @Arg('input', () => CreateEntityActionInvocationInput) input: CreateEntityActionInvocationInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
+        @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.CreateRecord('Entity Action Invocations', input, dataSource, userPayload, pubSub)
     }
-        
+
     @Mutation(() => EntityActionInvocation_)
     async UpdateEntityActionInvocation(
         @Arg('input', () => UpdateEntityActionInvocationInput) input: UpdateEntityActionInvocationInput,
@@ -19044,51 +19047,51 @@ export class EntityActionInvocationResolver extends ResolverBase {
     ) {
         return this.UpdateRecord('Entity Action Invocations', input, dataSource, userPayload, pubSub);
     }
-    
+
     @Mutation(() => EntityActionInvocation_)
     async DeleteEntityActionInvocation(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Entity Action Invocations', key, options, dataSource, userPayload, pubSub);
     }
-    
+
 }
 
 //****************************************************************************
 // ENTITY CLASS for Action Authorizations
 //****************************************************************************
 @ObjectType({ description: 'Links actions to authorizations, one or more of these must be possessed by a user in order to execute the action.' })
-export class ActionAuthorization_ {  
-    @Field() 
+export class ActionAuthorization_ {
+    @Field()
     @MaxLength(16)
     ID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     ActionID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     AuthorizationID: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     Comments?: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__CreatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(850)
     Action: string;
-        
+
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for Action Authorizations   
+// INPUT TYPE for Action Authorizations
 //****************************************************************************
 @InputType()
 export class CreateActionAuthorizationInput {
@@ -19101,10 +19104,10 @@ export class CreateActionAuthorizationInput {
     @Field({ nullable: true })
     Comments?: string;
 }
-    
-        
+
+
 //****************************************************************************
-// INPUT TYPE for Action Authorizations   
+// INPUT TYPE for Action Authorizations
 //****************************************************************************
 @InputType()
 export class UpdateActionAuthorizationInput {
@@ -19123,7 +19126,7 @@ export class UpdateActionAuthorizationInput {
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
 }
-    
+
 //****************************************************************************
 // RESOLVER for Action Authorizations
 //****************************************************************************
@@ -19175,16 +19178,16 @@ export class ActionAuthorizationResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Action Authorizations', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-    
+
     @Mutation(() => ActionAuthorization_)
     async CreateActionAuthorization(
         @Arg('input', () => CreateActionAuthorizationInput) input: CreateActionAuthorizationInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
+        @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.CreateRecord('Action Authorizations', input, dataSource, userPayload, pubSub)
     }
-        
+
     @Mutation(() => ActionAuthorization_)
     async UpdateActionAuthorization(
         @Arg('input', () => UpdateActionAuthorizationInput) input: UpdateActionAuthorizationInput,
@@ -19193,49 +19196,49 @@ export class ActionAuthorizationResolver extends ResolverBase {
     ) {
         return this.UpdateRecord('Action Authorizations', input, dataSource, userPayload, pubSub);
     }
-    
+
     @Mutation(() => ActionAuthorization_)
     async DeleteActionAuthorization(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Action Authorizations', key, options, dataSource, userPayload, pubSub);
     }
-    
+
 }
 
 //****************************************************************************
 // ENTITY CLASS for Entity Action Invocation Types
 //****************************************************************************
 @ObjectType({ description: 'Stores the possible invocation types of an action within the context of an entity. Examples would be: Record Created/Updated/Deleted/Accessed as well as things like “View” or “List” where you could run an EntityAction against an entire set of records in a view or list – either by user click or programmatically.' })
-export class EntityActionInvocationType_ {  
-    @Field() 
+export class EntityActionInvocationType_ {
+    @Field()
     @MaxLength(16)
     ID: string;
-          
-    @Field({description: 'Name of the invocation type such as Record Created/Updated/etc.'}) 
+
+    @Field({description: 'Name of the invocation type such as Record Created/Updated/etc.'})
     @MaxLength(510)
     Name: string;
-          
-    @Field({nullable: true, description: 'Description of the invocation type.'}) 
+
+    @Field({nullable: true, description: 'Description of the invocation type.'})
     Description?: string;
-          
-    @Field(() => Int) 
+
+    @Field(() => Int)
     DisplaySequence: number;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__CreatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-        
-    @Field(() => [mj_core_schema_server_object_types.EntityActionInvocation_])
-    EntityActionInvocationsArray: mj_core_schema_server_object_types.EntityActionInvocation_[]; // Link to EntityActionInvocations
-    
+
+    @Field(() => [EntityActionInvocation_])
+    EntityActionInvocationsArray: EntityActionInvocation_[]; // Link to EntityActionInvocations
+
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for Entity Action Invocation Types   
+// INPUT TYPE for Entity Action Invocation Types
 //****************************************************************************
 @InputType()
 export class CreateEntityActionInvocationTypeInput {
@@ -19248,10 +19251,10 @@ export class CreateEntityActionInvocationTypeInput {
     @Field(() => Int)
     DisplaySequence: number;
 }
-    
-        
+
+
 //****************************************************************************
-// INPUT TYPE for Entity Action Invocation Types   
+// INPUT TYPE for Entity Action Invocation Types
 //****************************************************************************
 @InputType()
 export class UpdateEntityActionInvocationTypeInput {
@@ -19270,7 +19273,7 @@ export class UpdateEntityActionInvocationTypeInput {
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
 }
-    
+
 //****************************************************************************
 // RESOLVER for Entity Action Invocation Types
 //****************************************************************************
@@ -19322,24 +19325,24 @@ export class EntityActionInvocationTypeResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Entity Action Invocation Types', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-      
-    @FieldResolver(() => [mj_core_schema_server_object_types.EntityActionInvocation_])
+
+    @FieldResolver(() => [EntityActionInvocation_])
     async EntityActionInvocationsArray(@Root() entityactioninvocationtype_: EntityActionInvocationType_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entity Action Invocations', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityActionInvocations] WHERE [InvocationTypeID]='${entityactioninvocationtype_.ID}' ` + this.getRowLevelSecurityWhereClause('Entity Action Invocations', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Entity Action Invocations', await dataSource.query(sSQL));
         return result;
     }
-        
+
     @Mutation(() => EntityActionInvocationType_)
     async CreateEntityActionInvocationType(
         @Arg('input', () => CreateEntityActionInvocationTypeInput) input: CreateEntityActionInvocationTypeInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
+        @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.CreateRecord('Entity Action Invocation Types', input, dataSource, userPayload, pubSub)
     }
-        
+
     @Mutation(() => EntityActionInvocationType_)
     async UpdateEntityActionInvocationType(
         @Arg('input', () => UpdateEntityActionInvocationTypeInput) input: UpdateEntityActionInvocationTypeInput,
@@ -19348,123 +19351,123 @@ export class EntityActionInvocationTypeResolver extends ResolverBase {
     ) {
         return this.UpdateRecord('Entity Action Invocation Types', input, dataSource, userPayload, pubSub);
     }
-    
+
     @Mutation(() => EntityActionInvocationType_)
     async DeleteEntityActionInvocationType(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Entity Action Invocation Types', key, options, dataSource, userPayload, pubSub);
     }
-    
+
 }
 
 //****************************************************************************
 // ENTITY CLASS for Actions
 //****************************************************************************
 @ObjectType({ description: 'Stores action definitions, including prompts, generated code, user comments, and status.' })
-export class Action_ {  
-    @Field() 
+export class Action_ {
+    @Field()
     @MaxLength(16)
     ID: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(16)
     CategoryID?: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(850)
     Name: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     Description?: string;
-          
-    @Field({description: 'Generated or Custom. Generated means the UserPrompt is used to prompt an AI model to automatically create the code for the Action. Custom means that a custom class has been implemented that subclasses the BaseAction class. The custom class needs to use the @RegisterClass decorator and be included in the MJAPI (or other runtime environment) to be available for execution.'}) 
+
+    @Field({description: 'Generated or Custom. Generated means the UserPrompt is used to prompt an AI model to automatically create the code for the Action. Custom means that a custom class has been implemented that subclasses the BaseAction class. The custom class needs to use the @RegisterClass decorator and be included in the MJAPI (or other runtime environment) to be available for execution.'})
     @MaxLength(40)
     Type: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     UserPrompt?: string;
-          
-    @Field({nullable: true, description: 'User\'s comments not shared with the LLM.'}) 
+
+    @Field({nullable: true, description: 'User\'s comments not shared with the LLM.'})
     UserComments?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     Code?: string;
-          
-    @Field({nullable: true, description: 'AI\'s explanation of the code.'}) 
+
+    @Field({nullable: true, description: 'AI\'s explanation of the code.'})
     CodeComments?: string;
-          
-    @Field({description: 'An action won\'t be usable until the code is approved.'}) 
+
+    @Field({description: 'An action won\'t be usable until the code is approved.'})
     @MaxLength(40)
     CodeApprovalStatus: string;
-          
-    @Field({nullable: true, description: 'Optional comments when an individual (or an AI) reviews and approves the code.'}) 
+
+    @Field({nullable: true, description: 'Optional comments when an individual (or an AI) reviews and approves the code.'})
     CodeApprovalComments?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(16)
     CodeApprovedByUserID?: string;
-          
-    @Field({nullable: true, description: 'When the code was approved.'}) 
+
+    @Field({nullable: true, description: 'When the code was approved.'})
     @MaxLength(8)
     CodeApprovedAt?: Date;
-          
-    @Field(() => Boolean, {description: 'If set to 1, Code will never be generated by the AI system. This overrides all other settings including the ForceCodeGeneration bit'}) 
+
+    @Field(() => Boolean, {description: 'If set to 1, Code will never be generated by the AI system. This overrides all other settings including the ForceCodeGeneration bit'})
     CodeLocked: boolean;
-          
-    @Field(() => Boolean, {description: 'If set to 1, the Action will generate code for the provided UserPrompt on the next Save even if the UserPrompt hasn\'t changed. This is useful to force regeneration when other candidates (such as a change in Action Inputs/Outputs) occurs or on demand by a user.'}) 
+
+    @Field(() => Boolean, {description: 'If set to 1, the Action will generate code for the provided UserPrompt on the next Save even if the UserPrompt hasn\'t changed. This is useful to force regeneration when other candidates (such as a change in Action Inputs/Outputs) occurs or on demand by a user.'})
     ForceCodeGeneration: boolean;
-          
-    @Field(() => Int, {nullable: true, description: 'Number of days to retain execution logs; NULL for indefinite.'}) 
+
+    @Field(() => Int, {nullable: true, description: 'Number of days to retain execution logs; NULL for indefinite.'})
     RetentionPeriod?: number;
-          
-    @Field({description: 'Status of the action (Pending, Active, Disabled).'}) 
+
+    @Field({description: 'Status of the action (Pending, Active, Disabled).'})
     @MaxLength(40)
     Status: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__CreatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(510)
     Category?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(200)
     CodeApprovedByUser?: string;
-        
-    @Field(() => [mj_core_schema_server_object_types.ActionParam_])
-    ActionParamsArray: mj_core_schema_server_object_types.ActionParam_[]; // Link to ActionParams
-    
-    @Field(() => [mj_core_schema_server_object_types.ActionLibrary_])
-    ActionLibrariesArray: mj_core_schema_server_object_types.ActionLibrary_[]; // Link to ActionLibraries
-    
-    @Field(() => [mj_core_schema_server_object_types.ScheduledAction_])
-    ScheduledActionsArray: mj_core_schema_server_object_types.ScheduledAction_[]; // Link to ScheduledActions
-    
-    @Field(() => [mj_core_schema_server_object_types.ActionResultCode_])
-    ActionResultCodesArray: mj_core_schema_server_object_types.ActionResultCode_[]; // Link to ActionResultCodes
-    
-    @Field(() => [mj_core_schema_server_object_types.ActionContext_])
-    ActionContextsArray: mj_core_schema_server_object_types.ActionContext_[]; // Link to ActionContexts
-    
-    @Field(() => [mj_core_schema_server_object_types.EntityAction_])
-    EntityActionsArray: mj_core_schema_server_object_types.EntityAction_[]; // Link to EntityActions
-    
-    @Field(() => [mj_core_schema_server_object_types.ActionExecutionLog_])
-    ActionExecutionLogsArray: mj_core_schema_server_object_types.ActionExecutionLog_[]; // Link to ActionExecutionLogs
-    
-    @Field(() => [mj_core_schema_server_object_types.ActionAuthorization_])
-    ActionAuthorizationsArray: mj_core_schema_server_object_types.ActionAuthorization_[]; // Link to ActionAuthorizations
-    
+
+    @Field(() => [ActionParam_])
+    ActionParamsArray: ActionParam_[]; // Link to ActionParams
+
+    @Field(() => [ActionLibrary_])
+    ActionLibrariesArray: ActionLibrary_[]; // Link to ActionLibraries
+
+    @Field(() => [ScheduledAction_])
+    ScheduledActionsArray: ScheduledAction_[]; // Link to ScheduledActions
+
+    @Field(() => [ActionResultCode_])
+    ActionResultCodesArray: ActionResultCode_[]; // Link to ActionResultCodes
+
+    @Field(() => [ActionContext_])
+    ActionContextsArray: ActionContext_[]; // Link to ActionContexts
+
+    @Field(() => [EntityAction_])
+    EntityActionsArray: EntityAction_[]; // Link to EntityActions
+
+    @Field(() => [ActionExecutionLog_])
+    ActionExecutionLogsArray: ActionExecutionLog_[]; // Link to ActionExecutionLogs
+
+    @Field(() => [ActionAuthorization_])
+    ActionAuthorizationsArray: ActionAuthorization_[]; // Link to ActionAuthorizations
+
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for Actions   
+// INPUT TYPE for Actions
 //****************************************************************************
 @InputType()
 export class CreateActionInput {
@@ -19516,10 +19519,10 @@ export class CreateActionInput {
     @Field()
     Status: string;
 }
-    
-        
+
+
 //****************************************************************************
-// INPUT TYPE for Actions   
+// INPUT TYPE for Actions
 //****************************************************************************
 @InputType()
 export class UpdateActionInput {
@@ -19577,7 +19580,7 @@ export class UpdateActionInput {
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
 }
-    
+
 //****************************************************************************
 // RESOLVER for Actions
 //****************************************************************************
@@ -19629,80 +19632,80 @@ export class ActionResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Actions', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-      
-    @FieldResolver(() => [mj_core_schema_server_object_types.ActionParam_])
+
+    @FieldResolver(() => [ActionParam_])
     async ActionParamsArray(@Root() action_: Action_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Action Params', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionParams] WHERE [ActionID]='${action_.ID}' ` + this.getRowLevelSecurityWhereClause('Action Params', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Action Params', await dataSource.query(sSQL));
         return result;
     }
-          
-    @FieldResolver(() => [mj_core_schema_server_object_types.ActionLibrary_])
+
+    @FieldResolver(() => [ActionLibrary_])
     async ActionLibrariesArray(@Root() action_: Action_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Action Libraries', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionLibraries] WHERE [ActionID]='${action_.ID}' ` + this.getRowLevelSecurityWhereClause('Action Libraries', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Action Libraries', await dataSource.query(sSQL));
         return result;
     }
-          
-    @FieldResolver(() => [mj_core_schema_server_object_types.ScheduledAction_])
+
+    @FieldResolver(() => [ScheduledAction_])
     async ScheduledActionsArray(@Root() action_: Action_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Scheduled Actions', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwScheduledActions] WHERE [ActionID]='${action_.ID}' ` + this.getRowLevelSecurityWhereClause('Scheduled Actions', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Scheduled Actions', await dataSource.query(sSQL));
         return result;
     }
-          
-    @FieldResolver(() => [mj_core_schema_server_object_types.ActionResultCode_])
+
+    @FieldResolver(() => [ActionResultCode_])
     async ActionResultCodesArray(@Root() action_: Action_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Action Result Codes', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionResultCodes] WHERE [ActionID]='${action_.ID}' ` + this.getRowLevelSecurityWhereClause('Action Result Codes', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Action Result Codes', await dataSource.query(sSQL));
         return result;
     }
-          
-    @FieldResolver(() => [mj_core_schema_server_object_types.ActionContext_])
+
+    @FieldResolver(() => [ActionContext_])
     async ActionContextsArray(@Root() action_: Action_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Action Contexts', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionContexts] WHERE [ActionID]='${action_.ID}' ` + this.getRowLevelSecurityWhereClause('Action Contexts', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Action Contexts', await dataSource.query(sSQL));
         return result;
     }
-          
-    @FieldResolver(() => [mj_core_schema_server_object_types.EntityAction_])
+
+    @FieldResolver(() => [EntityAction_])
     async EntityActionsArray(@Root() action_: Action_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entity Actions', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityActions] WHERE [ActionID]='${action_.ID}' ` + this.getRowLevelSecurityWhereClause('Entity Actions', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Entity Actions', await dataSource.query(sSQL));
         return result;
     }
-          
-    @FieldResolver(() => [mj_core_schema_server_object_types.ActionExecutionLog_])
+
+    @FieldResolver(() => [ActionExecutionLog_])
     async ActionExecutionLogsArray(@Root() action_: Action_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Action Execution Logs', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionExecutionLogs] WHERE [ActionID]='${action_.ID}' ` + this.getRowLevelSecurityWhereClause('Action Execution Logs', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Action Execution Logs', await dataSource.query(sSQL));
         return result;
     }
-          
-    @FieldResolver(() => [mj_core_schema_server_object_types.ActionAuthorization_])
+
+    @FieldResolver(() => [ActionAuthorization_])
     async ActionAuthorizationsArray(@Root() action_: Action_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Action Authorizations', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionAuthorizations] WHERE [ActionID]='${action_.ID}' ` + this.getRowLevelSecurityWhereClause('Action Authorizations', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Action Authorizations', await dataSource.query(sSQL));
         return result;
     }
-        
+
     @Mutation(() => Action_)
     async CreateAction(
         @Arg('input', () => CreateActionInput) input: CreateActionInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
+        @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.CreateRecord('Actions', input, dataSource, userPayload, pubSub)
     }
-        
+
     @Mutation(() => Action_)
     async UpdateAction(
         @Arg('input', () => UpdateActionInput) input: UpdateActionInput,
@@ -19711,51 +19714,51 @@ export class ActionResolver extends ResolverBase {
     ) {
         return this.UpdateRecord('Actions', input, dataSource, userPayload, pubSub);
     }
-    
+
     @Mutation(() => Action_)
     async DeleteAction(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Actions', key, options, dataSource, userPayload, pubSub);
     }
-    
+
 }
 
 //****************************************************************************
 // ENTITY CLASS for Entity Action Filters
 //****************************************************************************
 @ObjectType({ description: 'Optional use. Maps Action Filters to specific EntityAction instances, specifying execution order and status. This allows for “pre-processing” before an Action actually is fired off, to check for various state/dirty/value conditions.' })
-export class EntityActionFilter_ {  
-    @Field() 
+export class EntityActionFilter_ {
+    @Field()
     @MaxLength(16)
     ID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     EntityActionID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     ActionFilterID: string;
-          
-    @Field(() => Int, {description: 'Order of filter execution.'}) 
+
+    @Field(() => Int, {description: 'Order of filter execution.'})
     Sequence: number;
-          
-    @Field({description: 'Status of the entity action filter (Pending, Active, Disabled).'}) 
+
+    @Field({description: 'Status of the entity action filter (Pending, Active, Disabled).'})
     @MaxLength(40)
     Status: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__CreatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-        
+
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for Entity Action Filters   
+// INPUT TYPE for Entity Action Filters
 //****************************************************************************
 @InputType()
 export class CreateEntityActionFilterInput {
@@ -19771,10 +19774,10 @@ export class CreateEntityActionFilterInput {
     @Field()
     Status: string;
 }
-    
-        
+
+
 //****************************************************************************
-// INPUT TYPE for Entity Action Filters   
+// INPUT TYPE for Entity Action Filters
 //****************************************************************************
 @InputType()
 export class UpdateEntityActionFilterInput {
@@ -19796,7 +19799,7 @@ export class UpdateEntityActionFilterInput {
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
 }
-    
+
 //****************************************************************************
 // RESOLVER for Entity Action Filters
 //****************************************************************************
@@ -19848,16 +19851,16 @@ export class EntityActionFilterResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Entity Action Filters', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-    
+
     @Mutation(() => EntityActionFilter_)
     async CreateEntityActionFilter(
         @Arg('input', () => CreateEntityActionFilterInput) input: CreateEntityActionFilterInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
+        @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.CreateRecord('Entity Action Filters', input, dataSource, userPayload, pubSub)
     }
-        
+
     @Mutation(() => EntityActionFilter_)
     async UpdateEntityActionFilter(
         @Arg('input', () => UpdateEntityActionFilterInput) input: UpdateEntityActionFilterInput,
@@ -19866,51 +19869,51 @@ export class EntityActionFilterResolver extends ResolverBase {
     ) {
         return this.UpdateRecord('Entity Action Filters', input, dataSource, userPayload, pubSub);
     }
-    
+
     @Mutation(() => EntityActionFilter_)
     async DeleteEntityActionFilter(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Entity Action Filters', key, options, dataSource, userPayload, pubSub);
     }
-    
+
 }
 
 //****************************************************************************
 // ENTITY CLASS for Action Filters
 //****************************************************************************
 @ObjectType({ description: 'Defines filters that can be evaluated ahead of executing an action. Action Filters are usable in any code pipeline you can execute them with the same context as the action itself and use the outcome to determine if the action should execute or not.' })
-export class ActionFilter_ {  
-    @Field() 
+export class ActionFilter_ {
+    @Field()
     @MaxLength(16)
     ID: string;
-          
-    @Field() 
+
+    @Field()
     UserDescription: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     UserComments?: string;
-          
-    @Field() 
+
+    @Field()
     Code: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     CodeExplanation?: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__CreatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-        
-    @Field(() => [mj_core_schema_server_object_types.EntityActionFilter_])
-    EntityActionFiltersArray: mj_core_schema_server_object_types.EntityActionFilter_[]; // Link to EntityActionFilters
-    
+
+    @Field(() => [EntityActionFilter_])
+    EntityActionFiltersArray: EntityActionFilter_[]; // Link to EntityActionFilters
+
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for Action Filters   
+// INPUT TYPE for Action Filters
 //****************************************************************************
 @InputType()
 export class CreateActionFilterInput {
@@ -19926,10 +19929,10 @@ export class CreateActionFilterInput {
     @Field({ nullable: true })
     CodeExplanation?: string;
 }
-    
-        
+
+
 //****************************************************************************
-// INPUT TYPE for Action Filters   
+// INPUT TYPE for Action Filters
 //****************************************************************************
 @InputType()
 export class UpdateActionFilterInput {
@@ -19951,7 +19954,7 @@ export class UpdateActionFilterInput {
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
 }
-    
+
 //****************************************************************************
 // RESOLVER for Action Filters
 //****************************************************************************
@@ -20003,24 +20006,24 @@ export class ActionFilterResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Action Filters', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-      
-    @FieldResolver(() => [mj_core_schema_server_object_types.EntityActionFilter_])
+
+    @FieldResolver(() => [EntityActionFilter_])
     async EntityActionFiltersArray(@Root() actionfilter_: ActionFilter_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entity Action Filters', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityActionFilters] WHERE [ActionFilterID]='${actionfilter_.ID}' ` + this.getRowLevelSecurityWhereClause('Entity Action Filters', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Entity Action Filters', await dataSource.query(sSQL));
         return result;
     }
-        
+
     @Mutation(() => ActionFilter_)
     async CreateActionFilter(
         @Arg('input', () => CreateActionFilterInput) input: CreateActionFilterInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
+        @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.CreateRecord('Action Filters', input, dataSource, userPayload, pubSub)
     }
-        
+
     @Mutation(() => ActionFilter_)
     async UpdateActionFilter(
         @Arg('input', () => UpdateActionFilterInput) input: UpdateActionFilterInput,
@@ -20029,46 +20032,46 @@ export class ActionFilterResolver extends ResolverBase {
     ) {
         return this.UpdateRecord('Action Filters', input, dataSource, userPayload, pubSub);
     }
-    
+
     @Mutation(() => ActionFilter_)
     async DeleteActionFilter(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Action Filters', key, options, dataSource, userPayload, pubSub);
     }
-    
+
 }
 
 //****************************************************************************
 // ENTITY CLASS for Action Context Types
 //****************************************************************************
 @ObjectType({ description: 'Lists possible contexts for action execution with optional descriptions.' })
-export class ActionContextType_ {  
-    @Field() 
+export class ActionContextType_ {
+    @Field()
     @MaxLength(16)
     ID: string;
-          
-    @Field({description: 'Name of the context type.'}) 
+
+    @Field({description: 'Name of the context type.'})
     @MaxLength(510)
     Name: string;
-          
-    @Field({nullable: true, description: 'Description of the context type.'}) 
+
+    @Field({nullable: true, description: 'Description of the context type.'})
     Description?: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__CreatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-        
-    @Field(() => [mj_core_schema_server_object_types.ActionContext_])
-    ActionContextsArray: mj_core_schema_server_object_types.ActionContext_[]; // Link to ActionContexts
-    
+
+    @Field(() => [ActionContext_])
+    ActionContextsArray: ActionContext_[]; // Link to ActionContexts
+
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for Action Context Types   
+// INPUT TYPE for Action Context Types
 //****************************************************************************
 @InputType()
 export class CreateActionContextTypeInput {
@@ -20078,10 +20081,10 @@ export class CreateActionContextTypeInput {
     @Field({ nullable: true })
     Description?: string;
 }
-    
-        
+
+
 //****************************************************************************
-// INPUT TYPE for Action Context Types   
+// INPUT TYPE for Action Context Types
 //****************************************************************************
 @InputType()
 export class UpdateActionContextTypeInput {
@@ -20097,7 +20100,7 @@ export class UpdateActionContextTypeInput {
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
 }
-    
+
 //****************************************************************************
 // RESOLVER for Action Context Types
 //****************************************************************************
@@ -20149,24 +20152,24 @@ export class ActionContextTypeResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Action Context Types', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-      
-    @FieldResolver(() => [mj_core_schema_server_object_types.ActionContext_])
+
+    @FieldResolver(() => [ActionContext_])
     async ActionContextsArray(@Root() actioncontexttype_: ActionContextType_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Action Contexts', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionContexts] WHERE [ContextTypeID]='${actioncontexttype_.ID}' ` + this.getRowLevelSecurityWhereClause('Action Contexts', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Action Contexts', await dataSource.query(sSQL));
         return result;
     }
-        
+
     @Mutation(() => ActionContextType_)
     async CreateActionContextType(
         @Arg('input', () => CreateActionContextTypeInput) input: CreateActionContextTypeInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
+        @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.CreateRecord('Action Context Types', input, dataSource, userPayload, pubSub)
     }
-        
+
     @Mutation(() => ActionContextType_)
     async UpdateActionContextType(
         @Arg('input', () => UpdateActionContextTypeInput) input: UpdateActionContextTypeInput,
@@ -20175,54 +20178,54 @@ export class ActionContextTypeResolver extends ResolverBase {
     ) {
         return this.UpdateRecord('Action Context Types', input, dataSource, userPayload, pubSub);
     }
-    
+
     @Mutation(() => ActionContextType_)
     async DeleteActionContextType(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Action Context Types', key, options, dataSource, userPayload, pubSub);
     }
-    
+
 }
 
 //****************************************************************************
 // ENTITY CLASS for Action Result Codes
 //****************************************************************************
 @ObjectType({ description: 'Defines the possible result codes for each action.' })
-export class ActionResultCode_ {  
-    @Field() 
+export class ActionResultCode_ {
+    @Field()
     @MaxLength(16)
     ID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     ActionID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(510)
     ResultCode: string;
-          
-    @Field(() => Boolean, {description: 'Indicates if the result code is a success or not. It is possible an action might have more than one failure condition/result code and same for success conditions.'}) 
+
+    @Field(() => Boolean, {description: 'Indicates if the result code is a success or not. It is possible an action might have more than one failure condition/result code and same for success conditions.'})
     IsSuccess: boolean;
-          
-    @Field({nullable: true, description: 'Description of the result code.'}) 
+
+    @Field({nullable: true, description: 'Description of the result code.'})
     Description?: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__CreatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(850)
     Action: string;
-        
+
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for Action Result Codes   
+// INPUT TYPE for Action Result Codes
 //****************************************************************************
 @InputType()
 export class CreateActionResultCodeInput {
@@ -20238,10 +20241,10 @@ export class CreateActionResultCodeInput {
     @Field({ nullable: true })
     Description?: string;
 }
-    
-        
+
+
 //****************************************************************************
-// INPUT TYPE for Action Result Codes   
+// INPUT TYPE for Action Result Codes
 //****************************************************************************
 @InputType()
 export class UpdateActionResultCodeInput {
@@ -20263,7 +20266,7 @@ export class UpdateActionResultCodeInput {
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
 }
-    
+
 //****************************************************************************
 // RESOLVER for Action Result Codes
 //****************************************************************************
@@ -20315,16 +20318,16 @@ export class ActionResultCodeResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Action Result Codes', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-    
+
     @Mutation(() => ActionResultCode_)
     async CreateActionResultCode(
         @Arg('input', () => CreateActionResultCodeInput) input: CreateActionResultCodeInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
+        @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.CreateRecord('Action Result Codes', input, dataSource, userPayload, pubSub)
     }
-        
+
     @Mutation(() => ActionResultCode_)
     async UpdateActionResultCode(
         @Arg('input', () => UpdateActionResultCodeInput) input: UpdateActionResultCodeInput,
@@ -20333,56 +20336,56 @@ export class ActionResultCodeResolver extends ResolverBase {
     ) {
         return this.UpdateRecord('Action Result Codes', input, dataSource, userPayload, pubSub);
     }
-    
+
     @Mutation(() => ActionResultCode_)
     async DeleteActionResultCode(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Action Result Codes', key, options, dataSource, userPayload, pubSub);
     }
-    
+
 }
 
 //****************************************************************************
 // ENTITY CLASS for Action Contexts
 //****************************************************************************
 @ObjectType({ description: 'Links actions to their supported context types enabling a given action to be executable in more than one context.' })
-export class ActionContext_ {  
-    @Field() 
+export class ActionContext_ {
+    @Field()
     @MaxLength(16)
     ID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     ActionID: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(16)
     ContextTypeID?: string;
-          
-    @Field({description: 'Status of the action context (Pending, Active, Disabled).'}) 
+
+    @Field({description: 'Status of the action context (Pending, Active, Disabled).'})
     @MaxLength(40)
     Status: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__CreatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(850)
     Action: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(510)
     ContextType?: string;
-        
+
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for Action Contexts   
+// INPUT TYPE for Action Contexts
 //****************************************************************************
 @InputType()
 export class CreateActionContextInput {
@@ -20395,10 +20398,10 @@ export class CreateActionContextInput {
     @Field()
     Status: string;
 }
-    
-        
+
+
 //****************************************************************************
-// INPUT TYPE for Action Contexts   
+// INPUT TYPE for Action Contexts
 //****************************************************************************
 @InputType()
 export class UpdateActionContextInput {
@@ -20417,7 +20420,7 @@ export class UpdateActionContextInput {
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
 }
-    
+
 //****************************************************************************
 // RESOLVER for Action Contexts
 //****************************************************************************
@@ -20469,16 +20472,16 @@ export class ActionContextResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Action Contexts', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-    
+
     @Mutation(() => ActionContext_)
     async CreateActionContext(
         @Arg('input', () => CreateActionContextInput) input: CreateActionContextInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
+        @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.CreateRecord('Action Contexts', input, dataSource, userPayload, pubSub)
     }
-        
+
     @Mutation(() => ActionContext_)
     async UpdateActionContext(
         @Arg('input', () => UpdateActionContextInput) input: UpdateActionContextInput,
@@ -20487,70 +20490,70 @@ export class ActionContextResolver extends ResolverBase {
     ) {
         return this.UpdateRecord('Action Contexts', input, dataSource, userPayload, pubSub);
     }
-    
+
     @Mutation(() => ActionContext_)
     async DeleteActionContext(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Action Contexts', key, options, dataSource, userPayload, pubSub);
     }
-    
+
 }
 
 //****************************************************************************
 // ENTITY CLASS for Action Execution Logs
 //****************************************************************************
 @ObjectType({ description: 'Tracks every execution of an action, including start and end times, inputs, outputs, and result codes.' })
-export class ActionExecutionLog_ {  
-    @Field() 
+export class ActionExecutionLog_ {
+    @Field()
     @MaxLength(16)
     ID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     ActionID: string;
-          
-    @Field({description: 'Timestamp of when the action started execution.'}) 
+
+    @Field({description: 'Timestamp of when the action started execution.'})
     @MaxLength(8)
     StartedAt: Date;
-          
-    @Field({nullable: true, description: 'Timestamp of when the action ended execution.'}) 
+
+    @Field({nullable: true, description: 'Timestamp of when the action ended execution.'})
     @MaxLength(8)
     EndedAt?: Date;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     Params?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(510)
     ResultCode?: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     UserID: string;
-          
-    @Field(() => Int, {nullable: true, description: 'Number of days to retain the log; NULL for indefinite retention.'}) 
+
+    @Field(() => Int, {nullable: true, description: 'Number of days to retain the log; NULL for indefinite retention.'})
     RetentionPeriod?: number;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__CreatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(850)
     Action: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(200)
     User: string;
-        
+
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for Action Execution Logs   
+// INPUT TYPE for Action Execution Logs
 //****************************************************************************
 @InputType()
 export class CreateActionExecutionLogInput {
@@ -20575,10 +20578,10 @@ export class CreateActionExecutionLogInput {
     @Field(() => Int, { nullable: true })
     RetentionPeriod?: number;
 }
-    
-        
+
+
 //****************************************************************************
-// INPUT TYPE for Action Execution Logs   
+// INPUT TYPE for Action Execution Logs
 //****************************************************************************
 @InputType()
 export class UpdateActionExecutionLogInput {
@@ -20609,7 +20612,7 @@ export class UpdateActionExecutionLogInput {
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
 }
-    
+
 //****************************************************************************
 // RESOLVER for Action Execution Logs
 //****************************************************************************
@@ -20661,16 +20664,16 @@ export class ActionExecutionLogResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Action Execution Logs', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-    
+
     @Mutation(() => ActionExecutionLog_)
     async CreateActionExecutionLog(
         @Arg('input', () => CreateActionExecutionLogInput) input: CreateActionExecutionLogInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
+        @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.CreateRecord('Action Execution Logs', input, dataSource, userPayload, pubSub)
     }
-        
+
     @Mutation(() => ActionExecutionLog_)
     async UpdateActionExecutionLog(
         @Arg('input', () => UpdateActionExecutionLogInput) input: UpdateActionExecutionLogInput,
@@ -20679,74 +20682,74 @@ export class ActionExecutionLogResolver extends ResolverBase {
     ) {
         return this.UpdateRecord('Action Execution Logs', input, dataSource, userPayload, pubSub);
     }
-    
+
     @Mutation(() => ActionExecutionLog_)
     async DeleteActionExecutionLog(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Action Execution Logs', key, options, dataSource, userPayload, pubSub);
     }
-    
+
 }
 
 //****************************************************************************
 // ENTITY CLASS for Action Params
 //****************************************************************************
 @ObjectType({ description: 'Tracks the input and output parameters for Actions.' })
-export class ActionParam_ {  
-    @Field() 
+export class ActionParam_ {
+    @Field()
     @MaxLength(16)
     ID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     ActionID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(510)
     Name: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     DefaultValue?: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(20)
     Type: string;
-          
-    @Field({description: 'Tracks the basic value type of the parameter, additional information can be provided in the Description field'}) 
+
+    @Field({description: 'Tracks the basic value type of the parameter, additional information can be provided in the Description field'})
     @MaxLength(60)
     ValueType: string;
-          
-    @Field(() => Boolean) 
+
+    @Field(() => Boolean)
     IsArray: boolean;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     Description?: string;
-          
-    @Field(() => Boolean) 
+
+    @Field(() => Boolean)
     IsRequired: boolean;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__CreatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(850)
     Action: string;
-        
-    @Field(() => [mj_core_schema_server_object_types.EntityActionParam_])
-    EntityActionParamsArray: mj_core_schema_server_object_types.EntityActionParam_[]; // Link to EntityActionParams
-    
-    @Field(() => [mj_core_schema_server_object_types.ScheduledActionParam_])
-    ScheduledActionParamsArray: mj_core_schema_server_object_types.ScheduledActionParam_[]; // Link to ScheduledActionParams
-    
+
+    @Field(() => [EntityActionParam_])
+    EntityActionParamsArray: EntityActionParam_[]; // Link to EntityActionParams
+
+    @Field(() => [ScheduledActionParam_])
+    ScheduledActionParamsArray: ScheduledActionParam_[]; // Link to ScheduledActionParams
+
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for Action Params   
+// INPUT TYPE for Action Params
 //****************************************************************************
 @InputType()
 export class CreateActionParamInput {
@@ -20774,10 +20777,10 @@ export class CreateActionParamInput {
     @Field(() => Boolean)
     IsRequired: boolean;
 }
-    
-        
+
+
 //****************************************************************************
-// INPUT TYPE for Action Params   
+// INPUT TYPE for Action Params
 //****************************************************************************
 @InputType()
 export class UpdateActionParamInput {
@@ -20811,7 +20814,7 @@ export class UpdateActionParamInput {
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
 }
-    
+
 //****************************************************************************
 // RESOLVER for Action Params
 //****************************************************************************
@@ -20863,32 +20866,32 @@ export class ActionParamResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Action Params', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-      
-    @FieldResolver(() => [mj_core_schema_server_object_types.EntityActionParam_])
+
+    @FieldResolver(() => [EntityActionParam_])
     async EntityActionParamsArray(@Root() actionparam_: ActionParam_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entity Action Params', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityActionParams] WHERE [ActionParamID]='${actionparam_.ID}' ` + this.getRowLevelSecurityWhereClause('Entity Action Params', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Entity Action Params', await dataSource.query(sSQL));
         return result;
     }
-          
-    @FieldResolver(() => [mj_core_schema_server_object_types.ScheduledActionParam_])
+
+    @FieldResolver(() => [ScheduledActionParam_])
     async ScheduledActionParamsArray(@Root() actionparam_: ActionParam_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Scheduled Action Params', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwScheduledActionParams] WHERE [ActionParamID]='${actionparam_.ID}' ` + this.getRowLevelSecurityWhereClause('Scheduled Action Params', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Scheduled Action Params', await dataSource.query(sSQL));
         return result;
     }
-        
+
     @Mutation(() => ActionParam_)
     async CreateActionParam(
         @Arg('input', () => CreateActionParamInput) input: CreateActionParamInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
+        @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.CreateRecord('Action Params', input, dataSource, userPayload, pubSub)
     }
-        
+
     @Mutation(() => ActionParam_)
     async UpdateActionParam(
         @Arg('input', () => UpdateActionParamInput) input: UpdateActionParamInput,
@@ -20897,55 +20900,55 @@ export class ActionParamResolver extends ResolverBase {
     ) {
         return this.UpdateRecord('Action Params', input, dataSource, userPayload, pubSub);
     }
-    
+
     @Mutation(() => ActionParam_)
     async DeleteActionParam(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Action Params', key, options, dataSource, userPayload, pubSub);
     }
-    
+
 }
 
 //****************************************************************************
 // ENTITY CLASS for Action Libraries
 //****************************************************************************
 @ObjectType({ description: 'Tracks the list of libraries that a given Action uses, including a list of classes/functions for each library.' })
-export class ActionLibrary_ {  
-    @Field() 
+export class ActionLibrary_ {
+    @Field()
     @MaxLength(16)
     ID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     ActionID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     LibraryID: string;
-          
-    @Field({nullable: true, description: 'List of classes and functions used by the action from the library.'}) 
+
+    @Field({nullable: true, description: 'List of classes and functions used by the action from the library.'})
     ItemsUsed?: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__CreatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(850)
     Action: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(510)
     Library: string;
-        
+
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for Action Libraries   
+// INPUT TYPE for Action Libraries
 //****************************************************************************
 @InputType()
 export class CreateActionLibraryInput {
@@ -20958,10 +20961,10 @@ export class CreateActionLibraryInput {
     @Field({ nullable: true })
     ItemsUsed?: string;
 }
-    
-        
+
+
 //****************************************************************************
-// INPUT TYPE for Action Libraries   
+// INPUT TYPE for Action Libraries
 //****************************************************************************
 @InputType()
 export class UpdateActionLibraryInput {
@@ -20980,7 +20983,7 @@ export class UpdateActionLibraryInput {
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
 }
-    
+
 //****************************************************************************
 // RESOLVER for Action Libraries
 //****************************************************************************
@@ -21032,16 +21035,16 @@ export class ActionLibraryResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Action Libraries', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-    
+
     @Mutation(() => ActionLibrary_)
     async CreateActionLibrary(
         @Arg('input', () => CreateActionLibraryInput) input: CreateActionLibraryInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
+        @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.CreateRecord('Action Libraries', input, dataSource, userPayload, pubSub)
     }
-        
+
     @Mutation(() => ActionLibrary_)
     async UpdateActionLibrary(
         @Arg('input', () => UpdateActionLibraryInput) input: UpdateActionLibraryInput,
@@ -21050,59 +21053,59 @@ export class ActionLibraryResolver extends ResolverBase {
     ) {
         return this.UpdateRecord('Action Libraries', input, dataSource, userPayload, pubSub);
     }
-    
+
     @Mutation(() => ActionLibrary_)
     async DeleteActionLibrary(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Action Libraries', key, options, dataSource, userPayload, pubSub);
     }
-    
+
 }
 
 //****************************************************************************
 // ENTITY CLASS for Libraries
 //****************************************************************************
 @ObjectType({ description: 'Stores information about the available libraries, including a list of classes/functions, type definitions, and sample code. You can add additional custom libraries here to make them avaialable to code generation features within the system.' })
-export class Library_ {  
-    @Field() 
+export class Library_ {
+    @Field()
     @MaxLength(16)
     ID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(510)
     Name: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     Description?: string;
-          
-    @Field({description: 'Status of the library, only libraries marked as Active will be available for use by generated code. If a library was once active but no longer is, existing code that used the library will not be affected.'}) 
+
+    @Field({description: 'Status of the library, only libraries marked as Active will be available for use by generated code. If a library was once active but no longer is, existing code that used the library will not be affected.'})
     @MaxLength(40)
     Status: string;
-          
-    @Field({nullable: true, description: 'Code showing the types and functions defined in the library to be used for reference by humans and AI'}) 
+
+    @Field({nullable: true, description: 'Code showing the types and functions defined in the library to be used for reference by humans and AI'})
     TypeDefinitions?: string;
-          
-    @Field({nullable: true, description: 'Examples of code use of the classes and/or functions from within the library'}) 
+
+    @Field({nullable: true, description: 'Examples of code use of the classes and/or functions from within the library'})
     SampleCode?: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__CreatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-        
-    @Field(() => [mj_core_schema_server_object_types.ActionLibrary_])
-    ActionLibrariesArray: mj_core_schema_server_object_types.ActionLibrary_[]; // Link to ActionLibraries
-    
-    @Field(() => [mj_core_schema_server_object_types.LibraryItem_])
-    LibraryItemsArray: mj_core_schema_server_object_types.LibraryItem_[]; // Link to LibraryItems
-    
+
+    @Field(() => [ActionLibrary_])
+    ActionLibrariesArray: ActionLibrary_[]; // Link to ActionLibraries
+
+    @Field(() => [LibraryItem_])
+    LibraryItemsArray: LibraryItem_[]; // Link to LibraryItems
+
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for Libraries   
+// INPUT TYPE for Libraries
 //****************************************************************************
 @InputType()
 export class CreateLibraryInput {
@@ -21121,10 +21124,10 @@ export class CreateLibraryInput {
     @Field({ nullable: true })
     SampleCode?: string;
 }
-    
-        
+
+
 //****************************************************************************
-// INPUT TYPE for Libraries   
+// INPUT TYPE for Libraries
 //****************************************************************************
 @InputType()
 export class UpdateLibraryInput {
@@ -21149,7 +21152,7 @@ export class UpdateLibraryInput {
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
 }
-    
+
 //****************************************************************************
 // RESOLVER for Libraries
 //****************************************************************************
@@ -21201,32 +21204,32 @@ export class LibraryResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Libraries', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-      
-    @FieldResolver(() => [mj_core_schema_server_object_types.ActionLibrary_])
+
+    @FieldResolver(() => [ActionLibrary_])
     async ActionLibrariesArray(@Root() library_: Library_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Action Libraries', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionLibraries] WHERE [LibraryID]='${library_.ID}' ` + this.getRowLevelSecurityWhereClause('Action Libraries', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Action Libraries', await dataSource.query(sSQL));
         return result;
     }
-          
-    @FieldResolver(() => [mj_core_schema_server_object_types.LibraryItem_])
+
+    @FieldResolver(() => [LibraryItem_])
     async LibraryItemsArray(@Root() library_: Library_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Library Items', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwLibraryItems] WHERE [LibraryID]='${library_.ID}' ` + this.getRowLevelSecurityWhereClause('Library Items', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Library Items', await dataSource.query(sSQL));
         return result;
     }
-        
+
     @Mutation(() => Library_)
     async CreateLibrary(
         @Arg('input', () => CreateLibraryInput) input: CreateLibraryInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
+        @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.CreateRecord('Libraries', input, dataSource, userPayload, pubSub)
     }
-        
+
     @Mutation(() => Library_)
     async UpdateLibrary(
         @Arg('input', () => UpdateLibraryInput) input: UpdateLibraryInput,
@@ -21235,51 +21238,51 @@ export class LibraryResolver extends ResolverBase {
     ) {
         return this.UpdateRecord('Libraries', input, dataSource, userPayload, pubSub);
     }
-    
+
 }
 
 //****************************************************************************
 // ENTITY CLASS for List Categories
 //****************************************************************************
 @ObjectType()
-export class ListCategory_ {  
-    @Field() 
+export class ListCategory_ {
+    @Field()
     @MaxLength(16)
     ID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(200)
     Name: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     Description?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(16)
     ParentID?: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     UserID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__CreatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-        
-    @Field(() => [mj_core_schema_server_object_types.ListCategory_])
-    ListCategoriesArray: mj_core_schema_server_object_types.ListCategory_[]; // Link to ListCategories
-    
-    @Field(() => [mj_core_schema_server_object_types.List_])
-    ListsArray: mj_core_schema_server_object_types.List_[]; // Link to Lists
-    
+
+    @Field(() => [ListCategory_])
+    ListCategoriesArray: ListCategory_[]; // Link to ListCategories
+
+    @Field(() => [List_])
+    ListsArray: List_[]; // Link to Lists
+
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for List Categories   
+// INPUT TYPE for List Categories
 //****************************************************************************
 @InputType()
 export class CreateListCategoryInput {
@@ -21295,10 +21298,10 @@ export class CreateListCategoryInput {
     @Field()
     UserID: string;
 }
-    
-        
+
+
 //****************************************************************************
-// INPUT TYPE for List Categories   
+// INPUT TYPE for List Categories
 //****************************************************************************
 @InputType()
 export class UpdateListCategoryInput {
@@ -21320,7 +21323,7 @@ export class UpdateListCategoryInput {
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
 }
-    
+
 //****************************************************************************
 // RESOLVER for List Categories
 //****************************************************************************
@@ -21372,32 +21375,32 @@ export class ListCategoryResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('List Categories', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-      
-    @FieldResolver(() => [mj_core_schema_server_object_types.ListCategory_])
+
+    @FieldResolver(() => [ListCategory_])
     async ListCategoriesArray(@Root() listcategory_: ListCategory_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('List Categories', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwListCategories] WHERE [ParentID]='${listcategory_.ID}' ` + this.getRowLevelSecurityWhereClause('List Categories', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('List Categories', await dataSource.query(sSQL));
         return result;
     }
-          
-    @FieldResolver(() => [mj_core_schema_server_object_types.List_])
+
+    @FieldResolver(() => [List_])
     async ListsArray(@Root() listcategory_: ListCategory_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Lists', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwLists] WHERE [CategoryID]='${listcategory_.ID}' ` + this.getRowLevelSecurityWhereClause('Lists', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Lists', await dataSource.query(sSQL));
         return result;
     }
-        
+
     @Mutation(() => ListCategory_)
     async CreateListCategory(
         @Arg('input', () => CreateListCategoryInput) input: CreateListCategoryInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
+        @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.CreateRecord('List Categories', input, dataSource, userPayload, pubSub)
     }
-        
+
     @Mutation(() => ListCategory_)
     async UpdateListCategory(
         @Arg('input', () => UpdateListCategoryInput) input: UpdateListCategoryInput,
@@ -21406,53 +21409,53 @@ export class ListCategoryResolver extends ResolverBase {
     ) {
         return this.UpdateRecord('List Categories', input, dataSource, userPayload, pubSub);
     }
-    
+
 }
 
 //****************************************************************************
 // ENTITY CLASS for Communication Providers
 //****************************************************************************
 @ObjectType({ description: 'All supported communication providers.' })
-export class CommunicationProvider_ {  
-    @Field() 
+export class CommunicationProvider_ {
+    @Field()
     @MaxLength(16)
     ID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(510)
     Name: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     Description?: string;
-          
-    @Field({description: 'The status of the communication provider (Disabled or Active).'}) 
+
+    @Field({description: 'The status of the communication provider (Disabled or Active).'})
     @MaxLength(40)
     Status: string;
-          
-    @Field(() => Boolean, {description: 'Indicates if the provider supports sending messages.'}) 
+
+    @Field(() => Boolean, {description: 'Indicates if the provider supports sending messages.'})
     SupportsSending: boolean;
-          
-    @Field(() => Boolean, {description: 'Indicates if the provider supports receiving messages.'}) 
+
+    @Field(() => Boolean, {description: 'Indicates if the provider supports receiving messages.'})
     SupportsReceiving: boolean;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__CreatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-        
-    @Field(() => [mj_core_schema_server_object_types.CommunicationLog_])
-    CommunicationLogsArray: mj_core_schema_server_object_types.CommunicationLog_[]; // Link to CommunicationLogs
-    
-    @Field(() => [mj_core_schema_server_object_types.CommunicationProviderMessageType_])
-    CommunicationProviderMessageTypesArray: mj_core_schema_server_object_types.CommunicationProviderMessageType_[]; // Link to CommunicationProviderMessageTypes
-    
+
+    @Field(() => [CommunicationLog_])
+    CommunicationLogsArray: CommunicationLog_[]; // Link to CommunicationLogs
+
+    @Field(() => [CommunicationProviderMessageType_])
+    CommunicationProviderMessageTypesArray: CommunicationProviderMessageType_[]; // Link to CommunicationProviderMessageTypes
+
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for Communication Providers   
+// INPUT TYPE for Communication Providers
 //****************************************************************************
 @InputType()
 export class CreateCommunicationProviderInput {
@@ -21471,10 +21474,10 @@ export class CreateCommunicationProviderInput {
     @Field(() => Boolean)
     SupportsReceiving: boolean;
 }
-    
-        
+
+
 //****************************************************************************
-// INPUT TYPE for Communication Providers   
+// INPUT TYPE for Communication Providers
 //****************************************************************************
 @InputType()
 export class UpdateCommunicationProviderInput {
@@ -21499,7 +21502,7 @@ export class UpdateCommunicationProviderInput {
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
 }
-    
+
 //****************************************************************************
 // RESOLVER for Communication Providers
 //****************************************************************************
@@ -21551,32 +21554,32 @@ export class CommunicationProviderResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Communication Providers', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-      
-    @FieldResolver(() => [mj_core_schema_server_object_types.CommunicationLog_])
+
+    @FieldResolver(() => [CommunicationLog_])
     async CommunicationLogsArray(@Root() communicationprovider_: CommunicationProvider_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Communication Logs', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwCommunicationLogs] WHERE [CommunicationProviderID]='${communicationprovider_.ID}' ` + this.getRowLevelSecurityWhereClause('Communication Logs', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Communication Logs', await dataSource.query(sSQL));
         return result;
     }
-          
-    @FieldResolver(() => [mj_core_schema_server_object_types.CommunicationProviderMessageType_])
+
+    @FieldResolver(() => [CommunicationProviderMessageType_])
     async CommunicationProviderMessageTypesArray(@Root() communicationprovider_: CommunicationProvider_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Communication Provider Message Types', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwCommunicationProviderMessageTypes] WHERE [CommunicationProviderID]='${communicationprovider_.ID}' ` + this.getRowLevelSecurityWhereClause('Communication Provider Message Types', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Communication Provider Message Types', await dataSource.query(sSQL));
         return result;
     }
-        
+
     @Mutation(() => CommunicationProvider_)
     async CreateCommunicationProvider(
         @Arg('input', () => CreateCommunicationProviderInput) input: CreateCommunicationProviderInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
+        @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.CreateRecord('Communication Providers', input, dataSource, userPayload, pubSub)
     }
-        
+
     @Mutation(() => CommunicationProvider_)
     async UpdateCommunicationProvider(
         @Arg('input', () => UpdateCommunicationProviderInput) input: UpdateCommunicationProviderInput,
@@ -21585,63 +21588,63 @@ export class CommunicationProviderResolver extends ResolverBase {
     ) {
         return this.UpdateRecord('Communication Providers', input, dataSource, userPayload, pubSub);
     }
-    
+
 }
 
 //****************************************************************************
 // ENTITY CLASS for Communication Runs
 //****************************************************************************
 @ObjectType({ description: 'Runs of bulk message sends and receives.' })
-export class CommunicationRun_ {  
-    @Field() 
+export class CommunicationRun_ {
+    @Field()
     @MaxLength(16)
     ID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     UserID: string;
-          
-    @Field({description: 'The direction of the communication run (Sending or Receiving).'}) 
+
+    @Field({description: 'The direction of the communication run (Sending or Receiving).'})
     @MaxLength(40)
     Direction: string;
-          
-    @Field({description: 'The status of the communication run (Pending, In-Progress, Complete, Failed).'}) 
+
+    @Field({description: 'The status of the communication run (Pending, In-Progress, Complete, Failed).'})
     @MaxLength(40)
     Status: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(8)
     StartedAt?: Date;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(8)
     EndedAt?: Date;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     Comments?: string;
-          
-    @Field({nullable: true, description: 'The error message if the communication run failed.'}) 
+
+    @Field({nullable: true, description: 'The error message if the communication run failed.'})
     ErrorMessage?: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__CreatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(200)
     User: string;
-        
-    @Field(() => [mj_core_schema_server_object_types.CommunicationLog_])
-    CommunicationLogsArray: mj_core_schema_server_object_types.CommunicationLog_[]; // Link to CommunicationLogs
-    
+
+    @Field(() => [CommunicationLog_])
+    CommunicationLogsArray: CommunicationLog_[]; // Link to CommunicationLogs
+
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for Communication Runs   
+// INPUT TYPE for Communication Runs
 //****************************************************************************
 @InputType()
 export class CreateCommunicationRunInput {
@@ -21666,10 +21669,10 @@ export class CreateCommunicationRunInput {
     @Field({ nullable: true })
     ErrorMessage?: string;
 }
-    
-        
+
+
 //****************************************************************************
-// INPUT TYPE for Communication Runs   
+// INPUT TYPE for Communication Runs
 //****************************************************************************
 @InputType()
 export class UpdateCommunicationRunInput {
@@ -21700,7 +21703,7 @@ export class UpdateCommunicationRunInput {
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
 }
-    
+
 //****************************************************************************
 // RESOLVER for Communication Runs
 //****************************************************************************
@@ -21752,24 +21755,24 @@ export class CommunicationRunResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Communication Runs', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-      
-    @FieldResolver(() => [mj_core_schema_server_object_types.CommunicationLog_])
+
+    @FieldResolver(() => [CommunicationLog_])
     async CommunicationLogsArray(@Root() communicationrun_: CommunicationRun_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Communication Logs', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwCommunicationLogs] WHERE [CommunicationRunID]='${communicationrun_.ID}' ` + this.getRowLevelSecurityWhereClause('Communication Logs', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Communication Logs', await dataSource.query(sSQL));
         return result;
     }
-        
+
     @Mutation(() => CommunicationRun_)
     async CreateCommunicationRun(
         @Arg('input', () => CreateCommunicationRunInput) input: CreateCommunicationRunInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
+        @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.CreateRecord('Communication Runs', input, dataSource, userPayload, pubSub)
     }
-        
+
     @Mutation(() => CommunicationRun_)
     async UpdateCommunicationRun(
         @Arg('input', () => UpdateCommunicationRunInput) input: UpdateCommunicationRunInput,
@@ -21778,60 +21781,60 @@ export class CommunicationRunResolver extends ResolverBase {
     ) {
         return this.UpdateRecord('Communication Runs', input, dataSource, userPayload, pubSub);
     }
-    
+
 }
 
 //****************************************************************************
 // ENTITY CLASS for Communication Provider Message Types
 //****************************************************************************
 @ObjectType({ description: 'Providers and their supported message types with additional attributes.' })
-export class CommunicationProviderMessageType_ {  
-    @Field() 
+export class CommunicationProviderMessageType_ {
+    @Field()
     @MaxLength(16)
     ID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     CommunicationProviderID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     CommunicationBaseMessageTypeID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(510)
     Name: string;
-          
-    @Field({description: 'The status of the provider message type (Disabled or Active).'}) 
+
+    @Field({description: 'The status of the provider message type (Disabled or Active).'})
     @MaxLength(40)
     Status: string;
-          
-    @Field({nullable: true, description: 'Additional attributes specific to the provider message type.'}) 
+
+    @Field({nullable: true, description: 'Additional attributes specific to the provider message type.'})
     AdditionalAttributes?: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__CreatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(510)
     CommunicationProvider: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(200)
     CommunicationBaseMessageType: string;
-        
-    @Field(() => [mj_core_schema_server_object_types.CommunicationLog_])
-    CommunicationLogsArray: mj_core_schema_server_object_types.CommunicationLog_[]; // Link to CommunicationLogs
-    
+
+    @Field(() => [CommunicationLog_])
+    CommunicationLogsArray: CommunicationLog_[]; // Link to CommunicationLogs
+
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for Communication Provider Message Types   
+// INPUT TYPE for Communication Provider Message Types
 //****************************************************************************
 @InputType()
 export class CreateCommunicationProviderMessageTypeInput {
@@ -21850,10 +21853,10 @@ export class CreateCommunicationProviderMessageTypeInput {
     @Field({ nullable: true })
     AdditionalAttributes?: string;
 }
-    
-        
+
+
 //****************************************************************************
-// INPUT TYPE for Communication Provider Message Types   
+// INPUT TYPE for Communication Provider Message Types
 //****************************************************************************
 @InputType()
 export class UpdateCommunicationProviderMessageTypeInput {
@@ -21878,7 +21881,7 @@ export class UpdateCommunicationProviderMessageTypeInput {
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
 }
-    
+
 //****************************************************************************
 // RESOLVER for Communication Provider Message Types
 //****************************************************************************
@@ -21930,24 +21933,24 @@ export class CommunicationProviderMessageTypeResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Communication Provider Message Types', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-      
-    @FieldResolver(() => [mj_core_schema_server_object_types.CommunicationLog_])
+
+    @FieldResolver(() => [CommunicationLog_])
     async CommunicationLogsArray(@Root() communicationprovidermessagetype_: CommunicationProviderMessageType_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Communication Logs', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwCommunicationLogs] WHERE [CommunicationProviderMessageTypeID]='${communicationprovidermessagetype_.ID}' ` + this.getRowLevelSecurityWhereClause('Communication Logs', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Communication Logs', await dataSource.query(sSQL));
         return result;
     }
-        
+
     @Mutation(() => CommunicationProviderMessageType_)
     async CreateCommunicationProviderMessageType(
         @Arg('input', () => CreateCommunicationProviderMessageTypeInput) input: CreateCommunicationProviderMessageTypeInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
+        @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.CreateRecord('Communication Provider Message Types', input, dataSource, userPayload, pubSub)
     }
-        
+
     @Mutation(() => CommunicationProviderMessageType_)
     async UpdateCommunicationProviderMessageType(
         @Arg('input', () => UpdateCommunicationProviderMessageTypeInput) input: UpdateCommunicationProviderMessageTypeInput,
@@ -21956,74 +21959,74 @@ export class CommunicationProviderMessageTypeResolver extends ResolverBase {
     ) {
         return this.UpdateRecord('Communication Provider Message Types', input, dataSource, userPayload, pubSub);
     }
-    
+
     @Mutation(() => CommunicationProviderMessageType_)
     async DeleteCommunicationProviderMessageType(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Communication Provider Message Types', key, options, dataSource, userPayload, pubSub);
     }
-    
+
 }
 
 //****************************************************************************
 // ENTITY CLASS for Communication Logs
 //****************************************************************************
 @ObjectType({ description: 'Logs of sent and received messages.' })
-export class CommunicationLog_ {  
-    @Field() 
+export class CommunicationLog_ {
+    @Field()
     @MaxLength(16)
     ID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     CommunicationProviderID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     CommunicationProviderMessageTypeID: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(16)
     CommunicationRunID?: string;
-          
-    @Field({description: 'The direction of the communication log (Sending or Receiving).'}) 
+
+    @Field({description: 'The direction of the communication log (Sending or Receiving).'})
     @MaxLength(40)
     Direction: string;
-          
-    @Field({description: 'The date and time when the message was logged.'}) 
+
+    @Field({description: 'The date and time when the message was logged.'})
     @MaxLength(8)
     MessageDate: Date;
-          
-    @Field({description: 'The status of the logged message (Pending, In-Progress, Complete, Failed).'}) 
+
+    @Field({description: 'The status of the logged message (Pending, In-Progress, Complete, Failed).'})
     @MaxLength(40)
     Status: string;
-          
-    @Field({nullable: true, description: 'The content of the logged message.'}) 
+
+    @Field({nullable: true, description: 'The content of the logged message.'})
     MessageContent?: string;
-          
-    @Field({nullable: true, description: 'The error message if the message sending failed.'}) 
+
+    @Field({nullable: true, description: 'The error message if the message sending failed.'})
     ErrorMessage?: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__CreatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(510)
     CommunicationProvider: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(510)
     CommunicationProviderMessageType: string;
-        
+
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for Communication Logs   
+// INPUT TYPE for Communication Logs
 //****************************************************************************
 @InputType()
 export class CreateCommunicationLogInput {
@@ -22051,10 +22054,10 @@ export class CreateCommunicationLogInput {
     @Field({ nullable: true })
     ErrorMessage?: string;
 }
-    
-        
+
+
 //****************************************************************************
-// INPUT TYPE for Communication Logs   
+// INPUT TYPE for Communication Logs
 //****************************************************************************
 @InputType()
 export class UpdateCommunicationLogInput {
@@ -22088,7 +22091,7 @@ export class UpdateCommunicationLogInput {
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
 }
-    
+
 //****************************************************************************
 // RESOLVER for Communication Logs
 //****************************************************************************
@@ -22140,16 +22143,16 @@ export class CommunicationLogResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Communication Logs', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-    
+
     @Mutation(() => CommunicationLog_)
     async CreateCommunicationLog(
         @Arg('input', () => CreateCommunicationLogInput) input: CreateCommunicationLogInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
+        @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.CreateRecord('Communication Logs', input, dataSource, userPayload, pubSub)
     }
-        
+
     @Mutation(() => CommunicationLog_)
     async UpdateCommunicationLog(
         @Arg('input', () => UpdateCommunicationLogInput) input: UpdateCommunicationLogInput,
@@ -22158,52 +22161,52 @@ export class CommunicationLogResolver extends ResolverBase {
     ) {
         return this.UpdateRecord('Communication Logs', input, dataSource, userPayload, pubSub);
     }
-    
+
 }
 
 //****************************************************************************
 // ENTITY CLASS for Communication Base Message Types
 //****************************************************************************
 @ObjectType({ description: 'Base message types and their supported functionalities.' })
-export class CommunicationBaseMessageType_ {  
-    @Field() 
+export class CommunicationBaseMessageType_ {
+    @Field()
     @MaxLength(16)
     ID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(200)
     Type: string;
-          
-    @Field(() => Boolean, {description: 'Indicates if attachments are supported.'}) 
+
+    @Field(() => Boolean, {description: 'Indicates if attachments are supported.'})
     SupportsAttachments: boolean;
-          
-    @Field(() => Boolean, {description: 'Indicates if a subject line is supported.'}) 
+
+    @Field(() => Boolean, {description: 'Indicates if a subject line is supported.'})
     SupportsSubjectLine: boolean;
-          
-    @Field(() => Boolean, {description: 'Indicates if HTML content is supported.'}) 
+
+    @Field(() => Boolean, {description: 'Indicates if HTML content is supported.'})
     SupportsHtml: boolean;
-          
-    @Field(() => Int, {nullable: true, description: 'The maximum size in bytes for the message.'}) 
+
+    @Field(() => Int, {nullable: true, description: 'The maximum size in bytes for the message.'})
     MaxBytes?: number;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__CreatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-        
-    @Field(() => [mj_core_schema_server_object_types.CommunicationProviderMessageType_])
-    CommunicationProviderMessageTypesArray: mj_core_schema_server_object_types.CommunicationProviderMessageType_[]; // Link to CommunicationProviderMessageTypes
-    
-    @Field(() => [mj_core_schema_server_object_types.EntityCommunicationMessageType_])
-    EntityCommunicationMessageTypesArray: mj_core_schema_server_object_types.EntityCommunicationMessageType_[]; // Link to EntityCommunicationMessageTypes
-    
+
+    @Field(() => [CommunicationProviderMessageType_])
+    CommunicationProviderMessageTypesArray: CommunicationProviderMessageType_[]; // Link to CommunicationProviderMessageTypes
+
+    @Field(() => [EntityCommunicationMessageType_])
+    EntityCommunicationMessageTypesArray: EntityCommunicationMessageType_[]; // Link to EntityCommunicationMessageTypes
+
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for Communication Base Message Types   
+// INPUT TYPE for Communication Base Message Types
 //****************************************************************************
 @InputType()
 export class CreateCommunicationBaseMessageTypeInput {
@@ -22222,10 +22225,10 @@ export class CreateCommunicationBaseMessageTypeInput {
     @Field(() => Int, { nullable: true })
     MaxBytes?: number;
 }
-    
-        
+
+
 //****************************************************************************
-// INPUT TYPE for Communication Base Message Types   
+// INPUT TYPE for Communication Base Message Types
 //****************************************************************************
 @InputType()
 export class UpdateCommunicationBaseMessageTypeInput {
@@ -22250,7 +22253,7 @@ export class UpdateCommunicationBaseMessageTypeInput {
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
 }
-    
+
 //****************************************************************************
 // RESOLVER for Communication Base Message Types
 //****************************************************************************
@@ -22302,32 +22305,32 @@ export class CommunicationBaseMessageTypeResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Communication Base Message Types', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-      
-    @FieldResolver(() => [mj_core_schema_server_object_types.CommunicationProviderMessageType_])
+
+    @FieldResolver(() => [CommunicationProviderMessageType_])
     async CommunicationProviderMessageTypesArray(@Root() communicationbasemessagetype_: CommunicationBaseMessageType_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Communication Provider Message Types', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwCommunicationProviderMessageTypes] WHERE [CommunicationBaseMessageTypeID]='${communicationbasemessagetype_.ID}' ` + this.getRowLevelSecurityWhereClause('Communication Provider Message Types', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Communication Provider Message Types', await dataSource.query(sSQL));
         return result;
     }
-          
-    @FieldResolver(() => [mj_core_schema_server_object_types.EntityCommunicationMessageType_])
+
+    @FieldResolver(() => [EntityCommunicationMessageType_])
     async EntityCommunicationMessageTypesArray(@Root() communicationbasemessagetype_: CommunicationBaseMessageType_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entity Communication Message Types', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityCommunicationMessageTypes] WHERE [BaseMessageTypeID]='${communicationbasemessagetype_.ID}' ` + this.getRowLevelSecurityWhereClause('Entity Communication Message Types', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Entity Communication Message Types', await dataSource.query(sSQL));
         return result;
     }
-        
+
     @Mutation(() => CommunicationBaseMessageType_)
     async CreateCommunicationBaseMessageType(
         @Arg('input', () => CreateCommunicationBaseMessageTypeInput) input: CreateCommunicationBaseMessageTypeInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
+        @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.CreateRecord('Communication Base Message Types', input, dataSource, userPayload, pubSub)
     }
-        
+
     @Mutation(() => CommunicationBaseMessageType_)
     async UpdateCommunicationBaseMessageType(
         @Arg('input', () => UpdateCommunicationBaseMessageTypeInput) input: UpdateCommunicationBaseMessageTypeInput,
@@ -22336,76 +22339,76 @@ export class CommunicationBaseMessageTypeResolver extends ResolverBase {
     ) {
         return this.UpdateRecord('Communication Base Message Types', input, dataSource, userPayload, pubSub);
     }
-    
+
 }
 
 //****************************************************************************
 // ENTITY CLASS for Templates
 //****************************************************************************
 @ObjectType({ description: 'Templates are used for dynamic expansion of a static template with data from a given context. Templates can be used to create documents, messages and anything else that requires dynamic document creation merging together static text, data and lightweight logic' })
-export class Template_ {  
-    @Field() 
+export class Template_ {
+    @Field()
     @MaxLength(16)
     ID: string;
-          
-    @Field({description: 'Name of the template'}) 
+
+    @Field({description: 'Name of the template'})
     @MaxLength(510)
     Name: string;
-          
-    @Field({nullable: true, description: 'Description of the template'}) 
+
+    @Field({nullable: true, description: 'Description of the template'})
     Description?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(16)
     CategoryID?: string;
-          
-    @Field({nullable: true, description: 'This prompt will be used by the AI to generate template content as requested by the user.'}) 
+
+    @Field({nullable: true, description: 'This prompt will be used by the AI to generate template content as requested by the user.'})
     UserPrompt?: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     UserID: string;
-          
-    @Field({nullable: true, description: 'Optional, if provided, this template will not be available for use until the specified date. Requires IsActive to be set to 1'}) 
+
+    @Field({nullable: true, description: 'Optional, if provided, this template will not be available for use until the specified date. Requires IsActive to be set to 1'})
     @MaxLength(8)
     ActiveAt?: Date;
-          
-    @Field({nullable: true, description: 'Optional, if provided, this template will not be available for use after the specified date. If IsActive=0, this has no effect.'}) 
+
+    @Field({nullable: true, description: 'Optional, if provided, this template will not be available for use after the specified date. If IsActive=0, this has no effect.'})
     @MaxLength(8)
     DisabledAt?: Date;
-          
-    @Field(() => Boolean, {description: 'If set to 0, the template will be disabled regardless of the values in ActiveAt/DisabledAt. '}) 
+
+    @Field(() => Boolean, {description: 'If set to 0, the template will be disabled regardless of the values in ActiveAt/DisabledAt. '})
     IsActive: boolean;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__CreatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(510)
     Category?: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(200)
     User: string;
-        
-    @Field(() => [mj_core_schema_server_object_types.TemplateContent_])
-    TemplateContentsArray: mj_core_schema_server_object_types.TemplateContent_[]; // Link to TemplateContents
-    
-    @Field(() => [mj_core_schema_server_object_types.TemplateParam_])
-    TemplateParamsArray: mj_core_schema_server_object_types.TemplateParam_[]; // Link to TemplateParams
-    
-    @Field(() => [mj_core_schema_server_object_types.EntityDocument_])
-    EntityDocumentsArray: mj_core_schema_server_object_types.EntityDocument_[]; // Link to EntityDocuments
-    
+
+    @Field(() => [TemplateContent_])
+    TemplateContentsArray: TemplateContent_[]; // Link to TemplateContents
+
+    @Field(() => [TemplateParam_])
+    TemplateParamsArray: TemplateParam_[]; // Link to TemplateParams
+
+    @Field(() => [EntityDocument_])
+    EntityDocumentsArray: EntityDocument_[]; // Link to EntityDocuments
+
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for Templates   
+// INPUT TYPE for Templates
 //****************************************************************************
 @InputType()
 export class CreateTemplateInput {
@@ -22433,10 +22436,10 @@ export class CreateTemplateInput {
     @Field(() => Boolean)
     IsActive: boolean;
 }
-    
-        
+
+
 //****************************************************************************
-// INPUT TYPE for Templates   
+// INPUT TYPE for Templates
 //****************************************************************************
 @InputType()
 export class UpdateTemplateInput {
@@ -22470,7 +22473,7 @@ export class UpdateTemplateInput {
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
 }
-    
+
 //****************************************************************************
 // RESOLVER for Templates
 //****************************************************************************
@@ -22522,40 +22525,40 @@ export class TemplateResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Templates', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-      
-    @FieldResolver(() => [mj_core_schema_server_object_types.TemplateContent_])
+
+    @FieldResolver(() => [TemplateContent_])
     async TemplateContentsArray(@Root() template_: Template_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Template Contents', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwTemplateContents] WHERE [TemplateID]='${template_.ID}' ` + this.getRowLevelSecurityWhereClause('Template Contents', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Template Contents', await dataSource.query(sSQL));
         return result;
     }
-          
-    @FieldResolver(() => [mj_core_schema_server_object_types.TemplateParam_])
+
+    @FieldResolver(() => [TemplateParam_])
     async TemplateParamsArray(@Root() template_: Template_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Template Params', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwTemplateParams] WHERE [TemplateID]='${template_.ID}' ` + this.getRowLevelSecurityWhereClause('Template Params', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Template Params', await dataSource.query(sSQL));
         return result;
     }
-          
-    @FieldResolver(() => [mj_core_schema_server_object_types.EntityDocument_])
+
+    @FieldResolver(() => [EntityDocument_])
     async EntityDocumentsArray(@Root() template_: Template_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entity Documents', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityDocuments] WHERE [TemplateID]='${template_.ID}' ` + this.getRowLevelSecurityWhereClause('Entity Documents', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Entity Documents', await dataSource.query(sSQL));
         return result;
     }
-        
+
     @Mutation(() => Template_)
     async CreateTemplate(
         @Arg('input', () => CreateTemplateInput) input: CreateTemplateInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
+        @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.CreateRecord('Templates', input, dataSource, userPayload, pubSub)
     }
-        
+
     @Mutation(() => Template_)
     async UpdateTemplate(
         @Arg('input', () => UpdateTemplateInput) input: UpdateTemplateInput,
@@ -22564,59 +22567,59 @@ export class TemplateResolver extends ResolverBase {
     ) {
         return this.UpdateRecord('Templates', input, dataSource, userPayload, pubSub);
     }
-    
+
 }
 
 //****************************************************************************
 // ENTITY CLASS for Template Categories
 //****************************************************************************
 @ObjectType({ description: 'Template categories for organizing templates' })
-export class TemplateCategory_ {  
-    @Field() 
+export class TemplateCategory_ {
+    @Field()
     @MaxLength(16)
     ID: string;
-          
-    @Field({description: 'Name of the template category'}) 
+
+    @Field({description: 'Name of the template category'})
     @MaxLength(510)
     Name: string;
-          
-    @Field({nullable: true, description: 'Description of the template category'}) 
+
+    @Field({nullable: true, description: 'Description of the template category'})
     Description?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(16)
     ParentID?: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     UserID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__CreatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(510)
     Parent?: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(200)
     User: string;
-        
-    @Field(() => [mj_core_schema_server_object_types.Template_])
-    TemplatesArray: mj_core_schema_server_object_types.Template_[]; // Link to Templates
-    
-    @Field(() => [mj_core_schema_server_object_types.TemplateCategory_])
-    TemplateCategoriesArray: mj_core_schema_server_object_types.TemplateCategory_[]; // Link to TemplateCategories
-    
+
+    @Field(() => [Template_])
+    TemplatesArray: Template_[]; // Link to Templates
+
+    @Field(() => [TemplateCategory_])
+    TemplateCategoriesArray: TemplateCategory_[]; // Link to TemplateCategories
+
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for Template Categories   
+// INPUT TYPE for Template Categories
 //****************************************************************************
 @InputType()
 export class CreateTemplateCategoryInput {
@@ -22632,10 +22635,10 @@ export class CreateTemplateCategoryInput {
     @Field()
     UserID: string;
 }
-    
-        
+
+
 //****************************************************************************
-// INPUT TYPE for Template Categories   
+// INPUT TYPE for Template Categories
 //****************************************************************************
 @InputType()
 export class UpdateTemplateCategoryInput {
@@ -22657,7 +22660,7 @@ export class UpdateTemplateCategoryInput {
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
 }
-    
+
 //****************************************************************************
 // RESOLVER for Template Categories
 //****************************************************************************
@@ -22709,32 +22712,32 @@ export class TemplateCategoryResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Template Categories', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-      
-    @FieldResolver(() => [mj_core_schema_server_object_types.Template_])
+
+    @FieldResolver(() => [Template_])
     async TemplatesArray(@Root() templatecategory_: TemplateCategory_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Templates', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwTemplates] WHERE [CategoryID]='${templatecategory_.ID}' ` + this.getRowLevelSecurityWhereClause('Templates', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Templates', await dataSource.query(sSQL));
         return result;
     }
-          
-    @FieldResolver(() => [mj_core_schema_server_object_types.TemplateCategory_])
+
+    @FieldResolver(() => [TemplateCategory_])
     async TemplateCategoriesArray(@Root() templatecategory_: TemplateCategory_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Template Categories', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwTemplateCategories] WHERE [ParentID]='${templatecategory_.ID}' ` + this.getRowLevelSecurityWhereClause('Template Categories', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Template Categories', await dataSource.query(sSQL));
         return result;
     }
-        
+
     @Mutation(() => TemplateCategory_)
     async CreateTemplateCategory(
         @Arg('input', () => CreateTemplateCategoryInput) input: CreateTemplateCategoryInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
+        @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.CreateRecord('Template Categories', input, dataSource, userPayload, pubSub)
     }
-        
+
     @Mutation(() => TemplateCategory_)
     async UpdateTemplateCategory(
         @Arg('input', () => UpdateTemplateCategoryInput) input: UpdateTemplateCategoryInput,
@@ -22743,55 +22746,55 @@ export class TemplateCategoryResolver extends ResolverBase {
     ) {
         return this.UpdateRecord('Template Categories', input, dataSource, userPayload, pubSub);
     }
-    
+
 }
 
 //****************************************************************************
 // ENTITY CLASS for Template Contents
 //****************************************************************************
 @ObjectType({ description: 'Template content for different versions of a template for purposes like HTML/Text/etc' })
-export class TemplateContent_ {  
-    @Field() 
+export class TemplateContent_ {
+    @Field()
     @MaxLength(16)
     ID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     TemplateID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     TypeID: string;
-          
-    @Field({nullable: true, description: 'The actual text content for the template'}) 
+
+    @Field({nullable: true, description: 'The actual text content for the template'})
     TemplateText?: string;
-          
-    @Field(() => Int, {description: 'Priority of the content version, higher priority versions will be used ahead of lower priority versions for a given Type'}) 
+
+    @Field(() => Int, {description: 'Priority of the content version, higher priority versions will be used ahead of lower priority versions for a given Type'})
     Priority: number;
-          
-    @Field(() => Boolean, {description: 'Indicates whether the content is active or not. Use this to disable a particular Template Content item without having to remove it'}) 
+
+    @Field(() => Boolean, {description: 'Indicates whether the content is active or not. Use this to disable a particular Template Content item without having to remove it'})
     IsActive: boolean;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__CreatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(510)
     Template: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(510)
     Type: string;
-        
+
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for Template Contents   
+// INPUT TYPE for Template Contents
 //****************************************************************************
 @InputType()
 export class CreateTemplateContentInput {
@@ -22810,10 +22813,10 @@ export class CreateTemplateContentInput {
     @Field(() => Boolean)
     IsActive: boolean;
 }
-    
-        
+
+
 //****************************************************************************
-// INPUT TYPE for Template Contents   
+// INPUT TYPE for Template Contents
 //****************************************************************************
 @InputType()
 export class UpdateTemplateContentInput {
@@ -22838,7 +22841,7 @@ export class UpdateTemplateContentInput {
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
 }
-    
+
 //****************************************************************************
 // RESOLVER for Template Contents
 //****************************************************************************
@@ -22890,16 +22893,16 @@ export class TemplateContentResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Template Contents', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-    
+
     @Mutation(() => TemplateContent_)
     async CreateTemplateContent(
         @Arg('input', () => CreateTemplateContentInput) input: CreateTemplateContentInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
+        @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.CreateRecord('Template Contents', input, dataSource, userPayload, pubSub)
     }
-        
+
     @Mutation(() => TemplateContent_)
     async UpdateTemplateContent(
         @Arg('input', () => UpdateTemplateContentInput) input: UpdateTemplateContentInput,
@@ -22908,78 +22911,78 @@ export class TemplateContentResolver extends ResolverBase {
     ) {
         return this.UpdateRecord('Template Contents', input, dataSource, userPayload, pubSub);
     }
-    
+
 }
 
 //****************************************************************************
 // ENTITY CLASS for Template Params
 //****************************************************************************
 @ObjectType({ description: 'Parameters allowed for use inside the template' })
-export class TemplateParam_ {  
-    @Field() 
+export class TemplateParam_ {
+    @Field()
     @MaxLength(16)
     ID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     TemplateID: string;
-          
-    @Field({description: 'Name of the parameter'}) 
+
+    @Field({description: 'Name of the parameter'})
     @MaxLength(510)
     Name: string;
-          
-    @Field({nullable: true, description: 'Description of the parameter'}) 
+
+    @Field({nullable: true, description: 'Description of the parameter'})
     Description?: string;
-          
-    @Field({description: 'Type of the parameter - Record is an individual record within the entity specified by EntityID. Entity means an entire Entity or an entity filtered by the LinkedParameterName/Field attributes and/or ExtraFilter. Object is any valid JSON object. Array and Scalar have their common meanings.'}) 
+
+    @Field({description: 'Type of the parameter - Record is an individual record within the entity specified by EntityID. Entity means an entire Entity or an entity filtered by the LinkedParameterName/Field attributes and/or ExtraFilter. Object is any valid JSON object. Array and Scalar have their common meanings.'})
     @MaxLength(40)
     Type: string;
-          
-    @Field({nullable: true, description: 'Default value of the parameter'}) 
+
+    @Field({nullable: true, description: 'Default value of the parameter'})
     DefaultValue?: string;
-          
-    @Field(() => Boolean) 
+
+    @Field(() => Boolean)
     IsRequired: boolean;
-          
-    @Field({nullable: true, description: 'Only used when Type=Entity, this is used to link an Entity parameter with another parameter so that the rows in the Entity parameter can be filtered automatically based on the FKEY relationship between the Record and this Entity parameter. For example, if the Entity-based parameter is for an entity like Activities and there is another parameter of type Record for an entity like Contacts, in that situation the Activities Parameter would point to the Contacts parameter as the LinkedParameterName because we would filter down the Activities in each template render to only those linked to the Contact.'}) 
+
+    @Field({nullable: true, description: 'Only used when Type=Entity, this is used to link an Entity parameter with another parameter so that the rows in the Entity parameter can be filtered automatically based on the FKEY relationship between the Record and this Entity parameter. For example, if the Entity-based parameter is for an entity like Activities and there is another parameter of type Record for an entity like Contacts, in that situation the Activities Parameter would point to the Contacts parameter as the LinkedParameterName because we would filter down the Activities in each template render to only those linked to the Contact.'})
     @MaxLength(510)
     LinkedParameterName?: string;
-          
-    @Field({nullable: true, description: 'If the LinkedParameterName is specified, this is an optional setting to specify the field within the LinkedParameter that will be used for filtering. This is only needed if there is more than one foreign key relationship between the Entity parameter and the Linked parameter, or if there is no defined foreign key in the database between the two entities.'}) 
+
+    @Field({nullable: true, description: 'If the LinkedParameterName is specified, this is an optional setting to specify the field within the LinkedParameter that will be used for filtering. This is only needed if there is more than one foreign key relationship between the Entity parameter and the Linked parameter, or if there is no defined foreign key in the database between the two entities.'})
     @MaxLength(1000)
     LinkedParameterField?: string;
-          
-    @Field({nullable: true, description: 'Only used when Type = Entity, used to specify an optional filter to reduce the set of rows that are returned for each of the templates being rendered.'}) 
+
+    @Field({nullable: true, description: 'Only used when Type = Entity, used to specify an optional filter to reduce the set of rows that are returned for each of the templates being rendered.'})
     ExtraFilter?: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(16)
     EntityID?: string;
-          
-    @Field({nullable: true, description: 'Record ID, used only when Type is Record and a specific hardcoded record ID is desired, this is an uncommon use case, helpful for pulling in static types and metadata in some cases.'}) 
+
+    @Field({nullable: true, description: 'Record ID, used only when Type is Record and a specific hardcoded record ID is desired, this is an uncommon use case, helpful for pulling in static types and metadata in some cases.'})
     @MaxLength(4000)
     RecordID?: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__CreatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(510)
     Template: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     @MaxLength(510)
     Entity?: string;
-        
+
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for Template Params   
+// INPUT TYPE for Template Params
 //****************************************************************************
 @InputType()
 export class CreateTemplateParamInput {
@@ -23016,10 +23019,10 @@ export class CreateTemplateParamInput {
     @Field({ nullable: true })
     RecordID?: string;
 }
-    
-        
+
+
 //****************************************************************************
-// INPUT TYPE for Template Params   
+// INPUT TYPE for Template Params
 //****************************************************************************
 @InputType()
 export class UpdateTemplateParamInput {
@@ -23062,7 +23065,7 @@ export class UpdateTemplateParamInput {
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
 }
-    
+
 //****************************************************************************
 // RESOLVER for Template Params
 //****************************************************************************
@@ -23114,16 +23117,16 @@ export class TemplateParamResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Template Params', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-    
+
     @Mutation(() => TemplateParam_)
     async CreateTemplateParam(
         @Arg('input', () => CreateTemplateParamInput) input: CreateTemplateParamInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
+        @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.CreateRecord('Template Params', input, dataSource, userPayload, pubSub)
     }
-        
+
     @Mutation(() => TemplateParam_)
     async UpdateTemplateParam(
         @Arg('input', () => UpdateTemplateParamInput) input: UpdateTemplateParamInput,
@@ -23132,44 +23135,44 @@ export class TemplateParamResolver extends ResolverBase {
     ) {
         return this.UpdateRecord('Template Params', input, dataSource, userPayload, pubSub);
     }
-    
+
 }
 
 //****************************************************************************
 // ENTITY CLASS for Template Content Types
 //****************************************************************************
 @ObjectType({ description: 'Template content types for categorizing content within templates' })
-export class TemplateContentType_ {  
-    @Field() 
+export class TemplateContentType_ {
+    @Field()
     @MaxLength(16)
     ID: string;
-          
-    @Field({description: 'Name of the template content type'}) 
+
+    @Field({description: 'Name of the template content type'})
     @MaxLength(510)
     Name: string;
-          
-    @Field({nullable: true, description: 'Description of the template content type'}) 
+
+    @Field({nullable: true, description: 'Description of the template content type'})
     Description?: string;
-          
-    @Field({description: 'Refers to the primary language or codetype of the templates of this type, HTML, JSON, JavaScript, etc'}) 
+
+    @Field({description: 'Refers to the primary language or codetype of the templates of this type, HTML, JSON, JavaScript, etc'})
     @MaxLength(50)
     CodeType: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__CreatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-        
-    @Field(() => [mj_core_schema_server_object_types.TemplateContent_])
-    TemplateContentsArray: mj_core_schema_server_object_types.TemplateContent_[]; // Link to TemplateContents
-    
+
+    @Field(() => [TemplateContent_])
+    TemplateContentsArray: TemplateContent_[]; // Link to TemplateContents
+
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for Template Content Types   
+// INPUT TYPE for Template Content Types
 //****************************************************************************
 @InputType()
 export class CreateTemplateContentTypeInput {
@@ -23182,10 +23185,10 @@ export class CreateTemplateContentTypeInput {
     @Field()
     CodeType: string;
 }
-    
-        
+
+
 //****************************************************************************
-// INPUT TYPE for Template Content Types   
+// INPUT TYPE for Template Content Types
 //****************************************************************************
 @InputType()
 export class UpdateTemplateContentTypeInput {
@@ -23204,7 +23207,7 @@ export class UpdateTemplateContentTypeInput {
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
 }
-    
+
 //****************************************************************************
 // RESOLVER for Template Content Types
 //****************************************************************************
@@ -23256,24 +23259,24 @@ export class TemplateContentTypeResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Template Content Types', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-      
-    @FieldResolver(() => [mj_core_schema_server_object_types.TemplateContent_])
+
+    @FieldResolver(() => [TemplateContent_])
     async TemplateContentsArray(@Root() templatecontenttype_: TemplateContentType_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Template Contents', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwTemplateContents] WHERE [TypeID]='${templatecontenttype_.ID}' ` + this.getRowLevelSecurityWhereClause('Template Contents', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Template Contents', await dataSource.query(sSQL));
         return result;
     }
-        
+
     @Mutation(() => TemplateContentType_)
     async CreateTemplateContentType(
         @Arg('input', () => CreateTemplateContentTypeInput) input: CreateTemplateContentTypeInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
+        @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.CreateRecord('Template Content Types', input, dataSource, userPayload, pubSub)
     }
-        
+
     @Mutation(() => TemplateContentType_)
     async UpdateTemplateContentType(
         @Arg('input', () => UpdateTemplateContentTypeInput) input: UpdateTemplateContentTypeInput,
@@ -23282,48 +23285,48 @@ export class TemplateContentTypeResolver extends ResolverBase {
     ) {
         return this.UpdateRecord('Template Content Types', input, dataSource, userPayload, pubSub);
     }
-    
+
 }
 
 //****************************************************************************
 // ENTITY CLASS for Recommendations
 //****************************************************************************
 @ObjectType({ description: 'Recommendation headers that store the left side of the recommendation which we track in the SourceEntityID/SourceEntityRecordID' })
-export class Recommendation_ {  
-    @Field() 
+export class Recommendation_ {
+    @Field()
     @MaxLength(16)
     ID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     RecommendationRunID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     SourceEntityID: string;
-          
-    @Field({description: 'The record ID of the source entity'}) 
+
+    @Field({description: 'The record ID of the source entity'})
     SourceEntityRecordID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__CreatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(510)
     SourceEntity: string;
-        
-    @Field(() => [mj_core_schema_server_object_types.RecommendationItem_])
-    RecommendationItemsArray: mj_core_schema_server_object_types.RecommendationItem_[]; // Link to RecommendationItems
-    
+
+    @Field(() => [RecommendationItem_])
+    RecommendationItemsArray: RecommendationItem_[]; // Link to RecommendationItems
+
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for Recommendations   
+// INPUT TYPE for Recommendations
 //****************************************************************************
 @InputType()
 export class CreateRecommendationInput {
@@ -23336,10 +23339,10 @@ export class CreateRecommendationInput {
     @Field()
     SourceEntityRecordID: string;
 }
-    
-        
+
+
 //****************************************************************************
-// INPUT TYPE for Recommendations   
+// INPUT TYPE for Recommendations
 //****************************************************************************
 @InputType()
 export class UpdateRecommendationInput {
@@ -23358,7 +23361,7 @@ export class UpdateRecommendationInput {
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
 }
-    
+
 //****************************************************************************
 // RESOLVER for Recommendations
 //****************************************************************************
@@ -23410,24 +23413,24 @@ export class RecommendationResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Recommendations', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-      
-    @FieldResolver(() => [mj_core_schema_server_object_types.RecommendationItem_])
+
+    @FieldResolver(() => [RecommendationItem_])
     async RecommendationItemsArray(@Root() recommendation_: Recommendation_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Recommendation Items', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwRecommendationItems] WHERE [RecommendationID]='${recommendation_.ID}' ` + this.getRowLevelSecurityWhereClause('Recommendation Items', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Recommendation Items', await dataSource.query(sSQL));
         return result;
     }
-        
+
     @Mutation(() => Recommendation_)
     async CreateRecommendation(
         @Arg('input', () => CreateRecommendationInput) input: CreateRecommendationInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
+        @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.CreateRecord('Recommendations', input, dataSource, userPayload, pubSub)
     }
-        
+
     @Mutation(() => Recommendation_)
     async UpdateRecommendation(
         @Arg('input', () => UpdateRecommendationInput) input: UpdateRecommendationInput,
@@ -23436,40 +23439,40 @@ export class RecommendationResolver extends ResolverBase {
     ) {
         return this.UpdateRecord('Recommendations', input, dataSource, userPayload, pubSub);
     }
-    
+
 }
 
 //****************************************************************************
 // ENTITY CLASS for Recommendation Providers
 //****************************************************************************
 @ObjectType({ description: 'Recommendation providers details' })
-export class RecommendationProvider_ {  
-    @Field() 
+export class RecommendationProvider_ {
+    @Field()
     @MaxLength(16)
     ID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(510)
     Name: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     Description?: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__CreatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-        
-    @Field(() => [mj_core_schema_server_object_types.RecommendationRun_])
-    RecommendationRunsArray: mj_core_schema_server_object_types.RecommendationRun_[]; // Link to RecommendationRuns
-    
+
+    @Field(() => [RecommendationRun_])
+    RecommendationRunsArray: RecommendationRun_[]; // Link to RecommendationRuns
+
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for Recommendation Providers   
+// INPUT TYPE for Recommendation Providers
 //****************************************************************************
 @InputType()
 export class CreateRecommendationProviderInput {
@@ -23479,10 +23482,10 @@ export class CreateRecommendationProviderInput {
     @Field({ nullable: true })
     Description?: string;
 }
-    
-        
+
+
 //****************************************************************************
-// INPUT TYPE for Recommendation Providers   
+// INPUT TYPE for Recommendation Providers
 //****************************************************************************
 @InputType()
 export class UpdateRecommendationProviderInput {
@@ -23498,7 +23501,7 @@ export class UpdateRecommendationProviderInput {
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
 }
-    
+
 //****************************************************************************
 // RESOLVER for Recommendation Providers
 //****************************************************************************
@@ -23550,24 +23553,24 @@ export class RecommendationProviderResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Recommendation Providers', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-      
-    @FieldResolver(() => [mj_core_schema_server_object_types.RecommendationRun_])
+
+    @FieldResolver(() => [RecommendationRun_])
     async RecommendationRunsArray(@Root() recommendationprovider_: RecommendationProvider_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Recommendation Runs', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwRecommendationRuns] WHERE [RecommendationProviderID]='${recommendationprovider_.ID}' ` + this.getRowLevelSecurityWhereClause('Recommendation Runs', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Recommendation Runs', await dataSource.query(sSQL));
         return result;
     }
-        
+
     @Mutation(() => RecommendationProvider_)
     async CreateRecommendationProvider(
         @Arg('input', () => CreateRecommendationProviderInput) input: CreateRecommendationProviderInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
+        @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.CreateRecord('Recommendation Providers', input, dataSource, userPayload, pubSub)
     }
-        
+
     @Mutation(() => RecommendationProvider_)
     async UpdateRecommendationProvider(
         @Arg('input', () => UpdateRecommendationProviderInput) input: UpdateRecommendationProviderInput,
@@ -23576,64 +23579,64 @@ export class RecommendationProviderResolver extends ResolverBase {
     ) {
         return this.UpdateRecord('Recommendation Providers', input, dataSource, userPayload, pubSub);
     }
-    
+
 }
 
 //****************************************************************************
 // ENTITY CLASS for Recommendation Runs
 //****************************************************************************
 @ObjectType({ description: 'Recommendation runs log each time a provider is requested to provide recommendations' })
-export class RecommendationRun_ {  
-    @Field() 
+export class RecommendationRun_ {
+    @Field()
     @MaxLength(16)
     ID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     RecommendationProviderID: string;
-          
-    @Field({description: 'The start date of the recommendation run'}) 
+
+    @Field({description: 'The start date of the recommendation run'})
     @MaxLength(8)
     StartDate: Date;
-          
-    @Field({nullable: true, description: 'The end date of the recommendation run'}) 
+
+    @Field({nullable: true, description: 'The end date of the recommendation run'})
     @MaxLength(8)
     EndDate?: Date;
-          
-    @Field({description: 'The status of the recommendation run'}) 
+
+    @Field({description: 'The status of the recommendation run'})
     @MaxLength(100)
     Status: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     Description?: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     RunByUserID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__CreatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(510)
     RecommendationProvider: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(200)
     RunByUser: string;
-        
-    @Field(() => [mj_core_schema_server_object_types.Recommendation_])
-    RecommendationsArray: mj_core_schema_server_object_types.Recommendation_[]; // Link to Recommendations
-    
+
+    @Field(() => [Recommendation_])
+    RecommendationsArray: Recommendation_[]; // Link to Recommendations
+
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for Recommendation Runs   
+// INPUT TYPE for Recommendation Runs
 //****************************************************************************
 @InputType()
 export class CreateRecommendationRunInput {
@@ -23655,10 +23658,10 @@ export class CreateRecommendationRunInput {
     @Field()
     RunByUserID: string;
 }
-    
-        
+
+
 //****************************************************************************
-// INPUT TYPE for Recommendation Runs   
+// INPUT TYPE for Recommendation Runs
 //****************************************************************************
 @InputType()
 export class UpdateRecommendationRunInput {
@@ -23686,7 +23689,7 @@ export class UpdateRecommendationRunInput {
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
 }
-    
+
 //****************************************************************************
 // RESOLVER for Recommendation Runs
 //****************************************************************************
@@ -23738,24 +23741,24 @@ export class RecommendationRunResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Recommendation Runs', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-      
-    @FieldResolver(() => [mj_core_schema_server_object_types.Recommendation_])
+
+    @FieldResolver(() => [Recommendation_])
     async RecommendationsArray(@Root() recommendationrun_: RecommendationRun_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Recommendations', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwRecommendations] WHERE [RecommendationRunID]='${recommendationrun_.ID}' ` + this.getRowLevelSecurityWhereClause('Recommendations', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Recommendations', await dataSource.query(sSQL));
         return result;
     }
-        
+
     @Mutation(() => RecommendationRun_)
     async CreateRecommendationRun(
         @Arg('input', () => CreateRecommendationRunInput) input: CreateRecommendationRunInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
+        @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.CreateRecord('Recommendation Runs', input, dataSource, userPayload, pubSub)
     }
-        
+
     @Mutation(() => RecommendationRun_)
     async UpdateRecommendationRun(
         @Arg('input', () => UpdateRecommendationRunInput) input: UpdateRecommendationRunInput,
@@ -23764,49 +23767,49 @@ export class RecommendationRunResolver extends ResolverBase {
     ) {
         return this.UpdateRecord('Recommendation Runs', input, dataSource, userPayload, pubSub);
     }
-    
+
 }
 
 //****************************************************************************
 // ENTITY CLASS for Recommendation Items
 //****************************************************************************
 @ObjectType({ description: 'Table to store individual recommendation items that are the right side of the recommendation which we track in the DestinationEntityID/DestinationEntityRecordID' })
-export class RecommendationItem_ {  
-    @Field() 
+export class RecommendationItem_ {
+    @Field()
     @MaxLength(16)
     ID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     RecommendationID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     DestinationEntityID: string;
-          
-    @Field({description: 'The record ID of the destination entity'}) 
+
+    @Field({description: 'The record ID of the destination entity'})
     @MaxLength(900)
     DestinationEntityRecordID: string;
-          
-    @Field(() => Float, {nullable: true, description: 'A value between 0 and 1 indicating the probability of the match, higher numbers indicating a more certain match/recommendation.'}) 
+
+    @Field(() => Float, {nullable: true, description: 'A value between 0 and 1 indicating the probability of the match, higher numbers indicating a more certain match/recommendation.'})
     MatchProbability?: number;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__CreatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(510)
     DestinationEntity: string;
-        
+
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for Recommendation Items   
+// INPUT TYPE for Recommendation Items
 //****************************************************************************
 @InputType()
 export class CreateRecommendationItemInput {
@@ -23822,10 +23825,10 @@ export class CreateRecommendationItemInput {
     @Field(() => Float, { nullable: true })
     MatchProbability?: number;
 }
-    
-        
+
+
 //****************************************************************************
-// INPUT TYPE for Recommendation Items   
+// INPUT TYPE for Recommendation Items
 //****************************************************************************
 @InputType()
 export class UpdateRecommendationItemInput {
@@ -23847,7 +23850,7 @@ export class UpdateRecommendationItemInput {
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
 }
-    
+
 //****************************************************************************
 // RESOLVER for Recommendation Items
 //****************************************************************************
@@ -23899,16 +23902,16 @@ export class RecommendationItemResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Recommendation Items', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-    
+
     @Mutation(() => RecommendationItem_)
     async CreateRecommendationItem(
         @Arg('input', () => CreateRecommendationItemInput) input: CreateRecommendationItemInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
+        @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.CreateRecord('Recommendation Items', input, dataSource, userPayload, pubSub)
     }
-        
+
     @Mutation(() => RecommendationItem_)
     async UpdateRecommendationItem(
         @Arg('input', () => UpdateRecommendationItemInput) input: UpdateRecommendationItemInput,
@@ -23917,52 +23920,52 @@ export class RecommendationItemResolver extends ResolverBase {
     ) {
         return this.UpdateRecord('Recommendation Items', input, dataSource, userPayload, pubSub);
     }
-    
+
 }
 
 //****************************************************************************
 // ENTITY CLASS for Entity Communication Message Types
 //****************************************************************************
 @ObjectType({ description: 'Mapping between entities and communication base message types' })
-export class EntityCommunicationMessageType_ {  
-    @Field() 
+export class EntityCommunicationMessageType_ {
+    @Field()
     @MaxLength(16)
     ID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     EntityID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     BaseMessageTypeID: string;
-          
-    @Field(() => Boolean, {description: 'Indicates whether the message type is active'}) 
+
+    @Field(() => Boolean, {description: 'Indicates whether the message type is active'})
     IsActive: boolean;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__CreatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(510)
     Entity: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(200)
     BaseMessageType: string;
-        
-    @Field(() => [mj_core_schema_server_object_types.EntityCommunicationField_])
-    EntityCommunicationFieldsArray: mj_core_schema_server_object_types.EntityCommunicationField_[]; // Link to EntityCommunicationFields
-    
+
+    @Field(() => [EntityCommunicationField_])
+    EntityCommunicationFieldsArray: EntityCommunicationField_[]; // Link to EntityCommunicationFields
+
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for Entity Communication Message Types   
+// INPUT TYPE for Entity Communication Message Types
 //****************************************************************************
 @InputType()
 export class CreateEntityCommunicationMessageTypeInput {
@@ -23975,10 +23978,10 @@ export class CreateEntityCommunicationMessageTypeInput {
     @Field(() => Boolean)
     IsActive: boolean;
 }
-    
-        
+
+
 //****************************************************************************
-// INPUT TYPE for Entity Communication Message Types   
+// INPUT TYPE for Entity Communication Message Types
 //****************************************************************************
 @InputType()
 export class UpdateEntityCommunicationMessageTypeInput {
@@ -23997,7 +24000,7 @@ export class UpdateEntityCommunicationMessageTypeInput {
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
 }
-    
+
 //****************************************************************************
 // RESOLVER for Entity Communication Message Types
 //****************************************************************************
@@ -24049,24 +24052,24 @@ export class EntityCommunicationMessageTypeResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Entity Communication Message Types', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-      
-    @FieldResolver(() => [mj_core_schema_server_object_types.EntityCommunicationField_])
+
+    @FieldResolver(() => [EntityCommunicationField_])
     async EntityCommunicationFieldsArray(@Root() entitycommunicationmessagetype_: EntityCommunicationMessageType_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entity Communication Fields', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityCommunicationFields] WHERE [EntityCommunicationMessageTypeID]='${entitycommunicationmessagetype_.ID}' ` + this.getRowLevelSecurityWhereClause('Entity Communication Fields', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Entity Communication Fields', await dataSource.query(sSQL));
         return result;
     }
-        
+
     @Mutation(() => EntityCommunicationMessageType_)
     async CreateEntityCommunicationMessageType(
         @Arg('input', () => CreateEntityCommunicationMessageTypeInput) input: CreateEntityCommunicationMessageTypeInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
+        @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.CreateRecord('Entity Communication Message Types', input, dataSource, userPayload, pubSub)
     }
-        
+
     @Mutation(() => EntityCommunicationMessageType_)
     async UpdateEntityCommunicationMessageType(
         @Arg('input', () => UpdateEntityCommunicationMessageTypeInput) input: UpdateEntityCommunicationMessageTypeInput,
@@ -24075,41 +24078,41 @@ export class EntityCommunicationMessageTypeResolver extends ResolverBase {
     ) {
         return this.UpdateRecord('Entity Communication Message Types', input, dataSource, userPayload, pubSub);
     }
-    
+
 }
 
 //****************************************************************************
 // ENTITY CLASS for Entity Communication Fields
 //****************************************************************************
 @ObjectType({ description: 'Mapping between entity fields and communication base message types with priority' })
-export class EntityCommunicationField_ {  
-    @Field() 
+export class EntityCommunicationField_ {
+    @Field()
     @MaxLength(16)
     ID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     EntityCommunicationMessageTypeID: string;
-          
-    @Field({description: 'Name of the field in the entity that maps to the communication base message type'}) 
+
+    @Field({description: 'Name of the field in the entity that maps to the communication base message type'})
     @MaxLength(1000)
     FieldName: string;
-          
-    @Field(() => Int, {description: 'Priority of the field for the communication base message type'}) 
+
+    @Field(() => Int, {description: 'Priority of the field for the communication base message type'})
     Priority: number;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__CreatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-        
+
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for Entity Communication Fields   
+// INPUT TYPE for Entity Communication Fields
 //****************************************************************************
 @InputType()
 export class CreateEntityCommunicationFieldInput {
@@ -24122,10 +24125,10 @@ export class CreateEntityCommunicationFieldInput {
     @Field(() => Int)
     Priority: number;
 }
-    
-        
+
+
 //****************************************************************************
-// INPUT TYPE for Entity Communication Fields   
+// INPUT TYPE for Entity Communication Fields
 //****************************************************************************
 @InputType()
 export class UpdateEntityCommunicationFieldInput {
@@ -24144,7 +24147,7 @@ export class UpdateEntityCommunicationFieldInput {
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
 }
-    
+
 //****************************************************************************
 // RESOLVER for Entity Communication Fields
 //****************************************************************************
@@ -24196,16 +24199,16 @@ export class EntityCommunicationFieldResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Entity Communication Fields', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-    
+
     @Mutation(() => EntityCommunicationField_)
     async CreateEntityCommunicationField(
         @Arg('input', () => CreateEntityCommunicationFieldInput) input: CreateEntityCommunicationFieldInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
+        @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.CreateRecord('Entity Communication Fields', input, dataSource, userPayload, pubSub)
     }
-        
+
     @Mutation(() => EntityCommunicationField_)
     async UpdateEntityCommunicationField(
         @Arg('input', () => UpdateEntityCommunicationFieldInput) input: UpdateEntityCommunicationFieldInput,
@@ -24214,53 +24217,53 @@ export class EntityCommunicationFieldResolver extends ResolverBase {
     ) {
         return this.UpdateRecord('Entity Communication Fields', input, dataSource, userPayload, pubSub);
     }
-    
+
 }
 
 //****************************************************************************
 // ENTITY CLASS for Record Change Replay Runs
 //****************************************************************************
 @ObjectType({ description: 'Table to track the runs of replaying external record changes' })
-export class RecordChangeReplayRun_ {  
-    @Field() 
+export class RecordChangeReplayRun_ {
+    @Field()
     @MaxLength(16)
     ID: string;
-          
-    @Field({description: 'Timestamp when the replay run started'}) 
+
+    @Field({description: 'Timestamp when the replay run started'})
     @MaxLength(8)
     StartedAt: Date;
-          
-    @Field({nullable: true, description: 'Timestamp when the replay run ended'}) 
+
+    @Field({nullable: true, description: 'Timestamp when the replay run ended'})
     @MaxLength(8)
     EndedAt?: Date;
-          
-    @Field({description: 'Status of the replay run (Pending, In Progress, Complete, Error)'}) 
+
+    @Field({description: 'Status of the replay run (Pending, In Progress, Complete, Error)'})
     @MaxLength(100)
     Status: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     UserID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__CreatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(200)
     User: string;
-        
-    @Field(() => [mj_core_schema_server_object_types.RecordChange_])
-    RecordChangesArray: mj_core_schema_server_object_types.RecordChange_[]; // Link to RecordChanges
-    
+
+    @Field(() => [RecordChange_])
+    RecordChangesArray: RecordChange_[]; // Link to RecordChanges
+
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for Record Change Replay Runs   
+// INPUT TYPE for Record Change Replay Runs
 //****************************************************************************
 @InputType()
 export class CreateRecordChangeReplayRunInput {
@@ -24276,10 +24279,10 @@ export class CreateRecordChangeReplayRunInput {
     @Field()
     UserID: string;
 }
-    
-        
+
+
 //****************************************************************************
-// INPUT TYPE for Record Change Replay Runs   
+// INPUT TYPE for Record Change Replay Runs
 //****************************************************************************
 @InputType()
 export class UpdateRecordChangeReplayRunInput {
@@ -24301,7 +24304,7 @@ export class UpdateRecordChangeReplayRunInput {
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
 }
-    
+
 //****************************************************************************
 // RESOLVER for Record Change Replay Runs
 //****************************************************************************
@@ -24353,24 +24356,24 @@ export class RecordChangeReplayRunResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Record Change Replay Runs', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-      
-    @FieldResolver(() => [mj_core_schema_server_object_types.RecordChange_])
+
+    @FieldResolver(() => [RecordChange_])
     async RecordChangesArray(@Root() recordchangereplayrun_: RecordChangeReplayRun_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Record Changes', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwRecordChanges] WHERE [ReplayRunID]='${recordchangereplayrun_.ID}' ` + this.getRowLevelSecurityWhereClause('Record Changes', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Record Changes', await dataSource.query(sSQL));
         return result;
     }
-        
+
     @Mutation(() => RecordChangeReplayRun_)
     async CreateRecordChangeReplayRun(
         @Arg('input', () => CreateRecordChangeReplayRunInput) input: CreateRecordChangeReplayRunInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
+        @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.CreateRecord('Record Change Replay Runs', input, dataSource, userPayload, pubSub)
     }
-        
+
     @Mutation(() => RecordChangeReplayRun_)
     async UpdateRecordChangeReplayRun(
         @Arg('input', () => UpdateRecordChangeReplayRunInput) input: UpdateRecordChangeReplayRunInput,
@@ -24379,46 +24382,46 @@ export class RecordChangeReplayRunResolver extends ResolverBase {
     ) {
         return this.UpdateRecord('Record Change Replay Runs', input, dataSource, userPayload, pubSub);
     }
-    
+
 }
 
 //****************************************************************************
 // ENTITY CLASS for Library Items
 //****************************************************************************
 @ObjectType({ description: 'Table to store individual library items' })
-export class LibraryItem_ {  
-    @Field() 
+export class LibraryItem_ {
+    @Field()
     @MaxLength(16)
     ID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(510)
     Name: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     LibraryID: string;
-          
-    @Field({description: 'Type of the library item for example Class, Interface, etc.'}) 
+
+    @Field({description: 'Type of the library item for example Class, Interface, etc.'})
     @MaxLength(100)
     Type: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__CreatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(510)
     Library: string;
-        
+
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for Library Items   
+// INPUT TYPE for Library Items
 //****************************************************************************
 @InputType()
 export class CreateLibraryItemInput {
@@ -24431,10 +24434,10 @@ export class CreateLibraryItemInput {
     @Field()
     Type: string;
 }
-    
-        
+
+
 //****************************************************************************
-// INPUT TYPE for Library Items   
+// INPUT TYPE for Library Items
 //****************************************************************************
 @InputType()
 export class UpdateLibraryItemInput {
@@ -24453,7 +24456,7 @@ export class UpdateLibraryItemInput {
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
 }
-    
+
 //****************************************************************************
 // RESOLVER for Library Items
 //****************************************************************************
@@ -24505,16 +24508,16 @@ export class LibraryItemResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Library Items', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-    
+
     @Mutation(() => LibraryItem_)
     async CreateLibraryItem(
         @Arg('input', () => CreateLibraryItemInput) input: CreateLibraryItemInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
+        @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.CreateRecord('Library Items', input, dataSource, userPayload, pubSub)
     }
-        
+
     @Mutation(() => LibraryItem_)
     async UpdateLibraryItem(
         @Arg('input', () => UpdateLibraryItemInput) input: UpdateLibraryItemInput,
@@ -24523,44 +24526,44 @@ export class LibraryItemResolver extends ResolverBase {
     ) {
         return this.UpdateRecord('Library Items', input, dataSource, userPayload, pubSub);
     }
-    
+
 }
 
 //****************************************************************************
 // ENTITY CLASS for Entity Relationship Display Components
 //****************************************************************************
 @ObjectType({ description: 'This table stores a list of components that are available for displaying relationships in the MJ Explorer UI' })
-export class EntityRelationshipDisplayComponent_ {  
-    @Field() 
+export class EntityRelationshipDisplayComponent_ {
+    @Field()
     @MaxLength(16)
     ID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(510)
     Name: string;
-          
-    @Field({nullable: true}) 
+
+    @Field({nullable: true})
     Description?: string;
-          
-    @Field({description: 'The type of relationship the component displays. Valid values are "One to Many", "Many to Many", or "Both".'}) 
+
+    @Field({description: 'The type of relationship the component displays. Valid values are "One to Many", "Many to Many", or "Both".'})
     @MaxLength(40)
     RelationshipType: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__CreatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-        
-    @Field(() => [mj_core_schema_server_object_types.EntityRelationship_])
-    EntityRelationshipsArray: mj_core_schema_server_object_types.EntityRelationship_[]; // Link to EntityRelationships
-    
+
+    @Field(() => [EntityRelationship_])
+    EntityRelationshipsArray: EntityRelationship_[]; // Link to EntityRelationships
+
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for Entity Relationship Display Components   
+// INPUT TYPE for Entity Relationship Display Components
 //****************************************************************************
 @InputType()
 export class CreateEntityRelationshipDisplayComponentInput {
@@ -24573,10 +24576,10 @@ export class CreateEntityRelationshipDisplayComponentInput {
     @Field()
     RelationshipType: string;
 }
-    
-        
+
+
 //****************************************************************************
-// INPUT TYPE for Entity Relationship Display Components   
+// INPUT TYPE for Entity Relationship Display Components
 //****************************************************************************
 @InputType()
 export class UpdateEntityRelationshipDisplayComponentInput {
@@ -24595,7 +24598,7 @@ export class UpdateEntityRelationshipDisplayComponentInput {
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
 }
-    
+
 //****************************************************************************
 // RESOLVER for Entity Relationship Display Components
 //****************************************************************************
@@ -24647,24 +24650,24 @@ export class EntityRelationshipDisplayComponentResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Entity Relationship Display Components', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-      
-    @FieldResolver(() => [mj_core_schema_server_object_types.EntityRelationship_])
+
+    @FieldResolver(() => [EntityRelationship_])
     async EntityRelationshipsArray(@Root() entityrelationshipdisplaycomponent_: EntityRelationshipDisplayComponent_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entity Relationships', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityRelationships] WHERE [DisplayComponentID]='${entityrelationshipdisplaycomponent_.ID}' ` + this.getRowLevelSecurityWhereClause('Entity Relationships', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Entity Relationships', await dataSource.query(sSQL));
         return result;
     }
-        
+
     @Mutation(() => EntityRelationshipDisplayComponent_)
     async CreateEntityRelationshipDisplayComponent(
         @Arg('input', () => CreateEntityRelationshipDisplayComponentInput) input: CreateEntityRelationshipDisplayComponentInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
+        @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.CreateRecord('Entity Relationship Display Components', input, dataSource, userPayload, pubSub)
     }
-        
+
     @Mutation(() => EntityRelationshipDisplayComponent_)
     async UpdateEntityRelationshipDisplayComponent(
         @Arg('input', () => UpdateEntityRelationshipDisplayComponentInput) input: UpdateEntityRelationshipDisplayComponentInput,
@@ -24673,52 +24676,52 @@ export class EntityRelationshipDisplayComponentResolver extends ResolverBase {
     ) {
         return this.UpdateRecord('Entity Relationship Display Components', input, dataSource, userPayload, pubSub);
     }
-    
+
 }
 
 //****************************************************************************
 // ENTITY CLASS for Entity Action Params
 //****************************************************************************
 @ObjectType({ description: 'Stores paramater mappings to enable Entity Actions to automatically invoke Actions' })
-export class EntityActionParam_ {  
-    @Field() 
+export class EntityActionParam_ {
+    @Field()
     @MaxLength(16)
     ID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     EntityActionID: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(16)
     ActionParamID: string;
-          
-    @Field({description: 'Type of the value, which can be Static, Entity Object, or Script.'}) 
+
+    @Field({description: 'Type of the value, which can be Static, Entity Object, or Script.'})
     @MaxLength(40)
     ValueType: string;
-          
-    @Field({nullable: true, description: 'Value of the parameter, used only when ValueType is Static or Script. When value is Script, any valid JavaScript code can be provided. The script will have access to an object called EntityActionContext. This object will have a property called EntityObject on it that will contain the BaseEntity derived sub-class with the current data for the entity object this action is operating against. The script must provide the parameter value to the EntityActionContext.result property. This scripting capabilty is designed for very small and simple code, for anything of meaningful complexity, create a sub-class instead.'}) 
+
+    @Field({nullable: true, description: 'Value of the parameter, used only when ValueType is Static or Script. When value is Script, any valid JavaScript code can be provided. The script will have access to an object called EntityActionContext. This object will have a property called EntityObject on it that will contain the BaseEntity derived sub-class with the current data for the entity object this action is operating against. The script must provide the parameter value to the EntityActionContext.result property. This scripting capabilty is designed for very small and simple code, for anything of meaningful complexity, create a sub-class instead.'})
     Value?: string;
-          
-    @Field({nullable: true, description: 'Additional comments regarding the parameter.'}) 
+
+    @Field({nullable: true, description: 'Additional comments regarding the parameter.'})
     Comments?: string;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__CreatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-          
-    @Field() 
+
+    @Field()
     @MaxLength(510)
     ActionParam: string;
-        
+
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for Entity Action Params   
+// INPUT TYPE for Entity Action Params
 //****************************************************************************
 @InputType()
 export class CreateEntityActionParamInput {
@@ -24737,10 +24740,10 @@ export class CreateEntityActionParamInput {
     @Field({ nullable: true })
     Comments?: string;
 }
-    
-        
+
+
 //****************************************************************************
-// INPUT TYPE for Entity Action Params   
+// INPUT TYPE for Entity Action Params
 //****************************************************************************
 @InputType()
 export class UpdateEntityActionParamInput {
@@ -24765,7 +24768,7 @@ export class UpdateEntityActionParamInput {
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
 }
-    
+
 //****************************************************************************
 // RESOLVER for Entity Action Params
 //****************************************************************************
@@ -24817,16 +24820,16 @@ export class EntityActionParamResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Entity Action Params', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-    
+
     @Mutation(() => EntityActionParam_)
     async CreateEntityActionParam(
         @Arg('input', () => CreateEntityActionParamInput) input: CreateEntityActionParamInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
+        @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.CreateRecord('Entity Action Params', input, dataSource, userPayload, pubSub)
     }
-        
+
     @Mutation(() => EntityActionParam_)
     async UpdateEntityActionParam(
         @Arg('input', () => UpdateEntityActionParamInput) input: UpdateEntityActionParamInput,
@@ -24835,11 +24838,11 @@ export class EntityActionParamResolver extends ResolverBase {
     ) {
         return this.UpdateRecord('Entity Action Params', input, dataSource, userPayload, pubSub);
     }
-    
+
     @Mutation(() => EntityActionParam_)
     async DeleteEntityActionParam(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Entity Action Params', key, options, dataSource, userPayload, pubSub);
     }
-    
+
 }

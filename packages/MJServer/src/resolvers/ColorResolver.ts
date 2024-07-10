@@ -1,17 +1,6 @@
-import {
-  AppContext,
-  Ctx,
-  Field,
-  Int,
-  ObjectType,
-  PubSub,
-  PubSubEngine,
-  Public,
-  Query,
-  Resolver,
-  Root,
-  Subscription,
-} from '@memberjunction/server';
+import { AppContext } from '../types';
+import { Ctx, Field, Int, ObjectType, PubSub, PubSubEngine, Query, Resolver, Root, Subscription } from 'type-graphql';
+import { Public } from '../directives';
 
 @ObjectType()
 export class Color {

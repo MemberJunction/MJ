@@ -10,7 +10,7 @@ LoadProvider();
 
 import './auth/exampleNewUserSubClass'; // make sure this new class gets registered
 
-const localPath = (p: string) => resolve(__dirname, p);
+const localPath = (p: string) => resolve(import.meta.dirname, p);
 
 const resolverPaths = [
 //  'resolvers/**/*Resolver.{js,ts}',

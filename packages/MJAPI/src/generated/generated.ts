@@ -17,8 +17,6 @@ import { Metadata, EntityPermissionType, CompositeKey } from '@memberjunction/co
 import { MaxLength } from 'class-validator';
 import { DataSource } from 'typeorm';
 
-import * as mj_core_schema_server_object_types from '@memberjunction/server'
-
 import { ThreadDetailEntity, ThreadEntity, IndustryEntity, ContactRoleEntity, ContactLevelEntity, AccountEntity, ContactEntity, DealStageEntity, ActivityEntity, DealForecastCategoryEntity, DealEntity, DealTypeEntity, InvoiceEntity, ActivityAttachmentEntity, PaymentTermsTypeEntity, InvoiceStatusTypeEntity, SalesLineItemEntity, SalesTransactionEntity, CustomerAddress__client_financeEntity, Item__client_financeEntity, Customer__client_financeEntity, OrganizationLinkEntity, PersonLinkEntity, Account__client_crmEntity, StringMapEntity, ProductPriceLevelEntity, client_membershipEntity, Contact__client_crmEntity, UoMEntity, SalesOrderEntity, SalesOrderDetailEntity, ProductEntity, CustomerAddressEntity, SalesLineItem__client_membershipEntity, ItemEntity, CustomerEntity, SalesTransaction__client_membershipEntity } from 'mj_generatedentities';
     
 

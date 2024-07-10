@@ -6,10 +6,10 @@ import { expressMiddleware } from '@apollo/server/express4';
 import { mergeSchemas } from '@graphql-tools/schema';
 import { Metadata } from '@memberjunction/core';
 import { setupSQLServerClient, SQLServerProviderConfigData, UserCache } from '@memberjunction/sqlserver-dataprovider';
-import { json } from 'body-parser';
+import { default as BodyParser } from 'body-parser';
 import cors from 'cors';
 import express from 'express';
-import { globSync } from 'fast-glob';
+import { default as fg } from 'fast-glob';
 import { useServer } from 'graphql-ws/lib/use/ws';
 import { createServer } from 'node:http';
 import { sep } from 'node:path';
@@ -63,7 +63,7 @@ export * from './generated/generated'
 
 import { resolve } from 'node:path';
 
-const localPath = (p: string) => resolve(__dirname, p);
+const localPath = (p: string) => resolve(import.meta.dirname, p);
 
 export const serve = async (resolverPaths: Array<string>) => {
   const localResolverPaths = [
@@ -75,7 +75,7 @@ export const serve = async (resolverPaths: Array<string>) => {
   const combinedResolverPaths = [...resolverPaths, ...localResolverPaths];
 
   const replaceBackslashes = sep === '\\';
-  const paths = combinedResolverPaths.flatMap((path) => globSync(replaceBackslashes ? path.replace(/\\/g, '/') : path));
+  const paths = combinedResolverPaths.flatMap((path) => fg.globSync(replaceBackslashes ? path.replace(/\\/g, '/') : path));
   if (paths.length === 0) {
     console.warn(`No resolvers found in ${combinedResolverPaths.join(', ')}`);
     console.log({ combinedResolverPaths, paths, cwd: process.cwd() });
@@ -148,7 +148,7 @@ export const serve = async (resolverPaths: Array<string>) => {
   app.use(
     graphqlRootPath,
     cors<cors.CorsRequest>(),
-    json({limit: '50mb'}),
+    BodyParser.json({limit: '50mb'}),
     expressMiddleware(apolloServer, {
       context: contextFunction({ setupComplete$, dataSource }),
     })
@@ -158,4 +158,3 @@ export const serve = async (resolverPaths: Array<string>) => {
   console.log(`🚀 Server ready at http://localhost:${graphqlPort}/`);
 };
 
-export default serve;
