@@ -9,12 +9,12 @@ export abstract class EntityDocumentTemplateParserBase {
     public static ClearCache() {
         EntityDocumentTemplateParserBase.__cache = {};
     }
-    public static CreateCacheKey(EntityID: number, EntityRecordPrimaryKey: string, Content: string): string {
+    public static CreateCacheKey(EntityID: string, EntityRecordPrimaryKey: string, Content: string): string {
         return `${EntityID}___${EntityRecordPrimaryKey}___${Content}`;
-    }
+    } 
 
     protected static __cache: { [key: string]: string } = {};
-    protected static get _cache(): { [key: string]: string } {
+    protected static get _cache(): { [key: string]: string } { 
         return EntityDocumentTemplateParserBase.__cache;
     }
 
@@ -27,11 +27,11 @@ export abstract class EntityDocumentTemplateParserBase {
      * @param ContextUser - the current user
      * @returns the evaluated value of the template incorporating fields and function call(s), if any.
      */
-    public async Parse(Template: string, EntityID: number, EntityRecord: any, ContextUser?: UserInfo): Promise<string> {
+    public async Parse(Template: string, EntityID: string, EntityRecord: any, ContextUser: UserInfo): Promise<string> {
 
-        // if(!ContextUser){
-        //     throw new Error('ContextUser is required to parse the template');
-        // }
+        if(!ContextUser){
+            throw new Error('ContextUser is required to parse the template');
+        }
 
         const md = new Metadata();
         const entityInfo = md.Entities.find(e => e.ID === EntityID);
@@ -44,12 +44,12 @@ export abstract class EntityDocumentTemplateParserBase {
 
         const regex = /\$\{([^{}]+)\}/g;
         const matches = Template.matchAll(regex);
-
+        
         // Convert matches to an array to handle them asynchronously
         const replacements = Array.from(matches).map(async match => {
             const content = match[1]; // The captured group from regex
             const cacheKey = EntityDocumentTemplateParserBase.CreateCacheKey(EntityID, compositeKey.ToString(), content);
-
+            
             // check the cache and if we don't have an entry in the cache, add it
             if (!EntityDocumentTemplateParserBase._cache[cacheKey]) {
                 // Cache miss, evaluate and store the result
@@ -74,7 +74,7 @@ export abstract class EntityDocumentTemplateParserBase {
         return resolvedTemplate;
     }
 
-    protected async evalSingleArgument (argument: string, entityID: number, entityRecord: any, ContextUser?: UserInfo): Promise<string> {
+    protected async evalSingleArgument (argument: string, entityID: string, entityRecord: any, ContextUser: UserInfo): Promise<string> {
         const funcMatch = argument.match(/(\w+)\(([^)]*)\)/);
         if (funcMatch) {
             const [, funcName, paramsString] = funcMatch;
@@ -86,15 +86,15 @@ export abstract class EntityDocumentTemplateParserBase {
                 } else if (param.startsWith("'") && param.endsWith("'")) {
                     return param.slice(1, -1);
                 } else {
-                    return param;
+                    return param; 
                 }
             });
 
-
+            
             // Check if the method exists on this instance
             if (typeof this[funcName] === 'function') {
                 // Call the instance method dynamically using its name and spread the params
-                return this[funcName](entityID, entityRecord, ContextUser ?? {}, ...params);
+                return this[funcName](entityID, entityRecord, ContextUser, ...params);
             } else {
                 throw new Error(`Function ${funcName} is not defined.`);
             }
@@ -106,8 +106,8 @@ export abstract class EntityDocumentTemplateParserBase {
 }
 
 /**
- * This is the first-level sub-class of EntityDocumentTemplateParserBase. This class is used to parse a string template with variables and functions.
- * If you wish to override functionality you can subclass it and then use the @RegisterClass decorator to register the sub-class of EntityDocumentTemplateParser with a priority of 1 or above to
+ * This is the first-level sub-class of EntityDocumentTemplateParserBase. This class is used to parse a string template with variables and functions. 
+ * If you wish to override functionality you can subclass it and then use the @RegisterClass decorator to register the sub-class of EntityDocumentTemplateParser with a priority of 1 or above to 
  * then be used instead of the default implementation.
  */
 @RegisterClass(EntityDocumentTemplateParser)
@@ -119,21 +119,21 @@ export class EntityDocumentTemplateParser extends EntityDocumentTemplateParserBa
     }
 
     /**
-     * This function
-     * @param entityID
-     * @param entityRecord
-     * @param relationshipName
-     * @param maxRows
-     * @param entityDocumentName
-     * @returns
+     * This function 
+     * @param entityID 
+     * @param entityRecord 
+     * @param relationshipName 
+     * @param maxRows 
+     * @param entityDocumentName 
+     * @returns 
      */
-    protected async Relationship(entityID: number, entityRecord: any, ContextUser: UserInfo, relationshipName: string, maxRows: number, entityDocumentName: string): Promise<string> {
+    protected async Relationship(entityID: string, entityRecord: any, ContextUser: UserInfo, relationshipName: string, maxRows: number, entityDocumentName: string): Promise<string> {
         // super inefficient handling to start, we'll optimize this later to call the related stuff in batch
         const md = new Metadata();
         const vectorSyncer: EntityVectorSyncer = new EntityVectorSyncer();
         vectorSyncer.CurrentUser = ContextUser;
 
-        const entityInfo = md.Entities.find(e => e.ID === entityID);
+        const entityInfo = md.Entities.find(e => e.ID === entityID);    
         if (!entityInfo){
             throw new Error(`Entity with ID ${entityID} not found.`);
         }
@@ -167,7 +167,7 @@ export class EntityDocumentTemplateParser extends EntityDocumentTemplateParserBa
                     // now we need to batch the requests to the parser to have the right concurrency
                     const batchSize = 10; // Set the batch size to the desired number of concurrent requests
                     const results = [];
-
+                    
                     for (let i = 0; i < reData.Data.length; i += batchSize) {
                         const batchPromises = reData.Data.slice(i, i + batchSize).map(data => {
                             return parser.Parse(doc.Template, re.RelatedEntityID, data, ContextUser);
@@ -175,7 +175,7 @@ export class EntityDocumentTemplateParser extends EntityDocumentTemplateParserBa
                         const batchResults = await Promise.all(batchPromises);
                         results.push(...batchResults);
                     }
-
+                    
                     return results.map(r => r + "\n\n").join('');
                 }
                 else {

@@ -6,7 +6,7 @@ import { UserEntity, UserRoleEntity } from "@memberjunction/core-entities";
 
 @RegisterClass(NewUserBase)
 export class NewUserBase {
-    public async createNewUser(firstName: string, lastName: string, email: string, linkedRecordType: string = 'None', linkedEntityId?: number, linkedEntityRecordId?: number) {
+    public async createNewUser(firstName: string, lastName: string, email: string, linkedRecordType: string = 'None', linkedEntityId?: string, linkedEntityRecordId?: string) {
         try {
             const md = new Metadata();
             const contextUser = UserCache.Instance.Users.find(u => u.Email.trim().toLowerCase() === configInfo?.userHandling?.contextUserForNewUserCreation?.trim().toLowerCase())
@@ -30,12 +30,13 @@ export class NewUserBase {
 
             if (await u.Save()) {
                 // user created, now create however many roles we need to create for this user based on the config settings
-                const ur = <UserRoleEntity>await md.GetEntityObject('User Roles', contextUser);
+                const ur = await md.GetEntityObject<UserRoleEntity>('User Roles', contextUser);
                 let bSuccess: boolean = true;
                 for (const role of configInfo.userHandling.newUserRoles) {
                     ur.NewRecord();
                     ur.UserID = u.ID;
-                    ur.RoleName = role;
+                    const roleID = md.Roles.find(r => r.Name === role)?.ID; 
+                    ur.RoleID = roleID;
                     bSuccess = bSuccess && await ur.Save();
                 }
                 if (!bSuccess) {

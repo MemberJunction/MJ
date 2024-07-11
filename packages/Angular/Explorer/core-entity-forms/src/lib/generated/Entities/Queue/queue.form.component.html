@@ -18,7 +18,7 @@
                     
                     <mj-tab Name="Queue Tasks" 
                         [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: 109}">
+                        [Props]="{EntityRelationshipID: '0F4FE601-7EE9-4540-AC38-12E5A2B7D329'}">
                         Queue Tasks
                     </mj-tab>
                     <mj-tab-body>
@@ -28,7 +28,7 @@
                             [AllowLoad]="IsCurrentTab('Queue Tasks')"  
                             [EditMode]="GridEditMode()"  
                             [BottomMargin]="GridBottomMargin">
-                        </mj-user-view-grid>
+                        </mj-user-view-grid>                    
                     </mj-tab-body>
                 </mj-tabstrip>
     </form>

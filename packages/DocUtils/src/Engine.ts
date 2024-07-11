@@ -63,7 +63,7 @@ export class DocumentationEngine extends BaseEngine<DocumentationEngine> {
      * @param contextUser If you are running the action on the server side you must pass this in, but it is not required in an environment where a user is authenticated directly, e.g. a browser or other client. 
      */
     public async Config(forceRefresh: boolean = false, contextUser?: UserInfo): Promise<void> {
-        const configs: BaseEnginePropertyConfig[] = [
+        const configs: Partial<BaseEnginePropertyConfig>[] = [
             {
                 EntityName: 'Libraries',
                 PropertyName: '_Libraries'

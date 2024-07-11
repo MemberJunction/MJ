@@ -2,6 +2,66 @@
   "name": "@memberjunction/graphql-dataprovider",
   "entries": [
     {
+      "date": "Fri, 21 Jun 2024 13:15:28 GMT",
+      "version": "1.8.1",
+      "tag": "@memberjunction/graphql-dataprovider_v1.8.1",
+      "comments": {
+        "patch": [
+          {
+            "author": "beachball",
+            "package": "@memberjunction/graphql-dataprovider",
+            "comment": "Bump @memberjunction/core to v1.8.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/graphql-dataprovider",
+            "comment": "Bump @memberjunction/core-entities to v1.8.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/graphql-dataprovider",
+            "comment": "Bump @memberjunction/global to v1.8.1",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
+      "date": "Wed, 19 Jun 2024 16:32:44 GMT",
+      "version": "1.8.0",
+      "tag": "@memberjunction/graphql-dataprovider_v1.8.0",
+      "comments": {
+        "minor": [
+          {
+            "author": "97354817+AN-BC@users.noreply.github.com",
+            "package": "@memberjunction/graphql-dataprovider",
+            "commit": "cf83451c7cb7fb5afb3f437a64cb13070e74e74d",
+            "comment": "Applying package updates [skip ci]"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/graphql-dataprovider",
+            "comment": "Bump @memberjunction/core to v1.8.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/graphql-dataprovider",
+            "comment": "Bump @memberjunction/core-entities to v1.8.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/graphql-dataprovider",
+            "comment": "Bump @memberjunction/global to v1.8.0",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
       "date": "Wed, 12 Jun 2024 20:13:28 GMT",
       "version": "1.7.1",
       "tag": "@memberjunction/graphql-dataprovider_v1.7.1",

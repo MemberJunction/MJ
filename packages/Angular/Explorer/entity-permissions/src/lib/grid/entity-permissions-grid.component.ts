@@ -6,7 +6,7 @@ import { EntityPermissionEntity } from '@memberjunction/core-entities';
 
 export type EntityPermissionChangedEvent = {
   EntityName: string,
-  RoleName: string
+  RoleID: string
   PermissionTypeChanged: 'Read' | 'Create' | 'Update' | 'Delete'
   Value: boolean
   Cancel: boolean
@@ -64,7 +64,7 @@ export class EntityPermissionsGridComponent implements OnInit, OnChanges {
       throw new Error("Role not found: " + this.RoleName)
 
     const rv = new RunView();
-    const filter: string = this.Mode === 'Entity' ? 'EntityID=' + entity!.ID : `RoleName='${r?.Name}'`;
+    const filter: string = this.Mode === 'Entity' ? `EntityID='${entity!.ID}'` : `RoleName='${r?.Name}'`;
     const result = await rv.RunView({
       EntityName: 'Entity Permissions',
       ExtraFilter: filter,
@@ -80,7 +80,7 @@ export class EntityPermissionsGridComponent implements OnInit, OnChanges {
       const roles = md.Roles;
 
       if (this.Mode === 'Entity') {
-        const rolesWithNoPermissions = roles.filter(r => !existingPermissions.some(p => p.RoleName === r.Name));
+        const rolesWithNoPermissions = roles.filter(r => !existingPermissions.some(p => p.RoleID === r.ID));
         for (const r of rolesWithNoPermissions) {
           const p = await md.GetEntityObject<EntityPermissionEntity>('Entity Permissions')
           // p.NewRecord();
@@ -94,7 +94,7 @@ export class EntityPermissionsGridComponent implements OnInit, OnChanges {
             ID: null,
             Entity: entity!.Name,
             EntityID: entity!.ID,
-            RoleName: r!.Name,
+            RoleID: r!.ID,
             CanRead: false,
             CanCreate: false,
             CanUpdate: false,
@@ -102,7 +102,7 @@ export class EntityPermissionsGridComponent implements OnInit, OnChanges {
           });
           existingPermissions.push(p);
         }
-        this.permissions = existingPermissions.sort((a, b) => a.RoleName!.localeCompare(b.RoleName!));  
+        this.permissions = existingPermissions;
       }
       else if (this.Mode === 'Role') {
         // for the mode of Role, that means we want to show all entities and their permissions for the given role
@@ -138,6 +138,13 @@ export class EntityPermissionsGridComponent implements OnInit, OnChanges {
     this.isLoading = false
   }
     
+
+  public getRoleName(roleID: string): string {
+    const md = new Metadata();
+    const r = md.Roles.find(r => r.ID === roleID);
+    return r ? r.Name : '';
+  }
+  
   public async savePermissions() {
     if (this.NumDirtyPermissions > 0) {
       // iterate through each permisison and for the ones that are dirty, add to transaction group then commit at once
@@ -174,7 +181,7 @@ export class EntityPermissionsGridComponent implements OnInit, OnChanges {
   protected IsPermissionReallyDirty(p: EntityPermissionEntity): boolean {
     if (!p.Dirty)
       return false;
-    else if (p.ID > 0)
+    else if (p.IsSaved)
       return true;
     else
       return p.CanRead || p.CanCreate || p.CanUpdate || p.CanDelete; // if we have a new record, only consider it dirty if at least one permission is true
@@ -286,7 +293,7 @@ export class EntityPermissionsGridComponent implements OnInit, OnChanges {
     const value = type === 'Read' ? permission.CanRead : type === 'Create' ? permission.CanCreate : type === 'Update' ? permission.CanUpdate : permission.CanDelete;
     this.PermissionChanged.emit({
       EntityName: this.EntityName,
-      RoleName: permission.RoleName!,
+      RoleID: permission.RoleID!,
       PermissionTypeChanged: type,
       Value: value,
       Cancel: false

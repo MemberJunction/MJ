@@ -2,6 +2,152 @@
   "name": "@memberjunction/ai-vector-dupe",
   "entries": [
     {
+      "date": "Fri, 21 Jun 2024 13:15:27 GMT",
+      "version": "1.8.1",
+      "tag": "@memberjunction/ai-vector-dupe_v1.8.1",
+      "comments": {
+        "patch": [
+          {
+            "author": "craig.adam@bluecypress.io",
+            "package": "@memberjunction/ai-vector-dupe",
+            "commit": "1ccbb75ac8edd214b1d0552764057e580e99709b",
+            "comment": "Applying package updates [skip ci]"
+          },
+          {
+            "author": "97354817+AN-BC@users.noreply.github.com",
+            "package": "@memberjunction/ai-vector-dupe",
+            "commit": "1e04a4b44ff138612b4f27f132f9310ed7427778",
+            "comment": "Applying package updates [skip ci]"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ai-vector-dupe",
+            "comment": "Bump @memberjunction/ai to v1.8.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ai-vector-dupe",
+            "comment": "Bump @memberjunction/ai-vectordb to v1.8.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ai-vector-dupe",
+            "comment": "Bump @memberjunction/ai-vectors to v1.8.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ai-vector-dupe",
+            "comment": "Bump @memberjunction/ai-vectors-pinecone to v1.8.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ai-vector-dupe",
+            "comment": "Bump @memberjunction/ai-vector-sync to v1.8.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ai-vector-dupe",
+            "comment": "Bump @memberjunction/aiengine to v1.8.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ai-vector-dupe",
+            "comment": "Bump @memberjunction/core to v1.8.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ai-vector-dupe",
+            "comment": "Bump @memberjunction/global to v1.8.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ai-vector-dupe",
+            "comment": "Bump @memberjunction/core-entities to v1.8.1",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
+      "date": "Wed, 19 Jun 2024 16:32:44 GMT",
+      "version": "1.8.0",
+      "tag": "@memberjunction/ai-vector-dupe_v1.8.0",
+      "comments": {
+        "patch": [
+          {
+            "author": "craig.adam@bluecypress.io",
+            "package": "@memberjunction/ai-vector-dupe",
+            "commit": "25befe3e90297072b184f82c46594bd9885bc7d6",
+            "comment": "Applying package updates [skip ci]"
+          }
+        ],
+        "minor": [
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ai-vector-dupe",
+            "comment": "Bump @memberjunction/ai to v1.8.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ai-vector-dupe",
+            "comment": "Bump @memberjunction/ai-vectordb to v1.8.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ai-vector-dupe",
+            "comment": "Bump @memberjunction/ai-vectors to v1.8.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ai-vector-dupe",
+            "comment": "Bump @memberjunction/ai-vectors-pinecone to v1.8.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ai-vector-dupe",
+            "comment": "Bump @memberjunction/ai-vector-sync to v1.8.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ai-vector-dupe",
+            "comment": "Bump @memberjunction/aiengine to v1.8.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ai-vector-dupe",
+            "comment": "Bump @memberjunction/core to v1.8.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ai-vector-dupe",
+            "comment": "Bump @memberjunction/global to v1.8.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ai-vector-dupe",
+            "comment": "Bump @memberjunction/core-entities to v1.8.0",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
       "date": "Wed, 12 Jun 2024 20:13:29 GMT",
       "version": "1.7.1",
       "tag": "@memberjunction/ai-vector-dupe_v1.7.1",

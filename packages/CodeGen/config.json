@@ -18,7 +18,7 @@
         },
         {
             "name": "skip_database_generation",
-            "value": true
+            "value": false
         }
     ],
     "logging": {
@@ -27,13 +27,13 @@
         "console": true
     },
     "newEntityDefaults": {
-        "TrackRecordChanges": false,
+        "TrackRecordChanges": true,
         "AuditRecordAccess": false,
         "AuditViewRuns": false,
         "AllowAllRowsAPI": false,
         "AllowCreateAPI": true,
         "AllowUpdateAPI": true,
-        "AllowDeleteAPI": false,
+        "AllowDeleteAPI": true,
         "AllowUserSearchAPI": false,
         "CascadeDeletes": false,
         "UserViewMaxRows": 1000,
@@ -178,7 +178,7 @@
         },
         {
             "type": "CoreActionSubclasses",
-            "directory": "../CoreActions/src/generated"
+            "directory": "../Actions/CoreActions/src/generated"
         },
         {
             "type": "ActionSubclasses",
@@ -217,7 +217,7 @@
             "when": "after"
         },
         {
-            "workingDirectory": "../CoreActions",
+            "workingDirectory": "../Actions/CoreActions",
             "command": "npm",
             "args": [
                 "run",

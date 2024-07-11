@@ -16,6 +16,20 @@
                         </mj-form-section>
                     </mj-tab-body>
                     
+                    <mj-tab Name="Record Changes" 
+                        [Visible]="record.IsSaved" 
+                        [Props]="{EntityRelationshipID: '5AE2C273-CB70-4EB4-A46E-156EDA537A3A'}">
+                        Record Changes
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Record Changes')"  
+                            [NewRecordValues]="NewRecordValues('Record Changes')"
+                            [AllowLoad]="IsCurrentTab('Record Changes')"  
+                            [EditMode]="GridEditMode()"  
+                            [BottomMargin]="GridBottomMargin">
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
                 </mj-tabstrip>
     </form>
 </div>

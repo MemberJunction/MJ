@@ -16,24 +16,9 @@
                         </mj-form-section>
                     </mj-tab-body>
                     
-                    <mj-tab Name="Audit Logs" 
-                        [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: 100}">
-                        <span class="fa-solid fa-fingerprint tab-header-icon"></span>Audit Logs
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Audit Logs')"  
-                            [NewRecordValues]="NewRecordValues('Audit Logs')"
-                            [AllowLoad]="IsCurrentTab('Audit Logs')"  
-                            [EditMode]="GridEditMode()"  
-                            [BottomMargin]="GridBottomMargin">
-                        </mj-user-view-grid>
-                    </mj-tab-body>
-
                     <mj-tab Name="Audit Log Types" 
                         [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: 101}">
+                        [Props]="{EntityRelationshipID: '2E03D09E-AFFF-481B-8484-42649DD67A9F'}">
                         Audit Log Types
                     </mj-tab>
                     <mj-tab-body>
@@ -43,7 +28,22 @@
                             [AllowLoad]="IsCurrentTab('Audit Log Types')"  
                             [EditMode]="GridEditMode()"  
                             [BottomMargin]="GridBottomMargin">
-                        </mj-user-view-grid>
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Audit Logs" 
+                        [Visible]="record.IsSaved" 
+                        [Props]="{EntityRelationshipID: '12BCF651-04DF-49C7-917D-BF978E0BF8E1'}">
+                        <span class="fa-solid fa-fingerprint tab-header-icon"></span>Audit Logs
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Audit Logs')"  
+                            [NewRecordValues]="NewRecordValues('Audit Logs')"
+                            [AllowLoad]="IsCurrentTab('Audit Logs')"  
+                            [EditMode]="GridEditMode()"  
+                            [BottomMargin]="GridBottomMargin">
+                        </mj-user-view-grid>                    
                     </mj-tab-body>
                 </mj-tabstrip>
     </form>

@@ -92,9 +92,9 @@ export abstract class ProviderBase implements IMetadataProvider {
     public abstract GetEntityRecordName(entityName: string, compositeKey: CompositeKey): Promise<string>;
     public abstract GetEntityRecordNames(info: EntityRecordNameInput[]): Promise<EntityRecordNameResult[]>;
 
-    public abstract GetRecordFavoriteStatus(userId: number, entityName: string, CompositeKey: CompositeKey): Promise<boolean>;
+    public abstract GetRecordFavoriteStatus(userId: string, entityName: string, CompositeKey: CompositeKey): Promise<boolean>;
 
-    public abstract SetRecordFavoriteStatus(userId: number, entityName: string, CompositeKey: CompositeKey, isFavorite: boolean, contextUser: UserInfo): Promise<void>;
+    public abstract SetRecordFavoriteStatus(userId: string, entityName: string, CompositeKey: CompositeKey, isFavorite: boolean, contextUser: UserInfo): Promise<void>;
     /******** END - ABSTRACT SECTION ****************************************************************** */
 
 
@@ -178,8 +178,8 @@ export abstract class ProviderBase implements IMetadataProvider {
 
                 // Post Process the Applications, because we want to handle the sub-objects properly.
                 simpleMetadata.AllApplications = simpleMetadata.Applications.map((a: any) => {
-                    a.ApplicationEntities = simpleMetadata.ApplicationEntities.filter((ae: any) => ae.ApplicationName.trim().toLowerCase() === a.Name.trim().toLowerCase())
-                    a.ApplicationSettings = simpleMetadata.ApplicationSettings.filter((as: any) => as.ApplicationName.trim().toLowerCase() === a.Name.trim().toLowerCase())
+                    a.ApplicationEntities = simpleMetadata.ApplicationEntities.filter((ae: any) => ae.ApplicationID === a.ID)
+                    a.ApplicationSettings = simpleMetadata.ApplicationSettings.filter((as: any) => as.ApplicationID === a.ID)
                     return new ApplicationInfo(a, this);
                 });
 
@@ -224,7 +224,7 @@ export abstract class ProviderBase implements IMetadataProvider {
         if (fieldValues && fieldValues.length > 0)
             for (let f of fields) {
                 // populate the field values for each field, if we have them
-                f.EntityFieldValues = fieldValues.filter(fv => fv.EntityID === f.EntityID && fv.EntityFieldName.trim().toLowerCase() === f.Name.trim().toLowerCase());
+                f.EntityFieldValues = fieldValues.filter(fv => fv.EntityFieldID === f.ID);
             }
             
         for (let e of entities) {
@@ -581,7 +581,7 @@ export abstract class ProviderBase implements IMetadataProvider {
 
             // combine the entityupdate dates with a single top level entry for the dataset itself
             ret.push({
-                ID: -1,
+                ID: "",
                 Type: 'All Entity Metadata',
                 UpdatedAt: d.LatestUpdateDate
             })

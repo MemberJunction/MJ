@@ -36,12 +36,12 @@ export class BaseBrowserComponent {
     public async buildFiltersAndLoadData(): Promise<void> {
 
         const md: Metadata = new Metadata();
-        let categoryFilter: string = this.selectedFolderID ? `CategoryID = ${this.selectedFolderID}` : `CategoryID IS NULL`;
-        let resourceFilter: string = `UserID = ${md.CurrentUser.ID} AND ${categoryFilter}`;
+        let categoryFilter: string = this.selectedFolderID ? `CategoryID = '${this.selectedFolderID}'` : `CategoryID IS NULL`;
+        let resourceFilter: string = `UserID = '${md.CurrentUser.ID}' AND ${categoryFilter}`;
     
         //filter for the folders
-        let resourceCategoryFilter: string = this.selectedFolderID ? `ParentID = ${this.selectedFolderID}` : `ParentID IS NULL`;
-        resourceCategoryFilter += ` AND UserID = ${md.CurrentUser.ID}`;
+        let resourceCategoryFilter: string = this.selectedFolderID ? `ParentID = '${this.selectedFolderID}'` : `ParentID IS NULL`;
+        resourceCategoryFilter += ` AND UserID = '${md.CurrentUser.ID}'`;
         LogStatus("resourceFilter: " + resourceFilter + " category filter: " + resourceCategoryFilter);
         await this.LoadData({
             sortItemsAfterLoad: true, 

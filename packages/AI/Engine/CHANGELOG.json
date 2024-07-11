@@ -2,6 +2,78 @@
   "name": "@memberjunction/aiengine",
   "entries": [
     {
+      "date": "Fri, 21 Jun 2024 13:15:28 GMT",
+      "version": "1.8.1",
+      "tag": "@memberjunction/aiengine_v1.8.1",
+      "comments": {
+        "patch": [
+          {
+            "author": "beachball",
+            "package": "@memberjunction/aiengine",
+            "comment": "Bump @memberjunction/core to v1.8.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/aiengine",
+            "comment": "Bump @memberjunction/global to v1.8.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/aiengine",
+            "comment": "Bump @memberjunction/core-entities to v1.8.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/aiengine",
+            "comment": "Bump @memberjunction/ai to v1.8.1",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
+      "date": "Wed, 19 Jun 2024 16:32:44 GMT",
+      "version": "1.8.0",
+      "tag": "@memberjunction/aiengine_v1.8.0",
+      "comments": {
+        "minor": [
+          {
+            "author": "97354817+AN-BC@users.noreply.github.com",
+            "package": "@memberjunction/aiengine",
+            "commit": "baa78189045985f29e053a990e9066f5e0825ade",
+            "comment": "Applying package updates [skip ci]"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/aiengine",
+            "comment": "Bump @memberjunction/core to v1.8.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/aiengine",
+            "comment": "Bump @memberjunction/global to v1.8.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/aiengine",
+            "comment": "Bump @memberjunction/core-entities to v1.8.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/aiengine",
+            "comment": "Bump @memberjunction/ai to v1.8.0",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
       "date": "Wed, 12 Jun 2024 20:13:29 GMT",
       "version": "1.7.1",
       "tag": "@memberjunction/aiengine_v1.7.1",

@@ -2,6 +2,140 @@
   "name": "@memberjunction/sqlserver-dataprovider",
   "entries": [
     {
+      "date": "Fri, 21 Jun 2024 13:15:28 GMT",
+      "version": "1.8.1",
+      "tag": "@memberjunction/sqlserver-dataprovider_v1.8.1",
+      "comments": {
+        "patch": [
+          {
+            "author": "beachball",
+            "package": "@memberjunction/sqlserver-dataprovider",
+            "comment": "Bump @memberjunction/actions to v1.8.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/sqlserver-dataprovider",
+            "comment": "Bump @memberjunction/ai to v1.8.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/sqlserver-dataprovider",
+            "comment": "Bump @memberjunction/ai-vector-dupe to v1.8.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/sqlserver-dataprovider",
+            "comment": "Bump @memberjunction/aiengine to v1.8.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/sqlserver-dataprovider",
+            "comment": "Bump @memberjunction/core to v1.8.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/sqlserver-dataprovider",
+            "comment": "Bump @memberjunction/core-entities to v1.8.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/sqlserver-dataprovider",
+            "comment": "Bump @memberjunction/global to v1.8.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/sqlserver-dataprovider",
+            "comment": "Bump @memberjunction/queue to v1.8.1",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
+      "date": "Wed, 19 Jun 2024 16:32:44 GMT",
+      "version": "1.8.0",
+      "tag": "@memberjunction/sqlserver-dataprovider_v1.8.0",
+      "comments": {
+        "patch": [
+          {
+            "author": "97354817+AN-BC@users.noreply.github.com",
+            "package": "@memberjunction/sqlserver-dataprovider",
+            "commit": "1a9b8d29875aad6ea79f3c596481c32b02347829",
+            "comment": "Applying package updates [skip ci]"
+          },
+          {
+            "author": "97354817+AN-BC@users.noreply.github.com",
+            "package": "@memberjunction/sqlserver-dataprovider",
+            "commit": "3c0c17faf35a34170d160a9bf1860e76d57395ab",
+            "comment": "Applying package updates [skip ci]"
+          },
+          {
+            "author": "97354817+AN-BC@users.noreply.github.com",
+            "package": "@memberjunction/sqlserver-dataprovider",
+            "commit": "7be6a2040c0fb540dffec6abb4fceb04de980d32",
+            "comment": "Applying package updates [skip ci]"
+          }
+        ],
+        "minor": [
+          {
+            "author": "beachball",
+            "package": "@memberjunction/sqlserver-dataprovider",
+            "comment": "Bump @memberjunction/actions to v1.8.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/sqlserver-dataprovider",
+            "comment": "Bump @memberjunction/ai to v1.8.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/sqlserver-dataprovider",
+            "comment": "Bump @memberjunction/ai-vector-dupe to v1.8.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/sqlserver-dataprovider",
+            "comment": "Bump @memberjunction/aiengine to v1.8.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/sqlserver-dataprovider",
+            "comment": "Bump @memberjunction/core to v1.8.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/sqlserver-dataprovider",
+            "comment": "Bump @memberjunction/core-entities to v1.8.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/sqlserver-dataprovider",
+            "comment": "Bump @memberjunction/global to v1.8.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/sqlserver-dataprovider",
+            "comment": "Bump @memberjunction/queue to v1.8.0",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
       "date": "Wed, 12 Jun 2024 20:13:28 GMT",
       "version": "1.7.1",
       "tag": "@memberjunction/sqlserver-dataprovider_v1.7.1",

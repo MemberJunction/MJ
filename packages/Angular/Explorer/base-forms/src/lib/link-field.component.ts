@@ -1,4 +1,4 @@
-import { AfterViewInit, Component, ElementRef, Input, ViewChild } from "@angular/core";
+import { AfterViewInit, Component, ElementRef, Input, ViewChild, ChangeDetectorRef, OnChanges, SimpleChanges } from "@angular/core";
 import { BaseRecordComponent } from "./base-record-component";
 import { BaseEntity, CompositeKey, EntityFieldInfo, EntityInfo, Metadata, RunView } from "@memberjunction/core";
 import { debounceTime, fromEvent } from 'rxjs';
@@ -15,6 +15,9 @@ import { debounceTime, fromEvent } from 'rxjs';
     templateUrl: './link-field.component.html'
 })
 export class MJLinkField extends BaseRecordComponent implements AfterViewInit {
+    constructor(private cdr: ChangeDetectorRef) {
+        super();
+    }
     /**
      * The record object that contains the field to be rendered. This object should be an instance of BaseEntity or a derived class.
      */
@@ -30,40 +33,77 @@ export class MJLinkField extends BaseRecordComponent implements AfterViewInit {
      */
     @Input() RecordName?: string = '';
 
+    /**
+     * The type of component to show, search is a user input field that searches for records, dropdown is a dropdown list of records. The default is 'search'. If the related entity has
+     * a small list of possible records, it is often desirable to show a dropdown list instead of a search box.
+     */
+    @Input() LinkComponentType?: 'Search' | 'Dropdown' = 'Search';
+
     public RelatedEntityInfo: EntityInfo | undefined = undefined;
+
+    private _SelectedRecord: BaseEntity | undefined = undefined;
+    public get SelectedRecord(): BaseEntity | undefined {
+        return this._SelectedRecord;
+    }
+    public set SelectedRecord(val: BaseEntity | undefined) {
+        this._SelectedRecord = val;
+        if (val) {
+            this.Value = val.FirstPrimaryKey.Value;
+        }
+        else
+            this.Value = null;
+    }
     public RecordLinked: boolean = false;
-    public matchingRecords: BaseEntity[] = [];
+    public RelatedEntityRecords: BaseEntity[] = [];
     public showMatchingRecords: boolean = false;
+    public dropDownColumns: EntityFieldInfo[] = [];
 
-    @ViewChild('inputBox', { static: true }) inputBox!: ElementRef;
+    @ViewChild('inputBox', { static: false }) inputBox!: ElementRef;
 
-
-    async ngAfterViewInit() {
+    private async initComponent() {
         if (!this.record)
             throw new Error('record property is required');
         if (!this.FieldName)
             throw new Error('FieldName property is required');
 
-        await this.AttemptToLinkValue();
+        const relatedEntityID = this.EntityField?.RelatedEntityID
+        const md = new Metadata();
+        if (relatedEntityID) {
+            this.RelatedEntityInfo = md.EntityByID(relatedEntityID); 
+            this.cdr.detectChanges();
+        }
 
-        fromEvent(this.inputBox.nativeElement, 'input')
-            .pipe(debounceTime(300))
-            .subscribe(() => {
-                if (!this.RecordLinked) {
-                    this.showMatchingRecords = true;
-                    this.fetchMatchingRecords(this.inputBox.nativeElement.value);
-                }
-            });
+        if (this.LinkComponentType === 'Search') {
+            await this.AttemptToLinkValue();
 
-        fromEvent<KeyboardEvent>(this.inputBox.nativeElement, 'keydown').subscribe((event: KeyboardEvent) => {
-            if (this.RecordLinked && !['Backspace', 'Delete'].includes(event.key)) {
-                event.preventDefault();
-            } else if (['Backspace', 'Delete'].includes(event.key)) {
-                this.RecordName = '';
-                this.Value = null;
-                this.RecordLinked = false;
+            if (this.inputBox) {
+                fromEvent(this.inputBox.nativeElement, 'input')
+                    .pipe(debounceTime(300))
+                    .subscribe(() => {
+                        if (!this.RecordLinked) {
+                            this.showMatchingRecords = true;
+                            this.fetchMatchingRecords(this.inputBox.nativeElement.value);
+                        }
+                    });
+        
+                fromEvent<KeyboardEvent>(this.inputBox.nativeElement, 'keydown').subscribe((event: KeyboardEvent) => {
+                    if (this.RecordLinked && !['Backspace', 'Delete'].includes(event.key)) {
+                        event.preventDefault();
+                    } else if (['Backspace', 'Delete'].includes(event.key)) {
+                        this.RecordName = '';
+                        this.Value = null;
+                        this.RecordLinked = false;
+                    }
+                });    
             }
-        });
+        }
+        else {
+            await this.populateDropdownList()
+        }
+    }
+
+    async ngAfterViewInit() {
+        await this.initComponent();
     }
 
     protected async AttemptToLinkValue() {
@@ -92,7 +132,12 @@ export class MJLinkField extends BaseRecordComponent implements AfterViewInit {
 
     public set Value(val: any) {
         this.record.Set(this.FieldName, val);
-        this.AttemptToLinkValue();
+        if (this.LinkComponentType === 'Search') {
+            this.AttemptToLinkValue();
+        }
+        else {
+            this.SetDropdownValue();
+        }
     }
 
     public get EntityField(): EntityFieldInfo | undefined {
@@ -116,16 +161,36 @@ export class MJLinkField extends BaseRecordComponent implements AfterViewInit {
 
     public RelatedEntityNameField: string = '';
     protected async fetchMatchingRecords(query: string) {
-        const relatedEntityID = this.EntityField?.RelatedEntityID
-        const md = new Metadata();
         this.RecordLinked = false;
-        this.matchingRecords = [];
-        if (relatedEntityID) {
-            this.RelatedEntityInfo = md.EntityByID(relatedEntityID); 
-            // do a lookup using runView for records that have the Name field that start with the query
+        this.RelatedEntityRecords = [];
+        if (this.RelatedEntityInfo) {
             this.RelatedEntityNameField = this.RelatedEntityInfo.NameField ? this.RelatedEntityInfo.NameField.Name : '';
+            const escapedQuery = query.replace(/'/g, "''");
+            let filter = '';
+
+            if (!this.RelatedEntityInfo.FirstPrimaryKey.NeedsQuotes) {
+                // the pkey is a number, so let's see if the query is a number
+                if (isNaN(Number(query)) && this.RelatedEntityNameField === '') {
+                    // if the query is not a number (for number pkeys) and we don't have a name field to search on, then we can't search
+                    return;
+                }
+                else {
+                    // if we get here it means we either have a RelatedEntityNameField to search on or the query is a number
+                    if (!isNaN(Number(query))) {
+                        // if the query is a number, then we can search on the pkey
+                        filter = `[${this.RelatedEntityInfo.FirstPrimaryKey.Name}] = ${query}`;    
+                    }
+                }
+            }
+            else {
+                // the pkey is a string, so we can search on it no matter what the query is, a number, not a number, whatever
+                filter = `[${this.RelatedEntityInfo.FirstPrimaryKey.Name}] = '${escapedQuery}'`;
+            }
+            
             if (this.RelatedEntityNameField) {
-                const filter = `[${this.RelatedEntityNameField}] LIKE '${query}%'`;
+                filter = `[${this.RelatedEntityNameField}] LIKE '${escapedQuery}%'${filter.length > 0 ? ' OR ' + filter : ''}`;
+            }
+            if (filter && filter.length > 0) {
                 const rv = new RunView();
                 const result = await rv.RunView({
                     EntityName: this.RelatedEntityInfo.Name,
@@ -135,16 +200,62 @@ export class MJLinkField extends BaseRecordComponent implements AfterViewInit {
                     MaxRows: 5
                 })
                 if (result && result.Results?.length > 0) {
-                    this.matchingRecords = result.Results.filter(record => record[this.RelatedEntityNameField].toLowerCase().includes(query.toLowerCase()));    
-                }
+                    this.RelatedEntityRecords = result.Results;
+                }    
+            }
+            else {
+                this.RelatedEntityRecords = [<BaseEntity><any>{Name: "Can't search on " + this.RelatedEntityInfo.Name + ' records'}]; // this will have the effect of a single record in the list that says "Can't search on..."
             }
         }
     }
 
+    protected async populateDropdownList() {
+        if (this.RelatedEntityInfo) {
+            this.dropDownColumns = this.RelatedEntityInfo.Fields.filter(f => f.DefaultInView || f.IsPrimaryKey || f.IsNameField);
+            this.cdr.detectChanges();
+
+            // run a view to get the records
+            const rv = new RunView();
+            const result = await rv.RunView({
+                EntityName: this.RelatedEntityInfo.Name,
+                ExtraFilter: '',
+                OrderBy: this.RelatedEntityNameField,
+                ResultType: 'entity_object',
+            });
+            if (result && result.Success) {
+                this.RelatedEntityRecords = result.Results;
+
+                // look for a match between the records we have, finding a match between our this.Value and the pkey of the record
+                const match = this.RelatedEntityRecords.find(r => r.FirstPrimaryKey.Value === this.Value);
+                if (match) {
+                    this.SelectedRecord = match;
+                    this.SetDropdownValue();
+                }
+                
+                this.cdr.detectChanges();
+            }
+        }
+    }
+
+    protected async SetDropdownValue() {
+
+    }
+
     public onRecordSelected(linkedRecord: BaseEntity) {
-        this.RecordName = linkedRecord.Get(this.RelatedEntityNameField);
-        this.RecordLinked = true;
-        this.showMatchingRecords = false;
-        this.record.Set(this.FieldName, linkedRecord.FirstPrimaryKey.Value);
+        if (linkedRecord.EntityInfo) {
+            this.SelectedRecord = linkedRecord;
+
+            this.RecordName = this.RelatedEntityNameField ? linkedRecord.Get(this.RelatedEntityNameField) : linkedRecord.PrimaryKey.ToString();
+            this.RecordLinked = true;
+            this.showMatchingRecords = false;
+            this.record.Set(this.FieldName, linkedRecord.FirstPrimaryKey.Value);    
+        }
+        else {
+            // this means that we really don't have a selected record and we were just showing the "Can't search on..." record
+            this.showMatchingRecords = false;
+            this.RecordLinked = false;
+            this.RecordName = '';
+        }
+        this.cdr.detectChanges();
     }
 }

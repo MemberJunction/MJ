@@ -18,7 +18,7 @@
                     
                     <mj-tab Name="Contacts" 
                         [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: 168}">
+                        [Props]="{EntityRelationshipID: '00BB95E3-4BBD-4DAE-948F-8F4BE6DFB7F7'}">
                         Contacts
                     </mj-tab>
                     <mj-tab-body>
@@ -28,7 +28,7 @@
                             [AllowLoad]="IsCurrentTab('Contacts')"  
                             [EditMode]="GridEditMode()"  
                             [BottomMargin]="GridBottomMargin">
-                        </mj-user-view-grid>
+                        </mj-user-view-grid>                    
                     </mj-tab-body>
                 </mj-tabstrip>
     </form>

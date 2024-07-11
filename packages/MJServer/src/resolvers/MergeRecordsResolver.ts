@@ -59,13 +59,14 @@ export class RecordDependencyResolver {
     @Query(() => [RecordDependencyResult])
     async GetRecordDependencies(
       @Arg('entityName', () => String) entityName: string,
-      @Arg('CompositeKey', () => CompositeKeyInputType) CompositeKey: CompositeKey,
+      @Arg('CompositeKey', () => CompositeKeyInputType) ckInput: CompositeKeyInputType,
       @Ctx() { dataSource, userPayload }: AppContext,
       @PubSub() pubSub: PubSubEngine
     ) {
         try {
             const md = new Metadata();
-            const result = await md.GetRecordDependencies(entityName, CompositeKey); 
+            const ck = new CompositeKey(ckInput.KeyValuePairs);
+            const result = await md.GetRecordDependencies(entityName, ck); 
             return result;
         }
         catch (e) {

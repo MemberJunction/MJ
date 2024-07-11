@@ -26,7 +26,7 @@ export class ListDetailEntityExtended extends ListDetailEntity  {
 
             const rvResult = await rv.RunView({
                 EntityName: 'List Details',
-                ExtraFilter: `ListID = ${this.ListID} AND RecordID = ${this.RecordID}`
+                ExtraFilter: `ListID = '${this.ListID}' AND RecordID = '${this.RecordID}'`
             }, this.ContextCurrentUser);
 
             if(!rvResult.Success){

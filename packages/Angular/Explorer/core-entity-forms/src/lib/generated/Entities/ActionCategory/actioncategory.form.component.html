@@ -18,7 +18,7 @@
                     
                     <mj-tab Name="Action Categories" 
                         [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: 245}">
+                        [Props]="{EntityRelationshipID: 'F7D216ED-93E3-48EF-A46E-50B7F8506B52'}">
                         Action Categories
                     </mj-tab>
                     <mj-tab-body>
@@ -28,12 +28,12 @@
                             [AllowLoad]="IsCurrentTab('Action Categories')"  
                             [EditMode]="GridEditMode()"  
                             [BottomMargin]="GridBottomMargin">
-                        </mj-user-view-grid>
+                        </mj-user-view-grid>                    
                     </mj-tab-body>
 
                     <mj-tab Name="Actions" 
                         [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: 246}">
+                        [Props]="{EntityRelationshipID: '03987A91-3AEF-4803-AFF7-E707B6E362DA'}">
                         <span class="fa-solid fa-bolt tab-header-icon"></span>Actions
                     </mj-tab>
                     <mj-tab-body>
@@ -43,7 +43,7 @@
                             [AllowLoad]="IsCurrentTab('Actions')"  
                             [EditMode]="GridEditMode()"  
                             [BottomMargin]="GridBottomMargin">
-                        </mj-user-view-grid>
+                        </mj-user-view-grid>                    
                     </mj-tab-body>
                 </mj-tabstrip>
     </form>

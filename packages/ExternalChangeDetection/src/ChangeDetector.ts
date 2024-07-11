@@ -1,4 +1,4 @@
-import { BaseEngine, BaseEnginePropertyConfig, BaseEntity, CompositeKey, EntityField, EntityFieldTSType, EntityInfo, KeyValuePair, LogError, LogStatus, Metadata, RunView, UserInfo } from "@memberjunction/core";
+import { BaseEngine, BaseEnginePropertyConfig, BaseEntity, CompositeKey, ConsoleColor, EntityField, EntityFieldTSType, EntityInfo, KeyValuePair, LogError, LogStatus, Metadata, RunView, UpdateCurrentConsoleLine, UpdateCurrentConsoleProgress, UserInfo } from "@memberjunction/core";
 import { RecordChangeEntity, RecordChangeReplayRunEntity } from "@memberjunction/core-entities";
 import { SQLServerDataProvider } from "@memberjunction/sqlserver-dataprovider";
 
@@ -25,6 +25,9 @@ export class ChangeDetectionItem {
      * Populated for Create and Update types only. This is the latest version of the record from the organic database table
      */
     public LatestRecord?: BaseEntity;
+
+    public LegacyKey?: boolean = false; // if true, this means that the key was a single value and not a concatenated key
+    public LegacyKeyValue?: string; // if LegacyKey is true, this will be the single value of the key
 }
 
 /**
@@ -44,7 +47,7 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
     public async Config(forceRefresh?: boolean, contextUser?: UserInfo) {
         const provider: SQLServerDataProvider = <SQLServerDataProvider>Metadata.Provider;
 
-        const c: BaseEnginePropertyConfig[] = [
+        const c = [
             {
                 EntityName: "Entities",
                 PropertyName: "_EligibleEntities",
@@ -58,12 +61,36 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
         return super.getInstance<ExternalChangeDetectorEngine>();
     }
 
+
+    private _IneligibleEntities: string[] = [];// ['Entities', 'Entity Fields', 'Entity Field Values', 'Entity Relationships', 'Record Changes']; // default ineligible entities --- turned off for now
+    /**
+     * A list of entities that will automatically be excluded from all calls to this class. This array is used as a "safety"
+     * mechanism to prevent the system from trying to replay changes to these entities which wouldn't negatively affect system integrity
+     * but could cause performance issues. If you want to add/remove entities to this list, you can do so by manipulating this array.
+     * 
+     * If you want to run Change Detection and/or replay changes for entities in this array, you will need to remove them
+     * in your code before calling the methods in this class. While executing methods on this class with these default 
+     * ineligible entities will not cause any issues, they may take a long time to run and utilize a significant amount
+     * of resources. 
+     */
+    public get IneligibleEntities(): string[] {
+        return this._IneligibleEntities;
+    }
+
+
     private _EligibleEntities: EntityInfo[];
     /**
-     * A list of the entities that are eligible for external change detection
+     * A list of the entities that are eligible for external change detection. This is determined by using the underlying 
+     * database view vwEntitiesWithExternalChangeTracking which is a view that is maintained by the MJ system and is used to
+     * find a list of entities that have the required characteristics that support external change detection. These characteristics
+     * include:
+     *  * The entity has the TrackRecordChanges property set to 1
+     *  * The entity has the special UpdatedAt/CreatedAt fields (which are called __mj_UpdatedAt and __mj_CreatedAt in the database). These fields are AUTOMATICALLY added to an entity that has TrackRecordChanges set to 1 by the MJ CodeGen tool.
+     *  * The entity is not in the IneligibleEntities list. See info on the IneligibleEntities property for more information on excluded entities.
      */
     public get EligibleEntities(): EntityInfo[] {
-        return this._EligibleEntities;
+        const netEligible = this._EligibleEntities.filter(e => !this.IneligibleEntities.map(i => i.toLowerCase().trim()).includes(e.Name.toLowerCase().trim()));
+        return netEligible;
     }
 
     /**
@@ -72,6 +99,14 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
      */
     public async DetectChangesForEntity(entity: EntityInfo): Promise<ChangeDetectionResult> {
         try {
+            // check to make sure that the entity is in the eligible list
+            if (!entity) {
+                throw new Error("entity parameter is required");
+            }
+            else if (!this.EligibleEntities.find(e => e.ID === entity.ID)) {
+                throw new Error(`Entity ${entity.Name} is not eligible for external change detection. Refer to the documentation on the EligibleEntities and IneligibleEntities properties for more information.`);
+            }
+
             const md = new Metadata();
 
             const sqlCreates = this.generateDetectCreationsQuery(entity);
@@ -129,7 +164,19 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
                     const item = new ChangeDetectionItem();
                     item.Entity = entity;
                     const ck = new CompositeKey();
-                    ck.LoadFromConcatenatedString(row.RecordID); // this is a string like 'Field1Value|Field2Value' (no quotes)
+                    // row.RecordID should have a format of Field1|Value1||Field2|Value2, however in some cases there is legacy
+                    // data in the RecordChange table that just has a single value in it and in that case assuming that the entity
+                    // in question has a single-valued primary key, we can just use that value as the key, so we need to test for that
+                    // first and if we find that the RecordID is just a single value, we can use that as the key
+                    if (row.RecordID.indexOf(CompositeKey.DefaultValueDelimiter) === -1) {
+                        // there is no field delimiter, so we can assume this is a single value
+                        ck.LoadFromSingleKeyValuePair(entity.PrimaryKeys[0].Name, row.RecordID); // this is a string like 'Field1Value' (no quotes
+                        item.LegacyKey = true;
+                        item.LegacyKeyValue = row.RecordID;
+                    }
+                    else
+                        ck.LoadFromConcatenatedString(row.RecordID); // this is a string like 'Field1Value|Field2Value' (no quotes)
+
                     item.PrimaryKey = ck;
                     item.Type = 'Delete';
                     item.ChangedAt = row.ChangedAt;
@@ -175,7 +222,7 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
                 // now we have the version from the database that has been updated from an external source
                 // then we need to get the latest version from the vwRecordChanges table that matches this entity and RecordID
                 const result = await this.GetLatestRecordChangesDataForEntityRecord(change);
-                if (result) {
+                if (result && result.FullRecordJSON && result.FullRecordJSON.length > 0) {
                     // we have our row, so get the JSON, parse it and we'll have the differences
                     const json = JSON.parse(result.FullRecordJSON);
                     // now go through each field in the record object and compare it with the json
@@ -195,7 +242,7 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
                     return {changes, latestRecord: record};
                 }
                 else {
-                    LogStatus(`WARNING: No record found in vwRecordChanges for ${change.Entity.Name}: ${change.PrimaryKey}`);
+                    LogStatus(`      WARNING: No record found, or no FullRecordJSON found, in vwRecordChanges for ${change.Entity.Name}: ${change.PrimaryKey.ToConcatenatedString()}`);
                     return {changes: [], latestRecord: record};
                 }
             }
@@ -225,8 +272,8 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
                 return {differ: d1.getTime() !== d2.getTime(), castValue1: d1, castValue2: d2};
             case EntityFieldTSType.Number:
                 // check to see if value1 and value2 are both numbers, if not, convert them to numbers
-                const n1 = typeof value1 === 'number' ? value1 : parseFloat(value1);
-                const n2 = typeof value2 === 'number' ? value2 : parseFloat(value2);
+                const n1 = value1 ? typeof value1 === 'number' ? value1 : parseFloat(value1) : value1;
+                const n2 = value2 ? typeof value2 === 'number' ? value2 : parseFloat(value2) : value2;
                 return {differ: n1 !== n2, castValue1: n1, castValue2: n2};
             case EntityFieldTSType.String:
                 // check to see if value1 and value2 are both strings, if not, convert them to strings
@@ -250,6 +297,7 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
                     WHERE 
                         RecordID = '${change.PrimaryKey.ToConcatenatedString()}' 
                         AND EntityID = ${change.Entity.ID} 
+                        AND Status <> 'Pending'
                     ORDER BY 
                         ChangedAt DESC`;                
         const result = await Provider.ExecuteSQL(sql);
@@ -358,8 +406,8 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
                     RecordID
             ) rc ON ${primaryKeyString} = rc.RecordID
             WHERE 
-                ot.${EntityInfo.UpdatedAtFieldName} > COALESCE(rc.last_change_time, '1900-01-01');
-        `;
+                FORMAT(ot.${EntityInfo.UpdatedAtFieldName}, 'yyyy-MM-dd HH:mm:ss.fff') > COALESCE(FORMAT(rc.last_change_time, 'yyyy-MM-dd HH:mm:ss.fff'), '1900-01-01 00:00:00.000');`;
+                // use up to 3 digits of precision because when we get the values back into JavaScript objects, Date objects only have 3 digits of precision
     }
     
     protected generateDetectCreationsQuery(entity: EntityInfo): string {
@@ -386,7 +434,7 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
     
         return `
             SELECT 
-                rc.RecordID, rc.ChangedAt
+                rc.RecordID, MAX(rc.ChangedAt) ChangedAt
             FROM 
                 __mj.vwRecordChanges rc
             LEFT JOIN 
@@ -403,7 +451,8 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
                         SELECT rc2.ID FROM __mj.vwRecordChanges rc2 WHERE 
                         rc2.RecordID = rc.RecordID AND rc2.EntityID=rc.EntityID AND rc2.Type='Delete'
                     ) 
-
+            GROUP BY 
+                rc.RecordID
         `; // last part of above query makes sure we don't include records already deleted in Record Changes
     }
     
@@ -415,15 +464,34 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
      */
     public async DetectChangesForEntities(entities: EntityInfo[]): Promise<ChangeDetectionResult>  {
         try {
+            if (!entities)
+                throw new Error("entities parameter is required");
+            else if (entities.length === 0)
+                throw new Error("entities parameter must have at least one entity in it");
+
             const result: ChangeDetectionResult = new ChangeDetectionResult();
             result.Success = true;
             result.Changes = [];
 
-            for (const entity of entities) {
-                const entityResult = await this.DetectChangesForEntity(entity);
-                result.Changes = result.Changes.concat(entityResult.Changes);
-                result.Success = result.Success && entityResult.Success;
-            }
+            const promises = [];
+            // fire them all off in parallel
+            LogStatus(`Detecting changes for ${entities.length} entities`)
+            let numFinished: number = 0;
+            entities.forEach((e) => {
+                UpdateCurrentConsoleLine(`   Starting change detection changes for ${e.Name}`, ConsoleColor.gray);
+                const p = this.DetectChangesForEntity(e); // no await
+                promises.push(p);
+                p.then(entityResult => {
+                    UpdateCurrentConsoleProgress(`   Finished change detection changes for ${e.Name}`, ++numFinished, entities.length, entityResult.Success ? ConsoleColor.cyan : ConsoleColor.crimson);
+                    result.Changes = result.Changes.concat(entityResult.Changes);
+                    result.Success = result.Success && entityResult.Success;    
+                });
+            });
+
+            // now wait for all of the promises to finish
+            await Promise.all(promises);
+
+            UpdateCurrentConsoleProgress(`   Finished detecting changes for ${entities.length} entities`, entities.length, entities.length, result.Success ? ConsoleColor.green : ConsoleColor.red);
 
             return result;
         }
@@ -437,26 +505,55 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
         }
     }
 
+    /**
+     * This method will detect changes for all eligible entities as defined by the EligibleEntities property
+     */
     public async DetectChangesForAllEligibleEntities(): Promise<ChangeDetectionResult> {
         return await this.DetectChangesForEntities(this.EligibleEntities);
     }
 
     /**
      * This method will replay all of the items in the changes array
-     * @param changes 
-     * @returns 
+     * @param changes Array of changes to replay.
+     * @param batchSize Optional, defines the # of concurrent changes to replay at once. If you want to replay changes serially, set this to 1
+     * @returns {Promise<boolean>} - Returns true if all changes are successfully replayed, otherwise false.
      */
-    public async ReplayChanges(changes: ChangeDetectionItem[]): Promise<boolean> {
-        let run;
+    public async ReplayChanges(changes: ChangeDetectionItem[], batchSize: number = 20): Promise<boolean> {
+        let run; // delcare outside of try block so we have access to it in the catch block
         try {
             if (changes && changes.length > 0) {
                 const md = new Metadata();
                 const results = [];
                 run = await this.StartRun();
-                for (const change of changes) {
-                    const result = await this.ReplaySingleChange(md, run, change);
-                    results.push({Success: result, change: change});
+                LogStatus(`Replaying ${changes.length} changes`);
+
+                let numProcessed = 0;
+                for (let i = 0; i < changes.length; i += batchSize) {
+                    const batch = changes.slice(i, i + batchSize);
+            
+                    // Process the current batch
+                    const batchPromises = batch.map(async (change) => {
+                        UpdateCurrentConsoleProgress(
+                            `   Replaying ${change.Entity.Name} ${change.Type} ${change.PrimaryKey.ToConcatenatedString()}`,
+                            ++numProcessed,
+                            changes.length,
+                            ConsoleColor.gray
+                        );
+                        const result = await this.ReplaySingleChange(md, run, change);
+                        return { Success: result, change: change };
+                    });
+            
+                    // Wait for all promises in the current batch to complete
+                    const batchResults = await Promise.all(batchPromises);
+                    results.push(...batchResults);
                 }
+
+                // for (const change of changes) {
+                //     UpdateCurrentConsoleProgress(`   Replaying ${change.Entity.Name} ${change.Type} ${change.PrimaryKey.ToConcatenatedString()}`, changes.indexOf(change), changes.length, ConsoleColor.gray);
+                //     const result = await this.ReplaySingleChange(md, run, change);
+                //     results.push({Success: result, change: change});
+                // }
+
                 run.EndedAt = new Date();
                 run.Status = results.every(r => r.Success) ? 'Complete' : 'Error';
                 if (await run.Save()) {
@@ -476,11 +573,11 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
                 try {
                     run.Status = 'Error';
                     run.EndedAt = new Date();
-                    await run.Save();
+                    await run.Save(); // dont' care about return value here, we've already tried to save it and the return value will be false anyway and message is the original root cause of the first exception
                 }
-                catch (e) {
-                    LogError('Attempted to mark run as error failed, make sure you update the database for future runs to be allowed.')
-                    LogError(e);
+                catch (innerError) {
+                    LogError('Attempted to mark run as error failed, make sure you update the database for future runs to be allowed.');
+                    LogError(innerError);
                     return false; // couldn't get it done
                 }
             }
@@ -488,6 +585,9 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
         }
     }
 
+    /**
+     * Method creates a new Record Change Replay Run and returns the object for the run
+     */
     protected async StartRun(): Promise<RecordChangeReplayRunEntity> {
         // first make sure an existing run isn't in progress
         const rv = new RunView();
@@ -595,7 +695,12 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
         try {
             const rc = await md.GetEntityObject<RecordChangeEntity>("Record Changes", this.ContextUser);    
             rc.EntityID = change.Entity.ID;
-            rc.RecordID = change.PrimaryKey.ToConcatenatedString();
+
+            if (change.LegacyKey)
+                rc.RecordID = change.LegacyKeyValue; // need to match legacy key otherwise the other RC records will keep coming back up in detect changes runs in the future
+            else
+                rc.RecordID = change.PrimaryKey.ToConcatenatedString();
+
             rc.Source = 'External';
             rc.Type = change.Type;
             rc.Status = 'Pending';

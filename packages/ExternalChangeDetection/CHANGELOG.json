@@ -2,6 +2,122 @@
   "name": "@memberjunction/external-change-detection",
   "entries": [
     {
+      "date": "Fri, 21 Jun 2024 13:15:28 GMT",
+      "version": "1.8.1",
+      "tag": "@memberjunction/external-change-detection_v1.8.1",
+      "comments": {
+        "patch": [
+          {
+            "author": "beachball",
+            "package": "@memberjunction/external-change-detection",
+            "comment": "Bump @memberjunction/core to v1.8.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/external-change-detection",
+            "comment": "Bump @memberjunction/core-entities to v1.8.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/external-change-detection",
+            "comment": "Bump @memberjunction/global to v1.8.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/external-change-detection",
+            "comment": "Bump @memberjunction/sqlserver-dataprovider to v1.8.1",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
+      "date": "Wed, 19 Jun 2024 16:32:44 GMT",
+      "version": "1.8.0",
+      "tag": "@memberjunction/external-change-detection_v1.8.0",
+      "comments": {
+        "patch": [
+          {
+            "author": "97354817+AN-BC@users.noreply.github.com",
+            "package": "@memberjunction/external-change-detection",
+            "commit": "8a9ff1154b1a656d2e37f27597c3cb16a92053d1",
+            "comment": "Applying package updates [skip ci]"
+          },
+          {
+            "author": "97354817+AN-BC@users.noreply.github.com",
+            "package": "@memberjunction/external-change-detection",
+            "commit": "3c0c17faf35a34170d160a9bf1860e76d57395ab",
+            "comment": "Applying package updates [skip ci]"
+          },
+          {
+            "author": "97354817+AN-BC@users.noreply.github.com",
+            "package": "@memberjunction/external-change-detection",
+            "commit": "fcab65be00d229b087c7598b02e8e5ce45ea7ae8",
+            "comment": "Applying package updates [skip ci]"
+          },
+          {
+            "author": "97354817+AN-BC@users.noreply.github.com",
+            "package": "@memberjunction/external-change-detection",
+            "commit": "1a8f8282998b29f1effa8e7800b2dd366d5c7708",
+            "comment": "Applying package updates [skip ci]"
+          },
+          {
+            "author": "97354817+AN-BC@users.noreply.github.com",
+            "package": "@memberjunction/external-change-detection",
+            "commit": "93b70d50988cdcc262a7f2703155bb3189aaaa49",
+            "comment": "Applying package updates [skip ci]"
+          },
+          {
+            "author": "97354817+AN-BC@users.noreply.github.com",
+            "package": "@memberjunction/external-change-detection",
+            "commit": "1a9b8d29875aad6ea79f3c596481c32b02347829",
+            "comment": "Applying package updates [skip ci]"
+          },
+          {
+            "author": "97354817+AN-BC@users.noreply.github.com",
+            "package": "@memberjunction/external-change-detection",
+            "commit": "7be6a2040c0fb540dffec6abb4fceb04de980d32",
+            "comment": "Applying package updates [skip ci]"
+          },
+          {
+            "author": "97354817+AN-BC@users.noreply.github.com",
+            "package": "@memberjunction/external-change-detection",
+            "commit": "572c7eeb9299930446cfea8061508afd3c7793d2",
+            "comment": "Applying package updates [skip ci]"
+          }
+        ],
+        "minor": [
+          {
+            "author": "beachball",
+            "package": "@memberjunction/external-change-detection",
+            "comment": "Bump @memberjunction/core to v1.8.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/external-change-detection",
+            "comment": "Bump @memberjunction/core-entities to v1.8.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/external-change-detection",
+            "comment": "Bump @memberjunction/global to v1.8.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/external-change-detection",
+            "comment": "Bump @memberjunction/sqlserver-dataprovider to v1.8.0",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
       "date": "Wed, 12 Jun 2024 20:13:28 GMT",
       "version": "1.7.1",
       "tag": "@memberjunction/external-change-detection_v1.7.1",

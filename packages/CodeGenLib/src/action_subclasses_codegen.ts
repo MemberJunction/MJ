@@ -1,10 +1,10 @@
 import { CodeNameFromString, EntityFieldValueListType, EntityInfo, Metadata, SeverityType, TypeScriptTypeFromSQLType } from '@memberjunction/core';
 import fs from 'fs';
 import path from 'path';
-import { makeDir } from './util';
+import { makeDir } from './Misc/util';
 import { RegisterClass } from '@memberjunction/global';
 import { ActionEntity, ActionLibraryEntity } from '@memberjunction/core-entities';
-import { logError, logMessage, logStatus } from './logging';
+import { logError, logMessage, logStatus } from './Misc/logging';
 import { mkdirSync } from 'fs-extra';
 import { ActionEngine, ActionEntityServerEntity } from '@memberjunction/actions';
 
@@ -16,7 +16,7 @@ export class ActionSubClassGeneratorBase {
 
     protected getAllActionLibrariesAndUsedItems(actions: ActionEntityServerEntity[]) {
         // get all of the libraries from the combination of distinct libraries from all of the actions we have here
-        const allActionLibraries: {Library: string, LibraryID: number, ItemsUsedArray: string[]}[] = [];
+        const allActionLibraries: {Library: string, LibraryID: string, ItemsUsedArray: string[]}[] = [];
         actions.forEach(action => {
             action.Libraries.forEach(lib => {
                 if (!allActionLibraries.find(l => l.LibraryID === lib.LibraryID)) {

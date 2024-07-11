@@ -138,3 +138,18 @@ export function CleanJavaScript(javaScriptCode: string): string {
         return javaScriptCode.trim();
     }
 }
+
+/**
+ * Simple wrapper method to JSON.parse that catches any errors and logs them to the console. This method is useful when you want to parse JSON but don't want to crash the application if the JSON is invalid.
+ * @param jsonString 
+ * @returns 
+ */
+export function SafeJSONParse<T>(jsonString: string, logErrors: boolean = false): T {
+    try {
+        return <T>JSON.parse(jsonString);
+    } catch (e) {
+        if (logErrors)
+            console.error("Error parsing JSON string:", e);
+        return null;
+    }
+}

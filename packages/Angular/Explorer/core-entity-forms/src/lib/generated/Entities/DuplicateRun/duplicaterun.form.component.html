@@ -18,7 +18,7 @@
                     
                     <mj-tab Name="Duplicate Run Details" 
                         [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: 202}">
+                        [Props]="{EntityRelationshipID: 'A7D9BA48-2B3D-46FE-B16D-4A5355462E37'}">
                         Duplicate Run Details
                     </mj-tab>
                     <mj-tab-body>
@@ -28,7 +28,7 @@
                             [AllowLoad]="IsCurrentTab('Duplicate Run Details')"  
                             [EditMode]="GridEditMode()"  
                             [BottomMargin]="GridBottomMargin">
-                        </mj-user-view-grid>
+                        </mj-user-view-grid>                    
                     </mj-tab-body>
                 </mj-tabstrip>
     </form>

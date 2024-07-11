@@ -12,18 +12,11 @@ import { EntityFieldValueEntity } from '@memberjunction/core-entities';
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="EntityID"
-            Type="numerictextbox"
+            FieldName="EntityFieldID"
+            Type="textbox"
             [EditMode]="EditMode"
             LinkType="Record"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="EntityFieldName"
-            Type="textarea"
-            [EditMode]="EditMode"
-            LinkType="Record"
+            LinkComponentType="Search"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -78,6 +71,13 @@ import { EntityFieldValueEntity } from '@memberjunction/core-entities';
             [record]="record"
             [ShowLabel]="true"
             FieldName="Entity"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="EntityID"
             Type="textbox"
             [EditMode]="EditMode"
         ></mj-form-field>

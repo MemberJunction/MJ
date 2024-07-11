@@ -16,24 +16,9 @@
                         </mj-form-section>
                     </mj-tab-body>
                     
-                    <mj-tab Name="Company Integration Run API Logs" 
-                        [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: 88}">
-                        Company Integration Run API Logs
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Company Integration Run API Logs')"  
-                            [NewRecordValues]="NewRecordValues('Company Integration Run API Logs')"
-                            [AllowLoad]="IsCurrentTab('Company Integration Run API Logs')"  
-                            [EditMode]="GridEditMode()"  
-                            [BottomMargin]="GridBottomMargin">
-                        </mj-user-view-grid>
-                    </mj-tab-body>
-
                     <mj-tab Name="Error Logs" 
                         [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: 89}">
+                        [Props]="{EntityRelationshipID: '1AEC4E34-3C24-41CE-AA77-BBD00C166029'}">
                         Error Logs
                     </mj-tab>
                     <mj-tab-body>
@@ -43,12 +28,12 @@
                             [AllowLoad]="IsCurrentTab('Error Logs')"  
                             [EditMode]="GridEditMode()"  
                             [BottomMargin]="GridBottomMargin">
-                        </mj-user-view-grid>
+                        </mj-user-view-grid>                    
                     </mj-tab-body>
 
                     <mj-tab Name="Company Integration Run Details" 
                         [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: 90}">
+                        [Props]="{EntityRelationshipID: '82DA8645-248D-4A3A-87F9-D14CEE9765BA'}">
                         Company Integration Run Details
                     </mj-tab>
                     <mj-tab-body>
@@ -58,7 +43,22 @@
                             [AllowLoad]="IsCurrentTab('Company Integration Run Details')"  
                             [EditMode]="GridEditMode()"  
                             [BottomMargin]="GridBottomMargin">
-                        </mj-user-view-grid>
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Company Integration Run API Logs" 
+                        [Visible]="record.IsSaved" 
+                        [Props]="{EntityRelationshipID: 'F7A54429-B709-4E5B-8664-D234BA7A18E1'}">
+                        Company Integration Run API Logs
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Company Integration Run API Logs')"  
+                            [NewRecordValues]="NewRecordValues('Company Integration Run API Logs')"
+                            [AllowLoad]="IsCurrentTab('Company Integration Run API Logs')"  
+                            [EditMode]="GridEditMode()"  
+                            [BottomMargin]="GridBottomMargin">
+                        </mj-user-view-grid>                    
                     </mj-tab-body>
                 </mj-tabstrip>
     </form>

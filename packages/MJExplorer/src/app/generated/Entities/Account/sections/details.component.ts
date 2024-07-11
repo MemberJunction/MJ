@@ -184,6 +184,7 @@ import { AccountEntity } from 'mj_generatedentities';
             Type="numerictextbox"
             [EditMode]="EditMode"
             LinkType="Record"
+            LinkComponentType="Search"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -239,6 +240,13 @@ import { AccountEntity } from 'mj_generatedentities';
             [ShowLabel]="true"
             FieldName="LastEnrichedAt"
             Type="datepicker"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="__mj_DeletedAt"
+            Type="textbox"
             [EditMode]="EditMode"
         ></mj-form-field>
 

@@ -18,7 +18,7 @@
                     
                     <mj-tab Name="Recommendations" 
                         [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: 289}">
+                        [Props]="{EntityRelationshipID: 'F0BAF94B-C0A9-4A14-8286-3F63F96EAE09'}">
                         <span class="fa-solid fa-circle-nodes tab-header-icon"></span>Recommendations
                     </mj-tab>
                     <mj-tab-body>
@@ -28,7 +28,7 @@
                             [AllowLoad]="IsCurrentTab('Recommendations')"  
                             [EditMode]="GridEditMode()"  
                             [BottomMargin]="GridBottomMargin">
-                        </mj-user-view-grid>
+                        </mj-user-view-grid>                    
                     </mj-tab-body>
                 </mj-tabstrip>
     </form>

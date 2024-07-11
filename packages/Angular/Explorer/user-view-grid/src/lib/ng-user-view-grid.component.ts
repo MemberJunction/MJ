@@ -22,10 +22,11 @@ import { BaseFormComponentEvent, BaseFormComponentEventCodes, FormEditingComplet
 import { EntityCommunicationsEngineClient } from '@memberjunction/entity-communications-client';
 import { CommunicationEngineBase, Message } from '@memberjunction/communication-types';
 import { TemplateEngineBase } from '@memberjunction/templates-base-types';
+import { EntityCommunicationParams } from '@memberjunction/entity-communications-base';
 
 
 export type GridRowClickedEvent = {
-  entityId: number;
+  entityId: string;
   entityName: string;
   CompositeKey: CompositeKey;
 }
@@ -123,6 +124,10 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
     return this.compareMode || this.mergeMode || this.duplicateMode || this.addToListMode;
   }
 
+  public get EntityInfo(): EntityInfo | undefined {
+    return this._entityInfo;
+  }
+
   public showNewRecordDialog: boolean = false;
 
   public selectableSettings: SelectableSettings = {
@@ -145,11 +150,11 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
     return this._pendingRecords;
   }
 
-  public get ViewID(): number {
+  public get ViewID(): string {
     if (this.Params && this.Params.ViewID)
       return this.Params.ViewID;
     else
-      return 0;
+      return "";
   }
 
   /**
@@ -655,13 +660,16 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
   async Refresh(params: RunViewParams) {
     this.Params = params;
 
+    if (this.AllowLoad === false) { // MUST DO THIS IMMEDIATELY AFTER STORING PARAMS SO THAT IT IS NOT ASYNC FROM HERE - THAT WAY WE GET FUTURE CALLS TO Refresh() when AllowLoad is set to TRUE
+      return;
+    }
+
+    // NOW WE CAN DO ASYNC stuff, before we check AllowLoad we must not do async stuff
+
     await TemplateEngineBase.Instance.Config(false);
     await EntityCommunicationsEngineClient.Instance.Config(false);
     await CommunicationEngineBase.Instance.Config(false);
 
-    if (this.AllowLoad === false) {
-      return;
-    }
     if (params && (params.ViewEntity || params.ViewID || params.ViewName || (params.EntityName && params.ExtraFilter))) {
       const startTime = new Date().getTime();
       this.isLoading = true
@@ -682,7 +690,7 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
       }
       else if (!params.ViewEntity && (params.ViewID || params.ViewName)) {
         // this is NOT a dyamic view as we got either the ViewID or ViewName, so we can get the ViewEntity
-        if (params.ViewID && params.ViewID > 0) {
+        if (params.ViewID && params.ViewID.length > 0) {
           this._viewEntity = <UserViewEntityExtended>await ViewInfo.GetViewEntity(params.ViewID); 
         }
         else if (params.ViewName) {
@@ -1028,6 +1036,7 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
   }
 
 
+  public showTemplatePreviewDialog: boolean = false;
   /**
    * Handles communication functionality for a given view, only available if the entity being displayed supports communication.
    */
@@ -1035,31 +1044,41 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
     if (!this.Params)
       return;
 
-    const msg: Message = new Message();
-    msg.From = "amith@bluecypress.io"
-    msg.Body = "This is a test message";
-    msg.Subject = "Test Subject";
+    this.showTemplatePreviewDialog = true;
 
-    const sendGrid = CommunicationEngineBase.Instance.Providers.find(p => p.Name === "SendGrid")
-    if (!sendGrid)
-      throw new Error("SendGrid provider not found");
+    // const msg: Message = new Message();
+    // msg.From = "amith@bluecypress.io"
+    // msg.Body = "This is a test message";
+    // msg.Subject = "Test Subject";
 
-    const email = sendGrid.MessageTypes.find(mt => mt.Name === "Email");
-    if (!email) 
-      throw new Error("Email message type not found");
-    msg.MessageType = email;
+    // const sendGrid = CommunicationEngineBase.Instance.Providers.find(p => p.Name === "SendGrid")
+    // if (!sendGrid)
+    //   throw new Error("SendGrid provider not found");
+
+    // const email = sendGrid.MessageTypes.find(mt => mt.Name === "Email");
+    // if (!email) 
+    //   throw new Error("Email message type not found");
+    // msg.MessageType = email;
 
 
-    msg.BodyTemplate = TemplateEngineBase.Instance.FindTemplate('Test Template')
-    msg.HTMLBodyTemplate = msg.BodyTemplate;
-    msg.SubjectTemplate = TemplateEngineBase.Instance.FindTemplate('Test Subject Template')
+    // msg.HTMLBodyTemplate =  TemplateEngineBase.Instance.FindTemplate('User/Roles Demo')
+    // msg.SubjectTemplate = TemplateEngineBase.Instance.FindTemplate('Test Subject Template')
     
-    const result = await EntityCommunicationsEngineClient.Instance.RunEntityCommunication(this._entityInfo!.ID, this.Params, "SendGrid", "Email", msg);
-    if (result && result.Success) {
-      this.CreateSimpleNotification("Communication Sent", 'success', 2000)
-    }
-    else
-      this.CreateSimpleNotification("Error sending communication", 'error', 5000)
+    // const commParams: EntityCommunicationParams = {
+    //   EntityID: this._entityInfo!.ID, 
+    //   RunViewParams: this.Params, 
+    //   ProviderName: "SendGrid", 
+    //   ProviderMessageTypeName: "Email", 
+    //   Message: msg,
+    //   PreviewOnly: true,
+    //   IncludeProcessedMessages: true
+    // }
+    // const result = await EntityCommunicationsEngineClient.Instance.RunEntityCommunication(commParams);
+    // if (result && result.Success) {
+    //   this.CreateSimpleNotification("Communication Sent", 'success', 2000)
+    // }
+    // else
+    //   this.CreateSimpleNotification("Error sending communication", 'error', 5000)
   }
 
 
@@ -1146,7 +1165,7 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
 
     const rvResult: RunViewResult = await rv.RunView({
       EntityName: 'Lists',
-      ExtraFilter: `UserID = ${md.CurrentUser.ID} AND EntityID = ${this._entityInfo.ID}`,
+      ExtraFilter: `UserID = '${md.CurrentUser.ID}' AND EntityID = '${this._entityInfo.ID}'`,
       ResultType: 'entity_object'
     });
 

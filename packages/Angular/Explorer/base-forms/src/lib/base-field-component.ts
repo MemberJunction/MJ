@@ -39,6 +39,11 @@ export class MJFormField extends BaseRecordComponent implements AfterViewInit {
   @Input() LinkType: 'Email' | 'URL' | 'Record' | 'None' = 'None';
 
   /**
+   * Optional, when the field type is a linked field, you can specify if a search box is shown or a dropdown component is shown. The default is 'search'.
+   */
+  @Input() LinkComponentType: 'Search' | 'Dropdown' = 'Dropdown';
+
+  /**
    * If set to false, the label for the field will not be shown. The default is true.
    */
   @Input() ShowLabel: boolean = true;

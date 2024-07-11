@@ -1,9 +1,9 @@
 import { EntityInfo, EntityFieldInfo, EntityRelationshipInfo, TypeScriptTypeFromSQLType, Metadata } from '@memberjunction/core';
 import fs from 'fs';
 import path from 'path';
-import { logError } from './logging';
-import { mjCoreSchema } from './config';
-import { makeDir } from './util';
+import { logError } from './Misc/logging';
+import { mjCoreSchema } from './Config/config';
+import { makeDir } from './Misc/util';
 import { RegisterClass } from '@memberjunction/global';
 
 /**
@@ -250,8 +250,8 @@ export class Run${entity.BaseTableCodeName}ViewResult {
     @Field(() => [${serverGraphQLTypeName}])
     Results: ${serverGraphQLTypeName}[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;

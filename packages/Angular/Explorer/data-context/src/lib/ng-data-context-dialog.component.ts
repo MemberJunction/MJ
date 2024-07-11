@@ -10,7 +10,7 @@ import { Component, EventEmitter, Input, Output } from '@angular/core';
 })
 export class DataContextDialogComponent {
   @Output() dialogClosed = new EventEmitter();
-  @Input() dataContextId!: number;
+  @Input() dataContextId!: string;
 
   closePropertiesDialog(){
     this.dialogClosed.emit();

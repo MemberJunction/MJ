@@ -19,6 +19,15 @@ import { TagEntity } from '@memberjunction/core-entities';
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
+            FieldName="ParentID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            LinkType="Record"
+            LinkComponentType="Search"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
             FieldName="DisplayName"
             Type="textarea"
             [EditMode]="EditMode"
@@ -33,10 +42,16 @@ import { TagEntity } from '@memberjunction/core-entities';
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="ParentID"
-            Type="numerictextbox"
+            FieldName="__mj_CreatedAt"
+            Type="textbox"
             [EditMode]="EditMode"
-            LinkType="Record"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="__mj_UpdatedAt"
+            Type="textbox"
+            [EditMode]="EditMode"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"

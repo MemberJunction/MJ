@@ -19,7 +19,7 @@ import { FormBuilder } from "@angular/forms";
   styleUrls: ['./user-view-properties.component.scss']
 })
 export class UserViewPropertiesDialogComponent extends BaseFormComponent implements AfterViewInit, OnDestroy {
-  @Input() public ViewID: number | undefined;
+  @Input() public ViewID: string | undefined;
   @Input() public EntityName: string | undefined;
   @Input() public ShowPropertiesButton: boolean = true;
 
@@ -76,7 +76,7 @@ export class UserViewPropertiesDialogComponent extends BaseFormComponent impleme
     this.Open();
   }
 
-  public async Open(ViewID: number | undefined = this.ViewID) {
+  public async Open(ViewID: string | undefined = this.ViewID) {
     this.ViewID = ViewID;
     await this.Load();
     this.isDialogOpened = true; // binding causes the kendo window to open from this method call
@@ -257,11 +257,12 @@ export class UserViewPropertiesDialogComponent extends BaseFormComponent impleme
       this.sharedService.CreateSimpleNotification('Validation Errors: ' + valResults.Errors.map((e) => e.Message).join('\n'), 'warning', 7500);
     }
 
-    this.showloader = false;
-    this.isDialogOpened = false;
-
     let saveResult: boolean = await this.record.Save(); 
     if(saveResult){
+      // stop showing the loader and close the dialog if we saved successfully
+      this.showloader = false;
+      this.isDialogOpened = false;
+  
       let event: any = {
         Saved: true, 
         ViewEntity: this.record,

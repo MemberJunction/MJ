@@ -3,6 +3,7 @@ import { ApplicationSettingEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { LoadApplicationSettingDetailsComponent } from "./sections/details.component"
+
 @RegisterClass(BaseFormComponent, 'Application Settings') // Tell MemberJunction about this class
 @Component({
     selector: 'gen-applicationsetting-form',

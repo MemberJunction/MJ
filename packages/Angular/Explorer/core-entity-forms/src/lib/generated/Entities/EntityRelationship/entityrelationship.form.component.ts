@@ -3,6 +3,7 @@ import { EntityRelationshipEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { LoadEntityRelationshipDetailsComponent } from "./sections/details.component"
+
 @RegisterClass(BaseFormComponent, 'Entity Relationships') // Tell MemberJunction about this class
 @Component({
     selector: 'gen-entityrelationship-form',

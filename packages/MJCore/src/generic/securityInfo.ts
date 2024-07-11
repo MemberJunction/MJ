@@ -6,6 +6,8 @@ import { Metadata } from "./metadata";
  * Information about a single user
  */
 export class UserInfo extends BaseInfo {
+    ID: string = null;
+
     /* Name of the user that is used in various places in UIs/etc, can be anything including FirstLast, Email, a Handle, etc */
     Name: string = null
     FirstName: string = null
@@ -51,7 +53,7 @@ export class UserInfo extends BaseInfo {
                 const uri = new UserRoleInfo(userRoles[i])
                 this._UserRoles.push(uri)
     
-                const match = mdRoles.find(r => r.Name.trim().toLowerCase() == uri.RoleName.trim().toLowerCase()) 
+                const match = mdRoles.find(r => r.ID == uri.RoleID) 
                 if (match)
                     uri._setRole(match)
             }
@@ -63,13 +65,14 @@ export class UserInfo extends BaseInfo {
  * Information about a role that a user is linked to
  */
 export class UserRoleInfo extends BaseInfo {
-    UserID: number = null
-    RoleName: string = null
+    UserID: string = null
+    RoleID: string = null
     __mj_CreatedAt: Date = null
     __mj_UpdatedAt: Date = null
 
     // virtual fields - returned by the database VIEW
     User: string = null
+    Role: string = null
 
     private _RoleInfo: RoleInfo = null
     public get RoleInfo(): RoleInfo {
@@ -91,9 +94,10 @@ export class UserRoleInfo extends BaseInfo {
  * Information about a single role
  */
 export class RoleInfo extends BaseInfo {
+    ID: string = null
     Name: string = null
     Description: string = null
-    AzureID: string = null
+    DirectoryID: string = null
     SQLName: string = null
     __mj_CreatedAt: Date = null
     __mj_UpdatedAt: Date = null
@@ -105,11 +109,12 @@ export class RoleInfo extends BaseInfo {
 }
 
 export class RowLevelSecurityFilterInfo extends BaseInfo {
+    ID: string = null
     Name: string = null
     Description: string = null
     FilterText: string = null
-    CreatedAt: Date = null
-    UpdatedAt: Date = null
+    __mj_CreatedAt: Date = null
+    __mj_UpdatedAt: Date = null
 
     constructor (initData: any) {
         super();
@@ -138,11 +143,12 @@ export class RowLevelSecurityFilterInfo extends BaseInfo {
  *  
  **/
 export class AuthorizationInfo extends BaseInfo {
+    ID: string = null
     /**
      * The unique identifier for the parent authorization, if applicable.
-     * @type {number|null}
+     * @type {string|null}
      */
-    ParentID: number = null
+    ParentID: string = null
     Name: string = null
     /**
      * Indicates whether the authorization is active.
@@ -189,7 +195,7 @@ export class AuthorizationInfo extends BaseInfo {
                 const ari = new AuthorizationRoleInfo(authorizationRoles[i])
                 this._AuthorizationRoles.push(ari)
     
-                const match = mdRoles.find(r => r.Name.trim().toLowerCase() == ari.RoleName.trim().toLowerCase()) 
+                const match = mdRoles.find(r => r.ID === ari.RoleID) 
                 if (match)
                     ari._setRole(match)
             }
@@ -205,7 +211,7 @@ export class AuthorizationInfo extends BaseInfo {
     public UserCanExecute(user: UserInfo): boolean {
         if (this.IsActive && user && user.UserRoles) {
             for (let i = 0; i < user.UserRoles.length; i++) {
-                const matchingRole = this.Roles.find(r => r.RoleName == user.UserRoles[i].RoleName)
+                const matchingRole = this.Roles.find(r => r.ID === user.UserRoles[i].RoleID)
                 if (matchingRole)
                     return true; // as soon as we find a single matching role we can bail out as the user can execute
             }
@@ -221,7 +227,7 @@ export class AuthorizationInfo extends BaseInfo {
      */
     public RoleCanExecute(role: RoleInfo): boolean {
         if (this.IsActive) {
-            return this.Roles.find(r => r.RoleName == role.Name) != null
+            return this.Roles.find(r => r.ID === role.ID) != null
         }
         return false
     }
@@ -236,8 +242,9 @@ export type AuthorizationRoleType = typeof AuthorizationRoleType[keyof typeof Au
 
 
 export class AuthorizationRoleInfo extends BaseInfo {
-    AuthorizationName: string = null
-    RoleName: string = null
+    ID: string = null
+    AuthorizationID: string = null
+    RoleID: string = null
     Type: string = null
     __mj_CreatedAt: Date = null
     __mj_UpdatedAt: Date = null
@@ -313,7 +320,8 @@ export class AuthorizationEvaluator {
 }
 
 export class AuditLogTypeInfo extends BaseInfo {
-    ParentID: number = null
+    ID: string = null
+    ParentID: string = null
     Name: string = null
     Description: string = null
     AuthorizationName: string = null

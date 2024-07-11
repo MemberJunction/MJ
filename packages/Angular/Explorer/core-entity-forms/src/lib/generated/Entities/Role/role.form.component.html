@@ -16,39 +16,9 @@
                         </mj-form-section>
                     </mj-tab-body>
                     
-                    <mj-tab Name="Employee Roles" 
-                        [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: 48}">
-                        Employee Roles
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Employee Roles')"  
-                            [NewRecordValues]="NewRecordValues('Employee Roles')"
-                            [AllowLoad]="IsCurrentTab('Employee Roles')"  
-                            [EditMode]="GridEditMode()"  
-                            [BottomMargin]="GridBottomMargin">
-                        </mj-user-view-grid>
-                    </mj-tab-body>
-
-                    <mj-tab Name="Entity Permissions" 
-                        [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: 49}">
-                        Entity Permissions
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Entity Permissions')"  
-                            [NewRecordValues]="NewRecordValues('Entity Permissions')"
-                            [AllowLoad]="IsCurrentTab('Entity Permissions')"  
-                            [EditMode]="GridEditMode()"  
-                            [BottomMargin]="GridBottomMargin">
-                        </mj-user-view-grid>
-                    </mj-tab-body>
-
                     <mj-tab Name="User Roles" 
                         [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: 50}">
+                        [Props]="{EntityRelationshipID: '5E2ED3F8-8D69-41DE-BEB2-4695412BB8C8'}">
                         User Roles
                     </mj-tab>
                     <mj-tab-body>
@@ -58,12 +28,12 @@
                             [AllowLoad]="IsCurrentTab('User Roles')"  
                             [EditMode]="GridEditMode()"  
                             [BottomMargin]="GridBottomMargin">
-                        </mj-user-view-grid>
+                        </mj-user-view-grid>                    
                     </mj-tab-body>
 
                     <mj-tab Name="Authorization Roles" 
                         [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: 51}">
+                        [Props]="{EntityRelationshipID: '79942480-F5FD-4ED4-80B5-6533173CC893'}">
                         Authorization Roles
                     </mj-tab>
                     <mj-tab-body>
@@ -73,12 +43,27 @@
                             [AllowLoad]="IsCurrentTab('Authorization Roles')"  
                             [EditMode]="GridEditMode()"  
                             [BottomMargin]="GridBottomMargin">
-                        </mj-user-view-grid>
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Entity Permissions" 
+                        [Visible]="record.IsSaved" 
+                        [Props]="{EntityRelationshipID: '35993ABD-FE8D-4672-A1C3-71CB30D5CE34'}">
+                        Entity Permissions
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Entity Permissions')"  
+                            [NewRecordValues]="NewRecordValues('Entity Permissions')"
+                            [AllowLoad]="IsCurrentTab('Entity Permissions')"  
+                            [EditMode]="GridEditMode()"  
+                            [BottomMargin]="GridBottomMargin">
+                        </mj-user-view-grid>                    
                     </mj-tab-body>
 
                     <mj-tab Name="Query Permissions" 
                         [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: 138}">
+                        [Props]="{EntityRelationshipID: '78DA0E79-5414-4E15-8F79-8B1916FBF091'}">
                         Query Permissions
                     </mj-tab>
                     <mj-tab-body>
@@ -88,7 +73,22 @@
                             [AllowLoad]="IsCurrentTab('Query Permissions')"  
                             [EditMode]="GridEditMode()"  
                             [BottomMargin]="GridBottomMargin">
-                        </mj-user-view-grid>
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Employee Roles" 
+                        [Visible]="record.IsSaved" 
+                        [Props]="{EntityRelationshipID: '61C1C791-7EF4-4766-81DB-A30B7B92300B'}">
+                        Employee Roles
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Employee Roles')"  
+                            [NewRecordValues]="NewRecordValues('Employee Roles')"
+                            [AllowLoad]="IsCurrentTab('Employee Roles')"  
+                            [EditMode]="GridEditMode()"  
+                            [BottomMargin]="GridBottomMargin">
+                        </mj-user-view-grid>                    
                     </mj-tab-body>
                 </mj-tabstrip>
     </form>

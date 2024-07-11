@@ -26,7 +26,7 @@
           >
           <ng-template kendoGridToolbarTemplate>
             @if(!anyModeEnabled){
-                @if(ShowCreateNewRecordButton && UserCanCreateNewRecord) {
+                @if(EntityInfo && ShowCreateNewRecordButton && UserCanCreateNewRecord) {
                     <button kendoButton (click)="doCreateNewRecord()" >
                         <span class="fa-regular fa-plus"></span>
                         New {{entityRecord?.EntityInfo?.Name}}
@@ -179,24 +179,29 @@
     </div>
     <kendo-dialog
     class="dialog-wrapper"
-    title="Select List(s) To Add Record"
+    title="Select List(s) To Add Record(s) To"
     *ngIf="showAddToListDialog"
     (close)="toggleAddToListDialog(false)"
-    [minHeight]="450"
-    [maxHeight]="450"
+    [minHeight]="500"
+    [maxHeight]="500"
     [minWidth]="500"
     [maxWidth]="650"
     >
-    <div>
+    <div class="search-header">
         <kendo-textbox
       id="listSearch"
       placeholder="Search Lists..."
       kendoTextBox
       (valueChange)="onSearch($event)"
       [clearButton]="true"
-      class="padding-bottom-small"
+      class="search-bar"
     ></kendo-textbox>
+    <button kendoButton class="btn-no-border btn-outline">
+        <span class="fa-solid fa-plus"></span>
+        New List
+    </button>
     </div>
+    <hr>
     <div class="overflow-y-scroll">
         @if(showAddToListLoader){
             <kendo-loader type="converging-spinner"></kendo-loader>
@@ -204,17 +209,21 @@
         @else {
             @for(listEntity of listEntities; track listEntity){
                 <div class="list-item">
-                    {{listEntity.Name}}
+                    <div class="list-text" [ngClass]="{'list-selected': selectedListEntities.includes(listEntity)}">
+                        {{listEntity.Name}}
+                    </div>
                     @if(selectedListEntities.includes(listEntity)){
-                        <button kendoButton (click)="removeFromList(listEntity)">
-                            <span class="fa-regular fa-circle-minus"></span>
+                        <button kendoButton class="btn-no-border btn-selected" (click)="removeFromList(listEntity)">
+                            <span class="fa-solid fa-minus"></span>
                             Remove
                         </button>
                     }
                     @else {
-                        <button kendoButton (click)="addToList(listEntity)">
-                            <span class="fa-regular fa-circle-plus"></span>
-                            Add
+                        <button kendoButton class="btn-no-border" (click)="addToList(listEntity)">
+                            <div class="btn-margin-right">
+                                <span class="fa-solid fa-plus"></span>
+                                Add
+                            </div>
                         </button>
                     }
                 </div>
@@ -239,3 +248,14 @@
     Mode="complete"
     [Visible]="showNewRecordDialog"
 ></mj-entity-form-dialog>
+
+
+<mj-entity-communications-preview-window 
+    #templatePreviewDialog
+    [DialogVisible]="showTemplatePreviewDialog"
+    (DialogClosed)="showTemplatePreviewDialog = false"
+    [entityInfo]="_entityInfo"
+    [runViewParams]="Params"
+>
+
+</mj-entity-communications-preview-window> 

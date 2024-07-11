@@ -4,6 +4,7 @@ import { BaseInfo } from "./baseInfo"
  * Metadata about a single library that's available for code generation or other purposes.
  */
 export class LibraryInfo extends BaseInfo {
+    public ID: string = null;
     /**
      * Name of the library - used for import statements and within package.json
      */
@@ -28,8 +29,8 @@ export class LibraryInfo extends BaseInfo {
      * Sample code that demonstrates how to use the library
      */
     public SampleCode: string = null;
-    CreatedAt: Date = null
-    UpdatedAt: Date = null
+    __mj_CreatedAt: Date = null
+    __mj_UpdatedAt: Date = null
 
     private _exportItemsArray: string[] = null; 
     /**

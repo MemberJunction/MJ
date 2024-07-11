@@ -10,7 +10,7 @@ import { ___codeGenAPIPort, ___codeGenAPISubmissionDelay, ___codeGenAPIURL } fro
  */
 @RegisterClass(BaseEntity, 'Entity Permissions', 3)  
 export class EntityPermissionsEntity_Server extends EntityPermissionEntity  {
-    protected static _entityIDQueue: number[] = [];
+    protected static _entityIDQueue: string[] = [];
     protected static _lastModifiedTime: Date | null = null;
     protected static _submissionTimer: NodeJS.Timeout | null = null;
     protected static _submissionDelay: number = ___codeGenAPISubmissionDelay;  
@@ -23,7 +23,7 @@ export class EntityPermissionsEntity_Server extends EntityPermissionEntity  {
         return `${this._baseURL}:${this._port}${this._apiEndpoint}`;
     }
 
-    public static get EntityIDQueue(): number[] { 
+    public static get EntityIDQueue(): string[] { 
         return this._entityIDQueue; 
     }
 
@@ -31,7 +31,7 @@ export class EntityPermissionsEntity_Server extends EntityPermissionEntity  {
         this._entityIDQueue = [];
         this._submissionTimer = null;
     }
-    public static AddToQueue(entityID: number): void {
+    public static AddToQueue(entityID: string): void {
         if (this._entityIDQueue.indexOf(entityID) === -1)
             this._entityIDQueue.push(entityID); 
         this._lastModifiedTime = new Date();

@@ -56,6 +56,7 @@ export class ViewGridState {
 }
 
 export class ViewInfo extends BaseInfo {
+    ID: string = null
     UserID: number = null
     EntityID: number = null
     Name: string = null
@@ -68,8 +69,8 @@ export class ViewInfo extends BaseInfo {
     CustomFilterState: string = null
     WhereClause: string = null
     CustomWhereClause: string = null
-    CreatedAt: Date = null
-    UpdatedAt: Date = null
+    __mj_CreatedAt: Date = null
+    __mj_UpdatedAt: Date = null
     UserName: string = null
     UserType: string = null
     Entity: string = null

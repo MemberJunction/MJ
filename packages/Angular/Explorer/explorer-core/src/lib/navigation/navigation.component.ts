@@ -13,7 +13,7 @@ import { ItemType, TreeItem } from '../../generic/Item.types';
 import { MJTabStripComponent, TabClosedEvent, TabContextMenuEvent, TabEvent } from '@memberjunction/ng-tabstrip';
 
 export interface Tab {
-  id?: number;
+  id?: string;
   label?: string;
   icon?: string;
   data?: any;
@@ -393,14 +393,14 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
     const rv = new RunView();
     const workspaceParams: RunViewParams = {
       EntityName: "Workspaces",
-      ExtraFilter: `UserID=${md.CurrentUser.ID}`,
-      OrderBy: "UpdatedAt DESC", // by default get the workspace that was most recently updated
+      ExtraFilter: `UserID='${md.CurrentUser.ID}'`,
+      OrderBy: "__mj_UpdatedAt DESC", // by default get the workspace that was most recently updated
       ResultType: "entity_object" /*we want entity objects back so that we can modify them as needed*/
     }
     const workspaces = await rv.RunView(workspaceParams);
     if (workspaces.Success) {
       if (workspaces.Results.length) {
-        this.workSpace = workspaces.Results[0]; // by default get the first one, and since we are sorting by UpdatedAt DESC above, will be most recently modified one. Future feature for multi-workspace support we'll have to adjust this
+        this.workSpace = workspaces.Results[0]; // by default get the first one, and since we are sorting by __mj_UpdatedAt DESC above, will be most recently modified one. Future feature for multi-workspace support we'll have to adjust this
       } 
       else {
         // no matching record found, so create a new one
@@ -557,7 +557,7 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
     }
     else {
       const newTab: Tab = {
-        id: -1, // initially -1 but will be changed to the WorkspaceItem ID once we save it
+        id: "", // initially blank but will be changed to the WorkspaceItem ID once we save it
         data: data,
         labelLoading: true,
         contentLoading: false,
@@ -611,7 +611,7 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
     let url: string = '/resource';
     switch (rt?.Name.toLowerCase().trim()) {
       case 'user views':
-        if (data.ResourceRecordID && !isNaN(data.ResourceRecordID) && data.ResourceRecordID > 0) {
+        if (data.ResourceRecordID) {
           url += `/view/${data.ResourceRecordID}`;
         }
         else if (data.Configuration?.Entity) {
@@ -775,14 +775,14 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
       const md = new Metadata();
       let wsItem: WorkspaceItemEntity;
       if (!tab.workspaceItem) {
-        wsItem = <WorkspaceItemEntity>await md.GetEntityObject('Workspace Items');
+        wsItem = await md.GetEntityObject<WorkspaceItemEntity>('Workspace Items');
         if (tab.data.ID && !isNaN(tab.data.ID) && tab.data.ID > 0)
           await wsItem.Load(tab.data.ID);
         else {
           wsItem.NewRecord();
 
           wsItem.Name = tab.data.Name ? tab.data.Name : tab.data.ResourceType + ' Record:' + tab.data.ResourceRecordID;
-          wsItem.WorkSpaceID = this.workSpace.ID;
+          wsItem.WorkspaceID = this.workSpace.ID;
           wsItem.ResourceTypeID = tab.data?.ResourceTypeID;
         }
         tab.workspaceItem = wsItem;
@@ -859,7 +859,7 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
     if (index >= 0)
       this.tabs.splice(index, 1);
 
-    if (!tab.workspaceItem && tab.id && tab.id > 0) {
+    if (!tab.workspaceItem && tab.id && tab.id.length > 0) {
       // we lazy load the workspaceItem entity objects, so we load it here so we can delete it below, but only when it wasn't already loaded
       const md = new Metadata();
       tab.workspaceItem = <WorkspaceItemEntity>await md.GetEntityObject('Workspace Items');
@@ -1106,7 +1106,7 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
     this.drawerItems.push(drawerItem);
   }
 
-  protected async loadResourceType(key: string, resourceType: string, path: string, currentUserID: number) {
+  protected async loadResourceType(key: string, resourceType: string, path: string, currentUserID: string) {
     const rt = this.sharedService.ResourceTypeByName(resourceType)
     if (rt) {
       const drawerItem = {

@@ -18,7 +18,7 @@
                     
                     <mj-tab Name="Details" 
                         [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: 31}">
+                        [Props]="{EntityRelationshipID: '4DD0E798-B565-4618-BD94-6F17135ADD79'}">
                         Details
                     </mj-tab>
                     <mj-tab-body>
@@ -28,12 +28,12 @@
                             [AllowLoad]="IsCurrentTab('Details')"  
                             [EditMode]="GridEditMode()"  
                             [BottomMargin]="GridBottomMargin">
-                        </mj-user-view-grid>
+                        </mj-user-view-grid>                    
                     </mj-tab-body>
 
                     <mj-tab Name="Duplicate Runs" 
                         [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: 198}">
+                        [Props]="{EntityRelationshipID: 'EAE2BFC8-22FA-4E9E-9BB1-E3B25D23A40E'}">
                         Duplicate Runs
                     </mj-tab>
                     <mj-tab-body>
@@ -43,7 +43,7 @@
                             [AllowLoad]="IsCurrentTab('Duplicate Runs')"  
                             [EditMode]="GridEditMode()"  
                             [BottomMargin]="GridBottomMargin">
-                        </mj-user-view-grid>
+                        </mj-user-view-grid>                    
                     </mj-tab-body>
                 </mj-tabstrip>
     </form>

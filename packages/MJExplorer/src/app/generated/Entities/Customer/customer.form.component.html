@@ -16,54 +16,9 @@
                         </mj-form-section>
                     </mj-tab-body>
                     
-                    <mj-tab Name="Sales Line Items__client_membership" 
-                        [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: 236}">
-                        Sales Line Items__client_membership
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Sales Line Items__client_membership')"  
-                            [NewRecordValues]="NewRecordValues('Sales Line Items__client_membership')"
-                            [AllowLoad]="IsCurrentTab('Sales Line Items__client_membership')"  
-                            [EditMode]="GridEditMode()"  
-                            [BottomMargin]="GridBottomMargin">
-                        </mj-user-view-grid>
-                    </mj-tab-body>
-
-                    <mj-tab Name="Customer Address" 
-                        [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: 237}">
-                        Customer Address
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Customer Address')"  
-                            [NewRecordValues]="NewRecordValues('Customer Address')"
-                            [AllowLoad]="IsCurrentTab('Customer Address')"  
-                            [EditMode]="GridEditMode()"  
-                            [BottomMargin]="GridBottomMargin">
-                        </mj-user-view-grid>
-                    </mj-tab-body>
-
-                    <mj-tab Name="Person Links" 
-                        [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: 238}">
-                        Person Links
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Person Links')"  
-                            [NewRecordValues]="NewRecordValues('Person Links')"
-                            [AllowLoad]="IsCurrentTab('Person Links')"  
-                            [EditMode]="GridEditMode()"  
-                            [BottomMargin]="GridBottomMargin">
-                        </mj-user-view-grid>
-                    </mj-tab-body>
-
                     <mj-tab Name="Organization Links" 
                         [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: 239}">
+                        [Props]="{EntityRelationshipID: 'CF7FE453-6FA5-424F-B8C9-3E04BDD31605'}">
                         Organization Links
                     </mj-tab>
                     <mj-tab-body>
@@ -73,7 +28,52 @@
                             [AllowLoad]="IsCurrentTab('Organization Links')"  
                             [EditMode]="GridEditMode()"  
                             [BottomMargin]="GridBottomMargin">
-                        </mj-user-view-grid>
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Customer Address" 
+                        [Visible]="record.IsSaved" 
+                        [Props]="{EntityRelationshipID: 'A3A1E12A-0B4A-4A59-8483-49B0ED504360'}">
+                        Customer Address
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Customer Address')"  
+                            [NewRecordValues]="NewRecordValues('Customer Address')"
+                            [AllowLoad]="IsCurrentTab('Customer Address')"  
+                            [EditMode]="GridEditMode()"  
+                            [BottomMargin]="GridBottomMargin">
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Person Links" 
+                        [Visible]="record.IsSaved" 
+                        [Props]="{EntityRelationshipID: '2B1829F8-1088-48C2-8AE1-7DAD72674B0A'}">
+                        Person Links
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Person Links')"  
+                            [NewRecordValues]="NewRecordValues('Person Links')"
+                            [AllowLoad]="IsCurrentTab('Person Links')"  
+                            [EditMode]="GridEditMode()"  
+                            [BottomMargin]="GridBottomMargin">
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Sales Line Items__client_membership" 
+                        [Visible]="record.IsSaved" 
+                        [Props]="{EntityRelationshipID: 'E3A57EAE-80CF-4146-B2BE-7FA7AF395068'}">
+                        Sales Line Items__client_membership
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Sales Line Items__client_membership')"  
+                            [NewRecordValues]="NewRecordValues('Sales Line Items__client_membership')"
+                            [AllowLoad]="IsCurrentTab('Sales Line Items__client_membership')"  
+                            [EditMode]="GridEditMode()"  
+                            [BottomMargin]="GridBottomMargin">
+                        </mj-user-view-grid>                    
                     </mj-tab-body>
                 </mj-tabstrip>
     </form>

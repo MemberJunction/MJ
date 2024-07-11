@@ -3,12 +3,13 @@ import { EntityInfo } from './entityInfo'
 import { IMetadataProvider } from './interfaces';
 
 export class ApplicationSettingInfo extends BaseInfo {
+    ID: string = null
     ApplicationName: string = null
     Name: string = null
     Value: string = null
     Comments: string = null
-    CreatedAt: Date = null
-    UpdatedAt: Date = null
+    __mj_CreatedAt: Date = null
+    __mj_UpdatedAt: Date = null
 
     constructor (initData: any = null) {
         super()
@@ -17,8 +18,9 @@ export class ApplicationSettingInfo extends BaseInfo {
 }
 
 export class ApplicationEntityInfo extends BaseInfo {
+    ID: string = null
     ApplicationName: string = null
-    EntityID: number = null
+    EntityID: string = null
     Sequence: number = null
     DefaultForNewUser: boolean = null
     Application: string = null
@@ -47,6 +49,7 @@ export class ApplicationEntityInfo extends BaseInfo {
  * Information about an application
  */
 export class ApplicationInfo extends BaseInfo {
+    ID: string = null
     Name: string = null
     Description: string = null
     Icon: string = null

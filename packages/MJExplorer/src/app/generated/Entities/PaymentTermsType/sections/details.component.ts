@@ -64,7 +64,6 @@ import { PaymentTermsTypeEntity } from 'mj_generatedentities';
             FieldName="CompanyIntegrationID"
             Type="numerictextbox"
             [EditMode]="EditMode"
-            LinkType="Record"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"

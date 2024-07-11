@@ -16,24 +16,9 @@
                         </mj-form-section>
                     </mj-tab-body>
                     
-                    <mj-tab Name="client _memberships" 
-                        [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: 228}">
-                        client _memberships
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('client _memberships')"  
-                            [NewRecordValues]="NewRecordValues('client _memberships')"
-                            [AllowLoad]="IsCurrentTab('client _memberships')"  
-                            [EditMode]="GridEditMode()"  
-                            [BottomMargin]="GridBottomMargin">
-                        </mj-user-view-grid>
-                    </mj-tab-body>
-
                     <mj-tab Name="Sales Orders" 
                         [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: 229}">
+                        [Props]="{EntityRelationshipID: 'B0E3DBE3-2105-41AC-A22D-0EA31726A1DB'}">
                         Sales Orders
                     </mj-tab>
                     <mj-tab-body>
@@ -43,12 +28,12 @@
                             [AllowLoad]="IsCurrentTab('Sales Orders')"  
                             [EditMode]="GridEditMode()"  
                             [BottomMargin]="GridBottomMargin">
-                        </mj-user-view-grid>
+                        </mj-user-view-grid>                    
                     </mj-tab-body>
 
                     <mj-tab Name="Sales Order Details" 
                         [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: 230}">
+                        [Props]="{EntityRelationshipID: 'D9B427D0-7A01-4328-9FC2-2663ADAE3384'}">
                         Sales Order Details
                     </mj-tab>
                     <mj-tab-body>
@@ -58,7 +43,22 @@
                             [AllowLoad]="IsCurrentTab('Sales Order Details')"  
                             [EditMode]="GridEditMode()"  
                             [BottomMargin]="GridBottomMargin">
-                        </mj-user-view-grid>
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="client _memberships" 
+                        [Visible]="record.IsSaved" 
+                        [Props]="{EntityRelationshipID: '6D92D7D1-0BCE-4CF2-B06D-AC3AAFB312CE'}">
+                        client _memberships
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('client _memberships')"  
+                            [NewRecordValues]="NewRecordValues('client _memberships')"
+                            [AllowLoad]="IsCurrentTab('client _memberships')"  
+                            [EditMode]="GridEditMode()"  
+                            [BottomMargin]="GridBottomMargin">
+                        </mj-user-view-grid>                    
                     </mj-tab-body>
                 </mj-tabstrip>
     </form>

@@ -8,15 +8,15 @@ import { AIActionEntity, AIModelActionEntity, AIModelEntityExtended, EntityAIAct
 
 
 export class AIActionParams {
-    actionId: number
-    modelId: number
+    actionId: string
+    modelId: string
     modelName?: string
     systemPrompt?: string
     userPrompt?: string
 }
 
 export class EntityAIActionParams extends AIActionParams {
-    entityAIActionId: number
+    entityAIActionId: string
     entityRecord: BaseEntity
 }
 
@@ -27,7 +27,6 @@ export class AIEngine extends BaseEngine<AIEngine> {
     private _actions: AIActionEntity[] = [];
     private _entityActions: EntityAIActionEntity[] = [];
     private _modelActions: AIModelActionEntity[] = [];
-    private _metadataLoaded: boolean = false;
 
     public async Config(forceRefresh?: boolean, contextUser?: UserInfo) {
         const params = [

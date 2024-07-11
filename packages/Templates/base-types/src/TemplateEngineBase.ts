@@ -14,7 +14,7 @@ export class TemplateEngineBase extends BaseEngine<TemplateEngineBase> {
     }
 
     public async Config(forceRefresh?: boolean, contextUser?: UserInfo) {
-        const c: BaseEnginePropertyConfig[] = [
+        const c: Partial<BaseEnginePropertyConfig>[] = [
             {
                 EntityName: 'Template Content Types',
                 PropertyName: '_TemplateContentTypes',

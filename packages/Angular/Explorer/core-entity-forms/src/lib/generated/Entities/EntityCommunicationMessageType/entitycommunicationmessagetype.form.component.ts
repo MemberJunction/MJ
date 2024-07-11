@@ -3,6 +3,8 @@ import { EntityCommunicationMessageTypeEntity } from '@memberjunction/core-entit
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { LoadEntityCommunicationMessageTypeDetailsComponent } from "./sections/details.component"
+import { UserViewGridComponent } from "@memberjunction/ng-user-view-grid"
+
 @RegisterClass(BaseFormComponent, 'Entity Communication Message Types') // Tell MemberJunction about this class
 @Component({
     selector: 'gen-entitycommunicationmessagetype-form',

@@ -18,7 +18,7 @@
                     
                     <mj-tab Name="Report Categories" 
                         [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: 179}">
+                        [Props]="{EntityRelationshipID: '10C33A0F-08CB-42CA-AC52-11268CEB183F'}">
                         Report Categories
                     </mj-tab>
                     <mj-tab-body>
@@ -28,12 +28,12 @@
                             [AllowLoad]="IsCurrentTab('Report Categories')"  
                             [EditMode]="GridEditMode()"  
                             [BottomMargin]="GridBottomMargin">
-                        </mj-user-view-grid>
+                        </mj-user-view-grid>                    
                     </mj-tab-body>
 
                     <mj-tab Name="Reports" 
                         [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: 180}">
+                        [Props]="{EntityRelationshipID: '15930CBF-3740-4002-A689-397654F4D1CA'}">
                         <span class="fa-solid fa-chart-line tab-header-icon"></span>Reports
                     </mj-tab>
                     <mj-tab-body>
@@ -43,7 +43,7 @@
                             [AllowLoad]="IsCurrentTab('Reports')"  
                             [EditMode]="GridEditMode()"  
                             [BottomMargin]="GridBottomMargin">
-                        </mj-user-view-grid>
+                        </mj-user-view-grid>                    
                     </mj-tab-body>
                 </mj-tabstrip>
     </form>

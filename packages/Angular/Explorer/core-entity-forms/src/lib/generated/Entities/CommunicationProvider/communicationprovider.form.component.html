@@ -16,24 +16,9 @@
                         </mj-form-section>
                     </mj-tab-body>
                     
-                    <mj-tab Name="Communication Provider Message Types" 
-                        [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: 264}">
-                        Communication Provider Message Types
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Communication Provider Message Types')"  
-                            [NewRecordValues]="NewRecordValues('Communication Provider Message Types')"
-                            [AllowLoad]="IsCurrentTab('Communication Provider Message Types')"  
-                            [EditMode]="GridEditMode()"  
-                            [BottomMargin]="GridBottomMargin">
-                        </mj-user-view-grid>
-                    </mj-tab-body>
-
                     <mj-tab Name="Communication Logs" 
                         [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: 265}">
+                        [Props]="{EntityRelationshipID: 'FE425879-DBC7-4C9E-AC78-61609B5C476A'}">
                         Communication Logs
                     </mj-tab>
                     <mj-tab-body>
@@ -43,7 +28,34 @@
                             [AllowLoad]="IsCurrentTab('Communication Logs')"  
                             [EditMode]="GridEditMode()"  
                             [BottomMargin]="GridBottomMargin">
-                        </mj-user-view-grid>
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Message Types" 
+                        [Visible]="record.IsSaved" 
+                        [Props]="{EntityRelationshipID: '0BC657AB-B84E-4C5C-AEAC-F4DE8C998BE8'}">
+                        Message Types
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-join-grid
+                            [ShowSaveButton]="false"
+                            [ShowCancelButton]="false"
+                            [EditMode]="GridEditMode()"
+                            RowsEntityName="Communication Base Message Types"
+                            RowsEntityDisplayField="Type"
+                            RowsExtraFilter=""
+                            RowsEntityDataSource="FullEntity"
+                            RowsOrderBy="Type"
+                            RowsEntityDisplayName="Base Type"
+                            ColumnsMode="Fields"
+                            JoinEntityName="Communication Provider Message Types"
+                            JoinEntityRowForeignKey="CommunicationBaseMessageTypeID"
+                            [JoinEntityExtraFilter]="'CommunicationProviderID=' + record.ID"
+                            [JoinEntityDisplayColumns]="['Name','Status','AdditionalAttributes']"
+                            [NewRecordDefaultValues]="{CommunicationProviderID: record.ID}"
+                        >
+                        </mj-join-grid>
+                                            
                     </mj-tab-body>
                 </mj-tabstrip>
     </form>

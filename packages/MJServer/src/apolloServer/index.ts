@@ -1,6 +1,5 @@
 import { ApolloServer, ApolloServerOptions } from '@apollo/server';
 import { ApolloServerPluginDrainHttpServer } from '@apollo/server/plugin/drainHttpServer';
-import { PubSub } from 'graphql-subscriptions';
 import { Disposable } from 'graphql-ws';
 import { Server } from 'http';
 import { enableIntrospection } from '../config';

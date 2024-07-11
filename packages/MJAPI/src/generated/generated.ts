@@ -2,7 +2,7 @@
 * ALL ENTITIES - TypeGraphQL Type Class Definition - AUTO GENERATED FILE
 * Generated Entities and Resolvers for Server
 * 
-* GENERATED: 6/17/2024, 6:22:07 AM
+* GENERATED: 7/6/2024, 9:47:30 PM
 * 
 *   >>> DO NOT MODIFY THIS FILE!!!!!!!!!!!!
 *   >>> YOUR CHANGES WILL BE OVERWRITTEN
@@ -139,8 +139,8 @@ export class RunThreadDetailViewResult {
     @Field(() => [ThreadDetail_])
     Results: ThreadDetail_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -253,8 +253,8 @@ export class RunThreadViewResult {
     @Field(() => [Thread_])
     Results: Thread_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -402,8 +402,8 @@ export class RunIndustryViewResult {
     @Field(() => [Industry_])
     Results: Industry_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -550,8 +550,8 @@ export class RunContactRoleViewResult {
     @Field(() => [ContactRole_])
     Results: ContactRole_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -716,8 +716,8 @@ export class RunContactLevelViewResult {
     @Field(() => [ContactLevel_])
     Results: ContactLevel_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -924,15 +924,19 @@ export class Account_ {
     @Field({nullable: true}) 
     @MaxLength(8)
     LastEnrichedAt?: Date;
+          
+    @Field({nullable: true}) 
+    @MaxLength(10)
+    _mj__DeletedAt?: Date;
         
     @Field(() => [Contact_])
     ContactsArray: Contact_[]; // Link to Contacts
     
-    @Field(() => [Activity_])
-    ActivitiesArray: Activity_[]; // Link to Activities
-    
     @Field(() => [Deal_])
     DealsArray: Deal_[]; // Link to Deals
+    
+    @Field(() => [Activity_])
+    ActivitiesArray: Activity_[]; // Link to Activities
     
     @Field(() => [Invoice_])
     InvoicesArray: Invoice_[]; // Link to Invoices
@@ -944,6 +948,9 @@ export class Account_ {
 //****************************************************************************
 @InputType()
 export class CreateAccountInput {
+    @Field()
+    BCMID: string;
+
     @Field()
     Name: string;
 
@@ -1043,6 +1050,9 @@ export class CreateAccountInput {
 export class UpdateAccountInput {
     @Field(() => Int)
     ID: number;
+
+    @Field()
+    BCMID: string;
 
     @Field()
     Name: string;
@@ -1146,8 +1156,8 @@ export class RunAccountViewResult {
     @Field(() => [Account_])
     Results: Account_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -1198,19 +1208,19 @@ export class AccountResolver extends ResolverBase {
         return result;
     }
           
-    @FieldResolver(() => [Activity_])
-    async ActivitiesArray(@Root() account_: Account_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('Activities', userPayload);
-        const sSQL = `SELECT * FROM [crm].[vwActivities] WHERE [AccountID]=${account_.ID} ` + this.getRowLevelSecurityWhereClause('Activities', userPayload, EntityPermissionType.Read, 'AND');
-        const result = this.ArrayMapFieldNamesToCodeNames('Activities', await dataSource.query(sSQL));
-        return result;
-    }
-          
     @FieldResolver(() => [Deal_])
     async DealsArray(@Root() account_: Account_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Deals', userPayload);
         const sSQL = `SELECT * FROM [crm].[vwDeals] WHERE [AccountID]=${account_.ID} ` + this.getRowLevelSecurityWhereClause('Deals', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Deals', await dataSource.query(sSQL));
+        return result;
+    }
+          
+    @FieldResolver(() => [Activity_])
+    async ActivitiesArray(@Root() account_: Account_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Activities', userPayload);
+        const sSQL = `SELECT * FROM [crm].[vwActivities] WHERE [AccountID]=${account_.ID} ` + this.getRowLevelSecurityWhereClause('Activities', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Activities', await dataSource.query(sSQL));
         return result;
     }
           
@@ -1375,11 +1385,11 @@ export class Contact_ {
     @MaxLength(510)
     Account?: string;
         
-    @Field(() => [Invoice_])
-    InvoicesArray: Invoice_[]; // Link to Invoices
-    
     @Field(() => [Deal_])
     DealsArray: Deal_[]; // Link to Deals
+    
+    @Field(() => [Invoice_])
+    InvoicesArray: Invoice_[]; // Link to Invoices
     
     @Field(() => [Activity_])
     ActivitiesArray: Activity_[]; // Link to Activities
@@ -1391,6 +1401,9 @@ export class Contact_ {
 //****************************************************************************
 @InputType()
 export class CreateContactInput {
+    @Field()
+    BCMID: string;
+
     @Field()
     FirstName: string;
 
@@ -1481,6 +1494,9 @@ export class CreateContactInput {
 export class UpdateContactInput {
     @Field(() => Int)
     ID: number;
+
+    @Field()
+    BCMID: string;
 
     @Field()
     FirstName: string;
@@ -1575,8 +1591,8 @@ export class RunContactViewResult {
     @Field(() => [Contact_])
     Results: Contact_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -1619,19 +1635,19 @@ export class ContactResolver extends ResolverBase {
         return result;
     }
       
-    @FieldResolver(() => [Invoice_])
-    async InvoicesArray(@Root() contact_: Contact_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('Invoices', userPayload);
-        const sSQL = `SELECT * FROM [crm].[vwInvoices] WHERE [ContactID]=${contact_.ID} ` + this.getRowLevelSecurityWhereClause('Invoices', userPayload, EntityPermissionType.Read, 'AND');
-        const result = this.ArrayMapFieldNamesToCodeNames('Invoices', await dataSource.query(sSQL));
-        return result;
-    }
-          
     @FieldResolver(() => [Deal_])
     async DealsArray(@Root() contact_: Contact_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Deals', userPayload);
         const sSQL = `SELECT * FROM [crm].[vwDeals] WHERE [ContactID]=${contact_.ID} ` + this.getRowLevelSecurityWhereClause('Deals', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Deals', await dataSource.query(sSQL));
+        return result;
+    }
+          
+    @FieldResolver(() => [Invoice_])
+    async InvoicesArray(@Root() contact_: Contact_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Invoices', userPayload);
+        const sSQL = `SELECT * FROM [crm].[vwInvoices] WHERE [ContactID]=${contact_.ID} ` + this.getRowLevelSecurityWhereClause('Invoices', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Invoices', await dataSource.query(sSQL));
         return result;
     }
           
@@ -1731,8 +1747,8 @@ export class RunDealStageViewResult {
     @Field(() => [DealStage_])
     Results: DealStage_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -1890,6 +1906,9 @@ export class Activity_ {
 //****************************************************************************
 @InputType()
 export class CreateActivityInput {
+    @Field()
+    BCMID: string;
+
     @Field(() => Int, { nullable: true })
     EmployeeID?: number;
 
@@ -1950,6 +1969,9 @@ export class CreateActivityInput {
 export class UpdateActivityInput {
     @Field(() => Int)
     ID: number;
+
+    @Field()
+    BCMID: string;
 
     @Field(() => Int, { nullable: true })
     EmployeeID?: number;
@@ -2014,8 +2036,8 @@ export class RunActivityViewResult {
     @Field(() => [Activity_])
     Results: Activity_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -2156,8 +2178,8 @@ export class RunDealForecastCategoryViewResult {
     @Field(() => [DealForecastCategory_])
     Results: DealForecastCategory_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -2360,6 +2382,9 @@ export class Deal_ {
 @InputType()
 export class CreateDealInput {
     @Field()
+    BCMID: string;
+
+    @Field()
     ExternalSystemRecordID: string;
 
     @Field(() => Int)
@@ -2440,6 +2465,9 @@ export class CreateDealInput {
 export class UpdateDealInput {
     @Field(() => Int)
     ID: number;
+
+    @Field()
+    BCMID: string;
 
     @Field()
     ExternalSystemRecordID: string;
@@ -2525,8 +2553,8 @@ export class RunDealViewResult {
     @Field(() => [Deal_])
     Results: Deal_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -2675,8 +2703,8 @@ export class RunDealTypeViewResult {
     @Field(() => [DealType_])
     Results: DealType_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -2831,6 +2859,9 @@ export class Invoice_ {
 @InputType()
 export class CreateInvoiceInput {
     @Field()
+    BCMID: string;
+
+    @Field()
     InvoiceDate: Date;
 
     @Field(() => Int)
@@ -2878,6 +2909,9 @@ export class CreateInvoiceInput {
 export class UpdateInvoiceInput {
     @Field(() => Int)
     ID: number;
+
+    @Field()
+    BCMID: string;
 
     @Field()
     InvoiceDate: Date;
@@ -2930,8 +2964,8 @@ export class RunInvoiceViewResult {
     @Field(() => [Invoice_])
     Results: Invoice_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -3052,8 +3086,8 @@ export class RunActivityAttachmentViewResult {
     @Field(() => [ActivityAttachment_])
     Results: ActivityAttachment_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -3241,8 +3275,8 @@ export class RunPaymentTermsTypeViewResult {
     @Field(() => [PaymentTermsType_])
     Results: PaymentTermsType_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -3381,8 +3415,8 @@ export class RunInvoiceStatusTypeViewResult {
     @Field(() => [InvoiceStatusType_])
     Results: InvoiceStatusType_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -8919,8 +8953,8 @@ export class RunSalesLineItemViewResult {
     @Field(() => [SalesLineItem_])
     Results: SalesLineItem_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -12527,8 +12561,8 @@ export class RunSalesTransactionViewResult {
     @Field(() => [SalesTransaction_])
     Results: SalesTransaction_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -13748,8 +13782,8 @@ export class RunCustomerAddress__client_financeViewResult {
     @Field(() => [CustomerAddress__client_finance_])
     Results: CustomerAddress__client_finance_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -14854,8 +14888,8 @@ export class RunItem__client_financeViewResult {
     @Field(() => [Item__client_finance_])
     Results: Item__client_finance_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -15566,14 +15600,14 @@ export class Customer__client_finance_ {
     @MaxLength(2042)
     Writeoff_Account_Number_For_Drillback?: string;
         
-    @Field(() => [CustomerAddress__client_finance_])
-    CustomerAddress__client_financeArray: CustomerAddress__client_finance_[]; // Link to CustomerAddress__client_finance
-    
     @Field(() => [OrganizationLink_])
     OrganizationLinksArray: OrganizationLink_[]; // Link to OrganizationLinks
     
     @Field(() => [PersonLink_])
     PersonLinksArray: PersonLink_[]; // Link to PersonLinks
+    
+    @Field(() => [CustomerAddress__client_finance_])
+    CustomerAddress__client_financeArray: CustomerAddress__client_finance_[]; // Link to CustomerAddress__client_finance
     
 }
         
@@ -16693,8 +16727,8 @@ export class RunCustomer__client_financeViewResult {
     @Field(() => [Customer__client_finance_])
     Results: Customer__client_finance_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -16737,14 +16771,6 @@ export class Customer__client_financeResolver extends ResolverBase {
         return result;
     }
       
-    @FieldResolver(() => [CustomerAddress__client_finance_])
-    async CustomerAddress__client_financeArray(@Root() customer__client_finance_: Customer__client_finance_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('Customer Address__client_finance', userPayload);
-        const sSQL = `SELECT * FROM [client_finance].[vwCustomerAddress__client_finance] WHERE [Customer Number]='${customer__client_finance_.Customer_Number}' ` + this.getRowLevelSecurityWhereClause('Customer Address__client_finance', userPayload, EntityPermissionType.Read, 'AND');
-        const result = this.ArrayMapFieldNamesToCodeNames('Customer Address__client_finance', await dataSource.query(sSQL));
-        return result;
-    }
-          
     @FieldResolver(() => [OrganizationLink_])
     async OrganizationLinksArray(@Root() customer__client_finance_: Customer__client_finance_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Organization Links', userPayload);
@@ -16758,6 +16784,14 @@ export class Customer__client_financeResolver extends ResolverBase {
         this.CheckUserReadPermissions('Person Links', userPayload);
         const sSQL = `SELECT * FROM [common].[vwPersonLinks] WHERE [MainGreatPlainsCustomerID]='${customer__client_finance_.Customer_Number}' ` + this.getRowLevelSecurityWhereClause('Person Links', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Person Links', await dataSource.query(sSQL));
+        return result;
+    }
+          
+    @FieldResolver(() => [CustomerAddress__client_finance_])
+    async CustomerAddress__client_financeArray(@Root() customer__client_finance_: Customer__client_finance_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Customer Address__client_finance', userPayload);
+        const sSQL = `SELECT * FROM [client_finance].[vwCustomerAddress__client_finance] WHERE [Customer Number]='${customer__client_finance_.Customer_Number}' ` + this.getRowLevelSecurityWhereClause('Customer Address__client_finance', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Customer Address__client_finance', await dataSource.query(sSQL));
         return result;
     }
         
@@ -16828,6 +16862,9 @@ export class OrganizationLink_ {
 @InputType()
 export class CreateOrganizationLinkInput {
     @Field({ nullable: true })
+    CRMAccountID?: string;
+
+    @Field({ nullable: true })
     MainGreatPlainsCustomerID?: string;
 
     @Field({ nullable: true })
@@ -16848,6 +16885,9 @@ export class CreateOrganizationLinkInput {
 export class UpdateOrganizationLinkInput {
     @Field(() => Int)
     OrganizationLinkID: number;
+
+    @Field({ nullable: true })
+    CRMAccountID?: string;
 
     @Field({ nullable: true })
     MainGreatPlainsCustomerID?: string;
@@ -16873,8 +16913,8 @@ export class RunOrganizationLinkViewResult {
     @Field(() => [OrganizationLink_])
     Results: OrganizationLink_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -16989,22 +17029,22 @@ export class PersonLink_ {
     @MaxLength(8)
     UpdatedAt: Date;
         
+    @Field(() => [SalesTransaction_])
+    SalesTransactionsArray: SalesTransaction_[]; // Link to SalesTransactions
+    
     @Field(() => [CustomerAddress_])
     CustomerAddressArray: CustomerAddress_[]; // Link to CustomerAddress
     
     @Field(() => [CustomerAddress__client_finance_])
     CustomerAddress__client_financeArray: CustomerAddress__client_finance_[]; // Link to CustomerAddress__client_finance
-    // Relationship to Demo Keys is not included in the API because it is not marked as IncludeInAPI
-
-    @Field(() => [OrganizationLink_])
-    OrganizationLinksArray: OrganizationLink_[]; // Link to OrganizationLinks
     
     @Field(() => [SalesTransaction__client_membership_])
     SalesTransactions__client_membershipArray: SalesTransaction__client_membership_[]; // Link to SalesTransactions__client_membership
     
-    @Field(() => [SalesTransaction_])
-    SalesTransactionsArray: SalesTransaction_[]; // Link to SalesTransactions
-    
+    @Field(() => [OrganizationLink_])
+    OrganizationLinksArray: OrganizationLink_[]; // Link to OrganizationLinks
+    // Relationship to Demo Keys is not included in the API because it is not marked as IncludeInAPI
+
 }
         
 //****************************************************************************
@@ -17012,6 +17052,9 @@ export class PersonLink_ {
 //****************************************************************************
 @InputType()
 export class CreatePersonLinkInput {
+    @Field({ nullable: true })
+    CRMContactID?: string;
+
     @Field({ nullable: true })
     MainGreatPlainsCustomerID?: string;
 
@@ -17026,6 +17069,9 @@ export class CreatePersonLinkInput {
 
     @Field({ nullable: true })
     Email?: string;
+
+    @Field({ nullable: true })
+    CRMAccountID?: string;
 }
     
         
@@ -17038,6 +17084,9 @@ export class UpdatePersonLinkInput {
     PersonLinkID: number;
 
     @Field({ nullable: true })
+    CRMContactID?: string;
+
+    @Field({ nullable: true })
     MainGreatPlainsCustomerID?: string;
 
     @Field({ nullable: true })
@@ -17051,6 +17100,9 @@ export class UpdatePersonLinkInput {
 
     @Field({ nullable: true })
     Email?: string;
+
+    @Field({ nullable: true })
+    CRMAccountID?: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -17064,8 +17116,8 @@ export class RunPersonLinkViewResult {
     @Field(() => [PersonLink_])
     Results: PersonLink_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -17123,8 +17175,7 @@ export class PersonLinkResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Customer Address__client_finance', await dataSource.query(sSQL));
         return result;
     }
-        // Relationship to Demo Keys is not included in the API because it is not marked as IncludeInAPI
-  
+          
     @FieldResolver(() => [OrganizationLink_])
     async OrganizationLinksArray(@Root() personlink_: PersonLink_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Organization Links', userPayload);
@@ -17132,7 +17183,8 @@ export class PersonLinkResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Organization Links', await dataSource.query(sSQL));
         return result;
     }
-        
+        // Relationship to Demo Keys is not included in the API because it is not marked as IncludeInAPI
+
     @Mutation(() => PersonLink_)
     async CreatePersonLink(
         @Arg('input', () => CreatePersonLinkInput) input: CreatePersonLinkInput,
@@ -18252,17 +18304,17 @@ export class Account__client_crm_ {
     @MaxLength(1000)
     acep_pdinterviewlink?: string;
         
+    @Field(() => [Product_])
+    ProductsArray: Product_[]; // Link to Products
+    
     @Field(() => [Account__client_crm_])
     Accounts__client_crmArray: Account__client_crm_[]; // Link to Accounts__client_crm
-    
-    @Field(() => [PersonLink_])
-    PersonLinksArray: PersonLink_[]; // Link to PersonLinks
     
     @Field(() => [Contact__client_crm_])
     Contacts__client_crmArray: Contact__client_crm_[]; // Link to Contacts__client_crm
     
-    @Field(() => [Product_])
-    ProductsArray: Product_[]; // Link to Products
+    @Field(() => [PersonLink_])
+    PersonLinksArray: PersonLink_[]; // Link to PersonLinks
     
     @Field(() => [OrganizationLink_])
     OrganizationLinksArray: OrganizationLink_[]; // Link to OrganizationLinks
@@ -18461,6 +18513,9 @@ export class CreateAccount__client_crmInput {
     Address1_County?: string;
 
     @Field({ nullable: true })
+    Address1_AddressId?: string;
+
+    @Field({ nullable: true })
     Address1_Fax?: string;
 
     @Field(() => Int, { nullable: true })
@@ -18530,6 +18585,9 @@ export class CreateAccount__client_crmInput {
     Address2_County?: string;
 
     @Field({ nullable: true })
+    Address2_AddressId?: string;
+
+    @Field({ nullable: true })
     Address2_Fax?: string;
 
     @Field(() => Int, { nullable: true })
@@ -18584,6 +18642,9 @@ export class CreateAccount__client_crmInput {
     Address2_UTCOffset?: number;
 
     @Field({ nullable: true })
+    OwnerId?: string;
+
+    @Field({ nullable: true })
     OwnerIdName?: string;
 
     @Field({ nullable: true })
@@ -18595,8 +18656,20 @@ export class CreateAccount__client_crmInput {
     @Field(() => Int, { nullable: true })
     OwnerIdType?: number;
 
+    @Field({ nullable: true })
+    OwningUser?: string;
+
+    @Field({ nullable: true })
+    OwningTeam?: string;
+
     @Field(() => Int, { nullable: true })
     AccountCategoryCode?: number;
+
+    @Field({ nullable: true })
+    TerritoryId?: string;
+
+    @Field({ nullable: true })
+    DefaultPriceLevelId?: string;
 
     @Field(() => Int, { nullable: true })
     CustomerSizeCode?: number;
@@ -18623,13 +18696,22 @@ export class CreateAccount__client_crmInput {
     BusinessTypeCode?: number;
 
     @Field({ nullable: true })
+    OwningBusinessUnit?: string;
+
+    @Field({ nullable: true })
     TraversedPath?: string;
+
+    @Field({ nullable: true })
+    OriginatingLeadId?: string;
 
     @Field(() => Int, { nullable: true })
     PaymentTermsCode?: number;
 
     @Field(() => Int, { nullable: true })
     ShippingMethodCode?: number;
+
+    @Field({ nullable: true })
+    PrimaryContactId?: string;
 
     @Field(() => Boolean, { nullable: true })
     ParticipatesInWorkflow?: boolean;
@@ -18725,10 +18807,19 @@ export class CreateAccount__client_crmInput {
     CreatedOn?: Date;
 
     @Field({ nullable: true })
+    CreatedBy?: string;
+
+    @Field({ nullable: true })
     ModifiedOn?: Date;
+
+    @Field({ nullable: true })
+    ModifiedBy?: string;
 
     @Field()
     VersionNumber: number;
+
+    @Field({ nullable: true })
+    ParentAccountId?: string;
 
     @Field(() => Float, { nullable: true })
     Aging30?: number;
@@ -18748,6 +18839,9 @@ export class CreateAccount__client_crmInput {
     @Field(() => Int, { nullable: true })
     PreferredAppointmentDayCode?: number;
 
+    @Field({ nullable: true })
+    PreferredSystemUserId?: string;
+
     @Field(() => Int, { nullable: true })
     PreferredAppointmentTimeCode?: number;
 
@@ -18758,7 +18852,16 @@ export class CreateAccount__client_crmInput {
     DoNotSendMM?: boolean;
 
     @Field({ nullable: true })
+    MasterId?: string;
+
+    @Field({ nullable: true })
     LastUsedInCampaign?: Date;
+
+    @Field({ nullable: true })
+    PreferredServiceId?: string;
+
+    @Field({ nullable: true })
+    PreferredEquipmentId?: string;
 
     @Field(() => Float, { nullable: true })
     ExchangeRate?: number;
@@ -18774,6 +18877,9 @@ export class CreateAccount__client_crmInput {
 
     @Field(() => Int, { nullable: true })
     ImportSequenceNumber?: number;
+
+    @Field({ nullable: true })
+    TransactionCurrencyId?: string;
 
     @Field(() => Float, { nullable: true })
     CreditLimit_Base?: number;
@@ -18795,6 +18901,21 @@ export class CreateAccount__client_crmInput {
 
     @Field({ nullable: true })
     YomiName?: string;
+
+    @Field({ nullable: true })
+    CreatedOnBehalfBy?: string;
+
+    @Field({ nullable: true })
+    ModifiedOnBehalfBy?: string;
+
+    @Field({ nullable: true })
+    StageId?: string;
+
+    @Field({ nullable: true })
+    ProcessId?: string;
+
+    @Field({ nullable: true })
+    EntityImageId?: string;
 
     @Field(() => Int, { nullable: true })
     OpenDeals?: number;
@@ -18821,10 +18942,22 @@ export class CreateAccount__client_crmInput {
     OpenRevenue_State?: number;
 
     @Field({ nullable: true })
+    CreatedByExternalParty?: string;
+
+    @Field({ nullable: true })
+    ModifiedByExternalParty?: string;
+
+    @Field({ nullable: true })
     PrimarySatoriId?: string;
 
     @Field({ nullable: true })
     PrimaryTwitterId?: string;
+
+    @Field({ nullable: true })
+    SLAId?: string;
+
+    @Field({ nullable: true })
+    SLAInvokedId?: string;
 
     @Field(() => Int, { nullable: true })
     OnHoldTime?: number;
@@ -18871,6 +19004,12 @@ export class CreateAccount__client_crmInput {
     @Field({ nullable: true })
     Eone_AgingBucketDescription1?: string;
 
+    @Field({ nullable: true })
+    eone_shippingmethodid?: string;
+
+    @Field({ nullable: true })
+    eone_customerclassid?: string;
+
     @Field(() => Float, { nullable: true })
     Eone_CreditLimitAmount?: number;
 
@@ -18880,6 +19019,9 @@ export class CreateAccount__client_crmInput {
     @Field(() => Int, { nullable: true })
     Acep_ExhibitorPoints?: number;
 
+    @Field({ nullable: true })
+    acep_stateorprovinceid?: string;
+
     @Field(() => Int, { nullable: true })
     Acep_GPPriceLevel?: number;
 
@@ -18888,6 +19030,9 @@ export class CreateAccount__client_crmInput {
 
     @Field(() => Boolean, { nullable: true })
     Acep_OrganizationManaged?: boolean;
+
+    @Field({ nullable: true })
+    acep_countryid?: string;
 
     @Field({ nullable: true })
     Acep_LongName?: string;
@@ -18910,6 +19055,9 @@ export class CreateAccount__client_crmInput {
     @Field({ nullable: true })
     Eone_AgingBucketDescription2?: string;
 
+    @Field({ nullable: true })
+    eone_paymenttermsid?: string;
+
     @Field(() => Float, { nullable: true })
     Eone_AgingBucketValue4?: number;
 
@@ -18918,6 +19066,9 @@ export class CreateAccount__client_crmInput {
 
     @Field(() => Float, { nullable: true })
     Eone_AgingBucketValue7?: number;
+
+    @Field({ nullable: true })
+    acep_categoryid?: string;
 
     @Field(() => Float, { nullable: true })
     Eone_AgingBucketValue2?: number;
@@ -18933,6 +19084,9 @@ export class CreateAccount__client_crmInput {
 
     @Field({ nullable: true })
     Adx_CreatedByIPAddress?: string;
+
+    @Field({ nullable: true })
+    acep_onlinetransactioncredentialid?: string;
 
     @Field({ nullable: true })
     Eone_AgingBucketDescription6?: string;
@@ -18955,11 +19109,20 @@ export class CreateAccount__client_crmInput {
     @Field({ nullable: true })
     Adx_ModifiedByIPAddress?: string;
 
+    @Field({ nullable: true })
+    msa_managingpartnerid?: string;
+
     @Field(() => Float, { nullable: true })
     Eone_AgingBucketValue1?: number;
 
     @Field({ nullable: true })
     Adx_CreatedByUsername?: string;
+
+    @Field({ nullable: true })
+    Acep_DirectAccessId?: string;
+
+    @Field({ nullable: true })
+    acep_productid?: string;
 
     @Field({ nullable: true })
     Acep_DeactivatedDate?: Date;
@@ -18974,10 +19137,43 @@ export class CreateAccount__client_crmInput {
     acep_State?: number;
 
     @Field({ nullable: true })
+    acep_CertificationBoard?: string;
+
+    @Field({ nullable: true })
+    acep_Chapter?: string;
+
+    @Field({ nullable: true })
+    acep_EMRARegion?: string;
+
+    @Field({ nullable: true })
+    acep_Group?: string;
+
+    @Field({ nullable: true })
+    acep_Hospital?: string;
+
+    @Field({ nullable: true })
+    acep_MedicalSchool?: string;
+
+    @Field({ nullable: true })
+    acep_Residency?: string;
+
+    @Field({ nullable: true })
+    acep_Section?: string;
+
+    @Field({ nullable: true })
+    acep_Venue?: string;
+
+    @Field({ nullable: true })
     acep_FacebookAddress?: string;
 
     @Field({ nullable: true })
     acep_twitterusername?: string;
+
+    @Field({ nullable: true })
+    acep_Fellowship?: string;
+
+    @Field({ nullable: true })
+    acep_Clerkship?: string;
 
     @Field(() => Int, { nullable: true })
     acep_GPTaxScheduleIDcode?: number;
@@ -19007,10 +19203,16 @@ export class CreateAccount__client_crmInput {
     acep_YouTubeLink?: string;
 
     @Field({ nullable: true })
+    acep_CEDR?: string;
+
+    @Field({ nullable: true })
     acep_DummyFieldToRemove?: string;
 
     @Field(() => Int, { nullable: true })
     acep_CommunityType?: number;
+
+    @Field({ nullable: true })
+    acep_HealthSystem?: string;
 
     @Field({ nullable: true })
     acep_pdinterviewlink?: string;
@@ -19209,6 +19411,9 @@ export class UpdateAccount__client_crmInput {
     Address1_County?: string;
 
     @Field({ nullable: true })
+    Address1_AddressId?: string;
+
+    @Field({ nullable: true })
     Address1_Fax?: string;
 
     @Field(() => Int, { nullable: true })
@@ -19278,6 +19483,9 @@ export class UpdateAccount__client_crmInput {
     Address2_County?: string;
 
     @Field({ nullable: true })
+    Address2_AddressId?: string;
+
+    @Field({ nullable: true })
     Address2_Fax?: string;
 
     @Field(() => Int, { nullable: true })
@@ -19332,6 +19540,9 @@ export class UpdateAccount__client_crmInput {
     Address2_UTCOffset?: number;
 
     @Field({ nullable: true })
+    OwnerId?: string;
+
+    @Field({ nullable: true })
     OwnerIdName?: string;
 
     @Field({ nullable: true })
@@ -19343,11 +19554,23 @@ export class UpdateAccount__client_crmInput {
     @Field(() => Int, { nullable: true })
     OwnerIdType?: number;
 
+    @Field({ nullable: true })
+    OwningUser?: string;
+
+    @Field({ nullable: true })
+    OwningTeam?: string;
+
     @Field()
     AccountId: string;
 
     @Field(() => Int, { nullable: true })
     AccountCategoryCode?: number;
+
+    @Field({ nullable: true })
+    TerritoryId?: string;
+
+    @Field({ nullable: true })
+    DefaultPriceLevelId?: string;
 
     @Field(() => Int, { nullable: true })
     CustomerSizeCode?: number;
@@ -19374,13 +19597,22 @@ export class UpdateAccount__client_crmInput {
     BusinessTypeCode?: number;
 
     @Field({ nullable: true })
+    OwningBusinessUnit?: string;
+
+    @Field({ nullable: true })
     TraversedPath?: string;
+
+    @Field({ nullable: true })
+    OriginatingLeadId?: string;
 
     @Field(() => Int, { nullable: true })
     PaymentTermsCode?: number;
 
     @Field(() => Int, { nullable: true })
     ShippingMethodCode?: number;
+
+    @Field({ nullable: true })
+    PrimaryContactId?: string;
 
     @Field(() => Boolean, { nullable: true })
     ParticipatesInWorkflow?: boolean;
@@ -19476,10 +19708,19 @@ export class UpdateAccount__client_crmInput {
     CreatedOn?: Date;
 
     @Field({ nullable: true })
+    CreatedBy?: string;
+
+    @Field({ nullable: true })
     ModifiedOn?: Date;
+
+    @Field({ nullable: true })
+    ModifiedBy?: string;
 
     @Field()
     VersionNumber: number;
+
+    @Field({ nullable: true })
+    ParentAccountId?: string;
 
     @Field(() => Float, { nullable: true })
     Aging30?: number;
@@ -19499,6 +19740,9 @@ export class UpdateAccount__client_crmInput {
     @Field(() => Int, { nullable: true })
     PreferredAppointmentDayCode?: number;
 
+    @Field({ nullable: true })
+    PreferredSystemUserId?: string;
+
     @Field(() => Int, { nullable: true })
     PreferredAppointmentTimeCode?: number;
 
@@ -19509,7 +19753,16 @@ export class UpdateAccount__client_crmInput {
     DoNotSendMM?: boolean;
 
     @Field({ nullable: true })
+    MasterId?: string;
+
+    @Field({ nullable: true })
     LastUsedInCampaign?: Date;
+
+    @Field({ nullable: true })
+    PreferredServiceId?: string;
+
+    @Field({ nullable: true })
+    PreferredEquipmentId?: string;
 
     @Field(() => Float, { nullable: true })
     ExchangeRate?: number;
@@ -19525,6 +19778,9 @@ export class UpdateAccount__client_crmInput {
 
     @Field(() => Int, { nullable: true })
     ImportSequenceNumber?: number;
+
+    @Field({ nullable: true })
+    TransactionCurrencyId?: string;
 
     @Field(() => Float, { nullable: true })
     CreditLimit_Base?: number;
@@ -19546,6 +19802,21 @@ export class UpdateAccount__client_crmInput {
 
     @Field({ nullable: true })
     YomiName?: string;
+
+    @Field({ nullable: true })
+    CreatedOnBehalfBy?: string;
+
+    @Field({ nullable: true })
+    ModifiedOnBehalfBy?: string;
+
+    @Field({ nullable: true })
+    StageId?: string;
+
+    @Field({ nullable: true })
+    ProcessId?: string;
+
+    @Field({ nullable: true })
+    EntityImageId?: string;
 
     @Field(() => Int, { nullable: true })
     OpenDeals?: number;
@@ -19572,10 +19843,22 @@ export class UpdateAccount__client_crmInput {
     OpenRevenue_State?: number;
 
     @Field({ nullable: true })
+    CreatedByExternalParty?: string;
+
+    @Field({ nullable: true })
+    ModifiedByExternalParty?: string;
+
+    @Field({ nullable: true })
     PrimarySatoriId?: string;
 
     @Field({ nullable: true })
     PrimaryTwitterId?: string;
+
+    @Field({ nullable: true })
+    SLAId?: string;
+
+    @Field({ nullable: true })
+    SLAInvokedId?: string;
 
     @Field(() => Int, { nullable: true })
     OnHoldTime?: number;
@@ -19622,6 +19905,12 @@ export class UpdateAccount__client_crmInput {
     @Field({ nullable: true })
     Eone_AgingBucketDescription1?: string;
 
+    @Field({ nullable: true })
+    eone_shippingmethodid?: string;
+
+    @Field({ nullable: true })
+    eone_customerclassid?: string;
+
     @Field(() => Float, { nullable: true })
     Eone_CreditLimitAmount?: number;
 
@@ -19631,6 +19920,9 @@ export class UpdateAccount__client_crmInput {
     @Field(() => Int, { nullable: true })
     Acep_ExhibitorPoints?: number;
 
+    @Field({ nullable: true })
+    acep_stateorprovinceid?: string;
+
     @Field(() => Int, { nullable: true })
     Acep_GPPriceLevel?: number;
 
@@ -19639,6 +19931,9 @@ export class UpdateAccount__client_crmInput {
 
     @Field(() => Boolean, { nullable: true })
     Acep_OrganizationManaged?: boolean;
+
+    @Field({ nullable: true })
+    acep_countryid?: string;
 
     @Field({ nullable: true })
     Acep_LongName?: string;
@@ -19661,6 +19956,9 @@ export class UpdateAccount__client_crmInput {
     @Field({ nullable: true })
     Eone_AgingBucketDescription2?: string;
 
+    @Field({ nullable: true })
+    eone_paymenttermsid?: string;
+
     @Field(() => Float, { nullable: true })
     Eone_AgingBucketValue4?: number;
 
@@ -19669,6 +19967,9 @@ export class UpdateAccount__client_crmInput {
 
     @Field(() => Float, { nullable: true })
     Eone_AgingBucketValue7?: number;
+
+    @Field({ nullable: true })
+    acep_categoryid?: string;
 
     @Field(() => Float, { nullable: true })
     Eone_AgingBucketValue2?: number;
@@ -19684,6 +19985,9 @@ export class UpdateAccount__client_crmInput {
 
     @Field({ nullable: true })
     Adx_CreatedByIPAddress?: string;
+
+    @Field({ nullable: true })
+    acep_onlinetransactioncredentialid?: string;
 
     @Field({ nullable: true })
     Eone_AgingBucketDescription6?: string;
@@ -19706,11 +20010,20 @@ export class UpdateAccount__client_crmInput {
     @Field({ nullable: true })
     Adx_ModifiedByIPAddress?: string;
 
+    @Field({ nullable: true })
+    msa_managingpartnerid?: string;
+
     @Field(() => Float, { nullable: true })
     Eone_AgingBucketValue1?: number;
 
     @Field({ nullable: true })
     Adx_CreatedByUsername?: string;
+
+    @Field({ nullable: true })
+    Acep_DirectAccessId?: string;
+
+    @Field({ nullable: true })
+    acep_productid?: string;
 
     @Field({ nullable: true })
     Acep_DeactivatedDate?: Date;
@@ -19725,10 +20038,43 @@ export class UpdateAccount__client_crmInput {
     acep_State?: number;
 
     @Field({ nullable: true })
+    acep_CertificationBoard?: string;
+
+    @Field({ nullable: true })
+    acep_Chapter?: string;
+
+    @Field({ nullable: true })
+    acep_EMRARegion?: string;
+
+    @Field({ nullable: true })
+    acep_Group?: string;
+
+    @Field({ nullable: true })
+    acep_Hospital?: string;
+
+    @Field({ nullable: true })
+    acep_MedicalSchool?: string;
+
+    @Field({ nullable: true })
+    acep_Residency?: string;
+
+    @Field({ nullable: true })
+    acep_Section?: string;
+
+    @Field({ nullable: true })
+    acep_Venue?: string;
+
+    @Field({ nullable: true })
     acep_FacebookAddress?: string;
 
     @Field({ nullable: true })
     acep_twitterusername?: string;
+
+    @Field({ nullable: true })
+    acep_Fellowship?: string;
+
+    @Field({ nullable: true })
+    acep_Clerkship?: string;
 
     @Field(() => Int, { nullable: true })
     acep_GPTaxScheduleIDcode?: number;
@@ -19758,10 +20104,16 @@ export class UpdateAccount__client_crmInput {
     acep_YouTubeLink?: string;
 
     @Field({ nullable: true })
+    acep_CEDR?: string;
+
+    @Field({ nullable: true })
     acep_DummyFieldToRemove?: string;
 
     @Field(() => Int, { nullable: true })
     acep_CommunityType?: number;
+
+    @Field({ nullable: true })
+    acep_HealthSystem?: string;
 
     @Field({ nullable: true })
     acep_pdinterviewlink?: string;
@@ -19778,8 +20130,8 @@ export class RunAccount__client_crmViewResult {
     @Field(() => [Account__client_crm_])
     Results: Account__client_crm_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -19822,19 +20174,19 @@ export class Account__client_crmResolver extends ResolverBase {
         return result;
     }
       
+    @FieldResolver(() => [Product_])
+    async ProductsArray(@Root() account__client_crm_: Account__client_crm_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Products', userPayload);
+        const sSQL = `SELECT * FROM [client_crm].[vwProducts] WHERE [acep_PublisherId]='${account__client_crm_.AccountId}' ` + this.getRowLevelSecurityWhereClause('Products', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Products', await dataSource.query(sSQL));
+        return result;
+    }
+          
     @FieldResolver(() => [Account__client_crm_])
     async Accounts__client_crmArray(@Root() account__client_crm_: Account__client_crm_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Accounts__client_crm', userPayload);
         const sSQL = `SELECT * FROM [client_crm].[vwAccounts__client_crm] WHERE [ParentAccountId]='${account__client_crm_.AccountId}' ` + this.getRowLevelSecurityWhereClause('Accounts__client_crm', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Accounts__client_crm', await dataSource.query(sSQL));
-        return result;
-    }
-          
-    @FieldResolver(() => [PersonLink_])
-    async PersonLinksArray(@Root() account__client_crm_: Account__client_crm_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('Person Links', userPayload);
-        const sSQL = `SELECT * FROM [common].[vwPersonLinks] WHERE [CRMAccountID]='${account__client_crm_.AccountId}' ` + this.getRowLevelSecurityWhereClause('Person Links', userPayload, EntityPermissionType.Read, 'AND');
-        const result = this.ArrayMapFieldNamesToCodeNames('Person Links', await dataSource.query(sSQL));
         return result;
     }
           
@@ -19846,11 +20198,11 @@ export class Account__client_crmResolver extends ResolverBase {
         return result;
     }
           
-    @FieldResolver(() => [Product_])
-    async ProductsArray(@Root() account__client_crm_: Account__client_crm_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('Products', userPayload);
-        const sSQL = `SELECT * FROM [client_crm].[vwProducts] WHERE [acep_PublisherId]='${account__client_crm_.AccountId}' ` + this.getRowLevelSecurityWhereClause('Products', userPayload, EntityPermissionType.Read, 'AND');
-        const result = this.ArrayMapFieldNamesToCodeNames('Products', await dataSource.query(sSQL));
+    @FieldResolver(() => [PersonLink_])
+    async PersonLinksArray(@Root() account__client_crm_: Account__client_crm_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Person Links', userPayload);
+        const sSQL = `SELECT * FROM [common].[vwPersonLinks] WHERE [CRMAccountID]='${account__client_crm_.AccountId}' ` + this.getRowLevelSecurityWhereClause('Person Links', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Person Links', await dataSource.query(sSQL));
         return result;
     }
           
@@ -19939,6 +20291,9 @@ export class CreateStringMapInput {
     LangId?: number;
 
     @Field({ nullable: true })
+    OrganizationId?: string;
+
+    @Field({ nullable: true })
     Value?: string;
 
     @Field(() => Int, { nullable: true })
@@ -19967,6 +20322,9 @@ export class UpdateStringMapInput {
     LangId?: number;
 
     @Field({ nullable: true })
+    OrganizationId?: string;
+
+    @Field({ nullable: true })
     Value?: string;
 
     @Field(() => Int, { nullable: true })
@@ -19990,8 +20348,8 @@ export class RunStringMapViewResult {
     @Field(() => [StringMap_])
     Results: StringMap_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -20248,6 +20606,9 @@ export class CreateProductPriceLevelInput {
     PriceLevelIdName?: string;
 
     @Field({ nullable: true })
+    OrganizationId?: string;
+
+    @Field({ nullable: true })
     ModifiedByYomiName?: string;
 
     @Field({ nullable: true })
@@ -20280,6 +20641,21 @@ export class CreateProductPriceLevelInput {
     @Field({ nullable: true })
     TransactionCurrencyIdName?: string;
 
+    @Field({ nullable: true })
+    PriceLevelId?: string;
+
+    @Field({ nullable: true })
+    UoMId?: string;
+
+    @Field({ nullable: true })
+    UoMScheduleId?: string;
+
+    @Field({ nullable: true })
+    DiscountTypeId?: string;
+
+    @Field({ nullable: true })
+    ProductId?: string;
+
     @Field(() => Float, { nullable: true })
     Percentage?: number;
 
@@ -20310,8 +20686,17 @@ export class CreateProductPriceLevelInput {
     @Field()
     VersionNumber: number;
 
+    @Field({ nullable: true })
+    CreatedBy?: string;
+
+    @Field({ nullable: true })
+    ModifiedBy?: string;
+
     @Field(() => Float, { nullable: true })
     ExchangeRate?: number;
+
+    @Field({ nullable: true })
+    TransactionCurrencyId?: string;
 
     @Field({ nullable: true })
     OverriddenCreatedOn?: Date;
@@ -20324,6 +20709,18 @@ export class CreateProductPriceLevelInput {
 
     @Field(() => Float, { nullable: true })
     RoundingOptionAmount_Base?: number;
+
+    @Field({ nullable: true })
+    CreatedOnBehalfBy?: string;
+
+    @Field({ nullable: true })
+    ModifiedOnBehalfBy?: string;
+
+    @Field({ nullable: true })
+    ProcessId?: string;
+
+    @Field({ nullable: true })
+    StageId?: string;
 
     @Field({ nullable: true })
     TraversedPath?: string;
@@ -20348,6 +20745,9 @@ export class UpdateProductPriceLevelInput {
     PriceLevelIdName?: string;
 
     @Field({ nullable: true })
+    OrganizationId?: string;
+
+    @Field({ nullable: true })
     ModifiedByYomiName?: string;
 
     @Field({ nullable: true })
@@ -20380,8 +20780,23 @@ export class UpdateProductPriceLevelInput {
     @Field({ nullable: true })
     TransactionCurrencyIdName?: string;
 
+    @Field({ nullable: true })
+    PriceLevelId?: string;
+
     @Field()
     ProductPriceLevelId: string;
+
+    @Field({ nullable: true })
+    UoMId?: string;
+
+    @Field({ nullable: true })
+    UoMScheduleId?: string;
+
+    @Field({ nullable: true })
+    DiscountTypeId?: string;
+
+    @Field({ nullable: true })
+    ProductId?: string;
 
     @Field(() => Float, { nullable: true })
     Percentage?: number;
@@ -20413,8 +20828,17 @@ export class UpdateProductPriceLevelInput {
     @Field()
     VersionNumber: number;
 
+    @Field({ nullable: true })
+    CreatedBy?: string;
+
+    @Field({ nullable: true })
+    ModifiedBy?: string;
+
     @Field(() => Float, { nullable: true })
     ExchangeRate?: number;
+
+    @Field({ nullable: true })
+    TransactionCurrencyId?: string;
 
     @Field({ nullable: true })
     OverriddenCreatedOn?: Date;
@@ -20427,6 +20851,18 @@ export class UpdateProductPriceLevelInput {
 
     @Field(() => Float, { nullable: true })
     RoundingOptionAmount_Base?: number;
+
+    @Field({ nullable: true })
+    CreatedOnBehalfBy?: string;
+
+    @Field({ nullable: true })
+    ModifiedOnBehalfBy?: string;
+
+    @Field({ nullable: true })
+    ProcessId?: string;
+
+    @Field({ nullable: true })
+    StageId?: string;
 
     @Field({ nullable: true })
     TraversedPath?: string;
@@ -20443,8 +20879,8 @@ export class RunProductPriceLevelViewResult {
     @Field(() => [ProductPriceLevel_])
     Results: ProductPriceLevel_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -20766,11 +21202,11 @@ export class client_membership_ {
     @MaxLength(8)
     acep_futurelastreneweddate?: Date;
         
-    @Field(() => [SalesOrder_])
-    SalesOrdersArray: SalesOrder_[]; // Link to SalesOrders
-    
     @Field(() => [Contact__client_crm_])
     Contacts__client_crmArray: Contact__client_crm_[]; // Link to Contacts__client_crm
+    
+    @Field(() => [SalesOrder_])
+    SalesOrdersArray: SalesOrder_[]; // Link to SalesOrders
     
 }
         
@@ -20822,6 +21258,9 @@ export class Createclient_membershipInput {
     acep_FutureBillingOptionIdName?: string;
 
     @Field({ nullable: true })
+    OwnerId?: string;
+
+    @Field({ nullable: true })
     OwnerIdName?: string;
 
     @Field({ nullable: true })
@@ -20832,6 +21271,12 @@ export class Createclient_membershipInput {
 
     @Field(() => Int, { nullable: true })
     OwnerIdType?: number;
+
+    @Field({ nullable: true })
+    OwningUser?: string;
+
+    @Field({ nullable: true })
+    OwningTeam?: string;
 
     @Field({ nullable: true })
     Acep_AcquisitionPromoCode?: string;
@@ -20906,16 +21351,25 @@ export class Createclient_membershipInput {
     Acep_StatusReasonCode?: number;
 
     @Field({ nullable: true })
+    CreatedBy?: string;
+
+    @Field({ nullable: true })
     CreatedOn?: Date;
 
     @Field(() => Int, { nullable: true })
     ImportSequenceNumber?: number;
 
     @Field({ nullable: true })
+    ModifiedBy?: string;
+
+    @Field({ nullable: true })
     ModifiedOn?: Date;
 
     @Field({ nullable: true })
     OverriddenCreatedOn?: Date;
+
+    @Field({ nullable: true })
+    OwningBusinessUnit?: string;
 
     @Field(() => Int, { nullable: true })
     statecode?: number;
@@ -20931,6 +21385,27 @@ export class Createclient_membershipInput {
 
     @Field()
     VersionNumber: number;
+
+    @Field({ nullable: true })
+    acep_contactid?: string;
+
+    @Field({ nullable: true })
+    Acep_CurrentCRMOrderId?: string;
+
+    @Field({ nullable: true })
+    Acep_futureCRMOrderId?: string;
+
+    @Field({ nullable: true })
+    Acep_BillingOptionId?: string;
+
+    @Field({ nullable: true })
+    CreatedOnBehalfBy?: string;
+
+    @Field({ nullable: true })
+    ModifiedOnBehalfBy?: string;
+
+    @Field({ nullable: true })
+    acep_FutureBillingOptionId?: string;
 
     @Field({ nullable: true })
     acep_LastRateChangeDate?: Date;
@@ -20991,6 +21466,9 @@ export class Updateclient_membershipInput {
     acep_FutureBillingOptionIdName?: string;
 
     @Field({ nullable: true })
+    OwnerId?: string;
+
+    @Field({ nullable: true })
     OwnerIdName?: string;
 
     @Field({ nullable: true })
@@ -21001,6 +21479,12 @@ export class Updateclient_membershipInput {
 
     @Field(() => Int, { nullable: true })
     OwnerIdType?: number;
+
+    @Field({ nullable: true })
+    OwningUser?: string;
+
+    @Field({ nullable: true })
+    OwningTeam?: string;
 
     @Field({ nullable: true })
     Acep_AcquisitionPromoCode?: string;
@@ -21078,16 +21562,25 @@ export class Updateclient_membershipInput {
     Acep_StatusReasonCode?: number;
 
     @Field({ nullable: true })
+    CreatedBy?: string;
+
+    @Field({ nullable: true })
     CreatedOn?: Date;
 
     @Field(() => Int, { nullable: true })
     ImportSequenceNumber?: number;
 
     @Field({ nullable: true })
+    ModifiedBy?: string;
+
+    @Field({ nullable: true })
     ModifiedOn?: Date;
 
     @Field({ nullable: true })
     OverriddenCreatedOn?: Date;
+
+    @Field({ nullable: true })
+    OwningBusinessUnit?: string;
 
     @Field(() => Int, { nullable: true })
     statecode?: number;
@@ -21103,6 +21596,27 @@ export class Updateclient_membershipInput {
 
     @Field()
     VersionNumber: number;
+
+    @Field({ nullable: true })
+    acep_contactid?: string;
+
+    @Field({ nullable: true })
+    Acep_CurrentCRMOrderId?: string;
+
+    @Field({ nullable: true })
+    Acep_futureCRMOrderId?: string;
+
+    @Field({ nullable: true })
+    Acep_BillingOptionId?: string;
+
+    @Field({ nullable: true })
+    CreatedOnBehalfBy?: string;
+
+    @Field({ nullable: true })
+    ModifiedOnBehalfBy?: string;
+
+    @Field({ nullable: true })
+    acep_FutureBillingOptionId?: string;
 
     @Field({ nullable: true })
     acep_LastRateChangeDate?: Date;
@@ -21125,8 +21639,8 @@ export class Runclient_membershipViewResult {
     @Field(() => [client_membership_])
     Results: client_membership_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -21169,19 +21683,19 @@ export class client_membershipResolver extends ResolverBase {
         return result;
     }
       
-    @FieldResolver(() => [SalesOrder_])
-    async SalesOrdersArray(@Root() client_membership_: client_membership_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('Sales Orders', userPayload);
-        const sSQL = `SELECT * FROM [client_crm].[vwSalesOrders] WHERE [Acep_ACEPMembershipId]='${client_membership_.Acep_membershipId}' ` + this.getRowLevelSecurityWhereClause('Sales Orders', userPayload, EntityPermissionType.Read, 'AND');
-        const result = this.ArrayMapFieldNamesToCodeNames('Sales Orders', await dataSource.query(sSQL));
-        return result;
-    }
-          
     @FieldResolver(() => [Contact__client_crm_])
     async Contacts__client_crmArray(@Root() client_membership_: client_membership_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Contacts__client_crm', userPayload);
         const sSQL = `SELECT * FROM [client_crm].[vwContacts__client_crm] WHERE [Acep_ACEPMembershipId]='${client_membership_.Acep_membershipId}' ` + this.getRowLevelSecurityWhereClause('Contacts__client_crm', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Contacts__client_crm', await dataSource.query(sSQL));
+        return result;
+    }
+          
+    @FieldResolver(() => [SalesOrder_])
+    async SalesOrdersArray(@Root() client_membership_: client_membership_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Sales Orders', userPayload);
+        const sSQL = `SELECT * FROM [client_crm].[vwSalesOrders] WHERE [Acep_ACEPMembershipId]='${client_membership_.Acep_membershipId}' ` + this.getRowLevelSecurityWhereClause('Sales Orders', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Sales Orders', await dataSource.query(sSQL));
         return result;
     }
         
@@ -22969,14 +23483,14 @@ export class Contact__client_crm_ {
     @Field(() => Boolean, {nullable: true}) 
     acep_optoutregyr123?: boolean;
         
-    @Field(() => [Account__client_crm_])
-    Accounts__client_crmArray: Account__client_crm_[]; // Link to Accounts__client_crm
+    @Field(() => [PersonLink_])
+    PersonLinksArray: PersonLink_[]; // Link to PersonLinks
     
     @Field(() => [client_membership_])
     client_membershipsArray: client_membership_[]; // Link to client_memberships
     
-    @Field(() => [PersonLink_])
-    PersonLinksArray: PersonLink_[]; // Link to PersonLinks
+    @Field(() => [Account__client_crm_])
+    Accounts__client_crmArray: Account__client_crm_[]; // Link to Accounts__client_crm
     
     @Field(() => [SalesOrder_])
     SalesOrdersArray: SalesOrder_[]; // Link to SalesOrders
@@ -23130,6 +23644,9 @@ export class CreateContact__client_crmInput {
     Address1_County?: string;
 
     @Field({ nullable: true })
+    Address1_AddressId?: string;
+
+    @Field({ nullable: true })
     Address1_Fax?: string;
 
     @Field(() => Int, { nullable: true })
@@ -23197,6 +23714,9 @@ export class CreateContact__client_crmInput {
 
     @Field({ nullable: true })
     Address2_County?: string;
+
+    @Field({ nullable: true })
+    Address2_AddressId?: string;
 
     @Field({ nullable: true })
     Address2_Fax?: string;
@@ -23268,6 +23788,9 @@ export class CreateContact__client_crmInput {
     Address3_County?: string;
 
     @Field({ nullable: true })
+    Address3_AddressId?: string;
+
+    @Field({ nullable: true })
     Address3_Fax?: string;
 
     @Field(() => Int, { nullable: true })
@@ -23322,6 +23845,9 @@ export class CreateContact__client_crmInput {
     Address3_UTCOffset?: number;
 
     @Field({ nullable: true })
+    OwnerId?: string;
+
+    @Field({ nullable: true })
     OwnerIdName?: string;
 
     @Field({ nullable: true })
@@ -23334,16 +23860,31 @@ export class CreateContact__client_crmInput {
     OwnerIdType?: number;
 
     @Field({ nullable: true })
+    OwningUser?: string;
+
+    @Field({ nullable: true })
+    OwningTeam?: string;
+
+    @Field({ nullable: true })
+    AccountId?: string;
+
+    @Field({ nullable: true })
     AccountIdName?: string;
 
     @Field({ nullable: true })
     AccountIdYomiName?: string;
 
     @Field({ nullable: true })
+    ParentContactId?: string;
+
+    @Field({ nullable: true })
     ParentContactIdName?: string;
 
     @Field({ nullable: true })
     ParentContactIdYomiName?: string;
+
+    @Field({ nullable: true })
+    DefaultPriceLevelId?: string;
 
     @Field(() => Int, { nullable: true })
     CustomerSizeCode?: number;
@@ -23356,6 +23897,12 @@ export class CreateContact__client_crmInput {
 
     @Field(() => Int, { nullable: true })
     LeadSourceCode?: number;
+
+    @Field({ nullable: true })
+    OriginatingLeadId?: string;
+
+    @Field({ nullable: true })
+    OwningBusinessUnit?: string;
 
     @Field(() => Int, { nullable: true })
     PaymentTermsCode?: number;
@@ -23505,7 +24052,13 @@ export class CreateContact__client_crmInput {
     CreditOnHold?: boolean;
 
     @Field({ nullable: true })
+    CreatedBy?: string;
+
+    @Field({ nullable: true })
     ModifiedOn?: Date;
+
+    @Field({ nullable: true })
+    ModifiedBy?: string;
 
     @Field(() => Int, { nullable: true })
     NumberOfChildren?: number;
@@ -23549,6 +24102,15 @@ export class CreateContact__client_crmInput {
     @Field(() => Float, { nullable: true })
     Aging90?: number;
 
+    @Field({ nullable: true })
+    PreferredSystemUserId?: string;
+
+    @Field({ nullable: true })
+    PreferredServiceId?: string;
+
+    @Field({ nullable: true })
+    MasterId?: string;
+
     @Field(() => Int, { nullable: true })
     PreferredAppointmentDayCode?: number;
 
@@ -23558,11 +24120,20 @@ export class CreateContact__client_crmInput {
     @Field(() => Boolean, { nullable: true })
     DoNotSendMM?: boolean;
 
+    @Field({ nullable: true })
+    ParentCustomerId?: string;
+
     @Field(() => Boolean, { nullable: true })
     Merged?: boolean;
 
     @Field({ nullable: true })
     ExternalUserIdentifier?: string;
+
+    @Field({ nullable: true })
+    SubscriptionId?: string;
+
+    @Field({ nullable: true })
+    PreferredEquipmentId?: string;
 
     @Field({ nullable: true })
     LastUsedInCampaign?: Date;
@@ -23572,6 +24143,9 @@ export class CreateContact__client_crmInput {
 
     @Field(() => Int, { nullable: true })
     ParentCustomerIdType?: number;
+
+    @Field({ nullable: true })
+    TransactionCurrencyId?: string;
 
     @Field({ nullable: true })
     OverriddenCreatedOn?: Date;
@@ -23606,11 +24180,32 @@ export class CreateContact__client_crmInput {
     @Field({ nullable: true })
     ParentCustomerIdYomiName?: string;
 
+    @Field({ nullable: true })
+    CreatedOnBehalfBy?: string;
+
+    @Field({ nullable: true })
+    ModifiedOnBehalfBy?: string;
+
     @Field(() => Boolean, { nullable: true })
     IsAutoCreate?: boolean;
 
     @Field({ nullable: true })
+    StageId?: string;
+
+    @Field({ nullable: true })
+    ProcessId?: string;
+
+    @Field({ nullable: true })
+    EntityImageId?: string;
+
+    @Field({ nullable: true })
     TraversedPath?: string;
+
+    @Field({ nullable: true })
+    SLAId?: string;
+
+    @Field({ nullable: true })
+    SLAInvokedId?: string;
 
     @Field(() => Int, { nullable: true })
     OnHoldTime?: number;
@@ -23635,6 +24230,12 @@ export class CreateContact__client_crmInput {
 
     @Field({ nullable: true })
     Home2?: string;
+
+    @Field({ nullable: true })
+    CreatedByExternalParty?: string;
+
+    @Field({ nullable: true })
+    ModifiedByExternalParty?: string;
 
     @Field(() => Boolean, { nullable: true })
     MarketingOnly?: boolean;
@@ -23712,6 +24313,9 @@ export class CreateContact__client_crmInput {
     Acep_EktronId?: string;
 
     @Field({ nullable: true })
+    acep_plannersid?: string;
+
+    @Field({ nullable: true })
     Acep_EmployerAddressState?: string;
 
     @Field(() => Int, { nullable: true })
@@ -23742,6 +24346,9 @@ export class CreateContact__client_crmInput {
     Adx_failedpasswordattemptwindowstart?: Date;
 
     @Field({ nullable: true })
+    acep_countryofcitizenshipid?: string;
+
+    @Field({ nullable: true })
     Acep_PrimaryFax?: string;
 
     @Field(() => Boolean, { nullable: true })
@@ -23752,6 +24359,9 @@ export class CreateContact__client_crmInput {
 
     @Field({ nullable: true })
     Acep_CMEDate?: Date;
+
+    @Field({ nullable: true })
+    acep_countryid?: string;
 
     @Field({ nullable: true })
     Acep_emailaddress4?: string;
@@ -23776,6 +24386,9 @@ export class CreateContact__client_crmInput {
 
     @Field(() => Boolean, { nullable: true })
     Acep_AllowWeekendReview?: boolean;
+
+    @Field({ nullable: true })
+    Acep_ACEPMembershipId?: string;
 
     @Field(() => Float, { nullable: true })
     Acep_PercentFundedbyIndividual?: number;
@@ -23828,6 +24441,9 @@ export class CreateContact__client_crmInput {
     @Field({ nullable: true })
     cdi_grade?: string;
 
+    @Field({ nullable: true })
+    adx_systemuserid?: string;
+
     @Field(() => Int, { nullable: true })
     Acep_QuestionCode?: number;
 
@@ -23854,6 +24470,9 @@ export class CreateContact__client_crmInput {
 
     @Field({ nullable: true })
     Acep_WebSessionId?: string;
+
+    @Field({ nullable: true })
+    acep_emcareercountryid?: string;
 
     @Field({ nullable: true })
     Acep_WorkSettingOther?: string;
@@ -23911,6 +24530,9 @@ export class CreateContact__client_crmInput {
 
     @Field(() => Int, { nullable: true })
     Acep_GPPriceLevel?: number;
+
+    @Field({ nullable: true })
+    Acep_EMRAMembershipId?: string;
 
     @Field({ nullable: true })
     Acep_FormalName?: string;
@@ -23990,6 +24612,9 @@ export class CreateContact__client_crmInput {
     @Field({ nullable: true })
     cdi_twitter?: string;
 
+    @Field({ nullable: true })
+    Acep_SEMPAMembershipId?: string;
+
     @Field(() => Int, { nullable: true })
     Adx_failedpasswordattempts?: number;
 
@@ -24035,6 +24660,9 @@ export class CreateContact__client_crmInput {
     @Field(() => Int, { nullable: true })
     Acep_InvalidPasswordAttempts?: number;
 
+    @Field({ nullable: true })
+    acep_emcareerstateorprovinceid?: string;
+
     @Field(() => Boolean, { nullable: true })
     Acep_AllowBirthday?: boolean;
 
@@ -24070,6 +24698,9 @@ export class CreateContact__client_crmInput {
 
     @Field({ nullable: true })
     Acep_buildfullname?: string;
+
+    @Field({ nullable: true })
+    msa_managingpartnerid?: string;
 
     @Field({ nullable: true })
     Acep_emailaddress5?: string;
@@ -24136,6 +24767,9 @@ export class CreateContact__client_crmInput {
 
     @Field({ nullable: true })
     Acep_EmployerAddressCity?: string;
+
+    @Field({ nullable: true })
+    acep_stateorprovinceid?: string;
 
     @Field({ nullable: true })
     Acep_ModifiedByProcess?: string;
@@ -24235,6 +24869,9 @@ export class CreateContact__client_crmInput {
 
     @Field(() => Boolean, { nullable: true })
     acep_SyncedtoHigherLogic?: boolean;
+
+    @Field({ nullable: true })
+    acep_MarketingDataIndividual?: string;
 
     @Field({ nullable: true })
     acep_Biography?: string;
@@ -24475,6 +25112,9 @@ export class UpdateContact__client_crmInput {
     Address1_County?: string;
 
     @Field({ nullable: true })
+    Address1_AddressId?: string;
+
+    @Field({ nullable: true })
     Address1_Fax?: string;
 
     @Field(() => Int, { nullable: true })
@@ -24542,6 +25182,9 @@ export class UpdateContact__client_crmInput {
 
     @Field({ nullable: true })
     Address2_County?: string;
+
+    @Field({ nullable: true })
+    Address2_AddressId?: string;
 
     @Field({ nullable: true })
     Address2_Fax?: string;
@@ -24613,6 +25256,9 @@ export class UpdateContact__client_crmInput {
     Address3_County?: string;
 
     @Field({ nullable: true })
+    Address3_AddressId?: string;
+
+    @Field({ nullable: true })
     Address3_Fax?: string;
 
     @Field(() => Int, { nullable: true })
@@ -24667,6 +25313,9 @@ export class UpdateContact__client_crmInput {
     Address3_UTCOffset?: number;
 
     @Field({ nullable: true })
+    OwnerId?: string;
+
+    @Field({ nullable: true })
     OwnerIdName?: string;
 
     @Field({ nullable: true })
@@ -24679,10 +25328,22 @@ export class UpdateContact__client_crmInput {
     OwnerIdType?: number;
 
     @Field({ nullable: true })
+    OwningUser?: string;
+
+    @Field({ nullable: true })
+    OwningTeam?: string;
+
+    @Field({ nullable: true })
+    AccountId?: string;
+
+    @Field({ nullable: true })
     AccountIdName?: string;
 
     @Field({ nullable: true })
     AccountIdYomiName?: string;
+
+    @Field({ nullable: true })
+    ParentContactId?: string;
 
     @Field({ nullable: true })
     ParentContactIdName?: string;
@@ -24692,6 +25353,9 @@ export class UpdateContact__client_crmInput {
 
     @Field()
     ContactId: string;
+
+    @Field({ nullable: true })
+    DefaultPriceLevelId?: string;
 
     @Field(() => Int, { nullable: true })
     CustomerSizeCode?: number;
@@ -24704,6 +25368,12 @@ export class UpdateContact__client_crmInput {
 
     @Field(() => Int, { nullable: true })
     LeadSourceCode?: number;
+
+    @Field({ nullable: true })
+    OriginatingLeadId?: string;
+
+    @Field({ nullable: true })
+    OwningBusinessUnit?: string;
 
     @Field(() => Int, { nullable: true })
     PaymentTermsCode?: number;
@@ -24853,7 +25523,13 @@ export class UpdateContact__client_crmInput {
     CreditOnHold?: boolean;
 
     @Field({ nullable: true })
+    CreatedBy?: string;
+
+    @Field({ nullable: true })
     ModifiedOn?: Date;
+
+    @Field({ nullable: true })
+    ModifiedBy?: string;
 
     @Field(() => Int, { nullable: true })
     NumberOfChildren?: number;
@@ -24897,6 +25573,15 @@ export class UpdateContact__client_crmInput {
     @Field(() => Float, { nullable: true })
     Aging90?: number;
 
+    @Field({ nullable: true })
+    PreferredSystemUserId?: string;
+
+    @Field({ nullable: true })
+    PreferredServiceId?: string;
+
+    @Field({ nullable: true })
+    MasterId?: string;
+
     @Field(() => Int, { nullable: true })
     PreferredAppointmentDayCode?: number;
 
@@ -24906,11 +25591,20 @@ export class UpdateContact__client_crmInput {
     @Field(() => Boolean, { nullable: true })
     DoNotSendMM?: boolean;
 
+    @Field({ nullable: true })
+    ParentCustomerId?: string;
+
     @Field(() => Boolean, { nullable: true })
     Merged?: boolean;
 
     @Field({ nullable: true })
     ExternalUserIdentifier?: string;
+
+    @Field({ nullable: true })
+    SubscriptionId?: string;
+
+    @Field({ nullable: true })
+    PreferredEquipmentId?: string;
 
     @Field({ nullable: true })
     LastUsedInCampaign?: Date;
@@ -24920,6 +25614,9 @@ export class UpdateContact__client_crmInput {
 
     @Field(() => Int, { nullable: true })
     ParentCustomerIdType?: number;
+
+    @Field({ nullable: true })
+    TransactionCurrencyId?: string;
 
     @Field({ nullable: true })
     OverriddenCreatedOn?: Date;
@@ -24954,11 +25651,32 @@ export class UpdateContact__client_crmInput {
     @Field({ nullable: true })
     ParentCustomerIdYomiName?: string;
 
+    @Field({ nullable: true })
+    CreatedOnBehalfBy?: string;
+
+    @Field({ nullable: true })
+    ModifiedOnBehalfBy?: string;
+
     @Field(() => Boolean, { nullable: true })
     IsAutoCreate?: boolean;
 
     @Field({ nullable: true })
+    StageId?: string;
+
+    @Field({ nullable: true })
+    ProcessId?: string;
+
+    @Field({ nullable: true })
+    EntityImageId?: string;
+
+    @Field({ nullable: true })
     TraversedPath?: string;
+
+    @Field({ nullable: true })
+    SLAId?: string;
+
+    @Field({ nullable: true })
+    SLAInvokedId?: string;
 
     @Field(() => Int, { nullable: true })
     OnHoldTime?: number;
@@ -24983,6 +25701,12 @@ export class UpdateContact__client_crmInput {
 
     @Field({ nullable: true })
     Home2?: string;
+
+    @Field({ nullable: true })
+    CreatedByExternalParty?: string;
+
+    @Field({ nullable: true })
+    ModifiedByExternalParty?: string;
 
     @Field(() => Boolean, { nullable: true })
     MarketingOnly?: boolean;
@@ -25060,6 +25784,9 @@ export class UpdateContact__client_crmInput {
     Acep_EktronId?: string;
 
     @Field({ nullable: true })
+    acep_plannersid?: string;
+
+    @Field({ nullable: true })
     Acep_EmployerAddressState?: string;
 
     @Field(() => Int, { nullable: true })
@@ -25090,6 +25817,9 @@ export class UpdateContact__client_crmInput {
     Adx_failedpasswordattemptwindowstart?: Date;
 
     @Field({ nullable: true })
+    acep_countryofcitizenshipid?: string;
+
+    @Field({ nullable: true })
     Acep_PrimaryFax?: string;
 
     @Field(() => Boolean, { nullable: true })
@@ -25100,6 +25830,9 @@ export class UpdateContact__client_crmInput {
 
     @Field({ nullable: true })
     Acep_CMEDate?: Date;
+
+    @Field({ nullable: true })
+    acep_countryid?: string;
 
     @Field({ nullable: true })
     Acep_emailaddress4?: string;
@@ -25124,6 +25857,9 @@ export class UpdateContact__client_crmInput {
 
     @Field(() => Boolean, { nullable: true })
     Acep_AllowWeekendReview?: boolean;
+
+    @Field({ nullable: true })
+    Acep_ACEPMembershipId?: string;
 
     @Field(() => Float, { nullable: true })
     Acep_PercentFundedbyIndividual?: number;
@@ -25176,6 +25912,9 @@ export class UpdateContact__client_crmInput {
     @Field({ nullable: true })
     cdi_grade?: string;
 
+    @Field({ nullable: true })
+    adx_systemuserid?: string;
+
     @Field(() => Int, { nullable: true })
     Acep_QuestionCode?: number;
 
@@ -25202,6 +25941,9 @@ export class UpdateContact__client_crmInput {
 
     @Field({ nullable: true })
     Acep_WebSessionId?: string;
+
+    @Field({ nullable: true })
+    acep_emcareercountryid?: string;
 
     @Field({ nullable: true })
     Acep_WorkSettingOther?: string;
@@ -25259,6 +26001,9 @@ export class UpdateContact__client_crmInput {
 
     @Field(() => Int, { nullable: true })
     Acep_GPPriceLevel?: number;
+
+    @Field({ nullable: true })
+    Acep_EMRAMembershipId?: string;
 
     @Field({ nullable: true })
     Acep_FormalName?: string;
@@ -25338,6 +26083,9 @@ export class UpdateContact__client_crmInput {
     @Field({ nullable: true })
     cdi_twitter?: string;
 
+    @Field({ nullable: true })
+    Acep_SEMPAMembershipId?: string;
+
     @Field(() => Int, { nullable: true })
     Adx_failedpasswordattempts?: number;
 
@@ -25383,6 +26131,9 @@ export class UpdateContact__client_crmInput {
     @Field(() => Int, { nullable: true })
     Acep_InvalidPasswordAttempts?: number;
 
+    @Field({ nullable: true })
+    acep_emcareerstateorprovinceid?: string;
+
     @Field(() => Boolean, { nullable: true })
     Acep_AllowBirthday?: boolean;
 
@@ -25418,6 +26169,9 @@ export class UpdateContact__client_crmInput {
 
     @Field({ nullable: true })
     Acep_buildfullname?: string;
+
+    @Field({ nullable: true })
+    msa_managingpartnerid?: string;
 
     @Field({ nullable: true })
     Acep_emailaddress5?: string;
@@ -25484,6 +26238,9 @@ export class UpdateContact__client_crmInput {
 
     @Field({ nullable: true })
     Acep_EmployerAddressCity?: string;
+
+    @Field({ nullable: true })
+    acep_stateorprovinceid?: string;
 
     @Field({ nullable: true })
     Acep_ModifiedByProcess?: string;
@@ -25583,6 +26340,9 @@ export class UpdateContact__client_crmInput {
 
     @Field(() => Boolean, { nullable: true })
     acep_SyncedtoHigherLogic?: boolean;
+
+    @Field({ nullable: true })
+    acep_MarketingDataIndividual?: string;
 
     @Field({ nullable: true })
     acep_Biography?: string;
@@ -25689,8 +26449,8 @@ export class RunContact__client_crmViewResult {
     @Field(() => [Contact__client_crm_])
     Results: Contact__client_crm_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -25733,11 +26493,11 @@ export class Contact__client_crmResolver extends ResolverBase {
         return result;
     }
       
-    @FieldResolver(() => [Account__client_crm_])
-    async Accounts__client_crmArray(@Root() contact__client_crm_: Contact__client_crm_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('Accounts__client_crm', userPayload);
-        const sSQL = `SELECT * FROM [client_crm].[vwAccounts__client_crm] WHERE [PrimaryContactId]='${contact__client_crm_.ContactId}' ` + this.getRowLevelSecurityWhereClause('Accounts__client_crm', userPayload, EntityPermissionType.Read, 'AND');
-        const result = this.ArrayMapFieldNamesToCodeNames('Accounts__client_crm', await dataSource.query(sSQL));
+    @FieldResolver(() => [PersonLink_])
+    async PersonLinksArray(@Root() contact__client_crm_: Contact__client_crm_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Person Links', userPayload);
+        const sSQL = `SELECT * FROM [common].[vwPersonLinks] WHERE [CRMContactID]='${contact__client_crm_.ContactId}' ` + this.getRowLevelSecurityWhereClause('Person Links', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Person Links', await dataSource.query(sSQL));
         return result;
     }
           
@@ -25749,11 +26509,11 @@ export class Contact__client_crmResolver extends ResolverBase {
         return result;
     }
           
-    @FieldResolver(() => [PersonLink_])
-    async PersonLinksArray(@Root() contact__client_crm_: Contact__client_crm_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('Person Links', userPayload);
-        const sSQL = `SELECT * FROM [common].[vwPersonLinks] WHERE [CRMContactID]='${contact__client_crm_.ContactId}' ` + this.getRowLevelSecurityWhereClause('Person Links', userPayload, EntityPermissionType.Read, 'AND');
-        const result = this.ArrayMapFieldNamesToCodeNames('Person Links', await dataSource.query(sSQL));
+    @FieldResolver(() => [Account__client_crm_])
+    async Accounts__client_crmArray(@Root() contact__client_crm_: Contact__client_crm_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Accounts__client_crm', userPayload);
+        const sSQL = `SELECT * FROM [client_crm].[vwAccounts__client_crm] WHERE [PrimaryContactId]='${contact__client_crm_.ContactId}' ` + this.getRowLevelSecurityWhereClause('Accounts__client_crm', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Accounts__client_crm', await dataSource.query(sSQL));
         return result;
     }
           
@@ -25919,17 +26679,17 @@ export class UoM_ {
     @MaxLength(16)
     ModifiedByExternalParty?: string;
         
-    @Field(() => [Product_])
-    ProductsArray: Product_[]; // Link to Products
-    
     @Field(() => [SalesOrderDetail_])
     SalesOrderDetailsArray: SalesOrderDetail_[]; // Link to SalesOrderDetails
     
-    @Field(() => [ProductPriceLevel_])
-    ProductPriceLevelsArray: ProductPriceLevel_[]; // Link to ProductPriceLevels
-    
     @Field(() => [UoM_])
     UoMsArray: UoM_[]; // Link to UoMs
+    
+    @Field(() => [Product_])
+    ProductsArray: Product_[]; // Link to Products
+    
+    @Field(() => [ProductPriceLevel_])
+    ProductPriceLevelsArray: ProductPriceLevel_[]; // Link to ProductPriceLevels
     
 }
         
@@ -25978,13 +26738,28 @@ export class CreateUoMInput {
     BaseUoMName?: string;
 
     @Field({ nullable: true })
+    OrganizationId?: string;
+
+    @Field({ nullable: true })
+    BaseUoM?: string;
+
+    @Field({ nullable: true })
     Name?: string;
+
+    @Field({ nullable: true })
+    UoMScheduleId?: string;
 
     @Field(() => Float, { nullable: true })
     Quantity?: number;
 
     @Field({ nullable: true })
     CreatedOn?: Date;
+
+    @Field({ nullable: true })
+    CreatedBy?: string;
+
+    @Field({ nullable: true })
+    ModifiedBy?: string;
 
     @Field({ nullable: true })
     ModifiedOn?: Date;
@@ -26000,6 +26775,18 @@ export class CreateUoMInput {
 
     @Field({ nullable: true })
     OverriddenCreatedOn?: Date;
+
+    @Field({ nullable: true })
+    CreatedOnBehalfBy?: string;
+
+    @Field({ nullable: true })
+    ModifiedOnBehalfBy?: string;
+
+    @Field({ nullable: true })
+    CreatedByExternalParty?: string;
+
+    @Field({ nullable: true })
+    ModifiedByExternalParty?: string;
 }
     
         
@@ -26047,17 +26834,32 @@ export class UpdateUoMInput {
     @Field({ nullable: true })
     BaseUoMName?: string;
 
+    @Field({ nullable: true })
+    OrganizationId?: string;
+
     @Field()
     UoMId: string;
 
     @Field({ nullable: true })
+    BaseUoM?: string;
+
+    @Field({ nullable: true })
     Name?: string;
+
+    @Field({ nullable: true })
+    UoMScheduleId?: string;
 
     @Field(() => Float, { nullable: true })
     Quantity?: number;
 
     @Field({ nullable: true })
     CreatedOn?: Date;
+
+    @Field({ nullable: true })
+    CreatedBy?: string;
+
+    @Field({ nullable: true })
+    ModifiedBy?: string;
 
     @Field({ nullable: true })
     ModifiedOn?: Date;
@@ -26074,6 +26876,18 @@ export class UpdateUoMInput {
     @Field({ nullable: true })
     OverriddenCreatedOn?: Date;
 
+    @Field({ nullable: true })
+    CreatedOnBehalfBy?: string;
+
+    @Field({ nullable: true })
+    ModifiedOnBehalfBy?: string;
+
+    @Field({ nullable: true })
+    CreatedByExternalParty?: string;
+
+    @Field({ nullable: true })
+    ModifiedByExternalParty?: string;
+
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
 }
@@ -26086,8 +26900,8 @@ export class RunUoMViewResult {
     @Field(() => [UoM_])
     Results: UoM_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -26130,14 +26944,6 @@ export class UoMResolver extends ResolverBase {
         return result;
     }
       
-    @FieldResolver(() => [Product_])
-    async ProductsArray(@Root() uom_: UoM_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('Products', userPayload);
-        const sSQL = `SELECT * FROM [client_crm].[vwProducts] WHERE [DefaultUoMId]='${uom_.UoMId}' ` + this.getRowLevelSecurityWhereClause('Products', userPayload, EntityPermissionType.Read, 'AND');
-        const result = this.ArrayMapFieldNamesToCodeNames('Products', await dataSource.query(sSQL));
-        return result;
-    }
-          
     @FieldResolver(() => [SalesOrderDetail_])
     async SalesOrderDetailsArray(@Root() uom_: UoM_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Sales Order Details', userPayload);
@@ -26146,19 +26952,27 @@ export class UoMResolver extends ResolverBase {
         return result;
     }
           
-    @FieldResolver(() => [ProductPriceLevel_])
-    async ProductPriceLevelsArray(@Root() uom_: UoM_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('Product Price Levels', userPayload);
-        const sSQL = `SELECT * FROM [client_crm].[vwProductPriceLevels] WHERE [UoMId]='${uom_.UoMId}' ` + this.getRowLevelSecurityWhereClause('Product Price Levels', userPayload, EntityPermissionType.Read, 'AND');
-        const result = this.ArrayMapFieldNamesToCodeNames('Product Price Levels', await dataSource.query(sSQL));
-        return result;
-    }
-          
     @FieldResolver(() => [UoM_])
     async UoMsArray(@Root() uom_: UoM_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Uo Ms', userPayload);
         const sSQL = `SELECT * FROM [client_crm].[vwUoMs] WHERE [BaseUoM]='${uom_.UoMId}' ` + this.getRowLevelSecurityWhereClause('Uo Ms', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Uo Ms', await dataSource.query(sSQL));
+        return result;
+    }
+          
+    @FieldResolver(() => [Product_])
+    async ProductsArray(@Root() uom_: UoM_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Products', userPayload);
+        const sSQL = `SELECT * FROM [client_crm].[vwProducts] WHERE [DefaultUoMId]='${uom_.UoMId}' ` + this.getRowLevelSecurityWhereClause('Products', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Products', await dataSource.query(sSQL));
+        return result;
+    }
+          
+    @FieldResolver(() => [ProductPriceLevel_])
+    async ProductPriceLevelsArray(@Root() uom_: UoM_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Product Price Levels', userPayload);
+        const sSQL = `SELECT * FROM [client_crm].[vwProductPriceLevels] WHERE [UoMId]='${uom_.UoMId}' ` + this.getRowLevelSecurityWhereClause('Product Price Levels', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Product Price Levels', await dataSource.query(sSQL));
         return result;
     }
         
@@ -26966,14 +27780,14 @@ export class SalesOrder_ {
     @MaxLength(16)
     acep_statementbatch?: string;
         
-    @Field(() => [client_membership_])
-    client_membershipsArray: client_membership_[]; // Link to client_memberships
-    
     @Field(() => [SalesOrder_])
     SalesOrdersArray: SalesOrder_[]; // Link to SalesOrders
     
     @Field(() => [SalesOrderDetail_])
     SalesOrderDetailsArray: SalesOrderDetail_[]; // Link to SalesOrderDetails
+    
+    @Field(() => [client_membership_])
+    client_membershipsArray: client_membership_[]; // Link to client_memberships
     
 }
         
@@ -27106,6 +27920,9 @@ export class CreateSalesOrderInput {
     acep_eventexhibitoridName?: string;
 
     @Field({ nullable: true })
+    OwnerId?: string;
+
+    @Field({ nullable: true })
     OwnerIdName?: string;
 
     @Field({ nullable: true })
@@ -27118,16 +27935,34 @@ export class CreateSalesOrderInput {
     OwnerIdType?: number;
 
     @Field({ nullable: true })
+    OwningUser?: string;
+
+    @Field({ nullable: true })
+    OwningTeam?: string;
+
+    @Field({ nullable: true })
+    AccountId?: string;
+
+    @Field({ nullable: true })
     AccountIdName?: string;
 
     @Field({ nullable: true })
     AccountIdYomiName?: string;
 
     @Field({ nullable: true })
+    ContactId?: string;
+
+    @Field({ nullable: true })
     ContactIdName?: string;
 
     @Field({ nullable: true })
     ContactIdYomiName?: string;
+
+    @Field({ nullable: true })
+    OpportunityId?: string;
+
+    @Field({ nullable: true })
+    QuoteId?: string;
 
     @Field(() => Int, { nullable: true })
     PriorityCode?: number;
@@ -27139,7 +27974,13 @@ export class CreateSalesOrderInput {
     SubmitDate?: Date;
 
     @Field({ nullable: true })
+    OwningBusinessUnit?: string;
+
+    @Field({ nullable: true })
     SubmitStatusDescription?: string;
+
+    @Field({ nullable: true })
+    PriceLevelId?: string;
 
     @Field({ nullable: true })
     LastBackofficeSubmit?: Date;
@@ -27193,7 +28034,13 @@ export class CreateSalesOrderInput {
     FreightTermsCode?: number;
 
     @Field({ nullable: true })
+    CreatedBy?: string;
+
+    @Field({ nullable: true })
     CreatedOn?: Date;
+
+    @Field({ nullable: true })
+    ModifiedBy?: string;
 
     @Field({ nullable: true })
     ModifiedOn?: Date;
@@ -27277,6 +28124,9 @@ export class CreateSalesOrderInput {
     DiscountPercentage?: number;
 
     @Field({ nullable: true })
+    CustomerId?: string;
+
+    @Field({ nullable: true })
     CustomerIdName?: string;
 
     @Field(() => Int, { nullable: true })
@@ -27284,6 +28134,15 @@ export class CreateSalesOrderInput {
 
     @Field({ nullable: true })
     BillTo_ContactName?: string;
+
+    @Field({ nullable: true })
+    CampaignId?: string;
+
+    @Field({ nullable: true })
+    BillTo_AddressId?: string;
+
+    @Field({ nullable: true })
+    ShipTo_AddressId?: string;
 
     @Field(() => Boolean, { nullable: true })
     IsPriceLocked?: boolean;
@@ -27296,6 +28155,9 @@ export class CreateSalesOrderInput {
 
     @Field(() => Int, { nullable: true })
     UTCConversionTimeZoneCode?: number;
+
+    @Field({ nullable: true })
+    TransactionCurrencyId?: string;
 
     @Field(() => Int, { nullable: true })
     TimeZoneRuleVersionNumber?: number;
@@ -27337,10 +28199,25 @@ export class CreateSalesOrderInput {
     CustomerIdYomiName?: string;
 
     @Field({ nullable: true })
+    CreatedOnBehalfBy?: string;
+
+    @Field({ nullable: true })
+    ModifiedOnBehalfBy?: string;
+
+    @Field({ nullable: true })
     BillTo_Composite?: string;
 
     @Field({ nullable: true })
     ShipTo_Composite?: string;
+
+    @Field({ nullable: true })
+    ProcessId?: string;
+
+    @Field({ nullable: true })
+    StageId?: string;
+
+    @Field({ nullable: true })
+    EntityImageId?: string;
 
     @Field({ nullable: true })
     TraversedPath?: string;
@@ -27350,6 +28227,12 @@ export class CreateSalesOrderInput {
 
     @Field({ nullable: true })
     LastOnHoldTime?: Date;
+
+    @Field({ nullable: true })
+    SLAId?: string;
+
+    @Field({ nullable: true })
+    SLAInvokedId?: string;
 
     @Field({ nullable: true })
     Acep_InstallmentStartDate?: Date;
@@ -27372,6 +28255,9 @@ export class CreateSalesOrderInput {
     @Field({ nullable: true })
     Acep_InstallmentExpiryDate?: Date;
 
+    @Field({ nullable: true })
+    Acep_SEMPAMembershipId?: string;
+
     @Field(() => Int, { nullable: true })
     Acep_ChangeOrdertoInstallmenttype?: number;
 
@@ -27379,13 +28265,25 @@ export class CreateSalesOrderInput {
     Acep_CCTransactionSucceeded?: boolean;
 
     @Field({ nullable: true })
+    Acep_ACEPMembershipHistoryId?: string;
+
+    @Field({ nullable: true })
     Acep_parentorderid?: string;
+
+    @Field({ nullable: true })
+    acep_orgorderforrefundid?: string;
 
     @Field({ nullable: true })
     Acep_expirationdate?: Date;
 
     @Field({ nullable: true })
+    Acep_ACEPMembershipId?: string;
+
+    @Field({ nullable: true })
     Acep_CCTransactionDetails?: string;
+
+    @Field({ nullable: true })
+    Acep_BillingOptionId?: string;
 
     @Field(() => Int, { nullable: true })
     Acep_installmenttype?: number;
@@ -27393,11 +28291,23 @@ export class CreateSalesOrderInput {
     @Field({ nullable: true })
     Acep_GPOrderNumber?: string;
 
+    @Field({ nullable: true })
+    acep_eventregisterid?: string;
+
+    @Field({ nullable: true })
+    acep_batchid?: string;
+
+    @Field({ nullable: true })
+    acep_printrunid?: string;
+
     @Field(() => Int, { nullable: true })
     Acep_PaymentTypeCode?: number;
 
     @Field(() => Int, { nullable: true })
     Acep_installmentbilled?: number;
+
+    @Field({ nullable: true })
+    acep_eventexhibitorid?: string;
 
     @Field({ nullable: true })
     Acep_cyclestartdate?: Date;
@@ -27407,6 +28317,9 @@ export class CreateSalesOrderInput {
 
     @Field(() => Int, { nullable: true })
     Acep_numberofinstallments?: number;
+
+    @Field({ nullable: true })
+    acep_cmeapprovalid?: string;
 
     @Field({ nullable: true })
     Acep_PostedDate?: Date;
@@ -27419,6 +28332,9 @@ export class CreateSalesOrderInput {
 
     @Field(() => Boolean, { nullable: true })
     Acep_isrefund?: boolean;
+
+    @Field({ nullable: true })
+    Acep_EMRAMembershipId?: string;
 
     @Field(() => Int, { nullable: true })
     Eone_OrderStatus?: number;
@@ -27433,6 +28349,9 @@ export class CreateSalesOrderInput {
     Eone_TestDate?: Date;
 
     @Field({ nullable: true })
+    acep_conferenceregistrationid?: string;
+
+    @Field({ nullable: true })
     Acep_InstallmentDate?: string;
 
     @Field(() => Int, { nullable: true })
@@ -27443,6 +28362,27 @@ export class CreateSalesOrderInput {
 
     @Field({ nullable: true })
     Acep_PromoCode?: string;
+
+    @Field({ nullable: true })
+    eone_paymenttermsid?: string;
+
+    @Field({ nullable: true })
+    Acep_GroupBillId?: string;
+
+    @Field({ nullable: true })
+    acep_eventsponsorid?: string;
+
+    @Field({ nullable: true })
+    Acep_OrderTypeId?: string;
+
+    @Field({ nullable: true })
+    acep_salesorderid?: string;
+
+    @Field({ nullable: true })
+    eone_shippingmethodid?: string;
+
+    @Field({ nullable: true })
+    acep_membershipid?: string;
 
     @Field(() => Int, { nullable: true })
     acep_ordersource?: number;
@@ -27463,16 +28403,25 @@ export class CreateSalesOrderInput {
     acep_TransactionID?: string;
 
     @Field({ nullable: true })
+    acep_OrderContact?: string;
+
+    @Field({ nullable: true })
     acep_AlternateToEmailAddresses?: string;
 
     @Field(() => Int, { nullable: true })
     acep_ReasonType?: number;
 
     @Field({ nullable: true })
+    acep_MeetingRegistrationId?: string;
+
+    @Field({ nullable: true })
     acep_shiptoemail?: string;
 
     @Field({ nullable: true })
     acep_TrackingNumber?: string;
+
+    @Field({ nullable: true })
+    acep_statementbatch?: string;
 }
     
         
@@ -27605,6 +28554,9 @@ export class UpdateSalesOrderInput {
     acep_eventexhibitoridName?: string;
 
     @Field({ nullable: true })
+    OwnerId?: string;
+
+    @Field({ nullable: true })
     OwnerIdName?: string;
 
     @Field({ nullable: true })
@@ -27617,10 +28569,22 @@ export class UpdateSalesOrderInput {
     OwnerIdType?: number;
 
     @Field({ nullable: true })
+    OwningUser?: string;
+
+    @Field({ nullable: true })
+    OwningTeam?: string;
+
+    @Field({ nullable: true })
+    AccountId?: string;
+
+    @Field({ nullable: true })
     AccountIdName?: string;
 
     @Field({ nullable: true })
     AccountIdYomiName?: string;
+
+    @Field({ nullable: true })
+    ContactId?: string;
 
     @Field({ nullable: true })
     ContactIdName?: string;
@@ -27630,6 +28594,12 @@ export class UpdateSalesOrderInput {
 
     @Field()
     SalesOrderId: string;
+
+    @Field({ nullable: true })
+    OpportunityId?: string;
+
+    @Field({ nullable: true })
+    QuoteId?: string;
 
     @Field(() => Int, { nullable: true })
     PriorityCode?: number;
@@ -27641,7 +28611,13 @@ export class UpdateSalesOrderInput {
     SubmitDate?: Date;
 
     @Field({ nullable: true })
+    OwningBusinessUnit?: string;
+
+    @Field({ nullable: true })
     SubmitStatusDescription?: string;
+
+    @Field({ nullable: true })
+    PriceLevelId?: string;
 
     @Field({ nullable: true })
     LastBackofficeSubmit?: Date;
@@ -27695,7 +28671,13 @@ export class UpdateSalesOrderInput {
     FreightTermsCode?: number;
 
     @Field({ nullable: true })
+    CreatedBy?: string;
+
+    @Field({ nullable: true })
     CreatedOn?: Date;
+
+    @Field({ nullable: true })
+    ModifiedBy?: string;
 
     @Field({ nullable: true })
     ModifiedOn?: Date;
@@ -27779,6 +28761,9 @@ export class UpdateSalesOrderInput {
     DiscountPercentage?: number;
 
     @Field({ nullable: true })
+    CustomerId?: string;
+
+    @Field({ nullable: true })
     CustomerIdName?: string;
 
     @Field(() => Int, { nullable: true })
@@ -27786,6 +28771,15 @@ export class UpdateSalesOrderInput {
 
     @Field({ nullable: true })
     BillTo_ContactName?: string;
+
+    @Field({ nullable: true })
+    CampaignId?: string;
+
+    @Field({ nullable: true })
+    BillTo_AddressId?: string;
+
+    @Field({ nullable: true })
+    ShipTo_AddressId?: string;
 
     @Field(() => Boolean, { nullable: true })
     IsPriceLocked?: boolean;
@@ -27798,6 +28792,9 @@ export class UpdateSalesOrderInput {
 
     @Field(() => Int, { nullable: true })
     UTCConversionTimeZoneCode?: number;
+
+    @Field({ nullable: true })
+    TransactionCurrencyId?: string;
 
     @Field(() => Int, { nullable: true })
     TimeZoneRuleVersionNumber?: number;
@@ -27839,10 +28836,25 @@ export class UpdateSalesOrderInput {
     CustomerIdYomiName?: string;
 
     @Field({ nullable: true })
+    CreatedOnBehalfBy?: string;
+
+    @Field({ nullable: true })
+    ModifiedOnBehalfBy?: string;
+
+    @Field({ nullable: true })
     BillTo_Composite?: string;
 
     @Field({ nullable: true })
     ShipTo_Composite?: string;
+
+    @Field({ nullable: true })
+    ProcessId?: string;
+
+    @Field({ nullable: true })
+    StageId?: string;
+
+    @Field({ nullable: true })
+    EntityImageId?: string;
 
     @Field({ nullable: true })
     TraversedPath?: string;
@@ -27852,6 +28864,12 @@ export class UpdateSalesOrderInput {
 
     @Field({ nullable: true })
     LastOnHoldTime?: Date;
+
+    @Field({ nullable: true })
+    SLAId?: string;
+
+    @Field({ nullable: true })
+    SLAInvokedId?: string;
 
     @Field({ nullable: true })
     Acep_InstallmentStartDate?: Date;
@@ -27874,6 +28892,9 @@ export class UpdateSalesOrderInput {
     @Field({ nullable: true })
     Acep_InstallmentExpiryDate?: Date;
 
+    @Field({ nullable: true })
+    Acep_SEMPAMembershipId?: string;
+
     @Field(() => Int, { nullable: true })
     Acep_ChangeOrdertoInstallmenttype?: number;
 
@@ -27881,13 +28902,25 @@ export class UpdateSalesOrderInput {
     Acep_CCTransactionSucceeded?: boolean;
 
     @Field({ nullable: true })
+    Acep_ACEPMembershipHistoryId?: string;
+
+    @Field({ nullable: true })
     Acep_parentorderid?: string;
+
+    @Field({ nullable: true })
+    acep_orgorderforrefundid?: string;
 
     @Field({ nullable: true })
     Acep_expirationdate?: Date;
 
     @Field({ nullable: true })
+    Acep_ACEPMembershipId?: string;
+
+    @Field({ nullable: true })
     Acep_CCTransactionDetails?: string;
+
+    @Field({ nullable: true })
+    Acep_BillingOptionId?: string;
 
     @Field(() => Int, { nullable: true })
     Acep_installmenttype?: number;
@@ -27895,11 +28928,23 @@ export class UpdateSalesOrderInput {
     @Field({ nullable: true })
     Acep_GPOrderNumber?: string;
 
+    @Field({ nullable: true })
+    acep_eventregisterid?: string;
+
+    @Field({ nullable: true })
+    acep_batchid?: string;
+
+    @Field({ nullable: true })
+    acep_printrunid?: string;
+
     @Field(() => Int, { nullable: true })
     Acep_PaymentTypeCode?: number;
 
     @Field(() => Int, { nullable: true })
     Acep_installmentbilled?: number;
+
+    @Field({ nullable: true })
+    acep_eventexhibitorid?: string;
 
     @Field({ nullable: true })
     Acep_cyclestartdate?: Date;
@@ -27909,6 +28954,9 @@ export class UpdateSalesOrderInput {
 
     @Field(() => Int, { nullable: true })
     Acep_numberofinstallments?: number;
+
+    @Field({ nullable: true })
+    acep_cmeapprovalid?: string;
 
     @Field({ nullable: true })
     Acep_PostedDate?: Date;
@@ -27921,6 +28969,9 @@ export class UpdateSalesOrderInput {
 
     @Field(() => Boolean, { nullable: true })
     Acep_isrefund?: boolean;
+
+    @Field({ nullable: true })
+    Acep_EMRAMembershipId?: string;
 
     @Field(() => Int, { nullable: true })
     Eone_OrderStatus?: number;
@@ -27935,6 +28986,9 @@ export class UpdateSalesOrderInput {
     Eone_TestDate?: Date;
 
     @Field({ nullable: true })
+    acep_conferenceregistrationid?: string;
+
+    @Field({ nullable: true })
     Acep_InstallmentDate?: string;
 
     @Field(() => Int, { nullable: true })
@@ -27945,6 +28999,27 @@ export class UpdateSalesOrderInput {
 
     @Field({ nullable: true })
     Acep_PromoCode?: string;
+
+    @Field({ nullable: true })
+    eone_paymenttermsid?: string;
+
+    @Field({ nullable: true })
+    Acep_GroupBillId?: string;
+
+    @Field({ nullable: true })
+    acep_eventsponsorid?: string;
+
+    @Field({ nullable: true })
+    Acep_OrderTypeId?: string;
+
+    @Field({ nullable: true })
+    acep_salesorderid?: string;
+
+    @Field({ nullable: true })
+    eone_shippingmethodid?: string;
+
+    @Field({ nullable: true })
+    acep_membershipid?: string;
 
     @Field(() => Int, { nullable: true })
     acep_ordersource?: number;
@@ -27965,16 +29040,25 @@ export class UpdateSalesOrderInput {
     acep_TransactionID?: string;
 
     @Field({ nullable: true })
+    acep_OrderContact?: string;
+
+    @Field({ nullable: true })
     acep_AlternateToEmailAddresses?: string;
 
     @Field(() => Int, { nullable: true })
     acep_ReasonType?: number;
 
     @Field({ nullable: true })
+    acep_MeetingRegistrationId?: string;
+
+    @Field({ nullable: true })
     acep_shiptoemail?: string;
 
     @Field({ nullable: true })
     acep_TrackingNumber?: string;
+
+    @Field({ nullable: true })
+    acep_statementbatch?: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -27988,8 +29072,8 @@ export class RunSalesOrderViewResult {
     @Field(() => [SalesOrder_])
     Results: SalesOrder_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -28032,14 +29116,6 @@ export class SalesOrderResolver extends ResolverBase {
         return result;
     }
       
-    @FieldResolver(() => [client_membership_])
-    async client_membershipsArray(@Root() salesorder_: SalesOrder_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('client _memberships', userPayload);
-        const sSQL = `SELECT * FROM [client_crm].[vwclient_memberships] WHERE [Acep_CurrentCRMOrderId]='${salesorder_.SalesOrderId}' ` + this.getRowLevelSecurityWhereClause('client _memberships', userPayload, EntityPermissionType.Read, 'AND');
-        const result = this.ArrayMapFieldNamesToCodeNames('client _memberships', await dataSource.query(sSQL));
-        return result;
-    }
-          
     @FieldResolver(() => [SalesOrder_])
     async SalesOrdersArray(@Root() salesorder_: SalesOrder_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Sales Orders', userPayload);
@@ -28053,6 +29129,14 @@ export class SalesOrderResolver extends ResolverBase {
         this.CheckUserReadPermissions('Sales Order Details', userPayload);
         const sSQL = `SELECT * FROM [client_crm].[vwSalesOrderDetails] WHERE [SalesOrderId]='${salesorder_.SalesOrderId}' ` + this.getRowLevelSecurityWhereClause('Sales Order Details', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Sales Order Details', await dataSource.query(sSQL));
+        return result;
+    }
+          
+    @FieldResolver(() => [client_membership_])
+    async client_membershipsArray(@Root() salesorder_: SalesOrder_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('client _memberships', userPayload);
+        const sSQL = `SELECT * FROM [client_crm].[vwclient_memberships] WHERE [Acep_CurrentCRMOrderId]='${salesorder_.SalesOrderId}' ` + this.getRowLevelSecurityWhereClause('client _memberships', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('client _memberships', await dataSource.query(sSQL));
         return result;
     }
         
@@ -28416,14 +29500,23 @@ export class CreateSalesOrderDetailInput {
     @Field({ nullable: true })
     UoMIdName?: string;
 
+    @Field({ nullable: true })
+    OwnerId?: string;
+
     @Field(() => Int, { nullable: true })
     OwnerIdType?: number;
 
     @Field(() => Int, { nullable: true })
     SalesOrderStateCode?: number;
 
+    @Field({ nullable: true })
+    OwningBusinessUnit?: string;
+
     @Field(() => Boolean, { nullable: true })
     SalesOrderIsPriceLocked?: boolean;
+
+    @Field({ nullable: true })
+    OwningUser?: string;
 
     @Field({ nullable: true })
     SalesOrderIdName?: string;
@@ -28467,6 +29560,12 @@ export class CreateSalesOrderDetailInput {
     @Field({ nullable: true })
     acep_BillingOptionName?: string;
 
+    @Field({ nullable: true })
+    SalesOrderId?: string;
+
+    @Field({ nullable: true })
+    SalesRepId?: string;
+
     @Field(() => Boolean, { nullable: true })
     IsProductOverridden?: boolean;
 
@@ -28482,8 +29581,14 @@ export class CreateSalesOrderDetailInput {
     @Field(() => Float, { nullable: true })
     QuantityBackordered?: number;
 
+    @Field({ nullable: true })
+    UoMId?: string;
+
     @Field(() => Float, { nullable: true })
     QuantityCancelled?: number;
+
+    @Field({ nullable: true })
+    ProductId?: string;
 
     @Field({ nullable: true })
     RequestDeliveryBy?: Date;
@@ -28531,6 +29636,12 @@ export class CreateSalesOrderDetailInput {
     ShipTo_Line1?: string;
 
     @Field({ nullable: true })
+    CreatedBy?: string;
+
+    @Field({ nullable: true })
+    ModifiedBy?: string;
+
+    @Field({ nullable: true })
     ShipTo_Line2?: string;
 
     @Field({ nullable: true })
@@ -28569,6 +29680,9 @@ export class CreateSalesOrderDetailInput {
     @Field()
     VersionNumber: number;
 
+    @Field({ nullable: true })
+    ShipTo_AddressId?: string;
+
     @Field(() => Int, { nullable: true })
     TimeZoneRuleVersionNumber?: number;
 
@@ -28583,6 +29697,9 @@ export class CreateSalesOrderDetailInput {
 
     @Field({ nullable: true })
     OverriddenCreatedOn?: Date;
+
+    @Field({ nullable: true })
+    TransactionCurrencyId?: string;
 
     @Field(() => Float, { nullable: true })
     BaseAmount_Base?: number;
@@ -28602,14 +29719,26 @@ export class CreateSalesOrderDetailInput {
     @Field(() => Float, { nullable: true })
     ManualDiscountAmount_Base?: number;
 
+    @Field({ nullable: true })
+    CreatedOnBehalfBy?: string;
+
+    @Field({ nullable: true })
+    ModifiedOnBehalfBy?: string;
+
     @Field(() => Int, { nullable: true })
     SequenceNumber?: number;
+
+    @Field({ nullable: true })
+    ParentBundleId?: string;
 
     @Field(() => Int, { nullable: true })
     ProductTypeCode?: number;
 
     @Field(() => Int, { nullable: true })
     PropertyConfigurationStatus?: number;
+
+    @Field({ nullable: true })
+    ProductAssociationId?: string;
 
     @Field(() => Boolean, { nullable: true })
     Acep_IsPrimary?: boolean;
@@ -28630,6 +29759,9 @@ export class CreateSalesOrderDetailInput {
     acep_promocode?: string;
 
     @Field({ nullable: true })
+    acep_BillingOption?: string;
+
+    @Field({ nullable: true })
     acep_primaryemployer?: string;
 }
     
@@ -28642,14 +29774,23 @@ export class UpdateSalesOrderDetailInput {
     @Field({ nullable: true })
     UoMIdName?: string;
 
+    @Field({ nullable: true })
+    OwnerId?: string;
+
     @Field(() => Int, { nullable: true })
     OwnerIdType?: number;
 
     @Field(() => Int, { nullable: true })
     SalesOrderStateCode?: number;
 
+    @Field({ nullable: true })
+    OwningBusinessUnit?: string;
+
     @Field(() => Boolean, { nullable: true })
     SalesOrderIsPriceLocked?: boolean;
+
+    @Field({ nullable: true })
+    OwningUser?: string;
 
     @Field({ nullable: true })
     SalesOrderIdName?: string;
@@ -28696,6 +29837,12 @@ export class UpdateSalesOrderDetailInput {
     @Field()
     SalesOrderDetailId: string;
 
+    @Field({ nullable: true })
+    SalesOrderId?: string;
+
+    @Field({ nullable: true })
+    SalesRepId?: string;
+
     @Field(() => Boolean, { nullable: true })
     IsProductOverridden?: boolean;
 
@@ -28711,8 +29858,14 @@ export class UpdateSalesOrderDetailInput {
     @Field(() => Float, { nullable: true })
     QuantityBackordered?: number;
 
+    @Field({ nullable: true })
+    UoMId?: string;
+
     @Field(() => Float, { nullable: true })
     QuantityCancelled?: number;
+
+    @Field({ nullable: true })
+    ProductId?: string;
 
     @Field({ nullable: true })
     RequestDeliveryBy?: Date;
@@ -28760,6 +29913,12 @@ export class UpdateSalesOrderDetailInput {
     ShipTo_Line1?: string;
 
     @Field({ nullable: true })
+    CreatedBy?: string;
+
+    @Field({ nullable: true })
+    ModifiedBy?: string;
+
+    @Field({ nullable: true })
     ShipTo_Line2?: string;
 
     @Field({ nullable: true })
@@ -28798,6 +29957,9 @@ export class UpdateSalesOrderDetailInput {
     @Field()
     VersionNumber: number;
 
+    @Field({ nullable: true })
+    ShipTo_AddressId?: string;
+
     @Field(() => Int, { nullable: true })
     TimeZoneRuleVersionNumber?: number;
 
@@ -28812,6 +29974,9 @@ export class UpdateSalesOrderDetailInput {
 
     @Field({ nullable: true })
     OverriddenCreatedOn?: Date;
+
+    @Field({ nullable: true })
+    TransactionCurrencyId?: string;
 
     @Field(() => Float, { nullable: true })
     BaseAmount_Base?: number;
@@ -28831,14 +29996,26 @@ export class UpdateSalesOrderDetailInput {
     @Field(() => Float, { nullable: true })
     ManualDiscountAmount_Base?: number;
 
+    @Field({ nullable: true })
+    CreatedOnBehalfBy?: string;
+
+    @Field({ nullable: true })
+    ModifiedOnBehalfBy?: string;
+
     @Field(() => Int, { nullable: true })
     SequenceNumber?: number;
+
+    @Field({ nullable: true })
+    ParentBundleId?: string;
 
     @Field(() => Int, { nullable: true })
     ProductTypeCode?: number;
 
     @Field(() => Int, { nullable: true })
     PropertyConfigurationStatus?: number;
+
+    @Field({ nullable: true })
+    ProductAssociationId?: string;
 
     @Field(() => Boolean, { nullable: true })
     Acep_IsPrimary?: boolean;
@@ -28859,6 +30036,9 @@ export class UpdateSalesOrderDetailInput {
     acep_promocode?: string;
 
     @Field({ nullable: true })
+    acep_BillingOption?: string;
+
+    @Field({ nullable: true })
     acep_primaryemployer?: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
@@ -28873,8 +30053,8 @@ export class RunSalesOrderDetailViewResult {
     @Field(() => [SalesOrderDetail_])
     Results: SalesOrderDetail_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -29558,11 +30738,11 @@ export class Product_ {
     @Field(() => [Product_])
     ProductsArray: Product_[]; // Link to Products
     
-    @Field(() => [SalesOrderDetail_])
-    SalesOrderDetailsArray: SalesOrderDetail_[]; // Link to SalesOrderDetails
-    
     @Field(() => [ProductPriceLevel_])
     ProductPriceLevelsArray: ProductPriceLevel_[]; // Link to ProductPriceLevels
+    
+    @Field(() => [SalesOrderDetail_])
+    SalesOrderDetailsArray: SalesOrderDetail_[]; // Link to SalesOrderDetails
     
 }
         
@@ -29677,7 +30857,22 @@ export class CreateProductInput {
     DefaultUoMIdName?: string;
 
     @Field({ nullable: true })
+    DefaultUoMScheduleId?: string;
+
+    @Field({ nullable: true })
+    SubjectId?: string;
+
+    @Field({ nullable: true })
+    OrganizationId?: string;
+
+    @Field({ nullable: true })
     Name?: string;
+
+    @Field({ nullable: true })
+    DefaultUoMId?: string;
+
+    @Field({ nullable: true })
+    PriceLevelId?: string;
 
     @Field({ nullable: true })
     Description?: string;
@@ -29736,8 +30931,14 @@ export class CreateProductInput {
     @Field({ nullable: true })
     ModifiedOn?: Date;
 
+    @Field({ nullable: true })
+    CreatedBy?: string;
+
     @Field(() => Int, { nullable: true })
     StateCode?: number;
+
+    @Field({ nullable: true })
+    ModifiedBy?: string;
 
     @Field(() => Int, { nullable: true })
     StatusCode?: number;
@@ -29747,6 +30948,9 @@ export class CreateProductInput {
 
     @Field({ nullable: true })
     OverriddenCreatedOn?: Date;
+
+    @Field({ nullable: true })
+    TransactionCurrencyId?: string;
 
     @Field(() => Float, { nullable: true })
     ExchangeRate?: number;
@@ -29769,6 +30973,24 @@ export class CreateProductInput {
     @Field(() => Float, { nullable: true })
     StandardCost_Base?: number;
 
+    @Field({ nullable: true })
+    CreatedOnBehalfBy?: string;
+
+    @Field({ nullable: true })
+    ModifiedOnBehalfBy?: string;
+
+    @Field({ nullable: true })
+    EntityImageId?: string;
+
+    @Field({ nullable: true })
+    ProcessId?: string;
+
+    @Field({ nullable: true })
+    StageId?: string;
+
+    @Field({ nullable: true })
+    ParentProductId?: string;
+
     @Field(() => Int, { nullable: true })
     ProductStructure?: number;
 
@@ -29787,17 +31009,29 @@ export class CreateProductInput {
     @Field({ nullable: true })
     HierarchyPath?: string;
 
+    @Field({ nullable: true })
+    CreatedByExternalParty?: string;
+
+    @Field({ nullable: true })
+    ModifiedByExternalParty?: string;
+
     @Field(() => Float, { nullable: true })
     Eone_QuantityDamaged?: number;
 
     @Field(() => Boolean, { nullable: true })
     Acep_AllowWebQuantity?: boolean;
 
+    @Field({ nullable: true })
+    acep_courseproductid?: string;
+
     @Field(() => Int, { nullable: true })
     Acep_Duration?: number;
 
     @Field(() => Boolean, { nullable: true })
     Acep_Print?: boolean;
+
+    @Field({ nullable: true })
+    acep_subscriptiondetailid?: string;
 
     @Field(() => Int, { nullable: true })
     Acep_IntegrationPartnerCode?: number;
@@ -29845,7 +31079,13 @@ export class CreateProductInput {
     Acep_SalesTaxOptionCode?: number;
 
     @Field({ nullable: true })
+    acep_eventproductid?: string;
+
+    @Field({ nullable: true })
     Acep_Date?: Date;
+
+    @Field({ nullable: true })
+    Acep_PublicationId?: string;
 
     @Field(() => Int, { nullable: true })
     Acep_MultiYearValue?: number;
@@ -29858,6 +31098,9 @@ export class CreateProductInput {
 
     @Field(() => Boolean, { nullable: true })
     Acep_IncludeinSubscriptionIntegration?: boolean;
+
+    @Field({ nullable: true })
+    acep_productid?: string;
 
     @Field(() => Float, { nullable: true })
     Eone_QuantityInService?: number;
@@ -29910,8 +31153,14 @@ export class CreateProductInput {
     @Field(() => Int, { nullable: true })
     acep_ACEPRank?: number;
 
+    @Field({ nullable: true })
+    acep_CMEActivityId?: string;
+
     @Field(() => Int, { nullable: true })
     acep_Color?: number;
+
+    @Field({ nullable: true })
+    acep_CountryofOriginId?: string;
 
     @Field({ nullable: true })
     acep_Dimensions?: string;
@@ -29941,7 +31190,13 @@ export class CreateProductInput {
     acep_NumberofVariants?: number;
 
     @Field({ nullable: true })
+    acep_ProductTypeId?: string;
+
+    @Field({ nullable: true })
     acep_ProductURL?: string;
+
+    @Field({ nullable: true })
+    acep_PublisherId?: string;
 
     @Field({ nullable: true })
     acep_PurchaseURL?: string;
@@ -29957,6 +31212,9 @@ export class CreateProductInput {
 
     @Field({ nullable: true })
     acep_UPC?: string;
+
+    @Field({ nullable: true })
+    acep_VariantParentId?: string;
 
     @Field({ nullable: true })
     acep_About?: string;
@@ -29976,6 +31234,9 @@ export class CreateProductInput {
     @Field({ nullable: true })
     acep_Edition?: string;
 
+    @Field({ nullable: true })
+    acep_OrderTypeId?: string;
+
     @Field(() => Boolean, { nullable: true })
     acep_PublishtoStore?: boolean;
 
@@ -29984,6 +31245,9 @@ export class CreateProductInput {
 
     @Field(() => Boolean, { nullable: true })
     acep_ecmehidden?: boolean;
+
+    @Field({ nullable: true })
+    acep_ecmeproducttypeid?: string;
 
     @Field({ nullable: true })
     acep_importsource?: string;
@@ -30110,7 +31374,22 @@ export class UpdateProductInput {
     ProductId: string;
 
     @Field({ nullable: true })
+    DefaultUoMScheduleId?: string;
+
+    @Field({ nullable: true })
+    SubjectId?: string;
+
+    @Field({ nullable: true })
+    OrganizationId?: string;
+
+    @Field({ nullable: true })
     Name?: string;
+
+    @Field({ nullable: true })
+    DefaultUoMId?: string;
+
+    @Field({ nullable: true })
+    PriceLevelId?: string;
 
     @Field({ nullable: true })
     Description?: string;
@@ -30169,8 +31448,14 @@ export class UpdateProductInput {
     @Field({ nullable: true })
     ModifiedOn?: Date;
 
+    @Field({ nullable: true })
+    CreatedBy?: string;
+
     @Field(() => Int, { nullable: true })
     StateCode?: number;
+
+    @Field({ nullable: true })
+    ModifiedBy?: string;
 
     @Field(() => Int, { nullable: true })
     StatusCode?: number;
@@ -30180,6 +31465,9 @@ export class UpdateProductInput {
 
     @Field({ nullable: true })
     OverriddenCreatedOn?: Date;
+
+    @Field({ nullable: true })
+    TransactionCurrencyId?: string;
 
     @Field(() => Float, { nullable: true })
     ExchangeRate?: number;
@@ -30202,6 +31490,24 @@ export class UpdateProductInput {
     @Field(() => Float, { nullable: true })
     StandardCost_Base?: number;
 
+    @Field({ nullable: true })
+    CreatedOnBehalfBy?: string;
+
+    @Field({ nullable: true })
+    ModifiedOnBehalfBy?: string;
+
+    @Field({ nullable: true })
+    EntityImageId?: string;
+
+    @Field({ nullable: true })
+    ProcessId?: string;
+
+    @Field({ nullable: true })
+    StageId?: string;
+
+    @Field({ nullable: true })
+    ParentProductId?: string;
+
     @Field(() => Int, { nullable: true })
     ProductStructure?: number;
 
@@ -30220,17 +31526,29 @@ export class UpdateProductInput {
     @Field({ nullable: true })
     HierarchyPath?: string;
 
+    @Field({ nullable: true })
+    CreatedByExternalParty?: string;
+
+    @Field({ nullable: true })
+    ModifiedByExternalParty?: string;
+
     @Field(() => Float, { nullable: true })
     Eone_QuantityDamaged?: number;
 
     @Field(() => Boolean, { nullable: true })
     Acep_AllowWebQuantity?: boolean;
 
+    @Field({ nullable: true })
+    acep_courseproductid?: string;
+
     @Field(() => Int, { nullable: true })
     Acep_Duration?: number;
 
     @Field(() => Boolean, { nullable: true })
     Acep_Print?: boolean;
+
+    @Field({ nullable: true })
+    acep_subscriptiondetailid?: string;
 
     @Field(() => Int, { nullable: true })
     Acep_IntegrationPartnerCode?: number;
@@ -30278,7 +31596,13 @@ export class UpdateProductInput {
     Acep_SalesTaxOptionCode?: number;
 
     @Field({ nullable: true })
+    acep_eventproductid?: string;
+
+    @Field({ nullable: true })
     Acep_Date?: Date;
+
+    @Field({ nullable: true })
+    Acep_PublicationId?: string;
 
     @Field(() => Int, { nullable: true })
     Acep_MultiYearValue?: number;
@@ -30291,6 +31615,9 @@ export class UpdateProductInput {
 
     @Field(() => Boolean, { nullable: true })
     Acep_IncludeinSubscriptionIntegration?: boolean;
+
+    @Field({ nullable: true })
+    acep_productid?: string;
 
     @Field(() => Float, { nullable: true })
     Eone_QuantityInService?: number;
@@ -30343,8 +31670,14 @@ export class UpdateProductInput {
     @Field(() => Int, { nullable: true })
     acep_ACEPRank?: number;
 
+    @Field({ nullable: true })
+    acep_CMEActivityId?: string;
+
     @Field(() => Int, { nullable: true })
     acep_Color?: number;
+
+    @Field({ nullable: true })
+    acep_CountryofOriginId?: string;
 
     @Field({ nullable: true })
     acep_Dimensions?: string;
@@ -30374,7 +31707,13 @@ export class UpdateProductInput {
     acep_NumberofVariants?: number;
 
     @Field({ nullable: true })
+    acep_ProductTypeId?: string;
+
+    @Field({ nullable: true })
     acep_ProductURL?: string;
+
+    @Field({ nullable: true })
+    acep_PublisherId?: string;
 
     @Field({ nullable: true })
     acep_PurchaseURL?: string;
@@ -30390,6 +31729,9 @@ export class UpdateProductInput {
 
     @Field({ nullable: true })
     acep_UPC?: string;
+
+    @Field({ nullable: true })
+    acep_VariantParentId?: string;
 
     @Field({ nullable: true })
     acep_About?: string;
@@ -30409,6 +31751,9 @@ export class UpdateProductInput {
     @Field({ nullable: true })
     acep_Edition?: string;
 
+    @Field({ nullable: true })
+    acep_OrderTypeId?: string;
+
     @Field(() => Boolean, { nullable: true })
     acep_PublishtoStore?: boolean;
 
@@ -30417,6 +31762,9 @@ export class UpdateProductInput {
 
     @Field(() => Boolean, { nullable: true })
     acep_ecmehidden?: boolean;
+
+    @Field({ nullable: true })
+    acep_ecmeproducttypeid?: string;
 
     @Field({ nullable: true })
     acep_importsource?: string;
@@ -30439,8 +31787,8 @@ export class RunProductViewResult {
     @Field(() => [Product_])
     Results: Product_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -30491,19 +31839,19 @@ export class ProductResolver extends ResolverBase {
         return result;
     }
           
-    @FieldResolver(() => [SalesOrderDetail_])
-    async SalesOrderDetailsArray(@Root() product_: Product_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('Sales Order Details', userPayload);
-        const sSQL = `SELECT * FROM [client_crm].[vwSalesOrderDetails] WHERE [ProductId]='${product_.ProductId}' ` + this.getRowLevelSecurityWhereClause('Sales Order Details', userPayload, EntityPermissionType.Read, 'AND');
-        const result = this.ArrayMapFieldNamesToCodeNames('Sales Order Details', await dataSource.query(sSQL));
-        return result;
-    }
-          
     @FieldResolver(() => [ProductPriceLevel_])
     async ProductPriceLevelsArray(@Root() product_: Product_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Product Price Levels', userPayload);
         const sSQL = `SELECT * FROM [client_crm].[vwProductPriceLevels] WHERE [ProductId]='${product_.ProductId}' ` + this.getRowLevelSecurityWhereClause('Product Price Levels', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Product Price Levels', await dataSource.query(sSQL));
+        return result;
+    }
+          
+    @FieldResolver(() => [SalesOrderDetail_])
+    async SalesOrderDetailsArray(@Root() product_: Product_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Sales Order Details', userPayload);
+        const sSQL = `SELECT * FROM [client_crm].[vwSalesOrderDetails] WHERE [ProductId]='${product_.ProductId}' ` + this.getRowLevelSecurityWhereClause('Sales Order Details', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Sales Order Details', await dataSource.query(sSQL));
         return result;
     }
         
@@ -31676,8 +33024,8 @@ export class RunCustomerAddressViewResult {
     @Field(() => [CustomerAddress_])
     Results: CustomerAddress_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -37206,8 +38554,8 @@ export class RunSalesLineItem__client_membershipViewResult {
     @Field(() => [SalesLineItem__client_membership_])
     Results: SalesLineItem__client_membership_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -38315,8 +39663,8 @@ export class RunItemViewResult {
     @Field(() => [Item_])
     Results: Item_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -39035,8 +40383,8 @@ export class Customer_ {
     @MaxLength(2042)
     Writeoff_Account_Number_For_Drillback?: string;
         
-    @Field(() => [SalesLineItem__client_membership_])
-    SalesLineItems__client_membershipArray: SalesLineItem__client_membership_[]; // Link to SalesLineItems__client_membership
+    @Field(() => [OrganizationLink_])
+    OrganizationLinksArray: OrganizationLink_[]; // Link to OrganizationLinks
     
     @Field(() => [CustomerAddress_])
     CustomerAddressArray: CustomerAddress_[]; // Link to CustomerAddress
@@ -39044,8 +40392,8 @@ export class Customer_ {
     @Field(() => [PersonLink_])
     PersonLinksArray: PersonLink_[]; // Link to PersonLinks
     
-    @Field(() => [OrganizationLink_])
-    OrganizationLinksArray: OrganizationLink_[]; // Link to OrganizationLinks
+    @Field(() => [SalesLineItem__client_membership_])
+    SalesLineItems__client_membershipArray: SalesLineItem__client_membership_[]; // Link to SalesLineItems__client_membership
     
 }
         
@@ -40165,8 +41513,8 @@ export class RunCustomerViewResult {
     @Field(() => [Customer_])
     Results: Customer_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -40209,11 +41557,11 @@ export class CustomerResolver extends ResolverBase {
         return result;
     }
       
-    @FieldResolver(() => [SalesLineItem__client_membership_])
-    async SalesLineItems__client_membershipArray(@Root() customer_: Customer_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('Sales Line Items__client_membership', userPayload);
-        const sSQL = `SELECT * FROM [client_membership].[vwSalesLineItems__client_membership] WHERE [Customer Number]='${customer_.Customer_Number}' ` + this.getRowLevelSecurityWhereClause('Sales Line Items__client_membership', userPayload, EntityPermissionType.Read, 'AND');
-        const result = this.ArrayMapFieldNamesToCodeNames('Sales Line Items__client_membership', await dataSource.query(sSQL));
+    @FieldResolver(() => [OrganizationLink_])
+    async OrganizationLinksArray(@Root() customer_: Customer_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Organization Links', userPayload);
+        const sSQL = `SELECT * FROM [common].[vwOrganizationLinks] WHERE [MembershipGreatPlainsCustomerID]='${customer_.Customer_Number}' ` + this.getRowLevelSecurityWhereClause('Organization Links', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Organization Links', await dataSource.query(sSQL));
         return result;
     }
           
@@ -40233,11 +41581,11 @@ export class CustomerResolver extends ResolverBase {
         return result;
     }
           
-    @FieldResolver(() => [OrganizationLink_])
-    async OrganizationLinksArray(@Root() customer_: Customer_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('Organization Links', userPayload);
-        const sSQL = `SELECT * FROM [common].[vwOrganizationLinks] WHERE [MembershipGreatPlainsCustomerID]='${customer_.Customer_Number}' ` + this.getRowLevelSecurityWhereClause('Organization Links', userPayload, EntityPermissionType.Read, 'AND');
-        const result = this.ArrayMapFieldNamesToCodeNames('Organization Links', await dataSource.query(sSQL));
+    @FieldResolver(() => [SalesLineItem__client_membership_])
+    async SalesLineItems__client_membershipArray(@Root() customer_: Customer_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Sales Line Items__client_membership', userPayload);
+        const sSQL = `SELECT * FROM [client_membership].[vwSalesLineItems__client_membership] WHERE [Customer Number]='${customer_.Customer_Number}' ` + this.getRowLevelSecurityWhereClause('Sales Line Items__client_membership', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Sales Line Items__client_membership', await dataSource.query(sSQL));
         return result;
     }
         
@@ -43805,8 +45153,8 @@ export class RunSalesTransaction__client_membershipViewResult {
     @Field(() => [SalesTransaction__client_membership_])
     Results: SalesTransaction__client_membership_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;

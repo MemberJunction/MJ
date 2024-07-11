@@ -18,7 +18,7 @@
                     
                     <mj-tab Name="Reports" 
                         [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: 93}">
+                        [Props]="{EntityRelationshipID: 'FB957F29-EA8B-4A4F-944D-1F8D73955AC5'}">
                         <span class="fa-solid fa-chart-line tab-header-icon"></span>Reports
                     </mj-tab>
                     <mj-tab-body>
@@ -28,12 +28,12 @@
                             [AllowLoad]="IsCurrentTab('Reports')"  
                             [EditMode]="GridEditMode()"  
                             [BottomMargin]="GridBottomMargin">
-                        </mj-user-view-grid>
+                        </mj-user-view-grid>                    
                     </mj-tab-body>
 
                     <mj-tab Name="Workflow Runs" 
                         [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: 94}">
+                        [Props]="{EntityRelationshipID: '65EB838F-F461-4196-AD9E-BDFAA777B0C3'}">
                         Workflow Runs
                     </mj-tab>
                     <mj-tab-body>
@@ -43,7 +43,7 @@
                             [AllowLoad]="IsCurrentTab('Workflow Runs')"  
                             [EditMode]="GridEditMode()"  
                             [BottomMargin]="GridBottomMargin">
-                        </mj-user-view-grid>
+                        </mj-user-view-grid>                    
                     </mj-tab-body>
                 </mj-tabstrip>
     </form>

@@ -1,8 +1,7 @@
 {
   "name": "@memberjunction/ai-vector-sync",
-  "version": "1.7.1",
-  "repository": "github:MemberJunction/MJ",
-  "description": "MemberJunction: AI Vector/Entity Sync Package - handles synchronization between Vector DB and MJ CDP Data",
+  "version": "1.8.1",
+  "description": "MemberJunction: AI Vector/Entity Sync Package - handles synchronization between MemberJunction entities and vector databases",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": [
@@ -11,18 +10,17 @@
   "scripts": {
     "start": "ts-node-dev src/index.ts",
     "build": "tsc",
-    "watch": "tsc -w",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "author": "MemberJunction.com",
   "license": "ISC",
   "dependencies": {
-    "@memberjunction/ai": "1.7.1",
-    "@memberjunction/ai-vectordb": "1.7.1",
-    "@memberjunction/ai-vectors": "1.7.1",
-    "@memberjunction/aiengine": "1.7.1",
-    "@memberjunction/core": "1.7.1",
-    "@memberjunction/global": "1.7.1",
+    "@memberjunction/ai": "1.8.1",
+    "@memberjunction/ai-vectordb": "1.8.1",
+    "@memberjunction/ai-vectors": "1.8.1",
+    "@memberjunction/aiengine": "1.8.1",
+    "@memberjunction/core": "1.8.1",
+    "@memberjunction/global": "1.8.1",
     "dotenv": "^16.4.1",
     "typeorm": "^0.3.20"
   },

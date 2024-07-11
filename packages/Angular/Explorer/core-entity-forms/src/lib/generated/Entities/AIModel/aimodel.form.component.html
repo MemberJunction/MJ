@@ -18,7 +18,7 @@
                     
                     <mj-tab Name="AI Actions" 
                         [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: 102}">
+                        [Props]="{EntityRelationshipID: '24996A46-F936-4A43-A7EA-2558CAE9612F'}">
                         AI Actions
                     </mj-tab>
                     <mj-tab-body>
@@ -28,57 +28,12 @@
                             [AllowLoad]="IsCurrentTab('AI Actions')"  
                             [EditMode]="GridEditMode()"  
                             [BottomMargin]="GridBottomMargin">
-                        </mj-user-view-grid>
-                    </mj-tab-body>
-
-                    <mj-tab Name="AI Model Actions" 
-                        [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: 103}">
-                        AI Model Actions
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('AI Model Actions')"  
-                            [NewRecordValues]="NewRecordValues('AI Model Actions')"
-                            [AllowLoad]="IsCurrentTab('AI Model Actions')"  
-                            [EditMode]="GridEditMode()"  
-                            [BottomMargin]="GridBottomMargin">
-                        </mj-user-view-grid>
-                    </mj-tab-body>
-
-                    <mj-tab Name="Entity AI Actions" 
-                        [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: 104}">
-                        Entity AI Actions
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Entity AI Actions')"  
-                            [NewRecordValues]="NewRecordValues('Entity AI Actions')"
-                            [AllowLoad]="IsCurrentTab('Entity AI Actions')"  
-                            [EditMode]="GridEditMode()"  
-                            [BottomMargin]="GridBottomMargin">
-                        </mj-user-view-grid>
-                    </mj-tab-body>
-
-                    <mj-tab Name="Vector Indexes" 
-                        [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: 163}">
-                        Vector Indexes
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Vector Indexes')"  
-                            [NewRecordValues]="NewRecordValues('Vector Indexes')"
-                            [AllowLoad]="IsCurrentTab('Vector Indexes')"  
-                            [EditMode]="GridEditMode()"  
-                            [BottomMargin]="GridBottomMargin">
-                        </mj-user-view-grid>
+                        </mj-user-view-grid>                    
                     </mj-tab-body>
 
                     <mj-tab Name="Entity Documents" 
                         [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: 199}">
+                        [Props]="{EntityRelationshipID: '1D2B1E7C-8687-43E3-ADDF-3920FE15E262'}">
                         Entity Documents
                     </mj-tab>
                     <mj-tab-body>
@@ -88,7 +43,52 @@
                             [AllowLoad]="IsCurrentTab('Entity Documents')"  
                             [EditMode]="GridEditMode()"  
                             [BottomMargin]="GridBottomMargin">
-                        </mj-user-view-grid>
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Entity AI Actions" 
+                        [Visible]="record.IsSaved" 
+                        [Props]="{EntityRelationshipID: '1486CB4C-71BB-4E9E-B384-8531645E502F'}">
+                        Entity AI Actions
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Entity AI Actions')"  
+                            [NewRecordValues]="NewRecordValues('Entity AI Actions')"
+                            [AllowLoad]="IsCurrentTab('Entity AI Actions')"  
+                            [EditMode]="GridEditMode()"  
+                            [BottomMargin]="GridBottomMargin">
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="AI Model Actions" 
+                        [Visible]="record.IsSaved" 
+                        [Props]="{EntityRelationshipID: 'C4B5759A-40F3-4C20-9B12-A2F40A176C24'}">
+                        AI Model Actions
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('AI Model Actions')"  
+                            [NewRecordValues]="NewRecordValues('AI Model Actions')"
+                            [AllowLoad]="IsCurrentTab('AI Model Actions')"  
+                            [EditMode]="GridEditMode()"  
+                            [BottomMargin]="GridBottomMargin">
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Vector Indexes" 
+                        [Visible]="record.IsSaved" 
+                        [Props]="{EntityRelationshipID: '57722FAC-059C-4827-9301-BBF769AC4FF5'}">
+                        Vector Indexes
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Vector Indexes')"  
+                            [NewRecordValues]="NewRecordValues('Vector Indexes')"
+                            [AllowLoad]="IsCurrentTab('Vector Indexes')"  
+                            [EditMode]="GridEditMode()"  
+                            [BottomMargin]="GridBottomMargin">
+                        </mj-user-view-grid>                    
                     </mj-tab-body>
                 </mj-tabstrip>
     </form>

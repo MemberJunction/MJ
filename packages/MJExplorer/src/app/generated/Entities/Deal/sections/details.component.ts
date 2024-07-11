@@ -29,7 +29,6 @@ import { DealEntity } from 'mj_generatedentities';
             FieldName="CompanyIntegrationID"
             Type="numerictextbox"
             [EditMode]="EditMode"
-            LinkType="Record"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -38,6 +37,7 @@ import { DealEntity } from 'mj_generatedentities';
             Type="numerictextbox"
             [EditMode]="EditMode"
             LinkType="Record"
+            LinkComponentType="Search"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -46,6 +46,7 @@ import { DealEntity } from 'mj_generatedentities';
             Type="numerictextbox"
             [EditMode]="EditMode"
             LinkType="Record"
+            LinkComponentType="Search"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -95,7 +96,6 @@ import { DealEntity } from 'mj_generatedentities';
             FieldName="EmployeeID"
             Type="numerictextbox"
             [EditMode]="EditMode"
-            LinkType="Record"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -153,6 +153,7 @@ import { DealEntity } from 'mj_generatedentities';
             Type="numerictextbox"
             [EditMode]="EditMode"
             LinkType="Record"
+            LinkComponentType="Search"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -161,6 +162,7 @@ import { DealEntity } from 'mj_generatedentities';
             Type="numerictextbox"
             [EditMode]="EditMode"
             LinkType="Record"
+            LinkComponentType="Search"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -169,6 +171,7 @@ import { DealEntity } from 'mj_generatedentities';
             Type="numerictextbox"
             [EditMode]="EditMode"
             LinkType="Record"
+            LinkComponentType="Search"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"

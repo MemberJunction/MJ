@@ -18,7 +18,7 @@
                     
                     <mj-tab Name="Templates" 
                         [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: 278}">
+                        [Props]="{EntityRelationshipID: '31A0FE70-F2A2-4679-B794-2951B9331858'}">
                         <span class="fa-regular fa-rectangle-list tab-header-icon"></span>Templates
                     </mj-tab>
                     <mj-tab-body>
@@ -28,12 +28,12 @@
                             [AllowLoad]="IsCurrentTab('Templates')"  
                             [EditMode]="GridEditMode()"  
                             [BottomMargin]="GridBottomMargin">
-                        </mj-user-view-grid>
+                        </mj-user-view-grid>                    
                     </mj-tab-body>
 
                     <mj-tab Name="Template Categories" 
                         [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: 279}">
+                        [Props]="{EntityRelationshipID: '7A981F77-98A7-4133-B13D-8EC82188E574'}">
                         Template Categories
                     </mj-tab>
                     <mj-tab-body>
@@ -43,7 +43,7 @@
                             [AllowLoad]="IsCurrentTab('Template Categories')"  
                             [EditMode]="GridEditMode()"  
                             [BottomMargin]="GridBottomMargin">
-                        </mj-user-view-grid>
+                        </mj-user-view-grid>                    
                     </mj-tab-body>
                 </mj-tabstrip>
     </form>

@@ -18,7 +18,7 @@ export class ApplicationViewComponent extends BaseBrowserComponent implements On
     @ViewChild('entityRow') entityRowRef: Element | undefined;
     @ViewChild('userViewDialog') viewPropertiesDialog!: UserViewPropertiesDialogComponent;
 
-    @Input() public categoryEntityID!: number;
+    @Input() public categoryEntityID!: string;
 
     public currentlySelectedAppEntity: EntityEntity | undefined;
 
@@ -59,7 +59,7 @@ export class ApplicationViewComponent extends BaseBrowserComponent implements On
                 // next up we need to find the UserApplication record based on the app and the current user
                 const userAppResult = await rv.RunView<UserApplicationEntity>({
                     EntityName: "User Applications",
-                    ExtraFilter: `UserID=${md.CurrentUser.ID} AND ApplicationID=${this.app.ID}`,
+                    ExtraFilter: `UserID='${md.CurrentUser.ID}' AND ApplicationID='${this.app.ID}'`,
                     ResultType: 'entity_object'
                 })
                 if (!userAppResult || userAppResult.Success === false || userAppResult.Results.length === 0)
@@ -74,7 +74,7 @@ export class ApplicationViewComponent extends BaseBrowserComponent implements On
                 const userAppEntities = await rv.RunView<UserApplicationEntityEntity>({
                   EntityName: 'User Application Entities',
                   ResultType: 'entity_object',
-                  ExtraFilter: `UserApplicationID = ${this.userApp!.ID}`,
+                  ExtraFilter: `UserApplicationID = '${this.userApp!.ID}'`,
                   OrderBy: 'Sequence'
                 })
                 if (userAppEntities && userAppEntities.Success) {
@@ -138,7 +138,7 @@ export class ApplicationViewComponent extends BaseBrowserComponent implements On
           const userAppEntities = await rv.RunView<UserApplicationEntityEntity>({
             EntityName: 'User Application Entities',
             ResultType: 'entity_object',
-            ExtraFilter: `UserApplicationID = ${this.userApp!.ID}`,
+            ExtraFilter: `UserApplicationID = '${this.userApp!.ID}'`,
             OrderBy: 'Sequence'
           })
 
@@ -153,14 +153,15 @@ export class ApplicationViewComponent extends BaseBrowserComponent implements On
             const existing = existingUserAppEntities.find(uae => uae.EntityID === e.ID);
             if (existing) {
               existing.Sequence = index;
+              existing.EntityID = e.ID;
               userAppEntitiesToSave.push(existing);
             } 
             else {
               // this is a new app entity that the user has selected
               const newApp = await md.GetEntityObject<UserApplicationEntityEntity>("User Application Entities");
               newApp.UserApplicationID = this.userApp!.ID;
-              newApp.EntityID = e.ID;
               newApp.Sequence = index;
+              newApp.EntityID = e.ID;
               userAppEntitiesToSave.push(newApp);
             }
           }
@@ -209,7 +210,7 @@ export class ApplicationViewComponent extends BaseBrowserComponent implements On
         this.currentlySelectedAppEntity = entity;
         
         if(this.selectedFolderID){
-            let viewResult: Folder[] = await super.RunView(this.categoryEntityName, `ID=${this.selectedFolderID}`);
+            let viewResult: Folder[] = await super.RunView(this.categoryEntityName, `ID='${this.selectedFolderID}'`);
             if(viewResult.length > 0){
                 this.pageTitle = viewResult[0].Name;
             }
@@ -219,11 +220,11 @@ export class ApplicationViewComponent extends BaseBrowserComponent implements On
         }
 
         const md = new Metadata();
-        const parentFolderIDFilter: string = this.selectedFolderID ? `ParentID=${this.selectedFolderID}` : 'ParentID IS NULL';
-        const categoryFilter: string = `UserID=${md.CurrentUser.ID} AND EntityID=${this.currentlySelectedAppEntity.ID} AND ` + parentFolderIDFilter;
+        const parentFolderIDFilter: string = this.selectedFolderID ? `ParentID='${this.selectedFolderID}'` : 'ParentID IS NULL';
+        const categoryFilter: string = `UserID='${md.CurrentUser.ID}' AND EntityID='${this.currentlySelectedAppEntity.ID}' AND ` + parentFolderIDFilter;
         
-        const categoryIDFilter: string = this.selectedFolderID ? `CategoryID=${this.selectedFolderID}` : 'CategoryID IS NULL';
-        const userViewFilter: string = `UserID = ${md.CurrentUser.ID} AND EntityID = ${this.currentlySelectedAppEntity.ID} AND ` + categoryIDFilter;
+        const categoryIDFilter: string = this.selectedFolderID ? `CategoryID='${this.selectedFolderID}'` : 'CategoryID IS NULL';
+        const userViewFilter: string = `UserID = '${md.CurrentUser.ID}' AND EntityID='${this.currentlySelectedAppEntity.ID}' AND ` + categoryIDFilter;
 
         await super.LoadData({
             sortItemsAfterLoad: true, 

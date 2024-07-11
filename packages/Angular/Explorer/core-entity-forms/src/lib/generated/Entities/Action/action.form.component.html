@@ -36,7 +36,7 @@
                     
                     <mj-tab Name="Params" 
                         [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: 259}">
+                        [Props]="{EntityRelationshipID: '62F6AB25-BC3C-4D38-83FF-C2822F51D85D'}">
                         Params
                     </mj-tab>
                     <mj-tab-body>
@@ -46,12 +46,12 @@
                             [AllowLoad]="IsCurrentTab('Params')"  
                             [EditMode]="GridEditMode()"  
                             [BottomMargin]="GridBottomMargin">
-                        </mj-user-view-grid>
+                        </mj-user-view-grid>                    
                     </mj-tab-body>
 
                     <mj-tab Name="Libraries" 
                         [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: 260}">
+                        [Props]="{EntityRelationshipID: '505BF918-FFFE-438A-A018-B266D1F978A6'}">
                         <span class="fa-solid fa-book tab-header-icon"></span>Libraries
                     </mj-tab>
                     <mj-tab-body>
@@ -61,12 +61,27 @@
                             [AllowLoad]="IsCurrentTab('Libraries')"  
                             [EditMode]="GridEditMode()"  
                             [BottomMargin]="GridBottomMargin">
-                        </mj-user-view-grid>
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Scheduled Actions" 
+                        [Visible]="record.IsSaved" 
+                        [Props]="{EntityRelationshipID: '2F05DA9F-A83B-EF11-86D4-0022481D1B23'}">
+                        Scheduled Actions
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Scheduled Actions')"  
+                            [NewRecordValues]="NewRecordValues('Scheduled Actions')"
+                            [AllowLoad]="IsCurrentTab('Scheduled Actions')"  
+                            [EditMode]="GridEditMode()"  
+                            [BottomMargin]="GridBottomMargin">
+                        </mj-user-view-grid>                    
                     </mj-tab-body>
 
                     <mj-tab Name="Result Codes" 
                         [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: 252}">
+                        [Props]="{EntityRelationshipID: '23D9B49F-51A7-48A6-BD14-78F56792B2B3'}">
                         Result Codes
                     </mj-tab>
                     <mj-tab-body>
@@ -76,12 +91,12 @@
                             [AllowLoad]="IsCurrentTab('Result Codes')"  
                             [EditMode]="GridEditMode()"  
                             [BottomMargin]="GridBottomMargin">
-                        </mj-user-view-grid>
+                        </mj-user-view-grid>                    
                     </mj-tab-body>
 
                     <mj-tab Name="Action Contexts" 
                         [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: 253}">
+                        [Props]="{EntityRelationshipID: '897595E5-B69B-4E38-9907-EB73CF2327E4'}">
                         Action Contexts
                     </mj-tab>
                     <mj-tab-body>
@@ -91,12 +106,12 @@
                             [AllowLoad]="IsCurrentTab('Action Contexts')"  
                             [EditMode]="GridEditMode()"  
                             [BottomMargin]="GridBottomMargin">
-                        </mj-user-view-grid>
+                        </mj-user-view-grid>                    
                     </mj-tab-body>
 
                     <mj-tab Name="Entity Actions" 
                         [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: 255}">
+                        [Props]="{EntityRelationshipID: '6452B76C-DB27-4933-AF1D-0494DEC75D3D'}">
                         Entity Actions
                     </mj-tab>
                     <mj-tab-body>
@@ -106,12 +121,12 @@
                             [AllowLoad]="IsCurrentTab('Entity Actions')"  
                             [EditMode]="GridEditMode()"  
                             [BottomMargin]="GridBottomMargin">
-                        </mj-user-view-grid>
+                        </mj-user-view-grid>                    
                     </mj-tab-body>
 
                     <mj-tab Name="Execution Logs" 
                         [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: 256}">
+                        [Props]="{EntityRelationshipID: '609D0384-5DFB-4165-B6A8-1FB6568F178B'}">
                         Execution Logs
                     </mj-tab>
                     <mj-tab-body>
@@ -121,12 +136,12 @@
                             [AllowLoad]="IsCurrentTab('Execution Logs')"  
                             [EditMode]="GridEditMode()"  
                             [BottomMargin]="GridBottomMargin">
-                        </mj-user-view-grid>
+                        </mj-user-view-grid>                    
                     </mj-tab-body>
 
                     <mj-tab Name="Authorizations" 
                         [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: 250}">
+                        [Props]="{EntityRelationshipID: '2AAA2E1B-A307-40F5-9FE0-B564B94076C2'}">
                         Authorizations
                     </mj-tab>
                     <mj-tab-body>
@@ -136,7 +151,7 @@
                             [AllowLoad]="IsCurrentTab('Authorizations')"  
                             [EditMode]="GridEditMode()"  
                             [BottomMargin]="GridBottomMargin">
-                        </mj-user-view-grid>
+                        </mj-user-view-grid>                    
                     </mj-tab-body>
                 </mj-tabstrip>
             </kendo-splitter-pane>

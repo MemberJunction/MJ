@@ -1,5 +1,5 @@
-import { BaseEngine, BaseEnginePropertyConfig, UserInfo } from "@memberjunction/core";
-import { TemplateCategoryEntity, TemplateContentEntity, TemplateContentTypeEntity, TemplateParamEntity } from "@memberjunction/core-entities";
+import { UserInfo } from "@memberjunction/core";
+import { TemplateContentEntity } from "@memberjunction/core-entities";
 import * as nunjucks from 'nunjucks';
 import { MJGlobal } from "@memberjunction/global";
 import { TemplateExtensionBase } from "./extensions/TemplateExtensionBase";
@@ -11,14 +11,14 @@ import { TemplateEntityExtended, TemplateRenderResult, TemplateEngineBase } from
 export class TemplateEntityLoader extends nunjucks.Loader {
     public async: true; // tell nunjucks this is an async loader
 
-    private templates: { [templateId: number]: TemplateEntityExtended } = {};
+    private templates: { [templateId: string]: TemplateEntityExtended } = {};
 
     /**
      * Add a new template to the loader
      * @param templateId 
      * @param template 
      */
-    public AddTemplate(templateId: number, template: TemplateEntityExtended) {
+    public AddTemplate(templateId: string, template: TemplateEntityExtended) {
         this.templates[templateId] = template;
     }
 
@@ -48,36 +48,45 @@ export class TemplateEngineServer extends TemplateEngineBase {
         return super.getInstance<TemplateEngineServer>();
     }
 
+    private _oneTimeLoadingComplete: boolean = false;
     protected async AdditionalLoading(contextUser?: UserInfo): Promise<void> {
+        // pass along the call to our base class so it can do whatever it wants
         await super.AdditionalLoading(contextUser);
 
-        // do this after the templates are loaded and doing it inside AdditionalLoading() ensures it is done after the templates are loaded and
-        // only done once
-        this._templateLoader = new TemplateEntityLoader();
-        this._nunjucksEnv = new nunjucks.Environment(this._templateLoader, { autoescape: true, dev: true });
+        // clear our template cache as we are going to reload all of the templates
+        this.ClearTemplateCache();
+        if (!this._oneTimeLoadingComplete) {
+            this._oneTimeLoadingComplete = true; // flag to make sure we don't do this again
 
-        // get all of the extensions that are registered and register them with nunjucks
-        const extensions = MJGlobal.Instance.ClassFactory.GetAllRegistrations(TemplateExtensionBase);
-        if (extensions && extensions.length > 0) {
-            for (const ext of extensions) {
-                const instance = new ext.SubClass(contextUser);                
-                this._nunjucksEnv.addExtension(ext.Key, instance);
+            // do this after the templates are loaded and doing it inside AdditionalLoading() ensures it is done after the templates are loaded and
+            // only done once
+            this._templateLoader = new TemplateEntityLoader();
+            this._nunjucksEnv = new nunjucks.Environment(this._templateLoader, { autoescape: true, dev: true });
+
+            // get all of the extensions that are registered and register them with nunjucks
+            const extensions = MJGlobal.Instance.ClassFactory.GetAllRegistrations(TemplateExtensionBase);
+            if (extensions && extensions.length > 0) {
+                for (const ext of extensions) {
+                    const instance = new ext.SubClass(contextUser);                
+                    this._nunjucksEnv.addExtension(ext.Key, instance);
+                }
             }
-            // const aiPromptExtension = new AIPromptExtension();
-            // aiPromptExtension._contextUser = contextUser;
-            // this._nunjucksEnv.addExtension('AIPrompt', aiPromptExtension);
         }
     }
 
     private _nunjucksEnv: nunjucks.Environment;
     private _templateLoader: TemplateEntityLoader;
- 
+
+    /**
+     * Cache for templates that have been created by nunjucks so we don't have to create them over and over
+     */
+    private _templateCache: Map<string, any> = new Map<string, any>();
 
     public AddTemplate(templateEntity: TemplateEntityExtended) {
         this._templateLoader.AddTemplate(templateEntity.ID, templateEntity);
     }
  
-
+    
     /**
      * Renders a template with the given data.
      * @param templateEntity the template object to render
@@ -103,7 +112,7 @@ export class TemplateEngineServer extends TemplateEngineBase {
                 };
             }
      
-            const template = new nunjucks.Template(templateContent.TemplateText, this._nunjucksEnv);
+            const template = this.getNunjucksTemplate(templateContent.ID, templateContent.TemplateText);
             const result = await this.renderTemplateAsync(template, data); 
             return {
                 Success: true,
@@ -118,6 +127,25 @@ export class TemplateEngineServer extends TemplateEngineBase {
                 Message: e.message
             };
         }
+    }
+
+    /**
+     * This method is responsible for creating a new Nunjucks template, caching it, and returning it.
+     * If the templateContentId already had a template created, it will return that template from the cache.
+     * @param templateId 
+     * @param templateText 
+     */
+    protected getNunjucksTemplate(templateContentId: string, templateText: string): any {
+        let template = this._templateCache.get(templateContentId);
+        if (!template) {
+            template = new nunjucks.Template(templateText, this._nunjucksEnv);
+            this._templateCache.set(templateContentId, template);
+        }
+        return template;
+    }
+
+    public ClearTemplateCache() {
+        this._templateCache.clear();
     }
 
     /**

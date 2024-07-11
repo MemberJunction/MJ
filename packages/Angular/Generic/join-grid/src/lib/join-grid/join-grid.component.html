@@ -32,17 +32,25 @@
                     <tr [ngClass]="IsRecordReallyDirty(row) ? 'dirty-row' : ''">
                         <td class="first-column">
                             <span>{{row.FirstColValue}}</span>
+                            @if (EditMode !== 'None'){
+                                @if (!row.JoinExists) {
+                                    <button kendoButton class="cellButton" (click)="AddJoinEntityRecord(row)"><span class="fa-solid fa-plus"></span></button>
+                                }
+                                @else {
+                                    <button kendoButton class="cellButton" (click)="RemoveJoinEntityRecord(row)"><span class="fa-solid fa-minus"></span></button>
+                                }    
+                            }
                         </td>
                         @if (ColumnsMode === 'Fields') {
                             <td class="column-cell" *ngFor="let colName of JoinEntityDisplayColumns; let i = index">
                                 @if (EditMode !== 'None') {
-                                    @if (row.GetColumnValue(i)) {
+                                    @if (row.JoinExists) {
                                         @if (GetJoinEntityField(colName).ValueListType === "None") {
                                             @if (GetJoinEntityField(colName).TSType === EntityFieldTSType.Boolean) {
                                                 <input type="checkbox" [checked]="row.GetColumnValue(i)" (change)="UpdateCellValue(row, i, $event)" />
                                             }
                                             @else {
-                                                <input type="text" [value]="row.GetColumnValue(i)" (change)="UpdateCellValue(row, i, $event)" /> 
+                                                <kendo-textbox [value]="row.GetColumnValue(i)" (change)="UpdateCellValue(row, i, $event)" /> 
                                             }
                                         }
                                         @else {
@@ -52,14 +60,7 @@
                                                 (selectionChange)="UpdateCellValueDirect(row, i, $event)"
                                             >
                                             </kendo-dropdownlist>
-                                            <!-- <select (change)="UpdateCellValue(row, i, $event)" [value]="row.GetColumnValue(i)">
-                                                <option *ngFor="let val of GetJoinEntityFieldValues(colName)" [value]="val">{{val}}</option>
-                                            </select> -->
                                         }
-                                        <button kendoButton class="cellButton" (click)="RemoveJoinEntityRecord(row, i)"><span class="fa-solid fa-minus"></span></button>
-                                    }
-                                    @else {
-                                        <button kendoButton class="cellButton" (click)="AddJoinEntityRecord(row, i)"><span class="fa-solid fa-plus"></span></button>
                                     }
                                 }
                                 @else {

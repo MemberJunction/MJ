@@ -6,16 +6,17 @@ import { Metadata } from "./metadata";
  * Metadata about a single stored query in the database.
  */
 export class QueryInfo extends BaseInfo {
+    public ID: string = null
     public Name: string = null
     public Description: string  = null
-    public CategoryID: number = null
+    public CategoryID: string = null
     public SQL: string = null
     public OriginalSQL: string = null
     public Feedback: string = null
     public Status: 'Pending' | 'In-Review' | 'Approved' | 'Rejected' | 'Obsolete' = null
     public QualityRank: number = null
-    CreatedAt: Date = null
-    UpdatedAt: Date = null
+    __mj_CreatedAt: Date = null
+    __mj_UpdatedAt: Date = null
 
     // virtual fields - returned by the database VIEW
     Category: string = null
@@ -55,11 +56,12 @@ export class QueryInfo extends BaseInfo {
 }
 
 export class QueryCategoryInfo extends BaseInfo {
+    public ID: string = null
     public Name: string = null
-    public ParentID: number = null
+    public ParentID: string = null
     public Description: string = null
-    CreatedAt: Date = null
-    UpdatedAt: Date = null
+    __mj_CreatedAt: Date = null
+    __mj_UpdatedAt: Date = null
 
     // virtual fields - returned by the database VIEW
     Parent: string = null
@@ -82,7 +84,7 @@ export class QueryCategoryInfo extends BaseInfo {
 
 export class QueryFieldInfo extends BaseInfo {
     Name: string = null
-    QueryID: number = null
+    QueryID: string = null
     Description: string = null
     Sequence: number = null
     /**
@@ -93,14 +95,14 @@ export class QueryFieldInfo extends BaseInfo {
      * The full SQL type for the field, for example datetime or nvarchar(10) etc.
      */
     SQLFullType: string = null
-    SourceEntityID: number = null
+    SourceEntityID: string = null
     SourceFieldName: string = null
     IsComputed: boolean = null
     ComputationDescription: string = null
     IsSummary: boolean = null
     SummaryDescription: string = null
-    CreatedAt: Date = null
-    UpdatedAt: Date = null
+    __mj_CreatedAt: Date = null
+    __mj_UpdatedAt: Date = null
 
     // virtual fields - returned by the database VIEW
     SourceEntity: string = null
@@ -123,7 +125,7 @@ export class QueryFieldInfo extends BaseInfo {
 
 
 export class QueryPermissionInfo extends BaseInfo {
-    public QueryID: number = null
+    public QueryID: string = null
     public RoleName: string = null
 
     // virtual fields - returned by the database VIEW

@@ -8,6 +8,8 @@ import { LoadEntityAuditComponent } from "./sections/audit.component"
 import { LoadEntityAPIComponent } from "./sections/api.component"
 import { LoadEntityDBComponent } from "./sections/db.component"
 import { LoadEntityUIComponent } from "./sections/ui.component"
+import { UserViewGridComponent } from "@memberjunction/ng-user-view-grid"
+
 @RegisterClass(BaseFormComponent, 'Entities') // Tell MemberJunction about this class
 @Component({
     selector: 'gen-entity-form',

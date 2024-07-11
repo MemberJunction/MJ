@@ -42,7 +42,6 @@ export * from './directives';
 export * from './entitySubclasses/userViewEntity.server';
 export * from './entitySubclasses/entityPermissions.server';
 export * from './entitySubclasses/DuplicateRunEntity.server';
-export * from './entitySubclasses/EntityBehavior.server';
 export * from './types';
 export { TokenExpiredError } from './auth';
 
@@ -89,8 +88,10 @@ export const serve = async (resolverPaths: Array<string>) => {
   const config = new SQLServerProviderConfigData(dataSource, '', mj_core_schema, cacheRefreshInterval);
   await setupSQLServerClient(config); // datasource is already initialized, so we can setup the client right away
   const md = new Metadata();
+  console.log(`Data Source has been initialized. ${md?.Entities ? md.Entities.length : 0} entities loaded.`);
+  setupComplete$.next(true);
 
-
+  /******TEST HARNESS FOR CHANGE DETECTION */
   /******TEST HARNESS FOR CHANGE DETECTION */
   // const cd = ExternalChangeDetectorEngine.Instance;
   // await cd.Config(false, UserCache.Users[0]);
@@ -102,10 +103,10 @@ export const serve = async (resolverPaths: Array<string>) => {
   //     console.log(replayResult)
   //   });
   // });
+  /******TEST HARNESS FOR CHANGE DETECTION */
+  /******TEST HARNESS FOR CHANGE DETECTION */
 
-  console.log(`Data Source has been initialized. ${md?.Entities ? md.Entities.length : 0} entities loaded.`);
 
-  setupComplete$.next(true);
 
   const dynamicModules = await Promise.all(paths.map((modulePath) => import(modulePath.replace(/\.[jt]s$/, ''))));
   const resolvers = dynamicModules.flatMap((module) =>

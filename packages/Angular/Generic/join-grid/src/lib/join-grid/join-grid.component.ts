@@ -156,6 +156,7 @@ export class JoinGridComponent implements AfterViewInit {
   @Input() JoinEntityExtraFilter?: string
 
   /**
+   * ONLY USED WHEN ColumnsMode=Entity
    * When this property is set to JoinRecordExists the grid will operate as follows:
    *  * When a user checks the checkbox in the grid, a record will be created in the JoinEntity with the Row and Column foreign keys.
    *  * When a user unchecks the checkbox in the grid, the record in the JoinEntity will be deleted.
@@ -440,6 +441,7 @@ export class JoinGridComponent implements AfterViewInit {
           const column = this._columnsEntityData![i];
           const join = this._joinEntityData!.find(j => j.Get(this.JoinEntityRowForeignKey) === row.Get(this._rowsEntityInfo!.FirstPrimaryKey.Name) && 
                                                 j.Get(this.JoinEntityColumnForeignKey) === column.Get(this._columnsEntityInfo!.FirstPrimaryKey.Name));
+          rowData.JoinExists = true;
           rowData.ColumnData.push({
             index: i,
             ColumnForeignKeyValue: column.Get(this._columnsEntityInfo!.FirstPrimaryKey.Name),
@@ -457,6 +459,7 @@ export class JoinGridComponent implements AfterViewInit {
           const joinData = this._joinEntityData!.find(jed => jed.Get(this.JoinEntityRowForeignKey) === row.FirstPrimaryKey.Value)
           // joinData being undefined/null is a valid condition just means no join data for the row specified
           if (joinData) {
+            rowData.JoinExists = true;
             rowData.ColumnData.push({
               index: i,
               RowForeignKeyValue: rowData.RowForeignKeyValue,
@@ -542,7 +545,11 @@ export class JoinGridComponent implements AfterViewInit {
     this.UpdateCellValueDirect(row, colIndex, (event.target as HTMLInputElement).value);
   }
 
-  public async RemoveJoinEntityRecord(row: JoinGridRow, colIndex: number) {
+  /**
+   * Only used when ColumnsMode = Fields
+   * @param row 
+   */
+  public async RemoveJoinEntityRecord(row: JoinGridRow) {
     // this method is called when the user wnats to remove a record that maps to the cell for the row specified and the colIndex
     // only used when Mode = Fields
     if (this.ColumnsMode !== 'Fields') 
@@ -558,7 +565,10 @@ export class JoinGridComponent implements AfterViewInit {
     }  
   }
 
-  public async AddJoinEntityRecord(row: JoinGridRow, colIndex: number) {
+  /**
+   * Only used when ColumnsMode = Fields
+   */
+  public async AddJoinEntityRecord(row: JoinGridRow) {
     // this method is called when the user wnats to create a new record that maps to the cell for the row specified and the colIndex
     // only used when Mode = Fields
     if (this.ColumnsMode !== 'Fields') 

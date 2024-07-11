@@ -18,7 +18,7 @@
                     
                     <mj-tab Name="Reports" 
                         [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: 110}">
+                        [Props]="{EntityRelationshipID: '81867A0E-E847-4B82-8BE6-E7C05D99AE53'}">
                         <span class="fa-solid fa-chart-line tab-header-icon"></span>Reports
                     </mj-tab>
                     <mj-tab-body>
@@ -28,7 +28,7 @@
                             [AllowLoad]="IsCurrentTab('Reports')"  
                             [EditMode]="GridEditMode()"  
                             [BottomMargin]="GridBottomMargin">
-                        </mj-user-view-grid>
+                        </mj-user-view-grid>                    
                     </mj-tab-body>
                 </mj-tabstrip>
     </form>

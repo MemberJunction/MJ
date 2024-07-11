@@ -10,7 +10,8 @@ import { RunDynamicViewInput, RunViewByIDInput, RunViewByNameInput } from './Run
 import { DeleteOptionsInput } from './DeleteOptionsInput';
 import { MJGlobal } from '@memberjunction/global';
 import { PUSH_STATUS_UPDATES_TOPIC } from './PushStatusResolver';
-
+import { FieldMapper } from '@memberjunction/graphql-dataprovider';
+ 
 export class ResolverBase {
   protected MapFieldNamesToCodeNames(entityName: string, dataObject: any) {
     // for the given entity name provided, check to see if there are any fields
@@ -23,15 +24,11 @@ export class ResolverBase {
       const entityInfo = md.Entities.find((e) => e.Name === entityName);
       if (!entityInfo) throw new Error(`Entity ${entityName} not found in metadata`);
       const fields = entityInfo.Fields.filter((f) => f.Name !== f.CodeName || f.Name.startsWith('__mj_'));
+      const mapper = new FieldMapper();
       fields.forEach((f) => {
         if (dataObject.hasOwnProperty(f.Name)) {
-          if (f.CodeName.startsWith('__mj_')) {
-            // GraphQL doesn't allow us to pass back fields with __ so we are mapping our special field cases that start with __mj_ to _mj__ for transport - they are converted back on the other side automatically
-            const newCodeName = `_mj__${f.CodeName.substring(5)}`;
-            dataObject[newCodeName] = dataObject[f.Name];
-          } else {
-            dataObject[f.CodeName] = dataObject[f.Name];
-          }
+          // GraphQL doesn't allow us to pass back fields with __ so we are mapping our special field cases that start with __mj_ to _mj__ for transport - they are converted back on the other side automatically
+          dataObject[mapper.MapFieldName(f.CodeName)] = dataObject[f.Name];
           delete dataObject[f.Name];
         }
       });
@@ -134,9 +131,9 @@ export class ResolverBase {
       if (!entity) throw new Error(`Entity ${viewInput.EntityName} not found in metadata`);
 
       const viewInfo: UserViewEntity = {
-        ID: -1,
+        ID: "",
         Entity: viewInput.EntityName,
-        EntityID: entity.ID as number,
+        EntityID: entity.ID,
         EntityBaseView: entity.BaseView as string,
       } as UserViewEntity; // only providing a few bits of data here, but it's enough to get the view to run
 
@@ -169,9 +166,6 @@ export class ResolverBase {
     const entityInfo = md.Entities.find((e) => e.Name === entityName);
     if (!userPayload) throw new Error(`userPayload is null`);
 
-    // if ID is system user sentinel value, then we're running as the system user and we can skip the permission check
-    if (userPayload.userRecord?.ID === Number.MIN_SAFE_INTEGER) return;
-
     // first check permissions, the logged in user must have read permissions on the entity to run the view
     if (entityInfo) {
       const userInfo = UserCache.Users.find((u) => u.Email.toLowerCase().trim() === userPayload.email.toLowerCase().trim()); // get the user record from MD so we have ROLES attached, don't use the one from payload directly
@@ -188,7 +182,7 @@ export class ResolverBase {
     extraFilter: string,
     orderBy: string,
     userSearchString: string,
-    excludeUserViewRunID: number | undefined,
+    excludeUserViewRunID: string | undefined,
     overrideExcludeFilter: string | undefined,
     saveViewResults: boolean | undefined,
     fields: string[] | undefined,
@@ -244,15 +238,10 @@ export class ResolverBase {
           user
         );
         // go through the result and convert all fields that start with __mj_*** to _mj__*** for GraphQL transport
+        const mapper = new FieldMapper();
         if (result && result.Success) {
           for (const r of result.Results) {
-            const keys = Object.keys(r);
-            keys.forEach((k) => {
-              if (k.trim().toLowerCase().startsWith('__mj_')) {
-                r[`_mj__${k.substring(5)}`] = r[k];
-                delete r[k];
-              }
-            });
+            mapper.MapFields(r);
           }
         }
         return result;
@@ -300,7 +289,7 @@ export class ResolverBase {
     auditLogTypeName: string,
     status: string,
     details: string | null,
-    entityId: number,
+    entityId: string,
     recordId: any | null
   ): Promise<any> {
     try {
@@ -317,9 +306,10 @@ export class ResolverBase {
       const auditLog = await md.GetEntityObject<AuditLogEntity>('Audit Logs', userInfo); // must pass user context on back end as we're not authenticated the same way as the front end
       auditLog.NewRecord();
       auditLog.UserID = userInfo.ID;
-      auditLog.AuditLogTypeName = auditLogType.Name;
+      auditLog.AuditLogTypeID = auditLogType.ID;
 
-      if (authorization) auditLog.AuthorizationName = authorization.Name;
+      if (authorization) 
+        auditLog.AuthorizationID = authorization.ID;
 
       if (status?.trim().toLowerCase() === 'success') auditLog.Status = 'Success';
       else auditLog.Status = 'Failed';

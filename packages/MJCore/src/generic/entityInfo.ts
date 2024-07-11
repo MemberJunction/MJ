@@ -23,7 +23,9 @@ export type RecordChangeStatus = typeof RecordChangeStatus[keyof typeof RecordCh
  * Record Change object has information on a change to a record in the Record Changes entity
  */
 export class RecordChange extends BaseInfo {
-    EntityID: number = null
+    ID: string = null
+
+    EntityID: string = null
     RecordID: any = null
     ChangedAt: Date = null
     ChangesJSON: string = null
@@ -54,9 +56,11 @@ export class RecordChange extends BaseInfo {
  * maps to information in the Entity Relationships metadata entity.
  */
 export class EntityRelationshipInfo extends BaseInfo  {
-    EntityID: number = null 
+    ID: string = null
+
+    EntityID: string = null 
     Sequence: number = null
-    RelatedEntityID: number = null
+    RelatedEntityID: string = null
     BundleInAPI: boolean = null
     IncludeInParentAllQuery: boolean = null
     Type: string = null 
@@ -70,7 +74,9 @@ export class EntityRelationshipInfo extends BaseInfo  {
     DisplayName: string = null
     DisplayIconType: 'Related Entity Icon'| 'Custom' | 'None' = 'Related Entity Icon'
     DisplayIcon: string = null
-    DisplayUserViewGUID: string = null
+    DisplayUserViewID: string = null
+    DisplayComponentID: string = null
+    DisplayComponentConfiguration: string = null
     __mj_CreatedAt: Date = null
     __mj_UpdatedAt: Date = null
 
@@ -85,7 +91,7 @@ export class EntityRelationshipInfo extends BaseInfo  {
     RelatedEntityClassName: string = null
     RelatedEntityBaseTableCodeName: string = null
     DisplayUserViewName: string = null
-    DisplayUserViewID: number = null
+    DisplayComponent: string = null
 
     constructor (initData: any) {
         super();
@@ -104,6 +110,8 @@ export type EntityPermissionType = typeof EntityPermissionType[keyof typeof Enti
 
 
 export class EntityUserPermissionInfo {
+    ID: string = null
+
     Entity: EntityInfo;
     User: UserInfo;
     CanCreate: boolean;
@@ -113,21 +121,24 @@ export class EntityUserPermissionInfo {
 }
 
 export class EntityPermissionInfo extends BaseInfo{
-    EntityID: number = null
-    RoleName: string = null
+    ID: string = null
+
+    EntityID: string = null
+    RoleID: string = null
     CanCreate: boolean = null
     CanRead: boolean = null
     CanUpdate: boolean = null
     CanDelete: boolean = null
-    ReadRLSFilterID: number = null
-    CreateRLSFilterID: number = null
-    UpdateRLSFilterID: number = null
-    DeleteRLSFilterID: number = null
+    ReadRLSFilterID: string = null
+    CreateRLSFilterID: string = null
+    UpdateRLSFilterID: string = null
+    DeleteRLSFilterID: string = null
     __mj_CreatedAt: Date = null
     __mj_UpdatedAt: Date = null
 
     // virtual fields - returned by the database VIEW
     Entity: string = null
+    Role: string = null
     RoleSQLName: string = null
     ReadRLSFilter: string = null
     CreateRLSFilter: string = null
@@ -148,7 +159,7 @@ export class EntityPermissionInfo extends BaseInfo{
     }
 
     public RLSFilter(type: EntityPermissionType): RowLevelSecurityFilterInfo {
-        let fID: number = 0;
+        let fID: string = "";
 
         switch (type) {
             case EntityPermissionType.Read:
@@ -164,7 +175,7 @@ export class EntityPermissionInfo extends BaseInfo{
                 fID = this.DeleteRLSFilterID;
                 break;
         }
-        if (fID > 0) 
+        if (fID && fID.length > 0) 
             return Metadata.Provider.RowLevelSecurityFilters.find(f => f.ID === fID);
     }
 
@@ -204,8 +215,9 @@ export type EntityFieldValueListType = typeof EntityFieldValueListType[keyof typ
 
 
 export class EntityFieldValueInfo extends BaseInfo {
-    EntityID: number = null
-    EntityFieldName: string = null
+    ID: string = null
+
+    EntityFieldID: string = null // EntityFieldID is a uniqueidentifier column
     Sequence: number = null
     Value: string = null
     Code: string = null
@@ -232,10 +244,12 @@ export type GeneratedFormSectionType = typeof GeneratedFormSectionType[keyof typ
  * Field information within an entity - object models data from the Entity Fields entity in the metadata
  */
 export class EntityFieldInfo extends BaseInfo {
+    ID: string = null
+
     /**
      * Foreign key to the Entities entity.
      */
-    EntityID: number = null
+    EntityID: string = null
     /**
      * The sequence of the field within the entity, typically the intended display order
      */
@@ -277,10 +291,11 @@ export class EntityFieldInfo extends BaseInfo {
     GeneratedFormSection: string = null
     IsVirtual: boolean = null 
     IsNameField: boolean = null 
-    RelatedEntityID: number = null
+    RelatedEntityID: string = null
     RelatedEntityFieldName: string = null
     IncludeRelatedEntityNameFieldInBaseView: boolean = null
     RelatedEntityNameFieldMap: string = null
+    RelatedEntityDisplayType: 'Search' | 'Dropdown' = null
     __mj_CreatedAt: Date = null
     __mj_UpdatedAt: Date = null
     
@@ -418,16 +433,15 @@ export class EntityFieldInfo extends BaseInfo {
         return this.IsVirtual || 
                !this.AllowUpdateAPI || 
                this.IsPrimaryKey || 
-               this.Type.toLowerCase() === 'uniqueidentifier' ||
                this.IsSpecialDateField;
     }
 
     /**
-     * Helper method that returns true if the field is one of the special reserved MJ date fields for tracking CreatedAt and UpdatedAt timestamps. This is only used when the 
-     * entity has TrackRecordChanges=1
+     * Helper method that returns true if the field is one of the special reserved MJ date fields for tracking CreatedAt and UpdatedAt timestamps as well as the DeletedAt timestamp used for entities that
+     * have DeleteType=Soft. This is only used when the entity has TrackRecordChanges=1 or for entities where DeleteType=Soft
      */
     get IsSpecialDateField(): boolean {
-        return this.IsCreatedAtField || this.IsUpdatedAtField;
+        return this.IsCreatedAtField || this.IsUpdatedAtField || this.IsDeletedAtField;
     }
 
     /**
@@ -444,10 +458,16 @@ export class EntityFieldInfo extends BaseInfo {
     }
 
     /**
+     * Returns true if the field is the DeletedAt field, a special field that is used to track the deletion date of a record. This is only used when the entity has DeleteType=Soft
+     */
+    get IsDeletedAtField(): boolean {
+        return this.Name.trim().toLowerCase() === EntityInfo.DeletedAtFieldName.trim().toLowerCase();
+    }
+
+    /**
      * Returns true if the field is a "special" field (see list below) and is handled inside the DB layer and should be ignored in validation by the BaseEntity architecture
      * Also, we skip validation if we have a field that is:
      *  - the primary key
-     *  - a uniqueidentifier 
      *  - an autoincrement field
      *  - the field is virtual
      *  - the field is readonly
@@ -458,7 +478,6 @@ export class EntityFieldInfo extends BaseInfo {
 
         return this.IsSpecialDateField ||
                this.IsPrimaryKey ||
-               this.Type.trim().toLowerCase() === 'uniqueidentifier' ||
                this.AutoIncrement === true ||
                this.IsVirtual === true ||
                this.ReadOnly === true;
@@ -514,6 +533,8 @@ export class EntityFieldInfo extends BaseInfo {
  * Entity Document Type Info object has information about the document types that exist across all entities. When Entity Documents are created they are associated with a document type.
  */
 export class EntityDocumentTypeInfo extends BaseInfo {
+    ID: string = null
+
     Name: string = null
     Description: string = null  
     __mj_CreatedAt: Date = null
@@ -530,7 +551,8 @@ export class EntityDocumentTypeInfo extends BaseInfo {
  * Settings allow you to store key/value pairs of information that can be used to configure the behavior of the entity.
  */
 export class EntitySettingInfo extends BaseInfo {   
-    EntityID: number = null
+    ID: string = null
+    EntityID: string = null
     Name: string = null
     Value: string = null
     Comments: string = null
@@ -549,10 +571,12 @@ export class EntitySettingInfo extends BaseInfo {
  * Metadata about an entity
  */
 export class EntityInfo extends BaseInfo {
+    public ID: string = null
+
     /**
      * Reserved for future use
      */
-    public ParentID: number = null   
+    public ParentID: string = null   
     /**
      * Unique name of the entity
      */
@@ -588,6 +612,10 @@ export class EntityInfo extends BaseInfo {
     spUpdateGenerated: boolean = null
     spDeleteGenerated: boolean = null
     CascadeDeletes: boolean = null
+    DeleteType: 'Hard' | 'Soft' = 'Hard'
+    AllowRecordMerge: boolean = null
+    spMatch: string = null
+    RelationshipDefaultDisplayType: 'Search' | 'Dropdown' = null
     UserFormGenerated: boolean = null
     EntityObjectSubclassName: string = null
     EntityObjectSubclassImport: string = null
@@ -638,7 +666,7 @@ export class EntityInfo extends BaseInfo {
     }
 
     get ForeignKeys(): EntityFieldInfo[] {
-        return this.Fields.filter((f) => f.RelatedEntityID > 0);
+        return this.Fields.filter((f) => f.RelatedEntityID && f.RelatedEntityID.length > 0);
     }
 
     get Fields(): EntityFieldInfo[] {
@@ -657,6 +685,7 @@ export class EntityInfo extends BaseInfo {
 
     private static __createdAtFieldName = '__mj_CreatedAt';
     private static __updatedAtFieldName = '__mj_UpdatedAt';
+    private static __deletedAtFieldName = '__mj_DeletedAt';
     /**
      * Returns the name of the special reserved field that is used to store the CreatedAt timestamp across all of MJ. This is only used when an entity has TrackRecordChanges turned on
      */
@@ -668,6 +697,12 @@ export class EntityInfo extends BaseInfo {
      */
     public static get UpdatedAtFieldName(): string {
         return EntityInfo.__updatedAtFieldName;
+    }
+    /**
+     * Returns the name of the special reserved field that is used to store the DeletedAt timestamp across all of MJ. This is only used when an entity has DeleteType=Soft
+     */
+    public static get DeletedAtFieldName(): string {
+        return EntityInfo.__deletedAtFieldName;
     }
 
 
@@ -704,7 +739,7 @@ export class EntityInfo extends BaseInfo {
 
             for (let j: number = 0; j < this.Permissions.length; j++) {
                 const ep: EntityPermissionInfo = this.Permissions[j];
-                const roleMatch: UserRoleInfo = user.UserRoles.find((r) => r.RoleName.trim().toLowerCase() === ep.RoleName.trim().toLowerCase())
+                const roleMatch: UserRoleInfo = user.UserRoles.find((r) => r.RoleID === ep.RoleID)
                 if (roleMatch) // user has this role
                     permissionList.push(ep)
             }
@@ -738,7 +773,7 @@ export class EntityInfo extends BaseInfo {
     public UserExemptFromRowLevelSecurity(user: UserInfo, type: EntityPermissionType): boolean {
         for (let j: number = 0; j < this.Permissions.length; j++) {
             const ep: EntityPermissionInfo = this.Permissions[j];
-            const roleMatch: UserRoleInfo = user.UserRoles.find((r) => r.RoleName.trim().toLowerCase() === ep.RoleName.trim().toLowerCase())
+            const roleMatch: UserRoleInfo = user.UserRoles.find((r) => r.RoleID === ep.RoleID)
             if (roleMatch) { // user has this role 
                 switch (type) {
                     case EntityPermissionType.Create:
@@ -774,7 +809,7 @@ export class EntityInfo extends BaseInfo {
         const rlsList: RowLevelSecurityFilterInfo[] = [];
         for (let j: number = 0; j < this.Permissions.length; j++) {
             const ep: EntityPermissionInfo = this.Permissions[j];
-            const roleMatch: UserRoleInfo = user.UserRoles.find((r) => r.RoleName.trim().toLowerCase() === ep.RoleName.trim().toLowerCase())
+            const roleMatch: UserRoleInfo = user.UserRoles.find((r) => r.RoleID === ep.RoleID)
             if (roleMatch) { // user has this role
                 let matchObject: RowLevelSecurityFilterInfo = null;
                 switch (type) {
@@ -862,9 +897,9 @@ export class EntityInfo extends BaseInfo {
         if (filter && filter.length > 0) 
             params.ExtraFilter = `(${params.ExtraFilter}) AND (${filter})`; // caller provided their own filter, so AND it in with the relationship filter we have here
 
-        if (relationship.DisplayUserViewGUID && relationship.DisplayUserViewGUID.length > 0) {
+        if (relationship.DisplayUserViewID && relationship.DisplayUserViewID.length > 0) {
             // we have been given a specific view to run, use it
-            params.ViewID = relationship.DisplayUserViewID; // virtual field - the durable key is the GUID, but the base view for entityrelationship brings in view name and ID
+            params.ViewID = relationship.DisplayUserViewID;  
         }
         else {
             // no view specified, so specify the entity instead
@@ -1129,7 +1164,7 @@ export class RecordMergeResult {
     /**
      * The ID of the log record for the merge operation
      */
-    RecordMergeLogID: number | null
+    RecordMergeLogID: string | null
     /**
      * The details of the merge operation, including the status of each record that was merged
      */

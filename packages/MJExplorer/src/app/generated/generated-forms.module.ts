@@ -100,7 +100,7 @@ import { SalesLineItem__client_membershipDetailsComponent, LoadSalesLineItem__cl
 import { ItemDetailsComponent, LoadItemDetailsComponent } from "./Entities/Item/sections/details.component"
 import { CustomerDetailsComponent, LoadCustomerDetailsComponent } from "./Entities/Customer/sections/details.component"
 import { SalesTransaction__client_membershipDetailsComponent, LoadSalesTransaction__client_membershipDetailsComponent } from "./Entities/SalesTransaction__client_membership/sections/details.component"
-    
+import { TimelineModule } from "@memberjunction/ng-timeline"   
 
 @NgModule({
 declarations: [
@@ -138,7 +138,9 @@ imports: [
     MJTabStripModule,
     ContainerDirectivesModule,
     DropDownListModule,
-    ComboBoxModule
+    ComboBoxModule,
+    UserViewGridModule,
+    TimelineModule
 ],
 exports: [
 ]
@@ -183,7 +185,8 @@ imports: [
     MJTabStripModule,
     ContainerDirectivesModule,
     DropDownListModule,
-    ComboBoxModule
+    ComboBoxModule,
+    UserViewGridModule
 ],
 exports: [
 ]

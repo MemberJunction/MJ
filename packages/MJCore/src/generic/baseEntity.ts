@@ -1,4 +1,4 @@
-import { MJGlobal } from '@memberjunction/global';
+import { MJEventType, MJGlobal } from '@memberjunction/global';
 import { EntityFieldInfo, EntityInfo, EntityFieldTSType, EntityPermissionType, RecordChange, ValidationErrorInfo, ValidationResult, EntityRelationshipInfo } from './entityInfo';
 import { EntityDeleteOptions, EntitySaveOptions, IEntityDataProvider } from './interfaces';
 import { Metadata } from './metadata';
@@ -6,7 +6,7 @@ import { RunView } from '../views/runView';
 import { UserInfo } from './securityInfo';
 import { TransactionGroupBase } from './transactionGroup';
 import { LogError } from './logging';
-import { CompositeKey, FieldValueCollection, KeyValuePair } from './compositeKey';
+import { CompositeKey, FieldValueCollection } from './compositeKey';
 import { Subject, Subscription } from 'rxjs';
 
 /**
@@ -259,8 +259,8 @@ export class DataObjectParams {
 
 export class BaseEntityAIActionParams {
     name: string
-    actionId: number
-    modelId: number
+    actionId: string
+    modelId: string
     systemPrompt: string
     userMessage: string
     result: any
@@ -312,6 +312,7 @@ export class BaseEntityResult {
 
 /**
  * Event type that is used to raise events and provided structured callbacks for any caller that is interested in registering for events.
+ * This type is also used for whenever a BaseEntity instance raises an event with MJGlobal.
  */
 export class BaseEntityEvent {
     /**
@@ -371,11 +372,37 @@ export abstract class BaseEntity {
         this.RaiseEvent('transaction_ready', null);
     }
 
+
+    private static _baseEventCode = 'BaseEntityEvent';
+    /**
+     * When a BaseEntity class raises an event with MJGlobal, the eventCode property is set to this value. This is used to identify events that are raised by BaseEntity objects.
+     * Any MJGlobal event that is raised by a BaseEntity class will use a BaseEntityEvent type as the args parameter
+     */
+    public static get BaseEventCode(): string {
+        return BaseEntity._baseEventCode;
+    }
+
     /**
      * Used for raising events within the BaseEntity and can be used by sub-classes to raise events that are specific to the entity.
      */
     protected RaiseEvent(type: 'new_record' | 'save' | 'delete' | 'transaction_ready' | 'other', payload: any) {
+        // this is the local event handler that is specific to THIS instance of the entity object
         this._eventSubject.next({type: type, payload: payload, baseEntity: this});
+        // this next call is to MJGlobal to let everyone who cares knows that we had an event on an entity object
+        // at the moment we only broadcast save/delete not the others 
+        if (type === 'save' || type === 'delete') {
+            const event = new BaseEntityEvent();
+            event.baseEntity = this;
+            event.payload = null;
+            event.type = type;
+            
+            MJGlobal.Instance.RaiseEvent({
+                component: this,
+                event: MJEventType.ComponentEvent,
+                eventCode: BaseEntity.BaseEventCode,
+                args: event
+            });            
+        }
     }
 
     /**

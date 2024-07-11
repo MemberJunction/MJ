@@ -1,7 +1,6 @@
 {
   "name": "@memberjunction/ai-recommendations",
-  "version": "1.7.1",
-  "repository": "github:MemberJunction/MJ",
+  "version": "1.8.1",
   "description": "MemberJunction Recommendations Engine",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -20,9 +19,9 @@
     "typescript": "^5.4.5"
   },
   "dependencies": {
-    "@memberjunction/global": "1.7.1",
-    "@memberjunction/core": "1.7.1",
-    "@memberjunction/core-entities": "1.7.1",
-    "@memberjunction/ai": "1.7.1"
+    "@memberjunction/global": "1.8.1",
+    "@memberjunction/core": "1.8.1",
+    "@memberjunction/core-entities": "1.8.1",
+    "@memberjunction/ai": "1.8.1"
   }
 }

@@ -17,7 +17,7 @@ export class FavoritesComponent {
   async ngOnInit() {
     const md = new Metadata();
     const rv = new RunView();
-    let sFilter = `UserID=${md.CurrentUser.ID}`
+    let sFilter = `UserID='${md.CurrentUser.ID}'`
     if (this.ExtraFilter)
       sFilter += `AND (${this.ExtraFilter})`
 
