@@ -70,6 +70,7 @@ console.log(request);
 
 console.log('vectorizing entity...');
 await vectorizer.VectorizeEntity(request, systemUser);
+await vectorizer.CreateTemplateForEntityDocument(entityDocument);
 
 console.log('Done');
 process.exit('0');

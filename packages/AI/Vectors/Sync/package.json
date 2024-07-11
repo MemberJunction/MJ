@@ -21,6 +21,7 @@
   ],
   "scripts": {
     "build": "pkgroll --sourcemap --minify",
+    "build:tsc": "tsc",
     "watch": "pkgroll --sourcemap --watch"
   },
   "author": "MemberJunction.com",
