@@ -7044,15 +7044,6 @@ import { RegisterClass } from "@memberjunction/global";
             return this.Get('User');
         }
         
-        /**
-        * * Field Name: Role
-        * * Display Name: Role
-        * * SQL Data Type: nvarchar(50)
-        */
-        get Role(): string {  
-            return this.Get('Role');
-        }
-        
 
     }
         
@@ -8580,21 +8571,21 @@ import { RegisterClass } from "@memberjunction/global";
         }
         
         /**
-        * * Field Name: AIModel
-        * * Display Name: AIModel
-        * * SQL Data Type: nvarchar(50)
-        */
-        get AIModel(): string {  
-            return this.Get('AIModel');
-        }
-        
-        /**
         * * Field Name: AIAction
         * * Display Name: AIAction
         * * SQL Data Type: nvarchar(50)
         */
         get AIAction(): string {  
             return this.Get('AIAction');
+        }
+        
+        /**
+        * * Field Name: AIModel
+        * * Display Name: AIModel
+        * * SQL Data Type: nvarchar(50)
+        */
+        get AIModel(): string | null {  
+            return this.Get('AIModel');
         }
         
         /**
@@ -9406,21 +9397,21 @@ import { RegisterClass } from "@memberjunction/global";
         }
         
         /**
-        * * Field Name: User
-        * * Display Name: User
-        * * SQL Data Type: nvarchar(100)
-        */
-        get User(): string {  
-            return this.Get('User');
-        }
-        
-        /**
         * * Field Name: Category
         * * Display Name: Category
         * * SQL Data Type: nvarchar(100)
         */
         get Category(): string | null {  
             return this.Get('Category');
+        }
+        
+        /**
+        * * Field Name: User
+        * * Display Name: User
+        * * SQL Data Type: nvarchar(100)
+        */
+        get User(): string | null {  
+            return this.Get('User');
         }
         
 
@@ -10000,78 +9991,6 @@ import { RegisterClass } from "@memberjunction/global";
             return this.Get('__mj_UpdatedAt');
         }
         
-        /**
-        * * Field Name: Category
-        * * Display Name: Category
-        * * SQL Data Type: nvarchar(100)
-        */
-        get Category(): string | null {  
-            return this.Get('Category');
-        }
-        
-        /**
-        * * Field Name: User
-        * * Display Name: User
-        * * SQL Data Type: nvarchar(100)
-        */
-        get User(): string {  
-            return this.Get('User');
-        }
-        
-        /**
-        * * Field Name: Conversation
-        * * Display Name: Conversation
-        * * SQL Data Type: nvarchar(255)
-        */
-        get Conversation(): string | null {  
-            return this.Get('Conversation');
-        }
-        
-        /**
-        * * Field Name: DataContext
-        * * Display Name: Data Context
-        * * SQL Data Type: nvarchar(255)
-        */
-        get DataContext(): string | null {  
-            return this.Get('DataContext');
-        }
-        
-        /**
-        * * Field Name: OutputTriggerType
-        * * Display Name: Output Trigger Type
-        * * SQL Data Type: nvarchar(255)
-        */
-        get OutputTriggerType(): string | null {  
-            return this.Get('OutputTriggerType');
-        }
-        
-        /**
-        * * Field Name: OutputFormatType
-        * * Display Name: Output Format Type
-        * * SQL Data Type: nvarchar(255)
-        */
-        get OutputFormatType(): string | null {  
-            return this.Get('OutputFormatType');
-        }
-        
-        /**
-        * * Field Name: OutputDeliveryType
-        * * Display Name: Output Delivery Type
-        * * SQL Data Type: nvarchar(255)
-        */
-        get OutputDeliveryType(): string | null {  
-            return this.Get('OutputDeliveryType');
-        }
-        
-        /**
-        * * Field Name: OutputWorkflow
-        * * Display Name: Output Workflow
-        * * SQL Data Type: nvarchar(100)
-        */
-        get OutputWorkflow(): string | null {  
-            return this.Get('OutputWorkflow');
-        }
-        
 
     }
         
@@ -10183,7 +10102,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: User
         * * SQL Data Type: nvarchar(100)
         */
-        get User(): string {  
+        get User(): string | null {  
             return this.Get('User');
         }
         
@@ -11647,15 +11566,6 @@ import { RegisterClass } from "@memberjunction/global";
         */
         get User(): string {  
             return this.Get('User');
-        }
-        
-        /**
-        * * Field Name: ResourceType
-        * * Display Name: Resource Type
-        * * SQL Data Type: nvarchar(255)
-        */
-        get ResourceType(): string | null {  
-            return this.Get('ResourceType');
         }
         
 
@@ -13759,21 +13669,21 @@ import { RegisterClass } from "@memberjunction/global";
         }
         
         /**
-        * * Field Name: Type
-        * * Display Name: Type
-        * * SQL Data Type: nvarchar(100)
-        */
-        get Type(): string {  
-            return this.Get('Type');
-        }
-        
-        /**
         * * Field Name: Entity
         * * Display Name: Entity
         * * SQL Data Type: nvarchar(255)
         */
         get Entity(): string {  
             return this.Get('Entity');
+        }
+        
+        /**
+        * * Field Name: Type
+        * * Display Name: Type
+        * * SQL Data Type: nvarchar(100)
+        */
+        get Type(): string {  
+            return this.Get('Type');
         }
         
 
@@ -14783,21 +14693,21 @@ import { RegisterClass } from "@memberjunction/global";
         }
         
         /**
-        * * Field Name: Category
-        * * Display Name: Category
-        * * SQL Data Type: nvarchar(255)
-        */
-        get Category(): string | null {  
-            return this.Get('Category');
-        }
-        
-        /**
         * * Field Name: Provider
         * * Display Name: Provider
         * * SQL Data Type: nvarchar(50)
         */
         get Provider(): string {  
             return this.Get('Provider');
+        }
+        
+        /**
+        * * Field Name: Category
+        * * Display Name: Category
+        * * SQL Data Type: nvarchar(255)
+        */
+        get Category(): string | null {  
+            return this.Get('Category');
         }
         
 
@@ -15905,21 +15815,21 @@ import { RegisterClass } from "@memberjunction/global";
         }
         
         /**
-        * * Field Name: SourceList
-        * * Display Name: Source List
-        * * SQL Data Type: nvarchar(100)
-        */
-        get SourceList(): string {  
-            return this.Get('SourceList');
-        }
-        
-        /**
         * * Field Name: ApprovedByUser
         * * Display Name: Approved By User
         * * SQL Data Type: nvarchar(100)
         */
         get ApprovedByUser(): string | null {  
             return this.Get('ApprovedByUser');
+        }
+        
+        /**
+        * * Field Name: SourceList
+        * * Display Name: Source List
+        * * SQL Data Type: nvarchar(100)
+        */
+        get SourceList(): string {  
+            return this.Get('SourceList');
         }
         
 
@@ -17604,7 +17514,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Context Type
         * * SQL Data Type: nvarchar(255)
         */
-        get ContextType(): string | null {  
+        get ContextType(): string {  
             return this.Get('ContextType');
         }
         

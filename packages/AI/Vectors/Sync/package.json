@@ -2,15 +2,26 @@
   "name": "@memberjunction/ai-vector-sync",
   "version": "1.8.1",
   "description": "MemberJunction: AI Vector/Entity Sync Package - handles synchronization between MemberJunction entities and vector databases",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.cts",
+  "exports": {
+    "require": {
+      "types": "./dist/index.d.cts",
+      "default": "./dist/index.cjs"
+    },
+    "import": {
+      "types": "./dist/index.d.mts",
+      "default": "./dist/index.mjs"
+    }
+  },
+  "type": "module",
   "files": [
     "/dist"
   ],
   "scripts": {
-    "start": "ts-node-dev src/index.ts",
-    "build": "tsc",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "build": "pkgroll --sourcemap --minify",
+    "watch": "pkgroll --sourcemap --watch"
   },
   "author": "MemberJunction.com",
   "license": "ISC",
@@ -29,7 +40,7 @@
   "devDependencies": {
     "@types/mssql": "^9.1.5",
     "@types/node": "20.14.2",
-    "ts-node-dev": "^2.0.0",
+    "pkgroll": "2.1.1",
     "typescript": "^5.4.5"
   }
 }

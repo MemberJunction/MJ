@@ -1,7 +1,7 @@
 {
   "compilerOptions": {
-    "module": "commonjs",
-    "target": "es2020",
+    "module": "ESNext",
+    "target": "ESNext",
     "outDir": "dist",
     "rootDir": "src",
     "sourceMap": true,
@@ -23,8 +23,7 @@
     "noFallthroughCasesInSwitch": true,
     "allowSyntheticDefaultImports": true,
     "emitDecoratorMetadata": true,
-    "skipLibCheck": true,
-    "tsBuildInfoFile": "dist/tsconfig.tsbuildinfo"
+    "skipLibCheck": true
   },
   "exclude": ["node_modules"],
   "include": ["./src/**/*.ts"]

@@ -5,7 +5,7 @@ import { VectorDBBase } from "@memberjunction/ai-vectordb";
 import { MJGlobal } from "@memberjunction/global";
 import { AIModelEntity, DuplicateRunDetailEntity, DuplicateRunDetailMatchEntity, DuplicateRunEntity, EntityDocumentEntity, EntityEntity, ListDetailEntity, ListEntity, VectorDatabaseEntity } from "@memberjunction/core-entities";
 import { VectorBase } from "@memberjunction/ai-vectors";
-import { EntityDocumentTemplateParser, EntityDocumentTemplateParserBase, EntityVectorSyncer, VectorSyncRequest } from "@memberjunction/ai-vector-sync";
+import { EntityDocumentTemplateParser, EntityVectorSyncer, VectorSyncRequest } from "@memberjunction/ai-vector-sync";
 
 export class DuplicateRecordDetector extends VectorBase {
 
@@ -17,9 +17,9 @@ export class DuplicateRecordDetector extends VectorBase {
         this._runView = new RunView();
     }
 
-    public async getDuplicateRecords(params: PotentialDuplicateRequest, contextUser?: UserInfo): Promise<PotentialDuplicateResponse> {        
+    public async getDuplicateRecords(params: PotentialDuplicateRequest, contextUser?: UserInfo): Promise<PotentialDuplicateResponse> {
         super.CurrentUser = contextUser;
-        
+
         //for testing
         //params.EntityID = 25050001;
         //params.EntityDocumentID = 17;
@@ -36,7 +36,7 @@ export class DuplicateRecordDetector extends VectorBase {
             if(!entityDocument){
                 throw Error(`No active Entity Document found for entity ${params.EntityID}`);
                 //Update: No longer creating an entity docuement if one is not found
-                //If an entitiy document is not found, that is our indicator that the 
+                //If an entitiy document is not found, that is our indicator that the
                 //underlying entity's records have not been vectorized yet
                 //const defaultVectorDB: VectorDatabaseEntity = super.getVectorDatabase();
                 //const defaultAIModel: AIModelEntity = super.getAIModel();
@@ -62,7 +62,8 @@ export class DuplicateRecordDetector extends VectorBase {
         }
 
         console.log("vectorizing entity...");
-        await vectorizer.VectorizeEntity(request, super.CurrentUser);
+        const templateParser = EntityDocumentTemplateParser.CreateInstance();
+        await vectorizer.VectorizeEntity(request, templateParser, super.CurrentUser);
 
         const list: ListEntity = await this.getListEntity(params.ListID);
         let duplicateRun: DuplicateRunEntity = params.Options?.DuplicateRunID ? await this.getDuplicateRunEntity(params.Options?.DuplicateRunID) : await this.getDuplicateRunEntityByListID(list.ID);
@@ -112,17 +113,16 @@ export class DuplicateRecordDetector extends VectorBase {
 
         LogStatus("Vectorizing " + records.length + " records");
 
-        const templateParser: EntityDocumentTemplateParserBase = EntityDocumentTemplateParser.CreateInstance();
         const recordTemplates: string[] = [];
         //Relationship(entityID: number, entityRecord: any, relationshipName: string, maxRows: number, entityDocumentName: string)
-        let sampleTemplate: string = entityDocument.TemplateID;
+        let sampleTemplate: string = (entityDocument as any).Template;
         //sampleTemplate += " ${Relationship('Deals', 5, 'Sample Relationship Document for crm.Deals Entity')} ${Relationship('Deals', 5, 'Second Sample Relationship Document for crm.Deals Entity')}";
         for(const record of records){
             const template = await templateParser.Parse(sampleTemplate, entityDocument.EntityID, record, contextUser);
             recordTemplates.push(template);
         }
 
-        let embedTextsResult = await this._embedding.EmbedTexts({ texts: recordTemplates, model: null });        
+        let embedTextsResult = await this._embedding.EmbedTexts({ texts: recordTemplates, model: null });
         const topK: number = 5;
         let results: PotentialDuplicateResult[] = [];
         for (const [index, vector] of embedTextsResult.vectors.entries()){
@@ -133,16 +133,16 @@ export class DuplicateRecordDetector extends VectorBase {
                     return dupe.ProbabilityScore >= entityDocument.PotentialMatchThreshold;
                 });
                 let result: PotentialDuplicateResult = queryResult.data as PotentialDuplicateResult;
-                
+
                 result.EntityID = entityDocument.EntityID;
                 result.RecordCompositeKey = compositeKey;
                 results.push(result);
-                
+
                 //now update all of the dupe run detail records
                 let dupeRunDetail: DuplicateRunDetailEntity = duplicateRunDetails.find((detail) => detail.RecordID === compositeKey.ToString());
                 if(dupeRunDetail){
                     const matchRecords = await this.createDuplicateRunDetailMatchesForRecord(dupeRunDetail.ID, result);
-                    result.DuplicateRunDetailMatchRecordIDs = matchRecords.map((match) => match.ID);    
+                    result.DuplicateRunDetailMatchRecordIDs = matchRecords.map((match) => match.ID);
                     dupeRunDetail.MatchStatus = 'Complete';
                     let success = await super.SaveEntity(dupeRunDetail);
                     if(!success){
@@ -203,7 +203,7 @@ export class DuplicateRecordDetector extends VectorBase {
         duplicateRun.ProcessingStatus = 'In Progress';
         duplicateRun.ApprovalStatus = 'Pending';
         duplicateRun.SourceListID = listID;
-        
+
         const saveResult = await super.SaveEntity(duplicateRun);
         if(!saveResult){
             throw new Error(`Failed to save list for Potential Duplicate Run`);
@@ -233,10 +233,10 @@ export class DuplicateRecordDetector extends VectorBase {
 
     private async createDuplicateRunDetailRecordsByListID(listID: string, duplicateRunID: string): Promise<DuplicateRunDetailEntity[]> {
         let results: DuplicateRunDetailEntity[] = [];
-        const viewResults = await super.RunView.RunView({ 
-            EntityName: 'List Details', 
+        const viewResults = await super.RunView.RunView({
+            EntityName: 'List Details',
             ExtraFilter: `ListID = '${listID}'`,
-            ResultType: 'entity_object'}, 
+            ResultType: 'entity_object'},
             super.CurrentUser);
 
         if(!viewResults.Success){

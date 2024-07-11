@@ -125,14 +125,14 @@ import { EntityAIActionEntity } from '@memberjunction/core-entities';
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="AIModel"
+            FieldName="AIAction"
             Type="textbox"
             [EditMode]="EditMode"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="AIAction"
+            FieldName="AIModel"
             Type="textbox"
             [EditMode]="EditMode"
         ></mj-form-field>

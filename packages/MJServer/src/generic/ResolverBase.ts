@@ -23,9 +23,9 @@ export class ResolverBase {
       const md = new Metadata();
       const entityInfo = md.Entities.find((e) => e.Name === entityName);
       if (!entityInfo) throw new Error(`Entity ${entityName} not found in metadata`);
-      const fields = entityInfo.Fields.filter((f) => f.Name !== f.CodeName || f.Name.startsWith('__mj_'));
+      // const fields = entityInfo.Fields.filter((f) => f.Name !== f.CodeName || f.Name.startsWith('__mj_'));
       const mapper = new FieldMapper();
-      fields.forEach((f) => {
+      entityInfo.Fields.forEach((f) => {
         if (dataObject.hasOwnProperty(f.Name)) {
           // GraphQL doesn't allow us to pass back fields with __ so we are mapping our special field cases that start with __mj_ to _mj__ for transport - they are converted back on the other side automatically
           dataObject[mapper.MapFieldName(f.CodeName)] = dataObject[f.Name];
