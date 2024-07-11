@@ -1,6 +1,6 @@
 {
   "compilerOptions": {
-    "module": "commonjs",
+    "module": "ESNext",
     "target": "es2020",
     "outDir": "dist",
     "rootDir": "src",
@@ -24,6 +24,9 @@
     "allowSyntheticDefaultImports": true,
     "emitDecoratorMetadata": true,
     "skipLibCheck": true
+  },
+  "ts-node": {
+    "esm": true
   },
   "exclude": ["node_modules", "../../node_modules/@types/plotly.js"],
   "include": ["./src/**/*.ts"]

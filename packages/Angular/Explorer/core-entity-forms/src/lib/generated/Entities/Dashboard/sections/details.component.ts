@@ -65,14 +65,14 @@ import { DashboardEntity } from '@memberjunction/core-entities';
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="User"
+            FieldName="Category"
             Type="textbox"
             [EditMode]="EditMode"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="Category"
+            FieldName="User"
             Type="textbox"
             [EditMode]="EditMode"
         ></mj-form-field>
