@@ -1,4 +1,4 @@
-import { Embeddings, GetAIAPIKey } from '@memberjunction/ai';
+import { Embeddings, EmbedTextsResult, GetAIAPIKey } from '@memberjunction/ai';
 import { VectorDBBase } from '@memberjunction/ai-vectordb';
 import { VectorBase } from '@memberjunction/ai-vectors';
 import { BaseEntity, EntityField, LogError, LogStatus, Metadata, RunViewResult, UserInfo } from '@memberjunction/core';
@@ -15,7 +15,7 @@ import { resolve } from 'node:path';
 import { PassThrough } from 'node:stream';
 import { AIEngine } from '@memberjunction/aiengine';
 import { TemplateEngineServer } from '@memberjunction/templates';
-import { TemplateEntityExtended } from '@memberjunction/templates-base-types';
+import { TemplateEntityExtended, TemplateRenderResult } from '@memberjunction/templates-base-types';
 
 export type ArchiveWorkerContext = {
   executionId: number;
@@ -66,6 +66,7 @@ export class EntityVectorSyncer extends VectorBase {
     //small number in the hopes we dont hit embedding token limits
     const pageSize: number = 2;
 
+    let testRecords: BaseEntity[] = [];
     const dataStream = new PagedRecords();
     const workerContext = { executionId: Date.now(), entity, entityDocument };
     const annotator = new BatchWorker({
@@ -81,6 +82,7 @@ export class EntityVectorSyncer extends VectorBase {
       let hasMore = true;
       while (hasMore) {
         const recordsPage: BaseEntity[] = await super.pageRecordsByEntityID<BaseEntity>(request.entityID, pageNumber, pageSize );
+        testRecords.push(...recordsPage);
         const items: {}[] = recordsPage.map((e: BaseEntity) => e.GetAll());
         dataStream.addPage(items);
         if (recordsPage.length < pageSize) {
@@ -98,10 +100,10 @@ export class EntityVectorSyncer extends VectorBase {
     };
 
     // page data asynchrounously and add to the data stream
-    getData();
+    await getData();
 
-    console.log('Starting pipeline');
-    await pipeline(dataStream, annotator, archiver, new PassThrough({ objectMode: true }));
+    //console.log('Starting pipeline');
+    //await pipeline(dataStream, annotator, archiver, new PassThrough({ objectMode: true }));
 
     // const chunks: BaseEntity[][] = this.chunkArray(allrecords, batchSize);
     // LogStatus(`Processing ${allrecords.length} records in ${chunks.length} chunks of ${batchSize} records each`);
@@ -178,6 +180,35 @@ export class EntityVectorSyncer extends VectorBase {
 
     const endTime: number = new Date().getTime();
     LogStatus(`Finished vectorizing ${entityDocument.Entity} entity in ${endTime - startTime} ms`);
+
+    LogStatus('testing vectorizing entities with template engine');
+
+    await TemplateEngineServer.Instance.Config(false, contextUser);
+    const template: TemplateEntityExtended | undefined = TemplateEngineServer.Instance.Templates.find((t) => t.ID === (entityDocument.TemplateID || "370D3B93-C73F-EF11-86D4-0022481D1B23"));
+    if(!template){
+      throw new Error(`Template not found with ID ${entityDocument.TemplateID}`);
+    }
+
+    if(template.Content.length > 1){
+      throw new Error('Templates associated with Entity Documents should only have one Template Content reocrd.');
+    }
+
+    LogStatus(`template countent count: ${template.Content.length}`);
+    
+
+    for (const record of testRecords) {
+      const entityData: {Entity: any} = {
+        Entity: record.GetAll()
+      };
+      let result: TemplateRenderResult = await TemplateEngineServer.Instance.RenderTemplate(template, template.Content[0], entityData);
+      if(result.Success){
+        LogStatus(`Successfully rendered template for record ${record.Get("ID")}`);
+        LogStatus(result.Output);
+      }
+      else{
+        LogError(`Error rendering template for record ${record.Get("ID")}`, undefined, result.Message);
+      }
+    }
 
     return null;
   }
@@ -353,8 +384,10 @@ export class EntityVectorSyncer extends VectorBase {
       LogError('Error saving Template Entity', undefined, templateEntity.LatestResult);
       throw new Error(templateEntity.LatestResult.Message);
     }
+    LogStatus(`Successfully created new Template Entity ${templateEntity.ID}`);
 
     //next, create the template contents record
+    await TemplateEngineServer.Instance.Config(false, super.CurrentUser);
     const textContentType: TemplateContentTypeEntity = TemplateEngineServer.Instance.TemplateContentTypes.find((type: TemplateContentTypeEntity) => type.Name === 'Text');
     if(!textContentType){
       throw new Error('Text template content type not found');
@@ -375,6 +408,7 @@ export class EntityVectorSyncer extends VectorBase {
       LogError('Error saving Template Entity', undefined, templateContentsEntity.LatestResult);
       throw new Error(templateContentsEntity.LatestResult.Message);
     }
+    LogStatus(`Successfully created new Template Content Entity ${templateContentsEntity.ID}`);
 
     //next, create the template params record
     const templateParamsEntity: TemplateParamEntity = await super.Metadata.GetEntityObject<TemplateParamEntity>('Template Params');
@@ -396,6 +430,7 @@ export class EntityVectorSyncer extends VectorBase {
       LogError('Error saving Template Entity', undefined, templateParamsEntity.LatestResult);
       throw new Error(templateParamsEntity.LatestResult.Message);
     }
+    LogStatus(`Successfully created new Template Param Entity ${templateParamsEntity.ID}`);
     
     templateEntity.Content.push(templateContentsEntity);
     templateEntity.Params.push(templateParamsEntity);

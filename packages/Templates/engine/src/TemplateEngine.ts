@@ -1,4 +1,4 @@
-import { UserInfo } from "@memberjunction/core";
+import { UserInfo, ValidationErrorInfo } from "@memberjunction/core";
 import { TemplateContentEntity } from "@memberjunction/core-entities";
 import * as nunjucks from 'nunjucks';
 import { MJGlobal } from "@memberjunction/global";
@@ -108,7 +108,9 @@ export class TemplateEngineServer extends TemplateEngineBase {
                 return {
                     Success: false,
                     Output: null,
-                    Message: valResult.Errors.join(', ')
+                    Message: valResult.Errors.map((error: ValidationErrorInfo) => {
+                        return error.Message;
+                    }).join(', ')
                 };
             }
      
