@@ -2,7 +2,7 @@ import { Embeddings, GetAIAPIKey } from '@memberjunction/ai';
 import { VectorDBBase } from '@memberjunction/ai-vectordb';
 import { VectorBase } from '@memberjunction/ai-vectors';
 import { BaseEntity, EntityField, LogError, LogStatus, Metadata, UserInfo } from '@memberjunction/core';
-import { AIModelEntity, EntityDocumentEntity, VectorDatabaseEntity, VectorIndexEntity } from '@memberjunction/core-entities';
+import { AIModelEntity, EntityDocumentEntity, EntityDocumentTypeEntity, TemplateContentEntity, TemplateEntity, VectorDatabaseEntity, VectorIndexEntity } from '@memberjunction/core-entities';
 import { MJGlobal } from '@memberjunction/global';
 import { pipeline } from 'node:stream/promises';
 import { RECORD_DUPLICATES_TYPE_ID } from '../constants';
@@ -13,6 +13,10 @@ import { EntityDocumentCache } from './EntityDocumentCache';
 import { PagedRecords } from './PagedRecords';
 import { resolve } from 'node:path';
 import { PassThrough } from 'node:stream';
+import { AIEngine } from '@memberjunction/aiengine';
+import { TemplateEngineServer } from '@memberjunction/templates';
+
+LoadTemplateEntityExtended();
 
 export type ArchiveWorkerContext = {
   executionId: number;
@@ -32,6 +36,13 @@ export class EntityVectorSyncer extends VectorBase {
 
   constructor() {
     super();
+  }
+
+  public async Config(contextUser?: UserInfo): Promise<void> {
+    super.CurrentUser = contextUser;
+    await EntityDocumentCache.Instance.Refresh(contextUser);
+    await AIEngine.Instance.Config(false, contextUser);
+    await TemplateEngineServer.Instance.Config(false, contextUser);
   }
 
   public async VectorizeEntity(request: VectorSyncRequest, contextUser?: UserInfo): Promise<any> {
@@ -70,8 +81,8 @@ export class EntityVectorSyncer extends VectorBase {
       let pageNumber = 0;
       let hasMore = true;
       while (hasMore) {
-        const recordsPage: Array<BaseEntity> = await super.pageRecordsByEntityID(request.entityID, { pageNumber, pageSize });
-        const items = recordsPage.map((e) => e.GetAll());
+        const recordsPage: BaseEntity[] = await super.pageRecordsByEntityID<BaseEntity>(request.entityID, pageNumber, pageSize );
+        const items: {}[] = recordsPage.map((e: BaseEntity) => e.GetAll());
         dataStream.addPage(items);
         if (recordsPage.length < pageSize) {
           hasMore = false;
@@ -180,7 +191,7 @@ export class EntityVectorSyncer extends VectorBase {
    * @returns
    */
   public async CreateDefaultEntityDocument(
-    EntityID: number,
+    EntityID: string,
     VectorDatabase: VectorDatabaseEntity,
     AIModel: AIModelEntity
   ): Promise<EntityDocumentEntity> {
@@ -198,7 +209,7 @@ export class EntityVectorSyncer extends VectorBase {
     entityDocument.EntityID = EntityID;
     entityDocument.TypeID = RECORD_DUPLICATES_TYPE_ID;
     entityDocument.Status = 'Active';
-    entityDocument.Template = EDTemplate;
+    entityDocument.TemplateID = EDTemplate;
     entityDocument.VectorDatabaseID = VectorDatabase.ID;
     entityDocument.AIModelID = AIModel.ID;
     let saveResult = await this.SaveEntity(entityDocument);
@@ -210,7 +221,7 @@ export class EntityVectorSyncer extends VectorBase {
   }
 
   protected async GetVectorDatabaseAndEmbeddingClassByEntityDocumentID(
-    entityDocumentID: number,
+    entityDocumentID: string,
     createDocumentIfNotFound: boolean = false
   ): Promise<{ embedding: Embeddings; vectorDB: VectorDBBase }> {
     let entityDocument: EntityDocumentEntity | null =
@@ -259,7 +270,7 @@ export class EntityVectorSyncer extends VectorBase {
     return { embedding, vectorDB };
   }
 
-  public async GetEntityDocument(EntityDocumentID: number): Promise<EntityDocumentEntity | null> {
+  public async GetEntityDocument(EntityDocumentID: string): Promise<EntityDocumentEntity | null> {
     const cache = EntityDocumentCache.Instance;
     if (!cache.IsLoaded) {
       await cache.Refresh(super.CurrentUser);
@@ -275,10 +286,16 @@ export class EntityVectorSyncer extends VectorBase {
     return cache.GetDocumentByName(EntityDocumentName);
   }
 
-  public async GetFirstActiveEntityDocumentForEntity(entityID: number): Promise<EntityDocumentEntity | null> {
+  public async GetFirstActiveEntityDocumentForEntity(entityID: string): Promise<EntityDocumentEntity | null> {
+    const entityDocumentTypeID: EntityDocumentTypeEntity | undefined = AIEngine.EntityDocumentTypes.find((documentType: EntityDocumentTypeEntity) => documentType.Name === 'Record Duplicate');
+
+    if (!entityDocumentTypeID) {
+      throw new Error('Entity Document Type not found');
+    }
+
     const entityDocument: EntityDocumentEntity = await this.runViewForSingleValue<EntityDocumentEntity>(
       'Entity Documents',
-      `EntityID = ${entityID} AND TypeID = 9 AND Status = 'Active'`
+      `EntityID = '${entityID}' AND TypeID = '${entityDocumentTypeID.ID}' AND Status = 'Active'`
     );
     if (!entityDocument) {
       LogError(`No active Entity Document with entityID=${entityID} found`);
@@ -291,7 +308,7 @@ export class EntityVectorSyncer extends VectorBase {
   private async GetOrCreateVectorIndex(entityDocument: EntityDocumentEntity): Promise<VectorIndexEntity> {
     let vectorIndexEntity: VectorIndexEntity = await super.runViewForSingleValue(
       'Vector Indexes',
-      `VectorDatabaseID = ${entityDocument.VectorDatabaseID} AND EmbeddingModelID = ${entityDocument.AIModelID}`
+      `VectorDatabaseID = '${entityDocument.VectorDatabaseID}' AND EmbeddingModelID = '${entityDocument.AIModelID}'`
     );
     if (vectorIndexEntity) {
       return vectorIndexEntity;
@@ -323,6 +340,32 @@ export class EntityVectorSyncer extends VectorBase {
     }
   }
 
+  protected async CreateTemplateForEntityDocument(entityDocument: EntityDocumentEntity): Promise<TemplateEntity> {
+    const templateEntity: TemplateEntity = await super.Metadata.GetEntityObject<TemplateEntity>('Templates');
+    templateEntity.NewRecord();
+    templateEntity.Name = `Template for EntityDocument ${entityDocument.EntityID}`;
+    templateEntity.Description = `The template used by EntityDocument ${entityDocument.ID}`
+    templateEntity.UserID = super.CurrentUser.ID;
+    templateEntity.IsActive = true;
+    templateEntity.CategoryID = null;
+
+    const templateEntitySaveResult = await templateEntity.Save();
+    if(!templateEntitySaveResult){
+      LogError('Error saving Template Entity', undefined, templateEntity.LatestResult);
+      throw new Error(templateEntity.LatestResult.Message);
+    }
+
+    TemplateEngineServer.Instance.AddTemplate(templateEntity);
+
+    //next, create the template contents record
+    const templateContentsEntity: TemplateContentEntity = await super.Metadata.GetEntityObject<TemplateContentEntity>('Template Contents');
+    templateContentsEntity.NewRecord();
+    templateContentsEntity.TemplateID = templateEntity.ID;
+
+
+    
+  }
+
   private chunkArray(array: any[], chunkSize: number): BaseEntity[][] {
     let arrayCopy = [...array];
     let result: BaseEntity[][] = [];
@@ -351,3 +394,7 @@ export class EntityVectorSyncer extends VectorBase {
     return new Promise((resolve) => setTimeout(resolve, delayInms));
   };
 }
+function LoadTemplateEntityExtended() {
+  throw new Error('Function not implemented.');
+}
+

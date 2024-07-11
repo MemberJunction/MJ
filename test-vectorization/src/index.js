@@ -9,33 +9,38 @@ import { AppDataSource } from './db.js';
 import { LoadOpenAILLM } from '@memberjunction/ai-openai';
 import { LoadPineconeVectorDB } from '@memberjunction/ai-vectors-pinecone';
 
-const SYSTEM_USER_ID = 8;
+const SYSTEM_USER_ID = "EDAFCCEC-6A37-EF11-86D4-000D3A4E707E";
 
 const config = new SQLServerProviderConfigData(AppDataSource, '', '__mj', 5000);
 
-await AppDataSource.initialize();
-await setupSQLServerClient(config);
+const dataSource = await AppDataSource.initialize();
+const sqlServerDataProvider = await setupSQLServerClient(config);
 
 LoadGeneratedEntities();
 LoadOpenAILLM();
 LoadPineconeVectorDB();
 
 const params = {
-  EntityID: 25051002, // Contacts
-  EntityDocumentID: 1,
+  EntityID: "5F248F34-2837-EF11-86D4-6045BDEE16E6", // Accounts
+  EntityDocumentID: "A4AECCEC-6A37-EF11-86D4-000D3A4E707E",
 };
 
 const md = new Metadata();
-const systemUser = new UserInfo(md, {
+const systemUser = new UserInfo(sqlServerDataProvider, {
   ID: SYSTEM_USER_ID,
-  Name: 'System User',
-  Email: 'not.set@nowhere.com',
-  UserRoles: [{ UserID: SYSTEM_USER_ID, RoleName: 'UI' }],
+  Name: 'Jonathan Stfelix',
+  Email: 'jonathan.stfelix@bluecypress.io',
+  UserRoles: [
+    { UserID: SYSTEM_USER_ID, RoleName: 'UI', RoleID: 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E' }, 
+    { UserID: SYSTEM_USER_ID, RoleName: 'Developer', RoleID: 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E' },
+    { UserID: SYSTEM_USER_ID, RoleName: 'Integration', RoleID: 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E' }
+  ],
 });
 
 let vectorizer = new EntityVectorSyncer();
-vectorizer.CurrentUser = systemUser;
+//await vectorizer.Config(false, systemUser);
 
+vectorizer.CurrentUser = systemUser;
 await AIEngine.Instance.Config(false, systemUser);
 
 let entityDocument = null;
@@ -68,3 +73,4 @@ await vectorizer.VectorizeEntity(request, systemUser);
 
 console.log('Done');
 process.exit('0');
+

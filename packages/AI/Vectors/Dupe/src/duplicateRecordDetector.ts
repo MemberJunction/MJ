@@ -115,7 +115,7 @@ export class DuplicateRecordDetector extends VectorBase {
         const templateParser: EntityDocumentTemplateParserBase = EntityDocumentTemplateParser.CreateInstance();
         const recordTemplates: string[] = [];
         //Relationship(entityID: number, entityRecord: any, relationshipName: string, maxRows: number, entityDocumentName: string)
-        let sampleTemplate: string = entityDocument.Template;
+        let sampleTemplate: string = entityDocument.TemplateID;
         //sampleTemplate += " ${Relationship('Deals', 5, 'Sample Relationship Document for crm.Deals Entity')} ${Relationship('Deals', 5, 'Second Sample Relationship Document for crm.Deals Entity')}";
         for(const record of records){
             const template = await templateParser.Parse(sampleTemplate, entityDocument.EntityID, record, contextUser);

@@ -69,3 +69,7 @@ export class TemplateEntityExtended extends TemplateEntity {
         return result;
     }
 }
+
+export function LoadTemplateEntityExtended() {
+    // this does nothing but prevents the class from being removed by the tree shaker
+}

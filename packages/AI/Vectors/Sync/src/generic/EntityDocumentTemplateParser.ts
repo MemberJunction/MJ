@@ -170,7 +170,7 @@ export class EntityDocumentTemplateParser extends EntityDocumentTemplateParserBa
                     
                     for (let i = 0; i < reData.Data.length; i += batchSize) {
                         const batchPromises = reData.Data.slice(i, i + batchSize).map(data => {
-                            return parser.Parse(doc.Template, re.RelatedEntityID, data, ContextUser);
+                            return parser.Parse("", re.RelatedEntityID, data, ContextUser);
                         });
                         const batchResults = await Promise.all(batchPromises);
                         results.push(...batchResults);
