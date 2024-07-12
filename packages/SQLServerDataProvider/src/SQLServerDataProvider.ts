@@ -531,7 +531,6 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
                 sUserSearchSQL = '(' + sUserSearchSQL + ')'; // wrap the entire search string in parens
         }
 
-
         return sUserSearchSQL;
     }
 

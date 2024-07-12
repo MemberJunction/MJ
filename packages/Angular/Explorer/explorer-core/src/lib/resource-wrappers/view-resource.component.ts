@@ -20,16 +20,17 @@ export function LoadViewResource() {
 export class UserViewResource extends BaseResourceComponent {
     async GetResourceDisplayName(data: ResourceData): Promise<string> {
         const md = new Metadata();
-        if (data.ResourceRecordID?.length > 0) {
+        if (data.ResourceRecordID) {
             let compositeKey: CompositeKey = new CompositeKey([{FieldName: "ID", Value: data.ResourceRecordID}]);
             const name = await md.GetEntityRecordName('User Views', compositeKey);
-            return name ? name : 'View: ' + data.ResourceRecordID;
+            return name ? name : `View: ${data.ResourceRecordID}`;
         }
         else if (data.Configuration?.Entity && data.Configuration?.Entity.length > 0) {
             return `${data.Configuration?.Entity} [Dynamic${data.Configuration.ExtraFilter ? ' - Filtered' : ' - All'}]`;
         }
-        else
+        else{
             return 'User Views [Error]';
+        }
     }
     async GetResourceIconClass(data: ResourceData): Promise<string> {
         return '';

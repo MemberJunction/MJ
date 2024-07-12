@@ -1,7 +1,7 @@
 import dotenv from 'dotenv';
 dotenv.config();
 
-import { runMemberJunctionCodeGeneration, initializeConfig } from '@memberjunction/codegen-lib'
+import { runMemberJunctionCodeGeneration, initializeConfig } from '@memberjunction/codegen-lib';
 
 // Initialize configuration
 initializeConfig(process.cwd());

@@ -153,14 +153,15 @@ export class ApplicationViewComponent extends BaseBrowserComponent implements On
             const existing = existingUserAppEntities.find(uae => uae.EntityID === e.ID);
             if (existing) {
               existing.Sequence = index;
+              existing.EntityID = e.ID;
               userAppEntitiesToSave.push(existing);
             } 
             else {
               // this is a new app entity that the user has selected
               const newApp = await md.GetEntityObject<UserApplicationEntityEntity>("User Application Entities");
               newApp.UserApplicationID = this.userApp!.ID;
-              newApp.EntityID = e.ID;
               newApp.Sequence = index;
+              newApp.EntityID = e.ID;
               userAppEntitiesToSave.push(newApp);
             }
           }
