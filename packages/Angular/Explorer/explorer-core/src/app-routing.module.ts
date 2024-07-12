@@ -267,6 +267,9 @@ export class AppRoutingModule {
         throw new Error(`No registration found for Explorer Navigation Item: ${item.Name}`);
       }
     });
-    this.router.resetConfig([...this.router.config, ...dynamicRoutes]);
+
+    // create a combined routes array and make sure that we filter out any dynamic routes that are ALREADY in the router config
+    const newCombinedRoutes = [...routes, ...dynamicRoutes.filter(route => !routes.some(r => r.path?.trim().toLowerCase() === route.path?.trim().toLowerCase()))];
+    this.router.resetConfig(newCombinedRoutes);
   }
 }
