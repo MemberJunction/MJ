@@ -6,7 +6,6 @@ import { AIModelEntity, EntityDocumentEntity, EntityDocumentTypeEntity, Template
 import { MJGlobal } from '@memberjunction/global';
 import { pipeline } from 'node:stream/promises';
 import { RECORD_DUPLICATES_TYPE_ID } from '../constants';
-//import { EntityDocumentTemplateParser } from '../generic/EntityDocumentTemplateParser';
 import { VectorSyncRequest } from '../generic/vectorSync.types';
 import { BatchWorker } from './BatchWorker';
 import { EntityDocumentCache } from './EntityDocumentCache';
@@ -15,7 +14,7 @@ import { resolve } from 'node:path';
 import { PassThrough } from 'node:stream';
 import { AIEngine } from '@memberjunction/aiengine';
 import { TemplateEngineServer } from '@memberjunction/templates';
-import { TemplateEntityExtended, TemplateRenderResult } from '@memberjunction/templates-base-types';
+import { TemplateEntityExtended } from '@memberjunction/templates-base-types';
 
 export type ArchiveWorkerContext = {
   executionId: number;
@@ -51,6 +50,7 @@ export class EntityVectorSyncer extends VectorBase {
 
     const startTime: number = new Date().getTime();
     super.CurrentUser = contextUser;
+    await TemplateEngineServer.Instance.Config(false, contextUser);
     //const parser = EntityDocumentTemplateParser.CreateInstance();
     const entityDocument: EntityDocumentEntity = await this.GetEntityDocument(request.entityDocumentID);
     const vectorIndexEntity: VectorIndexEntity = await this.GetOrCreateVectorIndex(entityDocument);
@@ -66,24 +66,34 @@ export class EntityVectorSyncer extends VectorBase {
     //small number in the hopes we dont hit embedding token limits
     const pageSize: number = 2;
 
-    let testRecords: BaseEntity[] = [];
     const dataStream = new PagedRecords();
     const workerContext = { executionId: Date.now(), entity, entityDocument };
+
+    //annotator worker handles vectorizing the records 
     const annotator = new BatchWorker({
       workerFile: resolve(__dirname, 'workers/annotationWorker.js'),
       batchSize: 3,
       concurrencyLimit: 2,
       workerContext,
     });
-    const archiver = new BatchWorker({ workerFile: resolve(__dirname, 'workers/archiveWorker.js'), batchSize: 4, workerContext });
+
+    //archiver worker handles upserting the vectors into the vector database
+    const archiver = new BatchWorker({ 
+      workerFile: resolve(__dirname, 'workers/archiveWorker.js'), 
+      batchSize: 4, 
+      workerContext
+    });
 
     const getData = async () => {
       let pageNumber = 0;
       let hasMore = true;
       while (hasMore) {
         const recordsPage: BaseEntity[] = await super.pageRecordsByEntityID<BaseEntity>(request.entityID, pageNumber, pageSize );
-        testRecords.push(...recordsPage);
-        const items: {}[] = recordsPage.map((e: BaseEntity) => e.GetAll());
+        const items: {}[] = recordsPage.map((e: BaseEntity) => {
+          return {
+            Entity: e.GetAll()
+          };
+        });
         dataStream.addPage(items);
         if (recordsPage.length < pageSize) {
           hasMore = false;
@@ -100,10 +110,10 @@ export class EntityVectorSyncer extends VectorBase {
     };
 
     // page data asynchrounously and add to the data stream
-    await getData();
+    getData();
 
-    //console.log('Starting pipeline');
-    //await pipeline(dataStream, annotator, archiver, new PassThrough({ objectMode: true }));
+    console.log('Starting pipeline');
+    await pipeline(dataStream, annotator, archiver, new PassThrough({ objectMode: true }));
 
     // const chunks: BaseEntity[][] = this.chunkArray(allrecords, batchSize);
     // LogStatus(`Processing ${allrecords.length} records in ${chunks.length} chunks of ${batchSize} records each`);
@@ -180,36 +190,6 @@ export class EntityVectorSyncer extends VectorBase {
 
     const endTime: number = new Date().getTime();
     LogStatus(`Finished vectorizing ${entityDocument.Entity} entity in ${endTime - startTime} ms`);
-
-    LogStatus('testing vectorizing entities with template engine');
-
-    await TemplateEngineServer.Instance.Config(false, contextUser);
-    const template: TemplateEntityExtended | undefined = TemplateEngineServer.Instance.Templates.find((t) => t.ID === (entityDocument.TemplateID || "370D3B93-C73F-EF11-86D4-0022481D1B23"));
-    if(!template){
-      throw new Error(`Template not found with ID ${entityDocument.TemplateID}`);
-    }
-
-    if(template.Content.length > 1){
-      throw new Error('Templates associated with Entity Documents should only have one Template Content reocrd.');
-    }
-
-    LogStatus(`template countent count: ${template.Content.length}`);
-    
-
-    for (const record of testRecords) {
-      const entityData: {Entity: any} = {
-        Entity: record.GetAll()
-      };
-      let result: TemplateRenderResult = await TemplateEngineServer.Instance.RenderTemplate(template, template.Content[0], entityData);
-      if(result.Success){
-        LogStatus(`Successfully rendered template for record ${record.Get("ID")}`);
-        LogStatus(result.Output);
-      }
-      else{
-        LogError(`Error rendering template for record ${record.Get("ID")}`, undefined, result.Message);
-      }
-    }
-
     return null;
   }
 
@@ -486,7 +466,7 @@ export class EntityVectorSyncer extends VectorBase {
     return JSON.stringify(obj);
   }
 
-  private delay = (delayInms) => {
+  private delay = (delayInms: number) => {
     return new Promise((resolve) => setTimeout(resolve, delayInms));
   };
 }
