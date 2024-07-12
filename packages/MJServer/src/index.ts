@@ -77,8 +77,9 @@ export const serve = async (resolverPaths: Array<string>) => {
 
   const combinedResolverPaths = [...resolverPaths, ...localResolverPaths];
 
-  const replaceBackslashes = sep === '\\';
-  const paths = combinedResolverPaths.flatMap((path) => fg.globSync(replaceBackslashes ? path.replace(/\\/g, '/') : path));
+  const isWindows = sep === '\\';
+  const globs = combinedResolverPaths.flatMap((path) => (isWindows ? path.replace(/\\/g, '/') : path));
+  const paths = fg.globSync(globs);
   if (paths.length === 0) {
     console.warn(`No resolvers found in ${combinedResolverPaths.join(', ')}`);
     console.log({ combinedResolverPaths, paths, cwd: process.cwd() });
@@ -109,7 +110,7 @@ export const serve = async (resolverPaths: Array<string>) => {
   /******TEST HARNESS FOR CHANGE DETECTION */
   /******TEST HARNESS FOR CHANGE DETECTION */
 
-  const dynamicModules = await Promise.all(paths.map((modulePath) => import(modulePath.replace(/\.[jt]s$/, ''))));
+  const dynamicModules = await Promise.all(paths.map((modulePath) => import(isWindows ? `file://${modulePath}` : modulePath)));
   const resolvers = dynamicModules.flatMap((module) =>
     Object.values(module).filter((value) => typeof value === 'function')
   ) as BuildSchemaOptions['resolvers'];
