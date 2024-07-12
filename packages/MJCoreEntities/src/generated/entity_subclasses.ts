@@ -355,6 +355,181 @@ import { RegisterClass } from "@memberjunction/global";
     }
         
     /**
+     * Explorer Navigation Items - strongly typed entity sub-class
+     * * Schema: __mj
+     * * Base Table: ExplorerNavigationItem
+     * * Base View: vwExplorerNavigationItems
+     * * @description Table to store navigation items for MemberJunction Explorer
+     * * Primary Key: ID
+     * @extends {BaseEntity}
+     * @class
+     * @public
+     */
+    @RegisterClass(BaseEntity, 'Explorer Navigation Items')
+    export class ExplorerNavigationItemEntity extends BaseEntity {
+        /**
+        * Loads the Explorer Navigation Items record from the database
+        * @param ID: string - primary key value to load the Explorer Navigation Items record.
+        * @param EntityRelationshipsToLoad - (optional) the relationships to load
+        * @returns {Promise<boolean>} - true if successful, false otherwise
+        * @public
+        * @async
+        * @memberof ExplorerNavigationItemEntity
+        * @method
+        * @override
+        */      
+        public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+        }
+        
+            /**
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
+        * * Description: Unique identifier for each navigation item
+        */
+        get ID(): string {  
+            return this.Get('ID');
+        }
+        
+        /**
+        * * Field Name: Sequence
+        * * Display Name: Sequence
+        * * SQL Data Type: int
+        * * Description: Sequence number for the navigation item, must be unique and greater than 0
+        */
+        get Sequence(): number {  
+            return this.Get('Sequence');
+        }
+        set Sequence(value: number) {
+            this.Set('Sequence', value);
+        }
+        /**
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Unique name of the navigation item displayed to the user
+        */
+        get Name(): string {  
+            return this.Get('Name');
+        }
+        set Name(value: string) {
+            this.Set('Name', value);
+        }
+        /**
+        * * Field Name: Route
+        * * Display Name: Route
+        * * SQL Data Type: nvarchar(255)
+        * * Description: The route for the navigation item relative to the app main URL, using Angular syntax like "entity/:entityName"
+        */
+        get Route(): string {  
+            return this.Get('Route');
+        }
+        set Route(value: string) {
+            this.Set('Route', value);
+        }
+        /**
+        * * Field Name: IsActive
+        * * Display Name: Is Active
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: Indicates if the navigation item is active; allows turning off items in the UI without deleting them from the metadata
+        */
+        get IsActive(): boolean {  
+            return this.Get('IsActive');
+        }
+        set IsActive(value: boolean) {
+            this.Set('IsActive', value);
+        }
+        /**
+        * * Field Name: ShowInHomeScreen
+        * * Display Name: Show In Home Screen
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Controls if the navigation item is shown on the Home screen for MJ Explorer
+        */
+        get ShowInHomeScreen(): boolean {  
+            return this.Get('ShowInHomeScreen');
+        }
+        set ShowInHomeScreen(value: boolean) {
+            this.Set('ShowInHomeScreen', value);
+        }
+        /**
+        * * Field Name: ShowInNavigationDrawer
+        * * Display Name: Show In Navigation Drawer
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Controls if the item is shown in the left navigation drawer in the MJ Explorer app or not.
+        */
+        get ShowInNavigationDrawer(): boolean {  
+            return this.Get('ShowInNavigationDrawer');
+        }
+        set ShowInNavigationDrawer(value: boolean) {
+            this.Set('ShowInNavigationDrawer', value);
+        }
+        /**
+        * * Field Name: IconCSSClass
+        * * Display Name: Icon CSSClass
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Optional, CSS class for an icon to be displayed with the navigation item
+        */
+        get IconCSSClass(): string | null {  
+            return this.Get('IconCSSClass');
+        }
+        set IconCSSClass(value: string | null) {
+            this.Set('IconCSSClass', value);
+        }
+        /**
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Description of the navigation item, shown to the user on hover or in larger displays
+        */
+        get Description(): string | null {  
+            return this.Get('Description');
+        }
+        set Description(value: string | null) {
+            this.Set('Description', value);
+        }
+        /**
+        * * Field Name: Comments
+        * * Display Name: Comments
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Administrator comments, not shown to the end user in MJ Explorer app
+        */
+        get Comments(): string | null {  
+            return this.Get('Comments');
+        }
+        set Comments(value: string | null) {
+            this.Set('Comments', value);
+        }
+        /**
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
+        */
+        get __mj_CreatedAt(): Date {  
+            return this.Get('__mj_CreatedAt');
+        }
+        
+        /**
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
+        */
+        get __mj_UpdatedAt(): Date {  
+            return this.Get('__mj_UpdatedAt');
+        }
+        
+
+    }
+        
+    /**
      * Companies - strongly typed entity sub-class
      * * Schema: __mj
      * * Base Table: Company
@@ -7044,6 +7219,15 @@ import { RegisterClass } from "@memberjunction/global";
             return this.Get('User');
         }
         
+        /**
+        * * Field Name: Role
+        * * Display Name: Role
+        * * SQL Data Type: nvarchar(50)
+        */
+        get Role(): string {  
+            return this.Get('Role');
+        }
+        
 
     }
         
@@ -8571,21 +8755,21 @@ import { RegisterClass } from "@memberjunction/global";
         }
         
         /**
+        * * Field Name: AIModel
+        * * Display Name: AIModel
+        * * SQL Data Type: nvarchar(50)
+        */
+        get AIModel(): string {  
+            return this.Get('AIModel');
+        }
+        
+        /**
         * * Field Name: AIAction
         * * Display Name: AIAction
         * * SQL Data Type: nvarchar(50)
         */
         get AIAction(): string {  
             return this.Get('AIAction');
-        }
-        
-        /**
-        * * Field Name: AIModel
-        * * Display Name: AIModel
-        * * SQL Data Type: nvarchar(50)
-        */
-        get AIModel(): string | null {  
-            return this.Get('AIModel');
         }
         
         /**
@@ -9397,21 +9581,21 @@ import { RegisterClass } from "@memberjunction/global";
         }
         
         /**
+        * * Field Name: User
+        * * Display Name: User
+        * * SQL Data Type: nvarchar(100)
+        */
+        get User(): string {  
+            return this.Get('User');
+        }
+        
+        /**
         * * Field Name: Category
         * * Display Name: Category
         * * SQL Data Type: nvarchar(100)
         */
         get Category(): string | null {  
             return this.Get('Category');
-        }
-        
-        /**
-        * * Field Name: User
-        * * Display Name: User
-        * * SQL Data Type: nvarchar(100)
-        */
-        get User(): string | null {  
-            return this.Get('User');
         }
         
 
@@ -9991,6 +10175,78 @@ import { RegisterClass } from "@memberjunction/global";
             return this.Get('__mj_UpdatedAt');
         }
         
+        /**
+        * * Field Name: Category
+        * * Display Name: Category
+        * * SQL Data Type: nvarchar(100)
+        */
+        get Category(): string | null {  
+            return this.Get('Category');
+        }
+        
+        /**
+        * * Field Name: User
+        * * Display Name: User
+        * * SQL Data Type: nvarchar(100)
+        */
+        get User(): string {  
+            return this.Get('User');
+        }
+        
+        /**
+        * * Field Name: Conversation
+        * * Display Name: Conversation
+        * * SQL Data Type: nvarchar(255)
+        */
+        get Conversation(): string | null {  
+            return this.Get('Conversation');
+        }
+        
+        /**
+        * * Field Name: DataContext
+        * * Display Name: Data Context
+        * * SQL Data Type: nvarchar(255)
+        */
+        get DataContext(): string | null {  
+            return this.Get('DataContext');
+        }
+        
+        /**
+        * * Field Name: OutputTriggerType
+        * * Display Name: Output Trigger Type
+        * * SQL Data Type: nvarchar(255)
+        */
+        get OutputTriggerType(): string | null {  
+            return this.Get('OutputTriggerType');
+        }
+        
+        /**
+        * * Field Name: OutputFormatType
+        * * Display Name: Output Format Type
+        * * SQL Data Type: nvarchar(255)
+        */
+        get OutputFormatType(): string | null {  
+            return this.Get('OutputFormatType');
+        }
+        
+        /**
+        * * Field Name: OutputDeliveryType
+        * * Display Name: Output Delivery Type
+        * * SQL Data Type: nvarchar(255)
+        */
+        get OutputDeliveryType(): string | null {  
+            return this.Get('OutputDeliveryType');
+        }
+        
+        /**
+        * * Field Name: OutputWorkflow
+        * * Display Name: Output Workflow
+        * * SQL Data Type: nvarchar(100)
+        */
+        get OutputWorkflow(): string | null {  
+            return this.Get('OutputWorkflow');
+        }
+        
 
     }
         
@@ -10102,7 +10358,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: User
         * * SQL Data Type: nvarchar(100)
         */
-        get User(): string | null {  
+        get User(): string {  
             return this.Get('User');
         }
         
@@ -11566,6 +11822,15 @@ import { RegisterClass } from "@memberjunction/global";
         */
         get User(): string {  
             return this.Get('User');
+        }
+        
+        /**
+        * * Field Name: ResourceType
+        * * Display Name: Resource Type
+        * * SQL Data Type: nvarchar(255)
+        */
+        get ResourceType(): string | null {  
+            return this.Get('ResourceType');
         }
         
 
@@ -13669,21 +13934,21 @@ import { RegisterClass } from "@memberjunction/global";
         }
         
         /**
-        * * Field Name: Entity
-        * * Display Name: Entity
-        * * SQL Data Type: nvarchar(255)
-        */
-        get Entity(): string {  
-            return this.Get('Entity');
-        }
-        
-        /**
         * * Field Name: Type
         * * Display Name: Type
         * * SQL Data Type: nvarchar(100)
         */
         get Type(): string {  
             return this.Get('Type');
+        }
+        
+        /**
+        * * Field Name: Entity
+        * * Display Name: Entity
+        * * SQL Data Type: nvarchar(255)
+        */
+        get Entity(): string {  
+            return this.Get('Entity');
         }
         
 
@@ -14693,21 +14958,21 @@ import { RegisterClass } from "@memberjunction/global";
         }
         
         /**
-        * * Field Name: Provider
-        * * Display Name: Provider
-        * * SQL Data Type: nvarchar(50)
-        */
-        get Provider(): string {  
-            return this.Get('Provider');
-        }
-        
-        /**
         * * Field Name: Category
         * * Display Name: Category
         * * SQL Data Type: nvarchar(255)
         */
         get Category(): string | null {  
             return this.Get('Category');
+        }
+        
+        /**
+        * * Field Name: Provider
+        * * Display Name: Provider
+        * * SQL Data Type: nvarchar(50)
+        */
+        get Provider(): string {  
+            return this.Get('Provider');
         }
         
 
@@ -15815,21 +16080,21 @@ import { RegisterClass } from "@memberjunction/global";
         }
         
         /**
-        * * Field Name: ApprovedByUser
-        * * Display Name: Approved By User
-        * * SQL Data Type: nvarchar(100)
-        */
-        get ApprovedByUser(): string | null {  
-            return this.Get('ApprovedByUser');
-        }
-        
-        /**
         * * Field Name: SourceList
         * * Display Name: Source List
         * * SQL Data Type: nvarchar(100)
         */
         get SourceList(): string {  
             return this.Get('SourceList');
+        }
+        
+        /**
+        * * Field Name: ApprovedByUser
+        * * Display Name: Approved By User
+        * * SQL Data Type: nvarchar(100)
+        */
+        get ApprovedByUser(): string | null {  
+            return this.Get('ApprovedByUser');
         }
         
 
@@ -17514,7 +17779,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Context Type
         * * SQL Data Type: nvarchar(255)
         */
-        get ContextType(): string {  
+        get ContextType(): string | null {  
             return this.Get('ContextType');
         }
         

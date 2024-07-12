@@ -79,14 +79,14 @@ import { FileEntity } from '@memberjunction/core-entities';
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="Provider"
+            FieldName="Category"
             Type="textbox"
             [EditMode]="EditMode"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="Category"
+            FieldName="Provider"
             Type="textbox"
             [EditMode]="EditMode"
         ></mj-form-field>

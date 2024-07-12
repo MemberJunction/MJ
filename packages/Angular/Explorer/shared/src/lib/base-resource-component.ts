@@ -1,7 +1,8 @@
 import { BaseEntity } from "@memberjunction/core";
 import { SharedService } from "./shared.service";
+import { BaseNavigationComponent } from "./base-navigation-component";
 
-export abstract class BaseResourceComponent {
+export abstract class BaseResourceComponent extends BaseNavigationComponent {
     public Data: ResourceData = new ResourceData();
 
     private _loadComplete: boolean = false;
