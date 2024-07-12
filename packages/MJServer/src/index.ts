@@ -12,7 +12,7 @@ import express from 'express';
 import { default as fg } from 'fast-glob';
 import { useServer } from 'graphql-ws/lib/use/ws';
 import { createServer } from 'node:http';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath } from 'node:url';
 import { sep } from 'node:path';
 import 'reflect-metadata';
 import { ReplaySubject } from 'rxjs';
@@ -64,7 +64,13 @@ export * from './generated/generated';
 
 import { resolve } from 'node:path';
 
-const localPath = (p: string) => pathToFileURL(resolve(import.meta.dirname, p)).href;
+const localPath = (p: string) => {
+  // Convert import.meta.url to a local directory path
+  const dirname = fileURLToPath(new URL('.', import.meta.url));
+  // Resolve the provided path relative to the derived directory path
+  const resolvedPath = resolve(dirname, p);
+  return resolvedPath;
+};
 
 export const serve = async (resolverPaths: Array<string>) => {
   const localResolverPaths = ['resolvers/**/*Resolver.{js,ts}', 'generic/*Resolver.{js,ts}', 'generated/generated.{js,ts}'].map(localPath);
