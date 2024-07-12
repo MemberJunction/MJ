@@ -9,6 +9,7 @@ import { LogError, LogStatus } from "./logging";
 import { QueryCategoryInfo, QueryFieldInfo, QueryInfo, QueryPermissionInfo } from "./queryInfo";
 import { LibraryInfo } from "./libraryInfo";
 import { CompositeKey } from "./compositeKey";
+import { ExplorerNavigationItem } from "./explorerNavigationItem";
 
 /**
  * AllMetadata is used to pass all metadata around in a single object for convenience and type safety.
@@ -29,6 +30,7 @@ export class AllMetadata {
     AllQueryPermissions: QueryPermissionInfo[] = [];
     AllEntityDocumentTypes: EntityDocumentTypeInfo[] = [];
     AllLibraries: LibraryInfo[] = [];
+    AllExplorerNavigationItems: ExplorerNavigationItem[] = [];
 
     // Create a new instance of AllMetadata from a simple object
     public static FromSimpleObject(data: any, md: IMetadataProvider): AllMetadata {
@@ -64,7 +66,8 @@ export const AllMetadataArrays = [
     { key: 'AllQueryFields', class: QueryFieldInfo },
     { key: 'AllQueryPermissions', class: QueryPermissionInfo },
     { key: 'AllEntityDocumentTypes', class: EntityDocumentTypeInfo },
-    { key: 'AllLibraries', class: LibraryInfo }
+    { key: 'AllLibraries', class: LibraryInfo },
+    { key: 'AllExplorerNavigationItems', class: ExplorerNavigationItem }
 ];
 
 
@@ -108,6 +111,7 @@ export abstract class ProviderBase implements IMetadataProvider {
             // first, make sure we reset the flag to false so that if another call to this function happens
             // while we are waiting for the async call to finish, we dont do it again
             this._refresh = false;  
+            this._cachedVisibleExplorerNavigationItems = null; // reset this so it gets rebuilt next time it is requested
 
             const start = new Date().getTime();
             const res = await this.GetAllMetadata();
@@ -276,6 +280,16 @@ export abstract class ProviderBase implements IMetadataProvider {
     }
     public get Libraries(): LibraryInfo[] {
         return this._localMetadata.AllLibraries;
+    }
+    public get AllExplorerNavigationItems(): ExplorerNavigationItem[] {
+        return this._localMetadata.AllExplorerNavigationItems;
+    }
+    private _cachedVisibleExplorerNavigationItems: ExplorerNavigationItem[] = null;
+    public get VisibleExplorerNavigationItems(): ExplorerNavigationItem[] {
+        // filter and sort once and cache
+        if (!this._cachedVisibleExplorerNavigationItems)
+            this._cachedVisibleExplorerNavigationItems = this._localMetadata.AllExplorerNavigationItems.filter(e => e.IsActive).sort((a, b) => a.Sequence - b.Sequence);
+        return this._cachedVisibleExplorerNavigationItems;
     }
 
     public async Refresh(): Promise<boolean> {

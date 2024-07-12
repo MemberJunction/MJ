@@ -28,6 +28,7 @@ import { DropDownListModule } from '@progress/kendo-angular-dropdowns';
 // Import Generated Components
 import { ScheduledActionFormComponent, LoadScheduledActionFormComponent } from "./Entities/ScheduledAction/scheduledaction.form.component";
 import { ScheduledActionParamFormComponent, LoadScheduledActionParamFormComponent } from "./Entities/ScheduledActionParam/scheduledactionparam.form.component";
+import { ExplorerNavigationItemFormComponent, LoadExplorerNavigationItemFormComponent } from "./Entities/ExplorerNavigationItem/explorernavigationitem.form.component";
 import { CompanyFormComponent, LoadCompanyFormComponent } from "./Entities/Company/company.form.component";
 import { EmployeeFormComponent, LoadEmployeeFormComponent } from "./Entities/Employee/employee.form.component";
 import { UserFavoriteFormComponent, LoadUserFavoriteFormComponent } from "./Entities/UserFavorite/userfavorite.form.component";
@@ -161,6 +162,7 @@ import { EntityRelationshipDisplayComponentFormComponent, LoadEntityRelationship
 import { EntityActionParamFormComponent, LoadEntityActionParamFormComponent } from "./Entities/EntityActionParam/entityactionparam.form.component";
 import { ScheduledActionDetailsComponent, LoadScheduledActionDetailsComponent } from "./Entities/ScheduledAction/sections/details.component"
 import { ScheduledActionParamDetailsComponent, LoadScheduledActionParamDetailsComponent } from "./Entities/ScheduledActionParam/sections/details.component"
+import { ExplorerNavigationItemDetailsComponent, LoadExplorerNavigationItemDetailsComponent } from "./Entities/ExplorerNavigationItem/sections/details.component"
 import { CompanyDetailsComponent, LoadCompanyDetailsComponent } from "./Entities/Company/sections/details.component"
 import { EmployeeDetailsComponent, LoadEmployeeDetailsComponent } from "./Entities/Employee/sections/details.component"
 import { UserFavoriteDetailsComponent, LoadUserFavoriteDetailsComponent } from "./Entities/UserFavorite/sections/details.component"
@@ -305,6 +307,7 @@ import { JoinGridModule } from "@memberjunction/ng-join-grid"
 declarations: [
     ScheduledActionFormComponent,
     ScheduledActionParamFormComponent,
+    ExplorerNavigationItemFormComponent,
     CompanyFormComponent,
     EmployeeFormComponent,
     UserFavoriteFormComponent,
@@ -321,8 +324,7 @@ declarations: [
     UserFormComponent,
     EntityRelationshipFormComponent,
     UserRecordLogFormComponent,
-    UserViewFormComponent,
-    CompanyIntegrationRunFormComponent],
+    UserViewFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -349,6 +351,7 @@ export class GeneratedForms_SubModule_0 { }
 
 @NgModule({
 declarations: [
+    CompanyIntegrationRunFormComponent,
     CompanyIntegrationRunDetailFormComponent,
     ErrorLogFormComponent,
     ApplicationFormComponent,
@@ -367,8 +370,7 @@ declarations: [
     RecordChangeFormComponent,
     UserRoleFormComponent,
     RowLevelSecurityFilterFormComponent,
-    AuditLogFormComponent,
-    AuthorizationFormComponent],
+    AuditLogFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -395,6 +397,7 @@ export class GeneratedForms_SubModule_1 { }
 
 @NgModule({
 declarations: [
+    AuthorizationFormComponent,
     AuthorizationRoleFormComponent,
     AuditLogTypeFormComponent,
     EntityFieldValueFormComponent,
@@ -413,8 +416,7 @@ declarations: [
     ReportFormComponent,
     ReportSnapshotFormComponent,
     ResourceTypeFormComponent,
-    TagFormComponent,
-    TaggedItemFormComponent],
+    TagFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -441,6 +443,7 @@ export class GeneratedForms_SubModule_2 { }
 
 @NgModule({
 declarations: [
+    TaggedItemFormComponent,
     WorkspaceFormComponent,
     WorkspaceItemFormComponent,
     DatasetFormComponent,
@@ -459,8 +462,7 @@ declarations: [
     VectorIndexFormComponent,
     EntityDocumentTypeFormComponent,
     EntityDocumentRunFormComponent,
-    VectorDatabaseFormComponent,
-    EntityRecordDocumentFormComponent],
+    VectorDatabaseFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -487,6 +489,7 @@ export class GeneratedForms_SubModule_3 { }
 
 @NgModule({
 declarations: [
+    EntityRecordDocumentFormComponent,
     EntityDocumentFormComponent,
     DataContextItemFormComponent,
     DataContextFormComponent,
@@ -505,8 +508,7 @@ declarations: [
     DuplicateRunDetailFormComponent,
     ApplicationSettingFormComponent,
     ActionCategoryFormComponent,
-    EntityActionFormComponent,
-    EntityActionInvocationFormComponent],
+    EntityActionFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -533,6 +535,7 @@ export class GeneratedForms_SubModule_4 { }
 
 @NgModule({
 declarations: [
+    EntityActionInvocationFormComponent,
     ActionAuthorizationFormComponent,
     EntityActionInvocationTypeFormComponent,
     ActionFormComponent,
@@ -551,8 +554,7 @@ declarations: [
     CommunicationProviderMessageTypeFormComponent,
     CommunicationLogFormComponent,
     CommunicationBaseMessageTypeFormComponent,
-    TemplateFormComponent,
-    TemplateCategoryFormComponent],
+    TemplateFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -580,6 +582,7 @@ export class GeneratedForms_SubModule_5 { }
 
 @NgModule({
 declarations: [
+    TemplateCategoryFormComponent,
     TemplateContentFormComponent,
     TemplateParamFormComponent,
     TemplateContentTypeFormComponent,
@@ -595,11 +598,10 @@ declarations: [
     EntityActionParamFormComponent,
     ScheduledActionDetailsComponent,
     ScheduledActionParamDetailsComponent,
+    ExplorerNavigationItemDetailsComponent,
     CompanyDetailsComponent,
     EmployeeDetailsComponent,
-    UserFavoriteDetailsComponent,
-    EmployeeCompanyIntegrationDetailsComponent,
-    EmployeeRoleDetailsComponent],
+    UserFavoriteDetailsComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -626,6 +628,8 @@ export class GeneratedForms_SubModule_6 { }
 
 @NgModule({
 declarations: [
+    EmployeeCompanyIntegrationDetailsComponent,
+    EmployeeRoleDetailsComponent,
     EmployeeSkillDetailsComponent,
     RoleDetailsComponent,
     SkillDetailsComponent,
@@ -643,9 +647,7 @@ declarations: [
     EntityRelationshipDetailsComponent,
     UserRecordLogDetailsComponent,
     UserViewDetailsComponent,
-    CompanyIntegrationRunDetailsComponent,
-    CompanyIntegrationRunDetailDetailsComponent,
-    ErrorLogDetailsComponent],
+    CompanyIntegrationRunDetailsComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -671,6 +673,8 @@ export class GeneratedForms_SubModule_7 { }
 
 @NgModule({
 declarations: [
+    CompanyIntegrationRunDetailDetailsComponent,
+    ErrorLogDetailsComponent,
     ApplicationDetailsComponent,
     ApplicationEntityDetailsComponent,
     EntityPermissionDetailsComponent,
@@ -688,9 +692,7 @@ declarations: [
     UserRoleDetailsComponent,
     RowLevelSecurityFilterDetailsComponent,
     AuditLogDetailsComponent,
-    AuthorizationDetailsComponent,
-    AuthorizationRoleDetailsComponent,
-    AuditLogTypeDetailsComponent],
+    AuthorizationDetailsComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -716,6 +718,8 @@ export class GeneratedForms_SubModule_8 { }
 
 @NgModule({
 declarations: [
+    AuthorizationRoleDetailsComponent,
+    AuditLogTypeDetailsComponent,
     EntityFieldValueDetailsComponent,
     AIModelDetailsComponent,
     AIActionDetailsComponent,
@@ -733,9 +737,7 @@ declarations: [
     ReportSnapshotDetailsComponent,
     ResourceTypeDetailsComponent,
     TagDetailsComponent,
-    TaggedItemDetailsComponent,
-    WorkspaceDetailsComponent,
-    WorkspaceItemDetailsComponent],
+    TaggedItemDetailsComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -761,6 +763,8 @@ export class GeneratedForms_SubModule_9 { }
 
 @NgModule({
 declarations: [
+    WorkspaceDetailsComponent,
+    WorkspaceItemDetailsComponent,
     DatasetDetailsComponent,
     DatasetItemDetailsComponent,
     ConversationDetailDetailsComponent,
@@ -778,9 +782,7 @@ declarations: [
     EntityDocumentTypeDetailsComponent,
     EntityDocumentRunDetailsComponent,
     VectorDatabaseDetailsComponent,
-    EntityRecordDocumentDetailsComponent,
-    EntityDocumentDetailsComponent,
-    DataContextItemDetailsComponent],
+    EntityRecordDocumentDetailsComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -806,6 +808,8 @@ export class GeneratedForms_SubModule_10 { }
 
 @NgModule({
 declarations: [
+    EntityDocumentDetailsComponent,
+    DataContextItemDetailsComponent,
     DataContextDetailsComponent,
     UserViewCategoryDetailsComponent,
     DashboardCategoryDetailsComponent,
@@ -823,9 +827,7 @@ declarations: [
     ApplicationSettingDetailsComponent,
     ActionCategoryDetailsComponent,
     EntityActionDetailsComponent,
-    EntityActionInvocationDetailsComponent,
-    ActionAuthorizationDetailsComponent,
-    EntityActionInvocationTypeDetailsComponent],
+    EntityActionInvocationDetailsComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -851,6 +853,8 @@ export class GeneratedForms_SubModule_11 { }
 
 @NgModule({
 declarations: [
+    ActionAuthorizationDetailsComponent,
+    EntityActionInvocationTypeDetailsComponent,
     ActionDetailsComponent,
     ActionTopComponent,
     ActionCodeComponent,
@@ -868,9 +872,7 @@ declarations: [
     CommunicationRunDetailsComponent,
     CommunicationProviderMessageTypeDetailsComponent,
     CommunicationLogDetailsComponent,
-    CommunicationBaseMessageTypeDetailsComponent,
-    TemplateDetailsComponent,
-    TemplateCategoryDetailsComponent],
+    CommunicationBaseMessageTypeDetailsComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -896,6 +898,8 @@ export class GeneratedForms_SubModule_12 { }
 
 @NgModule({
 declarations: [
+    TemplateDetailsComponent,
+    TemplateCategoryDetailsComponent,
     TemplateContentDetailsComponent,
     TemplateParamDetailsComponent,
     TemplateContentTypeDetailsComponent,
@@ -962,6 +966,7 @@ export function LoadCoreGeneratedForms() {
     // in production builds tree shaking will eliminate the code unless we do this
     LoadScheduledActionFormComponent();
     LoadScheduledActionParamFormComponent();
+    LoadExplorerNavigationItemFormComponent();
     LoadCompanyFormComponent();
     LoadEmployeeFormComponent();
     LoadUserFavoriteFormComponent();
@@ -1095,6 +1100,7 @@ export function LoadCoreGeneratedForms() {
     LoadEntityActionParamFormComponent();
     LoadScheduledActionDetailsComponent();
     LoadScheduledActionParamDetailsComponent();
+    LoadExplorerNavigationItemDetailsComponent();
     LoadCompanyDetailsComponent();
     LoadEmployeeDetailsComponent();
     LoadUserFavoriteDetailsComponent();
