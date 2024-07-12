@@ -118,14 +118,14 @@ import { DuplicateRunEntity } from '@memberjunction/core-entities';
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="ApprovedByUser"
+            FieldName="SourceList"
             Type="textbox"
             [EditMode]="EditMode"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="SourceList"
+            FieldName="ApprovedByUser"
             Type="textbox"
             [EditMode]="EditMode"
         ></mj-form-field>

@@ -9,6 +9,7 @@ import { QueryCategoryInfo, QueryFieldInfo, QueryInfo, QueryPermissionInfo } fro
 import { LogError, LogStatus } from "./logging";
 import { LibraryInfo } from "./libraryInfo";
 import { CompositeKey } from "./compositeKey";
+import { ExplorerNavigationItem } from "./explorerNavigationItem";
 
 /**
  * Class used to access a wide array of MemberJunction metadata, to instantiate derived classes of BaseEntity for record access and manipulation and more. This class uses a provider model where different providers transparently plug-in to implement the functionality needed based on where the code is running. The provider in use is generally not of any importance to users of the class and code can be written indepdenent of tier/provider.
@@ -107,6 +108,20 @@ export class Metadata {
 
     public get Libraries(): LibraryInfo[] {
         return Metadata.Provider.Libraries;
+    }
+
+    /**
+     * Returns all of the ExplorerNavigationItems that are visible to the user, sorted by Sequence. Filtered by the IsActive bit.
+     */
+    public get VisibleExplorerNavigationItems(): ExplorerNavigationItem[] {
+        return Metadata.Provider.VisibleExplorerNavigationItems;
+    }
+
+    /**
+     * Returns all of the ExplorerNavigationItems, including those that are not visible. This is useful for admin tools and other places where you need to see all of the navigation items, not just the ones that are visible to the user.
+     */
+    public get AllExplorerNavigationItems(): ExplorerNavigationItem[] {
+        return Metadata.Provider.AllExplorerNavigationItems;
     }
 
     /**

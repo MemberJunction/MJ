@@ -1222,10 +1222,15 @@ export class ManageMetadataBase {
             if (configInfo.newEntityDefaults.AddToApplicationWithSchemaName) {
                // we should add this entity to the application
                const appName: string = newEntity.SchemaName === mj_core_schema() ? 'Admin' : newEntity.SchemaName; // for the __mj schema or whatever it is installed as for mj_core - we want to drop stuff into the admin app
-               const sSQLInsertApplicationEntity = `INSERT INTO ${mj_core_schema()}.ApplicationEntity 
-                                                         (ApplicationName, EntityID, Sequence) VALUES 
-                                                         ('${appName}', '${newEntityID}', (SELECT ISNULL(MAX(Sequence),0)+1 FROM ${mj_core_schema()}.ApplicationEntity WHERE ApplicationName = '${appName}'))`;
-               await ds.query(sSQLInsertApplicationEntity);
+               const app = md.Applications.find(a => a.Name.trim().toLowerCase() === appName.trim().toLowerCase());
+               if (app) {
+                  const sSQLInsertApplicationEntity = `INSERT INTO ${mj_core_schema()}.ApplicationEntity 
+                                                            (ApplicationID, EntityID, Sequence) VALUES 
+                                                            ('${app.ID}', '${newEntityID}', (SELECT ISNULL(MAX(Sequence),0)+1 FROM ${mj_core_schema()}.ApplicationEntity WHERE ApplicationName = '${appName}'))`;
+                  await ds.query(sSQLInsertApplicationEntity);
+               }
+               else
+                  LogError(`   >>>> ERROR: Unable to find Application ID for application ${appName} to add new entity ${newEntityName} to it`);
             }
 
             // next up, we need to check if we're configured to add permissions for new entities, and if so, add them
@@ -1233,7 +1238,7 @@ export class ManageMetadataBase {
                // we are asked to add permissions for new entities, so do that by looping through the permissions and adding them
                const permissions = configInfo.newEntityDefaults.PermissionDefaults.Permissions;
                for (const p of permissions) {
-                  const RoleID = md.Roles.find(r => r.Name === p.RoleName)?.ID;
+                  const RoleID = md.Roles.find(r => r.Name.trim().toLowerCase() === p.RoleName.trim().toLowerCase())?.ID;
                   if (RoleID) {
                      const sSQLInsertPermission = `INSERT INTO ${mj_core_schema()}.EntityPermission 
                                                    (EntityID, RoleID, CanRead, CanCreate, CanUpdate, CanDelete) VALUES 
