@@ -2,7 +2,7 @@
 * ALL ENTITIES - TypeGraphQL Type Class Definition - AUTO GENERATED FILE
 * Generated Entities and Resolvers for Server
 *
-* GENERATED: 7/10/2024, 12:56:07 PM
+* GENERATED: 7/11/2024, 9:22:36 PM
 *
 *   >>> DO NOT MODIFY THIS FILE!!!!!!!!!!!!
 *   >>> YOUR CHANGES WILL BE OVERWRITTEN
@@ -20,7 +20,7 @@ import { mj_core_schema } from '../config';
 
 
 
-import { ScheduledActionEntity, ScheduledActionParamEntity, CompanyEntity, EmployeeEntity, UserFavoriteEntity, EmployeeCompanyIntegrationEntity, EmployeeRoleEntity, EmployeeSkillEntity, RoleEntity, SkillEntity, IntegrationURLFormatEntity, IntegrationEntity, CompanyIntegrationEntity, EntityFieldEntity, EntityEntity, UserEntity, EntityRelationshipEntity, UserRecordLogEntity, UserViewEntity, CompanyIntegrationRunEntity, CompanyIntegrationRunDetailEntity, ErrorLogEntity, ApplicationEntity, ApplicationEntityEntity, EntityPermissionEntity, UserApplicationEntityEntity, UserApplicationEntity, CompanyIntegrationRunAPILogEntity, ListEntity, ListDetailEntity, UserViewRunEntity, UserViewRunDetailEntity, WorkflowRunEntity, WorkflowEntity, WorkflowEngineEntity, RecordChangeEntity, UserRoleEntity, RowLevelSecurityFilterEntity, AuditLogEntity, AuthorizationEntity, AuthorizationRoleEntity, AuditLogTypeEntity, EntityFieldValueEntity, AIModelEntity, AIActionEntity, AIModelActionEntity, EntityAIActionEntity, AIModelTypeEntity, QueueTypeEntity, QueueEntity, QueueTaskEntity, DashboardEntity, OutputTriggerTypeEntity, OutputFormatTypeEntity, OutputDeliveryTypeEntity, ReportEntity, ReportSnapshotEntity, ResourceTypeEntity, TagEntity, TaggedItemEntity, WorkspaceEntity, WorkspaceItemEntity, DatasetEntity, DatasetItemEntity, ConversationDetailEntity, ConversationEntity, UserNotificationEntity, SchemaInfoEntity, CompanyIntegrationRecordMapEntity, RecordMergeLogEntity, RecordMergeDeletionLogEntity, QueryFieldEntity, QueryCategoryEntity, QueryEntity, QueryPermissionEntity, VectorIndexEntity, EntityDocumentTypeEntity, EntityDocumentRunEntity, VectorDatabaseEntity, EntityRecordDocumentEntity, EntityDocumentEntity, DataContextItemEntity, DataContextEntity, UserViewCategoryEntity, DashboardCategoryEntity, ReportCategoryEntity, FileStorageProviderEntity, FileEntity, FileCategoryEntity, FileEntityRecordLinkEntity, VersionInstallationEntity, DuplicateRunDetailMatchEntity, EntityDocumentSettingEntity, EntitySettingEntity, DuplicateRunEntity, DuplicateRunDetailEntity, ApplicationSettingEntity, ActionCategoryEntity, EntityActionEntity, EntityActionInvocationEntity, ActionAuthorizationEntity, EntityActionInvocationTypeEntity, ActionEntity, EntityActionFilterEntity, ActionFilterEntity, ActionContextTypeEntity, ActionResultCodeEntity, ActionContextEntity, ActionExecutionLogEntity, ActionParamEntity, ActionLibraryEntity, LibraryEntity, ListCategoryEntity, CommunicationProviderEntity, CommunicationRunEntity, CommunicationProviderMessageTypeEntity, CommunicationLogEntity, CommunicationBaseMessageTypeEntity, TemplateEntity, TemplateCategoryEntity, TemplateContentEntity, TemplateParamEntity, TemplateContentTypeEntity, RecommendationEntity, RecommendationProviderEntity, RecommendationRunEntity, RecommendationItemEntity, EntityCommunicationMessageTypeEntity, EntityCommunicationFieldEntity, RecordChangeReplayRunEntity, LibraryItemEntity, EntityRelationshipDisplayComponentEntity, EntityActionParamEntity } from '@memberjunction/core-entities';
+import { ScheduledActionEntity, ScheduledActionParamEntity, ExplorerNavigationItemEntity, CompanyEntity, EmployeeEntity, UserFavoriteEntity, EmployeeCompanyIntegrationEntity, EmployeeRoleEntity, EmployeeSkillEntity, RoleEntity, SkillEntity, IntegrationURLFormatEntity, IntegrationEntity, CompanyIntegrationEntity, EntityFieldEntity, EntityEntity, UserEntity, EntityRelationshipEntity, UserRecordLogEntity, UserViewEntity, CompanyIntegrationRunEntity, CompanyIntegrationRunDetailEntity, ErrorLogEntity, ApplicationEntity, ApplicationEntityEntity, EntityPermissionEntity, UserApplicationEntityEntity, UserApplicationEntity, CompanyIntegrationRunAPILogEntity, ListEntity, ListDetailEntity, UserViewRunEntity, UserViewRunDetailEntity, WorkflowRunEntity, WorkflowEntity, WorkflowEngineEntity, RecordChangeEntity, UserRoleEntity, RowLevelSecurityFilterEntity, AuditLogEntity, AuthorizationEntity, AuthorizationRoleEntity, AuditLogTypeEntity, EntityFieldValueEntity, AIModelEntity, AIActionEntity, AIModelActionEntity, EntityAIActionEntity, AIModelTypeEntity, QueueTypeEntity, QueueEntity, QueueTaskEntity, DashboardEntity, OutputTriggerTypeEntity, OutputFormatTypeEntity, OutputDeliveryTypeEntity, ReportEntity, ReportSnapshotEntity, ResourceTypeEntity, TagEntity, TaggedItemEntity, WorkspaceEntity, WorkspaceItemEntity, DatasetEntity, DatasetItemEntity, ConversationDetailEntity, ConversationEntity, UserNotificationEntity, SchemaInfoEntity, CompanyIntegrationRecordMapEntity, RecordMergeLogEntity, RecordMergeDeletionLogEntity, QueryFieldEntity, QueryCategoryEntity, QueryEntity, QueryPermissionEntity, VectorIndexEntity, EntityDocumentTypeEntity, EntityDocumentRunEntity, VectorDatabaseEntity, EntityRecordDocumentEntity, EntityDocumentEntity, DataContextItemEntity, DataContextEntity, UserViewCategoryEntity, DashboardCategoryEntity, ReportCategoryEntity, FileStorageProviderEntity, FileEntity, FileCategoryEntity, FileEntityRecordLinkEntity, VersionInstallationEntity, DuplicateRunDetailMatchEntity, EntityDocumentSettingEntity, EntitySettingEntity, DuplicateRunEntity, DuplicateRunDetailEntity, ApplicationSettingEntity, ActionCategoryEntity, EntityActionEntity, EntityActionInvocationEntity, ActionAuthorizationEntity, EntityActionInvocationTypeEntity, ActionEntity, EntityActionFilterEntity, ActionFilterEntity, ActionContextTypeEntity, ActionResultCodeEntity, ActionContextEntity, ActionExecutionLogEntity, ActionParamEntity, ActionLibraryEntity, LibraryEntity, ListCategoryEntity, CommunicationProviderEntity, CommunicationRunEntity, CommunicationProviderMessageTypeEntity, CommunicationLogEntity, CommunicationBaseMessageTypeEntity, TemplateEntity, TemplateCategoryEntity, TemplateContentEntity, TemplateParamEntity, TemplateContentTypeEntity, RecommendationEntity, RecommendationProviderEntity, RecommendationRunEntity, RecommendationItemEntity, EntityCommunicationMessageTypeEntity, EntityCommunicationFieldEntity, RecordChangeReplayRunEntity, LibraryItemEntity, EntityRelationshipDisplayComponentEntity, EntityActionParamEntity } from '@memberjunction/core-entities';
     
 
 //****************************************************************************
@@ -437,6 +437,206 @@ export class ScheduledActionParamResolver extends ResolverBase {
     async DeleteScheduledActionParam(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Scheduled Action Params', key, options, dataSource, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for Explorer Navigation Items
+//****************************************************************************
+@ObjectType({ description: 'Table to store navigation items for MemberJunction Explorer' })
+export class ExplorerNavigationItem_ {
+    @Field({description: 'Unique identifier for each navigation item'}) 
+    @MaxLength(16)
+    ID: string;
+        
+    @Field(() => Int, {description: 'Sequence number for the navigation item, must be unique and greater than 0'}) 
+    Sequence: number;
+        
+    @Field({description: 'Unique name of the navigation item displayed to the user'}) 
+    @MaxLength(200)
+    Name: string;
+        
+    @Field({description: 'The route for the navigation item relative to the app main URL, using Angular syntax like "entity/:entityName"'}) 
+    @MaxLength(510)
+    Route: string;
+        
+    @Field(() => Boolean, {description: 'Indicates if the navigation item is active; allows turning off items in the UI without deleting them from the metadata'}) 
+    IsActive: boolean;
+        
+    @Field(() => Boolean, {description: 'Controls if the navigation item is shown on the Home screen for MJ Explorer'}) 
+    ShowInHomeScreen: boolean;
+        
+    @Field(() => Boolean, {description: 'Controls if the item is shown in the left navigation drawer in the MJ Explorer app or not.'}) 
+    ShowInNavigationDrawer: boolean;
+        
+    @Field({nullable: true, description: 'Optional, CSS class for an icon to be displayed with the navigation item'}) 
+    @MaxLength(200)
+    IconCSSClass?: string;
+        
+    @Field({nullable: true, description: 'Description of the navigation item, shown to the user on hover or in larger displays'}) 
+    Description?: string;
+        
+    @Field({nullable: true, description: 'Administrator comments, not shown to the end user in MJ Explorer app'}) 
+    Comments?: string;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for Explorer Navigation Items
+//****************************************************************************
+@InputType()
+export class CreateExplorerNavigationItemInput {
+    @Field(() => Int)
+    Sequence: number;
+
+    @Field()
+    Name: string;
+
+    @Field()
+    Route: string;
+
+    @Field(() => Boolean)
+    IsActive: boolean;
+
+    @Field(() => Boolean)
+    ShowInHomeScreen: boolean;
+
+    @Field(() => Boolean)
+    ShowInNavigationDrawer: boolean;
+
+    @Field({ nullable: true })
+    IconCSSClass?: string;
+
+    @Field({ nullable: true })
+    Description?: string;
+
+    @Field({ nullable: true })
+    Comments?: string;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for Explorer Navigation Items
+//****************************************************************************
+@InputType()
+export class UpdateExplorerNavigationItemInput {
+    @Field()
+    ID: string;
+
+    @Field(() => Int)
+    Sequence: number;
+
+    @Field()
+    Name: string;
+
+    @Field()
+    Route: string;
+
+    @Field(() => Boolean)
+    IsActive: boolean;
+
+    @Field(() => Boolean)
+    ShowInHomeScreen: boolean;
+
+    @Field(() => Boolean)
+    ShowInNavigationDrawer: boolean;
+
+    @Field({ nullable: true })
+    IconCSSClass?: string;
+
+    @Field({ nullable: true })
+    Description?: string;
+
+    @Field({ nullable: true })
+    Comments?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
+//****************************************************************************
+// RESOLVER for Explorer Navigation Items
+//****************************************************************************
+@ObjectType()
+export class RunExplorerNavigationItemViewResult {
+    @Field(() => [ExplorerNavigationItem_])
+    Results: ExplorerNavigationItem_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(ExplorerNavigationItem_)
+export class ExplorerNavigationItemResolver extends ResolverBase {
+    @Query(() => RunExplorerNavigationItemViewResult)
+    async RunExplorerNavigationItemViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunExplorerNavigationItemViewResult)
+    async RunExplorerNavigationItemViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunExplorerNavigationItemViewResult)
+    async RunExplorerNavigationItemDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        input.EntityName = 'Explorer Navigation Items';
+        return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
+    }
+    @Query(() => ExplorerNavigationItem_, { nullable: true })
+    async ExplorerNavigationItem(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ExplorerNavigationItem_ | null> {
+        this.CheckUserReadPermissions('Explorer Navigation Items', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwExplorerNavigationItems] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Explorer Navigation Items', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Explorer Navigation Items', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
+    }
+    
+    @Mutation(() => ExplorerNavigationItem_)
+    async CreateExplorerNavigationItem(
+        @Arg('input', () => CreateExplorerNavigationItemInput) input: CreateExplorerNavigationItemInput,
+        @Ctx() { dataSource, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.CreateRecord('Explorer Navigation Items', input, dataSource, userPayload, pubSub)
+    }
+        
+    @Mutation(() => ExplorerNavigationItem_)
+    async UpdateExplorerNavigationItem(
+        @Arg('input', () => UpdateExplorerNavigationItemInput) input: UpdateExplorerNavigationItemInput,
+        @Ctx() { dataSource, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.UpdateRecord('Explorer Navigation Items', input, dataSource, userPayload, pubSub);
+    }
+    
+    @Mutation(() => ExplorerNavigationItem_)
+    async DeleteExplorerNavigationItem(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Explorer Navigation Items', key, options, dataSource, userPayload, pubSub);
     }
     
 }
@@ -8115,6 +8315,10 @@ export class UserRole_ {
     @MaxLength(200)
     User: string;
         
+    @Field() 
+    @MaxLength(100)
+    Role: string;
+        
 }
 
 //****************************************************************************
@@ -9714,11 +9918,11 @@ export class EntityAIAction_ {
         
     @Field() 
     @MaxLength(100)
-    AIAction: string;
+    AIModel: string;
         
-    @Field({nullable: true}) 
+    @Field() 
     @MaxLength(100)
-    AIModel?: string;
+    AIAction: string;
         
     @Field({nullable: true}) 
     @MaxLength(510)
@@ -10674,13 +10878,13 @@ export class Dashboard_ {
     @MaxLength(10)
     _mj__UpdatedAt: Date;
         
-    @Field({nullable: true}) 
+    @Field() 
     @MaxLength(200)
-    Category?: string;
+    User: string;
         
     @Field({nullable: true}) 
     @MaxLength(200)
-    User?: string;
+    Category?: string;
         
 }
 
@@ -11159,6 +11363,38 @@ export class Report_ {
     @MaxLength(10)
     _mj__UpdatedAt: Date;
         
+    @Field({nullable: true}) 
+    @MaxLength(200)
+    Category?: string;
+        
+    @Field() 
+    @MaxLength(200)
+    User: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(510)
+    Conversation?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(510)
+    DataContext?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(510)
+    OutputTriggerType?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(510)
+    OutputFormatType?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(510)
+    OutputDeliveryType?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(200)
+    OutputWorkflow?: string;
+        
     @Field(() => [ReportSnapshot_])
     ReportSnapshotsArray: ReportSnapshot_[]; // Link to ReportSnapshots
     
@@ -11391,9 +11627,9 @@ export class ReportSnapshot_ {
     @MaxLength(510)
     Report: string;
         
-    @Field({nullable: true}) 
+    @Field() 
     @MaxLength(200)
-    User?: string;
+    User: string;
         
 }
 
@@ -12846,6 +13082,10 @@ export class UserNotification_ {
     @Field() 
     @MaxLength(200)
     User: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(510)
+    ResourceType?: string;
         
 }
 
@@ -15351,12 +15591,12 @@ export class EntityDocument_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
-    @MaxLength(510)
-    Entity: string;
-        
-    @Field() 
     @MaxLength(200)
     Type: string;
+        
+    @Field() 
+    @MaxLength(510)
+    Entity: string;
         
     @Field(() => [EntityDocumentSetting_])
     EntityDocumentSettingsArray: EntityDocumentSetting_[]; // Link to EntityDocumentSettings
@@ -16737,13 +16977,13 @@ export class File_ {
     @MaxLength(10)
     _mj__UpdatedAt: Date;
         
-    @Field() 
-    @MaxLength(100)
-    Provider: string;
-        
     @Field({nullable: true}) 
     @MaxLength(510)
     Category?: string;
+        
+    @Field() 
+    @MaxLength(100)
+    Provider: string;
         
     @Field(() => [FileEntityRecordLink_])
     FileEntityRecordLinksArray: FileEntityRecordLink_[]; // Link to FileEntityRecordLinks
@@ -17981,13 +18221,13 @@ export class DuplicateRun_ {
     @MaxLength(200)
     StartedByUser: string;
         
-    @Field({nullable: true}) 
-    @MaxLength(200)
-    ApprovedByUser?: string;
-        
     @Field() 
     @MaxLength(200)
     SourceList: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(200)
+    ApprovedByUser?: string;
         
     @Field(() => [DuplicateRunDetail_])
     DuplicateRunDetailsArray: DuplicateRunDetail_[]; // Link to DuplicateRunDetails
@@ -20335,9 +20575,9 @@ export class ActionContext_ {
     @MaxLength(850)
     Action: string;
         
-    @Field() 
+    @Field({nullable: true}) 
     @MaxLength(510)
-    ContextType: string;
+    ContextType?: string;
         
 }
 

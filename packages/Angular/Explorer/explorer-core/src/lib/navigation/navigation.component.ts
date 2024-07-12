@@ -987,6 +987,20 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
 
     this.drawerItems.length = 0; // clear the array
 
+    const items = md.VisibleExplorerNavigationItems.filter(item => item.ShowInNavigationDrawer);
+    items.forEach(item => {
+      const drawerItem = {
+        id: item.ID,
+        selected: false,
+        text: item.Name,
+        path: item.Route,
+        icon: item.IconCSSClass
+      }
+      this.drawerItems.push(drawerItem);
+    });
+
+    return;
+
     // the Drawer configuraion has the following sections:
     /*
        * Home - a simple view that shows all the other options - dashboards, reports, data, etc, and ALSO shows Favorites and Most Recently Used Records
@@ -1026,6 +1040,7 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
 
     // Settings
     await this.loadSettings(md);
+
 
     this.loading = false;
   }

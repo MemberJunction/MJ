@@ -1,0 +1,28 @@
+{
+  "name": "@memberjunction/actions-apollo",
+  "version": "1.8.1",
+  "description": "Action classes that wrap the Apollo.io data enrichment API for contacts and accounts",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "/dist"
+  ],
+  "scripts": {
+    "start": "ts-node-dev src/index.ts",
+    "build": "tsc",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "MemberJunction.com",
+  "license": "ISC",
+  "devDependencies": {
+    "ts-node-dev": "^2.0.0",
+    "typescript": "^5.4.5"
+  },
+  "dependencies": {
+    "@memberjunction/global": "1.8.1",
+    "@memberjunction/core": "1.8.1",
+    "@memberjunction/core-entities": "1.8.1",
+    "@memberjunction/actions": "1.8.1",
+    "axios": "^1.7.2"
+  }
+}
