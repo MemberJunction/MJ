@@ -987,7 +987,6 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
 
     this.drawerItems.length = 0; // clear the array
 
-    // new methodology - use the metadata
     const items = md.VisibleExplorerNavigationItems.filter(item => item.ShowInNavigationDrawer);
     items.forEach(item => {
       const drawerItem = {
@@ -999,6 +998,7 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
       }
       this.drawerItems.push(drawerItem);
     });
+
     return;
 
     // the Drawer configuraion has the following sections:
@@ -1040,6 +1040,7 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
 
     // Settings
     await this.loadSettings(md);
+
 
     this.loading = false;
   }
