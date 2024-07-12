@@ -12,6 +12,7 @@ import express from 'express';
 import { default as fg } from 'fast-glob';
 import { useServer } from 'graphql-ws/lib/use/ws';
 import { createServer } from 'node:http';
+import { pathToFileURL } from 'node:url';
 import { sep } from 'node:path';
 import 'reflect-metadata';
 import { ReplaySubject } from 'rxjs';
@@ -49,7 +50,7 @@ export * from './generic/PushStatusResolver';
 export * from './generic/ResolverBase';
 export * from './generic/RunViewResolver';
 export * from './generic/KeyValuePairInput';
-export * from './generic/KeyInputOutputTypes'
+export * from './generic/KeyInputOutputTypes';
 export * from './generic/DeleteOptionsInput';
 
 export * from './resolvers/AskSkipResolver';
@@ -59,18 +60,14 @@ export * from './resolvers/EntityRecordNameResolver';
 export * from './resolvers/MergeRecordsResolver';
 export * from './resolvers/ReportResolver';
 
-export * from './generated/generated'
+export * from './generated/generated';
 
 import { resolve } from 'node:path';
 
-const localPath = (p: string) => resolve(import.meta.dirname, p);
+const localPath = (p: string) => pathToFileURL(resolve(import.meta.dirname, p)).href;
 
 export const serve = async (resolverPaths: Array<string>) => {
-  const localResolverPaths = [
-    'resolvers/**/*Resolver.{js,ts}',
-    'generic/*Resolver.{js,ts}',
-    'generated/generated.{js,ts}'
-  ].map(localPath);
+  const localResolverPaths = ['resolvers/**/*Resolver.{js,ts}', 'generic/*Resolver.{js,ts}', 'generated/generated.{js,ts}'].map(localPath);
 
   const combinedResolverPaths = [...resolverPaths, ...localResolverPaths];
 
@@ -105,8 +102,6 @@ export const serve = async (resolverPaths: Array<string>) => {
   // });
   /******TEST HARNESS FOR CHANGE DETECTION */
   /******TEST HARNESS FOR CHANGE DETECTION */
-
-
 
   const dynamicModules = await Promise.all(paths.map((modulePath) => import(modulePath.replace(/\.[jt]s$/, ''))));
   const resolvers = dynamicModules.flatMap((module) =>
@@ -148,7 +143,7 @@ export const serve = async (resolverPaths: Array<string>) => {
   app.use(
     graphqlRootPath,
     cors<cors.CorsRequest>(),
-    BodyParser.json({limit: '50mb'}),
+    BodyParser.json({ limit: '50mb' }),
     expressMiddleware(apolloServer, {
       context: contextFunction({ setupComplete$, dataSource }),
     })
@@ -157,4 +152,3 @@ export const serve = async (resolverPaths: Array<string>) => {
   await new Promise<void>((resolve) => httpServer.listen({ port: graphqlPort }, resolve));
   console.log(`🚀 Server ready at http://localhost:${graphqlPort}/`);
 };
-
