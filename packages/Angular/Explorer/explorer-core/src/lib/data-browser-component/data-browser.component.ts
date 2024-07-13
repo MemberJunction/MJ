@@ -2,21 +2,25 @@ import { Component } from '@angular/core';
 import { Router } from '@angular/router'
 import { ApplicationInfo, Metadata, RunView } from '@memberjunction/core';
 import { ApplicationEntity, UserApplicationEntity } from '@memberjunction/core-entities';
-import { SharedService } from '@memberjunction/ng-shared';
+import { RegisterClass } from '@memberjunction/global';
+import { BaseNavigationComponent, SharedService } from '@memberjunction/ng-shared';
 
 @Component({
   selector: 'app-data-browser',
   templateUrl: './data-browser.component.html',
   styleUrls: ['./data-browser.component.css', '../../shared/first-tab-styles.css']
 })
-export class DataBrowserComponent {
+@RegisterClass(BaseNavigationComponent, 'Data')
+export class DataBrowserComponent extends BaseNavigationComponent {
   public showLoader: boolean = true;
 
   public AllApplications: ApplicationEntity[] = [];
   public SelectedApplications: ApplicationEntity[] = [];
   public UnselectedApplications: ApplicationEntity[] = [];
 
-  constructor(public sharedService: SharedService, private router: Router) {}
+  constructor(public sharedService: SharedService, private router: Router) {
+    super();
+  }
 
   ngOnInit(): void {
     this.LoadData();

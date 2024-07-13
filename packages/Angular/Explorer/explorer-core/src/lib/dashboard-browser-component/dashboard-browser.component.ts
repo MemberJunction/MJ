@@ -1,18 +1,19 @@
 import { Component } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router'
-import { SharedService } from '@memberjunction/ng-shared';
+import { BaseNavigationComponent, SharedService } from '@memberjunction/ng-shared';
 import { Item } from '../../generic/Item.types';
 import { BaseBrowserComponent } from '../base-browser-component/base-browser-component';
 import { DashboardEntity } from '@memberjunction/core-entities';
 import { BeforeUpdateItemEvent } from '../../generic/Events.types';
+import { RegisterClass } from '@memberjunction/global';
 
 @Component({
   selector: 'app-dashboard-browser',
   templateUrl: './dashboard-browser.component.html',
   styleUrls: ['./dashboard-browser.component.css', '../../shared/first-tab-styles.css']
 })
-
-export class DashboardBrowserComponent extends BaseBrowserComponent{
+@RegisterClass(BaseNavigationComponent, 'Dashboards')
+export class DashboardBrowserComponent extends BaseBrowserComponent {
 
   constructor(private router: Router, private route: ActivatedRoute, private sharedService: SharedService) {
     super();

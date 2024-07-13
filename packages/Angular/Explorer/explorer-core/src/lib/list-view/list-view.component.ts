@@ -2,16 +2,18 @@ import { Component, OnInit } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router'
 import { ListEntity } from '@memberjunction/core-entities';
 import { BaseBrowserComponent } from '../base-browser-component/base-browser-component';
-import { SharedService } from '@memberjunction/ng-shared';
+import { BaseNavigationComponent, SharedService } from '@memberjunction/ng-shared';
 import { Item } from '../../generic/Item.types';
 import { BeforeAddItemEvent, BeforeUpdateItemEvent } from '../../generic/Events.types';
 import { BaseEntity, EntityInfo, Metadata } from '@memberjunction/core';
+import { RegisterClass } from '@memberjunction/global';
 
 @Component({
   selector: 'mj-list-view',
   templateUrl: './list-view.component.html',
   styleUrls: ['./list-view.component.css', '../../shared/first-tab-styles.css']
 })
+@RegisterClass(BaseNavigationComponent, 'Lists')
 export class ListViewComponent extends BaseBrowserComponent implements OnInit {
     public showLoader :boolean = false;
     public showCreateLoader: boolean = false;

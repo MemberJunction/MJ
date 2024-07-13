@@ -1,17 +1,19 @@
 import { Component } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router'
 import { Item } from '../../generic/Item.types';
-import { SharedService } from '@memberjunction/ng-shared';
+import { BaseNavigationComponent, SharedService } from '@memberjunction/ng-shared';
 import { BaseBrowserComponent } from '../base-browser-component/base-browser-component';
 import { BeforeUpdateItemEvent } from '../../generic/Events.types';
 import { QueryEntity } from '@memberjunction/core-entities';
 import { LogStatus, Metadata } from '@memberjunction/core';
+import { RegisterClass } from '@memberjunction/global';
 
 @Component({
   selector: 'mj-query-browser',
   templateUrl: './query-browser.component.html',
   styleUrls: ['./query-browser.component.css', '../../shared/first-tab-styles.css']
 })
+@RegisterClass(BaseNavigationComponent, 'Queries')
 export class QueryBrowserComponent extends BaseBrowserComponent {
 
   constructor(private router: Router, private route: ActivatedRoute, private sharedService: SharedService) {

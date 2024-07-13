@@ -1,18 +1,18 @@
-  import { AfterViewInit, AfterViewChecked, Component, OnInit, ViewChild, ViewContainerRef, Renderer2, ElementRef, Injector, ComponentRef, OnDestroy, Input, ChangeDetectorRef, ComponentFactoryResolver } from '@angular/core';
+import { AfterViewInit, AfterViewChecked, Component, OnInit, ViewChild, ViewContainerRef, Renderer2, ElementRef, Injector, ComponentRef, OnDestroy, Input, ChangeDetectorRef, ComponentFactoryResolver } from '@angular/core';
 import { Location } from '@angular/common';
 import { ActivatedRoute, ActivationEnd, Router } from '@angular/router';
 import { LogError, Metadata, RunQuery, RunView, UserInfo, CompositeKey, LogStatus } from '@memberjunction/core';
 import { ConversationDetailEntity, ConversationEntity, DataContextEntity, DataContextItemEntity } from '@memberjunction/core-entities';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { Container } from '@memberjunction/ng-container-directives';
-import { SharedService } from '@memberjunction/ng-shared';
+import { BaseNavigationComponent, SharedService } from '@memberjunction/ng-shared';
 
 import { Subscription } from 'rxjs';
 import { take, filter } from 'rxjs/operators';
 import { ListViewComponent } from '@progress/kendo-angular-listview';
 import { MJAPISkipResult, SkipAPIAnalysisCompleteResponse, SkipAPIClarifyingQuestionResponse, SkipAPIResponse, SkipResponsePhase } from '@memberjunction/skip-types';
 import { DataContext } from '@memberjunction/data-context';
-import { CopyScalarsAndArrays, MJEvent, MJEventType, MJGlobal } from '@memberjunction/global';
+import { CopyScalarsAndArrays, MJEvent, MJEventType, MJGlobal, RegisterClass } from '@memberjunction/global';
 import { SkipSingleMessageComponent } from '../skip-single-message/skip-single-message.component';
   
 
@@ -21,7 +21,8 @@ import { SkipSingleMessageComponent } from '../skip-single-message/skip-single-m
   templateUrl: './skip-chat.component.html',
   styleUrls: ['./skip-chat.component.css']
 })
-export class SkipChatComponent implements OnInit, AfterViewInit, AfterViewChecked, OnDestroy {
+@RegisterClass(BaseNavigationComponent, 'Ask Skip')
+export class SkipChatComponent extends BaseNavigationComponent implements OnInit, AfterViewInit, AfterViewChecked, OnDestroy {
   @Input() AllowSend: boolean = true;
   @Input() public Messages: ConversationDetailEntity[] = [];
   @Input() public Conversations: ConversationEntity[] = [];
@@ -95,7 +96,9 @@ export class SkipChatComponent implements OnInit, AfterViewInit, AfterViewChecke
     private router: Router,
     private location: Location,
     private cdRef: ChangeDetectorRef,
-  ) {}
+  ) {
+    super();
+  }
 
   private paramsSubscription!: Subscription;
   ngOnInit() {

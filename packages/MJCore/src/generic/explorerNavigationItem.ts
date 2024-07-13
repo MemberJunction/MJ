@@ -16,4 +16,11 @@ export class ExplorerNavigationItem extends BaseInfo {
     public Comments: string = null;
     __mj_CreatedAt: Date = null
     __mj_UpdatedAt: Date = null
+
+    constructor(initData: any = null) {
+        super();
+        if (initData) {
+            this.copyInitData(initData);
+        }
+    }
 }
