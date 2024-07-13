@@ -296,6 +296,7 @@ export class EntityFieldInfo extends BaseInfo {
     IncludeRelatedEntityNameFieldInBaseView: boolean = null
     RelatedEntityNameFieldMap: string = null
     RelatedEntityDisplayType: 'Search' | 'Dropdown' = null
+    EntityIDFieldName: string = null
     __mj_CreatedAt: Date = null
     __mj_UpdatedAt: Date = null
     

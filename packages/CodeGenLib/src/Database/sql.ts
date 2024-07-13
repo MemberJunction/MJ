@@ -74,14 +74,21 @@ public buildEntityLevelsTree(entities: EntityInfo[]): EntityInfo[][] {
      }
 
      if (currentLevel.length === 0) {
-      // we have a cyclical dependency at this level, so we can't continue, instead of bombing completely, throw a warning and include in the final level
-      // all of the remaining entities in the dependency Map
-      console.warn(`    > Build Entity Levels Tree: Non-Fatal Error: Cyclical Dependency Detected, including remaining entities in final level. Entities: ${Array.from(dependencyMap.keys()).join(', ')}`);
-      for (const item of dependencyMap) {
-         const entityName = item[0];
-         currentLevel.push(entityMap.get(entityName));
+      // We have a cyclical dependency at this level, so we can't continue. Instead of bombing completely, throw a warning and include in the final level
+      // all of the remaining entities in the dependency map.
+      const circularDeps: string[] = [];
+      for (const [entityName, dependencies] of dependencyMap.entries()) {
+        circularDeps.push(`${entityName} depends on ${Array.from(dependencies).join(', ')}`);
       }
-     }
+      console.warn(`    > Build Entity Levels Tree: Non-Fatal Error: Cyclical Dependency Detected, including remaining entities in final level. Details:`);
+      circularDeps.forEach(dep => console.warn(`    ${dep}`));
+      
+      for (const item of dependencyMap) {
+        const entityName = item[0];
+        currentLevel.push(entityMap.get(entityName));
+      }
+    }
+
 
      // Add current level to the tree
      entityLevelTree.push(currentLevel);
@@ -141,57 +148,6 @@ public async recompileAllBaseViews(ds: DataSource, excludeSchemas: string[], app
    return bSuccess;
  }
 
-
-
-// public async recompileAllBaseViews(ds: DataSource, excludeSchemas: string[], applyPermissions: boolean): Promise<boolean> {
-//     let bSuccess: boolean = true; // start off true
-//     const md: Metadata = new Metadata();
-//     const tasks: Promise<boolean>[] = [];
-//     const concurrencyLimit = 5;
-
-//     const filteredEntities = md.Entities.filter(e => !excludeSchemas.includes(e.SchemaName) && e.BaseViewGenerated && e.IncludeInAPI && !e.VirtualEntity && !ManageMetadataBase.newEntityList.includes(e.Name));
-//     // filtered entities now has the entities we care about for purposes of recompiling base views. 
-//     // what we want to do now is build a dependency order tree. the way this works is that each LEVEL of that dependency order tree
-//     // has entities that are NOT dependent on any other entity in that level or any level below it.
-//     // we can then process one level at a time, in parallel, and then move on to the next level.
-//     // we have the dependency information in the metadata. Each entity has fields and those fields have RelatedEntity info (if they are foreign keys)
-//     // so we use that to build the tree.
-//     const entityLevelTree = this.buildEntityLevelsTree(filteredEntities);
-
-//     for (let i = 0; i < md.Entities.length; ++i) {  
-//       if (!excludeSchemas.includes(md.Entities[i].SchemaName)) {
-//          // do this in two steps to ensure recompile isn't ever short circuited through code optimization
-//          const e = md.Entities[i];
-//          e.RelatedEntities
-//          if ( e.BaseViewGenerated && // only do this for entities that have a base view generated
-//                e.IncludeInAPI && // only do this for entities that are included in the API
-//                !e.VirtualEntity && // do not include virtual entities
-//                !ManageMetadataBase.newEntityList.includes(e.Name)) {
-//             // only do this if base view generated and for NON-virtual entities, 
-//             // custom base views should be defined in the BEFORE SQL Scripts 
-//             // and NOT for newly created entities         
-//             tasks.push(this.recompileSingleBaseView(ds, e, applyPermissions));
-//             if (tasks.length === concurrencyLimit) {
-//               bSuccess = (await Promise.all(tasks)).every(result => result) && bSuccess;
-//               tasks.length = 0; // clear the array
-//             }
-//             // bSuccess = await this.recompileSingleBaseView(ds, e, applyPermissions) && bSuccess;
-//          }
-//       }
-//     }
-
-//     // Process any remaining tasks
-//     if (tasks.length > 0) {
-//       bSuccess = (await Promise.all(tasks)).every(result => result) && bSuccess;
-//     }    
-
-//     if (!bSuccess) {
-//          // temp thing for debug, let's dump the new entity list to see what's up
-//          console.warn('New Entity List:');
-//          console.warn('    ' + ManageMetadataBase.newEntityList.join('\n    '));
-//     }
-//     return bSuccess;
-//  }
  
  public async recompileSingleBaseView(ds: DataSource, entity: EntityInfo, applyPermissions: boolean): Promise<boolean> {
    const file = this.getDBObjectFileName('view', entity.SchemaName, entity.BaseView, false, entity.BaseViewGenerated);

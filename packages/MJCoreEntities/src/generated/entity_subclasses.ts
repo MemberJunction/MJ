@@ -2587,6 +2587,18 @@ import { RegisterClass } from "@memberjunction/global";
             this.Set('RelatedEntityDisplayType', value);
         }
         /**
+        * * Field Name: EntityIDFieldName
+        * * Display Name: Entity IDField Name
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Optional, used for "Soft Keys" to link records to different entity/record combinations on a per-record basis (for example the FileEntityRecordLink table has an EntityID/RecordID field pair. For that entity, the RecordID specifies "EntityID" for this field. This information allows MJ to detect soft keys/links for dependency detection, merging and for preventing orphaned soft-linked records during delete operations.
+        */
+        get EntityIDFieldName(): string | null {  
+            return this.Get('EntityIDFieldName');
+        }
+        set EntityIDFieldName(value: string | null) {
+            this.Set('EntityIDFieldName', value);
+        }
+        /**
         * * Field Name: __mj_CreatedAt
         * * Display Name: __mj _Created At
         * * SQL Data Type: datetimeoffset
@@ -7119,7 +7131,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: Integration
         * * Display Name: Integration
         * * SQL Data Type: nvarchar(100)
-        * * Default Value: null
         */
         get Integration(): string | null {  
             return this.Get('Integration');
@@ -7224,7 +7235,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: Role
         * * Display Name: Role
         * * SQL Data Type: nvarchar(50)
-        * * Default Value: null
         */
         get Role(): string {  
             return this.Get('Role');
@@ -10181,7 +10191,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: Category
         * * Display Name: Category
         * * SQL Data Type: nvarchar(100)
-        * * Default Value: null
         */
         get Category(): string | null {  
             return this.Get('Category');
@@ -10191,7 +10200,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: User
         * * Display Name: User
         * * SQL Data Type: nvarchar(100)
-        * * Default Value: null
         */
         get User(): string {  
             return this.Get('User');
@@ -10201,7 +10209,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: Conversation
         * * Display Name: Conversation
         * * SQL Data Type: nvarchar(255)
-        * * Default Value: null
         */
         get Conversation(): string | null {  
             return this.Get('Conversation');
@@ -10211,7 +10218,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: DataContext
         * * Display Name: Data Context
         * * SQL Data Type: nvarchar(255)
-        * * Default Value: null
         */
         get DataContext(): string | null {  
             return this.Get('DataContext');
@@ -10221,7 +10227,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: OutputTriggerType
         * * Display Name: Output Trigger Type
         * * SQL Data Type: nvarchar(255)
-        * * Default Value: null
         */
         get OutputTriggerType(): string | null {  
             return this.Get('OutputTriggerType');
@@ -10231,7 +10236,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: OutputFormatType
         * * Display Name: Output Format Type
         * * SQL Data Type: nvarchar(255)
-        * * Default Value: null
         */
         get OutputFormatType(): string | null {  
             return this.Get('OutputFormatType');
@@ -10241,7 +10245,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: OutputDeliveryType
         * * Display Name: Output Delivery Type
         * * SQL Data Type: nvarchar(255)
-        * * Default Value: null
         */
         get OutputDeliveryType(): string | null {  
             return this.Get('OutputDeliveryType');
@@ -10251,7 +10254,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: OutputWorkflow
         * * Display Name: Output Workflow
         * * SQL Data Type: nvarchar(100)
-        * * Default Value: null
         */
         get OutputWorkflow(): string | null {  
             return this.Get('OutputWorkflow');
@@ -11838,7 +11840,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: ResourceType
         * * Display Name: Resource Type
         * * SQL Data Type: nvarchar(255)
-        * * Default Value: null
         */
         get ResourceType(): string | null {  
             return this.Get('ResourceType');
