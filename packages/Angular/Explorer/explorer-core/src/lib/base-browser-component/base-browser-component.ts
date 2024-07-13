@@ -2,8 +2,9 @@ import { LogStatus, Metadata, RunView } from "@memberjunction/core";
 import { Folder, Item, ItemType } from "../../generic/Item.types";
 import { Router, Params, ActivatedRoute } from '@angular/router';
 import { BaseEvent, EventTypes, AfterAddFolderEvent, AfterDeleteItemEvent } from "../../generic/Events.types";
+import { BaseNavigationComponent } from "@memberjunction/ng-shared";
 
-export class BaseBrowserComponent {
+export class BaseBrowserComponent extends BaseNavigationComponent {
     public showLoader: boolean = false;
     public items: Item[];
     public folders: Folder[];
@@ -20,6 +21,7 @@ export class BaseBrowserComponent {
     protected parentFolderID: number | null = null;
     
     constructor() {
+        super();
         this.items = [];
         this.folders = [];
         this.entityData = [];

@@ -257,8 +257,10 @@ export class AppRoutingModule {
     const dynamicRoutes: Routes = md.VisibleExplorerNavigationItems.map(item => {
       const registration = MJGlobal.Instance.ClassFactory.GetRegistration(BaseNavigationComponent, item.Name)
       if (registration) {
+        // remove the leading slash from the route if it exists
+        const route = item.Route.startsWith('/') ? item.Route.substring(1) : item.Route;
         return {
-          path: item.Route,
+          path: route,
           component: registration.SubClass,
           canActivate: [AuthGuard],  
         }
@@ -268,8 +270,21 @@ export class AppRoutingModule {
       }
     });
 
+    // Find and remove the wildcard route
+    const wildcardRouteIndex = routes.findIndex(route => route.path?.trim() === '**');
+    const wildcardRoute = routes[wildcardRouteIndex];
+    if (wildcardRouteIndex > -1) {
+      routes.splice(wildcardRouteIndex, 1);
+    }
+
     // create a combined routes array and make sure that we filter out any dynamic routes that are ALREADY in the router config
     const newCombinedRoutes = [...routes, ...dynamicRoutes.filter(route => !routes.some(r => r.path?.trim().toLowerCase() === route.path?.trim().toLowerCase()))];
+
+    // Re-add the wildcard route at the end
+    if (wildcardRoute) {
+      newCombinedRoutes.push(wildcardRoute);
+    }
+
     this.router.resetConfig(newCombinedRoutes);
   }
 }

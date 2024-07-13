@@ -1,7 +1,7 @@
 import { Component, ElementRef, ViewChild, OnInit, OnDestroy, HostListener, HostBinding, AfterViewInit, Renderer2, Input, ChangeDetectorRef } from '@angular/core';
 import { Location } from '@angular/common';
 import { Router, NavigationEnd, Event, NavigationSkipped, ActivatedRoute } from '@angular/router';
-import { DrawerItem, DrawerSelectEvent, DrawerComponent, DrawerMode, TabCloseEvent, TabStripComponent, SelectEvent } from "@progress/kendo-angular-layout";
+import { DrawerItem, DrawerSelectEvent, DrawerComponent, DrawerMode } from "@progress/kendo-angular-layout";
 import { Metadata, ApplicationInfo, EntityInfo, RunView, RunViewParams, LogError, TransactionGroupBase, ApplicationEntityInfo, LogStatus, BaseEntity } from '@memberjunction/core';
 import { MJEvent, MJEventType, MJGlobal } from '@memberjunction/global';
 import { Subscription } from 'rxjs';
@@ -59,7 +59,7 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
   private resizeTimeout: any;
 
   @ViewChild(DrawerComponent, { static: false }) drawer!: DrawerComponent;
-  @ViewChild('mjTabstrip') mjTabStrip!: MJTabStripComponent;
+  @ViewChild('mjTabstrip', { static: false }) mjTabStrip!: MJTabStripComponent;
   @ViewChild('drawerWrapper', { static: false }) drawerWrapper!: ElementRef;
   @ViewChild('container', { static: true, read: ElementRef }) container !: ElementRef;
 
@@ -999,6 +999,8 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
       this.drawerItems.push(drawerItem);
     });
 
+    this.loading = false;
+
     return;
 
     // the Drawer configuraion has the following sections:
@@ -1042,7 +1044,6 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
     await this.loadSettings(md);
 
 
-    this.loading = false;
   }
 
   protected async loadSkip(md: Metadata) {
