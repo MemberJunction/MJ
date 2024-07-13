@@ -28,4 +28,9 @@ export abstract class BaseInfo {
         }
     }
 
+    constructor(initData: any = null) {
+        if (initData) {
+            this.copyInitData(initData);
+        }
+    }
 }

@@ -2,6 +2,8 @@ import { Component, OnInit } from '@angular/core';
 import { ActivatedRoute, NavigationEnd, Router } from '@angular/router';
 import { BaseEntity, Metadata } from '@memberjunction/core';
 import { ApplicationEntity, ApplicationEntityEntity, RoleEntity, UserEntity } from '@memberjunction/core-entities';
+import { RegisterClass } from '@memberjunction/global';
+import { BaseNavigationComponent } from '@memberjunction/ng-shared';
 import { filter } from 'rxjs/operators';
 
 export enum SettingsItem {
@@ -19,7 +21,8 @@ export enum SettingsItem {
   templateUrl: './settings.component.html',
   styleUrls: ['./settings.component.css']
 })
-export class SettingsComponent implements OnInit {
+@RegisterClass(BaseNavigationComponent, 'Settings')
+export class SettingsComponent extends BaseNavigationComponent implements OnInit {
   public currentItem: SettingsItem = SettingsItem.Users;
   public baseRoute: string = '/settings';
 
@@ -51,7 +54,9 @@ export class SettingsComponent implements OnInit {
     this.router.navigate([this.baseRoute, subPath]);
   }
   
-  constructor(private router: Router, private activatedRoute: ActivatedRoute) { }
+  constructor(private router: Router, private activatedRoute: ActivatedRoute) { 
+    super();
+  }
  
 
   ngOnInit() {

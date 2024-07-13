@@ -28,8 +28,11 @@ export class ResolverBase {
       entityInfo.Fields.forEach((f) => {
         if (dataObject.hasOwnProperty(f.Name)) {
           // GraphQL doesn't allow us to pass back fields with __ so we are mapping our special field cases that start with __mj_ to _mj__ for transport - they are converted back on the other side automatically
-          dataObject[mapper.MapFieldName(f.CodeName)] = dataObject[f.Name];
-          delete dataObject[f.Name];
+          const mappedFieldName = mapper.MapFieldName(f.CodeName)
+          if (mappedFieldName !== f.Name) {
+            dataObject[mappedFieldName] = dataObject[f.Name];
+            delete dataObject[f.Name];
+          }
         }
       });
     }
