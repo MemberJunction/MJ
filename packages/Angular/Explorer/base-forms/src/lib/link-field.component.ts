@@ -182,9 +182,12 @@ export class MJLinkField extends BaseRecordComponent implements AfterViewInit {
                     }
                 }
             }
-            else {
-                // the pkey is a string, so we can search on it no matter what the query is, a number, not a number, whatever
+            else if (this.RelatedEntityInfo.FirstPrimaryKey.Type.trim().toLowerCase() !== 'uniqueidentifier') {
+                // the pkey is a string that is NOT a unique identifier, so we can search on it no matter what the query is, a number, not a number, whatever
                 filter = `[${this.RelatedEntityInfo.FirstPrimaryKey.Name}] = '${escapedQuery}'`;
+            }
+            else {
+                // we can't search on the pkey so leave it alone
             }
             
             if (this.RelatedEntityNameField) {
