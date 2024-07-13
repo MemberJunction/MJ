@@ -8,6 +8,7 @@ import { AppDataSource } from './db.js';
 // import { BaseLLM, ChatParams, GetAIAPIKey } from "@memberjunction/ai";
 import { LoadOpenAILLM } from '@memberjunction/ai-openai';
 import { LoadPineconeVectorDB } from '@memberjunction/ai-vectors-pinecone';
+import { LoadMistralEmbedding } from '@memberjunction/ai-mistral';
 
 const SYSTEM_USER_ID = "EDAFCCEC-6A37-EF11-86D4-000D3A4E707E";
 
@@ -18,6 +19,7 @@ const sqlServerDataProvider = await setupSQLServerClient(config);
 
 LoadGeneratedEntities();
 LoadOpenAILLM();
+LoadMistralEmbedding();
 LoadPineconeVectorDB();
 
 const params = {

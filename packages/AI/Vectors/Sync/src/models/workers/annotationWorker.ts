@@ -1,34 +1,45 @@
 import { parentPort, threadId, workerData } from 'node:worker_threads';
-import type { ArchiveWorkerContext } from '../entityVectorSync';
+import type { AnnotateWorkerContext } from '../entityVectorSync';
 import type { WorkerData } from '../BatchWorker';
 import { TemplateEntityExtended, TemplateRenderResult } from '@memberjunction/templates-base-types';
 import { TemplateEngineServer } from '@memberjunction/templates';
-import { EntityDocumentEntity } from '@memberjunction/core-entities';
-import { LogError } from '@memberjunction/core';
+import { TemplateContentEntity } from '@memberjunction/core-entities';
+import { LogError, LogStatus, ValidationResult } from '@memberjunction/core';
+import { MJGlobal } from '@memberjunction/global';
+import { Embeddings, EmbedTextsResult } from '@memberjunction/ai';
+
+import { LoadOpenAILLM } from '@memberjunction/ai-openai';
+import { LoadMistralEmbedding } from '@memberjunction/ai-mistral';
+
+LoadOpenAILLM();
+LoadMistralEmbedding();
+
+const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 async function VectorizeEntity(): Promise<void> {
-  const { batch, context } = workerData as WorkerData<ArchiveWorkerContext>;
+  const { batch, context } = workerData as WorkerData<AnnotateWorkerContext>;
+
+  if(!batch){
+    throw new Error('batch is required for the AnnotationWorker');
+  }
+
+  const template: TemplateEntityExtended = context.template;
+  const templateContent: TemplateContentEntity = context.templateContent;
+  TemplateEngineServer.Instance.SetupNunjucks();
   const startTime = Date.now();
   console.log('\t##### Annotator started #####', { threadId, now: Date.now() % 10_000, elapsed: Date.now() - context.executionId });
   console.log(`Annotating ${batch.length} records`);
 
-  const entityDocument: EntityDocumentEntity = context.entityDocument;
-  const template: TemplateEntityExtended | undefined = TemplateEngineServer.Instance.Templates.find((t: TemplateEntityExtended) => t.ID === entityDocument.TemplateID);
-  if(!template){
-    throw new Error(`Template not found with ID ${entityDocument.TemplateID}`);
-  }
-
-  if(template.Content.length === 0){
-    throw new Error(`Template ${template.ID} does not have an associated Template Content record`);
-  }
-
-  if(template.Content.length > 1){
-    throw new Error('Templates used by Entity Documents should only have one associated Template Content record.');
-  }
-
+  const embedding: Embeddings = MJGlobal.Instance.ClassFactory.CreateInstance<Embeddings>(Embeddings, context.embeddingDriverClass, context.embeddingAPIKey);
   const processedBatch: string[] = [];
-  for (const entityData of batch) { 
-    let result: TemplateRenderResult = await TemplateEngineServer.Instance.RenderTemplate(template, template.Content[0], entityData);
+  for (const entityData of batch) {
+    const validationResult = ValidateTemplateInput(template, entityData);
+    if (!validationResult.Success) {
+      LogError(`Validation error for record ${entityData.ID}`, undefined, validationResult.Errors.map(e => e.Message).join('\n'));
+      continue;
+    }
+
+    let result: TemplateRenderResult = await TemplateEngineServer.Instance.RenderTemplate(template, templateContent, entityData, true);
     if(result.Success){
       processedBatch.push(result.Output);
     }
@@ -37,10 +48,57 @@ async function VectorizeEntity(): Promise<void> {
     }
   }
 
+  const embeddings: EmbedTextsResult = await embedding.EmbedTexts({ texts: processedBatch, model: null });
+  const embeddingBatch: Record<string, any>[] = embeddings.vectors.map((vector: number[], index: number) => {
+    return {
+      ID: index,
+      Vector: vector
+    };
+  });
+
+  LogStatus(`Embedding result: ${embeddings.vectors.length} vectors`);
+
   const runTime = Date.now() - startTime;
   const elapsed = Date.now() - context.executionId;
   console.log('\t##### Annotator finished #####', { threadId, now: Date.now() % 100_000, runTime, elapsed });
-  parentPort.postMessage({ ...workerData, batch: processedBatch });
+  await delay(250); //short deplay to avoid getting rate limited by the embedding model's api 
+  parentPort.postMessage({ ...workerData, batch: embeddingBatch });
+}
+
+/**
+ * This method is different from the Validate() method which validates the state of the Template itself. This method validates the data object provided meets the requirements for the template's parameter definitions.
+ * @param data - the data object to validate against the template's parameter definitions
+ */
+function ValidateTemplateInput(template: TemplateEntityExtended, data: any): ValidationResult {
+  const result = new ValidationResult();
+  let params = template.Params;
+
+  if(!params){
+    result.Errors.push({
+      Source: "",
+      Message: "Params property not found on the template.",
+      Value: "",
+      Type: 'Failure'
+    });
+  }
+
+  params?.forEach((p) => {
+    if (p.IsRequired) {
+        if (!data || data[p.Name] === undefined || data[p.Name] === null || 
+            (typeof data[p.Name] === 'string' && data[p.Name].toString().trim() === '')){
+              result.Errors.push({
+                Source: p.Name,
+                Message: `Parameter ${p.Name} is required.`,
+                Value: data[p.Name],
+                Type: 'Failure'
+              });
+            }
+      }
+  });
+
+  // now set result's top level success falg based on the existence of ANY failure record within the errors collection
+  result.Success = result.Errors.some(e => e.Type === 'Failure') ? false : true;
+  return result;
 }
 
 VectorizeEntity();

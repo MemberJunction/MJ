@@ -3,7 +3,7 @@ import { Worker } from 'node:worker_threads';
 
 type TransformCallback = Parameters<Transform['_flush']>[0];
 export type WorkerData<TContext = Record<string, unknown>, TRecord = Record<string, unknown>> = {
-  batch: Array<TRecord>;
+  batch?: Array<TRecord>;
   context?: TContext;
 };
 export type BatchWorkerOptions<TContext = Record<string, unknown>> = {

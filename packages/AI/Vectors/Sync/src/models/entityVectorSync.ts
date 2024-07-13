@@ -16,16 +16,23 @@ import { AIEngine } from '@memberjunction/aiengine';
 import { TemplateEngineServer } from '@memberjunction/templates';
 import { TemplateEntityExtended } from '@memberjunction/templates-base-types';
 
-export type ArchiveWorkerContext = {
-  executionId: number;
-  entity: BaseEntity;
-  entityDocument: EntityDocumentEntity;
-};
-
 export type AnnotateWorkerContext = {
   executionId: number;
   entity: BaseEntity;
   entityDocument: EntityDocumentEntity;
+  template: TemplateEntityExtended;
+  templateContent: TemplateContentEntity;
+  embeddingDriverClass: string;
+  embeddingAPIKey: string;
+};
+
+export type ArchiveWorkerContext = {
+  executionId: number;
+  entity: BaseEntity;
+  entityDocument: EntityDocumentEntity;
+  vectorDBClassKey: string;
+  vectorDBAPIKey: string;
+  embeddings: EmbedTextsResult;
 };
 
 export class EntityVectorSyncer extends VectorBase {
@@ -60,14 +67,43 @@ export class EntityVectorSyncer extends VectorBase {
     const entity = md.Entities.find((e) => e.ID === request.entityID);
     if (!entity) throw new Error(`Entity with ID ${request.entityID} not found.`);
 
+
+    const template: TemplateEntityExtended | undefined = TemplateEngineServer.Instance.Templates.find((t: TemplateEntityExtended) => t.ID === entityDocument.TemplateID);
+    if(!template){
+      throw new Error(`Template not found with ID ${entityDocument.TemplateID}`);
+    }
+
+    if(template.Content.length === 0){
+      throw new Error(`Template ${template.ID} does not have an associated Template Content record`);
+    }
+
+    if(template.Content.length > 1){
+      throw new Error('Templates used by Entity Documents should only have one associated Template Content record.');
+    }
+
     // this gets all the records, but we want to paginate
     // const allrecords: BaseEntity[] = await super.getRecordsByEntityID(request.entityID);
 
     //small number in the hopes we dont hit embedding token limits
     const pageSize: number = 2;
-
     const dataStream = new PagedRecords();
-    const workerContext = { executionId: Date.now(), entity, entityDocument };
+    
+    let templateObj: {} = {
+      ...template.GetAll(),
+      Params: template.Params.map((p) => p.GetAll())
+    }; 
+
+    const workerContext = { 
+      executionId: Date.now(), 
+      entity, 
+      entityDocument,
+      template: templateObj,
+      templateContent: template.Content[0].GetAll(),
+      vectorDBClassKey: obj.vectorDBClassKey,
+      vectorDBAPIKey: obj.vectorDBAPIKey,
+      embeddingDriverClass: obj.embeddingDriverClass,
+      embeddingAPIKey: obj.embeddingAPIKey
+    };
 
     //annotator worker handles vectorizing the records 
     const annotator = new BatchWorker({
@@ -233,7 +269,7 @@ export class EntityVectorSyncer extends VectorBase {
   protected async GetVectorDatabaseAndEmbeddingClassByEntityDocumentID(
     entityDocumentID: string,
     createDocumentIfNotFound: boolean = false
-  ): Promise<{ embedding: Embeddings; vectorDB: VectorDBBase }> {
+  ): Promise<{ embedding: Embeddings; vectorDB: VectorDBBase, vectorDBClassKey: string, vectorDBAPIKey: string, embeddingDriverClass: string, embeddingAPIKey: string }> {
     let entityDocument: EntityDocumentEntity | null =
       (await this.GetEntityDocument(entityDocumentID)) || (await this.GetFirstActiveEntityDocumentForEntity(entityDocumentID));
     if (!entityDocument) {
@@ -248,8 +284,6 @@ export class EntityVectorSyncer extends VectorBase {
         throw new Error(`No Entity Document found for ID=${entityDocumentID}`);
       }
     }
-
-    LogStatus(`Using vector database ${entityDocument.VectorDatabaseID} and AI Model ${entityDocument.AIModelID}`);
 
     const vectorDBEntity: VectorDatabaseEntity = this.getVectorDatabase(entityDocument.VectorDatabaseID);
     const aiModelEntity: AIModelEntity = this.getAIModel(entityDocument.AIModelID);
@@ -277,7 +311,18 @@ export class EntityVectorSyncer extends VectorBase {
       throw Error(`Failed to create Vector Database instance for ${vectorDBEntity.ClassKey}`);
     }
 
-    return { embedding, vectorDB };
+    LogStatus(`Using vector database ${vectorDBEntity.Name} and AI Model ${aiModelEntity.Name}`);
+
+    const obj = { 
+      embedding, 
+      vectorDB, 
+      vectorDBClassKey: vectorDBEntity.ClassKey, 
+      vectorDBAPIKey: vectorDBAPIKey,
+      embeddingDriverClass: aiModelEntity.DriverClass,
+      embeddingAPIKey: embeddingAPIKey
+    };
+
+    return obj;
   }
 
   public async GetEntityDocument(EntityDocumentID: string): Promise<EntityDocumentEntity | null> {

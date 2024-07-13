@@ -1,4 +1,4 @@
-import { UserInfo, ValidationErrorInfo } from "@memberjunction/core";
+import { LogStatus, UserInfo, ValidationErrorInfo } from "@memberjunction/core";
 import { TemplateContentEntity } from "@memberjunction/core-entities";
 import * as nunjucks from 'nunjucks';
 import { MJGlobal } from "@memberjunction/global";
@@ -74,6 +74,11 @@ export class TemplateEngineServer extends TemplateEngineBase {
         }
     }
 
+    public SetupNunjucks(): void {
+        this._templateLoader = new TemplateEntityLoader();
+        this._nunjucksEnv = new nunjucks.Environment(this._templateLoader, { autoescape: true, dev: true });
+    }
+
     private _nunjucksEnv: nunjucks.Environment;
     private _templateLoader: TemplateEntityLoader;
 
@@ -93,7 +98,7 @@ export class TemplateEngineServer extends TemplateEngineBase {
      * @param templateContent the template content item (within the template)  
      * @param data 
      */
-    public async RenderTemplate(templateEntity: TemplateEntityExtended, templateContent: TemplateContentEntity, data: any): Promise<TemplateRenderResult> {
+    public async RenderTemplate(templateEntity: TemplateEntityExtended, templateContent: TemplateContentEntity, data: any, SkipValidation?: boolean): Promise<TemplateRenderResult> {
         try {
             if (!templateContent) {
                 return {
@@ -102,16 +107,26 @@ export class TemplateEngineServer extends TemplateEngineBase {
                     Message: 'templateContent variable is required'
                 };
             }
-    
-            const valResult = templateEntity.ValidateTemplateInput(data);
-            if (!valResult.Success) {
+
+            if (!templateContent.TemplateText) {
                 return {
                     Success: false,
                     Output: null,
-                    Message: valResult.Errors.map((error: ValidationErrorInfo) => {
-                        return error.Message;
-                    }).join(', ')
+                    Message: 'TemplateContent.TemplateText variable is required'
                 };
+            }
+    
+            if(!SkipValidation){
+                const valResult = templateEntity.ValidateTemplateInput(data);
+                if (!valResult.Success) {
+                    return {
+                        Success: false,
+                        Output: null,
+                        Message: valResult.Errors.map((error: ValidationErrorInfo) => {
+                            return error.Message;
+                        }).join(', ')
+                    };
+                }
             }
      
             const template = this.getNunjucksTemplate(templateContent.ID, templateContent.TemplateText);
