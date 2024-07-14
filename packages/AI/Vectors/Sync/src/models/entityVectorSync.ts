@@ -1,7 +1,7 @@
 import { Embeddings, EmbedTextsResult, GetAIAPIKey } from '@memberjunction/ai';
 import { VectorDBBase } from '@memberjunction/ai-vectordb';
 import { VectorBase } from '@memberjunction/ai-vectors';
-import { BaseEntity, EntityField, LogError, LogStatus, Metadata, RunViewResult, UserInfo } from '@memberjunction/core';
+import { BaseEntity, EntityField, EntityInfo, LogError, LogStatus, Metadata, RunViewResult, UserInfo } from '@memberjunction/core';
 import { AIModelEntity, EntityDocumentEntity, EntityDocumentTypeEntity, TemplateContentEntity, TemplateContentTypeEntity, TemplateEntity, TemplateParamEntity, VectorDatabaseEntity, VectorIndexEntity } from '@memberjunction/core-entities';
 import { MJGlobal } from '@memberjunction/global';
 import { pipeline } from 'node:stream/promises';
@@ -33,6 +33,11 @@ export type ArchiveWorkerContext = {
   vectorDBClassKey: string;
   vectorDBAPIKey: string;
   embeddings: EmbedTextsResult;
+};
+
+export type TemplateParamData = {
+  ParamName: string;
+  Data: BaseEntity[];
 };
 
 export class EntityVectorSyncer extends VectorBase {
@@ -81,6 +86,8 @@ export class EntityVectorSyncer extends VectorBase {
       throw new Error('Templates used by Entity Documents should only have one associated Template Content record.');
     }
 
+    const validTemplate: boolean = this.ValidateTemplateContextParamAlignment(template);
+
     // this gets all the records, but we want to paginate
     // const allrecords: BaseEntity[] = await super.getRecordsByEntityID(request.entityID);
 
@@ -126,9 +133,7 @@ export class EntityVectorSyncer extends VectorBase {
       while (hasMore) {
         const recordsPage: BaseEntity[] = await super.pageRecordsByEntityID<BaseEntity>(request.entityID, pageNumber, pageSize );
         const items: {}[] = recordsPage.map((e: BaseEntity) => {
-          return {
-            Entity: e.GetAll()
-          };
+          return this.GetTemplateData(entity, e, template);
         });
         dataStream.addPage(items);
         if (recordsPage.length < pageSize) {
@@ -149,7 +154,7 @@ export class EntityVectorSyncer extends VectorBase {
     getData();
 
     console.log('Starting pipeline');
-    await pipeline(dataStream, annotator, archiver, new PassThrough({ objectMode: true }));
+    //await pipeline(dataStream, annotator, archiver, new PassThrough({ objectMode: true }));
 
     // const chunks: BaseEntity[][] = this.chunkArray(allrecords, batchSize);
     // LogStatus(`Processing ${allrecords.length} records in ${chunks.length} chunks of ${batchSize} records each`);
@@ -514,4 +519,85 @@ export class EntityVectorSyncer extends VectorBase {
   private delay = (delayInms: number) => {
     return new Promise((resolve) => setTimeout(resolve, delayInms));
   };
+
+  protected async GetTemplateData(entity: EntityInfo, record: BaseEntity, template: TemplateEntityExtended): Promise<{ [key: string]: any }> {
+    const templateData: { [key: string]: any } = {};
+    for(const param of template.Params){
+      if(templateData[param.Name]){
+        continue;
+      }
+
+      switch(param.Type){
+        case 'Record':
+          // this one is simple, we create a property by the provided name, and set the value to the record we are currently processing
+          templateData[param.Name] = record.GetAll();
+          break;
+        case 'Entity':
+          const relatedData: TemplateParamData | null = await this.GetRelatedTemplateData(entity, record, param);
+          if(!relatedData){
+            break;
+          }
+
+          // now filter down the data in d to just this record
+          const relatedDataForRecord = relatedData.Data.filter(rdfr => rdfr[param.LinkedParameterField] === entity.FirstPrimaryKey.Name);
+          // and set the value of the context data to the filtered data
+          templateData[param.Name] = relatedDataForRecord.map((rdfr) => rdfr.GetAll());
+          break;
+        case 'Array':
+        case 'Scalar':
+        case 'Object':
+          break;
+      }
+    }
+    return templateData;
+  }
+
+  protected async GetRelatedTemplateData(entity: EntityInfo, record: BaseEntity, templateParam: TemplateParamEntity): Promise<TemplateParamData | null> {
+    const relatedEntity = templateParam.Entity;
+    const relatedField = templateParam.LinkedParameterField;
+
+    // construct a filter for the related field so that we constrain the results to just the set of records linked to our recipients
+    const quotes = entity.FirstPrimaryKey.NeedsQuotes ? "'" : "";
+    const filter = `${relatedField} = ${quotes}${record[entity.FirstPrimaryKey.Name]}${quotes}`;
+    const finalFilter = templateParam.ExtraFilter ? `(${filter}) AND (${templateParam.ExtraFilter})` : filter;
+    
+    const result = await super.RunView.RunView({
+        EntityName: relatedEntity,
+        ExtraFilter: finalFilter,
+    }, super.CurrentUser);
+
+    if (result && result.Success) {
+      const relatedData: TemplateParamData = { ParamName: '', Data: [] };
+      relatedData.ParamName = templateParam.Name,
+      relatedData.Data = result.Results;
+      LogStatus("related data:", undefined, JSON.stringify(relatedData, null, 4));
+      return relatedData;
+    }
+    
+    LogError(`Error getting related data for entity ${relatedEntity} with filter ${finalFilter}`, undefined, result.ErrorMessage);
+    return null;
+  }
+
+  /**
+   * This method is resposnible for determining if the template(s) given have aligned parameters, meaning they don't have overlapping parameter names that have 
+   * different meanings. It is okay for scenarios where there are > 1 template in use for a message to have different parameter names, but if they have the SAME parameter names
+   * they must not have different settings.
+   */
+  protected ValidateTemplateContextParamAlignment(template: TemplateEntityExtended): boolean {
+    // the params are defined in each template they will be in the Params property of the template
+    const seenParams: {[key: string]: TemplateParamEntity } = {};
+    for (const templateParam of template.Params) {
+      const param: TemplateParamEntity | undefined = seenParams[templateParam.Name];
+      // we have a duplicate parameter name, now we need to check if the definitions are the same
+      if(param && param.Type !== templateParam.Type){
+        throw new Error(`Parameter ${param.Name} has different types in different templates`);
+      }
+      else {
+        seenParams[templateParam.Name] = templateParam;
+      }
+    }
+
+    // if we get here, we are good, otherwise we will have thrown an exception
+    return true;
+}
 }
