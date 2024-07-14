@@ -1,0 +1,25 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "node",
+      "request": "launch",
+      "name": "MJAPI",
+      "envFile": "${workspaceFolder}/packages/MJAPI/.env",
+      "cwd": "${workspaceFolder}/packages/MJAPI",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["start"],
+      "skipFiles": ["${workspaceFolder}/node_modules/**/*.js", "<node_internals>/**"]
+    },
+    {
+      "type": "chrome",
+      "request": "launch",
+      "preLaunchTask": "start MJExplorer",
+      "name": "MJExplorer",
+      "url": "http://localhost:4200",
+      "cwd": "${workspaceFolder}/packages/MJExplorer",
+      "webRoot": "${workspaceFolder}/packages/MJExplorer",
+      "sourceMaps": true
+    }
+  ]
+}
