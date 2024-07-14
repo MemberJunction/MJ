@@ -4,8 +4,6 @@ import {
   PotentialDuplicateResponse,
   PotentialDuplicate,
   Metadata,
-  KeyValuePair,
-  LogError,
   CompositeKey,
   PotentialDuplicateResult,
 } from '@memberjunction/core';

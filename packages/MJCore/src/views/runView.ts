@@ -88,6 +88,10 @@ export type RunViewParams = {
      */
     MaxRows?: number
     /**
+     * optional - if provided, this value will be used to offset the rows returned. 
+     */
+    OffsetRows?: number
+    /**
      * optional - if set to true, the view run will ALWAYS be logged to the Audit Log, regardless of the entity's property settings for logging view runs.
      */
     ForceAuditLog?: boolean

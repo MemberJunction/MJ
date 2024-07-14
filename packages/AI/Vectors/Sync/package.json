@@ -2,25 +2,14 @@
   "name": "@memberjunction/ai-vector-sync",
   "version": "1.8.1",
   "description": "MemberJunction: AI Vector/Entity Sync Package - handles synchronization between MemberJunction entities and vector databases",
-  "main": "./dist/index.cjs",
-  "module": "./dist/index.mjs",
-  "types": "./dist/index.d.cts",
-  "exports": {
-    "require": {
-      "types": "./dist/index.d.cts",
-      "default": "./dist/index.cjs"
-    },
-    "import": {
-      "types": "./dist/index.d.mts",
-      "default": "./dist/index.mjs"
-    }
-  },
-  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "files": [
     "/dist"
   ],
   "scripts": {
     "build": "pkgroll --sourcemap --minify",
+    "build:tsc": "tsc",
     "watch": "pkgroll --sourcemap --watch"
   },
   "author": "MemberJunction.com",
@@ -29,9 +18,14 @@
     "@memberjunction/ai": "1.8.1",
     "@memberjunction/ai-vectordb": "1.8.1",
     "@memberjunction/ai-vectors": "1.8.1",
+    "@memberjunction/ai-vectors-pinecone": "1.8.1",
+    "@memberjunction/ai-mistral": "1.8.1",
     "@memberjunction/aiengine": "1.8.1",
     "@memberjunction/core": "1.8.1",
     "@memberjunction/global": "1.8.1",
+    "@memberjunction/templates": "1.8.1",
+    "@memberjunction/templates-base-types": "1.8.1",
+    "@memberjunction/ai-openai": "1.8.1",
     "dotenv": "^16.4.1",
     "typeorm": "^0.3.20"
   },
