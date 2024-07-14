@@ -543,10 +543,6 @@ export class EntityVectorSyncer extends VectorBase {
           // and set the value of the context data to the filtered data
           templateData[param.Name] = relatedDataForRecord.map((rdfr) => rdfr.GetAll());
           break;
-        case 'Array':
-        case 'Scalar':
-        case 'Object':
-          break;
       }
     }
     return templateData;
@@ -570,7 +566,6 @@ export class EntityVectorSyncer extends VectorBase {
       const relatedData: TemplateParamData = { ParamName: '', Data: [] };
       relatedData.ParamName = templateParam.Name,
       relatedData.Data = result.Results;
-      LogStatus("related data:", undefined, JSON.stringify(relatedData, null, 4));
       return relatedData;
     }
     
