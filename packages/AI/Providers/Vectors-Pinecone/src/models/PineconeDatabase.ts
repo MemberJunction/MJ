@@ -3,7 +3,7 @@ import { error } from 'console';
 import { RegisterClass } from '@memberjunction/global'
 import { FetchResponse, Index, Pinecone, QueryOptions } from '@pinecone-database/pinecone';
 import { BaseRequestParams, BaseResponse, CreateIndexParams, EditIndexParams, IndexDescription, IndexList, RecordMetadata, VectorDBBase, VectorRecord } from '@memberjunction/ai-vectordb';
-import { LogStatus, PotentialDuplicate, PotentialDuplicateResult } from '@memberjunction/core';
+import { LogError, LogStatus, PotentialDuplicate, PotentialDuplicateResult } from '@memberjunction/core';
 
 @RegisterClass(VectorDBBase, "PineconeDatabase", 1)
 export class PineconeDatabase extends VectorDBBase {
@@ -186,17 +186,19 @@ export class PineconeDatabase extends VectorDBBase {
             response.Duplicates = [];
             for(const match of queryResponse.data.matches){
                 const record: {id: string, score: number, metadata: any} = match;
-                if(!record.metadata || !record.metadata.PrimaryKeys){
+                if(!record || !record.id){
                     continue;
                 }
 
-                const metadata: {PrimaryKeys: string[]} = record.metadata;
-                if(!metadata.PrimaryKeys){
+                //splitID should include 3 elements: the entity ID, entity document ID, and the record ID
+                const splitID: string[] = record.id.split('_');
+                if(splitID.length !== 3){
+                    LogError(`Invalid vector record ID: ${record.id}`);
                     continue;
                 }
 
                 let duplicate: PotentialDuplicate = new PotentialDuplicate();
-                duplicate.LoadFromList(metadata.PrimaryKeys);
+                duplicate.KeyValuePairs.push({ FieldName: 'ID', Value: splitID[2] });
                 duplicate.ProbabilityScore = record.score;
                 response.Duplicates.push(duplicate);
             }

@@ -929,7 +929,7 @@ export abstract class BaseEntity {
             const start = new Date().getTime();
             const valResult = CompositeKey.Validate();
             if (!valResult || !valResult.IsValid)
-                throw new Error(`Invalid CompositeKey passed to BaseEntity.Load(${this.EntityInfo.Name})`);
+                throw new Error(`Invalid CompositeKey passed to BaseEntity.Load(${this.EntityInfo.Name}): ${valResult.ErrorMessage}`);
 
             this.CheckPermissions(EntityPermissionType.Read, true); // this will throw an error and exit out if we don't have permission
 
