@@ -63,7 +63,7 @@ export class DuplicateRecordDetector extends VectorBase {
 
         console.log("vectorizing entity...");
         const templateParser = EntityDocumentTemplateParser.CreateInstance();
-        await vectorizer.VectorizeEntity(request, templateParser, super.CurrentUser);
+        await vectorizer.VectorizeEntity(request, super.CurrentUser);
 
         const list: ListEntity = await this.getListEntity(params.ListID);
         let duplicateRun: DuplicateRunEntity = params.Options?.DuplicateRunID ? await this.getDuplicateRunEntity(params.Options?.DuplicateRunID) : await this.getDuplicateRunEntityByListID(list.ID);

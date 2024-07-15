@@ -1,5 +1,5 @@
 import { AIEngine } from "@memberjunction/aiengine";
-import { BaseEntity, LogError, Metadata, CompositeKey, RunView, UserInfo } from "@memberjunction/core";
+import { BaseEntity, LogError, Metadata, CompositeKey, RunView, UserInfo, EntityInfo, RunViewResult } from "@memberjunction/core";
 import { AIModelEntityExtended, VectorDatabaseEntity } from "@memberjunction/core-entities";
 
 export class VectorBase {
@@ -38,6 +38,29 @@ export class VectorBase {
 
         return rvResult.Results;
     }
+
+    protected async pageRecordsByEntityID<T>( entityID: string, pageNumber: number, pageSize: number): Promise<T[]> {
+        const md = new Metadata();
+        const entity: EntityInfo | undefined = md.Entities.find((e) => e.ID === entityID);
+        if (!entity) {
+          throw new Error(`Entity with ID ${entityID} not found.`);
+        }
+    
+        const params = {
+          EntityName: entity.Name,
+          ResultType: 'entity_object' as const,
+          MaxRows: pageSize,
+          OffsetRows: Math.max(0, (pageNumber - 1) * pageSize),
+        };
+    
+        const rvResult: RunViewResult<T> = await this._runView.RunView<T>(params, this.CurrentUser);
+    
+        if (!rvResult.Success) {
+          throw new Error(rvResult.ErrorMessage);
+        }
+    
+        return rvResult.Results;
+      }
 
     protected buildExtraFilter(CompositeKey: CompositeKey[]): string {
         return CompositeKey.map((keyValue) => {
