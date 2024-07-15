@@ -296,6 +296,7 @@ export class EntityFieldInfo extends BaseInfo {
     IncludeRelatedEntityNameFieldInBaseView: boolean = null
     RelatedEntityNameFieldMap: string = null
     RelatedEntityDisplayType: 'Search' | 'Dropdown' = null
+    EntityIDFieldName: string = null
     __mj_CreatedAt: Date = null
     __mj_UpdatedAt: Date = null
     
@@ -1100,9 +1101,9 @@ export class RecordDependency {
      */
     FieldName: string
     /**
-     * The value of the primary key field in the parent record. At present, MemberJunction supports composite(multi-field) primary keys. However, foreign keys only support links to single-valued primary keys in their linked entity.
+     * The value of the primary key field in the parent record. MemberJunction supports composite(multi-field) primary keys. However, foreign keys only support links to single-valued primary keys in their linked entity.
      */
-    CompositeKey: CompositeKey
+    PrimaryKey: CompositeKey
 }
 
 /**
