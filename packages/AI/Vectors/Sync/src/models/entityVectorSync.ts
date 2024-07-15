@@ -93,7 +93,7 @@ export class EntityVectorSyncer extends VectorBase {
     // const allrecords: BaseEntity[] = await super.getRecordsByEntityID(request.entityID);
 
     //small number in the hopes we dont hit embedding token limits
-    const pageSize: number = 5;
+    const pageSize: number = 15;
     const dataStream = new PagedRecords();
     
     let templateObj: {} = {
