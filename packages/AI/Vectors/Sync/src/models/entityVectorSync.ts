@@ -11,7 +11,7 @@ import { BatchWorker } from './BatchWorker';
 import { EntityDocumentCache } from './EntityDocumentCache';
 import { PagedRecords } from './PagedRecords';
 import { resolve } from 'node:path';
-import { PassThrough } from 'node:stream';
+import { PassThrough, Transform } from 'node:stream';
 import { AIEngine } from '@memberjunction/aiengine';
 import { TemplateEngineServer } from '@memberjunction/templates';
 import { TemplateEntityExtended } from '@memberjunction/templates-base-types';
@@ -25,6 +25,7 @@ export type AnnotateWorkerContext = {
   templateContent: TemplateContentEntity;
   embeddingDriverClass: string;
   embeddingAPIKey: string;
+  delayTimeMS: number;
 };
 
 export type ArchiveWorkerContext = {
@@ -33,7 +34,9 @@ export type ArchiveWorkerContext = {
   entityDocument: EntityDocumentEntity;
   vectorDBClassKey: string;
   vectorDBAPIKey: string;
+  templateContent: TemplateContentEntity;
   embeddings: EmbedTextsResult;
+  delayTimeMS: number;
 };
 
 export type TemplateParamData = {
@@ -61,6 +64,8 @@ export class EntityVectorSyncer extends VectorBase {
       throw new Error('ContextUser is required to vectorize the entity');
     }
 
+    //start row
+    const delayTimeMS: number = 250;
     const startTime: number = new Date().getTime();
     super.CurrentUser = contextUser;
     await TemplateEngineServer.Instance.Config(false, contextUser);
@@ -110,7 +115,8 @@ export class EntityVectorSyncer extends VectorBase {
       vectorDBClassKey: obj.vectorDBClassKey,
       vectorDBAPIKey: obj.vectorDBAPIKey,
       embeddingDriverClass: obj.embeddingDriverClass,
-      embeddingAPIKey: obj.embeddingAPIKey
+      embeddingAPIKey: obj.embeddingAPIKey,
+      delayTimeMS
     };
 
     //annotator worker handles vectorizing the records 
@@ -130,14 +136,9 @@ export class EntityVectorSyncer extends VectorBase {
       workerContext
     });
 
-    const upserter = new EntityRecordDocumentWorker({
-      workerFile: resolve(__dirname, 'workers/upserter.js'),
-      batchSize: 4,
-      contextUser: super.CurrentUser,
-      workerContext
-    });
-
-    upserter.SetUpsertEntityRecordDocumentCallback(this.UpsertEntityRecordDocumentRecords);
+    const upserter = new Transform({objectMode: true, transform: (chunk, encoding, callback) => {
+      this.UpsertEntityRecordDocumentRecords(chunk as EmbeddingData, super.CurrentUser).then(() => callback(null)).catch(callback);
+    }});
 
     const getData = async (): Promise<void> => {
       let pageNumber = 0;
@@ -152,6 +153,7 @@ export class EntityVectorSyncer extends VectorBase {
           const templateData: { [key: string]: unknown } = await this.GetTemplateData(entity, record, template, relatedData);
           //we need a reference to this record's ID for the upsert worker
           templateData.__mj_recordID = record.FirstPrimaryKey.Value;
+          templateData.__mj_compositeKey = record.PrimaryKey.ToConcatenatedString();
           //we also need a reference to the vector index's ID
           templateData.VectorIndexID = vectorIndexEntity.ID;
           templateData.TemplateContent = template.Content[0].TemplateText;
@@ -640,29 +642,24 @@ export class EntityVectorSyncer extends VectorBase {
 
   // Rather than having this logic inside the EntityRecordDocumentWorker class, it's placed here instead
   //so that the logic behind vectorizing entities isnt spread out across so many files
-  protected async UpsertEntityRecordDocumentRecords(embeddingData: EmbeddingData[], contextUser: UserInfo): Promise<void> {
-    if(embeddingData.length === 0){
-      return;
-    }
-
-    let md: Metadata = new Metadata();
-    let rv: RunView = new RunView();
-    let sampleRecord: EmbeddingData = embeddingData[0];
+  protected async UpsertEntityRecordDocumentRecords(embeddingData: EmbeddingData, contextUser: UserInfo): Promise<void> {
+    let md: Metadata = super.Metadata;
+    let rv: RunView = super.RunView;
 
     let vectorIndex: VectorIndexEntity = await md.GetEntityObject('Vector Indexes', contextUser);
-    let loadResult = await vectorIndex.Load(sampleRecord.VectorIndexID.toString());
+    let loadResult = await vectorIndex.Load(embeddingData.VectorIndexID.toString());
     if(!loadResult){
-      LogError(`Vector Index with ID ${sampleRecord.VectorIndexID} not found`);
+      LogError(`Vector Index with ID ${embeddingData.VectorIndexID} not found`);
       return;
     }
 
-    let entityDocument: Record<string, unknown> = sampleRecord.EntityDocument;
+    let entityDocument: Record<string, unknown> = embeddingData.EntityDocument;
     let entityID: unknown = entityDocument.EntityID;
 
     let existingRecords: EntityRecordDocumentEntity[] = [];
     const runViewResult: RunViewResult<EntityRecordDocumentEntity> = await rv.RunView<EntityRecordDocumentEntity>({
       EntityName: 'Entity Record Documents',
-      ExtraFilter: `EntityID = '${entityID}' AND EntityDocumentID = '${entityDocument.ID}' AND RecordID in (${embeddingData.map((data) => data.__mj_recordID).join(',')})`,
+      ExtraFilter: `EntityID = '${entityID}' AND EntityDocumentID = '${entityDocument.ID}' AND RecordID in (${embeddingData.__mj_recordID})`,
       ResultType: 'entity_object'
     }, contextUser);
     
@@ -673,27 +670,25 @@ export class EntityVectorSyncer extends VectorBase {
       LogError(`Error getting existing Entity Record Documents`, undefined, runViewResult.ErrorMessage);
     }
 
-    for(const data of embeddingData){
-      let erdEntity: EntityRecordDocumentEntity | undefined = existingRecords.find((er: EntityRecordDocumentEntity) => er.RecordID.toString() === data.__mj_recordID.toString());
+      let erdEntity: EntityRecordDocumentEntity | undefined = existingRecords.find((er: EntityRecordDocumentEntity) => er.RecordID.toString() === embeddingData.__mj_recordID.toString());
       if(!erdEntity){
         erdEntity = await md.GetEntityObject('Entity Record Documents', contextUser);
         erdEntity.NewRecord();
       }
 
       erdEntity.EntityID = entityID.toString();
-      erdEntity.RecordID = data.__mj_recordID.toString();
-      erdEntity.DocumentText = data.TemplateContent;
-      erdEntity.VectorID = data.VectorID.toString();
-      erdEntity.VectorJSON = JSON.stringify(data.Vector);
-      erdEntity.VectorIndexID = data.VectorIndexID.toString();
+      erdEntity.RecordID = embeddingData.__mj_recordID.toString();
+      erdEntity.DocumentText = embeddingData.TemplateContent;
+      erdEntity.VectorID = embeddingData.VectorID.toString();
+      erdEntity.VectorJSON = JSON.stringify(embeddingData.Vector);
+      erdEntity.VectorIndexID = embeddingData.VectorIndexID.toString();
       erdEntity.EntityRecordUpdatedAt = new Date();
-      erdEntity.EntityDocumentID = data.EntityDocument.ID.toString();
+      erdEntity.EntityDocumentID = embeddingData.EntityDocument.ID.toString();
       erdEntity.ContextCurrentUser = contextUser;
       let erdEntitySaveResult: boolean = await erdEntity.Save();
       if(!erdEntitySaveResult){
         LogError('Error saving Entity Record Document Entity', undefined, erdEntity.LatestResult);
       }
-    }
 
     LogStatus("Upserting Entity Record Documents: Complete");
   }
@@ -719,5 +714,5 @@ export class EntityVectorSyncer extends VectorBase {
 
     // if we get here, we are good, otherwise we will have thrown an exception
     return true;
-}
+  }
 }

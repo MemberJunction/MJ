@@ -25,11 +25,14 @@ export type BatchWorkerOptions<TContext = Record<string, unknown>> = {
    * The maximum number of worker threads to run concurrently
    */
   concurrencyLimit?: number;
-
   /**
    * The user context to pass to the worker thread
    */
   contextUser?: UserInfo;
+  /**
+   * The time to delay between api calls
+   **/
+  delayTimeMS?: number;
 };
 
 /**

@@ -190,7 +190,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
                 if (params.IgnoreMaxRows === true) {
                     // do nothing, leave it blank, this structure is here to make the code easier to read
                 }
-                else if(params.OffsetRows && params.OffsetRows > 0) {
+                else if(params.StartRow && params.StartRow > 0) {
                     // do nothing, leave it blank, this structure is here to make the code easier to read
                 }
                 else if (params.MaxRows && params.MaxRows > 0) {
@@ -316,11 +316,11 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
                     viewSQL += ` ORDER BY ${orderBy}`;
                 }
 
-                if(params.OffsetRows && params.OffsetRows > 0 
+                if(params.StartRow && params.StartRow > 0 
                     && params.MaxRows && params.MaxRows > 0
                     && entityInfo.FirstPrimaryKey) {
                     viewSQL += ` ORDER BY ${entityInfo.FirstPrimaryKey.Name} `
-                    viewSQL += ` OFFSET ${params.OffsetRows} ROWS FETCH NEXT ${params.MaxRows} ROWS ONLY`;
+                    viewSQL += ` OFFSET ${params.StartRow} ROWS FETCH NEXT ${params.MaxRows} ROWS ONLY`;
                 }
 
                 // now we can run the viewSQL, but only do this if the ResultType !== 'count_only', otherwise we don't need to run the viewSQL

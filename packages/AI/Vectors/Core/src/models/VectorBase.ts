@@ -50,7 +50,7 @@ export class VectorBase {
             EntityName: entity.Name,
             ResultType: 'entity_object' as const,
             MaxRows: pageSize,
-            OffsetRows: Math.max(0, (pageNumber - 1) * pageSize),
+            StartRow: Math.max(0, (pageNumber - 1) * pageSize),
         }, this.CurrentUser);
     
         if (!rvResult.Success) {

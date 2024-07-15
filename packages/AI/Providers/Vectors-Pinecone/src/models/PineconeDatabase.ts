@@ -5,6 +5,13 @@ import { FetchResponse, Index, Pinecone, QueryOptions } from '@pinecone-database
 import { BaseRequestParams, BaseResponse, CreateIndexParams, EditIndexParams, IndexDescription, IndexList, RecordMetadata, VectorDBBase, VectorRecord } from '@memberjunction/ai-vectordb';
 import { LogError, LogStatus, PotentialDuplicate, PotentialDuplicateResult } from '@memberjunction/core';
 
+
+export type BaseMetadata = {
+    RecordID: string
+    Entity: string,
+    TemplateID: string,
+}
+
 @RegisterClass(VectorDBBase, "PineconeDatabase", 1)
 export class PineconeDatabase extends VectorDBBase {
 
@@ -185,20 +192,18 @@ export class PineconeDatabase extends VectorDBBase {
             let response: PotentialDuplicateResult = new PotentialDuplicateResult();
             response.Duplicates = [];
             for(const match of queryResponse.data.matches){
-                const record: {id: string, score: number, metadata: any} = match;
+                const record: {id: string, score: number, metadata: BaseMetadata} = match;
                 if(!record || !record.id){
                     continue;
                 }
 
-                //splitID should include 3 elements: the entity ID, entity document ID, and the record ID
-                const splitID: string[] = record.id.split('_');
-                if(splitID.length !== 3){
-                    LogError(`Invalid vector record ID: ${record.id}`);
+                if(!record.metadata || !record.metadata.RecordID){
+                    LogError(`Invalid vector metadata: ${record.id}`);
                     continue;
                 }
 
                 let duplicate: PotentialDuplicate = new PotentialDuplicate();
-                duplicate.KeyValuePairs.push({ FieldName: 'ID', Value: splitID[2] });
+                duplicate.LoadFromConcatenatedString(record.metadata.RecordID);
                 duplicate.ProbabilityScore = record.score;
                 response.Duplicates.push(duplicate);
             }

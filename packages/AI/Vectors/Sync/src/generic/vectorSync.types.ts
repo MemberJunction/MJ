@@ -21,6 +21,7 @@ export type EmbeddingData = {
     VectorID?: unknown;
     EntityData: Record<string, any>;
     __mj_recordID: unknown;
+    __mj_compositeKey?: unknown;
     //this is a plain object of the entity document
     EntityDocument?: Record<string, unknown>;
     TemplateContent?: string;

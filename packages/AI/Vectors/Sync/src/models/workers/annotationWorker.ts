@@ -55,6 +55,7 @@ async function VectorizeEntity(): Promise<void> {
       Vector: vector,
       EntityData: batch[index],
       __mj_recordID: batch[index].__mj_recordID,
+      __mj_compositeKey: batch[index].__mj_compositeKey,
       EntityDocument: context.entityDocument,
       VectorID: batch[index].VectorID,
       VectorIndexID: batch[index].VectorIndexID,
@@ -65,7 +66,7 @@ async function VectorizeEntity(): Promise<void> {
   const runTime = Date.now() - startTime;
   const elapsed = Date.now() - context.executionId;
   console.log('\t##### Generating Vectors: Complate #####', { threadId, now: Date.now() % 100_000, runTime, elapsed });
-  await delay(250); //short deplay to avoid getting rate limited by the embedding model's api 
+  await delay(context.delayTimeMS); //short deplay to avoid getting rate limited by the embedding model's api 
   parentPort.postMessage({ ...workerData, batch: embeddingBatch });
 }
 

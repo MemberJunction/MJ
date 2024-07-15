@@ -884,7 +884,8 @@ export class EntityInfo extends BaseInfo {
             // currently we only support a single value for FOREIGN KEYS, so we can just grab the first value in the primary key
             const firstKey = record.FirstPrimaryKey;
             keyValue = firstKey.Value;
-            quotes = firstKey.NeedsQuotes ? "'" : '';
+            //When creating a new record, the keyValue is null and the quotes are not needed
+            quotes = keyValue && firstKey.NeedsQuotes ? "'" : '';
         }
         if (relationship.Type.trim().toLowerCase() === 'one to many') {
             // one to many

@@ -82,7 +82,6 @@ export type RunViewParams = {
      * want to programmatically run a view and get ALL the data back, regardless of the MaxRows setting on the entity.
      */
     IgnoreMaxRows?: boolean
-
     /**
      * optional - if provided, and if IgnoreMaxRows = false, this value will be used to constrain the total # of rows returned by the view. If this is not provided, either the default settings at the entity-level will be used, or if the entity has no UserViewMaxRows setting, all rows will be returned that match any filter, if provided.
      */
@@ -90,7 +89,7 @@ export type RunViewParams = {
     /**
      * optional - if provided, this value will be used to offset the rows returned. 
      */
-    OffsetRows?: number
+    StartRow?: number
     /**
      * optional - if set to true, the view run will ALWAYS be logged to the Audit Log, regardless of the entity's property settings for logging view runs.
      */
