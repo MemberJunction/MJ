@@ -683,6 +683,71 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
 
 
     /**
+     * This function will generate SQL statements for all of the possible soft links that are not traditional foreign keys but exist in entities
+     * where there is a column that has the EntityIDFieldName set to a column name (not null). We need to get a list of all such soft link fields across ALL entities
+     * and then generate queries for each possible soft link in the same format as the hard links
+     * @param entityName 
+     * @param compositeKey 
+     */
+    protected GetSoftLinkDependencySQL(entityName: string, compositeKey: CompositeKey): string {
+        // we need to go through ALL of the entities in the system and find all of the EntityFields that have a non-null EntityIDFieldName
+        // for each of these, we generate a SQL Statement that will return the EntityName, RelatedEntityName, FieldName, and the primary key values of the related entity
+        let sSQL = '';
+        this.Entities.forEach((entity) => {
+            // we build a string that will concatenate all of the primary key values into a single string, this is because the primary key could be a composite key
+            // we do this in SQL by combining the pirmary key name and value for each row using the default separator defined by the CompositeKey class
+            // the output of this should be like the following 'Field1|Value1||Field2|Value2||Field3|Value3' where the || is the CompositeKey.DefaultFieldDelimiter and the | is the CompositeKey.DefaultValueDelimiter
+
+            const primaryKeySelectString = `CONCAT(${entity.PrimaryKeys.map(pk => `'${pk.Name}|' + CAST(${pk.Name} AS NVARCHAR(MAX))`).join(`,'${CompositeKey.DefaultFieldDelimiter}',`)})`;
+
+            // for this entity, check to see if it has any fields that are soft links, and for each of those, generate the SQL
+            entity.Fields.filter((f) => f.EntityIDFieldName && f.EntityIDFieldName.length > 0).forEach((f) => {
+                // each field in f must be processed
+                if (sSQL.length > 0)
+                    sSQL += ' UNION ALL ';
+
+                // there is a layer of indirection here because each ROW in each of the entity records for this entity/field combination could point to a DIFFERENT 
+                // entity. We find out which entity it is pointed to via the EntityIDFieldName in the field definition, so we have to filter the rows in the entity
+                // based on that.
+                sSQL += `SELECT 
+                            '${entityName}' AS EntityName, 
+                            '${entity.Name}' AS RelatedEntityName, 
+                            ${primaryKeySelectString} AS PrimaryKeyValue, 
+                            '${f.Name}' AS FieldName 
+                        FROM 
+                            [${entity.SchemaName}].[${entity.BaseView}]
+                        WHERE 
+                            [${f.EntityIDFieldName}] = '${entity.ID}' AND 
+                            [${f.Name}] = ${compositeKey.GetValueByIndex(0)}` // we only use the first primary key value, this is because we don't yet support composite primary keys
+
+            });
+        });
+        return sSQL;
+    }
+
+    protected GetHardLinkDependencySQL(entityDependencies: EntityDependency[], compositeKey: CompositeKey): string {
+        let sSQL = '';
+        for (const entityDependency of entityDependencies) {
+            const entityInfo = this.Entities.find((e) => e.Name.trim().toLowerCase() === entityDependency.EntityName?.trim().toLowerCase());
+            const relatedEntityInfo = this.Entities.find((e) => e.Name.trim().toLowerCase() === entityDependency.RelatedEntityName?.trim().toLowerCase());
+            const primaryKeySelectString = `CONCAT(${entityInfo.PrimaryKeys.map(pk => `'${pk.Name}|' + CAST(${pk.Name} AS NVARCHAR(MAX))`).join(`,'${CompositeKey.DefaultFieldDelimiter}',`)})`;
+
+            if (sSQL.length > 0)
+                sSQL += ' UNION ALL '
+            sSQL += `SELECT 
+                        '${entityDependency.EntityName}' AS EntityName, 
+                        '${entityDependency.RelatedEntityName}' AS RelatedEntityName, 
+                        ${primaryKeySelectString} AS PrimaryKeyValue, 
+                        '${entityDependency.FieldName}' AS FieldName 
+                    FROM 
+                        [${relatedEntityInfo.SchemaName}].[${relatedEntityInfo.BaseView}]
+                    WHERE 
+                        [${entityDependency.FieldName}] = ${this.GetRecordDependencyLinkSQL(entityDependency, entityInfo, relatedEntityInfo, compositeKey)}`
+        }
+        return sSQL;
+    }
+
+    /**
      * Returns a list of dependencies - records that are linked to the specified Entity/RecordID combination. A dependency is as defined by the relationships in the database. The MemberJunction metadata that is used
      * for this simply reflects the foreign key relationships that exist in the database. The CodeGen tool is what detects all of the relationships and generates the metadata that is used by MemberJunction. The metadata in question
      * is within the EntityField table and specifically the RelatedEntity and RelatedEntityField columns. In turn, this method uses that metadata and queries the database to determine the dependencies. To get the list of entity dependencies
@@ -694,25 +759,14 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
         try {
             // first, get the entity dependencies for this entity
             const entityDependencies = await this.GetEntityDependencies(entityName);
-            // now, we have to construct a query that will return the dependencies for this record
-            let sSQL = '';
-            for (const entityDependency of entityDependencies) {
-                const entityInfo = this.Entities.find((e) => e.Name.trim().toLowerCase() === entityDependency.EntityName?.trim().toLowerCase());
-                const relatedEntityInfo = this.Entities.find((e) => e.Name.trim().toLowerCase() === entityDependency.RelatedEntityName?.trim().toLowerCase());
-                if (sSQL.length > 0)
-                    sSQL += ' UNION ALL '
-                sSQL += `SELECT 
-                            '${entityDependency.EntityName}' AS EntityName, 
-                            '${entityDependency.RelatedEntityName}' AS RelatedEntityName, 
-                            ${entityInfo.PrimaryKeys.map(pk => pk.Name).join(',')/*Add in all pkeys, often just one, but this handles N primary keys*/}, 
-                            '${entityDependency.FieldName}' AS FieldName 
-                        FROM 
-                            [${relatedEntityInfo.SchemaName}].${relatedEntityInfo.BaseView} 
-                        WHERE 
-                            ${entityDependency.FieldName} = ${this.GetRecordDependencyLinkSQL(entityDependency, entityInfo, relatedEntityInfo, compositeKey)}`
-            }
+
+            // now, we have to construct a query that will return the dependencies for this record, both hard and soft links
+            const sSQL = this.GetHardLinkDependencySQL(entityDependencies, compositeKey) + '\n' + 
+                         this.GetSoftLinkDependencySQL(entityName, compositeKey);
+
             // now, execute the query
             const result = await this.ExecuteSQL(sSQL);
+
             // now we go through the results and create the RecordDependency objects
             const recordDependencies: RecordDependency[] = [];
             for (const r of result) {
@@ -724,13 +778,21 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
                 // })
                 
                 let compositeKey: CompositeKey = new CompositeKey();
-                compositeKey.LoadFromEntityInfoAndRecord(entityInfo, r);
+                // the row r will have a PrimaryKeyValue field that is a string that is a concatenation of the primary key field names and values
+                // we need to parse that out so that we can then pass it to the CompositeKey object
+                const pkeys = {};
+                const keyValues = r.PrimaryKeyValue.split(CompositeKey.DefaultFieldDelimiter);
+                keyValues.forEach((kv) => {
+                    const parts = kv.split(CompositeKey.DefaultValueDelimiter);
+                    pkeys[parts[0]] = parts[1];
+                });
+                compositeKey.LoadFromEntityInfoAndRecord(entityInfo, keyValues);
                 
                 const recordDependency: RecordDependency = {
                     EntityName: r.EntityName,
                     RelatedEntityName: r.RelatedEntityName,
                     FieldName: r.FieldName,
-                    CompositeKey: compositeKey
+                    PrimaryKey: compositeKey
                 };
                 
                 recordDependencies.push(recordDependency);
@@ -851,7 +913,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
                 for (const dependency of dependencies) {
                     const reInfo = this.Entities.find((e) => e.Name.trim().toLowerCase() === dependency.RelatedEntityName.trim().toLowerCase());
                     const relatedEntity: BaseEntity = await this.GetEntityObject(dependency.RelatedEntityName, contextUser);
-                    await relatedEntity.InnerLoad(dependency.CompositeKey);
+                    await relatedEntity.InnerLoad(dependency.PrimaryKey);
                     relatedEntity.Set(dependency.FieldName, request.SurvivingRecordCompositeKey.GetValueByIndex(0)); // only support single field foreign keys for now
                     /*
                     if we later support composite foreign keys, we'll need to do this instead, at the moment this code will break as dependency.KeyValuePair is a single value, not an array
@@ -862,7 +924,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
                      */
                     if (!await relatedEntity.Save()) {
                         newRecStatus.Success = false;
-                        newRecStatus.Message = `Error updating dependency record ${dependency.CompositeKey.ToString} for entity ${dependency.RelatedEntityName} to point to surviving record ${request.SurvivingRecordCompositeKey.ToString()}`;
+                        newRecStatus.Message = `Error updating dependency record ${dependency.PrimaryKey.ToString} for entity ${dependency.RelatedEntityName} to point to surviving record ${request.SurvivingRecordCompositeKey.ToString()}`;
                         throw new Error(newRecStatus.Message);
                     }
                 }

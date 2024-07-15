@@ -2,7 +2,7 @@
 * ALL ENTITIES - TypeGraphQL Type Class Definition - AUTO GENERATED FILE
 * Generated Entities and Resolvers for Server
 *
-* GENERATED: 7/12/2024, 2:03:13 PM
+* GENERATED: 7/14/2024, 7:16:42 PM
 *
 *   >>> DO NOT MODIFY THIS FILE!!!!!!!!!!!!
 *   >>> YOUR CHANGES WILL BE OVERWRITTEN
@@ -2668,6 +2668,10 @@ export class EntityField_ {
     @MaxLength(40)
     RelatedEntityDisplayType: string;
         
+    @Field({nullable: true, description: 'Optional, used for "Soft Keys" to link records to different entity/record combinations on a per-record basis (for example the FileEntityRecordLink table has an EntityID/RecordID field pair. For that entity, the RecordID specifies "EntityID" for this field. This information allows MJ to detect soft keys/links for dependency detection, merging and for preventing orphaned soft-linked records during delete operations.'}) 
+    @MaxLength(200)
+    EntityIDFieldName?: string;
+        
     @Field() 
     @MaxLength(10)
     _mj__CreatedAt: Date;
@@ -2804,6 +2808,9 @@ export class CreateEntityFieldInput {
 
     @Field()
     RelatedEntityDisplayType: string;
+
+    @Field({ nullable: true })
+    EntityIDFieldName?: string;
 }
     
 
@@ -2889,6 +2896,9 @@ export class UpdateEntityFieldInput {
 
     @Field()
     RelatedEntityDisplayType: string;
+
+    @Field({ nullable: true })
+    EntityIDFieldName?: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
