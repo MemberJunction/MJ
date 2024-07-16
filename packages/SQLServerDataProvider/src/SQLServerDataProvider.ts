@@ -190,6 +190,9 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
                 if (params.IgnoreMaxRows === true) {
                     // do nothing, leave it blank, this structure is here to make the code easier to read
                 }
+                else if(params.StartRow && params.StartRow > 0) {
+                    // do nothing, leave it blank, this structure is here to make the code easier to read
+                }
                 else if (params.MaxRows && params.MaxRows > 0) {
                     // user provided a max rows, so we use that
                     topSQL = 'TOP ' + params.MaxRows;
@@ -311,6 +314,13 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
                         throw new Error(`Invalid Order By clause: ${orderBy}, contains one more for forbidden keywords`);
 
                     viewSQL += ` ORDER BY ${orderBy}`;
+                }
+
+                if(params.StartRow && params.StartRow > 0 
+                    && params.MaxRows && params.MaxRows > 0
+                    && entityInfo.FirstPrimaryKey) {
+                    viewSQL += ` ORDER BY ${entityInfo.FirstPrimaryKey.Name} `
+                    viewSQL += ` OFFSET ${params.StartRow} ROWS FETCH NEXT ${params.MaxRows} ROWS ONLY`;
                 }
 
                 // now we can run the viewSQL, but only do this if the ResultType !== 'count_only', otherwise we don't need to run the viewSQL

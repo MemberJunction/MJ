@@ -1,11 +1,13 @@
+import { UserInfo } from '@memberjunction/core';
 import { Transform } from 'node:stream';
 import { Worker } from 'node:worker_threads';
 
-type TransformCallback = Parameters<Transform['_flush']>[0];
+export type TransformCallback = Parameters<Transform['_flush']>[0];
 export type WorkerData<TContext = Record<string, unknown>, TRecord = Record<string, unknown>> = {
   batch?: Array<TRecord>;
   context?: TContext;
 };
+
 export type BatchWorkerOptions<TContext = Record<string, unknown>> = {
   /**
    * The number of records to process in a batch
@@ -23,6 +25,14 @@ export type BatchWorkerOptions<TContext = Record<string, unknown>> = {
    * The maximum number of worker threads to run concurrently
    */
   concurrencyLimit?: number;
+  /**
+   * The user context to pass to the worker thread
+   */
+  contextUser?: UserInfo;
+  /**
+   * The time to delay between api calls
+   **/
+  delayTimeMS?: number;
 };
 
 /**
@@ -41,6 +51,8 @@ export class BatchWorker<TRecord = Record<string, unknown>, TContext = Record<st
 
   _queue: Array<() => Promise<void>> = [];
 
+  _contextUser: UserInfo | undefined = undefined;
+
   /**
    * @param {BatchWorkerOptions} options - Options for the BatchWorker
    */
@@ -50,6 +62,7 @@ export class BatchWorker<TRecord = Record<string, unknown>, TContext = Record<st
     this._workerFile = options.workerFile ?? this._workerFile;
     this._workerContext = options.workerContext ?? this._workerContext;
     this._concurrencyLimit = options.concurrencyLimit ?? this._concurrencyLimit;
+    this._contextUser = options.contextUser ?? this._contextUser;
   }
 
   /**

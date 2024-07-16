@@ -709,8 +709,9 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
       const resource = <BaseResourceComponent>new resourceReg.SubClass();
       return await resource.GetResourceDisplayName(data);
     }
-    else
+    else{
       return `Workspace Item ${data.ID}`;
+    }
   }
 
   public async GetWorkspaceItemIconClass(data: ResourceData): Promise<string> {
@@ -719,8 +720,9 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
       const resource = <BaseResourceComponent>new resourceReg.SubClass();
       return await resource.GetResourceIconClass(data);
     }
-    else
+    else{
       return '';
+    }
   }
 
   /**
@@ -985,6 +987,9 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
   private async LoadDrawer() {
     const md = new Metadata();
 
+    //make sure SharedService_resourceTypes is populated first
+    await SharedService.RefreshData();
+
     this.drawerItems.length = 0; // clear the array
 
     const items = md.VisibleExplorerNavigationItems.filter(item => item.ShowInNavigationDrawer);
@@ -1021,9 +1026,6 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
 
     // Data
     await this.loadApplications(md);
-
-    //make sure SharedService_resourceTypes is populated first
-    await SharedService.RefreshData();
 
     // Dashboards
     await this.loadResourceType('Dashboards','Dashboards','/dashboards', md.CurrentUser.ID);

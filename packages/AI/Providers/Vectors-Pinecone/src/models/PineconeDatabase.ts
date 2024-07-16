@@ -2,8 +2,15 @@ import { pineconeDefaultIndex } from '../config';
 import { error } from 'console';
 import { RegisterClass } from '@memberjunction/global'
 import { FetchResponse, Index, Pinecone, QueryOptions } from '@pinecone-database/pinecone';
-import { BaseRequestParams, BaseResponse, CreateIndexParams, EditIndexParams, IndexDescription, IndexList, RecordMetadata, VectorDBBase, VectorRecord } from '@memberjunction/ai-vectordb';
-import { LogStatus, PotentialDuplicate, PotentialDuplicateResult } from '@memberjunction/core';
+import { BaseRequestParams, BaseResponse, CreateIndexParams, EditIndexParams, IndexDescription, IndexList, QueryResponse, RecordMetadata, VectorDBBase, VectorRecord } from '@memberjunction/ai-vectordb';
+import { LogError, LogStatus, PotentialDuplicate, PotentialDuplicateResult } from '@memberjunction/core';
+
+
+export type BaseMetadata = {
+    RecordID: string
+    Entity: string,
+    TemplateID: string,
+}
 
 @RegisterClass(VectorDBBase, "PineconeDatabase", 1)
 export class PineconeDatabase extends VectorDBBase {
@@ -113,7 +120,7 @@ export class PineconeDatabase extends VectorDBBase {
 
     public async queryIndex(params: QueryOptions): Promise<BaseResponse> {
         let index: Index = this.getIndex().data;
-        let result = await index.query(params);
+        let result: QueryResponse = await index.query(params);
         return this.wrapResponse(result);
     }
 
@@ -176,39 +183,6 @@ export class PineconeDatabase extends VectorDBBase {
             index.deleteAll();
         }
         return this.wrapResponse(null);
-    }
-
-    public async getVectorDuplicates(params: QueryOptions): Promise<BaseResponse> {
-        params.includeMetadata = true;
-        const queryResponse = await this.queryIndex(params);
-        if(queryResponse.success){
-            let response: PotentialDuplicateResult = new PotentialDuplicateResult();
-            response.Duplicates = [];
-            for(const match of queryResponse.data.matches){
-                const record: {id: string, score: number, metadata: any} = match;
-                if(!record.metadata || !record.metadata.PrimaryKeys){
-                    continue;
-                }
-
-                const metadata: {PrimaryKeys: string[]} = record.metadata;
-                if(!metadata.PrimaryKeys){
-                    continue;
-                }
-
-                let duplicate: PotentialDuplicate = new PotentialDuplicate();
-                duplicate.LoadFromList(metadata.PrimaryKeys);
-                duplicate.ProbabilityScore = record.score;
-                response.Duplicates.push(duplicate);
-            }
-
-            return this.wrapResponse(response);
-        }
-
-        return {
-            success: false,
-            message: queryResponse.message,
-            data: null
-        }
     }
 
     private wrapResponse(data: any): BaseResponse {

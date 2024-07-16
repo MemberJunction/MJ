@@ -98,7 +98,14 @@ export class RunViewByIDInput {
     description:
       'Optional, pass in entity_object, simple, or count_only as options to specify the type of result you want back. Defaults to simple if not provided',
   })
-  ResultType?: string;
+  ResultType?: string; 
+
+  @Field(() => Int, {
+    nullable: true,
+    description:
+      'If a value > 0 is provided, this value will be used to offset the rows returned.',
+  })
+  StartRow?: number
 }
 
 @InputType()
@@ -188,6 +195,13 @@ export class RunViewByNameInput {
       'Optional, pass in entity_object, simple, or count_only as options to specify the type of result you want back. Defaults to simple if not provided',
   })
   ResultType?: string;
+
+  @Field(() => Int, {
+    nullable: true,
+    description:
+      'If a value > 0 is provided, this value will be used to offset the rows returned.',
+  })
+  StartRow?: number
 }
 @InputType()
 export class RunDynamicViewInput {
@@ -262,6 +276,13 @@ export class RunDynamicViewInput {
       'Optional, pass in entity_object, simple, or count_only as options to specify the type of result you want back. Defaults to simple if not provided',
   })
   ResultType?: string;
+
+  @Field(() => Int, {
+    nullable: true,
+    description:
+      'If a value > 0 is provided, this value will be used to offset the rows returned.',
+  })
+  StartRow?: number
 }
 
 @ObjectType()

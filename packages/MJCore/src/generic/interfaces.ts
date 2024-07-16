@@ -86,6 +86,13 @@ export class PotentialDuplicateRequest {
 }
 
 export class PotentialDuplicateResult {
+
+    constructor() {
+        this.RecordCompositeKey = new CompositeKey();
+        this.Duplicates = [];
+        this.DuplicateRunDetailMatchRecordIDs = [];
+    }
+
     EntityID: string;
     RecordCompositeKey: CompositeKey;
     Duplicates: PotentialDuplicate[];

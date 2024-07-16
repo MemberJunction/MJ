@@ -24,6 +24,11 @@
     "@memberjunction/core-entities": "1.8.1",
     "@memberjunction/actions": "1.8.1",
     "@memberjunction/communication-engine": "1.8.1",
-    "@memberjunction/external-change-detection": "1.8.1"
+    "@memberjunction/external-change-detection": "1.8.1",
+    "@memberjunction/ai": "1.8.1",
+    "@memberjunction/ai-vector-sync": "1.8.1",
+    "@memberjunction/ai-vectors-pinecone": "1.8.1",
+    "@memberjunction/ai-mistral": "1.8.1",
+    "@memberjunction/ai-openai": "1.8.1"
   }
 }

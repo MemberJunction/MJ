@@ -10,6 +10,7 @@ import { Embeddings, EmbedTextsResult } from '@memberjunction/ai';
 
 import { LoadOpenAILLM } from '@memberjunction/ai-openai';
 import { LoadMistralEmbedding } from '@memberjunction/ai-mistral';
+import { EmbeddingData } from '../../generic/vectorSync.types';
 
 LoadOpenAILLM();
 LoadMistralEmbedding();
@@ -27,8 +28,7 @@ async function VectorizeEntity(): Promise<void> {
   const templateContent: TemplateContentEntity = context.templateContent;
   TemplateEngineServer.Instance.SetupNunjucks();
   const startTime = Date.now();
-  console.log('\t##### Annotator started #####', { threadId, now: Date.now() % 10_000, elapsed: Date.now() - context.executionId });
-  console.log(`Annotating ${batch.length} records`);
+  //console.log('\t##### Annotator started #####', { threadId, now: Date.now() % 10_000, elapsed: Date.now() - context.executionId });
 
   const embedding: Embeddings = MJGlobal.Instance.ClassFactory.CreateInstance<Embeddings>(Embeddings, context.embeddingDriverClass, context.embeddingAPIKey);
   const processedBatch: string[] = [];
@@ -49,19 +49,24 @@ async function VectorizeEntity(): Promise<void> {
   }
 
   const embeddings: EmbedTextsResult = await embedding.EmbedTexts({ texts: processedBatch, model: null });
-  const embeddingBatch: Record<string, any>[] = embeddings.vectors.map((vector: number[], index: number) => {
+  const embeddingBatch: EmbeddingData[] = embeddings.vectors.map((vector: number[], index: number) => {
     return {
       ID: index,
-      Vector: vector
+      Vector: vector,
+      EntityData: batch[index],
+      __mj_recordID: batch[index].__mj_recordID,
+      __mj_compositeKey: batch[index].__mj_compositeKey,
+      EntityDocument: context.entityDocument,
+      VectorID: batch[index].VectorID,
+      VectorIndexID: batch[index].VectorIndexID,
+      TemplateContent: templateContent.TemplateText
     };
   });
 
-  LogStatus(`Embedding result: ${embeddings.vectors.length} vectors`);
-
   const runTime = Date.now() - startTime;
   const elapsed = Date.now() - context.executionId;
-  console.log('\t##### Annotator finished #####', { threadId, now: Date.now() % 100_000, runTime, elapsed });
-  await delay(250); //short deplay to avoid getting rate limited by the embedding model's api 
+  console.log('\t##### Generating Vectors: Complate #####', { threadId, now: Date.now() % 100_000, runTime, elapsed });
+  await delay(context.delayTimeMS); //short deplay to avoid getting rate limited by the embedding model's api 
   parentPort.postMessage({ ...workerData, batch: embeddingBatch });
 }
 
