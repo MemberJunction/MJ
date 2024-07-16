@@ -2,7 +2,7 @@ import { pineconeDefaultIndex } from '../config';
 import { error } from 'console';
 import { RegisterClass } from '@memberjunction/global'
 import { FetchResponse, Index, Pinecone, QueryOptions } from '@pinecone-database/pinecone';
-import { BaseRequestParams, BaseResponse, CreateIndexParams, EditIndexParams, IndexDescription, IndexList, RecordMetadata, VectorDBBase, VectorRecord } from '@memberjunction/ai-vectordb';
+import { BaseRequestParams, BaseResponse, CreateIndexParams, EditIndexParams, IndexDescription, IndexList, QueryResponse, RecordMetadata, VectorDBBase, VectorRecord } from '@memberjunction/ai-vectordb';
 import { LogError, LogStatus, PotentialDuplicate, PotentialDuplicateResult } from '@memberjunction/core';
 
 
@@ -120,7 +120,7 @@ export class PineconeDatabase extends VectorDBBase {
 
     public async queryIndex(params: QueryOptions): Promise<BaseResponse> {
         let index: Index = this.getIndex().data;
-        let result = await index.query(params);
+        let result: QueryResponse = await index.query(params);
         return this.wrapResponse(result);
     }
 
@@ -183,39 +183,6 @@ export class PineconeDatabase extends VectorDBBase {
             index.deleteAll();
         }
         return this.wrapResponse(null);
-    }
-
-    public async getVectorDuplicates(params: QueryOptions): Promise<BaseResponse> {
-        params.includeMetadata = true;
-        const queryResponse = await this.queryIndex(params);
-        if(queryResponse.success){
-            let response: PotentialDuplicateResult = new PotentialDuplicateResult();
-            response.Duplicates = [];
-            for(const match of queryResponse.data.matches){
-                const record: {id: string, score: number, metadata: BaseMetadata} = match;
-                if(!record || !record.id){
-                    continue;
-                }
-
-                if(!record.metadata || !record.metadata.RecordID){
-                    LogError(`Invalid vector metadata: ${record.id}`);
-                    continue;
-                }
-
-                let duplicate: PotentialDuplicate = new PotentialDuplicate();
-                duplicate.LoadFromConcatenatedString(record.metadata.RecordID);
-                duplicate.ProbabilityScore = record.score;
-                response.Duplicates.push(duplicate);
-            }
-
-            return this.wrapResponse(response);
-        }
-
-        return {
-            success: false,
-            message: queryResponse.message,
-            data: null
-        }
     }
 
     private wrapResponse(data: any): BaseResponse {

@@ -121,7 +121,7 @@ export class EntityVectorSyncer extends VectorBase {
 
     //annotator worker handles vectorizing the records 
     const annotator = new BatchWorker({
-      workerFile: resolve(__dirname, 'workers/annotationWorker.js'),
+      workerFile: resolve(__dirname, 'workers/VectorizeTemplates.js'),
       batchSize: 3,
       concurrencyLimit: 2,
       contextUser: super.CurrentUser,
@@ -130,7 +130,7 @@ export class EntityVectorSyncer extends VectorBase {
 
     //archiver worker handles upserting the vectors into the vector database
     const archiver = new BatchWorker({ 
-      workerFile: resolve(__dirname, 'workers/archiveWorker.js'), 
+      workerFile: resolve(__dirname, 'workers/UpsertVectors.js'), 
       batchSize: 4,
       contextUser: super.CurrentUser, 
       workerContext

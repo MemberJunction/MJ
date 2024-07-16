@@ -18,7 +18,7 @@ import { EntityDocumentEntity } from "@memberjunction/core-entities";
  *  * MessageType: The name of the Message Type (within the provider) to use to send the message.
  */
 @RegisterClass(BaseAction, "Vectorize Entity")
-export class SendSingleMessageAction extends BaseAction {
+export class VectorizeEntityAction extends BaseAction {
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
 
         const entityDocumentID: ActionParam = params.Params.find(p => p.Name === 'EntityDocumentID');
@@ -65,40 +65,5 @@ export class SendSingleMessageAction extends BaseAction {
                 ResultCode: "FAILED"            
             };
         }
-
-        /*
-        const subject = params.Params.find(p => p.Name === 'Subject');
-        const body = params.Params.find(p => p.Name === 'Body');
-        const to = params.Params.find(p => p.Name === 'To');
-        const from = params.Params.find(p => p.Name === 'From');
-        const provider = params.Params.find(p => p.Name === 'Provider');
-        await CommunicationEngine.Instance.Config(false, params.ContextUser);
-        const p = CommunicationEngine.Instance.Providers.find(p => p.Name === provider.Value)
-        const messageType = params.Params.find(p => p.Name === 'MessageType');
-        const mt = p.MessageTypes.find(mt => mt.Name === messageType.Value);
-
-        if (!p)
-            throw new Error(`Provider ${provider.Value} not found.`);
-        if (!mt)
-            throw new Error(`Provider Message Type ${messageType.Value} not found.`);
-        if (!from)
-            throw new Error(`From is required.`);
-        if (!to)
-            throw new Error(`To is required.`);
-
-        const m: Message = {
-            MessageType: mt, 
-            From: from.Value,
-            To: to.Value,
-            Subject: subject.Value,
-            Body: body.Value,
-        }
-        const result = await CommunicationEngine.Instance.SendSingleMessage(provider.Value, messageType.Value, m);
-        return {
-            Success: result.Success,
-            Message: result.Error,
-            ResultCode: result.Success ? "SUCCESS" : "FAILED"            
-        };
-        */
     }
 }
