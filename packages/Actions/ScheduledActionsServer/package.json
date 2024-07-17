@@ -19,7 +19,8 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "@memberjunction/core": "^1.8.1",
+    "@memberjunction/core": "1.8.1",
+    "@memberjunction/core-entities": "1.8.1",
     "@memberjunction/actions": "1.8.1",
     "@memberjunction/scheduled-actions": "1.8.1",
     "@memberjunction/ai": "1.8.1",

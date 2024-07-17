@@ -55,15 +55,12 @@ export class ScheduledActionEngine extends BaseEngine<ScheduledActionEngine> {
      */
     public async ExecuteScheduledActions(contextUser: UserInfo): Promise<ActionResult[]> {
         await ActionEngine.Instance.Config(false, contextUser);
-        console.log('AcrionEngine - done');
         await this.Config(false, contextUser);
-        console.log('ScheduledActionEngine - done');
 
         const results: ActionResult[] = [];
         const now = new Date();
         for (const scheduledAction of this.ScheduledActions) {
-            if (ScheduledActionEngine.IsActionDue(scheduledAction, now) || true) {
-                console.log('Action is due: ' + scheduledAction.Name);
+            if (ScheduledActionEngine.IsActionDue(scheduledAction, now)) {
                 const action: ActionEntityServerEntity = ActionEngine.Instance.Actions.find(a => a.ID === scheduledAction.ActionID);
                 const params: ActionParam[] = await this.MapScheduledActionParamsToActionParams(scheduledAction);
                 const result = await ActionEngine.Instance.RunAction({

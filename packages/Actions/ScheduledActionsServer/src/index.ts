@@ -1,12 +1,19 @@
 import express from 'express';
 
 import { LogError, LogStatus } from "@memberjunction/core";
-import { SQLServerProviderConfigData, UserCache, setupSQLServerClient } from "@memberjunction/sqlserver-dataprovider";
-import AppDataSource from "./db";
-import { currentUserEmail, mjCoreSchema, serverPort } from "./config";
+import { UserCache } from "@memberjunction/sqlserver-dataprovider";
+import { currentUserEmail, serverPort } from "./config";
 import { handleServerInit } from './util';
 import { ScheduledActionEngine } from '@memberjunction/scheduled-actions';
+import { LoadGeneratedEntities } from 'mj_generatedentities';
+import {LoadMistralEmbedding} from '@memberjunction/ai-mistral';
+import {LoadOpenAIEmbedding} from '@memberjunction/ai-openai';
+import {LoadPineconeVectorDB} from '@memberjunction/ai-vectors-pinecone';
 
+LoadGeneratedEntities();
+LoadMistralEmbedding();
+LoadOpenAIEmbedding();
+LoadPineconeVectorDB();
 
 const app = express();
 
@@ -48,7 +55,7 @@ app.get('/', async (req: any, res: any) => {
         options,
     } = req.query;
 
-    console.log(`Server Request Received: options === ${options}`);
+    LogStatus(`Server Request Received: options === ${options}`);
     let typedOptions: string = options;    
     const optionsToRun: string[] = typedOptions.includes(',') ? typedOptions.split(',') : [typedOptions];
     if (await runWithOptions(optionsToRun)) {
@@ -60,7 +67,7 @@ app.get('/', async (req: any, res: any) => {
 });
 
 app.listen(serverPort, () =>
-  console.log(`Server listening on port ${serverPort}!`)
+  LogStatus(`Server listening on port ${serverPort}!`)
 );
 
 
@@ -79,18 +86,18 @@ async function runWithOptions(options: string[]): Promise<boolean> {
             const opt = runOptions.find(o => o.name.trim().toLowerCase() === requestedOption.trim().toLowerCase())
             if (!opt) {
                 // if the requested option is not found, log a warning and skip it
-                console.warn(`Requested option ${requestedOption} not found, skipping`);
+                LogStatus(`Requested option ${requestedOption} not found, skipping`);
             }
             else {
                 // if the requested option is found, run it
-                console.log(`Running option ${opt.name}`);
+                LogStatus(`Running option ${opt.name}`);
                 bSuccess = bSuccess && await executeRunOption(opt,false) // pass in false as we don't need each option to init the server again
             }
         }   
         return bSuccess;
     }
     catch (error) {
-        console.error("An error occurred:", error);
+        LogError("An error occurred:", undefined, error);
         return false;
     }
 }
@@ -119,7 +126,7 @@ async function executeRunOption(option: runOption, initServer: boolean): Promise
             bResult = await option.run(initServer)
         }
         catch (e) {
-            console.warn(e)
+            LogStatus(e)
         }
         finally {
             option.currentRuns--;
@@ -127,7 +134,7 @@ async function executeRunOption(option: runOption, initServer: boolean): Promise
         }
     }
     else {
-        console.warn(`Max concurrency of ${option.maxConcurrency} reached for ${option.name} option, skipping`);
+        LogError(`Max concurrency of ${option.maxConcurrency} reached for ${option.name} option, skipping`);
         return false;
     }
 }
@@ -146,7 +153,7 @@ export async function runScheduledActions(): Promise<boolean> {
         return actionResults.some(r => !r.Success) ? false : true;
     }
     catch (error) {
-        console.error("An error occurred:", error); 
+        LogError("An error occurred:", undefined, error);
         return false;
     }
 }
