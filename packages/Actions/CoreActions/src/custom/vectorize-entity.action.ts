@@ -1,7 +1,5 @@
 import { ActionParam, ActionResultSimple, BaseAction, RunActionParams } from "@memberjunction/actions";
 import { RegisterClass } from "@memberjunction/global";
-import { CommunicationEngine } from "@memberjunction/communication-engine";
-import { Message } from "@memberjunction/communication-types";
 import { EntityVectorSyncer } from "@memberjunction/ai-vector-sync";
 import { EntityDocumentEntity } from "@memberjunction/core-entities";
 
@@ -21,8 +19,8 @@ import { EntityDocumentEntity } from "@memberjunction/core-entities";
 export class VectorizeEntityAction extends BaseAction {
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
 
-        const entityDocumentID: ActionParam = params.Params.find(p => p.Name === 'EntityDocumentID');
-        const entityID: ActionParam = params.Params.find(p => p.Name === 'EntityID');
+        const entityDocumentID: ActionParam | undefined = params.Params.find(p => p.Name === 'EntityDocumentID');
+        const entityID: ActionParam | undefined = params.Params.find(p => p.Name === 'EntityID');
         if(!entityDocumentID && !entityID){
             throw new Error(`EntityDocumentID and entityID params not found.`);
         }
@@ -32,9 +30,9 @@ export class VectorizeEntityAction extends BaseAction {
 
         let entityDocument: EntityDocumentEntity| null = null;
         if (entityDocumentID && entityDocumentID.Value) {
-        entityDocument = await vectorizer.GetEntityDocument(entityDocumentID.Value);
+            entityDocument = await vectorizer.GetEntityDocument(entityDocumentID.Value);
         } 
-        else {
+        else if(entityID && entityID.Value){
             entityDocument = await vectorizer.GetFirstActiveEntityDocumentForEntity(entityID.Value);
             if (!entityDocument) {
                 throw Error(`No active Entity Document found for entity ${entityID.Value}`);
@@ -42,7 +40,7 @@ export class VectorizeEntityAction extends BaseAction {
         }
 
         if (!entityDocument) {
-            throw new Error(`No active Entity Document found for entity ${entityID.Value}`);
+            throw new Error(`No active Entity Document found for entity ${entityID?.Value}`);
         }
 
         try{
@@ -61,9 +59,13 @@ export class VectorizeEntityAction extends BaseAction {
         catch(error){
             return {
                 Success: false,
-                Message: error,
+                Message: error as any,
                 ResultCode: "FAILED"            
             };
         }
     }
+}
+
+export function LoadVectorizeEntityAction(){
+    // this function is a stub that is used to force the bundler to include the above class in the final bundle and not tree shake them out
 }

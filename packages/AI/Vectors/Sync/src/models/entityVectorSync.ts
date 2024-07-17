@@ -2,7 +2,8 @@ import { Embeddings, EmbedTextsResult, GetAIAPIKey } from '@memberjunction/ai';
 import { VectorDBBase, VectorRecord } from '@memberjunction/ai-vectordb';
 import { VectorBase } from '@memberjunction/ai-vectors';
 import { BaseEntity, EntityField, EntityInfo, LogError, LogStatus, Metadata, RunView, RunViewResult, UserInfo } from '@memberjunction/core';
-import { AIModelEntity, EntityDocumentEntity, EntityDocumentTypeEntity, EntityRecordDocumentEntity, TemplateContentEntity, TemplateContentTypeEntity, TemplateEntity, TemplateParamEntity, VectorDatabaseEntity, VectorIndexEntity } from '@memberjunction/core-entities';
+import { AIModelEntity, EntityDocumentEntity, EntityDocumentTypeEntity, EntityRecordDocumentEntity, TemplateContentEntity, 
+  TemplateContentTypeEntity, TemplateEntity, TemplateParamEntity, VectorDatabaseEntity, VectorIndexEntity } from '@memberjunction/core-entities';
 import { MJGlobal } from '@memberjunction/global';
 import { pipeline } from 'node:stream/promises';
 import { RECORD_DUPLICATES_TYPE_ID } from '../constants';
