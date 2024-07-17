@@ -697,7 +697,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
             // we build a string that will concatenate all of the primary key values into a single string, this is because the primary key could be a composite key
             // we do this in SQL by combining the pirmary key name and value for each row using the default separator defined by the CompositeKey class
             // the output of this should be like the following 'Field1|Value1||Field2|Value2||Field3|Value3' where the || is the CompositeKey.DefaultFieldDelimiter and the | is the CompositeKey.DefaultValueDelimiter
-
+            const quotes = entity.FirstPrimaryKey.NeedsQuotes ? "'" : '';
             const primaryKeySelectString = `CONCAT(${entity.PrimaryKeys.map(pk => `'${pk.Name}|', CAST(${pk.Name} AS NVARCHAR(MAX))`).join(`,'${CompositeKey.DefaultFieldDelimiter}',`)})`;
 
             // for this entity, check to see if it has any fields that are soft links, and for each of those, generate the SQL
@@ -717,8 +717,8 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
                         FROM 
                             [${entity.SchemaName}].[${entity.BaseView}]
                         WHERE 
-                            [${f.EntityIDFieldName}] = '${entity.ID}' AND 
-                            [${f.Name}] = ${compositeKey.GetValueByIndex(0)}` // we only use the first primary key value, this is because we don't yet support composite primary keys
+                            [${f.EntityIDFieldName}] = ${quotes}${entity.ID}${quotes} AND 
+                            [${f.Name}] = ${quotes}${compositeKey.GetValueByIndex(0)}${quotes}` // we only use the first primary key value, this is because we don't yet support composite primary keys
 
             });
         });
@@ -820,18 +820,19 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
 
     protected GetRecordDependencyLinkSQL(dep: EntityDependency, entity: EntityInfo, relatedEntity: EntityInfo, CompositeKey: CompositeKey): string {
         const f = relatedEntity.Fields.find((f) => f.Name.trim().toLowerCase() === dep.FieldName?.trim().toLowerCase());
-        if (!f) 
+        const quotes = entity.FirstPrimaryKey.NeedsQuotes ? "'" : '';
+        if (!f){
             throw new Error(`Field ${dep.FieldName} not found in Entity ${relatedEntity.Name}`);
+        }
 
         if (f.RelatedEntityFieldName?.trim().toLowerCase() === 'id')  {
             // simple link to first primary key, most common scenario for linkages
-            return CompositeKey.GetValueByIndex(0);
+            return `${quotes}${CompositeKey.GetValueByIndex(0)}${quotes};`
         }
         else {
             // linking to something else, so we need to use that field in a sub-query
             // NOTICE - we are only using the FIRST primary key in our current implementation, this is because we don't yet support composite foreign keys
             // if we do start to support composite foreign keys, we'll need to update this code to handle that
-            const quotes = entity.FirstPrimaryKey.NeedsQuotes ? "'" : '';
             return `(SELECT ${f.RelatedEntityFieldName} FROM [${entity.SchemaName}].${entity.BaseView} WHERE ${entity.FirstPrimaryKey.Name}=${quotes}${CompositeKey.GetValueByIndex(0)}${quotes})`
         }
     }
