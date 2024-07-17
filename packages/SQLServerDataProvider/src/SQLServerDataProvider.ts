@@ -730,7 +730,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
         for (const entityDependency of entityDependencies) {
             const entityInfo = this.Entities.find((e) => e.Name.trim().toLowerCase() === entityDependency.EntityName?.trim().toLowerCase());
             const relatedEntityInfo = this.Entities.find((e) => e.Name.trim().toLowerCase() === entityDependency.RelatedEntityName?.trim().toLowerCase());
-            const primaryKeySelectString = `CONCAT(${entityInfo.PrimaryKeys.map(pk => `'${pk.Name}|' + CAST(${pk.Name} AS NVARCHAR(MAX))`).join(`,'${CompositeKey.DefaultFieldDelimiter}',`)})`;
+            const primaryKeySelectString = `CONCAT(${entityInfo.PrimaryKeys.map(pk => `'${pk.Name}|', CAST(${pk.Name} AS NVARCHAR(MAX))`).join(`,'${CompositeKey.DefaultFieldDelimiter}',`)})`;
 
             if (sSQL.length > 0)
                 sSQL += ' UNION ALL '
@@ -782,7 +782,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
                 if(!entityInfo){
                     throw new Error(`Entity ${r.EntityName} not found in metadata`);
                 }
-                
+
                 // future, if we support foreign keys that are composite keys, we'll need to enable this code
                 // const pkeyValues: KeyValuePair[] = [];
                 // entityInfo.PrimaryKeys.forEach((pk) => {
