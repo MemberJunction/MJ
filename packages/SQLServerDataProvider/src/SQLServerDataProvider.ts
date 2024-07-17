@@ -729,6 +729,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
         let sSQL = '';
         for (const entityDependency of entityDependencies) {
             const entityInfo = this.Entities.find((e) => e.Name.trim().toLowerCase() === entityDependency.EntityName?.trim().toLowerCase());
+            const quotes = entityInfo.FirstPrimaryKey.NeedsQuotes ? "'" : '';
             const relatedEntityInfo = this.Entities.find((e) => e.Name.trim().toLowerCase() === entityDependency.RelatedEntityName?.trim().toLowerCase());
             const primaryKeySelectString = `CONCAT(${entityInfo.PrimaryKeys.map(pk => `'${pk.Name}|', CAST(${pk.Name} AS NVARCHAR(MAX))`).join(`,'${CompositeKey.DefaultFieldDelimiter}',`)})`;
 
@@ -827,7 +828,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
 
         if (f.RelatedEntityFieldName?.trim().toLowerCase() === 'id')  {
             // simple link to first primary key, most common scenario for linkages
-            return `${quotes}${CompositeKey.GetValueByIndex(0)}${quotes};`
+            return `${quotes}${CompositeKey.GetValueByIndex(0)}${quotes}`
         }
         else {
             // linking to something else, so we need to use that field in a sub-query

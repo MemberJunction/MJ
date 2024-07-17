@@ -19,50 +19,44 @@ import { EntityDocumentEntity } from "@memberjunction/core-entities";
 export class VectorizeEntityAction extends BaseAction {
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
 
-        const entityDocumentID: ActionParam | undefined = params.Params.find(p => p.Name === 'EntityDocumentID');
-        const entityID: ActionParam | undefined = params.Params.find(p => p.Name === 'EntityID');
-        if(!entityDocumentID && !entityID){
-            throw new Error(`EntityDocumentID and entityID params not found.`);
+        const entityNamesParam: ActionParam | undefined = params.Params.find(p => p.Name === 'EntityNames');
+        let entityNames: string[] = [];
+        if(entityNamesParam && entityNamesParam.Value && entityNamesParam.Value.includes(',')){
+            entityNames = entityNamesParam.Value.split(',');
         }
 
         let vectorizer = new EntityVectorSyncer();
         await vectorizer.Config(params.ContextUser);
 
-        let entityDocument: EntityDocumentEntity| null = null;
-        if (entityDocumentID && entityDocumentID.Value) {
-            entityDocument = await vectorizer.GetEntityDocument(entityDocumentID.Value);
-        } 
-        else if(entityID && entityID.Value){
-            entityDocument = await vectorizer.GetFirstActiveEntityDocumentForEntity(entityID.Value);
-            if (!entityDocument) {
-                throw Error(`No active Entity Document found for entity ${entityID.Value}`);
+        const entityDocuments: EntityDocumentEntity[] = await vectorizer.GetActiveEntityDocuments(entityNames);
+        let results: ActionResultSimple[] = await Promise.all(entityDocuments.map(async (entityDocument: EntityDocumentEntity) => {
+            try{
+                await vectorizer.VectorizeEntity({
+                    entityID: entityDocument.EntityID,
+                    entityDocumentID: entityDocument.ID,
+                    batchCount: 20,
+                    options: {},
+                }, params.ContextUser);
+    
+                return {
+                    Success: true,
+                    ResultCode: "SUCCESS"            
+                };
             }
-        }
+            catch(error){
+                return {
+                    Success: false,
+                    Message: error as any,
+                    ResultCode: "FAILED"            
+                };
+            }
+        }));
 
-        if (!entityDocument) {
-            throw new Error(`No active Entity Document found for entity ${entityID?.Value}`);
-        }
-
-        try{
-            await vectorizer.VectorizeEntity({
-                entityID: entityDocument.EntityID,
-                entityDocumentID: entityDocument.ID,
-                batchCount: 20,
-                options: {},
-            }, params.ContextUser);
-
-            return {
-                Success: true,
-                ResultCode: "SUCCESS"            
-            };
-        }
-        catch(error){
-            return {
-                Success: false,
-                Message: error as any,
-                ResultCode: "FAILED"            
-            };
-        }
+        return {
+            Success: results.every(r => r.Success),
+            Message: results.map(r => r.Message).join('\n'),
+            ResultCode: results.every(r => r.Success) ? "SUCCESS" : "FAILED"            
+        };
     }
 }
 

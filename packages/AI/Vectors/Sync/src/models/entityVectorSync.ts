@@ -388,6 +388,51 @@ export class EntityVectorSyncer extends VectorBase {
     return entityDocument;
   }
 
+  /**
+   * Returns all active Entity Documents of the 'Record Duplicate' type.
+   * Note that this only returns the first active Entity Document. Meaning if there are multiple Entity Documents for the same entity, 
+   * only the oldest one will be returned.
+   * @param entityIDs If provided, only Entity Documents for the specified entities will be returned.
+   */
+  public async GetActiveEntityDocuments(entityNames?: string[]): Promise<EntityDocumentEntity[]> {
+    await AIEngine.Instance.Config(false, super.CurrentUser);
+
+    const entityDocumentTypeID: EntityDocumentTypeEntity | undefined = AIEngine.EntityDocumentTypes.find((documentType: EntityDocumentTypeEntity) => documentType.Name === 'Record Duplicate');
+    if (!entityDocumentTypeID) {
+      throw new Error('Entity Document Type not found');
+    }
+
+    let filter = `TypeID = '${entityDocumentTypeID}' AND Status = 'Active' `;
+    if (entityNames) {
+      filter += ` AND Entity IN (${entityNames.map((entityName: string) => `'${entityName}'`).join(',')})`;
+    }
+
+    const runViewResult: RunViewResult<EntityDocumentEntity> = await super.RunView.RunView<EntityDocumentEntity>({
+      EntityName: 'Entity Documents',
+      ExtraFilter: filter,
+      ResultType: 'entity_object',
+    }, super.CurrentUser);
+
+    if(!runViewResult.Success){
+      throw new Error(runViewResult.ErrorMessage);
+    }
+
+    let entityDocuments: EntityDocumentEntity[] = [];
+    let seenEntities: string[] = [];
+
+    //we only want one entity document per entity
+    for(const entityDocument of runViewResult.Results){
+      if(seenEntities.includes(entityDocument.EntityID)){
+        continue;
+      }
+      
+      entityDocuments.push(entityDocument);
+      seenEntities.push(entityDocument.EntityID);
+    }
+
+    return entityDocuments;
+  }
+
   private async GetOrCreateVectorIndex(entityDocument: EntityDocumentEntity): Promise<VectorIndexEntity> {
     let vectorIndexEntity: VectorIndexEntity = await super.runViewForSingleValue(
       'Vector Indexes',
