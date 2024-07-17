@@ -56,13 +56,10 @@
                                 <ng-template let-col="item">
                                 <div class="item-content">
                                     <div>
-                                    <input
-                                        type="checkbox"
-                                        [(ngModel)]="col.hidden"
-                                        id="column_{{col.ID}}"
-                                        kendoCheckBox
+                                    <kendo-checkbox
+                                        [checkedState]="!col.hidden"
                                         (change)="toggleColumn(col)"
-                                    />
+                                    ></kendo-checkbox>
                                     <kendo-label
                                         [for]="'column_'+col.ID"
                                         [text]="col.DisplayName ? col.DisplayName : col.Name"
