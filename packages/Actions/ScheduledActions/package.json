@@ -24,6 +24,7 @@
     "@memberjunction/core-entities": "1.8.1",
     "@memberjunction/actions": "1.8.1",
     "@memberjunction/sqlserver-dataprovider": "1.8.1",
+    "@memberjunction/core-actions": "1.8.1",
     "cron-parser": "^4.9.0"
   }
 }

@@ -45,12 +45,13 @@ const runOptions: runOption[] = [
 app.get('/', async (req: any, res: any) => {
     //Run all active integrations with conditions
     const {
-        RunOptions,
+        options,
     } = req.query;
 
-    console.log(`Server Request Received: RunOptions === ${RunOptions}`)
-    const options = RunOptions && runOptions.length > 0 ? RunOptions.split(',') : [];
-    if (await runWithOptions(options)) {
+    console.log(`Server Request Received: options === ${options}`);
+    let typedOptions: string = options;    
+    const optionsToRun: string[] = typedOptions.includes(',') ? typedOptions.split(',') : [typedOptions];
+    if (await runWithOptions(optionsToRun)) {
         res.json({Status: "Success"});
     }
     else {
@@ -82,6 +83,7 @@ async function runWithOptions(options: string[]): Promise<boolean> {
             }
             else {
                 // if the requested option is found, run it
+                console.log(`Running option ${opt.name}`);
                 bSuccess = bSuccess && await executeRunOption(opt,false) // pass in false as we don't need each option to init the server again
             }
         }   
@@ -135,14 +137,16 @@ export async function runScheduledActions(): Promise<boolean> {
     try {
         await handleServerInit(false); // init server here once 
         const user = UserCache.Instance.Users.find(u => u.Email === currentUserEmail)
-        if (!user)
+        if (!user){
             throw new Error(`User ${currentUserEmail} not found in cache`);
+        }
 
+        ScheduledActionEngine.Instance.Config(false, user);
         const actionResults = await ScheduledActionEngine.Instance.ExecuteScheduledActions(user);
         return actionResults.some(r => !r.Success) ? false : true;
     }
     catch (error) {
-        console.error("An error occurred:", error);
+        console.error("An error occurred:", error); 
         return false;
     }
 }

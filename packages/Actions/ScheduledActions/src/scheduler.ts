@@ -1,9 +1,12 @@
 import { BaseEngine, BaseEnginePropertyConfig, LogError, Metadata, UserInfo } from "@memberjunction/core";
 import { ScheduledActionEntityExtended, ScheduledActionParamEntity } from "@memberjunction/core-entities";
-import { ActionEngine, ActionParam, ActionResult } from "@memberjunction/actions";
+import { ActionEngine, ActionEntityServerEntity, ActionParam, ActionResult } from "@memberjunction/actions";
 import * as cronParser from 'cron-parser';
 import { SafeJSONParse } from "@memberjunction/global";
 import { SQLServerDataProvider } from "@memberjunction/sqlserver-dataprovider";
+import { LoadVectorizeEntityAction } from "@memberjunction/core-actions";
+
+LoadVectorizeEntityAction();
 
 /**
  * ScheduledActionEngine handles metadata caching and execution of scheduled actions based on their defined CronExpressions
@@ -52,18 +55,22 @@ export class ScheduledActionEngine extends BaseEngine<ScheduledActionEngine> {
      */
     public async ExecuteScheduledActions(contextUser: UserInfo): Promise<ActionResult[]> {
         await ActionEngine.Instance.Config(false, contextUser);
+        console.log('AcrionEngine - done');
+        await this.Config(false, contextUser);
+        console.log('ScheduledActionEngine - done');
 
         const results: ActionResult[] = [];
         const now = new Date();
         for (const scheduledAction of this.ScheduledActions) {
-            if (ScheduledActionEngine.IsActionDue(scheduledAction, now)) {
-                const action = ActionEngine.Instance.Actions.find(a => a.ID === scheduledAction.ActionID);
-                const params = this.MapScheduledActionParamsToActionParams(scheduledAction);
+            if (ScheduledActionEngine.IsActionDue(scheduledAction, now) || true) {
+                console.log('Action is due: ' + scheduledAction.Name);
+                const action: ActionEntityServerEntity = ActionEngine.Instance.Actions.find(a => a.ID === scheduledAction.ActionID);
+                const params: ActionParam[] = await this.MapScheduledActionParamsToActionParams(scheduledAction);
                 const result = await ActionEngine.Instance.RunAction({
                     Action: action,
                     ContextUser: contextUser,
                     Filters: [],
-                    Params: []
+                    Params: params
                 });
                 results.push(result);
             }
