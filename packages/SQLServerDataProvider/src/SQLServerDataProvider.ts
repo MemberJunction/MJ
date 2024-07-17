@@ -757,18 +757,27 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
      */
     public async GetRecordDependencies(entityName: string, compositeKey: CompositeKey): Promise<RecordDependency[]> {
         try {
+            const recordDependencies: RecordDependency[] = [];
+
             // first, get the entity dependencies for this entity
-            const entityDependencies = await this.GetEntityDependencies(entityName);
+            const entityDependencies: EntityDependency[] = await this.GetEntityDependencies(entityName);
+            if(entityDependencies.length === 0){
+                // no dependencies, exit early
+                return recordDependencies;
+            }
 
             // now, we have to construct a query that will return the dependencies for this record, both hard and soft links
-            const sSQL = this.GetHardLinkDependencySQL(entityDependencies, compositeKey) + '\n' + 
+            const sSQL: string = this.GetHardLinkDependencySQL(entityDependencies, compositeKey) + '\n' + 
                          this.GetSoftLinkDependencySQL(entityName, compositeKey);
 
             // now, execute the query
             const result = await this.ExecuteSQL(sSQL);
+            if(!result){
+                //something is likely wrong if we have record dependencies but no results were returned
+                throw new Error(`GetRecordDependenciesQuery returned null or undefined for Entity ${entityName} and Composite Key ${compositeKey.Values()}`);
+            }
 
             // now we go through the results and create the RecordDependency objects
-            const recordDependencies: RecordDependency[] = [];
             for (const r of result) {
                 const entityInfo = this.Entities.find((e) => e.Name.trim().toLowerCase() === r.EntityName?.trim().toLowerCase());
                 // future, if we support foreign keys that are composite keys, we'll need to enable this code
