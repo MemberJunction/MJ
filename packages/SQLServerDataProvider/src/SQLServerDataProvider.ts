@@ -772,14 +772,17 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
 
             // now, execute the query
             const result = await this.ExecuteSQL(sSQL);
-            if(!result){
-                //something is likely wrong if we have record dependencies but no results were returned
-                throw new Error(`GetRecordDependenciesQuery returned null or undefined for Entity ${entityName} and Composite Key ${compositeKey.Values()}`);
+            if(!result || result.length === 0){
+                return recordDependencies;
             }
 
             // now we go through the results and create the RecordDependency objects
             for (const r of result) {
-                const entityInfo = this.Entities.find((e) => e.Name.trim().toLowerCase() === r.EntityName?.trim().toLowerCase());
+                const entityInfo: EntityInfo | undefined = this.Entities.find((e) => e.Name.trim().toLowerCase() === r.EntityName?.trim().toLowerCase());
+                if(!entityInfo){
+                    throw new Error(`Entity ${r.EntityName} not found in metadata`);
+                }
+                
                 // future, if we support foreign keys that are composite keys, we'll need to enable this code
                 // const pkeyValues: KeyValuePair[] = [];
                 // entityInfo.PrimaryKeys.forEach((pk) => {
