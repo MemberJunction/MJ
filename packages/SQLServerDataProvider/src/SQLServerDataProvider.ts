@@ -698,7 +698,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
             // we do this in SQL by combining the pirmary key name and value for each row using the default separator defined by the CompositeKey class
             // the output of this should be like the following 'Field1|Value1||Field2|Value2||Field3|Value3' where the || is the CompositeKey.DefaultFieldDelimiter and the | is the CompositeKey.DefaultValueDelimiter
 
-            const primaryKeySelectString = `CONCAT(${entity.PrimaryKeys.map(pk => `'${pk.Name}|' + CAST(${pk.Name} AS NVARCHAR(MAX))`).join(`,'${CompositeKey.DefaultFieldDelimiter}',`)})`;
+            const primaryKeySelectString = `CONCAT(${entity.PrimaryKeys.map(pk => `'${pk.Name}|', CAST(${pk.Name} AS NVARCHAR(MAX))`).join(`,'${CompositeKey.DefaultFieldDelimiter}',`)})`;
 
             // for this entity, check to see if it has any fields that are soft links, and for each of those, generate the SQL
             entity.Fields.filter((f) => f.EntityIDFieldName && f.EntityIDFieldName.length > 0).forEach((f) => {
