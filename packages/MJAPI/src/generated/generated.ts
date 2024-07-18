@@ -2,7 +2,7 @@
 * ALL ENTITIES - TypeGraphQL Type Class Definition - AUTO GENERATED FILE
 * Generated Entities and Resolvers for Server
 *
-* GENERATED: 7/14/2024, 7:16:42 PM
+* GENERATED: 7/18/2024, 5:36:51 PM
 *
 *   >>> DO NOT MODIFY THIS FILE!!!!!!!!!!!!
 *   >>> YOUR CHANGES WILL BE OVERWRITTEN
@@ -19,8 +19,142 @@ import { DataSource } from 'typeorm';
 import * as mj_core_schema_server_object_types from '@memberjunction/server'
 
 
-import { ThreadDetailEntity, ThreadEntity, IndustryEntity, ContactRoleEntity, ContactLevelEntity, AccountEntity, ContactEntity, DealStageEntity, ActivityEntity, DealForecastCategoryEntity, DealEntity, DealTypeEntity, InvoiceEntity, ActivityAttachmentEntity, PaymentTermsTypeEntity, InvoiceStatusTypeEntity, SalesLineItemEntity, SalesTransactionEntity, CustomerAddress__client_financeEntity, Item__client_financeEntity, Customer__client_financeEntity, OrganizationLinkEntity, PersonLinkEntity, Account__client_crmEntity, StringMapEntity, ProductPriceLevelEntity, client_membershipEntity, Contact__client_crmEntity, UoMEntity, SalesOrderEntity, SalesOrderDetailEntity, ProductEntity, CustomerAddressEntity, SalesLineItem__client_membershipEntity, ItemEntity, CustomerEntity, SalesTransaction__client_membershipEntity } from 'mj_generatedentities';
+import { QuadDemoEntity, ThreadDetailEntity, ThreadEntity, IndustryEntity, ContactRoleEntity, ContactLevelEntity, AccountEntity, ContactEntity, DealStageEntity, ActivityEntity, DealForecastCategoryEntity, DealEntity, DealTypeEntity, InvoiceEntity, ActivityAttachmentEntity, PaymentTermsTypeEntity, InvoiceStatusTypeEntity, SalesLineItemEntity, SalesTransactionEntity, CustomerAddress__client_financeEntity, Item__client_financeEntity, Customer__client_financeEntity, OrganizationLinkEntity, PersonLinkEntity, Account__client_crmEntity, StringMapEntity, ProductPriceLevelEntity, client_membershipEntity, Contact__client_crmEntity, UoMEntity, SalesOrderEntity, SalesOrderDetailEntity, ProductEntity, CustomerAddressEntity, SalesLineItem__client_membershipEntity, ItemEntity, CustomerEntity, SalesTransaction__client_membershipEntity } from 'mj_generatedentities';
     
+
+//****************************************************************************
+// ENTITY CLASS for Quad Demos
+//****************************************************************************
+@ObjectType()
+export class QuadDemo_ {
+    @Field(() => Int) 
+    ID: number;
+        
+    @Field() 
+    @MaxLength(510)
+    Name: string;
+        
+    @Field({nullable: true}) 
+    Description?: string;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for Quad Demos
+//****************************************************************************
+@InputType()
+export class CreateQuadDemoInput {
+    @Field()
+    Name: string;
+
+    @Field({ nullable: true })
+    Description?: string;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for Quad Demos
+//****************************************************************************
+@InputType()
+export class UpdateQuadDemoInput {
+    @Field(() => Int)
+    ID: number;
+
+    @Field()
+    Name: string;
+
+    @Field({ nullable: true })
+    Description?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
+//****************************************************************************
+// RESOLVER for Quad Demos
+//****************************************************************************
+@ObjectType()
+export class RunQuadDemoViewResult {
+    @Field(() => [QuadDemo_])
+    Results: QuadDemo_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(QuadDemo_)
+export class QuadDemoResolver extends ResolverBase {
+    @Query(() => RunQuadDemoViewResult)
+    async RunQuadDemoViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunQuadDemoViewResult)
+    async RunQuadDemoViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunQuadDemoViewResult)
+    async RunQuadDemoDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        input.EntityName = 'Quad Demos';
+        return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
+    }
+    @Query(() => QuadDemo_, { nullable: true })
+    async QuadDemo(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<QuadDemo_ | null> {
+        this.CheckUserReadPermissions('Quad Demos', userPayload);
+        const sSQL = `SELECT * FROM [crm].[vwQuadDemos] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Quad Demos', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Quad Demos', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
+    }
+    
+    @Mutation(() => QuadDemo_)
+    async CreateQuadDemo(
+        @Arg('input', () => CreateQuadDemoInput) input: CreateQuadDemoInput,
+        @Ctx() { dataSource, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.CreateRecord('Quad Demos', input, dataSource, userPayload, pubSub)
+    }
+        
+    @Mutation(() => QuadDemo_)
+    async UpdateQuadDemo(
+        @Arg('input', () => UpdateQuadDemoInput) input: UpdateQuadDemoInput,
+        @Ctx() { dataSource, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.UpdateRecord('Quad Demos', input, dataSource, userPayload, pubSub);
+    }
+    
+    @Mutation(() => QuadDemo_)
+    async DeleteQuadDemo(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Quad Demos', key, options, dataSource, userPayload, pubSub);
+    }
+    
+}
 
 //****************************************************************************
 // ENTITY CLASS for Thread Details
