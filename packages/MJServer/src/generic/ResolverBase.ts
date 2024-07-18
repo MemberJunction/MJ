@@ -1,4 +1,4 @@
-import { BaseEntity, CompositeKey, EntityFieldTSType, EntityPermissionType, Metadata, RunView, UserInfo } from '@memberjunction/core';
+import { BaseEntity, CompositeKey, EntityFieldTSType, EntityPermissionType, Metadata, RunView, RunViewParams, RunViewResult, UserInfo } from '@memberjunction/core';
 import { AuditLogEntity, UserViewEntity } from '@memberjunction/core-entities';
 import { UserCache } from '@memberjunction/sqlserver-dataprovider';
 import { PubSubEngine } from 'type-graphql';
@@ -11,6 +11,25 @@ import { DeleteOptionsInput } from './DeleteOptionsInput';
 import { MJGlobal } from '@memberjunction/global';
 import { PUSH_STATUS_UPDATES_TOPIC } from './PushStatusResolver';
 import { FieldMapper } from '@memberjunction/graphql-dataprovider';
+
+type RunViewGenericParams = {
+  viewInfo: UserViewEntity;
+  dataSource: DataSource;
+  extraFilter: string;
+  orderBy: string;
+  userSearchString: string;
+  excludeUserViewRunID?: string;
+  overrideExcludeFilter?: string;
+  saveViewResults?: boolean;
+  fields?: string[];
+  ignoreMaxRows?: boolean;
+  excludeDataFromAllPriorViewRuns?: boolean;
+  forceAuditLog?: boolean;
+  auditLogDescription?: string;
+  resultType?: string;
+  userPayload?: UserPayload;
+  pubSub: PubSubEngine
+}
  
 export class ResolverBase {
   protected MapFieldNamesToCodeNames(entityName: string, dataObject: any) {
@@ -164,6 +183,66 @@ export class ResolverBase {
     }
   }
 
+  async RunViewsGeneric(viewInputs: (RunViewByNameInput & RunViewByIDInput & RunDynamicViewInput)[], dataSource: DataSource, userPayload: UserPayload, pubSub: PubSubEngine) {
+    let md: Metadata | null = null;
+    for(const viewInput of viewInputs) {
+      try {
+        let viewInfo: UserViewEntity | null = null;
+
+        if(viewInput.ViewName) {
+          viewInfo = this.safeFirstArrayElement(
+            await this.findBy(dataSource, 'User Views', { Name: viewInput.ViewName })
+          );
+        }
+        else if(viewInput.ViewID) {
+          viewInfo = this.safeFirstArrayElement(await this.findBy(dataSource, 'User Views', { ID: viewInput.ViewID }));
+        }
+        else if(viewInput.EntityName) {
+          md = md || new Metadata();
+          const entity = md.Entities.find((e) => e.Name === viewInput.EntityName);
+          if (!entity) {
+            throw new Error(`Entity ${viewInput.EntityName} not found in metadata`);
+          }
+
+          // only providing a few bits of data here, but it's enough to get the view to run
+          viewInfo = {
+            ID: "",
+            Entity: viewInput.EntityName,
+            EntityID: entity.ID,
+            EntityBaseView: entity.BaseView,
+          } as UserViewEntity;
+        }
+        else{
+          throw new Error("Unable to determine input type");
+        }
+
+        return this.RunViewGenericInternal(
+          viewInfo,
+          dataSource,
+          viewInput.ExtraFilter,
+          viewInput.OrderBy,
+          viewInput.UserSearchString,
+          viewInput.ExcludeUserViewRunID,
+          viewInput.OverrideExcludeFilter,
+          viewInput.SaveViewResults,
+          viewInput.Fields,
+          viewInput.IgnoreMaxRows,
+          viewInput.ExcludeDataFromAllPriorViewRuns,
+          viewInput.ForceAuditLog,
+          viewInput.AuditLogDescription,
+          viewInput.ResultType,
+          userPayload,
+          pubSub
+        );
+      } catch (err) {
+        console.log(err);
+        return null;
+      }
+    }
+  }
+
+
+
   protected CheckUserReadPermissions(entityName: string, userPayload: UserPayload | null) {
     const md = new Metadata();
     const entityInfo = md.Entities.find((e) => e.Name === entityName);
@@ -250,6 +329,84 @@ export class ResolverBase {
         return result;
       } else return null;
     } catch (err) {
+      console.log(err);
+      throw err;
+    }
+  }
+
+  protected async RunViewsGenericInternal(params: RunViewGenericParams[]) {
+    try {
+      let md: Metadata | null = null;
+      const rv = new RunView();
+      let RunViewParams: RunViewParams[] = [];
+      let contextUser: UserInfo | null = null;
+      for(const param of params){
+        if (param.viewInfo && param.userPayload) {
+          md = md || new Metadata();
+          const user: UserInfo = UserCache.Users.find((u) => u.Email.toLowerCase().trim() === param.userPayload?.email.toLowerCase().trim());
+          if (!user) {
+            throw new Error(`User ${param.userPayload?.email} not found in metadata`);
+          }
+
+          contextUser = contextUser || user;
+  
+          const entityInfo = md.Entities.find((e) => e.Name === param.viewInfo.Entity);
+          if (!entityInfo){
+            throw new Error(`Entity ${param.viewInfo.Entity} not found in metadata`);
+          }
+  
+          // figure out the result type from the input string (if provided)
+          let rt: 'simple' | 'entity_object' | 'count_only' = 'simple';
+          switch (param.resultType?.trim().toLowerCase()) {
+            case 'count_only':
+              rt = 'count_only';
+              break;
+            case 'entity_object':
+            default:
+              rt = 'simple'; // use simple as the default AND for entity_object becuase on teh server we don't really pass back a true entity_object anyway, just passing back the simple object anyway
+              break;
+          }
+  
+          RunViewParams.push({
+            ViewID: param.viewInfo.ID,
+            ViewName: param.viewInfo.Name,
+            EntityName: param.viewInfo.Entity,
+            ExtraFilter: param.extraFilter,
+            OrderBy: param.orderBy,
+            Fields: param.fields,
+            UserSearchString: param.userSearchString,
+            ExcludeUserViewRunID: param.excludeUserViewRunID,
+            OverrideExcludeFilter: param.overrideExcludeFilter,
+            SaveViewResults: param.saveViewResults,
+            ExcludeDataFromAllPriorViewRuns: param.excludeDataFromAllPriorViewRuns,
+            IgnoreMaxRows: param.ignoreMaxRows,
+            ForceAuditLog: param.forceAuditLog,
+            AuditLogDescription: param.auditLogDescription,
+            ResultType: rt,
+          });
+
+          
+          
+        } 
+        else {
+          return null;
+        }
+      }
+
+      let runViewResults: RunViewResult[] = await rv.RunViews(RunViewParams, contextUser);
+      // go through the result and convert all fields that start with __mj_*** to _mj__*** for GraphQL transport
+      const mapper = new FieldMapper();
+      for(const runViewResult of runViewResults){
+        if (runViewResult && runViewResult.Success) {
+          for (const result of runViewResult.Results) {
+            mapper.MapFields(result);
+          }
+        }
+      }
+
+      return runViewResults;
+    } 
+    catch (err) {
       console.log(err);
       throw err;
     }

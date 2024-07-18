@@ -306,6 +306,114 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         }
     }
 
+    public async RunViews<T = any>(params: RunViewParams, contextUser?: UserInfo): Promise<RunViewResult<T>> {
+        try {
+            for(const param of params){
+
+            }
+            
+            let qName: string = ''
+            let paramType: string = ''
+            if (params) {
+                const innerParams: any = {}
+                let entity: string, viewEntity: any;
+                if (params.ViewEntity) {
+                    viewEntity = params.ViewEntity
+                    entity = viewEntity.Entity
+                }
+                else {
+                    const {entityName, v} = await this.getEntityNameAndUserView(params, contextUser)
+                    viewEntity = v;
+                    entity = entityName;
+                }
+
+                // get entity metadata
+                const e = this.Entities.find(e => e.Name === entity);
+                if (!e)
+                    throw new Error(`Entity ${entity} not found in metadata`);
+
+                let dynamicView = false;
+
+                if (params.ViewID) {
+                    qName = `Run${e.ClassName}ViewByID`;
+                    paramType = 'RunViewByIDInput';
+                    innerParams.ViewID = params.ViewID;
+                }
+                else if (params.ViewName) {
+                    qName = `Run${e.ClassName}ViewByName`;
+                    paramType = 'RunViewByNameInput';
+                    innerParams.ViewName = params.ViewName;
+                }
+                else {
+                    dynamicView = true;
+                    qName = `Run${e.ClassName}DynamicView`;
+                    paramType = 'RunDynamicViewInput';
+                    innerParams.EntityName = params.EntityName;
+                }
+                innerParams.ExtraFilter = params.ExtraFilter ? params.ExtraFilter : '';
+                innerParams.OrderBy = params.OrderBy ? params.OrderBy : '';
+                innerParams.UserSearchString = params.UserSearchString ? params.UserSearchString : '';
+                innerParams.Fields = params.Fields; // pass it straight through, either null or array of strings
+                innerParams.IgnoreMaxRows = params.IgnoreMaxRows ? params.IgnoreMaxRows : false;
+                innerParams.MaxRows = params.MaxRows ? params.MaxRows : 0;
+                innerParams.ForceAuditLog = params.ForceAuditLog ? params.ForceAuditLog : false;
+                innerParams.ResultType = params.ResultType ? params.ResultType : 'simple';
+                if (params.AuditLogDescription && params.AuditLogDescription.length > 0)
+                    innerParams.AuditLogDescription = params.AuditLogDescription;
+
+                if (!dynamicView) {
+                    innerParams.ExcludeUserViewRunID = params.ExcludeUserViewRunID ? params.ExcludeUserViewRunID : "";
+                    innerParams.ExcludeDataFromAllPriorViewRuns = params.ExcludeDataFromAllPriorViewRuns ? params.ExcludeDataFromAllPriorViewRuns : false;
+                    innerParams.OverrideExcludeFilter = params.OverrideExcludeFilter ? params.OverrideExcludeFilter : '';
+                    innerParams.SaveViewResults = params.SaveViewResults ? params.SaveViewResults : false;
+                }
+
+                const fieldList = this.getViewRunTimeFieldList(e, viewEntity, params, dynamicView);
+                const query = gql`
+                    query RunViewQuery ($input: ${paramType}!) {
+                    ${qName}(input: $input) {
+                        Results {
+                            ${fieldList.join("\n                        ")}
+                        }
+                        UserViewRunID
+                        RowCount
+                        TotalRowCount
+                        ExecutionTime
+                        Success
+                        ErrorMessage
+                    }
+                }`
+
+                const viewData = await GraphQLDataProvider.ExecuteGQL(query, {input: innerParams} );
+                if (viewData && viewData[qName]) {
+                    // now, if we have any results in viewData that are for the CodeName, we need to convert them to the Name
+                    // so that the caller gets back what they expect
+                    const results = viewData[qName].Results;
+                    if (results && results.length > 0) {
+                        const codeNameDiffFields = e.Fields.filter(f => f.CodeName !== f.Name && f.CodeName !== undefined);
+                        results.forEach(r => {
+                            // for _mj__ results, we need to convert them back to the Name
+                            this.ConvertBackToMJFields(r);
+                            codeNameDiffFields.forEach(f => {
+                                r[f.Name] = r[f.CodeName];
+                                // delete r[f.CodeName];  // Leave the CodeName in the results, it is useful to have both
+                            })
+                        })
+                    }
+                    return viewData[qName];
+                }
+            }
+            else
+                throw ("No parameters passed to RunView");
+
+            return null;
+        }
+        catch (e) {
+            LogError(e);
+            throw (e)
+        }
+    }
+
     protected async getEntityNameAndUserView(params: RunViewParams, contextUser?: UserInfo): Promise<{entityName: string, v: UserViewEntityExtended}> {
         let entityName: string;
         let v: UserViewEntityExtended;

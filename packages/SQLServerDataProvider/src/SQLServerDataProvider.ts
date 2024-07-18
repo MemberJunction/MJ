@@ -381,6 +381,16 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
         }
     }
 
+    public async RunViews<T = any>(params: RunViewParams[], contextUser?: UserInfo): Promise<RunViewResult<T>[]> {
+        const results: RunViewResult<T>[] = [];
+        for (const p of params) {
+            const result = await this.RunView<T>(p, contextUser);
+            results.push(result);
+        }
+        
+        return results;
+    }
+
     protected validateUserProvidedSQLClause(clause: string): boolean {
         // convert the clause to lower case to make the keyword search case-insensitive
         const lowerClause = clause.toLowerCase();

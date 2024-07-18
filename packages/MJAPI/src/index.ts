@@ -8,7 +8,7 @@ LoadGeneratedActions();
 import { LoadProvider } from '@memberjunction/communication-sendgrid';
 LoadProvider();
 
-import './auth/exampleNewUserSubClass'; // make sure this new class gets registered
+//import './auth/exampleNewUserSubClass'; // make sure this new class gets registered
 
 const localPath = (p: string) => {
   // Convert import.meta.url to a local directory path
