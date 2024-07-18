@@ -98,3 +98,5 @@ packages/Templates-Old/.angular/
 packages/MJAPI/schema.graphql
 packages/MJAPI/.env-local
 packages/MJAPI/.env-remote
+
+.mj*
