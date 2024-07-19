@@ -540,7 +540,6 @@ export class RunViewResolver extends ResolverBase {
   ) {
     try {
       const rawData: RunViewGenericResult[] = await super.RunViewsGeneric(input, dataSource, userPayload, pubSub);
-      LogStatus("raw data", undefined, rawData);
       if (!rawData) {
         return null;
       }
@@ -560,7 +559,6 @@ export class RunViewResolver extends ResolverBase {
         });
       }
 
-      LogStatus("final data:", undefined, JSON.stringify(results, null, 4));
       return results;
     } 
     catch (err) {

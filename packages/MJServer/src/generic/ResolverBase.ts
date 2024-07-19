@@ -165,7 +165,6 @@ export class ResolverBase {
   }
 
   async RunViewsGeneric(viewInputs: (RunViewByNameInput & RunViewByIDInput & RunDynamicViewInput)[], dataSource: DataSource, userPayload: UserPayload, pubSub: PubSubEngine) {
-    console.log("in here");
     let md: Metadata | null = null;
     let params: RunViewGenericParams[] = [];
     for(const viewInput of viewInputs) {
@@ -225,7 +224,6 @@ export class ResolverBase {
     }
 
     let results: RunViewResult[] = await this.RunViewsGenericInternal(params);
-    console.log("results", results);
     return results;
   }
 
@@ -380,7 +378,7 @@ export class ResolverBase {
       }
 
       let runViewResults: RunViewResult[] = await rv.RunViews(RunViewParams, contextUser);
-      
+
       // go through the result and convert all fields that start with __mj_*** to _mj__*** for GraphQL transport
       const mapper = new FieldMapper();
       for(const runViewResult of runViewResults){

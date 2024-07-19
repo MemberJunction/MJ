@@ -396,10 +396,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 }
             }`;
 
-            LogStatus(query);
-
             const viewData: unknown = await GraphQLDataProvider.ExecuteGQL(query, {input: innerParams} );
-            LogStatus("runViews data:", undefined, viewData); 
             if (viewData && viewData["RunViews"]) {
                 // now, if we have any results in viewData that are for the CodeName, we need to convert them to the Name
                 // so that the caller gets back what they expect
@@ -419,7 +416,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                        return deserializeData;
                     });
                 }
-                console.log("final data:", results);
+
                 return results;
             }
 
