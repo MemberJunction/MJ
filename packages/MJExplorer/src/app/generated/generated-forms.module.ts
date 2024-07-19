@@ -53,6 +53,7 @@ import { PaymentTermsTypeFormComponent, LoadPaymentTermsTypeFormComponent } from
 import { PersonLinkFormComponent, LoadPersonLinkFormComponent } from "./Entities/PersonLink/personlink.form.component";
 import { ProductPriceLevelFormComponent, LoadProductPriceLevelFormComponent } from "./Entities/ProductPriceLevel/productpricelevel.form.component";
 import { ProductFormComponent, LoadProductFormComponent } from "./Entities/Product/product.form.component";
+import { QuadDemoFormComponent, LoadQuadDemoFormComponent } from "./Entities/QuadDemo/quaddemo.form.component";
 import { SalesLineItemFormComponent, LoadSalesLineItemFormComponent } from "./Entities/SalesLineItem/saleslineitem.form.component";
 import { SalesLineItem__client_membershipFormComponent, LoadSalesLineItem__client_membershipFormComponent } from "./Entities/SalesLineItem__client_membership/saleslineitem__client_membership.form.component";
 import { SalesOrderDetailFormComponent, LoadSalesOrderDetailFormComponent } from "./Entities/SalesOrderDetail/salesorderdetail.form.component";
@@ -90,6 +91,7 @@ import { PaymentTermsTypeDetailsComponent, LoadPaymentTermsTypeDetailsComponent 
 import { PersonLinkDetailsComponent, LoadPersonLinkDetailsComponent } from "./Entities/PersonLink/sections/details.component"
 import { ProductPriceLevelDetailsComponent, LoadProductPriceLevelDetailsComponent } from "./Entities/ProductPriceLevel/sections/details.component"
 import { ProductDetailsComponent, LoadProductDetailsComponent } from "./Entities/Product/sections/details.component"
+import { QuadDemoDetailsComponent, LoadQuadDemoDetailsComponent } from "./Entities/QuadDemo/sections/details.component"
 import { SalesLineItemDetailsComponent, LoadSalesLineItemDetailsComponent } from "./Entities/SalesLineItem/sections/details.component"
 import { SalesLineItem__client_membershipDetailsComponent, LoadSalesLineItem__client_membershipDetailsComponent } from "./Entities/SalesLineItem__client_membership/sections/details.component"
 import { SalesOrderDetailDetailsComponent, LoadSalesOrderDetailDetailsComponent } from "./Entities/SalesOrderDetail/sections/details.component"
@@ -158,6 +160,7 @@ declarations: [
     PersonLinkFormComponent,
     ProductPriceLevelFormComponent,
     ProductFormComponent,
+    QuadDemoFormComponent,
     SalesLineItemFormComponent,
     SalesLineItem__client_membershipFormComponent,
     SalesOrderDetailFormComponent,
@@ -169,8 +172,7 @@ declarations: [
     ThreadFormComponent,
     UoMFormComponent,
     AccountDetailsComponent,
-    Account__client_crmDetailsComponent,
-    ActivityDetailsComponent],
+    Account__client_crmDetailsComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -197,6 +199,7 @@ export class GeneratedForms_SubModule_1 { }
 
 @NgModule({
 declarations: [
+    ActivityDetailsComponent,
     ActivityAttachmentDetailsComponent,
     client_membershipDetailsComponent,
     ContactLevelDetailsComponent,
@@ -215,8 +218,7 @@ declarations: [
     InvoiceStatusTypeDetailsComponent,
     InvoiceDetailsComponent,
     ItemDetailsComponent,
-    Item__client_financeDetailsComponent,
-    OrganizationLinkDetailsComponent],
+    Item__client_financeDetailsComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -242,10 +244,12 @@ export class GeneratedForms_SubModule_2 { }
 
 @NgModule({
 declarations: [
+    OrganizationLinkDetailsComponent,
     PaymentTermsTypeDetailsComponent,
     PersonLinkDetailsComponent,
     ProductPriceLevelDetailsComponent,
     ProductDetailsComponent,
+    QuadDemoDetailsComponent,
     SalesLineItemDetailsComponent,
     SalesLineItem__client_membershipDetailsComponent,
     SalesOrderDetailDetailsComponent,
@@ -324,6 +328,7 @@ export function LoadGeneratedForms() {
     LoadPersonLinkFormComponent();
     LoadProductPriceLevelFormComponent();
     LoadProductFormComponent();
+    LoadQuadDemoFormComponent();
     LoadSalesLineItemFormComponent();
     LoadSalesLineItem__client_membershipFormComponent();
     LoadSalesOrderDetailFormComponent();
@@ -361,6 +366,7 @@ export function LoadGeneratedForms() {
     LoadPersonLinkDetailsComponent();
     LoadProductPriceLevelDetailsComponent();
     LoadProductDetailsComponent();
+    LoadQuadDemoDetailsComponent();
     LoadSalesLineItemDetailsComponent();
     LoadSalesLineItem__client_membershipDetailsComponent();
     LoadSalesOrderDetailDetailsComponent();

@@ -1,10 +1,13 @@
 import { DataSource } from "typeorm";
-import { configInfo, mj_core_schema } from '../Config/config';
+import { configInfo, mj_core_schema, outputDir } from '../Config/config';
 import { CodeNameFromString, EntityFieldInfo, EntityInfo, ExtractActualDefaultValue, LogError, LogStatus, Metadata, SeverityType } from "@memberjunction/core";
 import { logError, logMessage, logStatus, logWarning } from "../Misc/logging";
 import { SQLUtilityBase } from "./sql";
 import { AdvancedGeneration, EntityDescriptionResult, EntityNameResult } from "../Misc/advanced_generation";
 import { MJGlobal, RegisterClass } from "@memberjunction/global";
+
+import * as fs from 'fs';
+import path from 'path';
 
 
 /**
@@ -13,6 +16,10 @@ import { MJGlobal, RegisterClass } from "@memberjunction/global";
  */
 @RegisterClass(ManageMetadataBase)
 export class ManageMetadataBase {
+   protected _sqlUtilityObject: SQLUtilityBase = MJGlobal.Instance.ClassFactory.CreateInstance<SQLUtilityBase>(SQLUtilityBase);
+   public get SQLUtilityObject(): SQLUtilityBase {
+       return this._sqlUtilityObject;
+   }
    private static _newEntityList: string[] = [];
    public static get newEntityList(): string[] {
       return this._newEntityList;
@@ -35,6 +42,7 @@ export class ManageMetadataBase {
          bSuccess = false;
       }
       logStatus(`    > Created new entities in ${(new Date().getTime() - start.getTime()) / 1000} seconds`);
+
       start = new Date();  
       logStatus('   Updating existing entities...');
       if (! await this.updateExistingEntitiesFromSchema(ds, excludeSchemas)) {
@@ -42,6 +50,15 @@ export class ManageMetadataBase {
          bSuccess = false;
       }  
       logStatus(`    > Updated existing entities in ${(new Date().getTime() - start.getTime()) / 1000} seconds`);
+
+      start = new Date();  
+      logStatus('   Scanning for tables that were deleted where entity metadata still exists...');
+      if (! await this.checkAndRemoveMetadataForDeletedTables(ds, excludeSchemas)) {
+         logError('   Error removing metadata for tables that were removed');
+         bSuccess = false;
+      }  
+      logStatus(`    > Removed metadata for deleted tables in ${(new Date().getTime() - start.getTime()) / 1000} seconds`);
+
       start = new Date();
       logStatus('   Recompiling base views...');
       const sqlUtility = MJGlobal.Instance.ClassFactory.CreateInstance<SQLUtilityBase>(SQLUtilityBase);
@@ -266,6 +283,82 @@ export class ManageMetadataBase {
          return false;
       }
    }
+
+
+   /**
+    * This method will look for situations where entity metadata exist in the entities metadata table but the underlying table has been deleted. In this case, the metadata for the entity
+    * should be removed. This method is called as part of the manageMetadata method and is not intended to be called directly.
+    * @param ds 
+    * @param excludeSchemas 
+    */
+   protected async checkAndRemoveMetadataForDeletedTables(ds: DataSource, excludeSchemas: string[]): Promise<boolean> {
+      try {
+         const sql = `SELECT * FROM ${mj_core_schema()}.vwEntitiesWithMissingBaseTables WHERE VirtualEntity=0`
+         const entities = <EntityInfo[]>await ds.query(sql);
+         if (entities && entities.length > 0) {
+            for (const e of entities) {
+               // for the given entity, wipe out the entity metadata and its core deps. 
+               // the below could fail if there are non-core dependencies on the entity, but that's ok, we will flag that in the console
+               // for the admin to handle manually
+               try {
+                  const sqlDelete = `__mj.spDeleteEntityWithCoreDependencies @EntityID='${e.ID}'`;
+                  await ds.query(sqlDelete);
+                  logStatus(`      > Removed metadata for table ${e.SchemaName}.${e.BaseTable}`);
+
+                  // next up we need to remove the spCreate, spDelete, spUpdate, BaseView, and FullTextSearchFunction, if provided. 
+                  // We only remoe these artifcacts when they are generated which is info we have in the BaseViewGenerated, spCreateGenerated, etc. fields
+                  await this.checkDropSQLObject(ds, e.BaseViewGenerated, 'view', e.SchemaName, e.BaseView);
+                  await this.checkDropSQLObject(ds, e.spCreateGenerated, 'procedure', e.SchemaName, e.spCreate ? e.spCreate : `spCreate${e.ClassName}`);
+                  await this.checkDropSQLObject(ds, e.spDeleteGenerated, 'procedure', e.SchemaName, e.spDelete ? e.spDelete : `spDelete${e.ClassName}`);
+                  await this.checkDropSQLObject(ds, e.spUpdateGenerated, 'procedure', e.SchemaName, e.spUpdate ? e.spUpdate : `spUpdate${e.ClassName}`);
+                  await this.checkDropSQLObject(ds, e.FullTextSearchFunctionGenerated, 'function', e.SchemaName, e.FullTextSearchFunction);
+               }
+               catch (ex) {
+                  logError(`Error removing metadata for entity ${ex.Name}, error: ${ex}`);
+               }
+            }
+
+            // if we get here we now need to refresh our metadata object
+            const md = new Metadata();
+            await md.Refresh();
+         }
+         return true;
+      }                     
+      catch (e) {
+         logError(e);
+         return false;
+      }
+   }
+
+   protected async checkDropSQLObject(ds: DataSource, proceed: boolean, type: 'procedure' | 'view' | 'function', schemaName: string, name: string) {
+      try {
+         if (proceed && schemaName && name && schemaName.trim().length > 0 && name.trim().length > 0) {
+            const sqlDelete = `DROP ${type} IF EXISTS [${schemaName}].[${name}]`;
+            await ds.query(sqlDelete);
+
+            // next up, we need to clean up the cache of saved DB objects that may exist for this entity in the appropriate sub-directory.
+            const sqlOutputDir = outputDir('SQL', true);
+            if (sqlOutputDir) {
+               // now do the same thing for the /schema directory within the provided directory
+               const fType = type === 'procedure' ? 'sp' : type === 'view' ? 'view' : 'full_text_search_function';
+               const filePath = path.join(sqlOutputDir, this.SQLUtilityObject.getDBObjectFileName(fType, schemaName, name, false, true));
+               const filePathPermissions = path.join(sqlOutputDir, this.SQLUtilityObject.getDBObjectFileName(fType, schemaName, name, true, true));
+
+               // if the files exist, delete them
+               if (fs.existsSync(filePath))
+                  fs.unlinkSync(filePath);
+               if (fs.existsSync(filePathPermissions))
+                  fs.unlinkSync(filePathPermissions);               
+            }  
+
+            logStatus(`         > Removed ${type} ${schemaName}.${name}`);
+         }   
+      }
+      catch (e) {
+         logError(`         > Error removing ${type} ${schemaName}.${name}, error: ${e}`);
+      }
+   }
+
    
    /**
     * Manages M->M relationships between entities in the metadata based on foreign key relationships in the database.
@@ -1226,7 +1319,7 @@ export class ManageMetadataBase {
                if (app) {
                   const sSQLInsertApplicationEntity = `INSERT INTO ${mj_core_schema()}.ApplicationEntity 
                                                             (ApplicationID, EntityID, Sequence) VALUES 
-                                                            ('${app.ID}', '${newEntityID}', (SELECT ISNULL(MAX(Sequence),0)+1 FROM ${mj_core_schema()}.ApplicationEntity WHERE ApplicationName = '${appName}'))`;
+                                                            ('${app.ID}', '${newEntityID}', (SELECT ISNULL(MAX(Sequence),0)+1 FROM ${mj_core_schema()}.ApplicationEntity WHERE ApplicationID = '${app.ID}'))`;
                   await ds.query(sSQLInsertApplicationEntity);
                }
                else

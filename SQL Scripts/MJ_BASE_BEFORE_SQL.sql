@@ -1428,6 +1428,43 @@ GRANT SELECT ON __mj.vwEntitiesWithExternalChangeTracking TO cdp_Developer, cdp_
 GO
 
 
+DROP VIEW IF EXISTS  __mj.vwEntitiesWithMissingBaseTables
+GO
+CREATE VIEW __mj.vwEntitiesWithMissingBaseTables
+AS
+SELECT 
+    e.*
+FROM 
+    __mj.vwEntities e
+LEFT JOIN 
+    INFORMATION_SCHEMA.TABLES t
+ON 
+    e.SchemaName = t.TABLE_SCHEMA AND 
+    e.BaseTable = t.TABLE_NAME
+WHERE 
+    t.TABLE_NAME IS NULL
+GO
+GRANT SELECT ON __mj.vwEntitiesWithMissingBaseTables TO cdp_Developer
+
+GO
+
+
+
+
+DROP PROC IF EXISTS __mj.spDeleteEntityWithCoreDependencies
+GO
+CREATE PROC __mj.spDeleteEntityWithCoreDependencies
+  @EntityID nvarchar(100)
+AS
+DELETE FROM __mj.EntityFieldValue WHERE EntityFieldID IN (SELECT ID FROM __mj.EntityField WHERE EntityID = @EntityID)
+DELETE FROM __mj.EntityField WHERE EntityID = @EntityID
+DELETE FROM __mj.EntityPermission WHERE EntityID = @EntityID
+DELETE FROM __mj.EntityRelationship WHERE EntityID = @EntityID OR RelatedEntityID = @EntityID
+DELETE FROM __mj.ApplicationEntity WHERE EntityID = @EntityID
+DELETE FROM __mj.Entity WHERE ID = @EntityID
+GO
+
+
 
 
 /****
