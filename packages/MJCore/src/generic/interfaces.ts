@@ -412,6 +412,7 @@ export interface IRunViewProvider {
     Config(configData: ProviderConfigDataBase): Promise<boolean>
 
     RunView<T = any>(params: RunViewParams, contextUser?: UserInfo): Promise<RunViewResult<T>>
+    RunViews<T = any>(params: RunViewParams[], contextUser?: UserInfo): Promise<RunViewResult<T>[]>
 }
 
 export type RunQueryResult = {
