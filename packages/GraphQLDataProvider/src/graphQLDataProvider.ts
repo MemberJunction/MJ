@@ -13,7 +13,8 @@ import { BaseEntity, IEntityDataProvider, IMetadataProvider, IRunViewProvider, P
          EntityRecordNameResult, IRunReportProvider, RunReportResult, RunReportParams, RecordDependency, RecordMergeRequest, RecordMergeResult,
          IRunQueryProvider, RunQueryResult, PotentialDuplicateRequest, PotentialDuplicateResponse, CompositeKey, EntityDeleteOptions,
          RunQueryParams, BaseEntityResult,
-         KeyValuePair} from "@memberjunction/core";
+         KeyValuePair,
+         LogStatus} from "@memberjunction/core";
 import { UserViewEntityExtended, ViewInfo } from '@memberjunction/core-entities'
 
 import { gql, GraphQLClient } from 'graphql-request'
@@ -306,111 +307,128 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         }
     }
 
-    public async RunViews<T = any>(params: RunViewParams, contextUser?: UserInfo): Promise<RunViewResult<T>> {
+    public async RunViews<T = any>(params: RunViewParams[], contextUser?: UserInfo): Promise<RunViewResult<T>[]> {
         try {
+            let innerParams: any[] = [];
+            let entityInfos: EntityInfo[] = [];
+            let fieldList: string[] = [];
+
             for(const param of params){
-
-            }
-            
-            let qName: string = ''
-            let paramType: string = ''
-            if (params) {
-                const innerParams: any = {}
-                let entity: string, viewEntity: any;
-                if (params.ViewEntity) {
-                    viewEntity = params.ViewEntity
-                    entity = viewEntity.Entity
-                }
-                else {
-                    const {entityName, v} = await this.getEntityNameAndUserView(params, contextUser)
-                    viewEntity = v;
-                    entity = entityName;
-                }
-
-                // get entity metadata
-                const e = this.Entities.find(e => e.Name === entity);
-                if (!e)
-                    throw new Error(`Entity ${entity} not found in metadata`);
-
-                let dynamicView = false;
-
-                if (params.ViewID) {
-                    qName = `Run${e.ClassName}ViewByID`;
-                    paramType = 'RunViewByIDInput';
-                    innerParams.ViewID = params.ViewID;
-                }
-                else if (params.ViewName) {
-                    qName = `Run${e.ClassName}ViewByName`;
-                    paramType = 'RunViewByNameInput';
-                    innerParams.ViewName = params.ViewName;
-                }
-                else {
-                    dynamicView = true;
-                    qName = `Run${e.ClassName}DynamicView`;
-                    paramType = 'RunDynamicViewInput';
-                    innerParams.EntityName = params.EntityName;
-                }
-                innerParams.ExtraFilter = params.ExtraFilter ? params.ExtraFilter : '';
-                innerParams.OrderBy = params.OrderBy ? params.OrderBy : '';
-                innerParams.UserSearchString = params.UserSearchString ? params.UserSearchString : '';
-                innerParams.Fields = params.Fields; // pass it straight through, either null or array of strings
-                innerParams.IgnoreMaxRows = params.IgnoreMaxRows ? params.IgnoreMaxRows : false;
-                innerParams.MaxRows = params.MaxRows ? params.MaxRows : 0;
-                innerParams.ForceAuditLog = params.ForceAuditLog ? params.ForceAuditLog : false;
-                innerParams.ResultType = params.ResultType ? params.ResultType : 'simple';
-                if (params.AuditLogDescription && params.AuditLogDescription.length > 0)
-                    innerParams.AuditLogDescription = params.AuditLogDescription;
-
-                if (!dynamicView) {
-                    innerParams.ExcludeUserViewRunID = params.ExcludeUserViewRunID ? params.ExcludeUserViewRunID : "";
-                    innerParams.ExcludeDataFromAllPriorViewRuns = params.ExcludeDataFromAllPriorViewRuns ? params.ExcludeDataFromAllPriorViewRuns : false;
-                    innerParams.OverrideExcludeFilter = params.OverrideExcludeFilter ? params.OverrideExcludeFilter : '';
-                    innerParams.SaveViewResults = params.SaveViewResults ? params.SaveViewResults : false;
-                }
-
-                const fieldList = this.getViewRunTimeFieldList(e, viewEntity, params, dynamicView);
-                const query = gql`
-                    query RunViewQuery ($input: ${paramType}!) {
-                    ${qName}(input: $input) {
-                        Results {
-                            ${fieldList.join("\n                        ")}
-                        }
-                        UserViewRunID
-                        RowCount
-                        TotalRowCount
-                        ExecutionTime
-                        Success
-                        ErrorMessage
+                    let qName: string = ''
+                    let paramType: string = ''
+                    const innerParam: any = {}
+                    let entity: string | null = null; 
+                    let viewEntity: UserViewEntityExtended | null = null;
+                    if (param.ViewEntity) {
+                        viewEntity = param.ViewEntity as UserViewEntityExtended;
+                        entity = viewEntity.Get("Entity");
                     }
-                }`
-
-                const viewData = await GraphQLDataProvider.ExecuteGQL(query, {input: innerParams} );
-                if (viewData && viewData[qName]) {
-                    // now, if we have any results in viewData that are for the CodeName, we need to convert them to the Name
-                    // so that the caller gets back what they expect
-                    const results = viewData[qName].Results;
-                    if (results && results.length > 0) {
-                        const codeNameDiffFields = e.Fields.filter(f => f.CodeName !== f.Name && f.CodeName !== undefined);
-                        results.forEach(r => {
-                            // for _mj__ results, we need to convert them back to the Name
-                            this.ConvertBackToMJFields(r);
-                            codeNameDiffFields.forEach(f => {
-                                r[f.Name] = r[f.CodeName];
-                                // delete r[f.CodeName];  // Leave the CodeName in the results, it is useful to have both
-                            })
-                        })
+                    else {
+                        const {entityName, v} = await this.getEntityNameAndUserView(param, contextUser)
+                        viewEntity = v;
+                        entity = entityName;
                     }
-                    return viewData[qName];
-                }
+
+                    // get entity metadata
+                    const e = this.Entities.find(e => e.Name === entity);
+                    if (!e){
+                        throw new Error(`Entity ${entity} not found in metadata`);
+                    }
+
+                    entityInfos.push(e);
+                    let dynamicView: boolean = false;
+
+                    if (param.ViewID) {
+                        qName = `Run${e.ClassName}ViewByID`;
+                        paramType = 'RunViewByIDInput';
+                        innerParam.ViewID = param.ViewID;
+                    }
+                    else if (param.ViewName) {
+                        qName = `Run${e.ClassName}ViewByName`;
+                        paramType = 'RunViewByNameInput';
+                        innerParam.ViewName = param.ViewName;
+                    }
+                    else {
+                        dynamicView = true;
+                        qName = `Run${e.ClassName}DynamicView`;
+                        paramType = 'RunDynamicViewInput';
+                        innerParam.EntityName = param.EntityName;
+                    }
+
+                    innerParam.ExtraFilter = param.ExtraFilter || '';
+                    innerParam.OrderBy = param.OrderBy || '';
+                    innerParam.UserSearchString = param.UserSearchString || '';
+                    // pass it straight through, either null or array of strings
+                    innerParam.Fields = param.Fields;
+                    innerParam.IgnoreMaxRows = param.IgnoreMaxRows || false;
+                    innerParam.MaxRows = param.MaxRows || 0;
+                    innerParam.ForceAuditLog = param.ForceAuditLog || false;
+                    innerParam.ResultType = param.ResultType || 'simple';
+                    if (param.AuditLogDescription && param.AuditLogDescription.length > 0){
+                        innerParam.AuditLogDescription = param.AuditLogDescription;
+                    }
+
+                    if (!dynamicView) {
+                        innerParam.ExcludeUserViewRunID = param.ExcludeUserViewRunID || "";
+                        innerParam.ExcludeDataFromAllPriorViewRuns = param.ExcludeDataFromAllPriorViewRuns || false;
+                        innerParam.OverrideExcludeFilter = param.OverrideExcludeFilter || '';
+                        innerParam.SaveViewResults = param.SaveViewResults || false;
+                    }
+
+                    innerParams.push(innerParam);
+                    fieldList.push(...this.getViewRunTimeFieldList(e, viewEntity, param, dynamicView));
             }
-            else
-                throw ("No parameters passed to RunView");
+
+            const query = gql`
+                query RunViewsQuery ($input: [RunViewGenericInput!]!) {
+                RunViews(input: $input) {
+                    Results {
+                        ID
+                        EntityID
+                        Data
+                    }
+                    UserViewRunID
+                    RowCount
+                    TotalRowCount
+                    ExecutionTime
+                    Success
+                    ErrorMessage
+                }
+            }`;
+
+            LogStatus(query);
+
+            const viewData: unknown = await GraphQLDataProvider.ExecuteGQL(query, {input: innerParams} );
+            LogStatus("runViews data:", undefined, viewData); 
+            if (viewData && viewData["RunViews"]) {
+                // now, if we have any results in viewData that are for the CodeName, we need to convert them to the Name
+                // so that the caller gets back what they expect
+                const results: RunViewResult[] = viewData["RunViews"];
+                for(const [index, result] of results.entries()){
+                    //const codeNameDiffFields = entityInfos[index].Fields.filter(f => f.CodeName !== f.Name && f.CodeName !== undefined);
+                    result.Results = result.Results.map((data: unknown) => {
+                        let deserializeData: Record<string, unknown> = JSON.parse(data["Data"]);
+                        // for _mj__ results, we need to convert them back to the Name
+                        this.ConvertBackToMJFields(deserializeData);
+                        /*
+                        codeNameDiffFields.forEach(f => {
+                            deserializeData[f.Name] = deserializeData[f.CodeName];
+                            // delete r[f.CodeName];  // Leave the CodeName in the results, it is useful to have both
+                        });
+                        */
+                       return deserializeData;
+                    });
+                }
+                console.log("final data:", results);
+                return results;
+            }
 
             return null;
+
         }
         catch (e) {
             LogError(e);
-            throw (e)
+            throw (e);
         }
     }
 

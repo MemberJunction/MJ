@@ -1,35 +1,16 @@
-import { BaseEntity, CompositeKey, EntityFieldTSType, EntityPermissionType, Metadata, RunView, RunViewParams, RunViewResult, UserInfo } from '@memberjunction/core';
+import { BaseEntity, CompositeKey, EntityFieldTSType, EntityPermissionType, LogError, Metadata, RunView, RunViewParams, RunViewResult, UserInfo } from '@memberjunction/core';
 import { AuditLogEntity, UserViewEntity } from '@memberjunction/core-entities';
 import { UserCache } from '@memberjunction/sqlserver-dataprovider';
 import { PubSubEngine } from 'type-graphql';
 import { GraphQLError } from 'graphql';
 import { DataSource } from 'typeorm';
 
-import { UserPayload } from '../types';
+import { RunViewGenericParams, UserPayload } from '../types';
 import { RunDynamicViewInput, RunViewByIDInput, RunViewByNameInput } from './RunViewResolver';
 import { DeleteOptionsInput } from './DeleteOptionsInput';
 import { MJGlobal } from '@memberjunction/global';
 import { PUSH_STATUS_UPDATES_TOPIC } from './PushStatusResolver';
 import { FieldMapper } from '@memberjunction/graphql-dataprovider';
-
-type RunViewGenericParams = {
-  viewInfo: UserViewEntity;
-  dataSource: DataSource;
-  extraFilter: string;
-  orderBy: string;
-  userSearchString: string;
-  excludeUserViewRunID?: string;
-  overrideExcludeFilter?: string;
-  saveViewResults?: boolean;
-  fields?: string[];
-  ignoreMaxRows?: boolean;
-  excludeDataFromAllPriorViewRuns?: boolean;
-  forceAuditLog?: boolean;
-  auditLogDescription?: string;
-  resultType?: string;
-  userPayload?: UserPayload;
-  pubSub: PubSubEngine
-}
  
 export class ResolverBase {
   protected MapFieldNamesToCodeNames(entityName: string, dataObject: any) {
@@ -184,7 +165,9 @@ export class ResolverBase {
   }
 
   async RunViewsGeneric(viewInputs: (RunViewByNameInput & RunViewByIDInput & RunDynamicViewInput)[], dataSource: DataSource, userPayload: UserPayload, pubSub: PubSubEngine) {
+    console.log("in here");
     let md: Metadata | null = null;
+    let params: RunViewGenericParams[] = [];
     for(const viewInput of viewInputs) {
       try {
         let viewInfo: UserViewEntity | null = null;
@@ -216,29 +199,34 @@ export class ResolverBase {
           throw new Error("Unable to determine input type");
         }
 
-        return this.RunViewGenericInternal(
-          viewInfo,
-          dataSource,
-          viewInput.ExtraFilter,
-          viewInput.OrderBy,
-          viewInput.UserSearchString,
-          viewInput.ExcludeUserViewRunID,
-          viewInput.OverrideExcludeFilter,
-          viewInput.SaveViewResults,
-          viewInput.Fields,
-          viewInput.IgnoreMaxRows,
-          viewInput.ExcludeDataFromAllPriorViewRuns,
-          viewInput.ForceAuditLog,
-          viewInput.AuditLogDescription,
-          viewInput.ResultType,
+        params.push({
+          viewInfo: viewInfo,
+          dataSource: dataSource,
+          extraFilter: viewInput.ExtraFilter,
+          orderBy: viewInput.OrderBy,
+          userSearchString: viewInput.UserSearchString,
+          excludeUserViewRunID: viewInput.ExcludeUserViewRunID,
+          overrideExcludeFilter: viewInput.OverrideExcludeFilter,
+          saveViewResults: viewInput.EntityName ? false : viewInput.SaveViewResults,
+          fields: viewInput.Fields,
+          ignoreMaxRows: viewInput.IgnoreMaxRows,
+          excludeDataFromAllPriorViewRuns: viewInput.EntityName ? false : viewInput.ExcludeDataFromAllPriorViewRuns,
+          forceAuditLog: viewInput.ForceAuditLog,
+          auditLogDescription: viewInput.AuditLogDescription,
+          resultType: viewInput.ResultType,
           userPayload,
           pubSub
-        );
+        });
+
       } catch (err) {
-        console.log(err);
+        LogError(err);
         return null;
       }
     }
+
+    let results: RunViewResult[] = await this.RunViewsGenericInternal(params);
+    console.log("results", results);
+    return results;
   }
 
 
@@ -334,7 +322,7 @@ export class ResolverBase {
     }
   }
 
-  protected async RunViewsGenericInternal(params: RunViewGenericParams[]) {
+  protected async RunViewsGenericInternal(params: RunViewGenericParams[]): Promise<RunViewResult[]> {
     try {
       let md: Metadata | null = null;
       const rv = new RunView();
@@ -354,46 +342,45 @@ export class ResolverBase {
           if (!entityInfo){
             throw new Error(`Entity ${param.viewInfo.Entity} not found in metadata`);
           }
-  
-          // figure out the result type from the input string (if provided)
-          let rt: 'simple' | 'entity_object' | 'count_only' = 'simple';
-          switch (param.resultType?.trim().toLowerCase()) {
-            case 'count_only':
-              rt = 'count_only';
-              break;
-            case 'entity_object':
-            default:
-              rt = 'simple'; // use simple as the default AND for entity_object becuase on teh server we don't really pass back a true entity_object anyway, just passing back the simple object anyway
-              break;
-          }
-  
-          RunViewParams.push({
-            ViewID: param.viewInfo.ID,
-            ViewName: param.viewInfo.Name,
-            EntityName: param.viewInfo.Entity,
-            ExtraFilter: param.extraFilter,
-            OrderBy: param.orderBy,
-            Fields: param.fields,
-            UserSearchString: param.userSearchString,
-            ExcludeUserViewRunID: param.excludeUserViewRunID,
-            OverrideExcludeFilter: param.overrideExcludeFilter,
-            SaveViewResults: param.saveViewResults,
-            ExcludeDataFromAllPriorViewRuns: param.excludeDataFromAllPriorViewRuns,
-            IgnoreMaxRows: param.ignoreMaxRows,
-            ForceAuditLog: param.forceAuditLog,
-            AuditLogDescription: param.auditLogDescription,
-            ResultType: rt,
-          });
-
-          
-          
-        } 
-        else {
-          return null;
         }
+
+        // figure out the result type from the input string (if provided)
+        let rt: 'simple' | 'entity_object' | 'count_only' = 'simple';
+        switch (param.resultType?.trim().toLowerCase()) {
+          case 'count_only':
+            rt = 'count_only';
+            break;
+          // use simple as the default AND for entity_object 
+          // becuase on teh server we don't really pass back 
+          // a true entity_object anyway, just passing back 
+          // the simple object anyway
+          case 'entity_object':
+          default:
+            rt = 'simple';
+            break;
+        }
+
+        RunViewParams.push({
+          ViewID: param.viewInfo.ID,
+          ViewName: param.viewInfo.Name,
+          EntityName: param.viewInfo.Entity,
+          ExtraFilter: param.extraFilter,
+          OrderBy: param.orderBy,
+          Fields: param.fields,
+          UserSearchString: param.userSearchString,
+          ExcludeUserViewRunID: param.excludeUserViewRunID,
+          OverrideExcludeFilter: param.overrideExcludeFilter,
+          SaveViewResults: param.saveViewResults,
+          ExcludeDataFromAllPriorViewRuns: param.excludeDataFromAllPriorViewRuns,
+          IgnoreMaxRows: param.ignoreMaxRows,
+          ForceAuditLog: param.forceAuditLog,
+          AuditLogDescription: param.auditLogDescription,
+          ResultType: rt,
+        });
       }
 
       let runViewResults: RunViewResult[] = await rv.RunViews(RunViewParams, contextUser);
+      
       // go through the result and convert all fields that start with __mj_*** to _mj__*** for GraphQL transport
       const mapper = new FieldMapper();
       for(const runViewResult of runViewResults){
