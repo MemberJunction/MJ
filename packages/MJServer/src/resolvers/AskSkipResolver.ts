@@ -474,7 +474,7 @@ export class AskSkipResolver {
                    FROM 
                       ${e.SchemaName}.${e.BaseView} 
                    WHERE 
-                      ConversationID = ${ConversationId} 
+                      ConversationID = '${ConversationId}' 
                    ORDER 
                       BY __mj_CreatedAt DESC`;
       const result = await dataSource.query(sql);

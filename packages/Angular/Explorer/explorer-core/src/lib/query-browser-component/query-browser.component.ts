@@ -36,10 +36,10 @@ export class QueryBrowserComponent extends BaseBrowserComponent {
     this.route.paramMap.subscribe(async (params) => {
       this.selectedFolderID = Number(params.get('folderID')) || null;
       const md: Metadata = new Metadata();
-        let categoryFilter: string = this.selectedFolderID ? `CategoryID = ${this.selectedFolderID}` : `CategoryID IS NULL`;
+        let categoryFilter: string = this.selectedFolderID ? `CategoryID = '${this.selectedFolderID}'` : `CategoryID IS NULL`;
         let resourceFilter: string = `${categoryFilter}`;
     
-        let resourceCategoryFilter: string = this.selectedFolderID ? `ParentID = ${this.selectedFolderID}` : `ParentID IS NULL`;
+        let resourceCategoryFilter: string = this.selectedFolderID ? `ParentID = '${this.selectedFolderID}'` : `ParentID IS NULL`;
         LogStatus("resourceFilter: " + resourceFilter + " category filter: " + resourceCategoryFilter);
         await this.LoadData({
             sortItemsAfterLoad: true, 

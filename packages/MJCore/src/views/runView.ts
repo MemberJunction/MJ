@@ -230,7 +230,7 @@ export class RunView  {
             const rv = new RunView();
             const result = await rv.RunView({
                 EntityName: "User Views",
-                ExtraFilter: params.ViewID ? `ID = ${params.ViewID}` : `Name = '${params.ViewName}'`,
+                ExtraFilter: params.ViewID ? `ID = '${params.ViewID}'` : `Name = '${params.ViewName}'`,
                 ResultType: 'entity_object'
             });
             if (result && result.Success && result.Results.length > 0) {
