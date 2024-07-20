@@ -31,7 +31,7 @@ export class DataContextComponent implements OnInit {
       const response = await rv.RunView(
         { 
           EntityName: "Data Context Items", 
-          ExtraFilter: `DataContextID=${dataContextId}`,
+          ExtraFilter: `DataContextID='${dataContextId}'`,
           Fields: ["Type", "SQL", "ViewID", "QueryID", "EntityID", "RecordID"]
         });
       if(response.Success){

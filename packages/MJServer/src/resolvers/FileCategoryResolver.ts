@@ -40,7 +40,7 @@ export class FileResolver extends FileCategoryResolverBase {
       const rv = new RunView();
       const filesResult = await rv.RunView({
         EntityName: 'Files',
-        ExtraFilter: 'CategoryID=' + fileCategoryEntity.ID,
+        ExtraFilter: `CategoryID='${fileCategoryEntity.ID}'`,
         ResultType: 'entity_object'
       }, user);
       if (filesResult) {

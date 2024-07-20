@@ -533,7 +533,7 @@ export class DataContext {
             if (!this.ID)
                 throw new Error(`Data Context ID: ${DataContextID} not found`);
 
-            const result = await rv.RunView({EntityName: 'Data Context Items', IgnoreMaxRows: true, ExtraFilter: `DataContextID = ${DataContextID}`}, contextUser);
+            const result = await rv.RunView({EntityName: 'Data Context Items', IgnoreMaxRows: true, ExtraFilter: `DataContextID = '${DataContextID}'`}, contextUser);
             if (!result || !result.Success) 
               throw new Error(`Error running view to retrieve data context items for data context ID: ${DataContextID}`);
             else { 

@@ -85,7 +85,7 @@ export class SingleListDetailComponent implements OnInit {
 
             const listDetailRecords: ListDetailEntity[] = runViewResult.Results as ListDetailEntity[];
             if(listDetailRecords.length > 0){
-                const recordIDs: string = listDetailRecords.map(ld => ld.RecordID).join(',');
+                const recordIDs: string = listDetailRecords.map(ld => `'${ld.RecordID}'`).join(',');
                 let extraFilter: string = `ID IN (${recordIDs})`;
 
                 const rvResult: RunViewResult = await rv.RunView({

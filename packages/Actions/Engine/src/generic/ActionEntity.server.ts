@@ -8,7 +8,7 @@ import { BaseLLM, ChatMessage, ChatParams, GetAIAPIKey } from "@memberjunction/a
 import { DocumentationEngine, LibraryEntityExtended, LibraryItemEntityExtended } from "@memberjunction/doc-utils";
 
 /**
- * Server-Only custom sub-class for Actions entity. This sub-class handles the process of auto-generation code for the Actions entity. 
+ * Server-Only custom sub-class for Actions entity. This sub-class handles the process of auto-generation code for the Actions entity.
  */
 @RegisterClass(BaseEntity, 'Actions') // high priority make sure this class is used ahead of other things
 export class ActionEntityServerEntity extends ActionEntity {
@@ -21,7 +21,7 @@ export class ActionEntityServerEntity extends ActionEntity {
     }
     /**
      * Default implementation simply returns 'OpenAI' - override this in your subclass if you are using a different AI vendor.
-     * @returns 
+     * @returns
      */
     protected get AIVendorName(): string {
         return 'OpenAI';
@@ -74,9 +74,9 @@ export class ActionEntityServerEntity extends ActionEntity {
 
     /**
      * Override of the base Save method to handle the pre-processing to auto generate code whenever an action's UserPrompt is modified.
-     * This happens when a new record is created and also whenever the UserPrompt field is changed. 
-     * @param options 
-     * @returns 
+     * This happens when a new record is created and also whenever the UserPrompt field is changed.
+     * @param options
+     * @returns
      */
     public override async Save(options?: EntitySaveOptions): Promise<boolean> {
         // make sure the ActionEngine is configured
@@ -93,7 +93,7 @@ export class ActionEntityServerEntity extends ActionEntity {
             const result = await this.GenerateCode();
             if (result.Success) {
                 this.Code = result.Code;
-                this.CodeComments = result.Comments;    
+                this.CodeComments = result.Comments;
                 this.CodeApprovalStatus = 'Pending'; // set to pending even if previously approved since we changed the code
                 this.CodeApprovedAt = null; // reset the approved at date
                 this.CodeApprovedByUserID = null; // reset the approved by user id
@@ -107,25 +107,25 @@ export class ActionEntityServerEntity extends ActionEntity {
         this.ForceCodeGeneration = false; // make sure to reset this flag every time we save, it should never live past one run of the Save method, of course if Save fails, below, then it will not be reset
         const wasNewRecord = !this.IsSaved;
         if (await super.Save(options)) {
-            if (newCodeGenerated) 
+            if (newCodeGenerated)
                 return this.manageLibraries(codeLibraries, wasNewRecord);
-            else 
+            else
                 return true;
         }
         else
-            return false;        
+            return false;
     }
 
     protected async manageLibraries(codeLibraries: ActionLibrary[], wasNewRecord: boolean): Promise<boolean> {
         // new code was generated, we need to sync up the ActionLibraries table with the libraries used in the code for this Action
         // get a list of existing ActionLibrary records that match this Action
-        const existingLibraries: ActionLibraryEntity[] = [];       
+        const existingLibraries: ActionLibraryEntity[] = [];
         if (!wasNewRecord) {
             const rv = new RunView();
             const libResult = await rv.RunView(
                 {
                     EntityName: 'Action Libraries',
-                    ExtraFilter: `ActionID = ${this.ID}`,
+                    ExtraFilter: `ActionID = '${this.ID}'`,
                     ResultType: 'entity_object'
                 },
                 this.ContextCurrentUser
@@ -170,7 +170,7 @@ export class ActionEntityServerEntity extends ActionEntity {
         }
 
         // now commit the transaction
-        if (await tg.Submit()) 
+        if (await tg.Submit())
             return true;
         else
             return false;
@@ -187,18 +187,18 @@ export class ActionEntityServerEntity extends ActionEntity {
     /**
      * This method will generate code using a combination of the UserPrompt field as well as the overall context of how an Action gets executed. Code from the Action is later used by CodeGen to inject into
      * the mj_actions library for each user environment. The mj_actions library will have a class for each action and that class will have certain libraries imported at the top of the file and available for use.
-     * That information along with a detailed amount of system prompt steering goes into the AI model in order to generate contextually appropriate and reliable code that maps to the business logic of the user  
+     * That information along with a detailed amount of system prompt steering goes into the AI model in order to generate contextually appropriate and reliable code that maps to the business logic of the user
      */
     public async GenerateCode(maxAttempts: number = 3): Promise<GeneratedCode> {
         try {
             this.SendMessage('Generating code... ');
 
             const model = await AIEngine.Instance.GetHighestPowerModel(this.AIVendorName, 'llm', this.ContextCurrentUser)
-            const llm = MJGlobal.Instance.ClassFactory.CreateInstance<BaseLLM>(BaseLLM, model.DriverClass, GetAIAPIKey(model.DriverClass)); 
-    
+            const llm = MJGlobal.Instance.ClassFactory.CreateInstance<BaseLLM>(BaseLLM, model.DriverClass, GetAIAPIKey(model.DriverClass));
+
             const chatParams: ChatParams = {
                 model: model.APINameOrName,
-                messages: [      
+                messages: [
                     {
                         role: 'system',
                         content: this.GenerateSysPrompt()
@@ -240,24 +240,24 @@ export class ActionEntityServerEntity extends ActionEntity {
                     const parsed = JSON.parse(cleansed);
                     if (parsed.code && parsed.code.length > 0) {
                         const trimmed = parsed.code.trim();
-                        let comments: string = parsed.explanation;  
+                        let comments: string = parsed.explanation;
                         if(parsed.reflection){
                             comments = comments + `\n ${parsed.reflection}`;
                         }
-                        const result: GeneratedCode = { 
+                        const result: GeneratedCode = {
                             Success: true,
-                            Code: trimmed, 
+                            Code: trimmed,
                             Comments: parsed.explanation,
                             LibrariesUsed: parsed.libraries
-                        }; 
+                        };
 
-                        return result;  
+                        return result;
                     }
                     else {
                         throw new Error('Invalid JSON response from AI: ' + llmResponse);
                     }
                 }
-                else 
+                else
                     throw new Error('No response from AI');
             }
             else
@@ -296,7 +296,7 @@ export class ActionEntityServerEntity extends ActionEntity {
         if(result.Success){
             return result;
         }
-        else if (attemptsRemaining > 1) { 
+        else if (attemptsRemaining > 1) {
             return this.ValidateCode(llm, userRequest, generatedCode, attemptsRemaining - 1);
         }
         else {
@@ -315,12 +315,12 @@ export class ActionEntityServerEntity extends ActionEntity {
     * YOUR RESPONSE MUST BE A JSON OBJECT
     * MORE INFO BELOW
 </RETURN_FORMAT>
-        
+
 <INTRODUCTION>
 You are an expert in TypeScript coding and business applications. You take great pride in easy to read, commented, and nicely formatted code.
 You will be provided a request for how to handle a specific type of action that they want created. An action is a "verb" in the MemberJunction framework that can do basically anything the user asks for.
 Your job is to write the TypeScript code that will be taken and inserted into a class as shown below using the classes
-for inputs/outputs and the ActionResultSimple class that is provided. The code you write will be used by the MemberJunction engine to execute the action when 
+for inputs/outputs and the ActionResultSimple class that is provided. The code you write will be used by the MemberJunction engine to execute the action when
 it is called by the user.
 </INTRODUCTION>
 
@@ -339,7 +339,7 @@ const returnType = {
 `
         return prompt;
     }
-    
+
     public GenerateValidateCodePrompt(userRequest: string, generatedCode: GeneratedCode): string {
         return `<RETURN_FORMAT>
     * CRITICAL - I am a bot, I can ONLY understand fully formed JSON responses
@@ -349,7 +349,7 @@ const returnType = {
 
         <INTRODUCTION>
 You are an expert in TypeScript coding and business applications. You take great pride in easy to read, commented, and nicely formatted code.
-You are also exceptional in catching errors in other people's code and providing clear and easy to understand bug fixes, with comments explaining the 
+You are also exceptional in catching errors in other people's code and providing clear and easy to understand bug fixes, with comments explaining the
 issues and how you corrected it.
 You will be provided a request for how to handle a specific type of action that they want created, as well code written by someone else that attempts
 to satisfy the request. An action is a "verb" in the MemberJunction framework that can do basically anything the user asks for.
@@ -390,15 +390,15 @@ Your response must be JSON and parsable into this type:
     const returnType = {
         reflection: string, //Jot down your notes here on why you think the given code was valid or not. If it wasnt, write down why it isnt. Is it because there are syntax or logic errors, or because it doesnt satisfy the user's request?
         success: boolean //whether or not the above code is valid and can successfully compile and run, using the given libraries and data types
-        code: string, // REMEMBER: your code will be inserted INTO an existing method so do not generate the method signature, just the code that I will drop into my existing method as shown in the <CONTEXTINFO> 
+        code: string, // REMEMBER: your code will be inserted INTO an existing method so do not generate the method signature, just the code that I will drop into my existing method as shown in the <CONTEXTINFO>
         explanation: string // If the code is not valid, you will provide an explanation for a semi-technical person explaining what the corrected code does. Here again use line breaks liberally to make it easy to read but do NOT indent with spaces/tabs as I will handle that. Use * lists and numbered lists as appropriate.
         libraries: [
             {LibraryName: string, ItemsUsed: string[]}, // If the code is not valid, tell me the libraries you have used in the corrected code you created here in this array of libraries. I need this info to properly import them in the final code.
         ]
-}; 
+};
 `;
     }
-    
+
     public GenerateContextInfo(): string {
         return `
         <CODE_EXAMPLE>
@@ -421,7 +421,7 @@ The params parameter into the Run method has a property called Params which is a
 action are as shown below. For parameters shown as output, make sure you generate the code to handle this and place a new item in the Params array with the Name and Value set to the output parameter name and value respectively. If
 the parameter has a type of input/output, you will receive the value as an input, and you can update it if the program you create needs to pass back a different value.
     ${
-        JSON.stringify(this.Params) 
+        JSON.stringify(this.Params)
     }
 </AVAILABLE_PARAMETERS>
 
@@ -437,7 +437,7 @@ ${DocumentationEngine.Instance.Libraries.map((library: LibraryEntityExtended) =>
           "Content": ${item.HTMLContent}
       }
       `
-    }); 
+    });
   })}
 </AVAILABLE_LIBRARIES>
 
@@ -510,7 +510,7 @@ ${
     }))
 }
 </ENTITIES>
-The next message, which will be a user message in the conversation, will contain the sys admin's requested behavior for this entity. 
+The next message, which will be a user message in the conversation, will contain the sys admin's requested behavior for this entity.
 
 <CRITICAL>
 I am a bot and can only understand FULLY FORMED JSON responses that can be parsed with JSON.parse().
@@ -519,9 +519,9 @@ I am a bot and can only understand FULLY FORMED JSON responses that can be parse
 
     public GenerateRunViewParamsInfo(): string {
         return `/**
- * Parameters for running either a stored or dynamic view. 
- * A stored view is a view that is saved in the database and can be run either by ID or Name. 
- * A dynamic view is one that is not stored in the database and you provide parameters to return data as 
+ * Parameters for running either a stored or dynamic view.
+ * A stored view is a view that is saved in the database and can be run either by ID or Name.
+ * A dynamic view is one that is not stored in the database and you provide parameters to return data as
  * desired programatically.
  */
 export type RunViewParams = {
@@ -530,26 +530,26 @@ export type RunViewParams = {
      */
     ViewID?: number
     /**
-     * optional - Name of the UserView record to run, if you are using this, make sure to use a naming convention 
-     * so that your view names are unique. For example use a prefix like __Entity_View_ etc so that you're 
-     * likely to have a single result. If more than one view is available that matches a provided view name an 
+     * optional - Name of the UserView record to run, if you are using this, make sure to use a naming convention
+     * so that your view names are unique. For example use a prefix like __Entity_View_ etc so that you're
+     * likely to have a single result. If more than one view is available that matches a provided view name an
      * exception will be thrown.
      */
     ViewName?: string
     /**
-     * optional - this is the loaded instance of the BaseEntity (UserViewEntityComplete or a subclass of it). 
-     * This is the preferred parameter to use IF you already have a view entity object loaded up in your code 
+     * optional - this is the loaded instance of the BaseEntity (UserViewEntityComplete or a subclass of it).
+     * This is the preferred parameter to use IF you already have a view entity object loaded up in your code
      * becuase by passing this in, the RunView() method doesn't have to lookup all the metadata for the view and it is faster.
      * If you provide ViewEntity, ViewID/ViewName are ignored.
      */
     ViewEntity?: BaseEntity
     /**
-     * optional - this is only used if ViewID/ViewName/ViewEntity are not provided, it is used for 
+     * optional - this is only used if ViewID/ViewName/ViewEntity are not provided, it is used for
      * Dynamic Views in combination with the optional ExtraFilter
      */
     EntityName?: string
     /**
-     * An optional SQL WHERE clause that you can add to the existing filters on a stored view. For dynamic views, you can either 
+     * An optional SQL WHERE clause that you can add to the existing filters on a stored view. For dynamic views, you can either
      * run a view without a filter (if the entity definition allows it with AllowAllRowsAPI=1) or filter with any valid SQL WHERE clause.
      */
     ExtraFilter?: string
@@ -564,11 +564,11 @@ export type RunViewParams = {
     Fields?: string[]
     /**
      * optional - string that represents a user "search" - typically from a text search option in a UI somewhere. This field is then used in the view filtering to search whichever fields are configured to be included in search in the Entity Fields definition.
-     * Search String is combined with the stored view filters as well as ExtraFilter with an AND. 
+     * Search String is combined with the stored view filters as well as ExtraFilter with an AND.
      */
     UserSearchString?: string
     /**
-     * optional - if provided, records that were returned in the specified UserViewRunID will NOT be allowed in the result set. 
+     * optional - if provided, records that were returned in the specified UserViewRunID will NOT be allowed in the result set.
      * This is useful if you want to run a particular view over time and exclude a specific prior run's resulting data set. If you
      * want to exclude ALL data returned from ALL prior runs, use the ExcludeDataFromAllPriorViewRuns property instead.
      */
@@ -579,11 +579,11 @@ export type RunViewParams = {
      */
     ExcludeDataFromAllPriorViewRuns?: boolean
     /**
-     * optional - if you are providing the optional ExcludeUserViewRunID property, you can also optionally provide 
+     * optional - if you are providing the optional ExcludeUserViewRunID property, you can also optionally provide
      * this filter which will negate the specific list of record IDs that are excluded by the ExcludeUserViewRunID property.
      * This can be useful if you want to ensure a certain class of data is always allowed into your view and not filtered out
      * by a prior view run.
-     * 
+     *
      */
     OverrideExcludeFilter?: string
     /**
@@ -612,15 +612,15 @@ export type RunViewParams = {
 
     /**
      * Result Type is: 'simple', 'entity_object', or 'count_only' and defaults to 'simple'. If 'entity_object' is specified, the Results[] array will contain
-     * BaseEntity-derived objects instead of simple objects. This is useful if you want to work with the data in a more strongly typed manner and/or 
+     * BaseEntity-derived objects instead of simple objects. This is useful if you want to work with the data in a more strongly typed manner and/or
      * if you plan to do any update/delete operations on the data after it is returned. The 'count_only' option will return no rows, but the TotalRowCount property of the RunViewResult object will be populated.
      */
     ResultType?: 'simple' | 'entity_object' | 'count_only';
-} 
+}
         `;
     }
 }
- 
+
 export function LoadActionEntityServer() {
     // this function is used to force the class to load and register itself with the system
     // this is necessary because the class is not explicitly referenced in the code, it is only registered with the system

@@ -364,7 +364,7 @@ export class GenericBrowserListComponent implements OnInit{
     const rv: RunView = new RunView();
     const folderResult = await rv.RunView({
       EntityName:this.CategoryEntityName,
-      ExtraFilter: "ParentID ='" + folderID + "'"
+      ExtraFilter: `ParentID ='${folderID}'`
     });
 
     return folderResult && folderResult.Success && folderResult.Results.length > 0;

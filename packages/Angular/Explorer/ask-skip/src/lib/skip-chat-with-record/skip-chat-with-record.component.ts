@@ -10,11 +10,11 @@ import { SkipAPIChatWithRecordResponse } from "@memberjunction/skip-types";
     selector: 'mj-skip-chat-with-record',
     templateUrl: './skip-chat-with-record.component.html',
     styleUrls: ['./skip-chat-with-record.component.css']
-  })  
+  })
 export class SkipChatWithRecordComponent implements AfterViewInit {
   @Input() LinkedEntityID!: string;
   @Input() LinkedPrimaryKey: CompositeKey = new CompositeKey();
-  
+
   @ViewChild('mjChat') mjChat!: ChatComponent;
 
   /**
@@ -29,7 +29,7 @@ export class SkipChatWithRecordComponent implements AfterViewInit {
     {
         topLine: "Patterns",
         bottomLine: "Identify patterns or trends in the data looking for unique insights",
-        prompt: "What patterns do you see in this record's data that might be useful to know?"        
+        prompt: "What patterns do you see in this record's data that might be useful to know?"
     },
     {
         topLine: "Predictions",
@@ -81,7 +81,7 @@ export class SkipChatWithRecordComponent implements AfterViewInit {
                   // now, load up the conversation details
                   const result2 = await rv.RunView({
                       EntityName: "Conversation Details",
-                      ExtraFilter: "ConversationID=" + this._conversationId,
+                      ExtraFilter: `ConversationID='${this._conversationId}'`,
                       OrderBy: "__mj_CreatedAt ASC"
                   });
 
@@ -89,8 +89,8 @@ export class SkipChatWithRecordComponent implements AfterViewInit {
                   if (result2 && result2.Success) {
                       for (const cd of result2.Results) {
                           const cde = <ConversationDetailEntity>cd;
-                          this.mjChat.SendMessage(cde.Message, 
-                                                  cde.Role === 'User' ? md.CurrentUser.Name : "Skip", 
+                          this.mjChat.SendMessage(cde.Message,
+                                                  cde.Role === 'User' ? md.CurrentUser.Name : "Skip",
                                                   cde.Role === 'User' ? 'user' : 'ai',
                                                   cde.ID,
                                                   false);
@@ -119,13 +119,13 @@ export class SkipChatWithRecordComponent implements AfterViewInit {
                       AIMessageConversationDetailId
                   }
               }`
-              const result = await GraphQLDataProvider.ExecuteGQL(gql, { 
-                  userQuestion: message.message, 
+              const result = await GraphQLDataProvider.ExecuteGQL(gql, {
+                  userQuestion: message.message,
                   entityName: this.LinkedEntityName,
                   conversationId: this._conversationId,
                     compositeKey: this.LinkedPrimaryKey.Copy()
               });
-      
+
               if (result?.ExecuteAskSkipRecordChat?.Success) {
                   const resultObj = <SkipAPIChatWithRecordResponse>JSON.parse(result.ExecuteAskSkipRecordChat.Result)
                   this._conversationId = result.ExecuteAskSkipRecordChat.ConversationId;
@@ -136,11 +136,11 @@ export class SkipChatWithRecordComponent implements AfterViewInit {
           catch (err) {
               this.mjChat.ShowWaitingIndicator = false;
               SharedService.Instance.CreateSimpleNotification("Error communicating with Skip: " + err, "error");
-              console.error(err);          
-          }                        
+              console.error(err);
+          }
       }
-  }    
-  
+  }
+
   public async HandleClearChat() {
       if (this._conversationId.length > 0) {
           this.mjChat.ShowWaitingIndicator = true;
@@ -149,7 +149,7 @@ export class SkipChatWithRecordComponent implements AfterViewInit {
           const rv = new RunView();
           const result = await rv.RunView({
               EntityName: "Conversation Details",
-              ExtraFilter: "ConversationID='" + this._conversationId + "'",
+              ExtraFilter: `ConversationID='${this._conversationId}'`,
               ResultType: 'entity_object'
           });
           if (result && result.Success) {
@@ -165,7 +165,7 @@ export class SkipChatWithRecordComponent implements AfterViewInit {
                 // we have a data context for the conversation, so let's delete it, starting with the items
                 const resultDCI = await rv.RunView({
                     EntityName: "Data Context Items",
-                    ExtraFilter: "DataContextID='" + this._conversationId + "'",
+                    ExtraFilter: `DataContextID='${this._conversationId}'`,
                     ResultType: 'entity_object'
                 });
                 for (const dciEntity of resultDCI.Results) {
@@ -173,18 +173,18 @@ export class SkipChatWithRecordComponent implements AfterViewInit {
                     dci.TransactionGroup = tg;
                     dci.Delete(); // dont await because inside a TG
                 }
-      
+
                 // now delete the data context itself
                 const dcEntity = await md.GetEntityObject<DataContextEntity>("Data Contexts");
                 await dcEntity.Load(convoEntity.DataContextID);
                 dcEntity.TransactionGroup = tg;
-                dcEntity.Delete(); // dont await because inside a TG    
+                dcEntity.Delete(); // dont await because inside a TG
             }
 
             // now delete the conversation itself
             convoEntity.TransactionGroup = tg;
             convoEntity.Delete(); // dont await because inside a TG
-            
+
             await tg.Submit();
 
             this._conversationId = "";
