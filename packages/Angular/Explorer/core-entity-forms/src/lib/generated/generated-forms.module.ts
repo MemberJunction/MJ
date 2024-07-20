@@ -99,6 +99,7 @@ import { FileCategoryFormComponent, LoadFileCategoryFormComponent } from "./Enti
 import { FileEntityRecordLinkFormComponent, LoadFileEntityRecordLinkFormComponent } from "./Entities/FileEntityRecordLink/fileentityrecordlink.form.component";
 import { FileStorageProviderFormComponent, LoadFileStorageProviderFormComponent } from "./Entities/FileStorageProvider/filestorageprovider.form.component";
 import { FileFormComponent, LoadFileFormComponent } from "./Entities/File/file.form.component";
+import { flyway_schema_historyFormComponent, Loadflyway_schema_historyFormComponent } from "./Entities/flyway_schema_history/flyway_schema_history.form.component";
 import { IntegrationURLFormatFormComponent, LoadIntegrationURLFormatFormComponent } from "./Entities/IntegrationURLFormat/integrationurlformat.form.component";
 import { IntegrationFormComponent, LoadIntegrationFormComponent } from "./Entities/Integration/integration.form.component";
 import { LibraryFormComponent, LoadLibraryFormComponent } from "./Entities/Library/library.form.component";
@@ -240,6 +241,7 @@ import { FileCategoryDetailsComponent, LoadFileCategoryDetailsComponent } from "
 import { FileEntityRecordLinkDetailsComponent, LoadFileEntityRecordLinkDetailsComponent } from "./Entities/FileEntityRecordLink/sections/details.component"
 import { FileStorageProviderDetailsComponent, LoadFileStorageProviderDetailsComponent } from "./Entities/FileStorageProvider/sections/details.component"
 import { FileDetailsComponent, LoadFileDetailsComponent } from "./Entities/File/sections/details.component"
+import { flyway_schema_historyDetailsComponent, Loadflyway_schema_historyDetailsComponent } from "./Entities/flyway_schema_history/sections/details.component"
 import { IntegrationURLFormatDetailsComponent, LoadIntegrationURLFormatDetailsComponent } from "./Entities/IntegrationURLFormat/sections/details.component"
 import { IntegrationDetailsComponent, LoadIntegrationDetailsComponent } from "./Entities/Integration/sections/details.component"
 import { LibraryDetailsComponent, LoadLibraryDetailsComponent } from "./Entities/Library/sections/details.component"
@@ -457,13 +459,13 @@ declarations: [
     FileEntityRecordLinkFormComponent,
     FileStorageProviderFormComponent,
     FileFormComponent,
+    flyway_schema_historyFormComponent,
     IntegrationURLFormatFormComponent,
     IntegrationFormComponent,
     LibraryFormComponent,
     LibraryItemFormComponent,
     ListCategoryFormComponent,
-    ListDetailFormComponent,
-    ListFormComponent],
+    ListDetailFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -490,6 +492,7 @@ export class GeneratedForms_SubModule_3 { }
 
 @NgModule({
 declarations: [
+    ListFormComponent,
     OutputDeliveryTypeFormComponent,
     OutputFormatTypeFormComponent,
     OutputTriggerTypeFormComponent,
@@ -508,8 +511,7 @@ declarations: [
     RecordChangeFormComponent,
     RecordMergeDeletionLogFormComponent,
     RecordMergeLogFormComponent,
-    ReportCategoryFormComponent,
-    ReportSnapshotFormComponent],
+    ReportCategoryFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -536,6 +538,7 @@ export class GeneratedForms_SubModule_4 { }
 
 @NgModule({
 declarations: [
+    ReportSnapshotFormComponent,
     ReportFormComponent,
     ResourceTypeFormComponent,
     RoleFormComponent,
@@ -554,8 +557,7 @@ declarations: [
     UserApplicationEntityFormComponent,
     UserApplicationFormComponent,
     UserFavoriteFormComponent,
-    UserNotificationFormComponent,
-    UserRecordLogFormComponent],
+    UserNotificationFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -582,6 +584,7 @@ export class GeneratedForms_SubModule_5 { }
 
 @NgModule({
 declarations: [
+    UserRecordLogFormComponent,
     UserRoleFormComponent,
     UserViewCategoryFormComponent,
     UserViewRunDetailFormComponent,
@@ -600,8 +603,7 @@ declarations: [
     ActionCategoryDetailsComponent,
     ActionContextTypeDetailsComponent,
     ActionContextDetailsComponent,
-    ActionExecutionLogDetailsComponent,
-    ActionFilterDetailsComponent],
+    ActionExecutionLogDetailsComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -628,6 +630,7 @@ export class GeneratedForms_SubModule_6 { }
 
 @NgModule({
 declarations: [
+    ActionFilterDetailsComponent,
     ActionLibraryDetailsComponent,
     ActionParamDetailsComponent,
     ActionResultCodeDetailsComponent,
@@ -646,8 +649,7 @@ declarations: [
     AuthorizationRoleDetailsComponent,
     AuthorizationDetailsComponent,
     CommunicationBaseMessageTypeDetailsComponent,
-    CommunicationLogDetailsComponent,
-    CommunicationProviderMessageTypeDetailsComponent],
+    CommunicationLogDetailsComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -673,6 +675,7 @@ export class GeneratedForms_SubModule_7 { }
 
 @NgModule({
 declarations: [
+    CommunicationProviderMessageTypeDetailsComponent,
     CommunicationProviderDetailsComponent,
     CommunicationRunDetailsComponent,
     CompanyDetailsComponent,
@@ -691,8 +694,7 @@ declarations: [
     DatasetDetailsComponent,
     DuplicateRunDetailMatchDetailsComponent,
     DuplicateRunDetailDetailsComponent,
-    DuplicateRunDetailsComponent,
-    EmployeeCompanyIntegrationDetailsComponent],
+    DuplicateRunDetailsComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -718,6 +720,7 @@ export class GeneratedForms_SubModule_8 { }
 
 @NgModule({
 declarations: [
+    EmployeeCompanyIntegrationDetailsComponent,
     EmployeeRoleDetailsComponent,
     EmployeeSkillDetailsComponent,
     EmployeeDetailsComponent,
@@ -736,8 +739,7 @@ declarations: [
     EntityCommunicationFieldDetailsComponent,
     EntityCommunicationMessageTypeDetailsComponent,
     EntityDocumentRunDetailsComponent,
-    EntityDocumentSettingDetailsComponent,
-    EntityDocumentTypeDetailsComponent],
+    EntityDocumentSettingDetailsComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -763,6 +765,7 @@ export class GeneratedForms_SubModule_9 { }
 
 @NgModule({
 declarations: [
+    EntityDocumentTypeDetailsComponent,
     EntityDocumentDetailsComponent,
     EntityFieldValueDetailsComponent,
     EntityFieldDetailsComponent,
@@ -777,12 +780,11 @@ declarations: [
     FileEntityRecordLinkDetailsComponent,
     FileStorageProviderDetailsComponent,
     FileDetailsComponent,
+    flyway_schema_historyDetailsComponent,
     IntegrationURLFormatDetailsComponent,
     IntegrationDetailsComponent,
     LibraryDetailsComponent,
-    LibraryItemDetailsComponent,
-    ListCategoryDetailsComponent,
-    ListDetailDetailsComponent],
+    LibraryItemDetailsComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -808,6 +810,8 @@ export class GeneratedForms_SubModule_10 { }
 
 @NgModule({
 declarations: [
+    ListCategoryDetailsComponent,
+    ListDetailDetailsComponent,
     ListDetailsComponent,
     OutputDeliveryTypeDetailsComponent,
     OutputFormatTypeDetailsComponent,
@@ -825,9 +829,7 @@ declarations: [
     RecommendationDetailsComponent,
     RecordChangeReplayRunDetailsComponent,
     RecordChangeDetailsComponent,
-    RecordMergeDeletionLogDetailsComponent,
-    RecordMergeLogDetailsComponent,
-    ReportCategoryDetailsComponent],
+    RecordMergeDeletionLogDetailsComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -853,6 +855,8 @@ export class GeneratedForms_SubModule_11 { }
 
 @NgModule({
 declarations: [
+    RecordMergeLogDetailsComponent,
+    ReportCategoryDetailsComponent,
     ReportSnapshotDetailsComponent,
     ReportDetailsComponent,
     ResourceTypeDetailsComponent,
@@ -870,9 +874,7 @@ declarations: [
     TemplateParamDetailsComponent,
     TemplateDetailsComponent,
     UserApplicationEntityDetailsComponent,
-    UserApplicationDetailsComponent,
-    UserFavoriteDetailsComponent,
-    UserNotificationDetailsComponent],
+    UserApplicationDetailsComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -898,6 +900,8 @@ export class GeneratedForms_SubModule_12 { }
 
 @NgModule({
 declarations: [
+    UserFavoriteDetailsComponent,
+    UserNotificationDetailsComponent,
     UserRecordLogDetailsComponent,
     UserRoleDetailsComponent,
     UserViewCategoryDetailsComponent,
@@ -1037,6 +1041,7 @@ export function LoadCoreGeneratedForms() {
     LoadFileEntityRecordLinkFormComponent();
     LoadFileStorageProviderFormComponent();
     LoadFileFormComponent();
+    Loadflyway_schema_historyFormComponent();
     LoadIntegrationURLFormatFormComponent();
     LoadIntegrationFormComponent();
     LoadLibraryFormComponent();
@@ -1178,6 +1183,7 @@ export function LoadCoreGeneratedForms() {
     LoadFileEntityRecordLinkDetailsComponent();
     LoadFileStorageProviderDetailsComponent();
     LoadFileDetailsComponent();
+    Loadflyway_schema_historyDetailsComponent();
     LoadIntegrationURLFormatDetailsComponent();
     LoadIntegrationDetailsComponent();
     LoadLibraryDetailsComponent();

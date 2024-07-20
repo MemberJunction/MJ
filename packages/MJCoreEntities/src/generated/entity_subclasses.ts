@@ -12423,6 +12423,175 @@ export class FileEntity extends BaseEntity {
 
             
 /**
+ * flyway _schema _histories - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: flyway_schema_history
+ * * Base View: vwflyway_schema_histories
+ * * Primary Key: installed_rank
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'flyway _schema _histories')
+export class flyway_schema_historyEntity extends BaseEntity {
+    /**
+    * Loads the flyway _schema _histories record from the database
+    * @param installed_rank: number - primary key value to load the flyway _schema _histories record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof flyway_schema_historyEntity
+    * @method
+    * @override
+    */      
+    public async Load(installed_rank: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'installed_rank', Value: installed_rank });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: installed_rank
+    * * Display Name: installed _rank
+    * * SQL Data Type: int
+    */
+    get installed_rank(): number {  
+        return this.Get('installed_rank');
+    }
+
+    /**
+    * * Field Name: version
+    * * Display Name: version
+    * * SQL Data Type: nvarchar(50)
+    */
+    get version(): string | null {  
+        return this.Get('version');
+    }
+    set version(value: string | null) {
+        this.Set('version', value);
+    }
+
+    /**
+    * * Field Name: description
+    * * Display Name: description
+    * * SQL Data Type: nvarchar(200)
+    */
+    get description(): string | null {  
+        return this.Get('description');
+    }
+    set description(value: string | null) {
+        this.Set('description', value);
+    }
+
+    /**
+    * * Field Name: type
+    * * Display Name: type
+    * * SQL Data Type: nvarchar(20)
+    */
+    get type(): string {  
+        return this.Get('type');
+    }
+    set type(value: string) {
+        this.Set('type', value);
+    }
+
+    /**
+    * * Field Name: script
+    * * Display Name: script
+    * * SQL Data Type: nvarchar(1000)
+    */
+    get script(): string {  
+        return this.Get('script');
+    }
+    set script(value: string) {
+        this.Set('script', value);
+    }
+
+    /**
+    * * Field Name: checksum
+    * * Display Name: checksum
+    * * SQL Data Type: int
+    */
+    get checksum(): number | null {  
+        return this.Get('checksum');
+    }
+    set checksum(value: number | null) {
+        this.Set('checksum', value);
+    }
+
+    /**
+    * * Field Name: installed_by
+    * * Display Name: installed _by
+    * * SQL Data Type: nvarchar(100)
+    */
+    get installed_by(): string {  
+        return this.Get('installed_by');
+    }
+    set installed_by(value: string) {
+        this.Set('installed_by', value);
+    }
+
+    /**
+    * * Field Name: installed_on
+    * * Display Name: installed _on
+    * * SQL Data Type: datetime
+    * * Default Value: getdate()
+    */
+    get installed_on(): Date {  
+        return this.Get('installed_on');
+    }
+    set installed_on(value: Date) {
+        this.Set('installed_on', value);
+    }
+
+    /**
+    * * Field Name: execution_time
+    * * Display Name: execution _time
+    * * SQL Data Type: int
+    */
+    get execution_time(): number {  
+        return this.Get('execution_time');
+    }
+    set execution_time(value: number) {
+        this.Set('execution_time', value);
+    }
+
+    /**
+    * * Field Name: success
+    * * Display Name: success
+    * * SQL Data Type: bit
+    */
+    get success(): boolean {  
+        return this.Get('success');
+    }
+    set success(value: boolean) {
+        this.Set('success', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {  
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {  
+        return this.Get('__mj_UpdatedAt');
+    }
+}
+
+            
+/**
  * Integration URL Formats - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: IntegrationURLFormat
