@@ -91,7 +91,7 @@ export class QueueManager {
     return QueueManager.Instance.AddTask(queueType.ID, data, options, contextUser);
   }
 
-  public async AddTask(QueueTypeID: number, data: any, options: any, contextUser: UserInfo): Promise<TaskBase | undefined> {
+  public async AddTask(QueueTypeID: string, data: any, options: any, contextUser: UserInfo): Promise<TaskBase | undefined> {
     try {
       // STEP 1: Find the queue type
       const queueType = QueueManager.QueueTypes.find(qt => qt.ID == QueueTypeID);
@@ -128,7 +128,7 @@ export class QueueManager {
 
 
   // Initialize a map to hold ongoing queue creation promises
-  private ongoingQueueCreations = new Map<number, Promise<QueueBase>>();
+  private ongoingQueueCreations = new Map<string, Promise<QueueBase>>();
 
   protected async CheckCreateQueue(queueType: QueueTypeEntity, contextUser: UserInfo): Promise<QueueBase | undefined> {
     let queue = this._queues.find(q => q.QueueTypeID == queueType.ID);

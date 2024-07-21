@@ -13,7 +13,7 @@ import { ActionAuthorizationEntity } from '@memberjunction/core-entities';
             [record]="record"
             [ShowLabel]="true"
             FieldName="ActionID"
-            Type="numerictextbox"
+            Type="textbox"
             [EditMode]="EditMode"
             LinkType="Record"
             LinkComponentType="Search"
@@ -21,7 +21,7 @@ import { ActionAuthorizationEntity } from '@memberjunction/core-entities';
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="AuthorizationName"
+            FieldName="AuthorizationID"
             Type="textbox"
             [EditMode]="EditMode"
             LinkType="Record"

@@ -41,11 +41,11 @@ import { MJTabStripComponent } from "@memberjunction/ng-tabstrip";
 
     private _compositeKey: CompositeKey = new CompositeKey();
 
-    public get ViewID(): number {
+    public get ViewID(): string {
         if (this.Params && this.Params.ViewID)
           return this.Params.ViewID;
         else
-            return 0;
+            return "";
     }    
     /**
      * Returns the ViewID as a composite key

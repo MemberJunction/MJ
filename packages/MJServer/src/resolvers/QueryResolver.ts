@@ -6,7 +6,7 @@ import { AppContext } from '../types';
 @ObjectType()
 export class RunQueryResultType {
   @Field()
-  QueryID: number;
+  QueryID: string;
 
   @Field()
   Success: boolean;
@@ -27,7 +27,7 @@ export class RunQueryResultType {
 @Resolver(RunQueryResultType)
 export class ReportResolver {
   @Query(() => RunQueryResultType)
-  async GetQueryData(@Arg('QueryID', () => Int) QueryID: number, @Ctx() {}: AppContext): Promise<RunQueryResultType> {
+  async GetQueryData(@Arg('QueryID', () => String) QueryID: string, @Ctx() {}: AppContext): Promise<RunQueryResultType> {
     const runQuery = new RunQuery();
     const result = await runQuery.RunQuery({ QueryID: QueryID });
     return {

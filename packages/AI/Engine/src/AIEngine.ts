@@ -4,19 +4,19 @@ import { ClassifyResult } from "@memberjunction/ai";
 import { ChatResult } from "@memberjunction/ai";
 import { BaseEngine, BaseEntity, Metadata, RunView, UserInfo } from "@memberjunction/core";
 import { MJGlobal } from "@memberjunction/global";
-import { AIActionEntity, AIModelActionEntity, AIModelEntityExtended, EntityAIActionEntity, VectorDatabaseEntity } from "@memberjunction/core-entities";
+import { AIActionEntity, AIModelActionEntity, AIModelEntityExtended, EntityAIActionEntity, EntityDocumentTypeEntity, VectorDatabaseEntity } from "@memberjunction/core-entities";
 
 
 export class AIActionParams {
-    actionId: number
-    modelId: number
+    actionId: string
+    modelId: string
     modelName?: string
     systemPrompt?: string
     userPrompt?: string
 }
 
 export class EntityAIActionParams extends AIActionParams {
-    entityAIActionId: number
+    entityAIActionId: string
     entityRecord: BaseEntity
 }
 
@@ -27,6 +27,7 @@ export class AIEngine extends BaseEngine<AIEngine> {
     private _actions: AIActionEntity[] = [];
     private _entityActions: EntityAIActionEntity[] = [];
     private _modelActions: AIModelActionEntity[] = [];
+    private _entityDocumentTypes: EntityDocumentTypeEntity[] = [];
 
     public async Config(forceRefresh?: boolean, contextUser?: UserInfo) {
         const params = [
@@ -49,6 +50,10 @@ export class AIEngine extends BaseEngine<AIEngine> {
             {
                 PropertyName: '_modelActions',
                 EntityName: 'AI Model Actions'
+            },
+            {
+                PropertyName: '_entityDocumentTypes',
+                EntityName: 'Entity Document Types'
             }
         ];
         return await this.Load(params, forceRefresh, contextUser);
@@ -74,21 +79,30 @@ export class AIEngine extends BaseEngine<AIEngine> {
         AIEngine.checkMetadataLoaded();
         return AIEngine.Instance._models;
     }
+
     public static get VectorDatabases(): VectorDatabaseEntity[] {
         AIEngine.checkMetadataLoaded();
         return AIEngine.Instance._vectorDatabases;
     }
+
     public static get ModelActions(): AIModelActionEntity[] {
         AIEngine.checkMetadataLoaded();
         return AIEngine.Instance._modelActions;
     }
+
     public static get Actions(): AIActionEntity[] {
         AIEngine.checkMetadataLoaded();
         return AIEngine.Instance._actions;
     }
+
     public static get EntityAIActions(): EntityAIActionEntity[] {
         AIEngine.checkMetadataLoaded();
         return AIEngine.Instance._entityActions;
+    }
+
+    public static get EntityDocumentTypes(): EntityDocumentTypeEntity[] {
+        AIEngine.checkMetadataLoaded();
+        return AIEngine.Instance._entityDocumentTypes;
     }
 
     public static get Instance(): AIEngine {

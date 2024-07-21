@@ -1,6 +1,7 @@
 import { Arg, Ctx, Field, InputType, Int, ObjectType, PubSubEngine, Query, Resolver } from 'type-graphql';
 import { AppContext } from '../types';
 import { ResolverBase } from './ResolverBase';
+import { LogError, LogStatus } from '@memberjunction/core';
 
 /********************************************************************************
  * The PURPOSE of this resolver is to provide a generic way to run a view and return the results.
@@ -14,8 +15,8 @@ import { ResolverBase } from './ResolverBase';
 //****************************************************************************
 @InputType()
 export class RunViewByIDInput {
-  @Field(() => Int)
-  ViewID: number;
+  @Field(() => String)
+  ViewID: string;
 
   @Field(() => String, {
     nullable: true,
@@ -41,8 +42,8 @@ export class RunViewByIDInput {
   @Field(() => String, { nullable: true })
   UserSearchString: string;
 
-  @Field(() => Int, { nullable: true, description: 'Pass in a UserViewRun ID value to exclude all records from that run from results' })
-  ExcludeUserViewRunID?: number;
+  @Field(() => String, { nullable: true, description: 'Pass in a UserViewRun ID value to exclude all records from that run from results' })
+  ExcludeUserViewRunID?: string;
 
   @Field(() => String, {
     nullable: true,
@@ -98,7 +99,14 @@ export class RunViewByIDInput {
     description:
       'Optional, pass in entity_object, simple, or count_only as options to specify the type of result you want back. Defaults to simple if not provided',
   })
-  ResultType?: string;
+  ResultType?: string; 
+
+  @Field(() => Int, {
+    nullable: true,
+    description:
+      'If a value > 0 is provided, this value will be used to offset the rows returned.',
+  })
+  StartRow?: number
 }
 
 @InputType()
@@ -130,8 +138,8 @@ export class RunViewByNameInput {
   @Field(() => String, { nullable: true })
   UserSearchString: string;
 
-  @Field(() => Int, { nullable: true, description: 'Pass in a UserViewRun ID value to exclude all records from that run from results' })
-  ExcludeUserViewRunID?: number;
+  @Field(() => String, { nullable: true, description: 'Pass in a UserViewRun ID value to exclude all records from that run from results' })
+  ExcludeUserViewRunID?: string;
 
   @Field(() => String, {
     nullable: true,
@@ -188,7 +196,15 @@ export class RunViewByNameInput {
       'Optional, pass in entity_object, simple, or count_only as options to specify the type of result you want back. Defaults to simple if not provided',
   })
   ResultType?: string;
+
+  @Field(() => Int, {
+    nullable: true,
+    description:
+      'If a value > 0 is provided, this value will be used to offset the rows returned.',
+  })
+  StartRow?: number
 }
+
 @InputType()
 export class RunDynamicViewInput {
   @Field(() => String)
@@ -218,8 +234,8 @@ export class RunDynamicViewInput {
   @Field(() => String, { nullable: true })
   UserSearchString: string;
 
-  @Field(() => Int, { nullable: true, description: 'Pass in a UserViewRun ID value to exclude all records from that run from results' })
-  ExcludeUserViewRunID?: number;
+  @Field(() => String, { nullable: true, description: 'Pass in a UserViewRun ID value to exclude all records from that run from results' })
+  ExcludeUserViewRunID?: string;
 
   @Field(() => String, {
     nullable: true,
@@ -262,6 +278,109 @@ export class RunDynamicViewInput {
       'Optional, pass in entity_object, simple, or count_only as options to specify the type of result you want back. Defaults to simple if not provided',
   })
   ResultType?: string;
+
+  @Field(() => Int, {
+    nullable: true,
+    description:
+      'If a value > 0 is provided, this value will be used to offset the rows returned.',
+  })
+  StartRow?: number
+}
+
+@InputType()
+export class RunViewGenericInput {
+  @Field(() => String)
+  EntityName: string;
+
+  @Field(() => String, {
+    nullable: true,
+    description:
+      'Optional, pass in a valid condition to use as the view WHERE clause. For example, UpdatedAt >= Some Date - if not provided, no filter is applied',
+  })
+  ExtraFilter: string;
+
+  @Field(() => String, {
+    nullable: true,
+    description:
+      'Optional, pass in a valid order by clause sort the results on the server. For example, CreatedAt DESC to order by row creation date in reverse order. Any Valid SQL Order By clause is okay - if not provided, no server-side sorting is applied',
+  })
+  OrderBy: string;
+
+  @Field(() => [String], {
+    nullable: true,
+    description:
+      'Optional, array of entity field names, if not provided, all columns are returned. If provided, only the fields in the array are returned.',
+  })
+  Fields?: string[];
+
+  @Field(() => String, { nullable: true })
+  UserSearchString: string;
+
+  @Field(() => String, { nullable: true, description: 'Pass in a UserViewRun ID value to exclude all records from that run from results' })
+  ExcludeUserViewRunID?: string;
+
+  @Field(() => String, {
+    nullable: true,
+    description:
+      'Pass in a valid condition to append to the view WHERE clause to override the Exclude List. For example, UpdatedAt >= Some Date',
+  })
+  OverrideExcludeFilter?: string;
+
+  @Field(() => Boolean, {
+    nullable: true,
+    description:
+      'If set to True, the results of this view are saved into a new UserViewRun record and the UserViewRun.ID is passed back in the results.',
+  })
+  SaveViewResults?: boolean;
+
+  @Field(() => Boolean, {
+    nullable: true,
+    description:
+      'if set to true, the resulting data will filter out ANY records that were ever returned by this view, when the SaveViewResults property was set to true. This is useful if you want to run a particular view over time and make sure the results returned each time are new to the view.',
+  })
+  ExcludeDataFromAllPriorViewRuns?: boolean;
+
+  @Field(() => Boolean, {
+    nullable: true,
+    description:
+      'if set to true, if there IS any UserViewMaxRows property set for the entity in question, it will be IGNORED. This is useful in scenarios where you want to programmatically run a view and get ALL the data back, regardless of the MaxRows setting on the entity.',
+  })
+  IgnoreMaxRows?: boolean;
+
+  @Field(() => Int, {
+    nullable: true,
+    description:
+      'if a value > 0 is provided, and IgnoreMaxRows is set to false, this value is used for the max rows to be returned by the view.',  
+  })
+  MaxRows?: number
+
+  @Field(() => Boolean, {
+    nullable: true,
+    description:
+      'If set to true, an Audit Log record will be created for the view run, regardless of the property settings in the entity for auditing view runs',
+  })
+  ForceAuditLog?: boolean;
+
+  @Field(() => String, {
+    nullable: true,
+    description:
+      "if provided and either ForceAuditLog is set, or the entity's property settings for logging view runs are set to true, this will be used as the Audit Log Description.",
+  })
+  AuditLogDescription?: string;
+
+  @Field(() => String, {
+    nullable: true,
+    description:
+      'Optional, pass in entity_object, simple, or count_only as options to specify the type of result you want back. Defaults to simple if not provided',
+  })
+  ResultType?: string;
+
+  @Field(() => Int, {
+    nullable: true,
+    description:
+      'If a value > 0 is provided, this value will be used to offset the rows returned.',
+  })
+  StartRow?: number
 }
 
 @ObjectType()
@@ -269,8 +388,20 @@ export class RunViewResultRow {
   @Field(() => Int)
   ID: number;
 
-  @Field(() => Int)
-  EntityID: number;
+  @Field(() => String)
+  EntityID: string;
+
+  @Field(() => String)
+  Data: string;
+}
+
+@ObjectType()
+export class RunViewGenericResultRow {
+  @Field(() => String)
+  ID: string;
+
+  @Field(() => String)
+  EntityID: string;
 
   @Field(() => String)
   Data: string;
@@ -281,8 +412,32 @@ export class RunViewResult {
   @Field(() => [RunViewResultRow])
   Results: RunViewResultRow[];
 
+  @Field(() => String, { nullable: true })
+  UserViewRunID?: string;
+
   @Field(() => Int, { nullable: true })
-  UserViewRunID?: number;
+  RowCount: number;
+
+  @Field(() => Int, { nullable: true })
+  TotalRowCount: number;
+
+  @Field(() => Int, { nullable: true })
+  ExecutionTime: number;
+
+  @Field(() => String, { nullable: true })
+  ErrorMessage?: string;
+
+  @Field(() => Boolean, { nullable: false })
+  Success: boolean;
+}
+
+@ObjectType()
+export class RunViewGenericResult {
+  @Field(() => [RunViewGenericResultRow])
+  Results: RunViewGenericResultRow[];
+
+  @Field(() => String, { nullable: true })
+  UserViewRunID?: string;
 
   @Field(() => Int, { nullable: true })
   RowCount: number;
@@ -377,12 +532,47 @@ export class RunViewResolver extends ResolverBase {
     }
   }
 
-  protected processRawData(rawData: any[], entityId: number): RunViewResultRow[] {
+  @Query(() => [RunViewGenericResult])
+  async RunViews(
+    @Arg('input', () => [RunViewGenericInput]) input: (RunViewByNameInput & RunViewByIDInput & RunDynamicViewInput)[],
+    @Ctx() { dataSource, userPayload }: AppContext,
+    pubSub: PubSubEngine
+  ) {
+    try {
+      const rawData: RunViewGenericResult[] = await super.RunViewsGeneric(input, dataSource, userPayload, pubSub);
+      if (!rawData) {
+        return null;
+      }
+
+      let results: RunViewGenericResult[] = [];
+      for(const [index, data] of rawData.entries()){
+        const entityId = await dataSource.query(`SELECT TOP 1 ID from [${this.MJCoreSchema}].vwEntities WHERE Name='${input[index].EntityName}'`);
+        const returnData: any[] = this.processRawData(data.Results, entityId[0].ID);
+
+        results.push({
+          Results: returnData,
+          UserViewRunID: data?.UserViewRunID,
+          RowCount: data?.RowCount,
+          TotalRowCount: data?.TotalRowCount,
+          ExecutionTime: data?.ExecutionTime,
+          Success: data?.Success,
+        });
+      }
+
+      return results;
+    } 
+    catch (err) {
+      LogError(err);
+      return null;
+    }
+  }
+
+  protected processRawData(rawData: any[], entityId: string): RunViewResultRow[] {
     const returnResult = [];
     for (let i = 0; i < rawData.length; i++) {
       const row = rawData[i];
       returnResult.push({
-        ID: row.ID,
+        ID: row.ID.toString(),
         EntityID: entityId,
         Data: JSON.stringify(row),
       });

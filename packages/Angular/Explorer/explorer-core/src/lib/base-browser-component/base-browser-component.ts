@@ -2,8 +2,9 @@ import { LogStatus, Metadata, RunView } from "@memberjunction/core";
 import { Folder, Item, ItemType } from "../../generic/Item.types";
 import { Router, Params, ActivatedRoute } from '@angular/router';
 import { BaseEvent, EventTypes, AfterAddFolderEvent, AfterDeleteItemEvent } from "../../generic/Events.types";
+import { BaseNavigationComponent } from "@memberjunction/ng-shared";
 
-export class BaseBrowserComponent {
+export class BaseBrowserComponent extends BaseNavigationComponent {
     public showLoader: boolean = false;
     public items: Item[];
     public folders: Folder[];
@@ -20,6 +21,7 @@ export class BaseBrowserComponent {
     protected parentFolderID: number | null = null;
     
     constructor() {
+        super();
         this.items = [];
         this.folders = [];
         this.entityData = [];
@@ -36,12 +38,12 @@ export class BaseBrowserComponent {
     public async buildFiltersAndLoadData(): Promise<void> {
 
         const md: Metadata = new Metadata();
-        let categoryFilter: string = this.selectedFolderID ? `CategoryID = ${this.selectedFolderID}` : `CategoryID IS NULL`;
-        let resourceFilter: string = `UserID = ${md.CurrentUser.ID} AND ${categoryFilter}`;
+        let categoryFilter: string = this.selectedFolderID ? `CategoryID = '${this.selectedFolderID}'` : `CategoryID IS NULL`;
+        let resourceFilter: string = `UserID = '${md.CurrentUser.ID}' AND ${categoryFilter}`;
     
         //filter for the folders
-        let resourceCategoryFilter: string = this.selectedFolderID ? `ParentID = ${this.selectedFolderID}` : `ParentID IS NULL`;
-        resourceCategoryFilter += ` AND UserID = ${md.CurrentUser.ID}`;
+        let resourceCategoryFilter: string = this.selectedFolderID ? `ParentID = '${this.selectedFolderID}'` : `ParentID IS NULL`;
+        resourceCategoryFilter += ` AND UserID = '${md.CurrentUser.ID}'`;
         LogStatus("resourceFilter: " + resourceFilter + " category filter: " + resourceCategoryFilter);
         await this.LoadData({
             sortItemsAfterLoad: true, 

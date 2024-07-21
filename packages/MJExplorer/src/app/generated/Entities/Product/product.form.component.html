@@ -18,7 +18,7 @@
                     
                     <mj-tab Name="Products" 
                         [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: 232}">
+                        [Props]="{EntityRelationshipID: 'FEC7147D-C486-4DF2-A4F5-A13290C69563'}">
                         Products
                     </mj-tab>
                     <mj-tab-body>
@@ -31,24 +31,9 @@
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
-                    <mj-tab Name="Sales Order Details" 
-                        [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: 233}">
-                        Sales Order Details
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Sales Order Details')"  
-                            [NewRecordValues]="NewRecordValues('Sales Order Details')"
-                            [AllowLoad]="IsCurrentTab('Sales Order Details')"  
-                            [EditMode]="GridEditMode()"  
-                            [BottomMargin]="GridBottomMargin">
-                        </mj-user-view-grid>                    
-                    </mj-tab-body>
-
                     <mj-tab Name="Product Price Levels" 
                         [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: 234}">
+                        [Props]="{EntityRelationshipID: 'F8970851-EAF9-4283-8E7E-C77F3BB137A2'}">
                         Product Price Levels
                     </mj-tab>
                     <mj-tab-body>
@@ -56,6 +41,21 @@
                             [Params]="BuildRelationshipViewParamsByEntityName('Product Price Levels')"  
                             [NewRecordValues]="NewRecordValues('Product Price Levels')"
                             [AllowLoad]="IsCurrentTab('Product Price Levels')"  
+                            [EditMode]="GridEditMode()"  
+                            [BottomMargin]="GridBottomMargin">
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Sales Order Details" 
+                        [Visible]="record.IsSaved" 
+                        [Props]="{EntityRelationshipID: '4B24097C-2044-4BB5-9E7F-D3B38E7B6DE3'}">
+                        Sales Order Details
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Sales Order Details')"  
+                            [NewRecordValues]="NewRecordValues('Sales Order Details')"
+                            [AllowLoad]="IsCurrentTab('Sales Order Details')"  
                             [EditMode]="GridEditMode()"  
                             [BottomMargin]="GridBottomMargin">
                         </mj-user-view-grid>                    

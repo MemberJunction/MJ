@@ -3,6 +3,7 @@ import { IRunViewProvider, RunViewResult } from '../generic/interfaces';
 import { UserInfo } from '../generic/securityInfo';
 import { BaseEntity } from '../generic/baseEntity';
 import { Metadata } from '../generic/metadata';
+import { EntityInfo } from '../generic/entityInfo';
 
 /**
  * Parameters for running either a stored or dynamic view. 
@@ -14,7 +15,7 @@ export type RunViewParams = {
     /**
      * optional - ID of the UserView record to run, if provided, ViewName is ignored
      */
-    ViewID?: number
+    ViewID?: string
     /**
      * optional - Name of the UserView record to run, if you are using this, make sure to use a naming convention 
      * so that your view names are unique. For example use a prefix like __Entity_View_ etc so that you're 
@@ -58,7 +59,7 @@ export type RunViewParams = {
      * This is useful if you want to run a particular view over time and exclude a specific prior run's resulting data set. If you
      * want to exclude ALL data returned from ALL prior runs, use the ExcludeDataFromAllPriorViewRuns property instead.
      */
-    ExcludeUserViewRunID?: number
+    ExcludeUserViewRunID?: string
     /**
      * optional - if set to true, the resulting data will filter out ANY records that were ever returned by this view, when the SaveViewResults property was set to true.
      * This is useful if you want to run a particular view over time and make sure the results returned each time are new to the view.
@@ -82,11 +83,14 @@ export type RunViewParams = {
      * want to programmatically run a view and get ALL the data back, regardless of the MaxRows setting on the entity.
      */
     IgnoreMaxRows?: boolean
-
     /**
      * optional - if provided, and if IgnoreMaxRows = false, this value will be used to constrain the total # of rows returned by the view. If this is not provided, either the default settings at the entity-level will be used, or if the entity has no UserViewMaxRows setting, all rows will be returned that match any filter, if provided.
      */
     MaxRows?: number
+    /**
+     * optional - if provided, this value will be used to offset the rows returned. 
+     */
+    StartRow?: number
     /**
      * optional - if set to true, the view run will ALWAYS be logged to the Audit Log, regardless of the entity's property settings for logging view runs.
      */
@@ -150,6 +154,45 @@ export class RunView  {
         return result;
     }
 
+    public async RunViews<T = any>(params: RunViewParams[], contextUser?: UserInfo): Promise<RunViewResult<T>[]> {
+        let md: Metadata | null = null;
+        
+        for(const param of params) {
+            // FIRST, if the resultType is entity_object, we need to run the view with ALL fields in the entity
+            // so that we can get the data to populate the entity object with.
+            if (param.ResultType === 'entity_object') {
+                // we need to get the entity definition and then get all the fields for it
+                md = md || new Metadata();
+                const entity: EntityInfo | undefined = md.Entities.find(e => e.Name.trim().toLowerCase() === param.EntityName.trim().toLowerCase());
+                if (!entity){
+                    throw new Error(`Entity ${param.EntityName} not found in metadata`);
+                }
+                param.Fields = entity.Fields.map(f => f.Name); // just override whatever was passed in with all the fields - or if nothing was passed in, we set it. For loading the entity object, we need ALL the fields.
+            }
+        }
+
+        // NOW, run the view
+        const results: RunViewResult<T>[] = await RunView.Provider.RunViews<T>(params, contextUser);
+
+        for(const [index, result] of results.entries()){
+            const param:RunViewParams = params[index];
+            // FINALLY, if needed, transform the result set into BaseEntity-derived objects
+            if (param.ResultType === 'entity_object' && result && result.Success){
+                // we need to transform each of the items in the result set into a BaseEntity-derived object
+                md = md || new Metadata();
+                const newItems = [];
+                for (const item of result.Results) {
+                    const entity = await md.GetEntityObject(param.EntityName, contextUser);
+                    entity.LoadFromData(item);
+                    newItems.push(entity);
+                }
+                result.Results = newItems;
+            }
+        }
+
+        return results;
+    }
+
     private static _globalProviderKey: string = 'MJ_RunViewProvider';
     public static get Provider(): IRunViewProvider {
         const g = MJGlobal.Instance.GetGlobalObjectStore();
@@ -187,7 +230,7 @@ export class RunView  {
             const rv = new RunView();
             const result = await rv.RunView({
                 EntityName: "User Views",
-                ExtraFilter: params.ViewID ? `ID = ${params.ViewID}` : `Name = '${params.ViewName}'`,
+                ExtraFilter: params.ViewID ? `ID = '${params.ViewID}'` : `Name = '${params.ViewName}'`,
                 ResultType: 'entity_object'
             });
             if (result && result.Success && result.Results.length > 0) {

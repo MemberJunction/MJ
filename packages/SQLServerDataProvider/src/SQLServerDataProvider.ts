@@ -12,7 +12,8 @@ import { BaseEntity, IEntityDataProvider, IMetadataProvider, IRunViewProvider, P
          StripStopWords, RecordDependency, RecordMergeRequest, RecordMergeResult, RecordMergeDetailResult, EntityDependency, KeyValuePair, IRunQueryProvider, RunQueryResult, PotentialDuplicateRequest, PotentialDuplicateResponse, LogStatus,
          CompositeKey,
          EntityDeleteOptions,
-         BaseEntityResult} from "@memberjunction/core";
+         BaseEntityResult,
+         Metadata} from "@memberjunction/core";
 
 import { AuditLogEntity, DuplicateRunEntity, EntityAIActionEntity, ListEntity, RecordMergeDeletionLogEntity, RecordMergeLogEntity, UserFavoriteEntity, UserViewEntityExtended, ViewInfo } from '@memberjunction/core-entities'
 import { AIEngine, EntityAIActionParams } from "@memberjunction/aiengine";
@@ -155,7 +156,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
                 let viewEntity: any = null, entityInfo: EntityInfo = null;
                 if (params.ViewEntity) 
                     viewEntity = params.ViewEntity;
-                else if (params.ViewID && params.ViewID > 0) 
+                else if (params.ViewID && params.ViewID.length > 0) 
                     viewEntity = await ViewInfo.GetViewEntity(params.ViewID, contextUser);
                 else if (params.ViewName && params.ViewName.length > 0) 
                     viewEntity = await ViewInfo.GetViewEntityByName(params.ViewName, contextUser);
@@ -181,12 +182,15 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
                 // get other variaables from params
                 const extraFilter: string = params.ExtraFilter
                 const userSearchString: string = params.UserSearchString;
-                const excludeUserViewRunID: number = params.ExcludeUserViewRunID;
+                const excludeUserViewRunID: string = params.ExcludeUserViewRunID;
                 const overrideExcludeFilter: string = params.OverrideExcludeFilter;
                 const saveViewResults: boolean = params.SaveViewResults;
 
                 let topSQL: string = '';
                 if (params.IgnoreMaxRows === true) {
+                    // do nothing, leave it blank, this structure is here to make the code easier to read
+                }
+                else if(params.StartRow && params.StartRow > 0) {
                     // do nothing, leave it blank, this structure is here to make the code easier to read
                 }
                 else if (params.MaxRows && params.MaxRows > 0) {
@@ -203,7 +207,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
                 let countSQL = topSQL && topSQL.length > 0 ? `SELECT COUNT(*) AS TotalRowCount FROM [${entityInfo.SchemaName}].${entityInfo.BaseView}` : null;
                 let whereSQL: string = '';
                 let bHasWhere: boolean = false;
-                let userViewRunID: number = 0;
+                let userViewRunID: string = "";
 
                 // The view may have a where clause that is part of the view definition. If so, we need to add it to the SQL
                 if (viewEntity?.WhereClause && viewEntity?.WhereClause.length > 0) {
@@ -244,10 +248,10 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
                 
                 // now, check for an exclude UserViewRunID, or exclusion of ALL prior runs
                 // if provided, we need to exclude the records that were part of that run (or all prior runs)
-                if ((excludeUserViewRunID && excludeUserViewRunID > 0) || 
+                if ((excludeUserViewRunID && excludeUserViewRunID.length > 0) || 
                     (params.ExcludeDataFromAllPriorViewRuns === true) ) {
                     
-                    let sExcludeSQL: string = `ID NOT IN (SELECT RecordID FROM [${this.MJCoreSchemaName}].vwUserViewRunDetails WHERE EntityID=${viewEntity.EntityID} AND` 
+                    let sExcludeSQL: string = `ID NOT IN (SELECT RecordID FROM [${this.MJCoreSchemaName}].vwUserViewRunDetails WHERE EntityID='${viewEntity.EntityID}' AND` 
                     if (params.ExcludeDataFromAllPriorViewRuns === true)
                         sExcludeSQL += ` UserViewID=${viewEntity.ID})`; // exclude ALL prior runs for this view, we do NOT need to also add the UserViewRunID even if it was provided because this will automatically filter that out too
                     else
@@ -312,6 +316,13 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
                     viewSQL += ` ORDER BY ${orderBy}`;
                 }
 
+                if(params.StartRow && params.StartRow > 0 
+                    && params.MaxRows && params.MaxRows > 0
+                    && entityInfo.FirstPrimaryKey) {
+                    viewSQL += ` ORDER BY ${entityInfo.FirstPrimaryKey.Name} `
+                    viewSQL += ` OFFSET ${params.StartRow} ROWS FETCH NEXT ${params.MaxRows} ROWS ONLY`;
+                }
+
                 // now we can run the viewSQL, but only do this if the ResultType !== 'count_only', otherwise we don't need to run the viewSQL
                 const retData = params.ResultType === 'count_only' ? [] : await this._dataSource.query(viewSQL);
 
@@ -362,12 +373,22 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
                 RowCount: 0,
                 TotalRowCount: 0,
                 Results: [],
-                UserViewRunID: 0,
+                UserViewRunID: "",
                 ExecutionTime: exceptionStopTime.getTime()-startTime.getTime(),
                 Success: false,
                 ErrorMessage: e.message
             }
         }
+    }
+
+    public async RunViews<T = any>(params: RunViewParams[], contextUser?: UserInfo): Promise<RunViewResult<T>[]> {
+        const results: RunViewResult<T>[] = [];
+        for (const p of params) {
+            const result = await this.RunView<T>(p, contextUser);
+            results.push(result);
+        }
+        
+        return results;
     }
 
     protected validateUserProvidedSQLClause(clause: string): boolean {
@@ -415,49 +436,67 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
 
     protected getRunTimeViewFieldArray(params: RunViewParams, viewEntity: UserViewEntityExtended): EntityFieldInfo[] {
         const fieldList: EntityFieldInfo[] = []
+        try {
 
-        let entityInfo: EntityInfo = null;
-        if (viewEntity) {
-            entityInfo = viewEntity.ViewEntityInfo;
-        }
-        else {
-            entityInfo = this.Entities.find((e) => e.Name === params.EntityName);
-        }
-
-        if (params.Fields) {
-            // fields provided, if primary key isn't included, add it first
-            for (const ef of entityInfo.PrimaryKeys) {
-                if (params.Fields.find(f => f.trim().toLowerCase() === ef.Name.toLowerCase()) === undefined)
-                    fieldList.push(ef); // always include the primary key fields in view run time field list
-            }
-            
-            // now add the rest of the param.Fields to fields
-            params.Fields.forEach((f) => {
-                const field = entityInfo.Fields.find((field) => field.Name.trim().toLowerCase() === f.trim().toLowerCase());
-                fieldList.push(field);
-            });
-        }
-        else {
-            // fields weren't provided by the caller. So, let's do the following
-            // * if this is a defined view, using a View Name or View ID, we use the fields that are used wtihin the View and always return the ID
-            // * if this is an dynamic view, we return ALL fields in the entity using *
+            let entityInfo: EntityInfo = null;
             if (viewEntity) {
-                // saved view, figure out it's field list
-                viewEntity.Columns.forEach((c) => {
-                    if (!c.hidden) // only return the non-hidden fields
-                        fieldList.push(c.EntityField);
-                });
-                // the below shouldn't happen as the pkey fields should always be included by now, but make SURE...
+                entityInfo = viewEntity.ViewEntityInfo;
+            }
+            else {
+                entityInfo = this.Entities.find((e) => e.Name === params.EntityName);
+                if (!entityInfo)
+                    throw new Error(`Entity ${params.EntityName} not found in metadata`);
+            }
+    
+            if (params.Fields) {
+                // fields provided, if primary key isn't included, add it first
                 for (const ef of entityInfo.PrimaryKeys) {
-                    if (fieldList.find(f => f.Name.trim().toLowerCase() === ef.Name.toLowerCase()) === undefined)
+                    if (params.Fields.find(f => f.trim().toLowerCase() === ef.Name.toLowerCase()) === undefined)
                         fieldList.push(ef); // always include the primary key fields in view run time field list
-                }    
+                }
+                
+                // now add the rest of the param.Fields to fields
+                params.Fields.forEach((f) => {
+                    const field = entityInfo.Fields.find((field) => field.Name.trim().toLowerCase() === f.trim().toLowerCase());
+                    if (field)
+                        fieldList.push(field);
+                    else
+                        LogError(`Field ${f} not found in entity ${entityInfo.Name}`);
+                });
+            }
+            else {
+                // fields weren't provided by the caller. So, let's do the following
+                // * if this is a defined view, using a View Name or View ID, we use the fields that are used wtihin the View and always return the ID
+                // * if this is an dynamic view, we return ALL fields in the entity using *
+                if (viewEntity) {
+                    // saved view, figure out it's field list
+                    viewEntity.Columns.forEach((c) => {
+                        if (!c.hidden) { // only return the non-hidden fields
+                            if (c.EntityField) {
+                                fieldList.push(c.EntityField);
+                            }
+                            else {
+                                LogError(`View Field ${c.Name} doesn't match an Entity Field in entity ${entityInfo.Name}. This can happen if the view was saved with a field that no longer exists in the entity. It is best to update the view to remove this field.`);
+                            }
+                        }
+                    });
+                    // the below shouldn't happen as the pkey fields should always be included by now, but make SURE...
+                    for (const ef of entityInfo.PrimaryKeys) {
+                        if (fieldList.find(f => f.Name?.trim().toLowerCase() === ef.Name?.toLowerCase()) === undefined)
+                            fieldList.push(ef); // always include the primary key fields in view run time field list
+                    }    
+                }
             }
         }
-        return fieldList; // sometimes nothing is in the list and the caller will just use *
+        catch (e) {
+            LogError(e);
+        }
+        finally {
+            return fieldList;
+        }
     }
 
-    protected async executeSQLForUserViewRunLogging(viewId: number, entityBaseView: string, whereSQL: string, orderBySQL: string, user: UserInfo): Promise<{ executeViewSQL: string, runID: number }> {
+    protected async executeSQLForUserViewRunLogging(viewId: number, entityBaseView: string, whereSQL: string, orderBySQL: string, user: UserInfo): Promise<{ executeViewSQL: string, runID: string }> {
         const entityInfo = this.Entities.find((e) => e.BaseView.trim().toLowerCase() === entityBaseView.trim().toLowerCase());
         const sSQL = `
             DECLARE @ViewIDList TABLE ( ID NVARCHAR(255) );
@@ -465,7 +504,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
             EXEC [${this.MJCoreSchemaName}].spCreateUserViewRunWithDetail(${viewId},${user.Email}, @ViewIDLIst)
             `
         const runIDResult = await this._dataSource.query(sSQL);
-        const runID: number = runIDResult[0].UserViewRunID;
+        const runID: string = runIDResult[0].UserViewRunID;
         const sRetSQL: string = `SELECT * FROM [${entityInfo.SchemaName}].${entityBaseView} WHERE ${entityInfo.FirstPrimaryKey.Name} IN 
                                     (SELECT RecordID FROM [${this.MJCoreSchemaName}].vwUserViewRunDetails WHERE UserViewRunID=${runID})
                                  ${orderBySQL && orderBySQL.length > 0 ? ' ORDER BY ' + orderBySQL : ''}`
@@ -530,12 +569,11 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
                 sUserSearchSQL = '(' + sUserSearchSQL + ')'; // wrap the entire search string in parens
         }
 
-
         return sUserSearchSQL;
     }
 
     
-    public async createAuditLogRecord(user: UserInfo, authorizationName: string | null, auditLogTypeName: string, status: string, details: string | null, entityId: number, recordId: any | null, auditLogDescription: string | null): Promise<AuditLogEntity> {
+    public async createAuditLogRecord(user: UserInfo, authorizationName: string | null, auditLogTypeName: string, status: string, details: string | null, entityId: string, recordId: any | null, auditLogDescription: string | null): Promise<AuditLogEntity> {
         try {
             const authorization = authorizationName ? this.Authorizations.find((a) => a?.Name?.trim().toLowerCase() === authorizationName.trim().toLowerCase()) : null;
             const auditLogType = auditLogTypeName ? this.AuditLogTypes.find((a) => a?.Name?.trim().toLowerCase() === auditLogTypeName.trim().toLowerCase()) : null;
@@ -548,7 +586,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
             const auditLog = await this.GetEntityObject<AuditLogEntity>('Audit Logs', user); // must pass user context on back end as we're not authenticated the same way as the front end
             auditLog.NewRecord();
             auditLog.UserID = user.ID;
-            auditLog.Set('AuditLogTypeName', auditLogType.Name) // weak typing to get around read-only property
+            auditLog.AuditLogTypeID = auditLogType.ID;
             if (status?.trim().toLowerCase() === 'success')
                 auditLog.Status = 'Success'
             else    
@@ -558,7 +596,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
             auditLog.RecordID = recordId;
 
             if (authorization)
-                auditLog.AuthorizationName = authorization.Name;
+                auditLog.AuthorizationID = authorization.ID;
 
             if (details)
                 auditLog.Details = details;
@@ -604,14 +642,14 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
         return ProviderType.Database;
     }
 
-    public async GetRecordFavoriteStatus(userId: number, entityName: string, CompositeKey: CompositeKey): Promise<boolean> {
+    public async GetRecordFavoriteStatus(userId: string, entityName: string, CompositeKey: CompositeKey): Promise<boolean> {
         const id = await this.GetRecordFavoriteID(userId, entityName, CompositeKey);
         return id !== null;
     }
 
-    public async GetRecordFavoriteID(userId: number, entityName: string, CompositeKey: CompositeKey): Promise<number | null> {
+    public async GetRecordFavoriteID(userId: string, entityName: string, CompositeKey: CompositeKey): Promise<string | null> {
         try {
-            const sSQL = `SELECT ID FROM [${this.MJCoreSchemaName}].vwUserFavorites WHERE UserID=${userId} AND Entity='${entityName}' AND RecordID='${CompositeKey.Values()}'`
+            const sSQL = `SELECT ID FROM [${this.MJCoreSchemaName}].vwUserFavorites WHERE UserID='${userId}' AND Entity='${entityName}' AND RecordID='${CompositeKey.Values()}'`
             const result = await this.ExecuteSQL(sSQL);
             if (result && result.length > 0)
                 return result[0].ID;
@@ -624,7 +662,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
         }
     }
 
-    public async SetRecordFavoriteStatus(userId: number, entityName: string, CompositeKey: CompositeKey, isFavorite: boolean, contextUser: UserInfo): Promise<void> {
+    public async SetRecordFavoriteStatus(userId: string, entityName: string, CompositeKey: CompositeKey, isFavorite: boolean, contextUser: UserInfo): Promise<void> {
         try {
             const currentFavoriteId = await this.GetRecordFavoriteID(userId, entityName, CompositeKey);
             if ((currentFavoriteId === null && isFavorite === false) ||
@@ -673,6 +711,72 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
 
 
     /**
+     * This function will generate SQL statements for all of the possible soft links that are not traditional foreign keys but exist in entities
+     * where there is a column that has the EntityIDFieldName set to a column name (not null). We need to get a list of all such soft link fields across ALL entities
+     * and then generate queries for each possible soft link in the same format as the hard links
+     * @param entityName 
+     * @param compositeKey 
+     */
+    protected GetSoftLinkDependencySQL(entityName: string, compositeKey: CompositeKey): string {
+        // we need to go through ALL of the entities in the system and find all of the EntityFields that have a non-null EntityIDFieldName
+        // for each of these, we generate a SQL Statement that will return the EntityName, RelatedEntityName, FieldName, and the primary key values of the related entity
+        let sSQL = '';
+        this.Entities.forEach((entity) => {
+            // we build a string that will concatenate all of the primary key values into a single string, this is because the primary key could be a composite key
+            // we do this in SQL by combining the pirmary key name and value for each row using the default separator defined by the CompositeKey class
+            // the output of this should be like the following 'Field1|Value1||Field2|Value2||Field3|Value3' where the || is the CompositeKey.DefaultFieldDelimiter and the | is the CompositeKey.DefaultValueDelimiter
+            const quotes = entity.FirstPrimaryKey.NeedsQuotes ? "'" : '';
+            const primaryKeySelectString = `CONCAT(${entity.PrimaryKeys.map(pk => `'${pk.Name}|', CAST(${pk.Name} AS NVARCHAR(MAX))`).join(`,'${CompositeKey.DefaultFieldDelimiter}',`)})`;
+
+            // for this entity, check to see if it has any fields that are soft links, and for each of those, generate the SQL
+            entity.Fields.filter((f) => f.EntityIDFieldName && f.EntityIDFieldName.length > 0).forEach((f) => {
+                // each field in f must be processed
+                if (sSQL.length > 0)
+                    sSQL += ' UNION ALL ';
+
+                // there is a layer of indirection here because each ROW in each of the entity records for this entity/field combination could point to a DIFFERENT 
+                // entity. We find out which entity it is pointed to via the EntityIDFieldName in the field definition, so we have to filter the rows in the entity
+                // based on that.
+                sSQL += `SELECT 
+                            '${entityName}' AS EntityName, 
+                            '${entity.Name}' AS RelatedEntityName, 
+                            ${primaryKeySelectString} AS PrimaryKeyValue, 
+                            '${f.Name}' AS FieldName 
+                        FROM 
+                            [${entity.SchemaName}].[${entity.BaseView}]
+                        WHERE 
+                            [${f.EntityIDFieldName}] = ${quotes}${entity.ID}${quotes} AND 
+                            [${f.Name}] = ${quotes}${compositeKey.GetValueByIndex(0)}${quotes}` // we only use the first primary key value, this is because we don't yet support composite primary keys
+
+            });
+        });
+        return sSQL;
+    }
+
+    protected GetHardLinkDependencySQL(entityDependencies: EntityDependency[], compositeKey: CompositeKey): string {
+        let sSQL = '';
+        for (const entityDependency of entityDependencies) {
+            const entityInfo = this.Entities.find((e) => e.Name.trim().toLowerCase() === entityDependency.EntityName?.trim().toLowerCase());
+            const quotes = entityInfo.FirstPrimaryKey.NeedsQuotes ? "'" : '';
+            const relatedEntityInfo = this.Entities.find((e) => e.Name.trim().toLowerCase() === entityDependency.RelatedEntityName?.trim().toLowerCase());
+            const primaryKeySelectString = `CONCAT(${entityInfo.PrimaryKeys.map(pk => `'${pk.Name}|', CAST(${pk.Name} AS NVARCHAR(MAX))`).join(`,'${CompositeKey.DefaultFieldDelimiter}',`)})`;
+
+            if (sSQL.length > 0)
+                sSQL += ' UNION ALL '
+            sSQL += `SELECT 
+                        '${entityDependency.EntityName}' AS EntityName, 
+                        '${entityDependency.RelatedEntityName}' AS RelatedEntityName, 
+                        ${primaryKeySelectString} AS PrimaryKeyValue, 
+                        '${entityDependency.FieldName}' AS FieldName 
+                    FROM 
+                        [${relatedEntityInfo.SchemaName}].[${relatedEntityInfo.BaseView}]
+                    WHERE 
+                        [${entityDependency.FieldName}] = ${this.GetRecordDependencyLinkSQL(entityDependency, entityInfo, relatedEntityInfo, compositeKey)}`
+        }
+        return sSQL;
+    }
+
+    /**
      * Returns a list of dependencies - records that are linked to the specified Entity/RecordID combination. A dependency is as defined by the relationships in the database. The MemberJunction metadata that is used
      * for this simply reflects the foreign key relationships that exist in the database. The CodeGen tool is what detects all of the relationships and generates the metadata that is used by MemberJunction. The metadata in question
      * is within the EntityField table and specifically the RelatedEntity and RelatedEntityField columns. In turn, this method uses that metadata and queries the database to determine the dependencies. To get the list of entity dependencies
@@ -682,31 +786,32 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
      */
     public async GetRecordDependencies(entityName: string, compositeKey: CompositeKey): Promise<RecordDependency[]> {
         try {
+            const recordDependencies: RecordDependency[] = [];
+
             // first, get the entity dependencies for this entity
-            const entityDependencies = await this.GetEntityDependencies(entityName);
-            // now, we have to construct a query that will return the dependencies for this record
-            let sSQL = '';
-            for (const entityDependency of entityDependencies) {
-                const entityInfo = this.Entities.find((e) => e.Name.trim().toLowerCase() === entityDependency.EntityName?.trim().toLowerCase());
-                const relatedEntityInfo = this.Entities.find((e) => e.Name.trim().toLowerCase() === entityDependency.RelatedEntityName?.trim().toLowerCase());
-                if (sSQL.length > 0)
-                    sSQL += ' UNION ALL '
-                sSQL += `SELECT 
-                            '${entityDependency.EntityName}' AS EntityName, 
-                            '${entityDependency.RelatedEntityName}' AS RelatedEntityName, 
-                            ${entityInfo.PrimaryKeys.map(pk => pk.Name).join(',')/*Add in all pkeys, often just one, but this handles N primary keys*/}, 
-                            '${entityDependency.FieldName}' AS FieldName 
-                        FROM 
-                            [${relatedEntityInfo.SchemaName}].${relatedEntityInfo.BaseView} 
-                        WHERE 
-                            ${entityDependency.FieldName} = ${this.GetRecordDependencyLinkSQL(entityDependency, entityInfo, relatedEntityInfo, compositeKey)}`
+            const entityDependencies: EntityDependency[] = await this.GetEntityDependencies(entityName);
+            if(entityDependencies.length === 0){
+                // no dependencies, exit early
+                return recordDependencies;
             }
+
+            // now, we have to construct a query that will return the dependencies for this record, both hard and soft links
+            const sSQL: string = this.GetHardLinkDependencySQL(entityDependencies, compositeKey) + '\n' + 
+                         this.GetSoftLinkDependencySQL(entityName, compositeKey);
+
             // now, execute the query
             const result = await this.ExecuteSQL(sSQL);
+            if(!result || result.length === 0){
+                return recordDependencies;
+            }
+
             // now we go through the results and create the RecordDependency objects
-            const recordDependencies: RecordDependency[] = [];
             for (const r of result) {
-                const entityInfo = this.Entities.find((e) => e.Name.trim().toLowerCase() === r.EntityName?.trim().toLowerCase());
+                const entityInfo: EntityInfo | undefined = this.Entities.find((e) => e.Name.trim().toLowerCase() === r.EntityName?.trim().toLowerCase());
+                if(!entityInfo){
+                    throw new Error(`Entity ${r.EntityName} not found in metadata`);
+                }
+
                 // future, if we support foreign keys that are composite keys, we'll need to enable this code
                 // const pkeyValues: KeyValuePair[] = [];
                 // entityInfo.PrimaryKeys.forEach((pk) => {
@@ -714,13 +819,21 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
                 // })
                 
                 let compositeKey: CompositeKey = new CompositeKey();
-                compositeKey.LoadFromEntityInfoAndRecord(entityInfo, r);
+                // the row r will have a PrimaryKeyValue field that is a string that is a concatenation of the primary key field names and values
+                // we need to parse that out so that we can then pass it to the CompositeKey object
+                const pkeys = {};
+                const keyValues = r.PrimaryKeyValue.split(CompositeKey.DefaultFieldDelimiter);
+                keyValues.forEach((kv) => {
+                    const parts = kv.split(CompositeKey.DefaultValueDelimiter);
+                    pkeys[parts[0]] = parts[1];
+                });
+                compositeKey.LoadFromEntityInfoAndRecord(entityInfo, keyValues);
                 
                 const recordDependency: RecordDependency = {
                     EntityName: r.EntityName,
                     RelatedEntityName: r.RelatedEntityName,
                     FieldName: r.FieldName,
-                    CompositeKey: compositeKey
+                    PrimaryKey: compositeKey
                 };
                 
                 recordDependencies.push(recordDependency);
@@ -736,18 +849,19 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
 
     protected GetRecordDependencyLinkSQL(dep: EntityDependency, entity: EntityInfo, relatedEntity: EntityInfo, CompositeKey: CompositeKey): string {
         const f = relatedEntity.Fields.find((f) => f.Name.trim().toLowerCase() === dep.FieldName?.trim().toLowerCase());
-        if (!f) 
+        const quotes = entity.FirstPrimaryKey.NeedsQuotes ? "'" : '';
+        if (!f){
             throw new Error(`Field ${dep.FieldName} not found in Entity ${relatedEntity.Name}`);
+        }
 
         if (f.RelatedEntityFieldName?.trim().toLowerCase() === 'id')  {
             // simple link to first primary key, most common scenario for linkages
-            return CompositeKey.GetValueByIndex(0);
+            return `${quotes}${CompositeKey.GetValueByIndex(0)}${quotes}`
         }
         else {
             // linking to something else, so we need to use that field in a sub-query
             // NOTICE - we are only using the FIRST primary key in our current implementation, this is because we don't yet support composite foreign keys
             // if we do start to support composite foreign keys, we'll need to update this code to handle that
-            const quotes = entity.FirstPrimaryKey.NeedsQuotes ? "'" : '';
             return `(SELECT ${f.RelatedEntityFieldName} FROM [${entity.SchemaName}].${entity.BaseView} WHERE ${entity.FirstPrimaryKey.Name}=${quotes}${CompositeKey.GetValueByIndex(0)}${quotes})`
         }
     }
@@ -789,6 +903,10 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
     }
 
     public async MergeRecords(request: RecordMergeRequest, contextUser?: UserInfo): Promise<RecordMergeResult> {
+        const e = this.Entities.find(e=>e.Name.trim().toLowerCase() === request.EntityName.trim().toLowerCase());
+        if (!e || !e.AllowRecordMerge)
+            throw new Error(`Entity ${request.EntityName} does not allow record merging, check the AllowRecordMerge property in the entity metadata`);
+
         const result: RecordMergeResult = {
             Success: false,
             RecordMergeLogID: null,
@@ -837,7 +955,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
                 for (const dependency of dependencies) {
                     const reInfo = this.Entities.find((e) => e.Name.trim().toLowerCase() === dependency.RelatedEntityName.trim().toLowerCase());
                     const relatedEntity: BaseEntity = await this.GetEntityObject(dependency.RelatedEntityName, contextUser);
-                    await relatedEntity.InnerLoad(dependency.CompositeKey);
+                    await relatedEntity.InnerLoad(dependency.PrimaryKey);
                     relatedEntity.Set(dependency.FieldName, request.SurvivingRecordCompositeKey.GetValueByIndex(0)); // only support single field foreign keys for now
                     /*
                     if we later support composite foreign keys, we'll need to do this instead, at the moment this code will break as dependency.KeyValuePair is a single value, not an array
@@ -848,7 +966,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
                      */
                     if (!await relatedEntity.Save()) {
                         newRecStatus.Success = false;
-                        newRecStatus.Message = `Error updating dependency record ${dependency.CompositeKey.ToString} for entity ${dependency.RelatedEntityName} to point to surviving record ${request.SurvivingRecordCompositeKey.ToString()}`;
+                        newRecStatus.Message = `Error updating dependency record ${dependency.PrimaryKey.ToString} for entity ${dependency.RelatedEntityName} to point to surviving record ${request.SurvivingRecordCompositeKey.ToString()}`;
                         throw new Error(newRecStatus.Message);
                     }
                 }
@@ -1323,7 +1441,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
             const quotes = wrapRecordIdInQuotes ? "'" : '';
             const sSQL = `EXEC [${this.MJCoreSchemaName}].spCreateRecordChange_Internal @EntityName='${entityName}', 
                                                                                         @RecordID=${quotes}${recordID}${quotes}, 
-                                                                                        @UserID=${user.ID},
+                                                                                        @UserID='${user.ID}',
                                                                                         @Type='${type}',
                                                                                         @ChangesJSON='${changesJSON}', 
                                                                                         @ChangesDescription='${oldData && newData ? this.CreateUserDescriptionOfChanges(changes) : !oldData ? 'Record Created' : 'Record Deleted'}', 
@@ -1682,7 +1800,6 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
     
     public async GetDatasetByName(datasetName: string, itemFilters?: DatasetItemFilterType[]): Promise<DatasetResultType> {
         const sSQL = `SELECT 
-                        d.ID DatasetID,
                         di.*,
                         e.BaseView EntityBaseView,
                         e.SchemaName EntitySchemaName
@@ -1691,7 +1808,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
                     INNER JOIN 
                         [${this.MJCoreSchemaName}].vwDatasetItems di 
                     ON
-                        d.Name = di.DatasetName
+                        d.ID = di.DatasetID
                     INNER JOIN 
                         [${this.MJCoreSchemaName}].vwEntities e 
                     ON
@@ -1751,7 +1868,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
 
             return {
                 DatasetID: items[0].DatasetID,
-                DatasetName: items[0].DatasetName,
+                DatasetName: datasetName,
                 Success: bSuccess,
                 Status: '',
                 LatestUpdateDate: latestUpdateDate,
@@ -1760,8 +1877,8 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
         }
         else {
             return { 
-                DatasetID: 0,
-                DatasetName: '',
+                DatasetID: "",
+                DatasetName: datasetName,
                 Success: false,
                 Status: 'No Dataset or Items found for DatasetName: ' + datasetName,
                 LatestUpdateDate: null, 
@@ -1773,7 +1890,6 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
     public async GetDatasetStatusByName(datasetName: string, itemFilters?: DatasetItemFilterType[]): Promise<DatasetStatusResultType> {
         const sSQL = `
             SELECT 
-                d.ID DatasetID,
                 di.*,
                 e.BaseView EntityBaseView,
                 e.SchemaName EntitySchemaName 
@@ -1782,7 +1898,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
             INNER JOIN 
                 [${this.MJCoreSchemaName}].vwDatasetItems di 
             ON
-                d.Name = di.DatasetName
+                d.ID = di.DatasetID
             INNER JOIN
                 [${this.MJCoreSchemaName}].vwEntities e
             ON
@@ -1805,7 +1921,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
                     if (filter) 
                         filterSQL = ' WHERE ' + filter.Filter;
                 }
-                const itemSQL = `SELECT MAX(${item.DateFieldToCheck}) AS UpdateDate, ${item.EntityID} AS EntityID, '${item.Entity}' AS EntityName FROM [${item.EntitySchemaName}].[${item.EntityBaseView}]${filterSQL}`;
+                const itemSQL = `SELECT MAX(${item.DateFieldToCheck}) AS UpdateDate, COUNT(*) AS TheRowCount, '${item.EntityID}' AS EntityID, '${item.Entity}' AS EntityName FROM [${item.EntitySchemaName}].[${item.EntityBaseView}]${filterSQL}`;
                 combinedSQL += itemSQL;
                 if (index < items.length - 1) {
                     combinedSQL += ' UNION ALL ';
@@ -1821,6 +1937,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
                     updateDates.push({
                         EntityID: itemUpdate.EntityID, 
                         EntityName: itemUpdate.EntityName, 
+                        RowCount: itemUpdate.TheRowCount,
                         UpdateDate: updateDate
                     });
     
@@ -1831,7 +1948,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
     
                 return {
                     DatasetID: items[0].DatasetID,
-                    DatasetName: items[0].DatasetName,
+                    DatasetName: datasetName,
                     Success: true,
                     Status: '',
                     LatestUpdateDate: latestUpdateDate,
@@ -1841,7 +1958,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
             else {
                 return {
                     DatasetID: items[0].DatasetID,
-                    DatasetName: items[0].DatasetName,
+                    DatasetName: datasetName,
                     Success: false,
                     Status: 'No update dates found for DatasetName: ' + datasetName,
                     LatestUpdateDate: null,
@@ -1851,8 +1968,8 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
         }
         else {
             return { 
-                DatasetID: 0,
-                DatasetName: '',
+                DatasetID: "",
+                DatasetName: datasetName,
                 Success: false,
                 Status: 'No Dataset or Items found for DatasetName: ' + datasetName, 
                 EntityUpdateDates: null,
@@ -1931,7 +2048,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
     protected async GetCurrentUserMetadata(): Promise<UserInfo> {
         const user = await this.ExecuteSQL(`SELECT * FROM [${this.MJCoreSchemaName}].vwUsers WHERE Email='${this._currentUserEmail}'`);
         if (user && user.length === 1) {
-            const userRoles = await this.ExecuteSQL(`SELECT * FROM [${this.MJCoreSchemaName}].vwUserRoles WHERE UserID=${user[0].ID}`)
+            const userRoles = await this.ExecuteSQL(`SELECT * FROM [${this.MJCoreSchemaName}].vwUserRoles WHERE UserID='${user[0].ID}'`)
             return new UserInfo(this, 
                 {
                     ...user[0],

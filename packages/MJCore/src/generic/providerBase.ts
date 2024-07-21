@@ -9,6 +9,7 @@ import { LogError, LogStatus } from "./logging";
 import { QueryCategoryInfo, QueryFieldInfo, QueryInfo, QueryPermissionInfo } from "./queryInfo";
 import { LibraryInfo } from "./libraryInfo";
 import { CompositeKey } from "./compositeKey";
+import { ExplorerNavigationItem } from "./explorerNavigationItem";
 
 /**
  * AllMetadata is used to pass all metadata around in a single object for convenience and type safety.
@@ -29,6 +30,7 @@ export class AllMetadata {
     AllQueryPermissions: QueryPermissionInfo[] = [];
     AllEntityDocumentTypes: EntityDocumentTypeInfo[] = [];
     AllLibraries: LibraryInfo[] = [];
+    AllExplorerNavigationItems: ExplorerNavigationItem[] = [];
 
     // Create a new instance of AllMetadata from a simple object
     public static FromSimpleObject(data: any, md: IMetadataProvider): AllMetadata {
@@ -64,7 +66,8 @@ export const AllMetadataArrays = [
     { key: 'AllQueryFields', class: QueryFieldInfo },
     { key: 'AllQueryPermissions', class: QueryPermissionInfo },
     { key: 'AllEntityDocumentTypes', class: EntityDocumentTypeInfo },
-    { key: 'AllLibraries', class: LibraryInfo }
+    { key: 'AllLibraries', class: LibraryInfo },
+    { key: 'AllExplorerNavigationItems', class: ExplorerNavigationItem }
 ];
 
 
@@ -92,9 +95,9 @@ export abstract class ProviderBase implements IMetadataProvider {
     public abstract GetEntityRecordName(entityName: string, compositeKey: CompositeKey): Promise<string>;
     public abstract GetEntityRecordNames(info: EntityRecordNameInput[]): Promise<EntityRecordNameResult[]>;
 
-    public abstract GetRecordFavoriteStatus(userId: number, entityName: string, CompositeKey: CompositeKey): Promise<boolean>;
+    public abstract GetRecordFavoriteStatus(userId: string, entityName: string, CompositeKey: CompositeKey): Promise<boolean>;
 
-    public abstract SetRecordFavoriteStatus(userId: number, entityName: string, CompositeKey: CompositeKey, isFavorite: boolean, contextUser: UserInfo): Promise<void>;
+    public abstract SetRecordFavoriteStatus(userId: string, entityName: string, CompositeKey: CompositeKey, isFavorite: boolean, contextUser: UserInfo): Promise<void>;
     /******** END - ABSTRACT SECTION ****************************************************************** */
 
 
@@ -108,6 +111,7 @@ export abstract class ProviderBase implements IMetadataProvider {
             // first, make sure we reset the flag to false so that if another call to this function happens
             // while we are waiting for the async call to finish, we dont do it again
             this._refresh = false;  
+            this._cachedVisibleExplorerNavigationItems = null; // reset this so it gets rebuilt next time it is requested
 
             const start = new Date().getTime();
             const res = await this.GetAllMetadata();
@@ -178,8 +182,8 @@ export abstract class ProviderBase implements IMetadataProvider {
 
                 // Post Process the Applications, because we want to handle the sub-objects properly.
                 simpleMetadata.AllApplications = simpleMetadata.Applications.map((a: any) => {
-                    a.ApplicationEntities = simpleMetadata.ApplicationEntities.filter((ae: any) => ae.ApplicationName.trim().toLowerCase() === a.Name.trim().toLowerCase())
-                    a.ApplicationSettings = simpleMetadata.ApplicationSettings.filter((as: any) => as.ApplicationName.trim().toLowerCase() === a.Name.trim().toLowerCase())
+                    a.ApplicationEntities = simpleMetadata.ApplicationEntities.filter((ae: any) => ae.ApplicationID === a.ID)
+                    a.ApplicationSettings = simpleMetadata.ApplicationSettings.filter((as: any) => as.ApplicationID === a.ID)
                     return new ApplicationInfo(a, this);
                 });
 
@@ -224,7 +228,7 @@ export abstract class ProviderBase implements IMetadataProvider {
         if (fieldValues && fieldValues.length > 0)
             for (let f of fields) {
                 // populate the field values for each field, if we have them
-                f.EntityFieldValues = fieldValues.filter(fv => fv.EntityID === f.EntityID && fv.EntityFieldName.trim().toLowerCase() === f.Name.trim().toLowerCase());
+                f.EntityFieldValues = fieldValues.filter(fv => fv.EntityFieldID === f.ID);
             }
             
         for (let e of entities) {
@@ -276,6 +280,16 @@ export abstract class ProviderBase implements IMetadataProvider {
     }
     public get Libraries(): LibraryInfo[] {
         return this._localMetadata.AllLibraries;
+    }
+    public get AllExplorerNavigationItems(): ExplorerNavigationItem[] {
+        return this._localMetadata.AllExplorerNavigationItems;
+    }
+    private _cachedVisibleExplorerNavigationItems: ExplorerNavigationItem[] = null;
+    public get VisibleExplorerNavigationItems(): ExplorerNavigationItem[] {
+        // filter and sort once and cache
+        if (!this._cachedVisibleExplorerNavigationItems)
+            this._cachedVisibleExplorerNavigationItems = this._localMetadata.AllExplorerNavigationItems.filter(e => e.IsActive).sort((a, b) => a.Sequence - b.Sequence);
+        return this._cachedVisibleExplorerNavigationItems;
     }
 
     public async Refresh(): Promise<boolean> {
@@ -460,7 +474,28 @@ export abstract class ProviderBase implements IMetadataProvider {
                 if (status) {
                     const serverTimestamp = status.LatestUpdateDate.getTime();
                     const localTimestamp = new Date(val);
-                    return localTimestamp.getTime() >= serverTimestamp;
+                    if (localTimestamp.getTime() >= serverTimestamp) {
+                        // this situation means our local cache timestamp is >= the server timestamp, so we're most likely up to date
+                        // in this situation, the last thing we check is for each entity, if the rowcount is the same as the server, if it is, we're good
+                        // iterate through all of the entities and check the row counts
+                        const localDataset = await this.GetCachedDataset(datasetName, itemFilters);
+                        for (const eu of status.EntityUpdateDates) {
+                            const localEntity = localDataset.Results.find(e => e.EntityID === eu.EntityID);
+                            if (localEntity && localEntity.Results.length === eu.RowCount) {
+                                return true;
+                            }
+                            else {
+                                // we either couldn't find the entity in the local cache or the row count is different, so we're out of date
+                                // the RowCount being different picks up on DELETED rows. The UpdatedAt check which is handled above would pick up 
+                                // on any new rows or updated rows. This approach makes sure we detect deleted rows and refresh the cache.
+                                return false;
+                            }
+                        }
+                    }
+                    else {
+                        // our local cache timestamp is < the server timestamp, so we're out of date
+                        return false;                
+                    }
                 }
                 else {
                     return false;
@@ -575,15 +610,17 @@ export abstract class ProviderBase implements IMetadataProvider {
                 return {
                     ID: e.EntityID,
                     Type: e.EntityName,
-                    UpdatedAt: e.UpdateDate
+                    UpdatedAt: e.UpdateDate,
+                    RowCount: e.RowCount
                 }
             });
 
             // combine the entityupdate dates with a single top level entry for the dataset itself
             ret.push({
-                ID: -1,
+                ID: "",
                 Type: 'All Entity Metadata',
-                UpdatedAt: d.LatestUpdateDate
+                UpdatedAt: d.LatestUpdateDate,
+                RowCount: d.EntityUpdateDates.reduce((a, b) => a + b.RowCount, 0)
             })
             return ret;
         }
@@ -629,6 +666,13 @@ export abstract class ProviderBase implements IMetadataProvider {
                         if (localTime.getTime() !== remoteTime.getTime()) {
                             return true; // we can short circuit the entire rest of the function 
                                          // as one obsolete is good enough to obsolete the entire local metadata
+                        }
+                        else {
+                            // here we have a match for the local and remote timestamps, so we need to check the row counts
+                            // if the row counts are different, we're obsolete
+                            if (l.RowCount !== mdRemote[i].RowCount) {
+                                return true;
+                            }
                         }
                     }
                     else 

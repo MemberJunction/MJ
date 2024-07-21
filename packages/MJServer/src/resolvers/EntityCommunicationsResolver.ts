@@ -6,6 +6,7 @@ import { EntityCommunicationsEngine } from '@memberjunction/entity-communication
 import { RunViewParams } from '@memberjunction/core';
 import { GraphQLJSONObject } from 'graphql-type-json';
 import { TemplateEngineServer } from '@memberjunction/templates';
+import { EntityCommunicationParams } from '@memberjunction/entity-communications-base';
 
 
 @InputType()
@@ -151,22 +152,30 @@ export class CommunicationMessageInput {
 
 @ObjectType()
 export class RunEntityCommunicationResultType {
-  @Field()
-  Success: boolean;
+    @Field()
+    Success: boolean;
 
-  @Field()
-  ErrorMessage: string;
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    /**
+     * Optional, any context data that is needed to render the message template
+     */
+    @Field(() => GraphQLJSONObject, { nullable: true })
+    public Results?: any;
 }
-
+ 
 @Resolver(RunEntityCommunicationResultType)
-export class ReportResolver {
+export class ReportResolver { 
   @Query(() => RunEntityCommunicationResultType)
-  async RunEntityCommunicationByViewID( @Arg('entityID', () => Int) entityID: number, 
-                                        @Arg('runViewByIDInput', () => RunViewByIDInput) runViewByIDInput: RunViewByIDInput, 
-                                        @Arg('providerName', () => String) providerName: string, 
-                                        @Arg('providerMessageTypeName', () => String) providerMessageTypeName: string, 
-                                        @Arg('message', () => CommunicationMessageInput) message: CommunicationMessageInput, 
-                                        @Ctx() { userPayload }: AppContext): Promise<RunEntityCommunicationResultType> {
+  async RunEntityCommunicationByViewID( @Arg('entityID', () => String) entityID: string, 
+                                               @Arg('runViewByIDInput', () => RunViewByIDInput) runViewByIDInput: RunViewByIDInput, 
+                                               @Arg('providerName', () => String) providerName: string, 
+                                               @Arg('providerMessageTypeName', () => String) providerMessageTypeName: string, 
+                                               @Arg('message', () => CommunicationMessageInput) message: CommunicationMessageInput, 
+                                               @Arg('previewOnly', () => Boolean) previewOnly: boolean, 
+                                               @Arg('includeProcessedMessages', () => Boolean) includeProcessedMessages: boolean, 
+                                               @Ctx() { userPayload }: AppContext): Promise<RunEntityCommunicationResultType> {
     try {
         await EntityCommunicationsEngine.Instance.Config(false, userPayload.userRecord);
         const newMessage = new Message(message as unknown as Message);
@@ -181,8 +190,21 @@ export class ReportResolver {
         if (newMessage.SubjectTemplate) {
             newMessage.SubjectTemplate = TemplateEngineServer.Instance.FindTemplate(newMessage.SubjectTemplate.Name);
         }
-        const result = await EntityCommunicationsEngine.Instance.RunEntityCommunication(entityID, <RunViewParams>runViewByIDInput, providerName, providerMessageTypeName, newMessage);  
-        return result;
+        const params: EntityCommunicationParams = {
+            EntityID: entityID,
+            RunViewParams: <RunViewParams>runViewByIDInput, 
+            ProviderName: providerName, 
+            ProviderMessageTypeName: providerMessageTypeName, 
+            Message: newMessage, 
+            PreviewOnly: previewOnly, 
+            IncludeProcessedMessages: includeProcessedMessages
+        }
+        const result = await EntityCommunicationsEngine.Instance.RunEntityCommunication(params);  
+        return {
+            Success: result.Success,
+            ErrorMessage: result.ErrorMessage,
+            Results: includeProcessedMessages && result.Results ? {Results: result.Results} : undefined
+        };
     }   
     catch (e) {
         return {
@@ -190,5 +212,5 @@ export class ReportResolver {
             ErrorMessage: e.message
         }
     }                   
-  }
+  }  
 }

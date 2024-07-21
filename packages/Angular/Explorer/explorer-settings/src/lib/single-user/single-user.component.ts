@@ -11,7 +11,7 @@ import { EntityFormDialogComponent } from '@memberjunction/ng-entity-form-dialog
   styleUrls: ['./single-user.component.css']
 })
 export class SingleUserComponent implements OnInit {
-  @Input() UserID!: number;
+  @Input() UserID!: string;
 
   @ViewChild('entityForm') entityFormComponent!: EntityFormDialogComponent;
 
@@ -29,13 +29,13 @@ export class SingleUserComponent implements OnInit {
   }
 
   protected async Refresh() {
-    if (this.UserID > 0) {
+    if (this.UserID && this.UserID.length > 0) {
         const md = new Metadata();
         this.UserRecord = await md.GetEntityObject<UserEntity>('Users');
         await this.UserRecord.Load(this.UserID);      
         this.UserViewsParams = {
             EntityName: 'User Views',
-            ExtraFilter: `UserID = ${this.UserID}`,
+            ExtraFilter: `UserID = '${this.UserID}'`,
         };
     }
   }

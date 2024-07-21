@@ -2,15 +2,17 @@ import { Component } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router'
 import { ReportEntity } from '@memberjunction/core-entities';
 import { BaseBrowserComponent } from '../base-browser-component/base-browser-component';
-import { SharedService } from '@memberjunction/ng-shared';
+import { BaseNavigationComponent, SharedService } from '@memberjunction/ng-shared';
 import { Item } from '../../generic/Item.types';
 import { BeforeUpdateItemEvent } from '../../generic/Events.types';
+import { RegisterClass } from '@memberjunction/global';
 
 @Component({
   selector: 'mj-report-browser',
   templateUrl: './report-browser.component.html',
   styleUrls: ['./report-browser.component.css', '../../shared/first-tab-styles.css']
 })
+@RegisterClass(BaseNavigationComponent, 'Reports')
 export class ReportBrowserComponent extends BaseBrowserComponent {
   public reports: ReportEntity[] = [];
   public showLoader: boolean = false;

@@ -53,7 +53,7 @@ export class AddItemComponent implements OnInit {
     this.showloader = true;
     this.selectedReport = null;
     const rv = new RunView();
-    const reports = await rv.RunView({ EntityName: this.resourceType.Entity, ExtraFilter: 'UserID=' + this.md.CurrentUser.ID });
+    const reports = await rv.RunView({ EntityName: this.resourceType.Entity, ExtraFilter: `UserID='${this.md.CurrentUser.ID}'` });
     if (reports.Success) {
       this.Reports = reports.Results;
     }

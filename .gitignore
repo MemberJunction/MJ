@@ -55,6 +55,14 @@ Thumbs.db
 # Typescript cache
 *.tsbuildinfo
 
+# VSCode settings
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+!.vscode/*.code-snippets
+
 *.env
 mj server info.txt
 member_junction_code_for_documentation.pdf
@@ -88,3 +96,7 @@ build.log.json
 
 packages/Templates-Old/.angular/
 packages/MJAPI/schema.graphql
+packages/MJAPI/.env-local
+packages/MJAPI/.env-remote
+
+.mj*

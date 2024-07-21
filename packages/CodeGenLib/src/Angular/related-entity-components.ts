@@ -1,4 +1,4 @@
-import { EntityInfo, EntityRelationshipInfo, UserInfo } from "@memberjunction/core";
+import { EntityFieldInfo, EntityInfo, EntityRelationshipInfo, Metadata, UserInfo } from "@memberjunction/core";
 import { TypeTablesCache } from "@memberjunction/core-entities";
 import { MJGlobal } from "@memberjunction/global";
 
@@ -109,6 +109,35 @@ export abstract class RelatedEntityDisplayComponentGeneratorBase {
      */
     public abstract Generate(input: GenerationInput): Promise<GenerationResult>;
 
+
+
+    /**
+     * Helper method that will return the name of the foreign key in the specified entity
+     * that links to the related entity
+     */
+    protected GetForeignKeyName(entityName: string, relatedEntityName: string): string {
+        const f = this.GetForeignKey(entityName, relatedEntityName);
+        return f.Name;
+    }
+    /**
+     * Helper method that will return the EntityFieldInfo object for the foreign key in the specified entity
+     * that links to the related entity
+     */
+    protected GetForeignKey(entityName: string, relatedEntityName: string): EntityFieldInfo {
+        // find a foreign key field that links the entity to the related entity
+        const md = new Metadata();
+        const e = md.EntityByName(entityName);
+        if (!e)
+            throw new Error("Could not find entity " + entityName);
+
+        // now find the field in e that matches the related entity
+        const field = e.Fields.find(f => f.RelatedEntity === relatedEntityName);
+        if (!field)
+            throw new Error("Could not find a foreign key field in entity " + entityName + " that links to " + relatedEntityName);
+
+        return field;
+    }
+
     /**
      * Use this method to dynamically instantiate the correct RelatedEntityDisplayComponentGeneratorBase subclass based on the relationshipInfo provided
      * @param relationshipInfo The relationship info that contains the info needed to get the right component
@@ -117,7 +146,7 @@ export abstract class RelatedEntityDisplayComponentGeneratorBase {
      */
     public static async GetComponent(relationshipInfo: EntityRelationshipInfo, contextUser: UserInfo, ...params: any[]): Promise<RelatedEntityDisplayComponentGeneratorBase> {
         let key = "UserViewGrid"; // default key/name of component
-        if (relationshipInfo.DisplayComponentID && relationshipInfo.DisplayComponentID > 0) {
+        if (relationshipInfo.DisplayComponentID && relationshipInfo.DisplayComponentID.length > 0) {
             // get the component from the component info provided
             await TypeTablesCache.Instance.Config(false, contextUser);
             const component = TypeTablesCache.Instance.EntityRelationshipDisplayComponents.find(x => x.ID === relationshipInfo.DisplayComponentID);

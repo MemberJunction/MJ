@@ -296,7 +296,7 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
                         ${Provider.MJCoreSchemaName}.vwRecordChanges 
                     WHERE 
                         RecordID = '${change.PrimaryKey.ToConcatenatedString()}' 
-                        AND EntityID = ${change.Entity.ID} 
+                        AND EntityID = '${change.Entity.ID}' 
                         AND Status <> 'Pending'
                     ORDER BY 
                         ChangedAt DESC`;                
@@ -401,7 +401,7 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
                 FROM 
                     __mj.vwRecordChanges
                 WHERE 
-                    Type IN ('Update', 'Create') AND EntityID = ${entity.ID}
+                    Type IN ('Update', 'Create') AND EntityID = '${entity.ID}'
                 GROUP BY 
                     RecordID
             ) rc ON ${primaryKeyString} = rc.RecordID
@@ -423,7 +423,7 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
                 ON 
                 (${primaryKeyString} = rc.RecordID) AND 
                 rc.Type = 'Create' AND 
-                rc.EntityID = ${entity.ID} 
+                rc.EntityID = '${entity.ID}' 
             WHERE 
                 rc.RecordID IS NULL;
         `;
@@ -444,7 +444,7 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
             WHERE 
                 ${entity.PrimaryKeys.map(pk => `ot.[${pk.Name}] IS NULL`).join(' AND ')}
                 AND 
-                    rc.EntityID = ${entity.ID} 
+                    rc.EntityID = '${entity.ID}' 
                 AND
                     NOT EXISTS 
                     (

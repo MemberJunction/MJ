@@ -6,12 +6,13 @@ import { expressMiddleware } from '@apollo/server/express4';
 import { mergeSchemas } from '@graphql-tools/schema';
 import { Metadata } from '@memberjunction/core';
 import { setupSQLServerClient, SQLServerProviderConfigData, UserCache } from '@memberjunction/sqlserver-dataprovider';
-import { json } from 'body-parser';
+import { default as BodyParser } from 'body-parser';
 import cors from 'cors';
 import express from 'express';
-import { globSync } from 'fast-glob';
+import { default as fg } from 'fast-glob';
 import { useServer } from 'graphql-ws/lib/use/ws';
 import { createServer } from 'node:http';
+import { fileURLToPath } from 'node:url';
 import { sep } from 'node:path';
 import 'reflect-metadata';
 import { ReplaySubject } from 'rxjs';
@@ -42,7 +43,6 @@ export * from './directives';
 export * from './entitySubclasses/userViewEntity.server';
 export * from './entitySubclasses/entityPermissions.server';
 export * from './entitySubclasses/DuplicateRunEntity.server';
-export * from './entitySubclasses/EntityBehavior.server';
 export * from './types';
 export { TokenExpiredError } from './auth';
 
@@ -50,7 +50,7 @@ export * from './generic/PushStatusResolver';
 export * from './generic/ResolverBase';
 export * from './generic/RunViewResolver';
 export * from './generic/KeyValuePairInput';
-export * from './generic/KeyInputOutputTypes'
+export * from './generic/KeyInputOutputTypes';
 export * from './generic/DeleteOptionsInput';
 
 export * from './resolvers/AskSkipResolver';
@@ -60,23 +60,26 @@ export * from './resolvers/EntityRecordNameResolver';
 export * from './resolvers/MergeRecordsResolver';
 export * from './resolvers/ReportResolver';
 
-export * from './generated/generated'
+export * from './generated/generated';
 
 import { resolve } from 'node:path';
 
-const localPath = (p: string) => resolve(__dirname, p);
+const localPath = (p: string) => {
+  // Convert import.meta.url to a local directory path
+  const dirname = fileURLToPath(new URL('.', import.meta.url));
+  // Resolve the provided path relative to the derived directory path
+  const resolvedPath = resolve(dirname, p);
+  return resolvedPath;
+};
 
 export const serve = async (resolverPaths: Array<string>) => {
-  const localResolverPaths = [
-    'resolvers/**/*Resolver.{js,ts}',
-    'generic/*Resolver.{js,ts}',
-    'generated/generated.{js,ts}'
-  ].map(localPath);
+  const localResolverPaths = ['resolvers/**/*Resolver.{js,ts}', 'generic/*Resolver.{js,ts}', 'generated/generated.{js,ts}'].map(localPath);
 
   const combinedResolverPaths = [...resolverPaths, ...localResolverPaths];
 
-  const replaceBackslashes = sep === '\\';
-  const paths = combinedResolverPaths.flatMap((path) => globSync(replaceBackslashes ? path.replace(/\\/g, '/') : path));
+  const isWindows = sep === '\\';
+  const globs = combinedResolverPaths.flatMap((path) => (isWindows ? path.replace(/\\/g, '/') : path));
+  const paths = fg.globSync(globs);
   if (paths.length === 0) {
     console.warn(`No resolvers found in ${combinedResolverPaths.join(', ')}`);
     console.log({ combinedResolverPaths, paths, cwd: process.cwd() });
@@ -107,9 +110,7 @@ export const serve = async (resolverPaths: Array<string>) => {
   /******TEST HARNESS FOR CHANGE DETECTION */
   /******TEST HARNESS FOR CHANGE DETECTION */
 
-
-
-  const dynamicModules = await Promise.all(paths.map((modulePath) => import(modulePath.replace(/\.[jt]s$/, ''))));
+  const dynamicModules = await Promise.all(paths.map((modulePath) => import(isWindows ? `file://${modulePath}` : modulePath)));
   const resolvers = dynamicModules.flatMap((module) =>
     Object.values(module).filter((value) => typeof value === 'function')
   ) as BuildSchemaOptions['resolvers'];
@@ -149,7 +150,7 @@ export const serve = async (resolverPaths: Array<string>) => {
   app.use(
     graphqlRootPath,
     cors<cors.CorsRequest>(),
-    json({limit: '50mb'}),
+    BodyParser.json({ limit: '50mb' }),
     expressMiddleware(apolloServer, {
       context: contextFunction({ setupComplete$, dataSource }),
     })
@@ -158,5 +159,3 @@ export const serve = async (resolverPaths: Array<string>) => {
   await new Promise<void>((resolve) => httpServer.listen({ port: graphqlPort }, resolve));
   console.log(`🚀 Server ready at http://localhost:${graphqlPort}/`);
 };
-
-export default serve;

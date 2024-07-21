@@ -1,7 +1,7 @@
 import { Component, ElementRef, ViewChild, OnInit, OnDestroy, HostListener, HostBinding, AfterViewInit, Renderer2, Input, ChangeDetectorRef } from '@angular/core';
 import { Location } from '@angular/common';
 import { Router, NavigationEnd, Event, NavigationSkipped, ActivatedRoute } from '@angular/router';
-import { DrawerItem, DrawerSelectEvent, DrawerComponent, DrawerMode, TabCloseEvent, TabStripComponent, SelectEvent } from "@progress/kendo-angular-layout";
+import { DrawerItem, DrawerSelectEvent, DrawerComponent, DrawerMode } from "@progress/kendo-angular-layout";
 import { Metadata, ApplicationInfo, EntityInfo, RunView, RunViewParams, LogError, TransactionGroupBase, ApplicationEntityInfo, LogStatus, BaseEntity } from '@memberjunction/core';
 import { MJEvent, MJEventType, MJGlobal } from '@memberjunction/global';
 import { Subscription } from 'rxjs';
@@ -13,7 +13,7 @@ import { ItemType, TreeItem } from '../../generic/Item.types';
 import { MJTabStripComponent, TabClosedEvent, TabContextMenuEvent, TabEvent } from '@memberjunction/ng-tabstrip';
 
 export interface Tab {
-  id?: number;
+  id?: string;
   label?: string;
   icon?: string;
   data?: any;
@@ -59,7 +59,7 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
   private resizeTimeout: any;
 
   @ViewChild(DrawerComponent, { static: false }) drawer!: DrawerComponent;
-  @ViewChild('mjTabstrip') mjTabStrip!: MJTabStripComponent;
+  @ViewChild('mjTabstrip', { static: false }) mjTabStrip!: MJTabStripComponent;
   @ViewChild('drawerWrapper', { static: false }) drawerWrapper!: ElementRef;
   @ViewChild('container', { static: true, read: ElementRef }) container !: ElementRef;
 
@@ -393,7 +393,7 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
     const rv = new RunView();
     const workspaceParams: RunViewParams = {
       EntityName: "Workspaces",
-      ExtraFilter: `UserID=${md.CurrentUser.ID}`,
+      ExtraFilter: `UserID='${md.CurrentUser.ID}'`,
       OrderBy: "__mj_UpdatedAt DESC", // by default get the workspace that was most recently updated
       ResultType: "entity_object" /*we want entity objects back so that we can modify them as needed*/
     }
@@ -542,11 +542,23 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
     const existingTab = this.findExistingTab(data);
 
     if (existingTab) {
+      // merge the data that we are provided with in terms of its raw query params with the existing tab
+      // override existing values in the data.Configuration.___rawQueryParams from keys in the data.Configuration.___rawQueryParams
+      existingTab.data.Configuration.___rawQueryParams = { ...existingTab.data.Configuration.___rawQueryParams, ...data.Configuration.___rawQueryParams };
+
       const index = this.tabs.indexOf(existingTab);
+
+      // next, before we set the active tab, we need to merge the query params that we have for this tab with the query params that we have for the tab that we're about to select
+      // when the app first loads there won't be any query params for the tabs, but as we navigate around and the tabs get selected, we'll cache the query params for each tab
+      const tqp = this.tabQueryParams['tab_' + (index + 1)];
+      if (tqp)
+        this.tabQueryParams['tab_' + (index + 1)] = {...tqp, ...existingTab.data.Configuration.___rawQueryParams};  
+      else
+        this.tabQueryParams['tab_' + (index + 1)] = existingTab.data.Configuration.___rawQueryParams;
+
       // add one because the HOME tab is not in the tabs array but it IS part of our tab structure
       this.activeTabIndex = index + 1;
 
-      //this.tabstrip.selectTab(this.activeTabIndex);
 
       this.scrollIntoView();
       if (existingTab.label)
@@ -557,7 +569,7 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
     }
     else {
       const newTab: Tab = {
-        id: -1, // initially -1 but will be changed to the WorkspaceItem ID once we save it
+        id: "", // initially blank but will be changed to the WorkspaceItem ID once we save it
         data: data,
         labelLoading: true,
         contentLoading: false,
@@ -611,7 +623,7 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
     let url: string = '/resource';
     switch (rt?.Name.toLowerCase().trim()) {
       case 'user views':
-        if (data.ResourceRecordID && !isNaN(data.ResourceRecordID) && data.ResourceRecordID > 0) {
+        if (data.ResourceRecordID) {
           url += `/view/${data.ResourceRecordID}`;
         }
         else if (data.Configuration?.Entity) {
@@ -662,15 +674,18 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
     // Create a URLSearchParams object from the existing query params
     const queryParams = new URLSearchParams(existingQuery);
 
-    // Your cached query params, assuming it's an object like { key1: 'value1', key2: 'value2' }
     const tabIndex = this.tabs.indexOf(tab) + 1; // we add 1 Because the HOME tab is not in the array so we have to offset by 1 here for our data structure
-    let cachedQueryParams = this.tabQueryParams['tab_' + tabIndex]; // Replace with your actual method to get cached params
+    let cachedQueryParams = this.tabQueryParams['tab_' + tabIndex];  
     if (!cachedQueryParams) {
       // there is a case when we are first loading and cached query params might have been stuffed into a 'tab_-1' key because at the time activeTabIndex wasn't yet known. So we need to check for that
       cachedQueryParams = this.tabQueryParams['tab_-1'];
       if (cachedQueryParams) {
         delete this.tabQueryParams['tab_-1']; // remove it from the -1 key
-        this.tabQueryParams['tab_' + tabIndex] = cachedQueryParams; // stuff it into the correct key
+        const tqp = this.tabQueryParams['tab_' + tabIndex];
+        if (tqp)
+          this.tabQueryParams['tab_' + tabIndex] = {...tqp, ...cachedQueryParams}; // merge it with the existing key if it exists
+        else
+          this.tabQueryParams['tab_' + tabIndex] = {...cachedQueryParams}; // stuff it into the correct key
       }
     }
     if (cachedQueryParams) {
@@ -709,8 +724,9 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
       const resource = <BaseResourceComponent>new resourceReg.SubClass();
       return await resource.GetResourceDisplayName(data);
     }
-    else
+    else{
       return `Workspace Item ${data.ID}`;
+    }
   }
 
   public async GetWorkspaceItemIconClass(data: ResourceData): Promise<string> {
@@ -719,8 +735,9 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
       const resource = <BaseResourceComponent>new resourceReg.SubClass();
       return await resource.GetResourceIconClass(data);
     }
-    else
+    else{
       return '';
+    }
   }
 
   /**
@@ -775,14 +792,14 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
       const md = new Metadata();
       let wsItem: WorkspaceItemEntity;
       if (!tab.workspaceItem) {
-        wsItem = <WorkspaceItemEntity>await md.GetEntityObject('Workspace Items');
+        wsItem = await md.GetEntityObject<WorkspaceItemEntity>('Workspace Items');
         if (tab.data.ID && !isNaN(tab.data.ID) && tab.data.ID > 0)
           await wsItem.Load(tab.data.ID);
         else {
           wsItem.NewRecord();
 
           wsItem.Name = tab.data.Name ? tab.data.Name : tab.data.ResourceType + ' Record:' + tab.data.ResourceRecordID;
-          wsItem.WorkSpaceID = this.workSpace.ID;
+          wsItem.WorkspaceID = this.workSpace.ID;
           wsItem.ResourceTypeID = tab.data?.ResourceTypeID;
         }
         tab.workspaceItem = wsItem;
@@ -859,7 +876,7 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
     if (index >= 0)
       this.tabs.splice(index, 1);
 
-    if (!tab.workspaceItem && tab.id && tab.id > 0) {
+    if (!tab.workspaceItem && tab.id && tab.id.length > 0) {
       // we lazy load the workspaceItem entity objects, so we load it here so we can delete it below, but only when it wasn't already loaded
       const md = new Metadata();
       tab.workspaceItem = <WorkspaceItemEntity>await md.GetEntityObject('Workspace Items');
@@ -985,7 +1002,26 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
   private async LoadDrawer() {
     const md = new Metadata();
 
+    //make sure SharedService_resourceTypes is populated first
+    await SharedService.RefreshData();
+
     this.drawerItems.length = 0; // clear the array
+
+    const items = md.VisibleExplorerNavigationItems.filter(item => item.ShowInNavigationDrawer);
+    items.forEach(item => {
+      const drawerItem = {
+        id: item.ID,
+        selected: false,
+        text: item.Name,
+        path: item.Route,
+        icon: item.IconCSSClass
+      }
+      this.drawerItems.push(drawerItem);
+    });
+
+    this.loading = false;
+
+    return;
 
     // the Drawer configuraion has the following sections:
     /*
@@ -1006,9 +1042,6 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
     // Data
     await this.loadApplications(md);
 
-    //make sure SharedService_resourceTypes is populated first
-    await SharedService.RefreshData();
-
     // Dashboards
     await this.loadResourceType('Dashboards','Dashboards','/dashboards', md.CurrentUser.ID);
 
@@ -1027,7 +1060,7 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
     // Settings
     await this.loadSettings(md);
 
-    this.loading = false;
+
   }
 
   protected async loadSkip(md: Metadata) {
@@ -1106,7 +1139,7 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
     this.drawerItems.push(drawerItem);
   }
 
-  protected async loadResourceType(key: string, resourceType: string, path: string, currentUserID: number) {
+  protected async loadResourceType(key: string, resourceType: string, path: string, currentUserID: string) {
     const rt = this.sharedService.ResourceTypeByName(resourceType)
     if (rt) {
       const drawerItem = {

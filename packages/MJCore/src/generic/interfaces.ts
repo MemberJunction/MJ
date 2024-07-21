@@ -9,6 +9,7 @@ import { QueryCategoryInfo, QueryFieldInfo, QueryInfo, QueryPermissionInfo } fro
 import { RunQueryParams } from "./runQuery";
 import { LibraryInfo } from "./libraryInfo";
 import { CompositeKey } from "./compositeKey";
+import { ExplorerNavigationItem } from "./explorerNavigationItem";
 
 export class ProviderConfigDataBase {
     private _includeSchemas: string[] = [];
@@ -38,9 +39,10 @@ export class ProviderConfigDataBase {
 }
 
 export class MetadataInfo {
-    ID: number
+    ID: string
     Type: string
     UpdatedAt: Date
+    RowCount: number
 }
 
 export const ProviderType = {
@@ -59,11 +61,11 @@ export class PotentialDuplicateRequest {
     /**
     * The ID of the entity the record belongs to
     **/
-    EntityID: number;
+    EntityID: string;
     /**
     * The ID of the List entity to use
     **/
-    ListID: number
+    ListID: string;
     /**
      * The Primary Key values of each record
      * we're checking for duplicates
@@ -72,7 +74,7 @@ export class PotentialDuplicateRequest {
     /**
     * The ID of the entity document to use
     **/
-    EntityDocumentID?: number;
+    EntityDocumentID?: string;
     /**
     * The minimum score in order to consider a record a potential duplicate
     **/
@@ -85,10 +87,17 @@ export class PotentialDuplicateRequest {
 }
 
 export class PotentialDuplicateResult {
-    EntityID: number;
+
+    constructor() {
+        this.RecordCompositeKey = new CompositeKey();
+        this.Duplicates = [];
+        this.DuplicateRunDetailMatchRecordIDs = [];
+    }
+
+    EntityID: string;
     RecordCompositeKey: CompositeKey;
     Duplicates: PotentialDuplicate[];
-    DuplicateRunDetailMatchRecordIDs: number[];
+    DuplicateRunDetailMatchRecordIDs: string[];
 }
 
 //Wrapper for the PotentialDuplicateResponse class that includes  additional properties
@@ -202,6 +211,10 @@ export interface IMetadataProvider {
 
     get Libraries(): LibraryInfo[]
 
+    get VisibleExplorerNavigationItems(): ExplorerNavigationItem[]
+
+    get AllExplorerNavigationItems(): ExplorerNavigationItem[]
+
     get LatestRemoteMetadata(): MetadataInfo[]
 
     get LatestLocalMetadata(): MetadataInfo[]
@@ -266,9 +279,9 @@ export interface IMetadataProvider {
      */
     GetEntityRecordNames(info: EntityRecordNameInput[]): Promise<EntityRecordNameResult[]>
 
-    GetRecordFavoriteStatus(userId: number, entityName: string, CompositeKey: CompositeKey): Promise<boolean>
+    GetRecordFavoriteStatus(userId: string, entityName: string, CompositeKey: CompositeKey): Promise<boolean>
 
-    SetRecordFavoriteStatus(userId: number, entityName: string, CompositeKey: CompositeKey, isFavorite: boolean, contextUser: UserInfo): Promise<void>
+    SetRecordFavoriteStatus(userId: string, entityName: string, CompositeKey: CompositeKey, isFavorite: boolean, contextUser: UserInfo): Promise<void>
 
     CreateTransactionGroup(): Promise<TransactionGroupBase>
 
@@ -375,7 +388,7 @@ export type RunViewResult<T = any> = {
     /**
      * The newly created UserViews.ID value - only provided if RunViewParams.SaveViewResults=true
      */
-    UserViewRunID?: number;
+    UserViewRunID?: string;
     /**
      * Number of rows returned in the Results[] array
      */
@@ -400,10 +413,11 @@ export interface IRunViewProvider {
     Config(configData: ProviderConfigDataBase): Promise<boolean>
 
     RunView<T = any>(params: RunViewParams, contextUser?: UserInfo): Promise<RunViewResult<T>>
+    RunViews<T = any>(params: RunViewParams[], contextUser?: UserInfo): Promise<RunViewResult<T>[]>
 }
 
 export type RunQueryResult = {
-    QueryID: number;
+    QueryID: string;
     Success: boolean;
     Results: any[];
     RowCount: number;
@@ -418,7 +432,7 @@ export interface IRunQueryProvider {
 }
 
 export type RunReportResult = {
-    ReportID: number;
+    ReportID: string;
     Success: boolean;
     Results: any[];
     RowCount: number;
@@ -433,7 +447,7 @@ export interface IRunReportProvider {
 }
 
 export type DatasetResultType = {
-    DatasetID: number;
+    DatasetID: string;
     DatasetName: string;
     Success: boolean;
     Status: string;
@@ -444,7 +458,7 @@ export type DatasetResultType = {
 export type DatasetItemResultType = {
     Code: string;
     EntityName: string;
-    EntityID: number;
+    EntityID: string;
     Results: any[];
 }
 
@@ -454,7 +468,7 @@ export type DatasetItemFilterType = {
 }
 
 export type DatasetStatusResultType = {
-    DatasetID: number;
+    DatasetID: string;
     DatasetName: string;
     Success: boolean;
     Status: string;
@@ -464,6 +478,7 @@ export type DatasetStatusResultType = {
 
 export type DatasetStatusEntityUpdateDateType = {
     EntityName: string;
-    EntityID: number;
+    EntityID: string;
     UpdateDate: Date;
+    RowCount: number;
 }   

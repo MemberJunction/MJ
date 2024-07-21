@@ -56,6 +56,7 @@ export class ViewGridState {
 }
 
 export class ViewInfo extends BaseInfo {
+    ID: string = null
     UserID: number = null
     EntityID: number = null
     Name: string = null

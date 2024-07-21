@@ -1,5 +1,5 @@
 import { AIEngine } from "@memberjunction/aiengine";
-import { BaseEntity, LogError, Metadata, CompositeKey, RunView, UserInfo } from "@memberjunction/core";
+import { BaseEntity, LogError, Metadata, CompositeKey, RunView, UserInfo, EntityInfo, RunViewResult } from "@memberjunction/core";
 import { AIModelEntityExtended, VectorDatabaseEntity } from "@memberjunction/core-entities";
 
 export class VectorBase {
@@ -18,7 +18,7 @@ export class VectorBase {
     public get CurrentUser(): UserInfo { return this._currentUser; }
     public set CurrentUser(user: UserInfo) { this._currentUser = user; }
 
-    protected async getRecordsByEntityID(entityID: number, recordIDs?: CompositeKey[]): Promise<BaseEntity[]> {
+    protected async getRecordsByEntityID(entityID: string, recordIDs?: CompositeKey[]): Promise<BaseEntity[]> {
         const md = new Metadata();
         const entity = md.Entities.find(e => e.ID === entityID);
         if (!entity){
@@ -39,6 +39,27 @@ export class VectorBase {
         return rvResult.Results;
     }
 
+    protected async pageRecordsByEntityID<T>( entityID: string, pageNumber: number, pageSize: number): Promise<T[]> {
+        const md = new Metadata();
+        const entity: EntityInfo | undefined = md.Entities.find((e) => e.ID === entityID);
+        if (!entity) {
+          throw new Error(`Entity with ID ${entityID} not found.`);
+        }
+    
+        const rvResult: RunViewResult<T> = await this._runView.RunView<T>({
+            EntityName: entity.Name,
+            ResultType: 'entity_object' as const,
+            MaxRows: pageSize,
+            StartRow: Math.max(0, (pageNumber - 1) * pageSize),
+        }, this.CurrentUser);
+    
+        if (!rvResult.Success) {
+          throw new Error(rvResult.ErrorMessage);
+        }
+    
+        return rvResult.Results;
+    }
+
     protected buildExtraFilter(CompositeKey: CompositeKey[]): string {
         return CompositeKey.map((keyValue) => {
             return keyValue.KeyValuePairs.map((keys) => {
@@ -47,14 +68,13 @@ export class VectorBase {
         }).join("\n OR ");
     }
 
-    protected getAIModel(id?: number): AIModelEntityExtended {
-        /*elim this hardcoding by adding virtual field for Type to AI Models entity*/
+    protected getAIModel(id?: string): AIModelEntityExtended {
         let model: AIModelEntityExtended;
         if(id){
-            model = AIEngine.Models.find(m => m.AIModelTypeID === 3 && m.ID === id);
+            model = AIEngine.Models.find(m => m.AIModelType === "Embeddings" && m.ID === id);
         }
         else{
-            model = AIEngine.Models.find(m => m.AIModelTypeID === 3);
+            model = AIEngine.Models.find(m => m.AIModelType === "Embeddings");
         }
 
         if(!model){
@@ -63,7 +83,7 @@ export class VectorBase {
         return model;
     }
 
-    protected getVectorDatabase(id?: number): VectorDatabaseEntity {
+    protected getVectorDatabase(id?: string): VectorDatabaseEntity {
         if(AIEngine.VectorDatabases.length > 0){
             if(id){
                 let vectorDB = AIEngine.VectorDatabases.find(vd => vd.ID === id);

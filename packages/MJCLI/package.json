@@ -26,7 +26,7 @@
     "/oclif.manifest.json"
   ],
   "scripts": {
-    "build": "rimraf dist && tsc -b",
+    "build": "tsc -b",
     "prepack": "npm run build && oclif manifest && oclif readme",
     "postpack": "rimraf oclif.manifest.json",
     "version": "oclif readme && git add README.md"
@@ -34,6 +34,9 @@
   "oclif": {
     "bin": "mj",
     "commands": "./dist/commands",
+    "hooks": {
+      "init": "./dist/hooks/init"
+    },
     "dirname": "mj",
     "plugins": [
       "@oclif/plugin-help",
@@ -46,15 +49,22 @@
   },
   "dependencies": {
     "@inquirer/prompts": "^5.0.1",
+    "@memberjunction/codegen-lib": "1.8.1",
     "@oclif/core": "^3",
     "@oclif/plugin-help": "^6",
     "@oclif/plugin-version": "^2.0.17",
     "@oclif/plugin-warn-if-update-available": "^3.0.16",
+    "cosmiconfig": "9.0.0",
+    "dotenv": "16.4.5",
+    "figlet": "^1.7.0",
     "fs-extra": "^11.2.0",
+    "node-flyway": "0.0.10",
+    "ora-classic": "^5.4.2",
     "zod": "^3.23.4"
   },
   "devDependencies": {
     "@oclif/prettier-config": "^0.2.1",
+    "@types/figlet": "^1.5.8",
     "@types/fs-extra": "^11.0.4",
     "oclif": "^4",
     "rimraf": "5.0.7",

@@ -1,11 +1,31 @@
 import { BaseEngine, BaseEnginePropertyConfig, BaseEntity, RunViewParams, UserInfo } from "@memberjunction/core";
 import { EntityCommunicationFieldEntity, EntityCommunicationMessageTypeEntity } from "@memberjunction/core-entities";
 import { RegisterClass } from "@memberjunction/global";
-import { Message } from '@memberjunction/communication-types';
+import { Message, ProcessedMessage } from '@memberjunction/communication-types';
 
 @RegisterClass(BaseEntity, 'Entity Communication Message Types')
 export class EntityCommunicationMessageTypeExtended extends EntityCommunicationMessageTypeEntity {
     public CommunicationFields: EntityCommunicationFieldEntity[] = [];
+}
+
+
+export class EntityCommunicationParams {
+    EntityID: string;
+    RunViewParams: RunViewParams
+    ProviderName: string
+    ProviderMessageTypeName: string
+    Message: Message
+    PreviewOnly?: boolean = false
+    IncludeProcessedMessages?: boolean = false
+}
+export class EntityCommunicationResultItem {
+    RecipientData: any
+    Message: ProcessedMessage
+}
+export class EntityCommunicationResult {
+    Success: boolean
+    ErrorMessage?: string
+    Results?: EntityCommunicationResultItem[]    
 }
 
 export abstract class EntityCommunicationsEngineBase extends BaseEngine<EntityCommunicationsEngineBase> {
@@ -48,7 +68,7 @@ export abstract class EntityCommunicationsEngineBase extends BaseEngine<EntityCo
      * @param entityID 
      * @returns 
      */
-    public GetEntityCommunicationMessageTypes(entityID: number): EntityCommunicationMessageTypeExtended[] {
+    public GetEntityCommunicationMessageTypes(entityID: string): EntityCommunicationMessageTypeExtended[] {
         this.TryThrowIfNotLoaded();
         return this.EntityCommunicationMessageTypes.filter(m => m.EntityID === entityID);
     }
@@ -57,7 +77,7 @@ export abstract class EntityCommunicationsEngineBase extends BaseEngine<EntityCo
      * Returns true if the specified entity has any communication message types 
      * @param entityID 
      */
-    public EntitySupportsCommunication(entityID: number): boolean {
+    public EntitySupportsCommunication(entityID: string): boolean {
         this.TryThrowIfNotLoaded();
         return this.GetEntityCommunicationMessageTypes(entityID).length > 0;
     }
@@ -72,11 +92,8 @@ export abstract class EntityCommunicationsEngineBase extends BaseEngine<EntityCo
 
     /**
      * Executes a given message request against a view of records for a given entity
-     * @param entityID 
-     * @param runViewParams 
-     * @param providerName 
-     * @param providerMessageTypeName 
-     * @param message 
+     * @param params
      */
-    public abstract RunEntityCommunication(entityID: number, runViewParams: RunViewParams, providerName: string, providerMessageTypeName: string, message: Message): Promise<{Success: boolean, ErrorMessage: string}>  
+    public abstract RunEntityCommunication(params: EntityCommunicationParams): Promise<EntityCommunicationResult>  
+
 }

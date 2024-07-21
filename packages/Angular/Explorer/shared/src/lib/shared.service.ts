@@ -101,7 +101,7 @@ export class SharedService {
   public get SearchResultsResourceType(): ResourceTypeEntity {
     return SharedService._resourceTypes.find(rt => rt.Name.trim().toLowerCase() === 'search results')!;
   }
-  public ResourceTypeByID(id: number): ResourceTypeEntity | undefined {
+  public ResourceTypeByID(id: string): ResourceTypeEntity | undefined {
     return SharedService._resourceTypes.find(rt => rt.ID === id);
   }
   public ResourceTypeByName(name: string): ResourceTypeEntity | undefined {
@@ -235,7 +235,7 @@ export class SharedService {
    * @param resourceConfiguration Any object, it is converted to a string by JSON.stringify and stored in the database
    * @returns 
    */
-  public async CreateNotification(title: string, message: string, resourceTypeId: number | null, resourceRecordId: number | null, resourceConfiguration: any | null): Promise<UserNotificationEntity> {
+  public async CreateNotification(title: string, message: string, resourceTypeId: string | null, resourceRecordId: number | null, resourceConfiguration: any | null): Promise<UserNotificationEntity> {
     const md = new Metadata();
     const notification = <UserNotificationEntity>await md.GetEntityObject('User Notifications');
     notification.Title = title;
@@ -266,7 +266,7 @@ export class SharedService {
       const md = new Metadata();
       const result = await rv.RunView({
           EntityName: 'User Notifications',
-          ExtraFilter: 'UserID=' + md.CurrentUser.ID,
+          ExtraFilter: `UserID='${md.CurrentUser.ID}'`,
           OrderBy: '__mj_CreatedAt DESC',
           ResultType: 'entity_object' /* we want the entity objects, this has a little bit of overhead cost, but since we'll want to be able to modify the unread state it is helpful to have these ready to go */
       })

@@ -1,6 +1,6 @@
 import { Component, EventEmitter, Input, Output,  AfterViewInit, OnDestroy, ViewChild, ElementRef, Renderer2, ChangeDetectorRef} from '@angular/core';
 import { ActivatedRoute, Router } from "@angular/router";
-import { Metadata, EntityFieldInfo, EntityInfo, EntityFieldTSType } from "@memberjunction/core";
+import { Metadata, EntityFieldInfo, EntityInfo, EntityFieldTSType, ValidationResult, LogError } from "@memberjunction/core";
 import { DragEndEvent} from '@progress/kendo-angular-sortable';
 import { UserViewEntityExtended, ViewGridState } from '@memberjunction/core-entities';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
@@ -19,7 +19,7 @@ import { FormBuilder } from "@angular/forms";
   styleUrls: ['./user-view-properties.component.scss']
 })
 export class UserViewPropertiesDialogComponent extends BaseFormComponent implements AfterViewInit, OnDestroy {
-  @Input() public ViewID: number | undefined;
+  @Input() public ViewID: string | undefined;
   @Input() public EntityName: string | undefined;
   @Input() public ShowPropertiesButton: boolean = true;
 
@@ -76,7 +76,7 @@ export class UserViewPropertiesDialogComponent extends BaseFormComponent impleme
     this.Open();
   }
 
-  public async Open(ViewID: number | undefined = this.ViewID) {
+  public async Open(ViewID: string | undefined = this.ViewID) {
     this.ViewID = ViewID;
     await this.Load();
     this.isDialogOpened = true; // binding causes the kendo window to open from this method call
@@ -230,8 +230,9 @@ export class UserViewPropertiesDialogComponent extends BaseFormComponent impleme
   public async toggleColumn(column: any) {
     column.hidden = !column.hidden; // do the toggle
 
-     if (this.localGridState) 
-        this.updateRecordGridState(); 
+     if (this.localGridState){
+      this.updateRecordGridState(); 
+     }
   }
 
   public async saveProperties() : Promise<void> {
@@ -239,7 +240,8 @@ export class UserViewPropertiesDialogComponent extends BaseFormComponent impleme
     const bNewRecord = !this.record.IsSaved;
     this.showloader = true;
     const lfs = JSON.stringify(this.localFilterState);
-    this.record.FilterState = JSON.stringify(this.localFilterState); // pass this along as as string, not directly bound since Kendo Filter is bound to a local object we need to translate to a string
+    // pass this along as as string, not directly bound since Kendo Filter is bound to a local object we need to translate to a string
+    this.record.FilterState = JSON.stringify(this.localFilterState);
 
     // need to convert the UI format to the data format.  
     const sortMap = this.sortState.map((s: any) => {
@@ -251,52 +253,53 @@ export class UserViewPropertiesDialogComponent extends BaseFormComponent impleme
     this.record.SortState = JSON.stringify(sortMap);
 
     // validate the record first
-    const valResults = this.record.Validate();
+    const valResults: ValidationResult = this.record.Validate();
     if (valResults.Success === false) {
       this.showloader = false;
       this.sharedService.CreateSimpleNotification('Validation Errors: ' + valResults.Errors.map((e) => e.Message).join('\n'), 'warning', 7500);
     }
 
-    this.showloader = false;
-    this.isDialogOpened = false;
-
     let saveResult: boolean = await this.record.Save(); 
-    if(saveResult){
-      let event: any = {
-        Saved: true, 
-        ViewEntity: this.record,
-        Cancel: false,
-        bNewRecord: bNewRecord
-      }
-
-      this.dialogClosed.emit(event); 
-
-      if(event.Cancel) {
-        return;
-      }
-
-      if (!bNewRecord) // view already exists so we're not changing the route as it is alreayd on the view, but we fire an event to let people know that it's changed
-        MJGlobal.Instance.RaiseEvent({
-          event: MJEventType.ComponentEvent,
-          eventCode: EventCodes.ViewUpdated,
-          args: new ResourceData({ 
-                                  ResourceTypeID: this.sharedService.ViewResourceType.ID,
-                                  ResourceRecordID: this.record.FirstPrimaryKey.Value, 
-                                  Configuration: {
-                                    ViewEntity: this.record
-                                  }
-                                }),
-          component: this
-        });
-      else{
-        // we route to the new view using the router
-        this.router.navigate(['resource', 'view', this.record.FirstPrimaryKey.Value])
-      }
-    }
-    else {
+    if(!saveResult){
       // it failed, so don't close the dialog
       this.showloader = false;
       this.sharedService.CreateSimpleNotification('Saving the view failed, please try again and if this persists contact your administrator.', 'error', 5000);
+      LogError(this.record.LatestResult);
+    }
+
+    // stop showing the loader and close the dialog if we saved successfully
+    this.showloader = false;
+    this.isDialogOpened = false;
+
+    let event: any = {
+      Saved: true, 
+      ViewEntity: this.record,
+      Cancel: false,
+      bNewRecord: bNewRecord
+    }
+
+    this.dialogClosed.emit(event); 
+
+    if(event.Cancel) {
+      return;
+    }
+
+    if (!bNewRecord) // view already exists so we're not changing the route as it is alreayd on the view, but we fire an event to let people know that it's changed
+      MJGlobal.Instance.RaiseEvent({
+        event: MJEventType.ComponentEvent,
+        eventCode: EventCodes.ViewUpdated,
+        args: new ResourceData({ 
+                                ResourceTypeID: this.sharedService.ViewResourceType.ID,
+                                ResourceRecordID: this.record.FirstPrimaryKey.Value, 
+                                Configuration: {
+                                  ViewEntity: this.record
+                                }
+                              }),
+        component: this
+      });
+    else{
+      // we route to the new view using the router
+      this.router.navigate(['resource', 'view', this.record.FirstPrimaryKey.Value])
     }
   }
  

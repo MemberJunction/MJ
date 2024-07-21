@@ -7,7 +7,7 @@ import { EntityDocumentEntity } from "@memberjunction/core-entities";
 export class EntityDocumentCache {
     private static _instance: EntityDocumentCache;
     private _loaded: boolean = false;
-    private _cache: { [key: number]: EntityDocumentEntity } = {};
+    private _cache: { [key: string]: EntityDocumentEntity } = {};
     private _contextUser: UserInfo | null = null;
 
     private constructor() {
@@ -26,11 +26,11 @@ export class EntityDocumentCache {
         return this._loaded;
     }
 
-    protected Cache(): { [key: number]: EntityDocumentEntity } {
+    protected Cache(): { [key: string]: EntityDocumentEntity } {
         return this._cache;
     }
 
-    public GetDocument(EntityDocumentID: number): EntityDocumentEntity | null {
+    public GetDocument(EntityDocumentID: string): EntityDocumentEntity | null {
         let document: EntityDocumentEntity = this._cache[EntityDocumentID];
         if (!document) {
             LogStatus(`EntityDocumentCache.GetDocument: Cache miss for EntityDocumentID: ${EntityDocumentID}`);
@@ -41,15 +41,15 @@ export class EntityDocumentCache {
 
     public GetDocumentByName(EntityDocumentName: string): EntityDocumentEntity | null {
         const toLower = EntityDocumentName.trim().toLowerCase();
-        let docuement: EntityDocumentEntity = Object.values(this._cache).find((ed: EntityDocumentEntity) => {
+        let document: EntityDocumentEntity = Object.values(this._cache).find((ed: EntityDocumentEntity) => {
             ed.Name.trim().toLowerCase() === toLower;
         });
 
-        if (!docuement) {
+        if (!document) {
             LogStatus(`EntityDocumentCache.GetDocumentByName: Cache miss for EntityDocumentName: ${EntityDocumentName}`);
         }
 
-        return docuement || null;
+        return document || null;
     }
 
     public SetCurrentUser(user: UserInfo) {

@@ -1,71 +1,205 @@
 /********************************************************************************
 * ALL ENTITIES - TypeGraphQL Type Class Definition - AUTO GENERATED FILE
 * Generated Entities and Resolvers for Server
-* 
-* GENERATED: 6/20/2024, 3:35:36 PM
-* 
+*
+* GENERATED: 7/21/2024, 10:58:05 AM
+*
 *   >>> DO NOT MODIFY THIS FILE!!!!!!!!!!!!
 *   >>> YOUR CHANGES WILL BE OVERWRITTEN
 *   >>> THE NEXT TIME THIS FILE IS GENERATED
-* 
+*
 **********************************************************************************/
-import { Arg, Ctx, Int, Query, Resolver, Field, Float, ObjectType, FieldResolver, Root, InputType, Mutation, 
+import { Arg, Ctx, Int, Query, Resolver, Field, Float, ObjectType, FieldResolver, Root, InputType, Mutation,
             PubSub, PubSubEngine, ResolverBase, RunViewByIDInput, RunViewByNameInput, RunDynamicViewInput,
             AppContext, KeyValuePairInput, DeleteOptionsInput } from '@memberjunction/server';
 import { Metadata, EntityPermissionType, CompositeKey } from '@memberjunction/core'
 
 import { MaxLength } from 'class-validator';
 import { DataSource } from 'typeorm';
-
 import * as mj_core_schema_server_object_types from '@memberjunction/server'
 
-import { ThreadDetailEntity, ThreadEntity, IndustryEntity, ContactRoleEntity, ContactLevelEntity, AccountEntity, ContactEntity, DealStageEntity, ActivityEntity, DealForecastCategoryEntity, DealEntity, DealTypeEntity, InvoiceEntity, ActivityAttachmentEntity, PaymentTermsTypeEntity, InvoiceStatusTypeEntity, SalesLineItemEntity, SalesTransactionEntity, CustomerAddress__client_financeEntity, Item__client_financeEntity, Customer__client_financeEntity, OrganizationLinkEntity, PersonLinkEntity, Account__client_crmEntity, StringMapEntity, ProductPriceLevelEntity, client_membershipEntity, Contact__client_crmEntity, UoMEntity, SalesOrderEntity, SalesOrderDetailEntity, ProductEntity, CustomerAddressEntity, SalesLineItem__client_membershipEntity, ItemEntity, CustomerEntity, SalesTransaction__client_membershipEntity } from 'mj_generatedentities';
+
+import { QuadDemoEntity, ThreadDetailEntity, ThreadEntity, IndustryEntity, ContactRoleEntity, ContactLevelEntity, AccountEntity, ContactEntity, DealStageEntity, ActivityEntity, DealForecastCategoryEntity, DealEntity, DealTypeEntity, InvoiceEntity, ActivityAttachmentEntity, PaymentTermsTypeEntity, InvoiceStatusTypeEntity, SalesLineItemEntity, SalesTransactionEntity, CustomerAddress__client_financeEntity, Item__client_financeEntity, Customer__client_financeEntity, OrganizationLinkEntity, PersonLinkEntity, Account__client_crmEntity, StringMapEntity, ProductPriceLevelEntity, client_membershipEntity, Contact__client_crmEntity, UoMEntity, SalesOrderEntity, SalesOrderDetailEntity, ProductEntity, CustomerAddressEntity, SalesLineItem__client_membershipEntity, ItemEntity, CustomerEntity, SalesTransaction__client_membershipEntity } from 'mj_generatedentities';
     
+
+//****************************************************************************
+// ENTITY CLASS for Quad Demos
+//****************************************************************************
+@ObjectType()
+export class QuadDemo_ {
+    @Field(() => Int) 
+    ID: number;
+        
+    @Field() 
+    @MaxLength(510)
+    Name: string;
+        
+    @Field({nullable: true}) 
+    Description?: string;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for Quad Demos
+//****************************************************************************
+@InputType()
+export class CreateQuadDemoInput {
+    @Field()
+    Name: string;
+
+    @Field({ nullable: true })
+    Description?: string;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for Quad Demos
+//****************************************************************************
+@InputType()
+export class UpdateQuadDemoInput {
+    @Field(() => Int)
+    ID: number;
+
+    @Field()
+    Name: string;
+
+    @Field({ nullable: true })
+    Description?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
+//****************************************************************************
+// RESOLVER for Quad Demos
+//****************************************************************************
+@ObjectType()
+export class RunQuadDemoViewResult {
+    @Field(() => [QuadDemo_])
+    Results: QuadDemo_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(QuadDemo_)
+export class QuadDemoResolver extends ResolverBase {
+    @Query(() => RunQuadDemoViewResult)
+    async RunQuadDemoViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunQuadDemoViewResult)
+    async RunQuadDemoViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunQuadDemoViewResult)
+    async RunQuadDemoDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        input.EntityName = 'Quad Demos';
+        return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
+    }
+    @Query(() => QuadDemo_, { nullable: true })
+    async QuadDemo(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<QuadDemo_ | null> {
+        this.CheckUserReadPermissions('Quad Demos', userPayload);
+        const sSQL = `SELECT * FROM [crm].[vwQuadDemos] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Quad Demos', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Quad Demos', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
+    }
+    
+    @Mutation(() => QuadDemo_)
+    async CreateQuadDemo(
+        @Arg('input', () => CreateQuadDemoInput) input: CreateQuadDemoInput,
+        @Ctx() { dataSource, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.CreateRecord('Quad Demos', input, dataSource, userPayload, pubSub)
+    }
+        
+    @Mutation(() => QuadDemo_)
+    async UpdateQuadDemo(
+        @Arg('input', () => UpdateQuadDemoInput) input: UpdateQuadDemoInput,
+        @Ctx() { dataSource, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.UpdateRecord('Quad Demos', input, dataSource, userPayload, pubSub);
+    }
+    
+    @Mutation(() => QuadDemo_)
+    async DeleteQuadDemo(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Quad Demos', key, options, dataSource, userPayload, pubSub);
+    }
+    
+}
 
 //****************************************************************************
 // ENTITY CLASS for Thread Details
 //****************************************************************************
 @ObjectType()
-export class ThreadDetail_ {  
+export class ThreadDetail_ {
     @Field(() => Int) 
     ID: number;
-          
+        
     @Field(() => Int) 
     ThreadID: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     UserID?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     UserIP?: string;
-          
+        
     @Field() 
     @MaxLength(8)
     Created: Date;
-          
+        
     @Field() 
     @MaxLength(8)
     Updated: Date;
-          
+        
     @Field() 
     @MaxLength(40)
     Status: string;
-          
+        
     @Field({nullable: true}) 
     StatusMessage?: string;
-          
+        
     @Field({nullable: true}) 
     Response?: string;
-          
+        
     @Field() 
     @MaxLength(400)
     Thread: string;
         
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for Thread Details   
+// INPUT TYPE for Thread Details
 //****************************************************************************
 @InputType()
 export class CreateThreadDetailInput {
@@ -94,9 +228,9 @@ export class CreateThreadDetailInput {
     Response?: string;
 }
     
-        
+
 //****************************************************************************
-// INPUT TYPE for Thread Details   
+// INPUT TYPE for Thread Details
 //****************************************************************************
 @InputType()
 export class UpdateThreadDetailInput {
@@ -139,8 +273,8 @@ export class RunThreadDetailViewResult {
     @Field(() => [ThreadDetail_])
     Results: ThreadDetail_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -186,7 +320,7 @@ export class ThreadDetailResolver extends ResolverBase {
     @Mutation(() => ThreadDetail_)
     async CreateThreadDetail(
         @Arg('input', () => CreateThreadDetailInput) input: CreateThreadDetailInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
+        @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.CreateRecord('Thread Details', input, dataSource, userPayload, pubSub)
@@ -207,10 +341,10 @@ export class ThreadDetailResolver extends ResolverBase {
 // ENTITY CLASS for Threads
 //****************************************************************************
 @ObjectType()
-export class Thread_ {  
+export class Thread_ {
     @Field(() => Int) 
     ID: number;
-          
+        
     @Field() 
     @MaxLength(400)
     Name: string;
@@ -219,9 +353,9 @@ export class Thread_ {
     ThreadDetailsArray: ThreadDetail_[]; // Link to ThreadDetails
     
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for Threads   
+// INPUT TYPE for Threads
 //****************************************************************************
 @InputType()
 export class CreateThreadInput {
@@ -229,9 +363,9 @@ export class CreateThreadInput {
     Name: string;
 }
     
-        
+
 //****************************************************************************
-// INPUT TYPE for Threads   
+// INPUT TYPE for Threads
 //****************************************************************************
 @InputType()
 export class UpdateThreadInput {
@@ -253,8 +387,8 @@ export class RunThreadViewResult {
     @Field(() => [Thread_])
     Results: Thread_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -296,7 +430,7 @@ export class ThreadResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Threads', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-      
+    
     @FieldResolver(() => [ThreadDetail_])
     async ThreadDetailsArray(@Root() thread_: Thread_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Thread Details', userPayload);
@@ -308,7 +442,7 @@ export class ThreadResolver extends ResolverBase {
     @Mutation(() => Thread_)
     async CreateThread(
         @Arg('input', () => CreateThreadInput) input: CreateThreadInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
+        @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.CreateRecord('Threads', input, dataSource, userPayload, pubSub)
@@ -329,26 +463,26 @@ export class ThreadResolver extends ResolverBase {
 // ENTITY CLASS for Industries
 //****************************************************************************
 @ObjectType()
-export class Industry_ {  
+export class Industry_ {
     @Field(() => Int) 
     ID: number;
-          
+        
     @Field() 
     @MaxLength(40)
     Name: string;
-          
+        
     @Field() 
     @MaxLength(400)
     Description: string;
-          
+        
     @Field() 
     @MaxLength(8)
     CreatedAt: Date;
-          
+        
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
-          
+        
     @Field({nullable: true}) 
     Keywords?: string;
         
@@ -356,9 +490,9 @@ export class Industry_ {
     AccountsArray: Account_[]; // Link to Accounts
     
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for Industries   
+// INPUT TYPE for Industries
 //****************************************************************************
 @InputType()
 export class CreateIndustryInput {
@@ -372,9 +506,9 @@ export class CreateIndustryInput {
     Keywords?: string;
 }
     
-        
+
 //****************************************************************************
-// INPUT TYPE for Industries   
+// INPUT TYPE for Industries
 //****************************************************************************
 @InputType()
 export class UpdateIndustryInput {
@@ -402,8 +536,8 @@ export class RunIndustryViewResult {
     @Field(() => [Industry_])
     Results: Industry_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -445,7 +579,7 @@ export class IndustryResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Industries', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-      
+    
     @FieldResolver(() => [Account_])
     async AccountsArray(@Root() industry_: Industry_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Accounts', userPayload);
@@ -457,7 +591,7 @@ export class IndustryResolver extends ResolverBase {
     @Mutation(() => Industry_)
     async CreateIndustry(
         @Arg('input', () => CreateIndustryInput) input: CreateIndustryInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
+        @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.CreateRecord('Industries', input, dataSource, userPayload, pubSub)
@@ -478,24 +612,24 @@ export class IndustryResolver extends ResolverBase {
 // ENTITY CLASS for Contact Roles
 //****************************************************************************
 @ObjectType()
-export class ContactRole_ {  
+export class ContactRole_ {
     @Field(() => Int) 
     ID: number;
-          
+        
     @Field() 
     @MaxLength(100)
     Name: string;
-          
+        
     @Field({nullable: true}) 
     Description?: string;
-          
+        
     @Field({nullable: true}) 
     Keywords?: string;
-          
+        
     @Field() 
     @MaxLength(8)
     CreatedAt: Date;
-          
+        
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
@@ -504,9 +638,9 @@ export class ContactRole_ {
     ContactsArray: Contact_[]; // Link to Contacts
     
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for Contact Roles   
+// INPUT TYPE for Contact Roles
 //****************************************************************************
 @InputType()
 export class CreateContactRoleInput {
@@ -520,9 +654,9 @@ export class CreateContactRoleInput {
     Keywords?: string;
 }
     
-        
+
 //****************************************************************************
-// INPUT TYPE for Contact Roles   
+// INPUT TYPE for Contact Roles
 //****************************************************************************
 @InputType()
 export class UpdateContactRoleInput {
@@ -550,8 +684,8 @@ export class RunContactRoleViewResult {
     @Field(() => [ContactRole_])
     Results: ContactRole_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -593,7 +727,7 @@ export class ContactRoleResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Contact Roles', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-      
+    
     @FieldResolver(() => [Contact_])
     async ContactsArray(@Root() contactrole_: ContactRole_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Contacts', userPayload);
@@ -605,7 +739,7 @@ export class ContactRoleResolver extends ResolverBase {
     @Mutation(() => ContactRole_)
     async CreateContactRole(
         @Arg('input', () => CreateContactRoleInput) input: CreateContactRoleInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
+        @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.CreateRecord('Contact Roles', input, dataSource, userPayload, pubSub)
@@ -626,30 +760,30 @@ export class ContactRoleResolver extends ResolverBase {
 // ENTITY CLASS for Contact Levels
 //****************************************************************************
 @ObjectType()
-export class ContactLevel_ {  
+export class ContactLevel_ {
     @Field(() => Int) 
     ID: number;
-          
+        
     @Field() 
     @MaxLength(100)
     Name: string;
-          
+        
     @Field({nullable: true}) 
     Description?: string;
-          
+        
     @Field(() => Int) 
     Rank: number;
-          
+        
     @Field({nullable: true}) 
     Keywords?: string;
-          
+        
     @Field({nullable: true}) 
     ExcludeKeywords?: string;
-          
+        
     @Field() 
     @MaxLength(8)
     CreatedAt: Date;
-          
+        
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
@@ -658,9 +792,9 @@ export class ContactLevel_ {
     ContactsArray: Contact_[]; // Link to Contacts
     
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for Contact Levels   
+// INPUT TYPE for Contact Levels
 //****************************************************************************
 @InputType()
 export class CreateContactLevelInput {
@@ -680,9 +814,9 @@ export class CreateContactLevelInput {
     ExcludeKeywords?: string;
 }
     
-        
+
 //****************************************************************************
-// INPUT TYPE for Contact Levels   
+// INPUT TYPE for Contact Levels
 //****************************************************************************
 @InputType()
 export class UpdateContactLevelInput {
@@ -716,8 +850,8 @@ export class RunContactLevelViewResult {
     @Field(() => [ContactLevel_])
     Results: ContactLevel_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -759,7 +893,7 @@ export class ContactLevelResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Contact Levels', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-      
+    
     @FieldResolver(() => [Contact_])
     async ContactsArray(@Root() contactlevel_: ContactLevel_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Contacts', userPayload);
@@ -771,7 +905,7 @@ export class ContactLevelResolver extends ResolverBase {
     @Mutation(() => ContactLevel_)
     async CreateContactLevel(
         @Arg('input', () => CreateContactLevelInput) input: CreateContactLevelInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
+        @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.CreateRecord('Contact Levels', input, dataSource, userPayload, pubSub)
@@ -792,158 +926,165 @@ export class ContactLevelResolver extends ResolverBase {
 // ENTITY CLASS for Accounts
 //****************************************************************************
 @ObjectType()
-export class Account_ {  
+export class Account_ {
     @Field(() => Int) 
     ID: number;
-          
+        
     @Field() 
     @MaxLength(16)
     BCMID: string;
-          
+        
     @Field() 
     @MaxLength(510)
     Name: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     TaxID?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(40)
     Acronym?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(510)
     OperatingName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(500)
     DisplayName?: string;
-          
+        
     @Field({nullable: true}) 
     Description?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     AddressLine1?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     AddressLine2?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     AddressLine3?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     City?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     StateProvince?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(40)
     PostalCode?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     Country?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(10)
     ISOCountryCode?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(510)
     Domain?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(510)
     Website?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(510)
     EmailPattern?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(1000)
     LogoURL?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(510)
     LeadershipPageURL?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     PhoneNumber?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(510)
     LinkedIn?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(510)
     Facebook?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(510)
     Logo?: string;
-          
+        
     @Field(() => Int, {nullable: true}) 
     IndustryID?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     LastReviewedDate?: Date;
-          
+        
     @Field(() => Int) 
     ActivityCount: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     LatestActivityDate?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     EarliestActivityDate?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     RecordSource?: string;
-          
+        
     @Field() 
     @MaxLength(8)
     CreatedAt: Date;
-          
+        
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     LastEnrichedAt?: Date;
         
+    @Field({nullable: true}) 
+    @MaxLength(10)
+    _mj__DeletedAt?: Date;
+        
     @Field(() => [Contact_])
     ContactsArray: Contact_[]; // Link to Contacts
     
-    @Field(() => [Activity_])
-    ActivitiesArray: Activity_[]; // Link to Activities
-    
     @Field(() => [Deal_])
     DealsArray: Deal_[]; // Link to Deals
+    
+    @Field(() => [Activity_])
+    ActivitiesArray: Activity_[]; // Link to Activities
     
     @Field(() => [Invoice_])
     InvoicesArray: Invoice_[]; // Link to Invoices
     
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for Accounts   
+// INPUT TYPE for Accounts
 //****************************************************************************
 @InputType()
 export class CreateAccountInput {
+    @Field()
+    BCMID: string;
+
     @Field()
     Name: string;
 
@@ -1035,14 +1176,17 @@ export class CreateAccountInput {
     LastEnrichedAt?: Date;
 }
     
-        
+
 //****************************************************************************
-// INPUT TYPE for Accounts   
+// INPUT TYPE for Accounts
 //****************************************************************************
 @InputType()
 export class UpdateAccountInput {
     @Field(() => Int)
     ID: number;
+
+    @Field()
+    BCMID: string;
 
     @Field()
     Name: string;
@@ -1146,8 +1290,8 @@ export class RunAccountViewResult {
     @Field(() => [Account_])
     Results: Account_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -1189,7 +1333,7 @@ export class AccountResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Accounts', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-      
+    
     @FieldResolver(() => [Contact_])
     async ContactsArray(@Root() account_: Account_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Contacts', userPayload);
@@ -1197,15 +1341,7 @@ export class AccountResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Contacts', await dataSource.query(sSQL));
         return result;
     }
-          
-    @FieldResolver(() => [Activity_])
-    async ActivitiesArray(@Root() account_: Account_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('Activities', userPayload);
-        const sSQL = `SELECT * FROM [crm].[vwActivities] WHERE [AccountID]=${account_.ID} ` + this.getRowLevelSecurityWhereClause('Activities', userPayload, EntityPermissionType.Read, 'AND');
-        const result = this.ArrayMapFieldNamesToCodeNames('Activities', await dataSource.query(sSQL));
-        return result;
-    }
-          
+        
     @FieldResolver(() => [Deal_])
     async DealsArray(@Root() account_: Account_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Deals', userPayload);
@@ -1213,7 +1349,15 @@ export class AccountResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Deals', await dataSource.query(sSQL));
         return result;
     }
-          
+        
+    @FieldResolver(() => [Activity_])
+    async ActivitiesArray(@Root() account_: Account_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Activities', userPayload);
+        const sSQL = `SELECT * FROM [crm].[vwActivities] WHERE [AccountID]=${account_.ID} ` + this.getRowLevelSecurityWhereClause('Activities', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Activities', await dataSource.query(sSQL));
+        return result;
+    }
+        
     @FieldResolver(() => [Invoice_])
     async InvoicesArray(@Root() account_: Account_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Invoices', userPayload);
@@ -1225,7 +1369,7 @@ export class AccountResolver extends ResolverBase {
     @Mutation(() => Account_)
     async CreateAccount(
         @Arg('input', () => CreateAccountInput) input: CreateAccountInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
+        @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.CreateRecord('Accounts', input, dataSource, userPayload, pubSub)
@@ -1252,145 +1396,148 @@ export class AccountResolver extends ResolverBase {
 // ENTITY CLASS for Contacts
 //****************************************************************************
 @ObjectType()
-export class Contact_ {  
+export class Contact_ {
     @Field(() => Int) 
     ID: number;
-          
+        
     @Field() 
     @MaxLength(16)
     BCMID: string;
-          
+        
     @Field() 
     @MaxLength(200)
     FirstName: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     NickName?: string;
-          
+        
     @Field() 
     @MaxLength(200)
     LastName: string;
-          
+        
     @Field(() => Int, {nullable: true}) 
     AccountID?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     LastReviewedDate?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(400)
     Title?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     Email1?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     Email2?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     EmailSource?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     PhoneNumber?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(1000)
     ProfilePictureURL?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(510)
     Twitter?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(510)
     Instagram?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(1000)
     LinkedIn?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(510)
     Facebook?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(510)
     EmailStatus?: string;
-          
+        
     @Field(() => Int, {nullable: true}) 
     RoleID?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     LevelID?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(40)
     Prefix?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(500)
     Suffix?: string;
-          
+        
     @Field({nullable: true}) 
     Tags?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(40)
     Status?: string;
-          
+        
     @Field(() => Int) 
     ActivityCount: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     LatestActivityDate?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     EarliestActivityDate?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     RecordSource?: string;
-          
+        
     @Field() 
     @MaxLength(8)
     CreatedAt: Date;
-          
+        
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     LastEnrichedAt?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(510)
     Account?: string;
         
-    @Field(() => [Invoice_])
-    InvoicesArray: Invoice_[]; // Link to Invoices
-    
     @Field(() => [Deal_])
     DealsArray: Deal_[]; // Link to Deals
+    
+    @Field(() => [Invoice_])
+    InvoicesArray: Invoice_[]; // Link to Invoices
     
     @Field(() => [Activity_])
     ActivitiesArray: Activity_[]; // Link to Activities
     
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for Contacts   
+// INPUT TYPE for Contacts
 //****************************************************************************
 @InputType()
 export class CreateContactInput {
+    @Field()
+    BCMID: string;
+
     @Field()
     FirstName: string;
 
@@ -1473,14 +1620,17 @@ export class CreateContactInput {
     LastEnrichedAt?: Date;
 }
     
-        
+
 //****************************************************************************
-// INPUT TYPE for Contacts   
+// INPUT TYPE for Contacts
 //****************************************************************************
 @InputType()
 export class UpdateContactInput {
     @Field(() => Int)
     ID: number;
+
+    @Field()
+    BCMID: string;
 
     @Field()
     FirstName: string;
@@ -1575,8 +1725,8 @@ export class RunContactViewResult {
     @Field(() => [Contact_])
     Results: Contact_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -1618,15 +1768,7 @@ export class ContactResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Contacts', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-      
-    @FieldResolver(() => [Invoice_])
-    async InvoicesArray(@Root() contact_: Contact_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('Invoices', userPayload);
-        const sSQL = `SELECT * FROM [crm].[vwInvoices] WHERE [ContactID]=${contact_.ID} ` + this.getRowLevelSecurityWhereClause('Invoices', userPayload, EntityPermissionType.Read, 'AND');
-        const result = this.ArrayMapFieldNamesToCodeNames('Invoices', await dataSource.query(sSQL));
-        return result;
-    }
-          
+    
     @FieldResolver(() => [Deal_])
     async DealsArray(@Root() contact_: Contact_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Deals', userPayload);
@@ -1634,7 +1776,15 @@ export class ContactResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Deals', await dataSource.query(sSQL));
         return result;
     }
-          
+        
+    @FieldResolver(() => [Invoice_])
+    async InvoicesArray(@Root() contact_: Contact_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Invoices', userPayload);
+        const sSQL = `SELECT * FROM [crm].[vwInvoices] WHERE [ContactID]=${contact_.ID} ` + this.getRowLevelSecurityWhereClause('Invoices', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Invoices', await dataSource.query(sSQL));
+        return result;
+    }
+        
     @FieldResolver(() => [Activity_])
     async ActivitiesArray(@Root() contact_: Contact_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Activities', userPayload);
@@ -1646,7 +1796,7 @@ export class ContactResolver extends ResolverBase {
     @Mutation(() => Contact_)
     async CreateContact(
         @Arg('input', () => CreateContactInput) input: CreateContactInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
+        @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.CreateRecord('Contacts', input, dataSource, userPayload, pubSub)
@@ -1667,22 +1817,22 @@ export class ContactResolver extends ResolverBase {
 // ENTITY CLASS for Deal Stages
 //****************************************************************************
 @ObjectType()
-export class DealStage_ {  
+export class DealStage_ {
     @Field(() => Int) 
     ID: number;
-          
+        
     @Field() 
     @MaxLength(40)
     Name: string;
-          
+        
     @Field() 
     @MaxLength(400)
     Description: string;
-          
+        
     @Field() 
     @MaxLength(8)
     CreatedAt: Date;
-          
+        
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
@@ -1691,9 +1841,9 @@ export class DealStage_ {
     DealsArray: Deal_[]; // Link to Deals
     
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for Deal Stages   
+// INPUT TYPE for Deal Stages
 //****************************************************************************
 @InputType()
 export class CreateDealStageInput {
@@ -1704,9 +1854,9 @@ export class CreateDealStageInput {
     Description: string;
 }
     
-        
+
 //****************************************************************************
-// INPUT TYPE for Deal Stages   
+// INPUT TYPE for Deal Stages
 //****************************************************************************
 @InputType()
 export class UpdateDealStageInput {
@@ -1731,8 +1881,8 @@ export class RunDealStageViewResult {
     @Field(() => [DealStage_])
     Results: DealStage_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -1774,7 +1924,7 @@ export class DealStageResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Deal Stages', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-      
+    
     @FieldResolver(() => [Deal_])
     async DealsArray(@Root() dealstage_: DealStage_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Deals', userPayload);
@@ -1786,7 +1936,7 @@ export class DealStageResolver extends ResolverBase {
     @Mutation(() => DealStage_)
     async CreateDealStage(
         @Arg('input', () => CreateDealStageInput) input: CreateDealStageInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
+        @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.CreateRecord('Deal Stages', input, dataSource, userPayload, pubSub)
@@ -1807,89 +1957,92 @@ export class DealStageResolver extends ResolverBase {
 // ENTITY CLASS for Activities
 //****************************************************************************
 @ObjectType()
-export class Activity_ {  
+export class Activity_ {
     @Field(() => Int) 
     ID: number;
-          
+        
     @Field() 
     @MaxLength(16)
     BCMID: string;
-          
+        
     @Field(() => Int, {nullable: true}) 
     EmployeeID?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     ContactID?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     AccountID?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     DealID?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     ActivityDate?: Date;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     IsActive?: boolean;
-          
+        
     @Field({nullable: true}) 
     Description?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(60)
     Type?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(510)
     Attachment?: string;
-          
+        
     @Field(() => Int) 
     CompanyIntegrationID: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     ExternalSystemRecordID?: string;
-          
+        
     @Field() 
     @MaxLength(8)
     CreatedAt: Date;
-          
+        
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
-          
+        
     @Field(() => Int, {nullable: true}) 
     AttachmentID?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(510)
     Title?: string;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     IsOpened?: boolean;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     IsBounced?: boolean;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     IsReplied?: boolean;
-          
+        
     @Field({nullable: true}) 
     Summary?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(510)
     Account?: string;
         
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for Activities   
+// INPUT TYPE for Activities
 //****************************************************************************
 @InputType()
 export class CreateActivityInput {
+    @Field()
+    BCMID: string;
+
     @Field(() => Int, { nullable: true })
     EmployeeID?: number;
 
@@ -1942,14 +2095,17 @@ export class CreateActivityInput {
     Summary?: string;
 }
     
-        
+
 //****************************************************************************
-// INPUT TYPE for Activities   
+// INPUT TYPE for Activities
 //****************************************************************************
 @InputType()
 export class UpdateActivityInput {
     @Field(() => Int)
     ID: number;
+
+    @Field()
+    BCMID: string;
 
     @Field(() => Int, { nullable: true })
     EmployeeID?: number;
@@ -2014,8 +2170,8 @@ export class RunActivityViewResult {
     @Field(() => [Activity_])
     Results: Activity_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -2061,7 +2217,7 @@ export class ActivityResolver extends ResolverBase {
     @Mutation(() => Activity_)
     async CreateActivity(
         @Arg('input', () => CreateActivityInput) input: CreateActivityInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
+        @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.CreateRecord('Activities', input, dataSource, userPayload, pubSub)
@@ -2082,26 +2238,26 @@ export class ActivityResolver extends ResolverBase {
 // ENTITY CLASS for Deal Forecast Categories
 //****************************************************************************
 @ObjectType()
-export class DealForecastCategory_ {  
+export class DealForecastCategory_ {
     @Field(() => Int) 
     ID: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Name?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     DisplayName?: string;
-          
+        
     @Field() 
     @MaxLength(400)
     Description: string;
-          
+        
     @Field() 
     @MaxLength(8)
     CreatedAt: Date;
-          
+        
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
@@ -2110,9 +2266,9 @@ export class DealForecastCategory_ {
     DealsArray: Deal_[]; // Link to Deals
     
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for Deal Forecast Categories   
+// INPUT TYPE for Deal Forecast Categories
 //****************************************************************************
 @InputType()
 export class CreateDealForecastCategoryInput {
@@ -2126,9 +2282,9 @@ export class CreateDealForecastCategoryInput {
     Description: string;
 }
     
-        
+
 //****************************************************************************
-// INPUT TYPE for Deal Forecast Categories   
+// INPUT TYPE for Deal Forecast Categories
 //****************************************************************************
 @InputType()
 export class UpdateDealForecastCategoryInput {
@@ -2156,8 +2312,8 @@ export class RunDealForecastCategoryViewResult {
     @Field(() => [DealForecastCategory_])
     Results: DealForecastCategory_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -2199,7 +2355,7 @@ export class DealForecastCategoryResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Deal Forecast Categories', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-      
+    
     @FieldResolver(() => [Deal_])
     async DealsArray(@Root() dealforecastcategory_: DealForecastCategory_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Deals', userPayload);
@@ -2211,7 +2367,7 @@ export class DealForecastCategoryResolver extends ResolverBase {
     @Mutation(() => DealForecastCategory_)
     async CreateDealForecastCategory(
         @Arg('input', () => CreateDealForecastCategoryInput) input: CreateDealForecastCategoryInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
+        @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.CreateRecord('Deal Forecast Categories', input, dataSource, userPayload, pubSub)
@@ -2238,113 +2394,113 @@ export class DealForecastCategoryResolver extends ResolverBase {
 // ENTITY CLASS for Deals
 //****************************************************************************
 @ObjectType()
-export class Deal_ {  
+export class Deal_ {
     @Field(() => Int) 
     ID: number;
-          
+        
     @Field() 
     @MaxLength(16)
     BCMID: string;
-          
+        
     @Field() 
     @MaxLength(100)
     ExternalSystemRecordID: string;
-          
+        
     @Field(() => Int) 
     CompanyIntegrationID: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     AccountID?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     ContactID?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(510)
     Title?: string;
-          
+        
     @Field({nullable: true}) 
     Description?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Value?: number;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     IncludeInForecast?: boolean;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Probability?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     CloseDate?: Date;
-          
+        
     @Field(() => Int, {nullable: true}) 
     EmployeeID?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Pipeline?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     LeadSource?: string;
-          
+        
     @Field({nullable: true}) 
     LeadSourceDetail?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     ExternalSystemCreatedAt?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     ExternalSystemUpdatedAt?: Date;
-          
+        
     @Field() 
     @MaxLength(8)
     CreatedAt: Date;
-          
+        
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
-          
+        
     @Field(() => Int, {nullable: true}) 
     DealTypeID?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     DealStageID?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     DealForecastCategoryID?: number;
-          
+        
     @Field(() => Float) 
     MRR: number;
-          
+        
     @Field(() => Float) 
     OneTimeFees: number;
-          
+        
     @Field(() => Int) 
     ContractTermMonths: number;
-          
+        
     @Field({nullable: true}) 
     ForecastNotes?: string;
-          
+        
     @Field(() => Boolean) 
     IsDeleted: boolean;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(510)
     Account?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     DealType?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(40)
     DealStage?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     DealForecastCategory?: string;
@@ -2353,12 +2509,15 @@ export class Deal_ {
     ActivitiesArray: Activity_[]; // Link to Activities
     
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for Deals   
+// INPUT TYPE for Deals
 //****************************************************************************
 @InputType()
 export class CreateDealInput {
+    @Field()
+    BCMID: string;
+
     @Field()
     ExternalSystemRecordID: string;
 
@@ -2432,14 +2591,17 @@ export class CreateDealInput {
     IsDeleted: boolean;
 }
     
-        
+
 //****************************************************************************
-// INPUT TYPE for Deals   
+// INPUT TYPE for Deals
 //****************************************************************************
 @InputType()
 export class UpdateDealInput {
     @Field(() => Int)
     ID: number;
+
+    @Field()
+    BCMID: string;
 
     @Field()
     ExternalSystemRecordID: string;
@@ -2525,8 +2687,8 @@ export class RunDealViewResult {
     @Field(() => [Deal_])
     Results: Deal_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -2568,7 +2730,7 @@ export class DealResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Deals', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-      
+    
     @FieldResolver(() => [Activity_])
     async ActivitiesArray(@Root() deal_: Deal_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Activities', userPayload);
@@ -2580,7 +2742,7 @@ export class DealResolver extends ResolverBase {
     @Mutation(() => Deal_)
     async CreateDeal(
         @Arg('input', () => CreateDealInput) input: CreateDealInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
+        @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.CreateRecord('Deals', input, dataSource, userPayload, pubSub)
@@ -2601,26 +2763,26 @@ export class DealResolver extends ResolverBase {
 // ENTITY CLASS for Deal Types
 //****************************************************************************
 @ObjectType()
-export class DealType_ {  
+export class DealType_ {
     @Field(() => Int) 
     ID: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Name?: string;
-          
+        
     @Field() 
     @MaxLength(400)
     Description: string;
-          
+        
     @Field() 
     @MaxLength(8)
     CreatedAt: Date;
-          
+        
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(40)
     DisplayName?: string;
@@ -2629,9 +2791,9 @@ export class DealType_ {
     DealsArray: Deal_[]; // Link to Deals
     
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for Deal Types   
+// INPUT TYPE for Deal Types
 //****************************************************************************
 @InputType()
 export class CreateDealTypeInput {
@@ -2645,9 +2807,9 @@ export class CreateDealTypeInput {
     DisplayName?: string;
 }
     
-        
+
 //****************************************************************************
-// INPUT TYPE for Deal Types   
+// INPUT TYPE for Deal Types
 //****************************************************************************
 @InputType()
 export class UpdateDealTypeInput {
@@ -2675,8 +2837,8 @@ export class RunDealTypeViewResult {
     @Field(() => [DealType_])
     Results: DealType_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -2718,7 +2880,7 @@ export class DealTypeResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Deal Types', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-      
+    
     @FieldResolver(() => [Deal_])
     async DealsArray(@Root() dealtype_: DealType_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Deals', userPayload);
@@ -2730,7 +2892,7 @@ export class DealTypeResolver extends ResolverBase {
     @Mutation(() => DealType_)
     async CreateDealType(
         @Arg('input', () => CreateDealTypeInput) input: CreateDealTypeInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
+        @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.CreateRecord('Deal Types', input, dataSource, userPayload, pubSub)
@@ -2751,85 +2913,88 @@ export class DealTypeResolver extends ResolverBase {
 // ENTITY CLASS for Invoices
 //****************************************************************************
 @ObjectType()
-export class Invoice_ {  
+export class Invoice_ {
     @Field(() => Int) 
     ID: number;
-          
+        
     @Field() 
     @MaxLength(16)
     BCMID: string;
-          
+        
     @Field() 
     @MaxLength(8)
     InvoiceDate: Date;
-          
+        
     @Field(() => Int) 
     AccountID: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     ContactID?: number;
-          
+        
     @Field(() => Float) 
     SubTotal: number;
-          
+        
     @Field(() => Float) 
     Tax: number;
-          
+        
     @Field(() => Float) 
     Total: number;
-          
+        
     @Field(() => Int) 
     CompanyIntegrationID: number;
-          
+        
     @Field() 
     @MaxLength(100)
     ExternalSystemRecordID: string;
-          
+        
     @Field() 
     @MaxLength(40)
     InvoiceNumber: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     PostingDate?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     DueDate?: Date;
-          
+        
     @Field(() => Int) 
     StatusID: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     PaymentTermsID?: number;
-          
+        
     @Field() 
     @MaxLength(8)
     CreatedAt: Date;
-          
+        
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
-          
+        
     @Field() 
     @MaxLength(510)
     Account: string;
-          
+        
     @Field() 
     @MaxLength(40)
     Status: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     PaymentTerms?: string;
         
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for Invoices   
+// INPUT TYPE for Invoices
 //****************************************************************************
 @InputType()
 export class CreateInvoiceInput {
+    @Field()
+    BCMID: string;
+
     @Field()
     InvoiceDate: Date;
 
@@ -2870,14 +3035,17 @@ export class CreateInvoiceInput {
     PaymentTermsID?: number;
 }
     
-        
+
 //****************************************************************************
-// INPUT TYPE for Invoices   
+// INPUT TYPE for Invoices
 //****************************************************************************
 @InputType()
 export class UpdateInvoiceInput {
     @Field(() => Int)
     ID: number;
+
+    @Field()
+    BCMID: string;
 
     @Field()
     InvoiceDate: Date;
@@ -2930,8 +3098,8 @@ export class RunInvoiceViewResult {
     @Field(() => [Invoice_])
     Results: Invoice_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -2977,7 +3145,7 @@ export class InvoiceResolver extends ResolverBase {
     @Mutation(() => Invoice_)
     async CreateInvoice(
         @Arg('input', () => CreateInvoiceInput) input: CreateInvoiceInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
+        @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.CreateRecord('Invoices', input, dataSource, userPayload, pubSub)
@@ -2998,18 +3166,18 @@ export class InvoiceResolver extends ResolverBase {
 // ENTITY CLASS for Activity Attachments
 //****************************************************************************
 @ObjectType()
-export class ActivityAttachment_ {  
+export class ActivityAttachment_ {
     @Field(() => Int) 
     ID: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(510)
     Attachments?: string;
-          
+        
     @Field() 
     @MaxLength(8)
     CreatedAt: Date;
-          
+        
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
@@ -3018,9 +3186,9 @@ export class ActivityAttachment_ {
     ActivitiesArray: Activity_[]; // Link to Activities
     
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for Activity Attachments   
+// INPUT TYPE for Activity Attachments
 //****************************************************************************
 @InputType()
 export class CreateActivityAttachmentInput {
@@ -3028,9 +3196,9 @@ export class CreateActivityAttachmentInput {
     Attachments?: string;
 }
     
-        
+
 //****************************************************************************
-// INPUT TYPE for Activity Attachments   
+// INPUT TYPE for Activity Attachments
 //****************************************************************************
 @InputType()
 export class UpdateActivityAttachmentInput {
@@ -3052,8 +3220,8 @@ export class RunActivityAttachmentViewResult {
     @Field(() => [ActivityAttachment_])
     Results: ActivityAttachment_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -3095,7 +3263,7 @@ export class ActivityAttachmentResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Activity Attachments', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-      
+    
     @FieldResolver(() => [Activity_])
     async ActivitiesArray(@Root() activityattachment_: ActivityAttachment_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Activities', userPayload);
@@ -3107,7 +3275,7 @@ export class ActivityAttachmentResolver extends ResolverBase {
     @Mutation(() => ActivityAttachment_)
     async CreateActivityAttachment(
         @Arg('input', () => CreateActivityAttachmentInput) input: CreateActivityAttachmentInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
+        @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.CreateRecord('Activity Attachments', input, dataSource, userPayload, pubSub)
@@ -3128,41 +3296,41 @@ export class ActivityAttachmentResolver extends ResolverBase {
 // ENTITY CLASS for Payment Terms Types
 //****************************************************************************
 @ObjectType()
-export class PaymentTermsType_ {  
+export class PaymentTermsType_ {
     @Field(() => Int) 
     ID: number;
-          
+        
     @Field() 
     @MaxLength(100)
     Name: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(40)
     DisplayName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(40)
     Code?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(40)
     DueDateCalculation?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(400)
     Description?: string;
-          
+        
     @Field() 
     @MaxLength(8)
     CreatedAt: Date;
-          
+        
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
-          
+        
     @Field(() => Int, {nullable: true}) 
     CompanyIntegrationID?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     ExternalSystemRecordID?: string;
@@ -3171,9 +3339,9 @@ export class PaymentTermsType_ {
     InvoicesArray: Invoice_[]; // Link to Invoices
     
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for Payment Terms Types   
+// INPUT TYPE for Payment Terms Types
 //****************************************************************************
 @InputType()
 export class CreatePaymentTermsTypeInput {
@@ -3199,9 +3367,9 @@ export class CreatePaymentTermsTypeInput {
     ExternalSystemRecordID?: string;
 }
     
-        
+
 //****************************************************************************
-// INPUT TYPE for Payment Terms Types   
+// INPUT TYPE for Payment Terms Types
 //****************************************************************************
 @InputType()
 export class UpdatePaymentTermsTypeInput {
@@ -3241,8 +3409,8 @@ export class RunPaymentTermsTypeViewResult {
     @Field(() => [PaymentTermsType_])
     Results: PaymentTermsType_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -3284,7 +3452,7 @@ export class PaymentTermsTypeResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Payment Terms Types', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-      
+    
     @FieldResolver(() => [Invoice_])
     async InvoicesArray(@Root() paymenttermstype_: PaymentTermsType_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Invoices', userPayload);
@@ -3296,7 +3464,7 @@ export class PaymentTermsTypeResolver extends ResolverBase {
     @Mutation(() => PaymentTermsType_)
     async CreatePaymentTermsType(
         @Arg('input', () => CreatePaymentTermsTypeInput) input: CreatePaymentTermsTypeInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
+        @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.CreateRecord('Payment Terms Types', input, dataSource, userPayload, pubSub)
@@ -3317,22 +3485,22 @@ export class PaymentTermsTypeResolver extends ResolverBase {
 // ENTITY CLASS for Invoice Status Types
 //****************************************************************************
 @ObjectType()
-export class InvoiceStatusType_ {  
+export class InvoiceStatusType_ {
     @Field(() => Int) 
     ID: number;
-          
+        
     @Field() 
     @MaxLength(40)
     Name: string;
-          
+        
     @Field() 
     @MaxLength(400)
     Description: string;
-          
+        
     @Field() 
     @MaxLength(8)
     CreatedAt: Date;
-          
+        
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
@@ -3341,9 +3509,9 @@ export class InvoiceStatusType_ {
     InvoicesArray: Invoice_[]; // Link to Invoices
     
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for Invoice Status Types   
+// INPUT TYPE for Invoice Status Types
 //****************************************************************************
 @InputType()
 export class CreateInvoiceStatusTypeInput {
@@ -3354,9 +3522,9 @@ export class CreateInvoiceStatusTypeInput {
     Description: string;
 }
     
-        
+
 //****************************************************************************
-// INPUT TYPE for Invoice Status Types   
+// INPUT TYPE for Invoice Status Types
 //****************************************************************************
 @InputType()
 export class UpdateInvoiceStatusTypeInput {
@@ -3381,8 +3549,8 @@ export class RunInvoiceStatusTypeViewResult {
     @Field(() => [InvoiceStatusType_])
     Results: InvoiceStatusType_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -3424,7 +3592,7 @@ export class InvoiceStatusTypeResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Invoice Status Types', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-      
+    
     @FieldResolver(() => [Invoice_])
     async InvoicesArray(@Root() invoicestatustype_: InvoiceStatusType_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Invoices', userPayload);
@@ -3436,7 +3604,7 @@ export class InvoiceStatusTypeResolver extends ResolverBase {
     @Mutation(() => InvoiceStatusType_)
     async CreateInvoiceStatusType(
         @Arg('input', () => CreateInvoiceStatusTypeInput) input: CreateInvoiceStatusTypeInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
+        @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.CreateRecord('Invoice Status Types', input, dataSource, userPayload, pubSub)
@@ -3457,2053 +3625,2053 @@ export class InvoiceStatusTypeResolver extends ResolverBase {
 // ENTITY CLASS for Sales Line Items
 //****************************************************************************
 @ObjectType()
-export class SalesLineItem_ {  
+export class SalesLineItem_ {
     @Field() 
     @MaxLength(100)
     SOP_Type: string;
-          
+        
     @Field() 
     @MaxLength(21)
     SOP_Number: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(31)
     Item_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(101)
     Item_Description?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     QTY?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Extended_Cost?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Extended_Price?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Unit_Cost?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Unit_Price?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Customer_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     ABC_Code?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Account_Amount?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     Accounts_Receivable_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Actual_Ship_Date?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Actual_Ship_Date_from_Sales_Transaction?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(61)
     Address_1_from_Customer_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(61)
     Address_1_from_Sales_Line_Item?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(61)
     Address_1_from_Sales_Transaction?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(61)
     Address_2_from_Customer_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(61)
     Address_2_from_Sales_Line_Item?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(61)
     Address_2_from_Sales_Transaction?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(61)
     Address_3_from_Customer_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(61)
     Address_3_from_Sales_Line_Item?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(61)
     Address_3_from_Sales_Transaction?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Address_Code_from_Customer_Master?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Aging_Bucket1?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Aging_Bucket2?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Aging_Bucket3?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Aging_Bucket4?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Aging_Bucket5?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Aging_Bucket6?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Aging_Bucket7?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Allocate_By?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Allow_Back_Orders?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(31)
     Alternate_Item_1?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(31)
     Alternate_Item_2?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Apply_Withholding?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     Assembly_Variance_Account_Number?: string;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Average_Days_To_Pay___Life?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Average_Days_To_Pay___Year?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Average_Days_to_Pay___LYR?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Back_Order_Date?: Date;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Backout_Freight_Amount?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Backout_Misc_Amount?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Backout_Sales_Amount?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Backout_Tax_Amount?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Balance_Type?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     Bank_Branch?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(31)
     Bank_Name?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Based_On_Invoice_Total?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Based_On_Invoice_Total_from_Sales_Transaction?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Batch_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Batch_Source?: string;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Break_Field_1?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Break_Field_2?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Break_Field_3?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     COD_Amount?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     COGS_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     COGS_Account_Number_from_Customer_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     COGS_Account_Number_from_Item_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     COGS_Inflation_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     COGS_Monetary_Correction_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     Cash_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Checkbook_ID?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(35)
     City_from_Customer_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(35)
     City_from_Sales_Line_Item?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(35)
     City_from_Sales_Transaction?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(31)
     Comment1_from_Customer_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(31)
     Comment2_from_Customer_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(51)
     Comment_1?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(51)
     Comment_2?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(51)
     Comment_3?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(51)
     Comment_4?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Comment_ID?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Comment_ID_from_Sales_Transaction?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Commission_Amount?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Commission_Applied_To?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Commission_Sale_Amount?: number;
-          
+        
     @Field(() => Int) 
     Component_Sequence: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(61)
     Contact_Person_from_Customer_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(61)
     Contact_Person_from_Sales_Line_Item?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(61)
     Contact_Person_from_Sales_Transaction?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Contract_End_Date?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(31)
     Contract_Item_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(11)
     Contract_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     Contract_Serial_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Contract_Start_Date?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Corporate_Customer_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Correction?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Correction_to_Nonexisting_Transaction?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(61)
     Country_from_Customer_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(61)
     Country_from_Sales_Line_Item?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(61)
     Country_from_Sales_Transaction?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Created_Date_from_Customer_Master?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Created_Date_from_Item_Master?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Created_Date_from_Sales_Transaction?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Credit_Card_Exp_Date?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Credit_Card_ID?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Credit_Limit_Amount?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Credit_Limit_Period?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Credit_Limit_Period_Amount?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Credit_Limit_Type?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Currency_ID?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Currency_ID_from_Customer_Master?: string;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Currency_Index?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Currency_Index_from_Sales_Transaction?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Current_Cost?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Customer_Balance?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Customer_Class?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Customer_Discount?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(65)
     Customer_Name?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(65)
     Customer_Name_from_Customer_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     Customer_PO_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     Damaged_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     Damaged_Account_Number_from_Item_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Date_Last_Repeated?: Date;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Days_to_Increment?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Decimal_Places_Currency?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Decimal_Places_Currency_from_Item_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Decimal_Places_QTYS?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Decimal_Places_QTYS_from_Item_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Default_Cash_Account_Type?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Denomination_Exchange_Rate?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Deposit_Received?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Deposits_Received?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Dest_Batch_1?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Dest_Batch_2?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Discount_Available_Amount?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Discount_Available_Freight?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Discount_Available_Misc?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Discount_Available_Sales?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Discount_Available_Taken?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Discount_Date?: Date;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Discount_Dollar_Amount?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Discount_Grace_Period?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Discount_Percent_Amount?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Discount_Returned?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Discount_Taken_Amount?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     Discounts_Available_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     Discounts_Taken_Account_Number?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Document_Amount?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Document_Date?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Document_Format_ID?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Document_ID?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     Document_Number_Corrected?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     Document_Number_Corrected_from_Sales_Transaction?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Document_Status?: string;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Drop_Ship?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     Drop_Ship_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Due_Date?: Date;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Due_Date_Grace_Period?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     EC_Transaction?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Exceptional_Demand_from_Sales_Line_Item?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Exchange_Date?: Date;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Exchange_Rate?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Exchange_Table_ID?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Existing_Qty_Available?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Existing_Qty_Selected?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Extended_Cost_from_Sales_Transaction?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     Fax_Number_from_Sales_Line_Item?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     Fax_Number_from_Sales_Transaction?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     Fax_from_Customer_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     Finance_Charge_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Finance_Charge_Amt_Type?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Finance_Charge_Dollar?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Finance_Charge_ID?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Finance_Charge_Percent?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Finance_Charges_CYTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Finance_Charges_LYR_Calendar?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     First_Invoice_Date?: Date;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Freight_Amount?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Freight_Schedule_ID?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Freight_Tax_Amount?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Freight_Taxable?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Fulfillment_Date?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Fulfillment_Date_from_Sales_Transaction?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     GL_Posting_Date?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(31)
     Governmental_Corporate_ID?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(31)
     Governmental_Individual_ID?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     High_Balance_LTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     High_Balance_LYR?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     High_Balance_YTD?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Hold?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     IV_Item_Taxable?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     In_Service_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     In_Service_Account_Number_from_Item_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     In_Use_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     In_Use_Account_Number_from_Item_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Inactive?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     Inventory_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     Inventory_Account_Number_from_Customer_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     Inventory_Account_Number_from_Item_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     Inventory_Inflation_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     Inventory_Monetary_Correction_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     Inventory_Offset_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     Inventory_Returns_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Invoice_Date?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(11)
     Item_Class_Code?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Item_Code?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Item_Code_from_Item_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(101)
     Item_Description_from_Item_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(11)
     Item_Generic_Description?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Item_Shipping_Weight?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Item_Short_Name?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Item_Tax_Schedule_ID?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Item_Tax_Schedule_ID_from_Item_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Item_Tracking_Option?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Item_Type?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Keep_Calendar_History?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Keep_Calendar_History_from_Customer_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Keep_Distribution_History?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Keep_Distribution_History_from_Customer_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Keep_Period_History?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Keep_Period_History_from_Customer_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Keep_Trx_History?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Keep_Trx_History_from_Customer_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Kit_COGS_Account_Source?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Last_Aged?: Date;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Last_Finance_Charge_Amount?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     Last_Generated_Serial_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Last_NSF_Check_Date?: Date;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Last_Payment_Amount?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Last_Payment_Date?: Date;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Last_Statement_Amount?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Last_Statement_Date?: Date;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Last_Transaction_Amount?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Last_Transaction_Date?: Date;
-          
+        
     @Field(() => Int) 
     Line_Item_Sequence: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(11)
     Location_Code?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(11)
     Location_Code_from_Item_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(11)
     Location_Code_from_Sales_Transaction?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(11)
     Lot_Type?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     MC_Transaction_State?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     Markdown_Account_Number?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Markdown_Amount?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Markdown_Amount_from_Sales_Transaction?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Markdown_Percent?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Markdown_Type?: string;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Master_Number?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Master_Record_Type?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Max_Writeoff_Amount?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Maximum_Writeoff_Type?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Minimum_Payment_Dollar?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Minimum_Payment_Percent?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Minimum_Payment_Type?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Misc_Amount?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Misc_Schedule_ID?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Misc_Tax_Amount?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Misc_Taxable?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Modified_Date_from_Customer_Master?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Modified_Date_from_Item_Master?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Modified_Date_from_Sales_Transaction?: Date;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Non_Commissioned_Amount?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Non_Current_Scheduled_Payments?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Non_IV?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Note_Index_from_Customer_Master?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Note_Index_from_Item_Master?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Note_Index_from_Sales_Transaction?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Number_ADTP_Documents___LYR?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Number_ADTP_Documents___Life?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Number_ADTP_Documents___Year?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Number_Of_NSF_Checks_Life?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Number_Of_NSF_Checks_YTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     On_Order_Amount?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Order_Date?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Order_Fulfillment_Shortage_Default?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     Original_Number?: string;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Original_Sequence_Number_Corrected?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Original_Type?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Originating_Account_Amount?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Originating_Backout_Freight_Amount?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Originating_Backout_Misc_Amount?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Originating_Backout_Sales_Amount?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Originating_Backout_Tax_Amount?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Originating_COD_Amount?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Originating_Commission_Amount?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Originating_Commission_Sales_Amount?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Originating_Decimal_Places_Currency?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Originating_Deposit_Received?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Originating_Discount_Available_Amount?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Originating_Discount_Available_Freight?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Originating_Discount_Available_Misc?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Originating_Discount_Available_Sales?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Originating_Discount_Available_Taken?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Originating_Discount_Dollar_Amount?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Originating_Discount_Returned?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Originating_Discount_Taken_Amount?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Originating_Document_Amount?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Originating_Extended_Cost?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Originating_Extended_Cost_from_Sales_Transaction?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Originating_Extended_Price?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Originating_Freight_Amount?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Originating_Freight_Tax_Amount?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Originating_Markdown_Amount?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Originating_Markdown_Amount_from_Sales_Transaction?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Originating_Misc_Amount?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Originating_Misc_Tax_Amount?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Originating_Non_Commissioned_Amount?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Originating_Payment_Received?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Originating_Remaining_Price?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Originating_Remaining_Subtotal?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Originating_Subtotal?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Originating_Tax_Amount?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Originating_Tax_Amount_from_Sales_Transaction?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Originating_Taxable_Tax_Amount?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Originating_Taxable_Tax_Amount_from_Sales_Transaction?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Originating_Trade_Discount_Amount?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Originating_Trade_Discount_Amount_from_Sales_Transaction?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Originating_Unit_Cost?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Originating_Unit_Price?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     Packing_Slip_Number?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Payment_Received?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     Payment_Terms_ID?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     Payment_Terms_ID_from_Customer_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     Phone_1_from_Customer_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     Phone_1_from_Sales_Line_Item?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     Phone_2_from_Customer_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     Phone_2_from_Sales_Line_Item?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     Phone_3_from_Customer_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     Phone_3_from_Sales_Line_Item?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     Phone_3_from_Sales_Transaction?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     Phone_Number_1_from_Sales_Transaction?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     Phone_Number_2_from_Sales_Transaction?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     Picking_Ticket_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Post_Results_To?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Posted_Date?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Posted_User_ID?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Posting_Status?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(11)
     PriceLevel?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(11)
     PriceLevel_from_Customer_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(11)
     PriceLevel_from_Item_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(11)
     PriceLevel_from_Sales_Transaction?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(11)
     Price_Group?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Price_Method?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Primary_Billto_Address_Code?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Primary_Billto_Address_Code_from_Customer_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Primary_Shipto_Address_Code_from_Customer_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Primary_Shipto_Address_Code_from_Sales_Line_Item?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Primary_Shipto_Address_Code_from_Sales_Transaction?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Priority_from_Customer_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Prospect?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     Purch_Inflation_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     Purch_Monetary_Correction_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     Purchase_Price_Variance_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Purchasing_Status?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(9)
     Purchasing_U_Of_M?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     QTY_Allocated?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     QTY_Canceled?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     QTY_Canceled_Other?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     QTY_Damaged?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     QTY_Fulfilled?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     QTY_In_Base_U_Of_M?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     QTY_In_Service?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     QTY_In_Use?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     QTY_On_Hand?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     QTY_On_PO?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     QTY_Ordered?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     QTY_Prev_BO_On_Order?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     QTY_Prev_Back_Ordered?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     QTY_Prev_Invoiced?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     QTY_Prev_Ordered?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     QTY_Prev_Received?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     QTY_Received?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     QTY_Remaining?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     QTY_Remaining_On_BO?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     QTY_Returned?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     QTY_Selected?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     QTY_To_Back_Order?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     QTY_To_Invoice?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     QTY_To_Order?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Quote_Date?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Quote_Expiration_Date?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Rate_Calculation_Method?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Rate_Type_ID?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Rate_Type_ID_from_Customer_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(31)
     Reference?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Remaining_Price?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Remaining_Subtotal?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Repeating?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Requested_Ship_Date?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Requested_Ship_Date_from_Sales_Transaction?: Date;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Retainage?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Return_Date?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     Returns_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Revalue_Customer?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Sale_Date?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     Sales_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     Sales_Account_Number_from_Customer_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     Sales_Account_Number_from_Item_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     Sales_Discounts_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Sales_Document_Status?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     Sales_Returns_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Sales_Territory?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Sales_Territory_from_Customer_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Sales_Territory_from_Sales_Transaction?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Salesperson_ID?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Salesperson_ID_from_Customer_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Salesperson_ID_from_Sales_Transaction?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(9)
     Selling_U_Of_M?: string;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Sequence_Number_Corrected?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(65)
     ShipToName_from_Sales_Line_Item?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(65)
     ShipToName_from_Sales_Transaction?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Ship_Complete_Document?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Ship_Complete_Document_from_Customer_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Shipping_Document?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Shipping_Method?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Shipping_Method_from_Customer_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Shipping_Method_from_Sales_Transaction?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Short_Name?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Simplified?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Standard_Cost?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(29)
     State_from_Customer_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(29)
     State_from_Sales_Line_Item?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(29)
     State_from_Sales_Transaction?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Statement_Address_Code?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Statement_Cycle?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(65)
     Statement_Name?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Subtotal?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     TRX_Frequency?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(13)
     TRX_Source?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(13)
     TRX_Source_from_Sales_Transaction?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Tax_Amount?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Tax_Amount_from_Sales_Transaction?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(31)
     Tax_Commodity_Code?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Tax_Date?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Tax_Engine_Called?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(25)
     Tax_Exempt_1?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(25)
     Tax_Exempt_1_from_Customer_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(25)
     Tax_Exempt_2?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(25)
     Tax_Exempt_2_from_Customer_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Tax_Options?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(25)
     Tax_Registration_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(25)
     Tax_Registration_Number_from_Customer_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Tax_Schedule_ID_from_Customer_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Tax_Schedule_ID_from_Sales_Line_Item?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Tax_Schedule_ID_from_Sales_Transaction?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Tax_Schedule_Source_from_Sales_Line_Item?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Tax_Schedule_Source_from_Sales_Transaction?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Taxable_Tax_Amount?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Taxable_Tax_Amount_from_Sales_Transaction?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Time?: Date;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Times_Printed?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Times_Repeated?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Times_To_Repeat?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Total___FC_LTD?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Total___FC_LYR?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Total___FC_YTD?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Total___Invoices_LTD?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Total___Invoices_LYR?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Total___Invoices_YTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Amount_Of_NSF_Checks_Life?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Amount_Of_NSF_Checks_YTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Bad_Deb_LYR?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Bad_Debt_LTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Bad_Debt_YTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Cash_Received_LTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Cash_Received_LYR?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Cash_Received_YTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Costs_LTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Costs_LYR?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Costs_YTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Discounts_Available_YTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Discounts_Taken_LTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Discounts_Taken_LYR?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Discounts_Taken_YTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Finance_Charges_LTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Finance_Charges_LYR?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Finance_Charges_YTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Returns_LTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Returns_LYR?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Returns_YTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Sales_LTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Sales_LYR?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Sales_YTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Waived_FC_LTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Waived_FC_LYR?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Waived_FC_YTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Writeoffs_LTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Writeoffs_LYR?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Writeoffs_YTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Trade_Discount_Amount?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Trade_Discount_Amount_from_Sales_Transaction?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Trade_Discount_Percent?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(3)
     UPS_Zone?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(3)
     UPS_Zone_from_Customer_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(9)
     U_Of_M?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(11)
     U_Of_M_Schedule?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Unpaid_Finance_Charges_YTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Unposted_Cash_Amount?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Unposted_Other_Cash_Amount?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Unposted_Other_Sales_Amount?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Unposted_Sales_Amount?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     Unrealized_Purchase_Price_Variance_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Use_Document_ID_1?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Use_Document_ID_2?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(11)
     User_Category_Value_1?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(11)
     User_Category_Value_2?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(11)
     User_Category_Value_3?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(11)
     User_Category_Value_4?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(11)
     User_Category_Value_5?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(11)
     User_Category_Value_6?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     User_Defined_1?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     User_Defined_1_from_Customer_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     User_Defined_2?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     User_Defined_2_from_Customer_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     User_Defined_3?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     User_Defined_4?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     User_Defined_5?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     User_Defined_Date_1?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     User_Defined_Date_2?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     User_Defined_Table_1?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     User_Defined_Table_2?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     User_Defined_Table_3?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     User_To_Enter?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Valuation_Method?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     Variances_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Void_Status?: string;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Warranty_Days?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Withholding_Amount?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Write_Offs_LIFE?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Write_Offs_LYR?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Write_Offs_YTD?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     Writeoff_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(11)
     Zip_Code_from_Sales_Line_Item?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(11)
     Zip_Code_from_Sales_Transaction?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(11)
     Zip_from_Customer_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Workflow_Approval_Status_Credit_Limit?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Workflow_Priority_Credit_Limit?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Workflow_Approval_Status_Quote?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Workflow_Priority_Quote?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Accounts_Receivable_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Assembly_Variance_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Cash_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Checkbook_ID_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     COGS_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     COGS_Inflation_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     COGS_Monetary_Correction_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Customer_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Damaged_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Discounts_Available_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Discounts_Taken_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Drop_Ship_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Finance_Charge_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     In_Service_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     In_Use_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Inventory_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Inventory_Inflation_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Inventory_Monetary_Correction_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Inventory_Offset_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Inventory_Returns_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Item_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Markdown_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Purch_Inflation_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Purch_Monetary_Correction_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Purchase_Price_Variance_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Returns_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Sales_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Sales_Discounts_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Sales_Returns_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Salesperson_ID_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     SOP_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Unrealized_Purchase_Price_Variance_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Variances_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Writeoff_Account_Number_For_Drillback?: string;
-          
+        
     @Field(() => Int) 
     ID: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     SalesTransactionID?: number;
         
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for Sales Line Items   
+// INPUT TYPE for Sales Line Items
 //****************************************************************************
 @InputType()
 export class CreateSalesLineItemInput {
@@ -7203,9 +7371,9 @@ export class CreateSalesLineItemInput {
     SalesTransactionID?: number;
 }
     
-        
+
 //****************************************************************************
-// INPUT TYPE for Sales Line Items   
+// INPUT TYPE for Sales Line Items
 //****************************************************************************
 @InputType()
 export class UpdateSalesLineItemInput {
@@ -8919,8 +9087,8 @@ export class RunSalesLineItemViewResult {
     @Field(() => [SalesLineItem_])
     Results: SalesLineItem_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -8966,7 +9134,7 @@ export class SalesLineItemResolver extends ResolverBase {
     @Mutation(() => SalesLineItem_)
     async CreateSalesLineItem(
         @Arg('input', () => CreateSalesLineItemInput) input: CreateSalesLineItemInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
+        @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.CreateRecord('Sales Line Items', input, dataSource, userPayload, pubSub)
@@ -8987,1315 +9155,1315 @@ export class SalesLineItemResolver extends ResolverBase {
 // ENTITY CLASS for Sales Transactions
 //****************************************************************************
 @ObjectType()
-export class SalesTransaction_ {  
+export class SalesTransaction_ {
     @Field() 
     @MaxLength(100)
     SOP_Type: string;
-          
+        
     @Field() 
     @MaxLength(21)
     SOP_Number: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Document_Date?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Customer_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(65)
     Customer_Name?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     Customer_PO_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Primary_Shipto_Address_Code?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Sales_Document_Status?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Document_Amount?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Account_Amount?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     Accounts_Receivable_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Actual_Ship_Date?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(61)
     Address_1?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(61)
     Address_1_from_Customer_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(61)
     Address_2?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(61)
     Address_2_from_Customer_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(61)
     Address_3?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(61)
     Address_3_from_Customer_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Address_Code_from_Customer_Master?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Aging_Bucket1?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Aging_Bucket2?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Aging_Bucket3?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Aging_Bucket4?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Aging_Bucket5?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Aging_Bucket6?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Aging_Bucket7?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Allocate_By?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Apply_Withholding?: string;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Average_Days_To_Pay___Life?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Average_Days_To_Pay___Year?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Average_Days_to_Pay___LYR?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Back_Order_Date?: Date;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Backout_Freight_Amount?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Backout_Misc_Amount?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Backout_Tax_Amount?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Balance_Type?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     Bank_Branch?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(31)
     Bank_Name?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Based_On_Invoice_Total?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Batch_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Batch_Source?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     COD_Amount?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     COGS_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     Cash_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Checkbook_ID?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(35)
     City?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(35)
     City_from_Customer_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(31)
     Comment1_from_Customer_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(31)
     Comment2_from_Customer_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(51)
     Comment_1?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(51)
     Comment_2?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(51)
     Comment_3?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(51)
     Comment_4?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Comment_ID?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Commission_Amount?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Commission_Applied_To?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Commission_Sale_Amount?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(61)
     Contact_Person?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(61)
     Contact_Person_from_Customer_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Corporate_Customer_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Correction?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Correction_to_Nonexisting_Transaction?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(61)
     Country?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(61)
     Country_from_Customer_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Created_Date?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Created_Date_from_Customer_Master?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Credit_Card_Exp_Date?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Credit_Card_ID?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Credit_Limit_Amount?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Credit_Limit_Period?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Credit_Limit_Period_Amount?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Credit_Limit_Type?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Currency_ID?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Currency_ID_from_Customer_Master?: string;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Currency_Index?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Customer_Balance?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Customer_Class?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Customer_Discount?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(65)
     Customer_Name_from_Customer_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Date_Last_Repeated?: Date;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Days_to_Increment?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Default_Cash_Account_Type?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Denomination_Exchange_Rate?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Deposit_Received?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Deposits_Received?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Dest_Batch_1?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Dest_Batch_2?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Discount_Available_Amount?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Discount_Available_Freight?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Discount_Available_Misc?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Discount_Available_Taken?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Discount_Date?: Date;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Discount_Dollar_Amount?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Discount_Grace_Period?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Discount_Percent_Amount?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Discount_Returned?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Discount_Taken_Amount?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     Discounts_Available_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     Discounts_Taken_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Document_Format_ID?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Document_ID?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     Document_Number_Corrected?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Document_Status?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Due_Date?: Date;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Due_Date_Grace_Period?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     EC_Transaction?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Exceptional_Demand_from_Sales_Transaction?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Exchange_Date?: Date;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Exchange_Rate?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Exchange_Table_ID?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Extended_Cost?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     Fax_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     Fax_from_Customer_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     Finance_Charge_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Finance_Charge_Amt_Type?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Finance_Charge_Dollar?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Finance_Charge_ID?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Finance_Charge_Percent?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Finance_Charges_CYTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Finance_Charges_LYR_Calendar?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     First_Invoice_Date?: Date;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Freight_Amount?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Freight_Schedule_ID?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Freight_Tax_Amount?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Freight_Taxable?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Fulfillment_Date?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     GL_Posting_Date?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(31)
     Governmental_Corporate_ID?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(31)
     Governmental_Individual_ID?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     High_Balance_LTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     High_Balance_LYR?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     High_Balance_YTD?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Hold?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Inactive?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     Inventory_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Invoice_Date?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Keep_Calendar_History?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Keep_Distribution_History?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Keep_Period_History?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Keep_Trx_History?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Last_Aged?: Date;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Last_Finance_Charge_Amount?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Last_NSF_Check_Date?: Date;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Last_Payment_Amount?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Last_Payment_Date?: Date;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Last_Statement_Amount?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Last_Statement_Date?: Date;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Last_Transaction_Amount?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Last_Transaction_Date?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(11)
     Location_Code?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     MC_Transaction_State?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Markdown_Amount?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Master_Number?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Max_Writeoff_Amount?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Maximum_Writeoff_Type?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Minimum_Payment_Dollar?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Minimum_Payment_Percent?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Minimum_Payment_Type?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Misc_Amount?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Misc_Schedule_ID?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Misc_Tax_Amount?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Misc_Taxable?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Modified_Date?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Modified_Date_from_Customer_Master?: Date;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Non_Commissioned_Amount?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Non_Current_Scheduled_Payments?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Note_Index?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Note_Index_from_Customer_Master?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Number_ADTP_Documents___LYR?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Number_ADTP_Documents___Life?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Number_ADTP_Documents___Year?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Number_Of_NSF_Checks_Life?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Number_Of_NSF_Checks_YTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     On_Order_Amount?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Order_Date?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Order_Fulfillment_Shortage_Default?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     Original_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Original_Type?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Originating_Account_Amount?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Originating_Backout_Freight_Amount?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Originating_Backout_Misc_Amount?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Originating_Backout_Tax_Amount?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Originating_COD_Amount?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Originating_Commission_Amount?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Originating_Commission_Sales_Amount?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Originating_Deposit_Received?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Originating_Discount_Available_Amount?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Originating_Discount_Available_Freight?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Originating_Discount_Available_Misc?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Originating_Discount_Available_Taken?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Originating_Discount_Dollar_Amount?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Originating_Discount_Returned?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Originating_Discount_Taken_Amount?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Originating_Document_Amount?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Originating_Extended_Cost?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Originating_Freight_Amount?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Originating_Freight_Tax_Amount?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Originating_Markdown_Amount?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Originating_Misc_Amount?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Originating_Misc_Tax_Amount?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Originating_Non_Commissioned_Amount?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Originating_Payment_Received?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Originating_Remaining_Subtotal?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Originating_Subtotal?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Originating_Tax_Amount?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Originating_Taxable_Tax_Amount?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Originating_Trade_Discount_Amount?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     Packing_Slip_Number?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Payment_Received?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     Payment_Terms_ID?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     Payment_Terms_ID_from_Customer_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     Phone_1_from_Customer_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     Phone_2_from_Customer_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     Phone_3?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     Phone_3_from_Customer_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     Phone_Number_1?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     Phone_Number_2?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     Picking_Ticket_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Post_Results_To?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Posted_Date?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Posted_User_ID?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Posting_Status?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(11)
     PriceLevel?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(11)
     PriceLevel_from_Customer_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Primary_Billto_Address_Code?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Primary_Billto_Address_Code_from_Customer_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Primary_Shipto_Address_Code_from_Customer_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Priority_from_Customer_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Prospect?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Quote_Date?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Quote_Expiration_Date?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Rate_Calculation_Method?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Rate_Type_ID?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Rate_Type_ID_from_Customer_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(31)
     Reference?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Remaining_Subtotal?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Repeating?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Requested_Ship_Date?: Date;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Retainage?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Return_Date?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Revalue_Customer?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Sale_Date?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     Sales_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Sales_Territory?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Sales_Territory_from_Customer_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Salesperson_ID?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Salesperson_ID_from_Customer_Master?: string;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Sequence_Number_Corrected?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(65)
     ShipToName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Ship_Complete_Document?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Ship_Complete_Document_from_Customer_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Shipping_Document?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Shipping_Method?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Shipping_Method_from_Customer_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Short_Name?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Simplified?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(29)
     State?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(29)
     State_from_Customer_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Statement_Address_Code?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Statement_Cycle?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(65)
     Statement_Name?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Subtotal?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     TRX_Frequency?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(13)
     TRX_Source?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Tax_Amount?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Tax_Date?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Tax_Engine_Called?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(25)
     Tax_Exempt_1?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(25)
     Tax_Exempt_1_from_Customer_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(25)
     Tax_Exempt_2?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(25)
     Tax_Exempt_2_from_Customer_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(25)
     Tax_Registration_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(25)
     Tax_Registration_Number_from_Customer_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Tax_Schedule_ID?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Tax_Schedule_ID_from_Customer_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Tax_Schedule_Source?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Taxable_Tax_Amount?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Time?: Date;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Times_Printed?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Times_Repeated?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Times_To_Repeat?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Total___FC_LTD?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Total___FC_LYR?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Total___FC_YTD?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Total___Invoices_LTD?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Total___Invoices_LYR?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Total___Invoices_YTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Amount_Of_NSF_Checks_Life?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Amount_Of_NSF_Checks_YTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Bad_Deb_LYR?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Bad_Debt_LTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Bad_Debt_YTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Cash_Received_LTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Cash_Received_LYR?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Cash_Received_YTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Costs_LTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Costs_LYR?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Costs_YTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Discounts_Available_YTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Discounts_Taken_LTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Discounts_Taken_LYR?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Discounts_Taken_YTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Finance_Charges_LTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Finance_Charges_LYR?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Finance_Charges_YTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Returns_LTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Returns_LYR?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Returns_YTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Sales_LTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Sales_LYR?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Sales_YTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Waived_FC_LTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Waived_FC_LYR?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Waived_FC_YTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Writeoffs_LTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Writeoffs_LYR?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Writeoffs_YTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Trade_Discount_Amount?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Trade_Discount_Percent?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(3)
     UPS_Zone?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(3)
     UPS_Zone_from_Customer_Master?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Unpaid_Finance_Charges_YTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Unposted_Cash_Amount?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Unposted_Other_Cash_Amount?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Unposted_Other_Sales_Amount?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Unposted_Sales_Amount?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Use_Document_ID_1?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Use_Document_ID_2?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     User_Defined_1?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     User_Defined_1_from_Customer_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     User_Defined_2?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     User_Defined_2_from_Customer_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     User_Defined_3?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     User_Defined_4?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     User_Defined_5?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     User_Defined_Date_1?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     User_Defined_Date_2?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     User_Defined_Table_1?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     User_Defined_Table_2?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     User_Defined_Table_3?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     User_To_Enter?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Void_Status?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Withholding_Amount?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Write_Offs_LIFE?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Write_Offs_LYR?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Write_Offs_YTD?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     Writeoff_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(11)
     Zip_Code?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(11)
     Zip_from_Customer_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Workflow_Approval_Status_Credit_Limit?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Workflow_Priority_Credit_Limit?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Workflow_Approval_Status_Quote?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Workflow_Priority_Quote?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Accounts_Receivable_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Cash_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Checkbook_ID_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     COGS_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Customer_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Discounts_Available_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Discounts_Taken_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Finance_Charge_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Inventory_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Sales_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Salesperson_ID_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     SOP_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Writeoff_Account_Number_For_Drillback?: string;
-          
+        
     @Field(() => Int) 
     ID: number;
         
@@ -10303,9 +10471,9 @@ export class SalesTransaction_ {
     SalesLineItemsArray: SalesLineItem_[]; // Link to SalesLineItems
     
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for Sales Transactions   
+// INPUT TYPE for Sales Transactions
 //****************************************************************************
 @InputType()
 export class CreateSalesTransactionInput {
@@ -11408,9 +11576,9 @@ export class CreateSalesTransactionInput {
     Writeoff_Account_Number_For_Drillback?: string;
 }
     
-        
+
 //****************************************************************************
-// INPUT TYPE for Sales Transactions   
+// INPUT TYPE for Sales Transactions
 //****************************************************************************
 @InputType()
 export class UpdateSalesTransactionInput {
@@ -12527,8 +12695,8 @@ export class RunSalesTransactionViewResult {
     @Field(() => [SalesTransaction_])
     Results: SalesTransaction_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -12570,7 +12738,7 @@ export class SalesTransactionResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Sales Transactions', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-      
+    
     @FieldResolver(() => [SalesLineItem_])
     async SalesLineItemsArray(@Root() salestransaction_: SalesTransaction_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Sales Line Items', userPayload);
@@ -12582,7 +12750,7 @@ export class SalesTransactionResolver extends ResolverBase {
     @Mutation(() => SalesTransaction_)
     async CreateSalesTransaction(
         @Arg('input', () => CreateSalesTransactionInput) input: CreateSalesTransactionInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
+        @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.CreateRecord('Sales Transactions', input, dataSource, userPayload, pubSub)
@@ -12603,451 +12771,451 @@ export class SalesTransactionResolver extends ResolverBase {
 // ENTITY CLASS for Customer Address__client_finance
 //****************************************************************************
 @ObjectType()
-export class CustomerAddress__client_finance_ {  
+export class CustomerAddress__client_finance_ {
     @Field() 
     @MaxLength(15)
     Customer_Number: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(65)
     Customer_Name?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(61)
     Address_1?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(61)
     Address_2?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(35)
     City?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(29)
     State?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(11)
     Zip?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     Phone_1?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     Accounts_Receivable_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(61)
     Address_3?: string;
-          
+        
     @Field() 
     @MaxLength(15)
     Address_Code: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Balance_Type?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     Bank_Branch?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(31)
     Bank_Name?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     COGS_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     Cash_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Checkbook_ID?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(31)
     Comment1?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(31)
     Comment2?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(61)
     Contact_Person?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Corporate_Customer_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(61)
     Country?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Created_Date?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Credit_Card_Exp_Date?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Credit_Card_ID?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Credit_Limit_Amount?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Credit_Limit_Period?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Credit_Limit_Period_Amount?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Credit_Limit_Type?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Currency_ID?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Customer_Class?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Customer_Discount?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Default_Cash_Account_Type?: string;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Discount_Grace_Period?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     Discounts_Avail_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     Discounts_Taken_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Document_Format_ID?: string;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Due_Date_Grace_Period?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     Fax?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     Finance_Charge_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Finance_Charge_Amt_Type?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Finance_Charge_Dollar?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Finance_Charge_ID?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Finance_Charge_Percent?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     First_Invoice_Date?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(31)
     Governmental_Corporate_ID?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(31)
     Governmental_Individual_ID?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Hold?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(201)
     INet1?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(201)
     INet2?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(201)
     INet3?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(201)
     INet4?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(201)
     INet5?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(201)
     INet6?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(201)
     INet7?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(201)
     INet8?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Inactive?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     Inventory_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Keep_Calendar_History?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Keep_Distribution_History?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Keep_Period_History?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Keep_Trx_History?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Max_Writeoff_Amount?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Maximum_Writeoff_Type?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Minimum_Payment_Dollar?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Minimum_Payment_Percent?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Minimum_Payment_Type?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Modified_Date?: Date;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Note_Index?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Order_Fulfillment_Shortage_Default?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     Payment_Terms_ID?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     Phone_2?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     Phone_3?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Post_Results_To?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(11)
     PriceLevel?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Primary_Billto_Address_Code?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Primary_Shipto_Address_Code?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Priority?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Rate_Type_ID?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Revalue_Customer?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     Sales_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Sales_Territory?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Salesperson_ID?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Salesperson_ID_from_Customer_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Shipping_Method?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Short_Name?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(11)
     Site_ID?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Statement_Address_Code?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Statement_Cycle?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(65)
     Statement_Name?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(25)
     Tax_Exempt_1?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(25)
     Tax_Exempt_2?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(25)
     Tax_Registration_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Tax_Schedule_ID?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Territory_ID?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(3)
     UPS_Zone?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     User_Defined_1?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     User_Defined_1_from_Customer_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     User_Defined_2?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     User_Defined_2_from_Customer_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     Writeoff_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Accounts_Receivable_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Cash_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Checkbook_ID_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     COGS_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Customer_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Discounts_Avail_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Discounts_Taken_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Finance_Charge_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Inventory_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Sales_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Salesperson_ID_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Writeoff_Account_Number_For_Drillback?: string;
         
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for Customer Address__client_finance   
+// INPUT TYPE for Customer Address__client_finance
 //****************************************************************************
 @InputType()
 export class CreateCustomerAddress__client_financeInput {
@@ -13391,9 +13559,9 @@ export class CreateCustomerAddress__client_financeInput {
     Writeoff_Account_Number_For_Drillback?: string;
 }
     
-        
+
 //****************************************************************************
-// INPUT TYPE for Customer Address__client_finance   
+// INPUT TYPE for Customer Address__client_finance
 //****************************************************************************
 @InputType()
 export class UpdateCustomerAddress__client_financeInput {
@@ -13748,8 +13916,8 @@ export class RunCustomerAddress__client_financeViewResult {
     @Field(() => [CustomerAddress__client_finance_])
     Results: CustomerAddress__client_finance_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -13795,7 +13963,7 @@ export class CustomerAddress__client_financeResolver extends ResolverBase {
     @Mutation(() => CustomerAddress__client_finance_)
     async CreateCustomerAddress__client_finance(
         @Arg('input', () => CreateCustomerAddress__client_financeInput) input: CreateCustomerAddress__client_financeInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
+        @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.CreateRecord('Customer Address__client_finance', input, dataSource, userPayload, pubSub)
@@ -13816,410 +13984,410 @@ export class CustomerAddress__client_financeResolver extends ResolverBase {
 // ENTITY CLASS for Items__client_finance
 //****************************************************************************
 @ObjectType()
-export class Item__client_finance_ {  
+export class Item__client_finance_ {
     @Field() 
     @MaxLength(31)
     Item_Number: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(101)
     Item_Description?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Item_Type?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     ABC_Code?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Allow_Back_Orders?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(31)
     Alternate_Item_1?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(31)
     Alternate_Item_2?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     Assembly_Variance_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     COGS_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     COGS_Inflation_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     COGS_Monetary_Correction_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(7)
     Country_Origin?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Created_Date?: Date;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Current_Cost?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     Damaged_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Decimal_Places_Currency?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Decimal_Places_QTYS?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     Drop_Ship_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     In_Service_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     In_Use_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     Inventory_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     Inventory_Inflation_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     Inventory_Monetary_Correction_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     Inventory_Offset_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     Inventory_Returns_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(11)
     Item_Class_Code?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Item_Code?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(11)
     Item_Generic_Description?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Item_Shipping_Weight?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Item_Short_Name?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Item_Tax_Schedule_ID?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Item_Tracking_Option?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Keep_Calendar_History?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Keep_Distribution_History?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Keep_Period_History?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Keep_Trx_History?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Kit_COGS_Account_Source?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     Last_Generated_Serial_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(11)
     Location_Code?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(11)
     Lot_Type?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(31)
     Manufacturer?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(31)
     Manufacturer_Item_Number?: string;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Master_Record_Type?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(101)
     Mfg__Item_Description?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Modified_Date?: Date;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Note_Index?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(11)
     PriceLevel?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(11)
     Price_Group?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Price_Method?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Primary_Mfg__Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     Purch_Inflation_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     Purch_Monetary_Correction_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Purchase_Item_Tax_Schedule_ID?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     Purchase_Price_Variance_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Purchase_Tax_Options?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(9)
     Purchasing_U_Of_M?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Revalue_Inventory?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     Sales_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     Sales_Discounts_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     Sales_Returns_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(9)
     Selling_U_Of_M?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Standard_Cost?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(31)
     Tax_Commodity_Code?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Tax_Options?: string;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Tolerance_Percentage?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(11)
     U_Of_M_Schedule?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     Unrealized_Purchase_Price_Variance_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(11)
     User_Category_Value_1?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(11)
     User_Category_Value_2?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(11)
     User_Category_Value_3?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(11)
     User_Category_Value_4?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(11)
     User_Category_Value_5?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(11)
     User_Category_Value_6?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Valuation_Method?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     Variances_Account_Number?: string;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Warranty_Days?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Assembly_Variance_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     COGS_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     COGS_Inflation_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     COGS_Monetary_Correction_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Damaged_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Drop_Ship_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     In_Service_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     In_Use_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Inventory_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Inventory_Inflation_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Inventory_Monetary_Correction_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Inventory_Offset_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Inventory_Returns_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Item_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Purch_Inflation_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Purch_Monetary_Correction_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Purchase_Price_Variance_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Sales_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Sales_Discounts_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Sales_Returns_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Unrealized_Purchase_Price_Variance_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Variances_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Use_Qty_Overage_Tolerance?: string;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Qty_Overage_Tolerance_Percentage?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Use_Qty_Shortage_Tolerance?: string;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Qty_Shortage_Tolerance_Percentage?: number;
         
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for Items__client_finance   
+// INPUT TYPE for Items__client_finance
 //****************************************************************************
 @InputType()
 export class CreateItem__client_financeInput {
@@ -14530,9 +14698,9 @@ export class CreateItem__client_financeInput {
     Qty_Shortage_Tolerance_Percentage?: number;
 }
     
-        
+
 //****************************************************************************
-// INPUT TYPE for Items__client_finance   
+// INPUT TYPE for Items__client_finance
 //****************************************************************************
 @InputType()
 export class UpdateItem__client_financeInput {
@@ -14854,8 +15022,8 @@ export class RunItem__client_financeViewResult {
     @Field(() => [Item__client_finance_])
     Results: Item__client_finance_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -14901,7 +15069,7 @@ export class Item__client_financeResolver extends ResolverBase {
     @Mutation(() => Item__client_finance_)
     async CreateItem__client_finance(
         @Arg('input', () => CreateItem__client_financeInput) input: CreateItem__client_financeInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
+        @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.CreateRecord('Items__client_finance', input, dataSource, userPayload, pubSub)
@@ -14922,663 +15090,663 @@ export class Item__client_financeResolver extends ResolverBase {
 // ENTITY CLASS for Customers__client_finance
 //****************************************************************************
 @ObjectType()
-export class Customer__client_finance_ {  
+export class Customer__client_finance_ {
     @Field() 
     @MaxLength(15)
     Customer_Number: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(65)
     Customer_Name?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(61)
     Address_1?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(61)
     Address_2?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(35)
     City?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(29)
     State?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(11)
     Zip?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     Phone_1?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Aging_Bucket1?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Aging_Bucket2?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Aging_Bucket3?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Aging_Bucket4?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Aging_Bucket5?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Aging_Bucket6?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Aging_Bucket7?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     Accounts_Receivable_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(61)
     Address_3?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Address_Code?: string;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Average_Days_To_Pay___Life?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Average_Days_To_Pay___Year?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Average_Days_to_Pay___LYR?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Balance_Type?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     Bank_Branch?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(31)
     Bank_Name?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     COGS_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     Cash_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Checkbook_ID?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(31)
     Comment1?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(31)
     Comment2?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(61)
     Contact_Person?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Corporate_Customer_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(61)
     Country?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Created_Date?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Credit_Card_Exp_Date?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Credit_Card_ID?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Credit_Limit_Amount?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Credit_Limit_Period?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Credit_Limit_Period_Amount?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Credit_Limit_Type?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Currency_ID?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Customer_Balance?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Customer_Class?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Customer_Discount?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Default_Cash_Account_Type?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Deposits_Received?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Discount_Grace_Period?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     Discounts_Available_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     Discounts_Taken_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Document_Format_ID?: string;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Due_Date_Grace_Period?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     Fax?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     Finance_Charge_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Finance_Charge_Amt_Type?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Finance_Charge_Dollar?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Finance_Charge_ID?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Finance_Charge_Percent?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Finance_Charges_CYTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Finance_Charges_LYR_Calendar?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     First_Invoice_Date?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(31)
     Governmental_Corporate_ID?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(31)
     Governmental_Individual_ID?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     High_Balance_LTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     High_Balance_LYR?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     High_Balance_YTD?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Hold?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Inactive?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     Inventory_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Keep_Calendar_History?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Keep_Distribution_History?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Keep_Period_History?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Keep_Trx_History?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Last_Aged?: Date;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Last_Finance_Charge_Amount?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Last_NSF_Check_Date?: Date;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Last_Payment_Amount?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Last_Payment_Date?: Date;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Last_Statement_Amount?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Last_Statement_Date?: Date;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Last_Transaction_Amount?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Last_Transaction_Date?: Date;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Max_Writeoff_Amount?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Maximum_Writeoff_Type?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Minimum_Payment_Dollar?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Minimum_Payment_Percent?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Minimum_Payment_Type?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Modified_Date?: Date;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Non_Current_Scheduled_Payments?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Note_Index?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Number_ADTP_Documents___LYR?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Number_ADTP_Documents___Life?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Number_ADTP_Documents___Year?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Number_Of_NSF_Checks_Life?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Number_Of_NSF_Checks_YTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     On_Order_Amount?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Order_Fulfillment_Shortage_Default?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     Payment_Terms_ID?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     Phone_2?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     Phone_3?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Post_Results_To?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(11)
     PriceLevel?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Primary_Billto_Address_Code?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Primary_Shipto_Address_Code?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Priority?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Rate_Type_ID?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Retainage?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Revalue_Customer?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     Sales_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     Sales_Order_Returns_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Sales_Territory?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Salesperson_ID?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Send_Email_Statements?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Ship_Complete_Document?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Shipping_Method?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Short_Name?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Statement_Address_Code?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Statement_Cycle?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(65)
     Statement_Name?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(25)
     Tax_Exempt_1?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(25)
     Tax_Exempt_2?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(25)
     Tax_Registration_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Tax_Schedule_ID?: string;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Total___FC_LTD?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Total___FC_LYR?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Total___FC_YTD?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Total___Invoices_LTD?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Total___Invoices_LYR?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Total___Invoices_YTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Amount_Of_NSF_Checks_Life?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Amount_Of_NSF_Checks_YTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Bad_Deb_LYR?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Bad_Debt_LTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Bad_Debt_YTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Cash_Received_LTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Cash_Received_LYR?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Cash_Received_YTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Costs_LTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Costs_LYR?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Costs_YTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Discounts_Available_YTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Discounts_Taken_LTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Discounts_Taken_LYR?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Discounts_Taken_YTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Finance_Charges_LTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Finance_Charges_LYR?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Finance_Charges_YTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Returns_LTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Returns_LYR?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Returns_YTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Sales_LTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Sales_LYR?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Sales_YTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Waived_FC_LTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Waived_FC_LYR?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Waived_FC_YTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Writeoffs_LTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Writeoffs_LYR?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Writeoffs_YTD?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(3)
     UPS_Zone?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Unpaid_Finance_Charges_YTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Unposted_Cash_Amount?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Unposted_Other_Cash_Amount?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Unposted_Other_Sales_Amount?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Unposted_Sales_Amount?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     User_Defined_1?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     User_Defined_2?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Write_Offs_LIFE?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Write_Offs_LYR?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Write_Offs_YTD?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     Writeoff_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Accounts_Receivable_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Cash_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Checkbook_ID_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     COGS_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Customer_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Discounts_Available_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Discounts_Taken_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Finance_Charge_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Inventory_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Sales_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Sales_Order_Returns_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Salesperson_ID_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Writeoff_Account_Number_For_Drillback?: string;
         
-    @Field(() => [CustomerAddress__client_finance_])
-    CustomerAddress__client_financeArray: CustomerAddress__client_finance_[]; // Link to CustomerAddress__client_finance
-    
     @Field(() => [OrganizationLink_])
     OrganizationLinksArray: OrganizationLink_[]; // Link to OrganizationLinks
     
     @Field(() => [PersonLink_])
     PersonLinksArray: PersonLink_[]; // Link to PersonLinks
     
+    @Field(() => [CustomerAddress__client_finance_])
+    CustomerAddress__client_financeArray: CustomerAddress__client_finance_[]; // Link to CustomerAddress__client_finance
+    
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for Customers__client_finance   
+// INPUT TYPE for Customers__client_finance
 //****************************************************************************
 @InputType()
 export class CreateCustomer__client_financeInput {
@@ -16129,9 +16297,9 @@ export class CreateCustomer__client_financeInput {
     Writeoff_Account_Number_For_Drillback?: string;
 }
     
-        
+
 //****************************************************************************
-// INPUT TYPE for Customers__client_finance   
+// INPUT TYPE for Customers__client_finance
 //****************************************************************************
 @InputType()
 export class UpdateCustomer__client_financeInput {
@@ -16693,8 +16861,8 @@ export class RunCustomer__client_financeViewResult {
     @Field(() => [Customer__client_finance_])
     Results: Customer__client_finance_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -16736,15 +16904,7 @@ export class Customer__client_financeResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Customers__client_finance', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-      
-    @FieldResolver(() => [CustomerAddress__client_finance_])
-    async CustomerAddress__client_financeArray(@Root() customer__client_finance_: Customer__client_finance_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('Customer Address__client_finance', userPayload);
-        const sSQL = `SELECT * FROM [client_finance].[vwCustomerAddress__client_finance] WHERE [Customer Number]='${customer__client_finance_.Customer_Number}' ` + this.getRowLevelSecurityWhereClause('Customer Address__client_finance', userPayload, EntityPermissionType.Read, 'AND');
-        const result = this.ArrayMapFieldNamesToCodeNames('Customer Address__client_finance', await dataSource.query(sSQL));
-        return result;
-    }
-          
+    
     @FieldResolver(() => [OrganizationLink_])
     async OrganizationLinksArray(@Root() customer__client_finance_: Customer__client_finance_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Organization Links', userPayload);
@@ -16752,7 +16912,7 @@ export class Customer__client_financeResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Organization Links', await dataSource.query(sSQL));
         return result;
     }
-          
+        
     @FieldResolver(() => [PersonLink_])
     async PersonLinksArray(@Root() customer__client_finance_: Customer__client_finance_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Person Links', userPayload);
@@ -16761,10 +16921,18 @@ export class Customer__client_financeResolver extends ResolverBase {
         return result;
     }
         
+    @FieldResolver(() => [CustomerAddress__client_finance_])
+    async CustomerAddress__client_financeArray(@Root() customer__client_finance_: Customer__client_finance_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Customer Address__client_finance', userPayload);
+        const sSQL = `SELECT * FROM [client_finance].[vwCustomerAddress__client_finance] WHERE [Customer Number]='${customer__client_finance_.Customer_Number}' ` + this.getRowLevelSecurityWhereClause('Customer Address__client_finance', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Customer Address__client_finance', await dataSource.query(sSQL));
+        return result;
+    }
+        
     @Mutation(() => Customer__client_finance_)
     async CreateCustomer__client_finance(
         @Arg('input', () => CreateCustomer__client_financeInput) input: CreateCustomer__client_financeInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
+        @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.CreateRecord('Customers__client_finance', input, dataSource, userPayload, pubSub)
@@ -16785,34 +16953,34 @@ export class Customer__client_financeResolver extends ResolverBase {
 // ENTITY CLASS for Organization Links
 //****************************************************************************
 @ObjectType({ description: 'CompanyLink is used to connect data from across multiple schemas. These source schemas represent different source systems like membership, education, events, etc. The CompanyLink table has entries for "matches" between records that represent companies/organizations across the different source systems so that we have a structured way to unify this data in the CDP.' })
-export class OrganizationLink_ {  
+export class OrganizationLink_ {
     @Field(() => Int) 
     OrganizationLinkID: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     CRMAccountID?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     MainGreatPlainsCustomerID?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     MembershipGreatPlainsCustomerID?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(320)
     OrganizationName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     CategoryName?: string;
-          
+        
     @Field() 
     @MaxLength(8)
     CreatedAt: Date;
-          
+        
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
@@ -16821,12 +16989,15 @@ export class OrganizationLink_ {
     PersonLinksArray: PersonLink_[]; // Link to PersonLinks
     
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for Organization Links   
+// INPUT TYPE for Organization Links
 //****************************************************************************
 @InputType()
 export class CreateOrganizationLinkInput {
+    @Field({ nullable: true })
+    CRMAccountID?: string;
+
     @Field({ nullable: true })
     MainGreatPlainsCustomerID?: string;
 
@@ -16840,14 +17011,17 @@ export class CreateOrganizationLinkInput {
     CategoryName?: string;
 }
     
-        
+
 //****************************************************************************
-// INPUT TYPE for Organization Links   
+// INPUT TYPE for Organization Links
 //****************************************************************************
 @InputType()
 export class UpdateOrganizationLinkInput {
     @Field(() => Int)
     OrganizationLinkID: number;
+
+    @Field({ nullable: true })
+    CRMAccountID?: string;
 
     @Field({ nullable: true })
     MainGreatPlainsCustomerID?: string;
@@ -16873,8 +17047,8 @@ export class RunOrganizationLinkViewResult {
     @Field(() => [OrganizationLink_])
     Results: OrganizationLink_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -16916,7 +17090,7 @@ export class OrganizationLinkResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Organization Links', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-      
+    
     @FieldResolver(() => [PersonLink_])
     async PersonLinksArray(@Root() organizationlink_: OrganizationLink_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Person Links', userPayload);
@@ -16928,7 +17102,7 @@ export class OrganizationLinkResolver extends ResolverBase {
     @Mutation(() => OrganizationLink_)
     async CreateOrganizationLink(
         @Arg('input', () => CreateOrganizationLinkInput) input: CreateOrganizationLinkInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
+        @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.CreateRecord('Organization Links', input, dataSource, userPayload, pubSub)
@@ -16949,69 +17123,72 @@ export class OrganizationLinkResolver extends ResolverBase {
 // ENTITY CLASS for Person Links
 //****************************************************************************
 @ObjectType({ description: 'PersonLink is used to connect data from across multiple schemas. These source schemas represent different source systems like membership, education, events, etc. The PersonLink table has entries for "matches" between records that represent people across the different source systems so that we have a structured way to unify this data in the CDP.' })
-export class PersonLink_ {  
+export class PersonLink_ {
     @Field(() => Int) 
     PersonLinkID: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     CRMContactID?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     MainGreatPlainsCustomerID?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     MembershipGreatPlainsCustomerID?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(320)
     FirstName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(320)
     LastName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(320)
     Email?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     CRMAccountID?: string;
-          
+        
     @Field() 
     @MaxLength(8)
     CreatedAt: Date;
-          
+        
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
         
+    @Field(() => [SalesTransaction_])
+    SalesTransactionsArray: SalesTransaction_[]; // Link to SalesTransactions
+    
     @Field(() => [CustomerAddress_])
     CustomerAddressArray: CustomerAddress_[]; // Link to CustomerAddress
     
     @Field(() => [CustomerAddress__client_finance_])
     CustomerAddress__client_financeArray: CustomerAddress__client_finance_[]; // Link to CustomerAddress__client_finance
-    // Relationship to Demo Keys is not included in the API because it is not marked as IncludeInAPI
-
-    @Field(() => [OrganizationLink_])
-    OrganizationLinksArray: OrganizationLink_[]; // Link to OrganizationLinks
     
     @Field(() => [SalesTransaction__client_membership_])
     SalesTransactions__client_membershipArray: SalesTransaction__client_membership_[]; // Link to SalesTransactions__client_membership
     
-    @Field(() => [SalesTransaction_])
-    SalesTransactionsArray: SalesTransaction_[]; // Link to SalesTransactions
-    
+    @Field(() => [OrganizationLink_])
+    OrganizationLinksArray: OrganizationLink_[]; // Link to OrganizationLinks
+    // Relationship to Demo Keys is not included in the API because it is not marked as IncludeInAPI
+
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for Person Links   
+// INPUT TYPE for Person Links
 //****************************************************************************
 @InputType()
 export class CreatePersonLinkInput {
+    @Field({ nullable: true })
+    CRMContactID?: string;
+
     @Field({ nullable: true })
     MainGreatPlainsCustomerID?: string;
 
@@ -17026,11 +17203,14 @@ export class CreatePersonLinkInput {
 
     @Field({ nullable: true })
     Email?: string;
+
+    @Field({ nullable: true })
+    CRMAccountID?: string;
 }
     
-        
+
 //****************************************************************************
-// INPUT TYPE for Person Links   
+// INPUT TYPE for Person Links
 //****************************************************************************
 @InputType()
 export class UpdatePersonLinkInput {
@@ -17038,6 +17218,9 @@ export class UpdatePersonLinkInput {
     PersonLinkID: number;
 
     @Field({ nullable: true })
+    CRMContactID?: string;
+
+    @Field({ nullable: true })
     MainGreatPlainsCustomerID?: string;
 
     @Field({ nullable: true })
@@ -17051,6 +17234,9 @@ export class UpdatePersonLinkInput {
 
     @Field({ nullable: true })
     Email?: string;
+
+    @Field({ nullable: true })
+    CRMAccountID?: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -17064,8 +17250,8 @@ export class RunPersonLinkViewResult {
     @Field(() => [PersonLink_])
     Results: PersonLink_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -17107,7 +17293,7 @@ export class PersonLinkResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Person Links', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-      
+    
     @FieldResolver(() => [CustomerAddress_])
     async CustomerAddressArray(@Root() personlink_: PersonLink_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Customer Address', userPayload);
@@ -17115,7 +17301,7 @@ export class PersonLinkResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Customer Address', await dataSource.query(sSQL));
         return result;
     }
-          
+        
     @FieldResolver(() => [CustomerAddress__client_finance_])
     async CustomerAddress__client_financeArray(@Root() personlink_: PersonLink_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Customer Address__client_finance', userPayload);
@@ -17123,8 +17309,7 @@ export class PersonLinkResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Customer Address__client_finance', await dataSource.query(sSQL));
         return result;
     }
-        // Relationship to Demo Keys is not included in the API because it is not marked as IncludeInAPI
-  
+        
     @FieldResolver(() => [OrganizationLink_])
     async OrganizationLinksArray(@Root() personlink_: PersonLink_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Organization Links', userPayload);
@@ -17132,11 +17317,12 @@ export class PersonLinkResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Organization Links', await dataSource.query(sSQL));
         return result;
     }
-        
+        // Relationship to Demo Keys is not included in the API because it is not marked as IncludeInAPI
+
     @Mutation(() => PersonLink_)
     async CreatePersonLink(
         @Arg('input', () => CreatePersonLinkInput) input: CreatePersonLinkInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
+        @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.CreateRecord('Person Links', input, dataSource, userPayload, pubSub)
@@ -17157,1120 +17343,1120 @@ export class PersonLinkResolver extends ResolverBase {
 // ENTITY CLASS for Accounts__client_crm
 //****************************************************************************
 @ObjectType()
-export class Account__client_crm_ {  
+export class Account__client_crm_ {
     @Field({nullable: true}) 
     @MaxLength(320)
     SLAInvokedIdName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     eone_customerclassidName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     acep_HospitalName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     Acep_DirectAccessIdName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(320)
     PreferredEquipmentIdName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     acep_CEDRName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(320)
     PreferredServiceIdName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(320)
     acep_ChapterName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(400)
     acep_productidName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     acep_ClerkshipName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     acep_countryidName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(400)
     CreatedByYomiName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(400)
     CreatedByName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     eone_paymenttermsidName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     acep_categoryidName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(900)
     CreatedByExternalPartyYomiName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(600)
     CreatedByExternalPartyName?: string;
-          
+        
     @Field(() => Int, {nullable: true}) 
     EntityImage_Timestamp?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(400)
     EntityImage_URL?: string;
-          
+        
     @Field(() => Int, {nullable: true}) 
     EntityImage?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(320)
     acep_GroupName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(320)
     PrimaryContactIdName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(900)
     PrimaryContactIdYomiName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(320)
     acep_SectionName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     acep_MedicalSchoolName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     TransactionCurrencyIdName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(600)
     ModifiedByExternalPartyName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(900)
     ModifiedByExternalPartyYomiName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(320)
     acep_HealthSystemYomiName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(320)
     acep_HealthSystemName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     acep_VenueName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     acep_onlinetransactioncredentialidName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(400)
     TerritoryIdName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     DefaultPriceLevelIdName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(320)
     msa_managingpartneridName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(320)
     msa_managingpartneridYomiName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(400)
     ModifiedOnBehalfByYomiName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(400)
     ModifiedOnBehalfByName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     eone_shippingmethodidName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(400)
     PreferredSystemUserIdYomiName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(400)
     PreferredSystemUserIdName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     acep_CertificationBoardName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(320)
     acep_EMRARegionName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(320)
     MasterAccountIdYomiName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(320)
     MasterAccountIdName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(320)
     SLAName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(900)
     OriginatingLeadIdYomiName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(320)
     OriginatingLeadIdName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     acep_stateorprovinceidName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(400)
     acep_FellowshipName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(320)
     acep_ResidencyName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(320)
     ParentAccountIdName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(320)
     ParentAccountIdYomiName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(400)
     CreatedOnBehalfByName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(400)
     CreatedOnBehalfByYomiName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(400)
     ModifiedByName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(400)
     ModifiedByYomiName?: string;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Address1_AddressTypeCode?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8000)
     Address1_City?: string;
-          
+        
     @Field({nullable: true}) 
     Address1_Composite?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8000)
     Address1_Country?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8000)
     Address1_County?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     Address1_AddressId?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Address1_Fax?: string;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Address1_FreightTermsCode?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Address1_Latitude?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8000)
     Address1_Line1?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8000)
     Address1_Line2?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8000)
     Address1_Line3?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Address1_Longitude?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(400)
     Address1_Name?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Address1_PostalCode?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Address1_PostOfficeBox?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(300)
     Address1_PrimaryContactName?: string;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Address1_ShippingMethodCode?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8000)
     Address1_StateOrProvince?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Address1_Telephone1?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Address1_Telephone2?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Address1_Telephone3?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Address1_UPSZone?: string;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Address1_UTCOffset?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Address2_AddressTypeCode?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8000)
     Address2_City?: string;
-          
+        
     @Field({nullable: true}) 
     Address2_Composite?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8000)
     Address2_Country?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8000)
     Address2_County?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     Address2_AddressId?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Address2_Fax?: string;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Address2_FreightTermsCode?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Address2_Latitude?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8000)
     Address2_Line1?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8000)
     Address2_Line2?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8000)
     Address2_Line3?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Address2_Longitude?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(400)
     Address2_Name?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Address2_PostalCode?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Address2_PostOfficeBox?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(300)
     Address2_PrimaryContactName?: string;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Address2_ShippingMethodCode?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8000)
     Address2_StateOrProvince?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Address2_Telephone1?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Address2_Telephone2?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Address2_Telephone3?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Address2_UPSZone?: string;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Address2_UTCOffset?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     OwnerId?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(320)
     OwnerIdName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(320)
     OwnerIdYomiName?: string;
-          
+        
     @Field(() => Int, {nullable: true}) 
     OwnerIdDsc?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     OwnerIdType?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     OwningUser?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     OwningTeam?: string;
-          
+        
     @Field() 
     @MaxLength(16)
     AccountId: string;
-          
+        
     @Field(() => Int, {nullable: true}) 
     AccountCategoryCode?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     TerritoryId?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     DefaultPriceLevelId?: string;
-          
+        
     @Field(() => Int, {nullable: true}) 
     CustomerSizeCode?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     PreferredContactMethodCode?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     CustomerTypeCode?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     AccountRatingCode?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     IndustryCode?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     TerritoryCode?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     AccountClassificationCode?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     BusinessTypeCode?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     OwningBusinessUnit?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2500)
     TraversedPath?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     OriginatingLeadId?: string;
-          
+        
     @Field(() => Int, {nullable: true}) 
     PaymentTermsCode?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     ShippingMethodCode?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     PrimaryContactId?: string;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     ParticipatesInWorkflow?: boolean;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(320)
     Name?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(40)
     AccountNumber?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Revenue?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     NumberOfEmployees?: number;
-          
+        
     @Field({nullable: true}) 
     Description?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(40)
     SIC?: string;
-          
+        
     @Field(() => Int, {nullable: true}) 
     OwnershipCode?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     MarketCap?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     SharesOutstanding?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(20)
     TickerSymbol?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(40)
     StockExchange?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(400)
     WebSiteURL?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(400)
     FtpSiteURL?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     EMailAddress1?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     EMailAddress2?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     EMailAddress3?: string;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     DoNotPhone?: boolean;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     DoNotFax?: boolean;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Telephone1?: string;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     DoNotEMail?: boolean;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Telephone2?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Fax?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Telephone3?: string;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     DoNotPostalMail?: boolean;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     DoNotBulkEMail?: boolean;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     DoNotBulkPostalMail?: boolean;
-          
+        
     @Field(() => Float, {nullable: true}) 
     CreditLimit?: number;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     CreditOnHold?: boolean;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     IsPrivate?: boolean;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     CreatedOn?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     CreatedBy?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     ModifiedOn?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     ModifiedBy?: string;
-          
+        
     @Field() 
     @MaxLength(8)
     VersionNumber: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     ParentAccountId?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Aging30?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     StateCode?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Aging60?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     StatusCode?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Aging90?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     PreferredAppointmentDayCode?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     PreferredSystemUserId?: string;
-          
+        
     @Field(() => Int, {nullable: true}) 
     PreferredAppointmentTimeCode?: number;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     Merged?: boolean;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     DoNotSendMM?: boolean;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     MasterId?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     LastUsedInCampaign?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     PreferredServiceId?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     PreferredEquipmentId?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     ExchangeRate?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     UTCConversionTimeZoneCode?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     OverriddenCreatedOn?: Date;
-          
+        
     @Field(() => Int, {nullable: true}) 
     TimeZoneRuleVersionNumber?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     ImportSequenceNumber?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     TransactionCurrencyId?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     CreditLimit_Base?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Aging30_Base?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Revenue_Base?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Aging90_Base?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     MarketCap_Base?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Aging60_Base?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(320)
     YomiName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     CreatedOnBehalfBy?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     ModifiedOnBehalfBy?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     StageId?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     ProcessId?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     EntityImageId?: string;
-          
+        
     @Field(() => Int, {nullable: true}) 
     OpenDeals?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     OpenDeals_Date?: Date;
-          
+        
     @Field(() => Int, {nullable: true}) 
     OpenDeals_State?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2500)
     TimeSpentByMeOnEmailAndMeetings?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     OpenRevenue?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     OpenRevenue_Base?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     OpenRevenue_Date?: Date;
-          
+        
     @Field(() => Int, {nullable: true}) 
     OpenRevenue_State?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     CreatedByExternalParty?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     ModifiedByExternalParty?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(400)
     PrimarySatoriId?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(40)
     PrimaryTwitterId?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     SLAId?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     SLAInvokedId?: string;
-          
+        
     @Field(() => Int, {nullable: true}) 
     OnHoldTime?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     LastOnHoldTime?: Date;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     FollowEmail?: boolean;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     MarketingOnly?: boolean;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     Acep_MembershipEligible?: boolean;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     Acep_EktronGroupIDs?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     Et_lastbouncetype?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     Et_lastbouncesendid?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     Et_lastbouncedate?: string;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     cdi_allowtextmessages?: boolean;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Acep_LobbyPercentage?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     Eone_AgingBucketDescription3?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     Adx_ModifiedByUsername?: string;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Acep_BookstoreCustomerType?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     Eone_AgingBucketDescription1?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     eone_shippingmethodid?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     eone_customerclassid?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Eone_CreditLimitAmount?: number;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     Acep_Inactive?: boolean;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Acep_ExhibitorPoints?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     acep_stateorprovinceid?: string;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Acep_GPPriceLevel?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     Acep_ShortName?: string;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     Acep_OrganizationManaged?: boolean;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     acep_countryid?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(500)
     Acep_LongName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     Acep_PrimaryPhone?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     Eone_AgingBucketDescription5?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     Eone_AgingBucketDescription7?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     Eone_AgingBucketDescription4?: string;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     New_scribe_stripcompany?: boolean;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     Eone_AgingBucketDescription2?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     eone_paymenttermsid?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Eone_AgingBucketValue4?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     Acep_Code?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Eone_AgingBucketValue7?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     acep_categoryid?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Eone_AgingBucketValue2?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     Acep_GPCompanyId?: string;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     Acep_newmemberchapterpaid?: boolean;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Eone_AgingBucketValue5?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     Adx_CreatedByIPAddress?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     acep_onlinetransactioncredentialid?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     Eone_AgingBucketDescription6?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Acep_InactiveDate?: Date;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Eone_CrefitLimitType?: number;
-          
+        
     @Field({nullable: true}) 
     Acep_formattedaddresses?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8000)
     new_c360sisiteurl?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Eone_AgingBucketValue6?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     Adx_ModifiedByIPAddress?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     msa_managingpartnerid?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Eone_AgingBucketValue1?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     Adx_CreatedByUsername?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     Acep_DirectAccessId?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     acep_productid?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Acep_DeactivatedDate?: Date;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Eone_AgingBucketValue3?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     acep_Country?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     acep_State?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     acep_CertificationBoard?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     acep_Chapter?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     acep_EMRARegion?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     acep_Group?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     acep_Hospital?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     acep_MedicalSchool?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     acep_Residency?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     acep_Section?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     acep_Venue?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     acep_FacebookAddress?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     acep_twitterusername?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     acep_Fellowship?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     acep_Clerkship?: string;
-          
+        
     @Field(() => Int, {nullable: true}) 
     acep_GPTaxScheduleIDcode?: number;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     acep_TermsApproved?: boolean;
-          
+        
     @Field(() => Int, {nullable: true}) 
     cdi_accountscore?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     acep_Instagram?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(1000)
     acep_MultimediaLink?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(1000)
     acep_MultimediaLink2?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(1000)
     acep_MultimediaLink3?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(1000)
     acep_VimeoLink?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(1000)
     acep_YouTubeLink?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     acep_CEDR?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     acep_DummyFieldToRemove?: string;
-          
+        
     @Field(() => Int, {nullable: true}) 
     acep_CommunityType?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     acep_HealthSystem?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(1000)
     acep_pdinterviewlink?: string;
         
+    @Field(() => [Product_])
+    ProductsArray: Product_[]; // Link to Products
+    
     @Field(() => [Account__client_crm_])
     Accounts__client_crmArray: Account__client_crm_[]; // Link to Accounts__client_crm
-    
-    @Field(() => [PersonLink_])
-    PersonLinksArray: PersonLink_[]; // Link to PersonLinks
     
     @Field(() => [Contact__client_crm_])
     Contacts__client_crmArray: Contact__client_crm_[]; // Link to Contacts__client_crm
     
-    @Field(() => [Product_])
-    ProductsArray: Product_[]; // Link to Products
+    @Field(() => [PersonLink_])
+    PersonLinksArray: PersonLink_[]; // Link to PersonLinks
     
     @Field(() => [OrganizationLink_])
     OrganizationLinksArray: OrganizationLink_[]; // Link to OrganizationLinks
     
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for Accounts__client_crm   
+// INPUT TYPE for Accounts__client_crm
 //****************************************************************************
 @InputType()
 export class CreateAccount__client_crmInput {
@@ -18461,6 +18647,9 @@ export class CreateAccount__client_crmInput {
     Address1_County?: string;
 
     @Field({ nullable: true })
+    Address1_AddressId?: string;
+
+    @Field({ nullable: true })
     Address1_Fax?: string;
 
     @Field(() => Int, { nullable: true })
@@ -18530,6 +18719,9 @@ export class CreateAccount__client_crmInput {
     Address2_County?: string;
 
     @Field({ nullable: true })
+    Address2_AddressId?: string;
+
+    @Field({ nullable: true })
     Address2_Fax?: string;
 
     @Field(() => Int, { nullable: true })
@@ -18584,6 +18776,9 @@ export class CreateAccount__client_crmInput {
     Address2_UTCOffset?: number;
 
     @Field({ nullable: true })
+    OwnerId?: string;
+
+    @Field({ nullable: true })
     OwnerIdName?: string;
 
     @Field({ nullable: true })
@@ -18595,8 +18790,20 @@ export class CreateAccount__client_crmInput {
     @Field(() => Int, { nullable: true })
     OwnerIdType?: number;
 
+    @Field({ nullable: true })
+    OwningUser?: string;
+
+    @Field({ nullable: true })
+    OwningTeam?: string;
+
     @Field(() => Int, { nullable: true })
     AccountCategoryCode?: number;
+
+    @Field({ nullable: true })
+    TerritoryId?: string;
+
+    @Field({ nullable: true })
+    DefaultPriceLevelId?: string;
 
     @Field(() => Int, { nullable: true })
     CustomerSizeCode?: number;
@@ -18623,13 +18830,22 @@ export class CreateAccount__client_crmInput {
     BusinessTypeCode?: number;
 
     @Field({ nullable: true })
+    OwningBusinessUnit?: string;
+
+    @Field({ nullable: true })
     TraversedPath?: string;
+
+    @Field({ nullable: true })
+    OriginatingLeadId?: string;
 
     @Field(() => Int, { nullable: true })
     PaymentTermsCode?: number;
 
     @Field(() => Int, { nullable: true })
     ShippingMethodCode?: number;
+
+    @Field({ nullable: true })
+    PrimaryContactId?: string;
 
     @Field(() => Boolean, { nullable: true })
     ParticipatesInWorkflow?: boolean;
@@ -18725,10 +18941,19 @@ export class CreateAccount__client_crmInput {
     CreatedOn?: Date;
 
     @Field({ nullable: true })
+    CreatedBy?: string;
+
+    @Field({ nullable: true })
     ModifiedOn?: Date;
+
+    @Field({ nullable: true })
+    ModifiedBy?: string;
 
     @Field()
     VersionNumber: number;
+
+    @Field({ nullable: true })
+    ParentAccountId?: string;
 
     @Field(() => Float, { nullable: true })
     Aging30?: number;
@@ -18748,6 +18973,9 @@ export class CreateAccount__client_crmInput {
     @Field(() => Int, { nullable: true })
     PreferredAppointmentDayCode?: number;
 
+    @Field({ nullable: true })
+    PreferredSystemUserId?: string;
+
     @Field(() => Int, { nullable: true })
     PreferredAppointmentTimeCode?: number;
 
@@ -18758,7 +18986,16 @@ export class CreateAccount__client_crmInput {
     DoNotSendMM?: boolean;
 
     @Field({ nullable: true })
+    MasterId?: string;
+
+    @Field({ nullable: true })
     LastUsedInCampaign?: Date;
+
+    @Field({ nullable: true })
+    PreferredServiceId?: string;
+
+    @Field({ nullable: true })
+    PreferredEquipmentId?: string;
 
     @Field(() => Float, { nullable: true })
     ExchangeRate?: number;
@@ -18774,6 +19011,9 @@ export class CreateAccount__client_crmInput {
 
     @Field(() => Int, { nullable: true })
     ImportSequenceNumber?: number;
+
+    @Field({ nullable: true })
+    TransactionCurrencyId?: string;
 
     @Field(() => Float, { nullable: true })
     CreditLimit_Base?: number;
@@ -18795,6 +19035,21 @@ export class CreateAccount__client_crmInput {
 
     @Field({ nullable: true })
     YomiName?: string;
+
+    @Field({ nullable: true })
+    CreatedOnBehalfBy?: string;
+
+    @Field({ nullable: true })
+    ModifiedOnBehalfBy?: string;
+
+    @Field({ nullable: true })
+    StageId?: string;
+
+    @Field({ nullable: true })
+    ProcessId?: string;
+
+    @Field({ nullable: true })
+    EntityImageId?: string;
 
     @Field(() => Int, { nullable: true })
     OpenDeals?: number;
@@ -18821,10 +19076,22 @@ export class CreateAccount__client_crmInput {
     OpenRevenue_State?: number;
 
     @Field({ nullable: true })
+    CreatedByExternalParty?: string;
+
+    @Field({ nullable: true })
+    ModifiedByExternalParty?: string;
+
+    @Field({ nullable: true })
     PrimarySatoriId?: string;
 
     @Field({ nullable: true })
     PrimaryTwitterId?: string;
+
+    @Field({ nullable: true })
+    SLAId?: string;
+
+    @Field({ nullable: true })
+    SLAInvokedId?: string;
 
     @Field(() => Int, { nullable: true })
     OnHoldTime?: number;
@@ -18871,6 +19138,12 @@ export class CreateAccount__client_crmInput {
     @Field({ nullable: true })
     Eone_AgingBucketDescription1?: string;
 
+    @Field({ nullable: true })
+    eone_shippingmethodid?: string;
+
+    @Field({ nullable: true })
+    eone_customerclassid?: string;
+
     @Field(() => Float, { nullable: true })
     Eone_CreditLimitAmount?: number;
 
@@ -18880,6 +19153,9 @@ export class CreateAccount__client_crmInput {
     @Field(() => Int, { nullable: true })
     Acep_ExhibitorPoints?: number;
 
+    @Field({ nullable: true })
+    acep_stateorprovinceid?: string;
+
     @Field(() => Int, { nullable: true })
     Acep_GPPriceLevel?: number;
 
@@ -18888,6 +19164,9 @@ export class CreateAccount__client_crmInput {
 
     @Field(() => Boolean, { nullable: true })
     Acep_OrganizationManaged?: boolean;
+
+    @Field({ nullable: true })
+    acep_countryid?: string;
 
     @Field({ nullable: true })
     Acep_LongName?: string;
@@ -18910,6 +19189,9 @@ export class CreateAccount__client_crmInput {
     @Field({ nullable: true })
     Eone_AgingBucketDescription2?: string;
 
+    @Field({ nullable: true })
+    eone_paymenttermsid?: string;
+
     @Field(() => Float, { nullable: true })
     Eone_AgingBucketValue4?: number;
 
@@ -18918,6 +19200,9 @@ export class CreateAccount__client_crmInput {
 
     @Field(() => Float, { nullable: true })
     Eone_AgingBucketValue7?: number;
+
+    @Field({ nullable: true })
+    acep_categoryid?: string;
 
     @Field(() => Float, { nullable: true })
     Eone_AgingBucketValue2?: number;
@@ -18933,6 +19218,9 @@ export class CreateAccount__client_crmInput {
 
     @Field({ nullable: true })
     Adx_CreatedByIPAddress?: string;
+
+    @Field({ nullable: true })
+    acep_onlinetransactioncredentialid?: string;
 
     @Field({ nullable: true })
     Eone_AgingBucketDescription6?: string;
@@ -18955,11 +19243,20 @@ export class CreateAccount__client_crmInput {
     @Field({ nullable: true })
     Adx_ModifiedByIPAddress?: string;
 
+    @Field({ nullable: true })
+    msa_managingpartnerid?: string;
+
     @Field(() => Float, { nullable: true })
     Eone_AgingBucketValue1?: number;
 
     @Field({ nullable: true })
     Adx_CreatedByUsername?: string;
+
+    @Field({ nullable: true })
+    Acep_DirectAccessId?: string;
+
+    @Field({ nullable: true })
+    acep_productid?: string;
 
     @Field({ nullable: true })
     Acep_DeactivatedDate?: Date;
@@ -18974,10 +19271,43 @@ export class CreateAccount__client_crmInput {
     acep_State?: number;
 
     @Field({ nullable: true })
+    acep_CertificationBoard?: string;
+
+    @Field({ nullable: true })
+    acep_Chapter?: string;
+
+    @Field({ nullable: true })
+    acep_EMRARegion?: string;
+
+    @Field({ nullable: true })
+    acep_Group?: string;
+
+    @Field({ nullable: true })
+    acep_Hospital?: string;
+
+    @Field({ nullable: true })
+    acep_MedicalSchool?: string;
+
+    @Field({ nullable: true })
+    acep_Residency?: string;
+
+    @Field({ nullable: true })
+    acep_Section?: string;
+
+    @Field({ nullable: true })
+    acep_Venue?: string;
+
+    @Field({ nullable: true })
     acep_FacebookAddress?: string;
 
     @Field({ nullable: true })
     acep_twitterusername?: string;
+
+    @Field({ nullable: true })
+    acep_Fellowship?: string;
+
+    @Field({ nullable: true })
+    acep_Clerkship?: string;
 
     @Field(() => Int, { nullable: true })
     acep_GPTaxScheduleIDcode?: number;
@@ -19007,18 +19337,24 @@ export class CreateAccount__client_crmInput {
     acep_YouTubeLink?: string;
 
     @Field({ nullable: true })
+    acep_CEDR?: string;
+
+    @Field({ nullable: true })
     acep_DummyFieldToRemove?: string;
 
     @Field(() => Int, { nullable: true })
     acep_CommunityType?: number;
 
     @Field({ nullable: true })
+    acep_HealthSystem?: string;
+
+    @Field({ nullable: true })
     acep_pdinterviewlink?: string;
 }
     
-        
+
 //****************************************************************************
-// INPUT TYPE for Accounts__client_crm   
+// INPUT TYPE for Accounts__client_crm
 //****************************************************************************
 @InputType()
 export class UpdateAccount__client_crmInput {
@@ -19209,6 +19545,9 @@ export class UpdateAccount__client_crmInput {
     Address1_County?: string;
 
     @Field({ nullable: true })
+    Address1_AddressId?: string;
+
+    @Field({ nullable: true })
     Address1_Fax?: string;
 
     @Field(() => Int, { nullable: true })
@@ -19278,6 +19617,9 @@ export class UpdateAccount__client_crmInput {
     Address2_County?: string;
 
     @Field({ nullable: true })
+    Address2_AddressId?: string;
+
+    @Field({ nullable: true })
     Address2_Fax?: string;
 
     @Field(() => Int, { nullable: true })
@@ -19332,6 +19674,9 @@ export class UpdateAccount__client_crmInput {
     Address2_UTCOffset?: number;
 
     @Field({ nullable: true })
+    OwnerId?: string;
+
+    @Field({ nullable: true })
     OwnerIdName?: string;
 
     @Field({ nullable: true })
@@ -19343,11 +19688,23 @@ export class UpdateAccount__client_crmInput {
     @Field(() => Int, { nullable: true })
     OwnerIdType?: number;
 
+    @Field({ nullable: true })
+    OwningUser?: string;
+
+    @Field({ nullable: true })
+    OwningTeam?: string;
+
     @Field()
     AccountId: string;
 
     @Field(() => Int, { nullable: true })
     AccountCategoryCode?: number;
+
+    @Field({ nullable: true })
+    TerritoryId?: string;
+
+    @Field({ nullable: true })
+    DefaultPriceLevelId?: string;
 
     @Field(() => Int, { nullable: true })
     CustomerSizeCode?: number;
@@ -19374,13 +19731,22 @@ export class UpdateAccount__client_crmInput {
     BusinessTypeCode?: number;
 
     @Field({ nullable: true })
+    OwningBusinessUnit?: string;
+
+    @Field({ nullable: true })
     TraversedPath?: string;
+
+    @Field({ nullable: true })
+    OriginatingLeadId?: string;
 
     @Field(() => Int, { nullable: true })
     PaymentTermsCode?: number;
 
     @Field(() => Int, { nullable: true })
     ShippingMethodCode?: number;
+
+    @Field({ nullable: true })
+    PrimaryContactId?: string;
 
     @Field(() => Boolean, { nullable: true })
     ParticipatesInWorkflow?: boolean;
@@ -19476,10 +19842,19 @@ export class UpdateAccount__client_crmInput {
     CreatedOn?: Date;
 
     @Field({ nullable: true })
+    CreatedBy?: string;
+
+    @Field({ nullable: true })
     ModifiedOn?: Date;
+
+    @Field({ nullable: true })
+    ModifiedBy?: string;
 
     @Field()
     VersionNumber: number;
+
+    @Field({ nullable: true })
+    ParentAccountId?: string;
 
     @Field(() => Float, { nullable: true })
     Aging30?: number;
@@ -19499,6 +19874,9 @@ export class UpdateAccount__client_crmInput {
     @Field(() => Int, { nullable: true })
     PreferredAppointmentDayCode?: number;
 
+    @Field({ nullable: true })
+    PreferredSystemUserId?: string;
+
     @Field(() => Int, { nullable: true })
     PreferredAppointmentTimeCode?: number;
 
@@ -19509,7 +19887,16 @@ export class UpdateAccount__client_crmInput {
     DoNotSendMM?: boolean;
 
     @Field({ nullable: true })
+    MasterId?: string;
+
+    @Field({ nullable: true })
     LastUsedInCampaign?: Date;
+
+    @Field({ nullable: true })
+    PreferredServiceId?: string;
+
+    @Field({ nullable: true })
+    PreferredEquipmentId?: string;
 
     @Field(() => Float, { nullable: true })
     ExchangeRate?: number;
@@ -19525,6 +19912,9 @@ export class UpdateAccount__client_crmInput {
 
     @Field(() => Int, { nullable: true })
     ImportSequenceNumber?: number;
+
+    @Field({ nullable: true })
+    TransactionCurrencyId?: string;
 
     @Field(() => Float, { nullable: true })
     CreditLimit_Base?: number;
@@ -19546,6 +19936,21 @@ export class UpdateAccount__client_crmInput {
 
     @Field({ nullable: true })
     YomiName?: string;
+
+    @Field({ nullable: true })
+    CreatedOnBehalfBy?: string;
+
+    @Field({ nullable: true })
+    ModifiedOnBehalfBy?: string;
+
+    @Field({ nullable: true })
+    StageId?: string;
+
+    @Field({ nullable: true })
+    ProcessId?: string;
+
+    @Field({ nullable: true })
+    EntityImageId?: string;
 
     @Field(() => Int, { nullable: true })
     OpenDeals?: number;
@@ -19572,10 +19977,22 @@ export class UpdateAccount__client_crmInput {
     OpenRevenue_State?: number;
 
     @Field({ nullable: true })
+    CreatedByExternalParty?: string;
+
+    @Field({ nullable: true })
+    ModifiedByExternalParty?: string;
+
+    @Field({ nullable: true })
     PrimarySatoriId?: string;
 
     @Field({ nullable: true })
     PrimaryTwitterId?: string;
+
+    @Field({ nullable: true })
+    SLAId?: string;
+
+    @Field({ nullable: true })
+    SLAInvokedId?: string;
 
     @Field(() => Int, { nullable: true })
     OnHoldTime?: number;
@@ -19622,6 +20039,12 @@ export class UpdateAccount__client_crmInput {
     @Field({ nullable: true })
     Eone_AgingBucketDescription1?: string;
 
+    @Field({ nullable: true })
+    eone_shippingmethodid?: string;
+
+    @Field({ nullable: true })
+    eone_customerclassid?: string;
+
     @Field(() => Float, { nullable: true })
     Eone_CreditLimitAmount?: number;
 
@@ -19631,6 +20054,9 @@ export class UpdateAccount__client_crmInput {
     @Field(() => Int, { nullable: true })
     Acep_ExhibitorPoints?: number;
 
+    @Field({ nullable: true })
+    acep_stateorprovinceid?: string;
+
     @Field(() => Int, { nullable: true })
     Acep_GPPriceLevel?: number;
 
@@ -19639,6 +20065,9 @@ export class UpdateAccount__client_crmInput {
 
     @Field(() => Boolean, { nullable: true })
     Acep_OrganizationManaged?: boolean;
+
+    @Field({ nullable: true })
+    acep_countryid?: string;
 
     @Field({ nullable: true })
     Acep_LongName?: string;
@@ -19661,6 +20090,9 @@ export class UpdateAccount__client_crmInput {
     @Field({ nullable: true })
     Eone_AgingBucketDescription2?: string;
 
+    @Field({ nullable: true })
+    eone_paymenttermsid?: string;
+
     @Field(() => Float, { nullable: true })
     Eone_AgingBucketValue4?: number;
 
@@ -19669,6 +20101,9 @@ export class UpdateAccount__client_crmInput {
 
     @Field(() => Float, { nullable: true })
     Eone_AgingBucketValue7?: number;
+
+    @Field({ nullable: true })
+    acep_categoryid?: string;
 
     @Field(() => Float, { nullable: true })
     Eone_AgingBucketValue2?: number;
@@ -19684,6 +20119,9 @@ export class UpdateAccount__client_crmInput {
 
     @Field({ nullable: true })
     Adx_CreatedByIPAddress?: string;
+
+    @Field({ nullable: true })
+    acep_onlinetransactioncredentialid?: string;
 
     @Field({ nullable: true })
     Eone_AgingBucketDescription6?: string;
@@ -19706,11 +20144,20 @@ export class UpdateAccount__client_crmInput {
     @Field({ nullable: true })
     Adx_ModifiedByIPAddress?: string;
 
+    @Field({ nullable: true })
+    msa_managingpartnerid?: string;
+
     @Field(() => Float, { nullable: true })
     Eone_AgingBucketValue1?: number;
 
     @Field({ nullable: true })
     Adx_CreatedByUsername?: string;
+
+    @Field({ nullable: true })
+    Acep_DirectAccessId?: string;
+
+    @Field({ nullable: true })
+    acep_productid?: string;
 
     @Field({ nullable: true })
     Acep_DeactivatedDate?: Date;
@@ -19725,10 +20172,43 @@ export class UpdateAccount__client_crmInput {
     acep_State?: number;
 
     @Field({ nullable: true })
+    acep_CertificationBoard?: string;
+
+    @Field({ nullable: true })
+    acep_Chapter?: string;
+
+    @Field({ nullable: true })
+    acep_EMRARegion?: string;
+
+    @Field({ nullable: true })
+    acep_Group?: string;
+
+    @Field({ nullable: true })
+    acep_Hospital?: string;
+
+    @Field({ nullable: true })
+    acep_MedicalSchool?: string;
+
+    @Field({ nullable: true })
+    acep_Residency?: string;
+
+    @Field({ nullable: true })
+    acep_Section?: string;
+
+    @Field({ nullable: true })
+    acep_Venue?: string;
+
+    @Field({ nullable: true })
     acep_FacebookAddress?: string;
 
     @Field({ nullable: true })
     acep_twitterusername?: string;
+
+    @Field({ nullable: true })
+    acep_Fellowship?: string;
+
+    @Field({ nullable: true })
+    acep_Clerkship?: string;
 
     @Field(() => Int, { nullable: true })
     acep_GPTaxScheduleIDcode?: number;
@@ -19758,10 +20238,16 @@ export class UpdateAccount__client_crmInput {
     acep_YouTubeLink?: string;
 
     @Field({ nullable: true })
+    acep_CEDR?: string;
+
+    @Field({ nullable: true })
     acep_DummyFieldToRemove?: string;
 
     @Field(() => Int, { nullable: true })
     acep_CommunityType?: number;
+
+    @Field({ nullable: true })
+    acep_HealthSystem?: string;
 
     @Field({ nullable: true })
     acep_pdinterviewlink?: string;
@@ -19778,8 +20264,8 @@ export class RunAccount__client_crmViewResult {
     @Field(() => [Account__client_crm_])
     Results: Account__client_crm_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -19821,31 +20307,7 @@ export class Account__client_crmResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Accounts__client_crm', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-      
-    @FieldResolver(() => [Account__client_crm_])
-    async Accounts__client_crmArray(@Root() account__client_crm_: Account__client_crm_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('Accounts__client_crm', userPayload);
-        const sSQL = `SELECT * FROM [client_crm].[vwAccounts__client_crm] WHERE [ParentAccountId]='${account__client_crm_.AccountId}' ` + this.getRowLevelSecurityWhereClause('Accounts__client_crm', userPayload, EntityPermissionType.Read, 'AND');
-        const result = this.ArrayMapFieldNamesToCodeNames('Accounts__client_crm', await dataSource.query(sSQL));
-        return result;
-    }
-          
-    @FieldResolver(() => [PersonLink_])
-    async PersonLinksArray(@Root() account__client_crm_: Account__client_crm_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('Person Links', userPayload);
-        const sSQL = `SELECT * FROM [common].[vwPersonLinks] WHERE [CRMAccountID]='${account__client_crm_.AccountId}' ` + this.getRowLevelSecurityWhereClause('Person Links', userPayload, EntityPermissionType.Read, 'AND');
-        const result = this.ArrayMapFieldNamesToCodeNames('Person Links', await dataSource.query(sSQL));
-        return result;
-    }
-          
-    @FieldResolver(() => [Contact__client_crm_])
-    async Contacts__client_crmArray(@Root() account__client_crm_: Account__client_crm_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('Contacts__client_crm', userPayload);
-        const sSQL = `SELECT * FROM [client_crm].[vwContacts__client_crm] WHERE [msa_managingpartnerid]='${account__client_crm_.AccountId}' ` + this.getRowLevelSecurityWhereClause('Contacts__client_crm', userPayload, EntityPermissionType.Read, 'AND');
-        const result = this.ArrayMapFieldNamesToCodeNames('Contacts__client_crm', await dataSource.query(sSQL));
-        return result;
-    }
-          
+    
     @FieldResolver(() => [Product_])
     async ProductsArray(@Root() account__client_crm_: Account__client_crm_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Products', userPayload);
@@ -19853,7 +20315,31 @@ export class Account__client_crmResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Products', await dataSource.query(sSQL));
         return result;
     }
-          
+        
+    @FieldResolver(() => [Account__client_crm_])
+    async Accounts__client_crmArray(@Root() account__client_crm_: Account__client_crm_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Accounts__client_crm', userPayload);
+        const sSQL = `SELECT * FROM [client_crm].[vwAccounts__client_crm] WHERE [ParentAccountId]='${account__client_crm_.AccountId}' ` + this.getRowLevelSecurityWhereClause('Accounts__client_crm', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Accounts__client_crm', await dataSource.query(sSQL));
+        return result;
+    }
+        
+    @FieldResolver(() => [Contact__client_crm_])
+    async Contacts__client_crmArray(@Root() account__client_crm_: Account__client_crm_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Contacts__client_crm', userPayload);
+        const sSQL = `SELECT * FROM [client_crm].[vwContacts__client_crm] WHERE [msa_managingpartnerid]='${account__client_crm_.AccountId}' ` + this.getRowLevelSecurityWhereClause('Contacts__client_crm', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Contacts__client_crm', await dataSource.query(sSQL));
+        return result;
+    }
+        
+    @FieldResolver(() => [PersonLink_])
+    async PersonLinksArray(@Root() account__client_crm_: Account__client_crm_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Person Links', userPayload);
+        const sSQL = `SELECT * FROM [common].[vwPersonLinks] WHERE [CRMAccountID]='${account__client_crm_.AccountId}' ` + this.getRowLevelSecurityWhereClause('Person Links', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Person Links', await dataSource.query(sSQL));
+        return result;
+    }
+        
     @FieldResolver(() => [OrganizationLink_])
     async OrganizationLinksArray(@Root() account__client_crm_: Account__client_crm_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Organization Links', userPayload);
@@ -19865,7 +20351,7 @@ export class Account__client_crmResolver extends ResolverBase {
     @Mutation(() => Account__client_crm_)
     async CreateAccount__client_crm(
         @Arg('input', () => CreateAccount__client_crmInput) input: CreateAccount__client_crmInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
+        @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.CreateRecord('Accounts__client_crm', input, dataSource, userPayload, pubSub)
@@ -19886,43 +20372,43 @@ export class Account__client_crmResolver extends ResolverBase {
 // ENTITY CLASS for String Maps
 //****************************************************************************
 @ObjectType()
-export class StringMap_ {  
+export class StringMap_ {
     @Field(() => Int, {nullable: true}) 
     ObjectTypeCode?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     AttributeName?: string;
-          
+        
     @Field(() => Int, {nullable: true}) 
     AttributeValue?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     LangId?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     OrganizationId?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8000)
     Value?: string;
-          
+        
     @Field(() => Int, {nullable: true}) 
     DisplayOrder?: number;
-          
+        
     @Field() 
     @MaxLength(8)
     VersionNumber: number;
-          
+        
     @Field() 
     @MaxLength(16)
     StringMapId: string;
         
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for String Maps   
+// INPUT TYPE for String Maps
 //****************************************************************************
 @InputType()
 export class CreateStringMapInput {
@@ -19939,6 +20425,9 @@ export class CreateStringMapInput {
     LangId?: number;
 
     @Field({ nullable: true })
+    OrganizationId?: string;
+
+    @Field({ nullable: true })
     Value?: string;
 
     @Field(() => Int, { nullable: true })
@@ -19948,9 +20437,9 @@ export class CreateStringMapInput {
     VersionNumber: number;
 }
     
-        
+
 //****************************************************************************
-// INPUT TYPE for String Maps   
+// INPUT TYPE for String Maps
 //****************************************************************************
 @InputType()
 export class UpdateStringMapInput {
@@ -19965,6 +20454,9 @@ export class UpdateStringMapInput {
 
     @Field(() => Int, { nullable: true })
     LangId?: number;
+
+    @Field({ nullable: true })
+    OrganizationId?: string;
 
     @Field({ nullable: true })
     Value?: string;
@@ -19990,8 +20482,8 @@ export class RunStringMapViewResult {
     @Field(() => [StringMap_])
     Results: StringMap_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -20037,7 +20529,7 @@ export class StringMapResolver extends ResolverBase {
     @Mutation(() => StringMap_)
     async CreateStringMap(
         @Arg('input', () => CreateStringMapInput) input: CreateStringMapInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
+        @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.CreateRecord('String Maps', input, dataSource, userPayload, pubSub)
@@ -20058,180 +20550,180 @@ export class StringMapResolver extends ResolverBase {
 // ENTITY CLASS for Product Price Levels
 //****************************************************************************
 @ObjectType()
-export class ProductPriceLevel_ {  
+export class ProductPriceLevel_ {
     @Field({nullable: true}) 
     @MaxLength(200)
     DiscountTypeIdName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(400)
     ModifiedOnBehalfByYomiName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(400)
     ModifiedOnBehalfByName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     PriceLevelIdName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     OrganizationId?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(400)
     ModifiedByYomiName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(400)
     ModifiedByName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(400)
     CreatedByYomiName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(400)
     CreatedByName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(400)
     ProductIdName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     ProductNumber?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(400)
     CreatedOnBehalfByName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(400)
     CreatedOnBehalfByYomiName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(400)
     UoMScheduleIdName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     UoMIdName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     TransactionCurrencyIdName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     PriceLevelId?: string;
-          
+        
     @Field() 
     @MaxLength(16)
     ProductPriceLevelId: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     UoMId?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     UoMScheduleId?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     DiscountTypeId?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     ProductId?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Percentage?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Amount?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     CreatedOn?: Date;
-          
+        
     @Field(() => Int, {nullable: true}) 
     QuantitySellingCode?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     RoundingPolicyCode?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     ModifiedOn?: Date;
-          
+        
     @Field(() => Int, {nullable: true}) 
     PricingMethodCode?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     RoundingOptionCode?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     RoundingOptionAmount?: number;
-          
+        
     @Field() 
     @MaxLength(8)
     VersionNumber: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     CreatedBy?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     ModifiedBy?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     ExchangeRate?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     TransactionCurrencyId?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     OverriddenCreatedOn?: Date;
-          
+        
     @Field(() => Int, {nullable: true}) 
     ImportSequenceNumber?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Amount_Base?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     RoundingOptionAmount_Base?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     CreatedOnBehalfBy?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     ModifiedOnBehalfBy?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     ProcessId?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     StageId?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2500)
     TraversedPath?: string;
         
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for Product Price Levels   
+// INPUT TYPE for Product Price Levels
 //****************************************************************************
 @InputType()
 export class CreateProductPriceLevelInput {
@@ -20248,6 +20740,9 @@ export class CreateProductPriceLevelInput {
     PriceLevelIdName?: string;
 
     @Field({ nullable: true })
+    OrganizationId?: string;
+
+    @Field({ nullable: true })
     ModifiedByYomiName?: string;
 
     @Field({ nullable: true })
@@ -20280,6 +20775,21 @@ export class CreateProductPriceLevelInput {
     @Field({ nullable: true })
     TransactionCurrencyIdName?: string;
 
+    @Field({ nullable: true })
+    PriceLevelId?: string;
+
+    @Field({ nullable: true })
+    UoMId?: string;
+
+    @Field({ nullable: true })
+    UoMScheduleId?: string;
+
+    @Field({ nullable: true })
+    DiscountTypeId?: string;
+
+    @Field({ nullable: true })
+    ProductId?: string;
+
     @Field(() => Float, { nullable: true })
     Percentage?: number;
 
@@ -20310,8 +20820,17 @@ export class CreateProductPriceLevelInput {
     @Field()
     VersionNumber: number;
 
+    @Field({ nullable: true })
+    CreatedBy?: string;
+
+    @Field({ nullable: true })
+    ModifiedBy?: string;
+
     @Field(() => Float, { nullable: true })
     ExchangeRate?: number;
+
+    @Field({ nullable: true })
+    TransactionCurrencyId?: string;
 
     @Field({ nullable: true })
     OverriddenCreatedOn?: Date;
@@ -20326,12 +20845,24 @@ export class CreateProductPriceLevelInput {
     RoundingOptionAmount_Base?: number;
 
     @Field({ nullable: true })
+    CreatedOnBehalfBy?: string;
+
+    @Field({ nullable: true })
+    ModifiedOnBehalfBy?: string;
+
+    @Field({ nullable: true })
+    ProcessId?: string;
+
+    @Field({ nullable: true })
+    StageId?: string;
+
+    @Field({ nullable: true })
     TraversedPath?: string;
 }
     
-        
+
 //****************************************************************************
-// INPUT TYPE for Product Price Levels   
+// INPUT TYPE for Product Price Levels
 //****************************************************************************
 @InputType()
 export class UpdateProductPriceLevelInput {
@@ -20348,6 +20879,9 @@ export class UpdateProductPriceLevelInput {
     PriceLevelIdName?: string;
 
     @Field({ nullable: true })
+    OrganizationId?: string;
+
+    @Field({ nullable: true })
     ModifiedByYomiName?: string;
 
     @Field({ nullable: true })
@@ -20380,8 +20914,23 @@ export class UpdateProductPriceLevelInput {
     @Field({ nullable: true })
     TransactionCurrencyIdName?: string;
 
+    @Field({ nullable: true })
+    PriceLevelId?: string;
+
     @Field()
     ProductPriceLevelId: string;
+
+    @Field({ nullable: true })
+    UoMId?: string;
+
+    @Field({ nullable: true })
+    UoMScheduleId?: string;
+
+    @Field({ nullable: true })
+    DiscountTypeId?: string;
+
+    @Field({ nullable: true })
+    ProductId?: string;
 
     @Field(() => Float, { nullable: true })
     Percentage?: number;
@@ -20413,8 +20962,17 @@ export class UpdateProductPriceLevelInput {
     @Field()
     VersionNumber: number;
 
+    @Field({ nullable: true })
+    CreatedBy?: string;
+
+    @Field({ nullable: true })
+    ModifiedBy?: string;
+
     @Field(() => Float, { nullable: true })
     ExchangeRate?: number;
+
+    @Field({ nullable: true })
+    TransactionCurrencyId?: string;
 
     @Field({ nullable: true })
     OverriddenCreatedOn?: Date;
@@ -20427,6 +20985,18 @@ export class UpdateProductPriceLevelInput {
 
     @Field(() => Float, { nullable: true })
     RoundingOptionAmount_Base?: number;
+
+    @Field({ nullable: true })
+    CreatedOnBehalfBy?: string;
+
+    @Field({ nullable: true })
+    ModifiedOnBehalfBy?: string;
+
+    @Field({ nullable: true })
+    ProcessId?: string;
+
+    @Field({ nullable: true })
+    StageId?: string;
 
     @Field({ nullable: true })
     TraversedPath?: string;
@@ -20443,8 +21013,8 @@ export class RunProductPriceLevelViewResult {
     @Field(() => [ProductPriceLevel_])
     Results: ProductPriceLevel_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -20490,7 +21060,7 @@ export class ProductPriceLevelResolver extends ResolverBase {
     @Mutation(() => ProductPriceLevel_)
     async CreateProductPriceLevel(
         @Arg('input', () => CreateProductPriceLevelInput) input: CreateProductPriceLevelInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
+        @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.CreateRecord('Product Price Levels', input, dataSource, userPayload, pubSub)
@@ -20511,271 +21081,271 @@ export class ProductPriceLevelResolver extends ResolverBase {
 // ENTITY CLASS for client _memberships
 //****************************************************************************
 @ObjectType()
-export class client_membership_ {  
+export class client_membership_ {
     @Field({nullable: true}) 
     @MaxLength(400)
     createdbyyominame?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(400)
     CreatedByName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(400)
     modifiedbyyominame?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(400)
     ModifiedByName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     Acep_BillingOptionIdName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(320)
     acep_contactidName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(900)
     acep_contactidYomiName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(400)
     createdonbehalfbyyominame?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(400)
     CreatedOnBehalfByName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(400)
     modifiedonbehalfbyyominame?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(400)
     ModifiedOnBehalfByName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(600)
     Acep_futureCRMOrderIdName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(600)
     Acep_CurrentCRMOrderIdName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     acep_FutureBillingOptionIdName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     OwnerId?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(320)
     OwnerIdName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(320)
     OwnerIdYomiName?: string;
-          
+        
     @Field(() => Int, {nullable: true}) 
     OwnerIdDsc?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     OwnerIdType?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     OwningUser?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     OwningTeam?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     Acep_AcquisitionPromoCode?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Acep_CancellationDate?: Date;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Acep_CurrentMemberRateCode?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Acep_CurrentMemberTypeCode?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Acep_CycleStartDate?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Acep_ExpirationDate?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Acep_FutureCycleStartDate?: Date;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     Acep_FutureDuesPaid?: boolean;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Acep_FutureExpirationDate?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Acep_FutureLastPaidDate?: Date;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Acep_FutureMemberRateCode?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Acep_FutureMemberTypeCode?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Acep_FuturePaidThroughDate?: Date;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Acep_FutureStatusCode?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Acep_FutureStatusReasonCode?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Acep_JoinDate?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Acep_LastPayDate?: Date;
-          
+        
     @Field() 
     @MaxLength(16)
     Acep_membershipId: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(370)
     Acep_name?: string;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Acep_OrganizationCode?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Acep_OriginalJoinDate?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Acep_PaidThroughDate?: Date;
-          
+        
     @Field({nullable: true}) 
     Acep_ProgressionInfo?: string;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Acep_StatusCode?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Acep_StatusReasonCode?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     CreatedBy?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     CreatedOn?: Date;
-          
+        
     @Field(() => Int, {nullable: true}) 
     ImportSequenceNumber?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     ModifiedBy?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     ModifiedOn?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     OverriddenCreatedOn?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     OwningBusinessUnit?: string;
-          
+        
     @Field(() => Int, {nullable: true}) 
     statecode?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     statuscode?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     TimeZoneRuleVersionNumber?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     UTCConversionTimeZoneCode?: number;
-          
+        
     @Field() 
     @MaxLength(8)
     VersionNumber: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     acep_contactid?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     Acep_CurrentCRMOrderId?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     Acep_futureCRMOrderId?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     Acep_BillingOptionId?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     CreatedOnBehalfBy?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     ModifiedOnBehalfBy?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     acep_FutureBillingOptionId?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     acep_LastRateChangeDate?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     acep_currentlastreneweddate?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     acep_futurelastreneweddate?: Date;
         
-    @Field(() => [SalesOrder_])
-    SalesOrdersArray: SalesOrder_[]; // Link to SalesOrders
-    
     @Field(() => [Contact__client_crm_])
     Contacts__client_crmArray: Contact__client_crm_[]; // Link to Contacts__client_crm
     
+    @Field(() => [SalesOrder_])
+    SalesOrdersArray: SalesOrder_[]; // Link to SalesOrders
+    
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for client _memberships   
+// INPUT TYPE for client _memberships
 //****************************************************************************
 @InputType()
 export class Createclient_membershipInput {
@@ -20822,6 +21392,9 @@ export class Createclient_membershipInput {
     acep_FutureBillingOptionIdName?: string;
 
     @Field({ nullable: true })
+    OwnerId?: string;
+
+    @Field({ nullable: true })
     OwnerIdName?: string;
 
     @Field({ nullable: true })
@@ -20832,6 +21405,12 @@ export class Createclient_membershipInput {
 
     @Field(() => Int, { nullable: true })
     OwnerIdType?: number;
+
+    @Field({ nullable: true })
+    OwningUser?: string;
+
+    @Field({ nullable: true })
+    OwningTeam?: string;
 
     @Field({ nullable: true })
     Acep_AcquisitionPromoCode?: string;
@@ -20906,16 +21485,25 @@ export class Createclient_membershipInput {
     Acep_StatusReasonCode?: number;
 
     @Field({ nullable: true })
+    CreatedBy?: string;
+
+    @Field({ nullable: true })
     CreatedOn?: Date;
 
     @Field(() => Int, { nullable: true })
     ImportSequenceNumber?: number;
 
     @Field({ nullable: true })
+    ModifiedBy?: string;
+
+    @Field({ nullable: true })
     ModifiedOn?: Date;
 
     @Field({ nullable: true })
     OverriddenCreatedOn?: Date;
+
+    @Field({ nullable: true })
+    OwningBusinessUnit?: string;
 
     @Field(() => Int, { nullable: true })
     statecode?: number;
@@ -20933,6 +21521,27 @@ export class Createclient_membershipInput {
     VersionNumber: number;
 
     @Field({ nullable: true })
+    acep_contactid?: string;
+
+    @Field({ nullable: true })
+    Acep_CurrentCRMOrderId?: string;
+
+    @Field({ nullable: true })
+    Acep_futureCRMOrderId?: string;
+
+    @Field({ nullable: true })
+    Acep_BillingOptionId?: string;
+
+    @Field({ nullable: true })
+    CreatedOnBehalfBy?: string;
+
+    @Field({ nullable: true })
+    ModifiedOnBehalfBy?: string;
+
+    @Field({ nullable: true })
+    acep_FutureBillingOptionId?: string;
+
+    @Field({ nullable: true })
     acep_LastRateChangeDate?: Date;
 
     @Field({ nullable: true })
@@ -20942,9 +21551,9 @@ export class Createclient_membershipInput {
     acep_futurelastreneweddate?: Date;
 }
     
-        
+
 //****************************************************************************
-// INPUT TYPE for client _memberships   
+// INPUT TYPE for client _memberships
 //****************************************************************************
 @InputType()
 export class Updateclient_membershipInput {
@@ -20991,6 +21600,9 @@ export class Updateclient_membershipInput {
     acep_FutureBillingOptionIdName?: string;
 
     @Field({ nullable: true })
+    OwnerId?: string;
+
+    @Field({ nullable: true })
     OwnerIdName?: string;
 
     @Field({ nullable: true })
@@ -21001,6 +21613,12 @@ export class Updateclient_membershipInput {
 
     @Field(() => Int, { nullable: true })
     OwnerIdType?: number;
+
+    @Field({ nullable: true })
+    OwningUser?: string;
+
+    @Field({ nullable: true })
+    OwningTeam?: string;
 
     @Field({ nullable: true })
     Acep_AcquisitionPromoCode?: string;
@@ -21078,16 +21696,25 @@ export class Updateclient_membershipInput {
     Acep_StatusReasonCode?: number;
 
     @Field({ nullable: true })
+    CreatedBy?: string;
+
+    @Field({ nullable: true })
     CreatedOn?: Date;
 
     @Field(() => Int, { nullable: true })
     ImportSequenceNumber?: number;
 
     @Field({ nullable: true })
+    ModifiedBy?: string;
+
+    @Field({ nullable: true })
     ModifiedOn?: Date;
 
     @Field({ nullable: true })
     OverriddenCreatedOn?: Date;
+
+    @Field({ nullable: true })
+    OwningBusinessUnit?: string;
 
     @Field(() => Int, { nullable: true })
     statecode?: number;
@@ -21103,6 +21730,27 @@ export class Updateclient_membershipInput {
 
     @Field()
     VersionNumber: number;
+
+    @Field({ nullable: true })
+    acep_contactid?: string;
+
+    @Field({ nullable: true })
+    Acep_CurrentCRMOrderId?: string;
+
+    @Field({ nullable: true })
+    Acep_futureCRMOrderId?: string;
+
+    @Field({ nullable: true })
+    Acep_BillingOptionId?: string;
+
+    @Field({ nullable: true })
+    CreatedOnBehalfBy?: string;
+
+    @Field({ nullable: true })
+    ModifiedOnBehalfBy?: string;
+
+    @Field({ nullable: true })
+    acep_FutureBillingOptionId?: string;
 
     @Field({ nullable: true })
     acep_LastRateChangeDate?: Date;
@@ -21125,8 +21773,8 @@ export class Runclient_membershipViewResult {
     @Field(() => [client_membership_])
     Results: client_membership_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -21168,15 +21816,7 @@ export class client_membershipResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('client _memberships', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-      
-    @FieldResolver(() => [SalesOrder_])
-    async SalesOrdersArray(@Root() client_membership_: client_membership_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('Sales Orders', userPayload);
-        const sSQL = `SELECT * FROM [client_crm].[vwSalesOrders] WHERE [Acep_ACEPMembershipId]='${client_membership_.Acep_membershipId}' ` + this.getRowLevelSecurityWhereClause('Sales Orders', userPayload, EntityPermissionType.Read, 'AND');
-        const result = this.ArrayMapFieldNamesToCodeNames('Sales Orders', await dataSource.query(sSQL));
-        return result;
-    }
-          
+    
     @FieldResolver(() => [Contact__client_crm_])
     async Contacts__client_crmArray(@Root() client_membership_: client_membership_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Contacts__client_crm', userPayload);
@@ -21185,10 +21825,18 @@ export class client_membershipResolver extends ResolverBase {
         return result;
     }
         
+    @FieldResolver(() => [SalesOrder_])
+    async SalesOrdersArray(@Root() client_membership_: client_membership_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Sales Orders', userPayload);
+        const sSQL = `SELECT * FROM [client_crm].[vwSalesOrders] WHERE [Acep_ACEPMembershipId]='${client_membership_.Acep_membershipId}' ` + this.getRowLevelSecurityWhereClause('Sales Orders', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Sales Orders', await dataSource.query(sSQL));
+        return result;
+    }
+        
     @Mutation(() => client_membership_)
     async Createclient_membership(
         @Arg('input', () => Createclient_membershipInput) input: Createclient_membershipInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
+        @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.CreateRecord('client _memberships', input, dataSource, userPayload, pubSub)
@@ -21209,1774 +21857,1774 @@ export class client_membershipResolver extends ResolverBase {
 // ENTITY CLASS for Contacts__client_crm
 //****************************************************************************
 @ObjectType()
-export class Contact__client_crm_ {  
+export class Contact__client_crm_ {
     @Field({nullable: true}) 
     @MaxLength(370)
     Acep_EMRAMembershipIdName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(320)
     msa_managingpartneridYomiName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(320)
     msa_managingpartneridName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(900)
     ModifiedByExternalPartyYomiName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(600)
     ModifiedByExternalPartyName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     acep_emcareercountryidName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(400)
     adx_systemuseridName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(400)
     adx_systemuseridYomiName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(400)
     PreferredSystemUserIdName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(400)
     PreferredSystemUserIdYomiName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(400)
     CreatedByYomiName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(400)
     CreatedByName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     TransactionCurrencyIdName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(900)
     CreatedByExternalPartyYomiName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(600)
     CreatedByExternalPartyName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(900)
     OriginatingLeadIdYomiName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(320)
     OriginatingLeadIdName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     acep_emcareerstateorprovinceidName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     acep_MarketingDataIndividualName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     acep_countryofcitizenshipidName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(400)
     ModifiedByName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(400)
     ModifiedByYomiName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(400)
     ModifiedOnBehalfByName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(400)
     ModifiedOnBehalfByYomiName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(900)
     MasterContactIdYomiName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(320)
     MasterContactIdName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(400)
     CreatedOnBehalfByName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(400)
     CreatedOnBehalfByYomiName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(370)
     Acep_ACEPMembershipIdName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(370)
     Acep_SEMPAMembershipIdName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(320)
     PreferredServiceIdName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     acep_plannersidName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(320)
     PreferredEquipmentIdName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(320)
     SLAInvokedIdName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(400)
     EntityImage_URL?: string;
-          
+        
     @Field(() => Int, {nullable: true}) 
     EntityImage_Timestamp?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     EntityImage?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     acep_stateorprovinceidName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     DefaultPriceLevelIdName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     acep_countryidName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(320)
     SLAName?: string;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Address1_AddressTypeCode?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8000)
     Address1_City?: string;
-          
+        
     @Field({nullable: true}) 
     Address1_Composite?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8000)
     Address1_Country?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8000)
     Address1_County?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     Address1_AddressId?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Address1_Fax?: string;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Address1_FreightTermsCode?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Address1_Latitude?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8000)
     Address1_Line1?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8000)
     Address1_Line2?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8000)
     Address1_Line3?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Address1_Longitude?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(400)
     Address1_Name?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Address1_PostalCode?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Address1_PostOfficeBox?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(300)
     Address1_PrimaryContactName?: string;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Address1_ShippingMethodCode?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8000)
     Address1_StateOrProvince?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Address1_Telephone1?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Address1_Telephone2?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Address1_Telephone3?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Address1_UPSZone?: string;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Address1_UTCOffset?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Address2_AddressTypeCode?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8000)
     Address2_City?: string;
-          
+        
     @Field({nullable: true}) 
     Address2_Composite?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8000)
     Address2_Country?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8000)
     Address2_County?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     Address2_AddressId?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Address2_Fax?: string;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Address2_FreightTermsCode?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Address2_Latitude?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8000)
     Address2_Line1?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8000)
     Address2_Line2?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8000)
     Address2_Line3?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Address2_Longitude?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(400)
     Address2_Name?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Address2_PostalCode?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Address2_PostOfficeBox?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(300)
     Address2_PrimaryContactName?: string;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Address2_ShippingMethodCode?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8000)
     Address2_StateOrProvince?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Address2_Telephone1?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Address2_Telephone2?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Address2_Telephone3?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Address2_UPSZone?: string;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Address2_UTCOffset?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Address3_AddressTypeCode?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8000)
     Address3_City?: string;
-          
+        
     @Field({nullable: true}) 
     Address3_Composite?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8000)
     Address3_Country?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8000)
     Address3_County?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     Address3_AddressId?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Address3_Fax?: string;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Address3_FreightTermsCode?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Address3_Latitude?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8000)
     Address3_Line1?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8000)
     Address3_Line2?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8000)
     Address3_Line3?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Address3_Longitude?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(400)
     Address3_Name?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Address3_PostalCode?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Address3_PostOfficeBox?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(300)
     Address3_PrimaryContactName?: string;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Address3_ShippingMethodCode?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8000)
     Address3_StateOrProvince?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Address3_Telephone1?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Address3_Telephone2?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Address3_Telephone3?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Address3_UPSZone?: string;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Address3_UTCOffset?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     OwnerId?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(320)
     OwnerIdName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(320)
     OwnerIdYomiName?: string;
-          
+        
     @Field(() => Int, {nullable: true}) 
     OwnerIdDsc?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     OwnerIdType?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     OwningUser?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     OwningTeam?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     AccountId?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8000)
     AccountIdName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8000)
     AccountIdYomiName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     ParentContactId?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8000)
     ParentContactIdName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8000)
     ParentContactIdYomiName?: string;
-          
+        
     @Field() 
     @MaxLength(16)
     ContactId: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     DefaultPriceLevelId?: string;
-          
+        
     @Field(() => Int, {nullable: true}) 
     CustomerSizeCode?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     CustomerTypeCode?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     PreferredContactMethodCode?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     LeadSourceCode?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     OriginatingLeadId?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     OwningBusinessUnit?: string;
-          
+        
     @Field(() => Int, {nullable: true}) 
     PaymentTermsCode?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     ShippingMethodCode?: number;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     ParticipatesInWorkflow?: boolean;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     IsBackofficeCustomer?: boolean;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     Salutation?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     JobTitle?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     FirstName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     Department?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     NickName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     MiddleName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     LastName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(20)
     Suffix?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(300)
     YomiFirstName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(320)
     FullName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(300)
     YomiMiddleName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(300)
     YomiLastName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Anniversary?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     BirthDate?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     GovernmentId?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(900)
     YomiFullName?: string;
-          
+        
     @Field({nullable: true}) 
     Description?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     EmployeeId?: string;
-          
+        
     @Field(() => Int, {nullable: true}) 
     GenderCode?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     AnnualIncome?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     HasChildrenCode?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     EducationCode?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(400)
     WebSiteUrl?: string;
-          
+        
     @Field(() => Int, {nullable: true}) 
     FamilyStatusCode?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(400)
     FtpSiteUrl?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     EMailAddress1?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     SpousesName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     AssistantName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     EMailAddress2?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     AssistantPhone?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     EMailAddress3?: string;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     DoNotPhone?: boolean;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     ManagerName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     ManagerPhone?: string;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     DoNotFax?: boolean;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     DoNotEMail?: boolean;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     DoNotPostalMail?: boolean;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     DoNotBulkEMail?: boolean;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     DoNotBulkPostalMail?: boolean;
-          
+        
     @Field(() => Int, {nullable: true}) 
     AccountRoleCode?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     TerritoryCode?: number;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     IsPrivate?: boolean;
-          
+        
     @Field(() => Float, {nullable: true}) 
     CreditLimit?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     CreatedOn?: Date;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     CreditOnHold?: boolean;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     CreatedBy?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     ModifiedOn?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     ModifiedBy?: string;
-          
+        
     @Field(() => Int, {nullable: true}) 
     NumberOfChildren?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(510)
     ChildrensNames?: string;
-          
+        
     @Field() 
     @MaxLength(8)
     VersionNumber: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     MobilePhone?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Pager?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Telephone1?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Telephone2?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Telephone3?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Fax?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Aging30?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     StateCode?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Aging60?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     StatusCode?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Aging90?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     PreferredSystemUserId?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     PreferredServiceId?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     MasterId?: string;
-          
+        
     @Field(() => Int, {nullable: true}) 
     PreferredAppointmentDayCode?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     PreferredAppointmentTimeCode?: number;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     DoNotSendMM?: boolean;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     ParentCustomerId?: string;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     Merged?: boolean;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     ExternalUserIdentifier?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     SubscriptionId?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     PreferredEquipmentId?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     LastUsedInCampaign?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8000)
     ParentCustomerIdName?: string;
-          
+        
     @Field(() => Int, {nullable: true}) 
     ParentCustomerIdType?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     TransactionCurrencyId?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     OverriddenCreatedOn?: Date;
-          
+        
     @Field(() => Float, {nullable: true}) 
     ExchangeRate?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     ImportSequenceNumber?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     TimeZoneRuleVersionNumber?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     UTCConversionTimeZoneCode?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     AnnualIncome_Base?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     CreditLimit_Base?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Aging60_Base?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Aging90_Base?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Aging30_Base?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8000)
     ParentCustomerIdYomiName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     CreatedOnBehalfBy?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     ModifiedOnBehalfBy?: string;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     IsAutoCreate?: boolean;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     StageId?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     ProcessId?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     EntityImageId?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2500)
     TraversedPath?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     SLAId?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     SLAInvokedId?: string;
-          
+        
     @Field(() => Int, {nullable: true}) 
     OnHoldTime?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     LastOnHoldTime?: Date;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     FollowEmail?: boolean;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2500)
     TimeSpentByMeOnEmailAndMeetings?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Business2?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Callback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Company?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Home2?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     CreatedByExternalParty?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     ModifiedByExternalParty?: string;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     MarketingOnly?: boolean;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     Acep_Org?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     Acep_MSPromoCode?: string;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     Acep_AllowRenewalEmail?: boolean;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     Acep_npinumber?: string;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     Acep_AllowOtherACEPChapterMarketing?: boolean;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     Acep_AllowSEMPAClinicalCases?: boolean;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     Acep_AllowSEMPAEducationalMeetings?: boolean;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     Acep_AllowSEMPANews?: boolean;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     Acep_AllowSEMPAWeekendEdition?: boolean;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     Acep_AllowSEMPAProducts?: boolean;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     Acep_AllowSEMPAEducationalProductsandPrograms?: boolean;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Acep_CareerStatus?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(300)
     Acep_StatementUrl?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2)
     Et_lastbouncesendid?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2)
     Et_lastbouncedate?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2)
     Et_lastbouncetype?: string;
-          
+        
     @Field({nullable: true}) 
     Acep_CourseList?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(300)
     Acep_ConferenceReceipt?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(300)
     Acep_ConferenceSchedule?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(300)
     Acep_WebAccountURL?: string;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     cdi_allowtextmessages?: boolean;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     Acep_buildbadgetitle?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     Acep_ABEMNumber?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     Acep_EktronId?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     acep_plannersid?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     Acep_EmployerAddressState?: string;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Acep_SEMPAMaterialNeeded?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     Acep_EmployerAddressStreet2?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     Acep_MaidenName?: string;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     Acep_IsAAPAMember?: boolean;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     Acep_EmployerName?: string;
-          
+        
     @Field(() => Int, {nullable: true}) 
     cdi_totalscore?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Adx_LastFailedLogon?: Date;
-          
+        
     @Field(() => Int, {nullable: true}) 
     cdi_score?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Adx_failedpasswordattemptwindowstart?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     acep_countryofcitizenshipid?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(50)
     Acep_PrimaryFax?: string;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     Acep_DonotBill?: boolean;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     Acep_emailaddress6?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Acep_CMEDate?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     acep_countryid?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     Acep_emailaddress4?: string;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     Adx_changepasswordatnextlogon?: boolean;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     Acep_ServedasLiaison?: boolean;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     Acep_EmployerAddressStreet1?: string;
-          
+        
     @Field(() => Int, {nullable: true}) 
     MSA_eServicesAccessLevel?: number;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     Acep_AutoChargeMembership?: boolean;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Adx_LastSuccessfulLogon?: Date;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     Acep_AllowWeekendReview?: boolean;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     Acep_ACEPMembershipId?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Acep_PercentFundedbyIndividual?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     Adx_CreatedByUsername?: string;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     Acep_AllowEMRAWhatsUpinEM?: boolean;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     Acep_AllowAdvocacy?: boolean;
-          
+        
     @Field({nullable: true}) 
     Acep_DuesStatementHTML?: string;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     Acep_DoNotPromote?: boolean;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     Acep_Telephone2Ext?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     Acep_Answer?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     Acep_EmployerAddressZip?: string;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     Acep_AllowInternationalACEPNews?: boolean;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     Acep_EmployerAddressStreet3?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(600)
     Acep_ReferredBy?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     Adx_ModifiedByUsername?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     Acep_Designation?: string;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Acep_count?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     Adx_username?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     cdi_grade?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     adx_systemuserid?: string;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Acep_QuestionCode?: number;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     Acep_Deceased?: boolean;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     Acep_IsLockedOut?: boolean;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     Acep_WrittenorNewspaperColumn?: boolean;
-          
+        
     @Field({nullable: true}) 
     Acep_FormattedAddresses?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Adx_failedpasswordanswerattemptwindowstart?: Date;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Acep_MaterialNeeded?: number;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     Acep_AllowEMF?: boolean;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(400)
     Acep_WebSessionId?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     acep_emcareercountryid?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     Acep_WorkSettingOther?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(500)
     Adx_OrganizationName?: string;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Acep_EktronUserId?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Adx_TimeZone?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Acep_WebAccountOriginatedOrgCode?: number;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     Acep_Migrationupdate?: boolean;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     Acep_PrimaryChapter?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Acep_LastLockedOutDate?: Date;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Acep_GPTaxScheduleIDCode?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(256)
     Adx_passwordanswer?: string;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     Acep_crmupdate?: boolean;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(510)
     Acep_ProfessionalDesignation?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     Acep_SempaAAPAID?: string;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     Acep_QuestionnaireReceived?: boolean;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Acep_PrefixCode?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     Acep_AmaMemberNumber?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     acep_cmespending_Base?: number;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     Acep_AllowSMS?: boolean;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Acep_GPPriceLevel?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     Acep_EMRAMembershipId?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     Acep_FormalName?: string;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     Adx_ProfileIsAnonymous?: boolean;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Acep_WorkSetting?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     cdi_identifiedon?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(50)
     Acep_Fax3?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(256)
     Adx_resetpassword?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Acep_LastActivityDate?: Date;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     Acep_BirthdayisToday?: boolean;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     Acep_MembershipButtons?: string;
-          
+        
     @Field(() => Int, {nullable: true}) 
     cdi_age?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     Acep_PrimaryPhone?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(1000)
     cdi_image?: string;
-          
+        
     @Field({nullable: true}) 
     cdi_social?: string;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     Adx_LogonEnabled?: boolean;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(256)
     Adx_passwordsalt?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     New_renewaldate?: string;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     Acep_EmploymentPriorto2000?: boolean;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Acep_CMESpending?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Acep_currentbilltocode?: number;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     Adx_lockedout?: boolean;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Acep_NumberOfYearsInPractice?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Adx_lastlockedout?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     Acep_SempaPhysician?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Adx_lastactivity?: Date;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     cdi_gender?: boolean;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(1000)
     cdi_twitter?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     Acep_SEMPAMembershipId?: string;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Adx_failedpasswordattempts?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Adx_failedpasswordanswerattempts?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     Acep_EMCareerCity?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     cdi_visitorkey?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     cdi_rowkey?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(50)
     Acep_Fax2?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     Acep_SempaNCCPAID?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     Acep_PrimaryPhoneExt?: string;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Acep_EMReferenceBooksSpending?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     Adx_ModifiedByIPAddress?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     Acep_BadgeName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Acep_telephone4?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(1000)
     cdi_linkedin?: string;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     Acep_InvoiceDonations?: boolean;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Acep_InvalidPasswordAttempts?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     acep_emcareerstateorprovinceid?: string;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     Acep_AllowBirthday?: boolean;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     Acep_AllowNEMPAC?: boolean;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     cdi_partitionkey?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     Adx_passwordformat?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Acep_LastPasswordChangedDate?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     Acep_buildaddress?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     Acep_MemberAppSavedStep?: string;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     Acep_AllowWebinars?: boolean;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(512)
     Adx_passwordquestion?: string;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     Acep_AllowEMRAEducationalProductsandPrograms?: boolean;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Adx_lastpasswordchange?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     Acep_buildfullname?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     msa_managingpartnerid?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     Acep_emailaddress5?: string;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Acep_BookstoreCustomerType?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     cdi_longitude?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     Acep_CreatedByProcess?: string;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     Acep_AllowSpecialAlertsandUpdates?: boolean;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(256)
     Adx_password?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     New_Childsname?: string;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Acep_CreatedReasonCode?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     Acep_EMCareerHospital?: string;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     Acep_AppearedonTelevision?: boolean;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     cdi_ip?: string;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     Acep_AllowACEPEducationalMeetings?: boolean;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     Acep_AllowEMToday?: boolean;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     Acep_SEMPAPromoCodeForDiscounts?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     cdi_latitude?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     Acep_Fax1?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(1000)
     cdi_facebook?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     Adx_CreatedByIPAddress?: string;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     Acep_NewsMediaInterviews?: boolean;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Acep_LastLoginDate?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Adx_ProfileLastActivity?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     Acep_EmployerAddressCity?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     acep_stateorprovinceid?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     Acep_ModifiedByProcess?: string;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Acep_suffix?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Acep_HospitalFax?: string;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     Acep_AllowACEPEducationalProducts?: boolean;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     Acep_isfaculty?: boolean;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     Acep_Telephone3Ext?: string;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     MSA_webuser?: boolean;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     Acep_AOANumber?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(1000)
     Adx_InvitationCode?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     Acep_Telephone1Ext?: string;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Acep_EthnicityCode?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Adx_InvitationCodeExpiryDate?: Date;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     Acep_EMFDoNotMail?: boolean;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     Acep_SEMPAReferredNumber?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8000)
     new_c360sisiteurl?: string;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     Acep_AllowEMRANews?: boolean;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     Acep_ContactNumber?: string;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     Acep_IsApproved?: boolean;
-          
+        
     @Field(() => Int, {nullable: true}) 
     acep_Country?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     acep_State?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     acep_NextBirthday?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(300)
     acep_ProfilePictureURL?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(40)
     acep_BasecampIdACEP?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(40)
     acep_BasecampIdEMRA?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(40)
     acep_BasecampIdSEMPA?: string;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     acep_AllowACEPJobAlerts?: boolean;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     acep_AllowEMRAAnnouncements?: boolean;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     acep_AllowSEMPAAnnouncements?: boolean;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     acep_AllowSEMPADidYouKnow?: boolean;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     acep_AllowSEMPAFoundation?: boolean;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     acep_AllowSEMPAwhatshappening?: boolean;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     acep_ParticipateinSurveys?: boolean;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     acep_SyncedtoHigherLogic?: boolean;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     acep_MarketingDataIndividual?: string;
-          
+        
     @Field({nullable: true}) 
     acep_Biography?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     acep_Instagram?: string;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     acep_Clinician?: boolean;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     acep_ExternalID?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     acep_EMRAKit?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     acep_EMRAKitDate?: Date;
-          
+        
     @Field(() => Int, {nullable: true}) 
     acep_EMRAKitShipper?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     acep_PracticeSetting?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     cdi_timezones?: number;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     acep_NeedsanEMRACVRecord?: boolean;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     acep_AutoRenewal?: boolean;
-          
+        
     @Field(() => Int, {nullable: true}) 
     acep_PrimaryPractice?: number;
-          
+        
     @Field({nullable: true}) 
     acep_ShortBiography?: string;
-          
+        
     @Field(() => Int, {nullable: true}) 
     acep_Disability?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     acep_PrimaryInterest?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     acep_PrimaryLanguage?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     acep_Pronouns?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     acep_SexualOrientation?: number;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     acep_PaperInvoice?: boolean;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     acep_AllowRenewalPhone?: boolean;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     acep_retired?: boolean;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     acep_allowacepnow?: boolean;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     acep_allowannals?: boolean;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     acep_allowchapternews?: boolean;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     acep_allowclinicalupdates?: boolean;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     acep_allowjacepopen?: boolean;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     acep_allowmemberbenefits?: boolean;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     acep_allowmembershippromotions?: boolean;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     acep_acepaccreditationprograms?: boolean;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     acep_emdatainstitutecedrandequal?: boolean;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     acep_optoutregyr123?: boolean;
         
-    @Field(() => [Account__client_crm_])
-    Accounts__client_crmArray: Account__client_crm_[]; // Link to Accounts__client_crm
+    @Field(() => [PersonLink_])
+    PersonLinksArray: PersonLink_[]; // Link to PersonLinks
     
     @Field(() => [client_membership_])
     client_membershipsArray: client_membership_[]; // Link to client_memberships
     
-    @Field(() => [PersonLink_])
-    PersonLinksArray: PersonLink_[]; // Link to PersonLinks
+    @Field(() => [Account__client_crm_])
+    Accounts__client_crmArray: Account__client_crm_[]; // Link to Accounts__client_crm
     
     @Field(() => [SalesOrder_])
     SalesOrdersArray: SalesOrder_[]; // Link to SalesOrders
@@ -22985,9 +23633,9 @@ export class Contact__client_crm_ {
     Contacts__client_crmArray: Contact__client_crm_[]; // Link to Contacts__client_crm
     
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for Contacts__client_crm   
+// INPUT TYPE for Contacts__client_crm
 //****************************************************************************
 @InputType()
 export class CreateContact__client_crmInput {
@@ -23130,6 +23778,9 @@ export class CreateContact__client_crmInput {
     Address1_County?: string;
 
     @Field({ nullable: true })
+    Address1_AddressId?: string;
+
+    @Field({ nullable: true })
     Address1_Fax?: string;
 
     @Field(() => Int, { nullable: true })
@@ -23197,6 +23848,9 @@ export class CreateContact__client_crmInput {
 
     @Field({ nullable: true })
     Address2_County?: string;
+
+    @Field({ nullable: true })
+    Address2_AddressId?: string;
 
     @Field({ nullable: true })
     Address2_Fax?: string;
@@ -23268,6 +23922,9 @@ export class CreateContact__client_crmInput {
     Address3_County?: string;
 
     @Field({ nullable: true })
+    Address3_AddressId?: string;
+
+    @Field({ nullable: true })
     Address3_Fax?: string;
 
     @Field(() => Int, { nullable: true })
@@ -23322,6 +23979,9 @@ export class CreateContact__client_crmInput {
     Address3_UTCOffset?: number;
 
     @Field({ nullable: true })
+    OwnerId?: string;
+
+    @Field({ nullable: true })
     OwnerIdName?: string;
 
     @Field({ nullable: true })
@@ -23334,16 +23994,31 @@ export class CreateContact__client_crmInput {
     OwnerIdType?: number;
 
     @Field({ nullable: true })
+    OwningUser?: string;
+
+    @Field({ nullable: true })
+    OwningTeam?: string;
+
+    @Field({ nullable: true })
+    AccountId?: string;
+
+    @Field({ nullable: true })
     AccountIdName?: string;
 
     @Field({ nullable: true })
     AccountIdYomiName?: string;
 
     @Field({ nullable: true })
+    ParentContactId?: string;
+
+    @Field({ nullable: true })
     ParentContactIdName?: string;
 
     @Field({ nullable: true })
     ParentContactIdYomiName?: string;
+
+    @Field({ nullable: true })
+    DefaultPriceLevelId?: string;
 
     @Field(() => Int, { nullable: true })
     CustomerSizeCode?: number;
@@ -23356,6 +24031,12 @@ export class CreateContact__client_crmInput {
 
     @Field(() => Int, { nullable: true })
     LeadSourceCode?: number;
+
+    @Field({ nullable: true })
+    OriginatingLeadId?: string;
+
+    @Field({ nullable: true })
+    OwningBusinessUnit?: string;
 
     @Field(() => Int, { nullable: true })
     PaymentTermsCode?: number;
@@ -23505,7 +24186,13 @@ export class CreateContact__client_crmInput {
     CreditOnHold?: boolean;
 
     @Field({ nullable: true })
+    CreatedBy?: string;
+
+    @Field({ nullable: true })
     ModifiedOn?: Date;
+
+    @Field({ nullable: true })
+    ModifiedBy?: string;
 
     @Field(() => Int, { nullable: true })
     NumberOfChildren?: number;
@@ -23549,6 +24236,15 @@ export class CreateContact__client_crmInput {
     @Field(() => Float, { nullable: true })
     Aging90?: number;
 
+    @Field({ nullable: true })
+    PreferredSystemUserId?: string;
+
+    @Field({ nullable: true })
+    PreferredServiceId?: string;
+
+    @Field({ nullable: true })
+    MasterId?: string;
+
     @Field(() => Int, { nullable: true })
     PreferredAppointmentDayCode?: number;
 
@@ -23558,11 +24254,20 @@ export class CreateContact__client_crmInput {
     @Field(() => Boolean, { nullable: true })
     DoNotSendMM?: boolean;
 
+    @Field({ nullable: true })
+    ParentCustomerId?: string;
+
     @Field(() => Boolean, { nullable: true })
     Merged?: boolean;
 
     @Field({ nullable: true })
     ExternalUserIdentifier?: string;
+
+    @Field({ nullable: true })
+    SubscriptionId?: string;
+
+    @Field({ nullable: true })
+    PreferredEquipmentId?: string;
 
     @Field({ nullable: true })
     LastUsedInCampaign?: Date;
@@ -23572,6 +24277,9 @@ export class CreateContact__client_crmInput {
 
     @Field(() => Int, { nullable: true })
     ParentCustomerIdType?: number;
+
+    @Field({ nullable: true })
+    TransactionCurrencyId?: string;
 
     @Field({ nullable: true })
     OverriddenCreatedOn?: Date;
@@ -23606,11 +24314,32 @@ export class CreateContact__client_crmInput {
     @Field({ nullable: true })
     ParentCustomerIdYomiName?: string;
 
+    @Field({ nullable: true })
+    CreatedOnBehalfBy?: string;
+
+    @Field({ nullable: true })
+    ModifiedOnBehalfBy?: string;
+
     @Field(() => Boolean, { nullable: true })
     IsAutoCreate?: boolean;
 
     @Field({ nullable: true })
+    StageId?: string;
+
+    @Field({ nullable: true })
+    ProcessId?: string;
+
+    @Field({ nullable: true })
+    EntityImageId?: string;
+
+    @Field({ nullable: true })
     TraversedPath?: string;
+
+    @Field({ nullable: true })
+    SLAId?: string;
+
+    @Field({ nullable: true })
+    SLAInvokedId?: string;
 
     @Field(() => Int, { nullable: true })
     OnHoldTime?: number;
@@ -23635,6 +24364,12 @@ export class CreateContact__client_crmInput {
 
     @Field({ nullable: true })
     Home2?: string;
+
+    @Field({ nullable: true })
+    CreatedByExternalParty?: string;
+
+    @Field({ nullable: true })
+    ModifiedByExternalParty?: string;
 
     @Field(() => Boolean, { nullable: true })
     MarketingOnly?: boolean;
@@ -23712,6 +24447,9 @@ export class CreateContact__client_crmInput {
     Acep_EktronId?: string;
 
     @Field({ nullable: true })
+    acep_plannersid?: string;
+
+    @Field({ nullable: true })
     Acep_EmployerAddressState?: string;
 
     @Field(() => Int, { nullable: true })
@@ -23742,6 +24480,9 @@ export class CreateContact__client_crmInput {
     Adx_failedpasswordattemptwindowstart?: Date;
 
     @Field({ nullable: true })
+    acep_countryofcitizenshipid?: string;
+
+    @Field({ nullable: true })
     Acep_PrimaryFax?: string;
 
     @Field(() => Boolean, { nullable: true })
@@ -23752,6 +24493,9 @@ export class CreateContact__client_crmInput {
 
     @Field({ nullable: true })
     Acep_CMEDate?: Date;
+
+    @Field({ nullable: true })
+    acep_countryid?: string;
 
     @Field({ nullable: true })
     Acep_emailaddress4?: string;
@@ -23776,6 +24520,9 @@ export class CreateContact__client_crmInput {
 
     @Field(() => Boolean, { nullable: true })
     Acep_AllowWeekendReview?: boolean;
+
+    @Field({ nullable: true })
+    Acep_ACEPMembershipId?: string;
 
     @Field(() => Float, { nullable: true })
     Acep_PercentFundedbyIndividual?: number;
@@ -23828,6 +24575,9 @@ export class CreateContact__client_crmInput {
     @Field({ nullable: true })
     cdi_grade?: string;
 
+    @Field({ nullable: true })
+    adx_systemuserid?: string;
+
     @Field(() => Int, { nullable: true })
     Acep_QuestionCode?: number;
 
@@ -23854,6 +24604,9 @@ export class CreateContact__client_crmInput {
 
     @Field({ nullable: true })
     Acep_WebSessionId?: string;
+
+    @Field({ nullable: true })
+    acep_emcareercountryid?: string;
 
     @Field({ nullable: true })
     Acep_WorkSettingOther?: string;
@@ -23911,6 +24664,9 @@ export class CreateContact__client_crmInput {
 
     @Field(() => Int, { nullable: true })
     Acep_GPPriceLevel?: number;
+
+    @Field({ nullable: true })
+    Acep_EMRAMembershipId?: string;
 
     @Field({ nullable: true })
     Acep_FormalName?: string;
@@ -23990,6 +24746,9 @@ export class CreateContact__client_crmInput {
     @Field({ nullable: true })
     cdi_twitter?: string;
 
+    @Field({ nullable: true })
+    Acep_SEMPAMembershipId?: string;
+
     @Field(() => Int, { nullable: true })
     Adx_failedpasswordattempts?: number;
 
@@ -24035,6 +24794,9 @@ export class CreateContact__client_crmInput {
     @Field(() => Int, { nullable: true })
     Acep_InvalidPasswordAttempts?: number;
 
+    @Field({ nullable: true })
+    acep_emcareerstateorprovinceid?: string;
+
     @Field(() => Boolean, { nullable: true })
     Acep_AllowBirthday?: boolean;
 
@@ -24070,6 +24832,9 @@ export class CreateContact__client_crmInput {
 
     @Field({ nullable: true })
     Acep_buildfullname?: string;
+
+    @Field({ nullable: true })
+    msa_managingpartnerid?: string;
 
     @Field({ nullable: true })
     Acep_emailaddress5?: string;
@@ -24136,6 +24901,9 @@ export class CreateContact__client_crmInput {
 
     @Field({ nullable: true })
     Acep_EmployerAddressCity?: string;
+
+    @Field({ nullable: true })
+    acep_stateorprovinceid?: string;
 
     @Field({ nullable: true })
     Acep_ModifiedByProcess?: string;
@@ -24237,6 +25005,9 @@ export class CreateContact__client_crmInput {
     acep_SyncedtoHigherLogic?: boolean;
 
     @Field({ nullable: true })
+    acep_MarketingDataIndividual?: string;
+
+    @Field({ nullable: true })
     acep_Biography?: string;
 
     @Field({ nullable: true })
@@ -24330,9 +25101,9 @@ export class CreateContact__client_crmInput {
     acep_optoutregyr123?: boolean;
 }
     
-        
+
 //****************************************************************************
-// INPUT TYPE for Contacts__client_crm   
+// INPUT TYPE for Contacts__client_crm
 //****************************************************************************
 @InputType()
 export class UpdateContact__client_crmInput {
@@ -24475,6 +25246,9 @@ export class UpdateContact__client_crmInput {
     Address1_County?: string;
 
     @Field({ nullable: true })
+    Address1_AddressId?: string;
+
+    @Field({ nullable: true })
     Address1_Fax?: string;
 
     @Field(() => Int, { nullable: true })
@@ -24542,6 +25316,9 @@ export class UpdateContact__client_crmInput {
 
     @Field({ nullable: true })
     Address2_County?: string;
+
+    @Field({ nullable: true })
+    Address2_AddressId?: string;
 
     @Field({ nullable: true })
     Address2_Fax?: string;
@@ -24613,6 +25390,9 @@ export class UpdateContact__client_crmInput {
     Address3_County?: string;
 
     @Field({ nullable: true })
+    Address3_AddressId?: string;
+
+    @Field({ nullable: true })
     Address3_Fax?: string;
 
     @Field(() => Int, { nullable: true })
@@ -24667,6 +25447,9 @@ export class UpdateContact__client_crmInput {
     Address3_UTCOffset?: number;
 
     @Field({ nullable: true })
+    OwnerId?: string;
+
+    @Field({ nullable: true })
     OwnerIdName?: string;
 
     @Field({ nullable: true })
@@ -24679,10 +25462,22 @@ export class UpdateContact__client_crmInput {
     OwnerIdType?: number;
 
     @Field({ nullable: true })
+    OwningUser?: string;
+
+    @Field({ nullable: true })
+    OwningTeam?: string;
+
+    @Field({ nullable: true })
+    AccountId?: string;
+
+    @Field({ nullable: true })
     AccountIdName?: string;
 
     @Field({ nullable: true })
     AccountIdYomiName?: string;
+
+    @Field({ nullable: true })
+    ParentContactId?: string;
 
     @Field({ nullable: true })
     ParentContactIdName?: string;
@@ -24692,6 +25487,9 @@ export class UpdateContact__client_crmInput {
 
     @Field()
     ContactId: string;
+
+    @Field({ nullable: true })
+    DefaultPriceLevelId?: string;
 
     @Field(() => Int, { nullable: true })
     CustomerSizeCode?: number;
@@ -24704,6 +25502,12 @@ export class UpdateContact__client_crmInput {
 
     @Field(() => Int, { nullable: true })
     LeadSourceCode?: number;
+
+    @Field({ nullable: true })
+    OriginatingLeadId?: string;
+
+    @Field({ nullable: true })
+    OwningBusinessUnit?: string;
 
     @Field(() => Int, { nullable: true })
     PaymentTermsCode?: number;
@@ -24853,7 +25657,13 @@ export class UpdateContact__client_crmInput {
     CreditOnHold?: boolean;
 
     @Field({ nullable: true })
+    CreatedBy?: string;
+
+    @Field({ nullable: true })
     ModifiedOn?: Date;
+
+    @Field({ nullable: true })
+    ModifiedBy?: string;
 
     @Field(() => Int, { nullable: true })
     NumberOfChildren?: number;
@@ -24897,6 +25707,15 @@ export class UpdateContact__client_crmInput {
     @Field(() => Float, { nullable: true })
     Aging90?: number;
 
+    @Field({ nullable: true })
+    PreferredSystemUserId?: string;
+
+    @Field({ nullable: true })
+    PreferredServiceId?: string;
+
+    @Field({ nullable: true })
+    MasterId?: string;
+
     @Field(() => Int, { nullable: true })
     PreferredAppointmentDayCode?: number;
 
@@ -24906,11 +25725,20 @@ export class UpdateContact__client_crmInput {
     @Field(() => Boolean, { nullable: true })
     DoNotSendMM?: boolean;
 
+    @Field({ nullable: true })
+    ParentCustomerId?: string;
+
     @Field(() => Boolean, { nullable: true })
     Merged?: boolean;
 
     @Field({ nullable: true })
     ExternalUserIdentifier?: string;
+
+    @Field({ nullable: true })
+    SubscriptionId?: string;
+
+    @Field({ nullable: true })
+    PreferredEquipmentId?: string;
 
     @Field({ nullable: true })
     LastUsedInCampaign?: Date;
@@ -24920,6 +25748,9 @@ export class UpdateContact__client_crmInput {
 
     @Field(() => Int, { nullable: true })
     ParentCustomerIdType?: number;
+
+    @Field({ nullable: true })
+    TransactionCurrencyId?: string;
 
     @Field({ nullable: true })
     OverriddenCreatedOn?: Date;
@@ -24954,11 +25785,32 @@ export class UpdateContact__client_crmInput {
     @Field({ nullable: true })
     ParentCustomerIdYomiName?: string;
 
+    @Field({ nullable: true })
+    CreatedOnBehalfBy?: string;
+
+    @Field({ nullable: true })
+    ModifiedOnBehalfBy?: string;
+
     @Field(() => Boolean, { nullable: true })
     IsAutoCreate?: boolean;
 
     @Field({ nullable: true })
+    StageId?: string;
+
+    @Field({ nullable: true })
+    ProcessId?: string;
+
+    @Field({ nullable: true })
+    EntityImageId?: string;
+
+    @Field({ nullable: true })
     TraversedPath?: string;
+
+    @Field({ nullable: true })
+    SLAId?: string;
+
+    @Field({ nullable: true })
+    SLAInvokedId?: string;
 
     @Field(() => Int, { nullable: true })
     OnHoldTime?: number;
@@ -24983,6 +25835,12 @@ export class UpdateContact__client_crmInput {
 
     @Field({ nullable: true })
     Home2?: string;
+
+    @Field({ nullable: true })
+    CreatedByExternalParty?: string;
+
+    @Field({ nullable: true })
+    ModifiedByExternalParty?: string;
 
     @Field(() => Boolean, { nullable: true })
     MarketingOnly?: boolean;
@@ -25060,6 +25918,9 @@ export class UpdateContact__client_crmInput {
     Acep_EktronId?: string;
 
     @Field({ nullable: true })
+    acep_plannersid?: string;
+
+    @Field({ nullable: true })
     Acep_EmployerAddressState?: string;
 
     @Field(() => Int, { nullable: true })
@@ -25090,6 +25951,9 @@ export class UpdateContact__client_crmInput {
     Adx_failedpasswordattemptwindowstart?: Date;
 
     @Field({ nullable: true })
+    acep_countryofcitizenshipid?: string;
+
+    @Field({ nullable: true })
     Acep_PrimaryFax?: string;
 
     @Field(() => Boolean, { nullable: true })
@@ -25100,6 +25964,9 @@ export class UpdateContact__client_crmInput {
 
     @Field({ nullable: true })
     Acep_CMEDate?: Date;
+
+    @Field({ nullable: true })
+    acep_countryid?: string;
 
     @Field({ nullable: true })
     Acep_emailaddress4?: string;
@@ -25124,6 +25991,9 @@ export class UpdateContact__client_crmInput {
 
     @Field(() => Boolean, { nullable: true })
     Acep_AllowWeekendReview?: boolean;
+
+    @Field({ nullable: true })
+    Acep_ACEPMembershipId?: string;
 
     @Field(() => Float, { nullable: true })
     Acep_PercentFundedbyIndividual?: number;
@@ -25176,6 +26046,9 @@ export class UpdateContact__client_crmInput {
     @Field({ nullable: true })
     cdi_grade?: string;
 
+    @Field({ nullable: true })
+    adx_systemuserid?: string;
+
     @Field(() => Int, { nullable: true })
     Acep_QuestionCode?: number;
 
@@ -25202,6 +26075,9 @@ export class UpdateContact__client_crmInput {
 
     @Field({ nullable: true })
     Acep_WebSessionId?: string;
+
+    @Field({ nullable: true })
+    acep_emcareercountryid?: string;
 
     @Field({ nullable: true })
     Acep_WorkSettingOther?: string;
@@ -25259,6 +26135,9 @@ export class UpdateContact__client_crmInput {
 
     @Field(() => Int, { nullable: true })
     Acep_GPPriceLevel?: number;
+
+    @Field({ nullable: true })
+    Acep_EMRAMembershipId?: string;
 
     @Field({ nullable: true })
     Acep_FormalName?: string;
@@ -25338,6 +26217,9 @@ export class UpdateContact__client_crmInput {
     @Field({ nullable: true })
     cdi_twitter?: string;
 
+    @Field({ nullable: true })
+    Acep_SEMPAMembershipId?: string;
+
     @Field(() => Int, { nullable: true })
     Adx_failedpasswordattempts?: number;
 
@@ -25383,6 +26265,9 @@ export class UpdateContact__client_crmInput {
     @Field(() => Int, { nullable: true })
     Acep_InvalidPasswordAttempts?: number;
 
+    @Field({ nullable: true })
+    acep_emcareerstateorprovinceid?: string;
+
     @Field(() => Boolean, { nullable: true })
     Acep_AllowBirthday?: boolean;
 
@@ -25418,6 +26303,9 @@ export class UpdateContact__client_crmInput {
 
     @Field({ nullable: true })
     Acep_buildfullname?: string;
+
+    @Field({ nullable: true })
+    msa_managingpartnerid?: string;
 
     @Field({ nullable: true })
     Acep_emailaddress5?: string;
@@ -25484,6 +26372,9 @@ export class UpdateContact__client_crmInput {
 
     @Field({ nullable: true })
     Acep_EmployerAddressCity?: string;
+
+    @Field({ nullable: true })
+    acep_stateorprovinceid?: string;
 
     @Field({ nullable: true })
     Acep_ModifiedByProcess?: string;
@@ -25583,6 +26474,9 @@ export class UpdateContact__client_crmInput {
 
     @Field(() => Boolean, { nullable: true })
     acep_SyncedtoHigherLogic?: boolean;
+
+    @Field({ nullable: true })
+    acep_MarketingDataIndividual?: string;
 
     @Field({ nullable: true })
     acep_Biography?: string;
@@ -25689,8 +26583,8 @@ export class RunContact__client_crmViewResult {
     @Field(() => [Contact__client_crm_])
     Results: Contact__client_crm_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -25732,23 +26626,7 @@ export class Contact__client_crmResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Contacts__client_crm', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-      
-    @FieldResolver(() => [Account__client_crm_])
-    async Accounts__client_crmArray(@Root() contact__client_crm_: Contact__client_crm_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('Accounts__client_crm', userPayload);
-        const sSQL = `SELECT * FROM [client_crm].[vwAccounts__client_crm] WHERE [PrimaryContactId]='${contact__client_crm_.ContactId}' ` + this.getRowLevelSecurityWhereClause('Accounts__client_crm', userPayload, EntityPermissionType.Read, 'AND');
-        const result = this.ArrayMapFieldNamesToCodeNames('Accounts__client_crm', await dataSource.query(sSQL));
-        return result;
-    }
-          
-    @FieldResolver(() => [client_membership_])
-    async client_membershipsArray(@Root() contact__client_crm_: Contact__client_crm_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('client _memberships', userPayload);
-        const sSQL = `SELECT * FROM [client_crm].[vwclient_memberships] WHERE [acep_contactid]='${contact__client_crm_.ContactId}' ` + this.getRowLevelSecurityWhereClause('client _memberships', userPayload, EntityPermissionType.Read, 'AND');
-        const result = this.ArrayMapFieldNamesToCodeNames('client _memberships', await dataSource.query(sSQL));
-        return result;
-    }
-          
+    
     @FieldResolver(() => [PersonLink_])
     async PersonLinksArray(@Root() contact__client_crm_: Contact__client_crm_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Person Links', userPayload);
@@ -25756,7 +26634,23 @@ export class Contact__client_crmResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Person Links', await dataSource.query(sSQL));
         return result;
     }
-          
+        
+    @FieldResolver(() => [client_membership_])
+    async client_membershipsArray(@Root() contact__client_crm_: Contact__client_crm_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('client _memberships', userPayload);
+        const sSQL = `SELECT * FROM [client_crm].[vwclient_memberships] WHERE [acep_contactid]='${contact__client_crm_.ContactId}' ` + this.getRowLevelSecurityWhereClause('client _memberships', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('client _memberships', await dataSource.query(sSQL));
+        return result;
+    }
+        
+    @FieldResolver(() => [Account__client_crm_])
+    async Accounts__client_crmArray(@Root() contact__client_crm_: Contact__client_crm_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Accounts__client_crm', userPayload);
+        const sSQL = `SELECT * FROM [client_crm].[vwAccounts__client_crm] WHERE [PrimaryContactId]='${contact__client_crm_.ContactId}' ` + this.getRowLevelSecurityWhereClause('Accounts__client_crm', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Accounts__client_crm', await dataSource.query(sSQL));
+        return result;
+    }
+        
     @FieldResolver(() => [SalesOrder_])
     async SalesOrdersArray(@Root() contact__client_crm_: Contact__client_crm_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Sales Orders', userPayload);
@@ -25764,7 +26658,7 @@ export class Contact__client_crmResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Sales Orders', await dataSource.query(sSQL));
         return result;
     }
-          
+        
     @FieldResolver(() => [Contact__client_crm_])
     async Contacts__client_crmArray(@Root() contact__client_crm_: Contact__client_crm_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Contacts__client_crm', userPayload);
@@ -25776,7 +26670,7 @@ export class Contact__client_crmResolver extends ResolverBase {
     @Mutation(() => Contact__client_crm_)
     async CreateContact__client_crm(
         @Arg('input', () => CreateContact__client_crmInput) input: CreateContact__client_crmInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
+        @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.CreateRecord('Contacts__client_crm', input, dataSource, userPayload, pubSub)
@@ -25797,144 +26691,144 @@ export class Contact__client_crmResolver extends ResolverBase {
 // ENTITY CLASS for Uo Ms
 //****************************************************************************
 @ObjectType()
-export class UoM_ {  
+export class UoM_ {
     @Field({nullable: true}) 
     @MaxLength(400)
     ModifiedOnBehalfByYomiName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(400)
     ModifiedOnBehalfByName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(400)
     ModifiedByYomiName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(400)
     ModifiedByName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(400)
     CreatedByName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(400)
     CreatedByYomiName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(900)
     ModifiedByExternalPartyYomiName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(600)
     ModifiedByExternalPartyName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(600)
     CreatedByExternalPartyName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(900)
     CreatedByExternalPartyYomiName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(400)
     CreatedOnBehalfByYomiName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(400)
     CreatedOnBehalfByName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     BaseUoMName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     OrganizationId?: string;
-          
+        
     @Field() 
     @MaxLength(16)
     UoMId: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     BaseUoM?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     Name?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     UoMScheduleId?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Quantity?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     CreatedOn?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     CreatedBy?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     ModifiedBy?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     ModifiedOn?: Date;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     IsScheduleBaseUoM?: boolean;
-          
+        
     @Field() 
     @MaxLength(8)
     VersionNumber: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     ImportSequenceNumber?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     OverriddenCreatedOn?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     CreatedOnBehalfBy?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     ModifiedOnBehalfBy?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     CreatedByExternalParty?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     ModifiedByExternalParty?: string;
         
-    @Field(() => [Product_])
-    ProductsArray: Product_[]; // Link to Products
-    
     @Field(() => [SalesOrderDetail_])
     SalesOrderDetailsArray: SalesOrderDetail_[]; // Link to SalesOrderDetails
-    
-    @Field(() => [ProductPriceLevel_])
-    ProductPriceLevelsArray: ProductPriceLevel_[]; // Link to ProductPriceLevels
     
     @Field(() => [UoM_])
     UoMsArray: UoM_[]; // Link to UoMs
     
+    @Field(() => [Product_])
+    ProductsArray: Product_[]; // Link to Products
+    
+    @Field(() => [ProductPriceLevel_])
+    ProductPriceLevelsArray: ProductPriceLevel_[]; // Link to ProductPriceLevels
+    
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for Uo Ms   
+// INPUT TYPE for Uo Ms
 //****************************************************************************
 @InputType()
 export class CreateUoMInput {
@@ -25978,13 +26872,28 @@ export class CreateUoMInput {
     BaseUoMName?: string;
 
     @Field({ nullable: true })
+    OrganizationId?: string;
+
+    @Field({ nullable: true })
+    BaseUoM?: string;
+
+    @Field({ nullable: true })
     Name?: string;
+
+    @Field({ nullable: true })
+    UoMScheduleId?: string;
 
     @Field(() => Float, { nullable: true })
     Quantity?: number;
 
     @Field({ nullable: true })
     CreatedOn?: Date;
+
+    @Field({ nullable: true })
+    CreatedBy?: string;
+
+    @Field({ nullable: true })
+    ModifiedBy?: string;
 
     @Field({ nullable: true })
     ModifiedOn?: Date;
@@ -26000,11 +26909,23 @@ export class CreateUoMInput {
 
     @Field({ nullable: true })
     OverriddenCreatedOn?: Date;
+
+    @Field({ nullable: true })
+    CreatedOnBehalfBy?: string;
+
+    @Field({ nullable: true })
+    ModifiedOnBehalfBy?: string;
+
+    @Field({ nullable: true })
+    CreatedByExternalParty?: string;
+
+    @Field({ nullable: true })
+    ModifiedByExternalParty?: string;
 }
     
-        
+
 //****************************************************************************
-// INPUT TYPE for Uo Ms   
+// INPUT TYPE for Uo Ms
 //****************************************************************************
 @InputType()
 export class UpdateUoMInput {
@@ -26047,17 +26968,32 @@ export class UpdateUoMInput {
     @Field({ nullable: true })
     BaseUoMName?: string;
 
+    @Field({ nullable: true })
+    OrganizationId?: string;
+
     @Field()
     UoMId: string;
 
     @Field({ nullable: true })
+    BaseUoM?: string;
+
+    @Field({ nullable: true })
     Name?: string;
+
+    @Field({ nullable: true })
+    UoMScheduleId?: string;
 
     @Field(() => Float, { nullable: true })
     Quantity?: number;
 
     @Field({ nullable: true })
     CreatedOn?: Date;
+
+    @Field({ nullable: true })
+    CreatedBy?: string;
+
+    @Field({ nullable: true })
+    ModifiedBy?: string;
 
     @Field({ nullable: true })
     ModifiedOn?: Date;
@@ -26074,6 +27010,18 @@ export class UpdateUoMInput {
     @Field({ nullable: true })
     OverriddenCreatedOn?: Date;
 
+    @Field({ nullable: true })
+    CreatedOnBehalfBy?: string;
+
+    @Field({ nullable: true })
+    ModifiedOnBehalfBy?: string;
+
+    @Field({ nullable: true })
+    CreatedByExternalParty?: string;
+
+    @Field({ nullable: true })
+    ModifiedByExternalParty?: string;
+
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
 }
@@ -26086,8 +27034,8 @@ export class RunUoMViewResult {
     @Field(() => [UoM_])
     Results: UoM_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -26129,15 +27077,7 @@ export class UoMResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Uo Ms', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-      
-    @FieldResolver(() => [Product_])
-    async ProductsArray(@Root() uom_: UoM_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('Products', userPayload);
-        const sSQL = `SELECT * FROM [client_crm].[vwProducts] WHERE [DefaultUoMId]='${uom_.UoMId}' ` + this.getRowLevelSecurityWhereClause('Products', userPayload, EntityPermissionType.Read, 'AND');
-        const result = this.ArrayMapFieldNamesToCodeNames('Products', await dataSource.query(sSQL));
-        return result;
-    }
-          
+    
     @FieldResolver(() => [SalesOrderDetail_])
     async SalesOrderDetailsArray(@Root() uom_: UoM_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Sales Order Details', userPayload);
@@ -26145,15 +27085,7 @@ export class UoMResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Sales Order Details', await dataSource.query(sSQL));
         return result;
     }
-          
-    @FieldResolver(() => [ProductPriceLevel_])
-    async ProductPriceLevelsArray(@Root() uom_: UoM_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('Product Price Levels', userPayload);
-        const sSQL = `SELECT * FROM [client_crm].[vwProductPriceLevels] WHERE [UoMId]='${uom_.UoMId}' ` + this.getRowLevelSecurityWhereClause('Product Price Levels', userPayload, EntityPermissionType.Read, 'AND');
-        const result = this.ArrayMapFieldNamesToCodeNames('Product Price Levels', await dataSource.query(sSQL));
-        return result;
-    }
-          
+        
     @FieldResolver(() => [UoM_])
     async UoMsArray(@Root() uom_: UoM_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Uo Ms', userPayload);
@@ -26162,10 +27094,26 @@ export class UoMResolver extends ResolverBase {
         return result;
     }
         
+    @FieldResolver(() => [Product_])
+    async ProductsArray(@Root() uom_: UoM_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Products', userPayload);
+        const sSQL = `SELECT * FROM [client_crm].[vwProducts] WHERE [DefaultUoMId]='${uom_.UoMId}' ` + this.getRowLevelSecurityWhereClause('Products', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Products', await dataSource.query(sSQL));
+        return result;
+    }
+        
+    @FieldResolver(() => [ProductPriceLevel_])
+    async ProductPriceLevelsArray(@Root() uom_: UoM_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Product Price Levels', userPayload);
+        const sSQL = `SELECT * FROM [client_crm].[vwProductPriceLevels] WHERE [UoMId]='${uom_.UoMId}' ` + this.getRowLevelSecurityWhereClause('Product Price Levels', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Product Price Levels', await dataSource.query(sSQL));
+        return result;
+    }
+        
     @Mutation(() => UoM_)
     async CreateUoM(
         @Arg('input', () => CreateUoMInput) input: CreateUoMInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
+        @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.CreateRecord('Uo Ms', input, dataSource, userPayload, pubSub)
@@ -26186,799 +27134,799 @@ export class UoMResolver extends ResolverBase {
 // ENTITY CLASS for Sales Orders
 //****************************************************************************
 @ObjectType()
-export class SalesOrder_ {  
+export class SalesOrder_ {
     @Field({nullable: true}) 
     @MaxLength(370)
     Acep_ACEPMembershipIdName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(400)
     EntityImage_URL?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(900)
     acep_OrderContactYomiName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(600)
     QuoteIdName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(40)
     Acep_GroupBillIdName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(370)
     Acep_EMRAMembershipIdName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(320)
     SLAInvokedIdName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     acep_membershipidName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(320)
     acep_OrderContactName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(400)
     ModifiedOnBehalfByYomiName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(400)
     acep_MeetingRegistrationIdName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     acep_salesorderidName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(400)
     ModifiedByYomiName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     acep_statementbatchName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(1000)
     acep_cmeapprovalidName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     Acep_OrderTypeIdName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(600)
     acep_orgorderforrefundidName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(400)
     CreatedOnBehalfByYomiName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(400)
     CreatedByName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(400)
     acep_conferenceregistrationidName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(400)
     CreatedOnBehalfByName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(400)
     ModifiedOnBehalfByName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(600)
     OpportunityIdName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(400)
     ModifiedByName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     acep_batchidName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     TransactionCurrencyIdName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     acep_printrunidName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(320)
     SLAName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     acep_eventregisteridName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     eone_paymenttermsidName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(370)
     Acep_SEMPAMembershipIdName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(370)
     Acep_ACEPMembershipHistoryIdName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(256)
     CampaignIdName?: string;
-          
+        
     @Field(() => Int, {nullable: true}) 
     EntityImage_Timestamp?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     eone_shippingmethodidName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(400)
     CreatedByYomiName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     PriceLevelIdName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     Acep_BillingOptionIdName?: string;
-          
+        
     @Field(() => Int, {nullable: true}) 
     EntityImage?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     acep_eventsponsoridName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     acep_eventexhibitoridName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     OwnerId?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(320)
     OwnerIdName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(320)
     OwnerIdYomiName?: string;
-          
+        
     @Field(() => Int, {nullable: true}) 
     OwnerIdDsc?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     OwnerIdType?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     OwningUser?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     OwningTeam?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     AccountId?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8000)
     AccountIdName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8000)
     AccountIdYomiName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     ContactId?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8000)
     ContactIdName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8000)
     ContactIdYomiName?: string;
-          
+        
     @Field() 
     @MaxLength(16)
     SalesOrderId: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     OpportunityId?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     QuoteId?: string;
-          
+        
     @Field(() => Int, {nullable: true}) 
     PriorityCode?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     SubmitStatus?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     SubmitDate?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     OwningBusinessUnit?: string;
-          
+        
     @Field({nullable: true}) 
     SubmitStatusDescription?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     PriceLevelId?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     LastBackofficeSubmit?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     OrderNumber?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(600)
     Name?: string;
-          
+        
     @Field(() => Int, {nullable: true}) 
     PricingErrorCode?: number;
-          
+        
     @Field({nullable: true}) 
     Description?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     DiscountAmount?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     FreightAmount?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     TotalAmount?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     TotalLineItemAmount?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     TotalLineItemDiscountAmount?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     TotalAmountLessFreight?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     TotalDiscountAmount?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     RequestDeliveryBy?: Date;
-          
+        
     @Field(() => Float, {nullable: true}) 
     TotalTax?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     ShippingMethodCode?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     PaymentTermsCode?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     FreightTermsCode?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     CreatedBy?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     CreatedOn?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     ModifiedBy?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     ModifiedOn?: Date;
-          
+        
     @Field(() => Int, {nullable: true}) 
     StateCode?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     StatusCode?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(400)
     ShipTo_Name?: string;
-          
+        
     @Field() 
     @MaxLength(8)
     VersionNumber: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8000)
     ShipTo_Line1?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8000)
     ShipTo_Line2?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8000)
     ShipTo_Line3?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(160)
     ShipTo_City?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     ShipTo_StateOrProvince?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(160)
     ShipTo_Country?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(40)
     ShipTo_PostalCode?: string;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     WillCall?: boolean;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     ShipTo_Telephone?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(400)
     BillTo_Name?: string;
-          
+        
     @Field(() => Int, {nullable: true}) 
     ShipTo_FreightTermsCode?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     ShipTo_Fax?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8000)
     BillTo_Line1?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8000)
     BillTo_Line2?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8000)
     BillTo_Line3?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(160)
     BillTo_City?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     BillTo_StateOrProvince?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(160)
     BillTo_Country?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(40)
     BillTo_PostalCode?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     BillTo_Telephone?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     BillTo_Fax?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     DiscountPercentage?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     CustomerId?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8000)
     CustomerIdName?: string;
-          
+        
     @Field(() => Int, {nullable: true}) 
     CustomerIdType?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(300)
     BillTo_ContactName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     CampaignId?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     BillTo_AddressId?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     ShipTo_AddressId?: string;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     IsPriceLocked?: boolean;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     DateFulfilled?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(300)
     ShipTo_ContactName?: string;
-          
+        
     @Field(() => Int, {nullable: true}) 
     UTCConversionTimeZoneCode?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     TransactionCurrencyId?: string;
-          
+        
     @Field(() => Int, {nullable: true}) 
     TimeZoneRuleVersionNumber?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     ImportSequenceNumber?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     ExchangeRate?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     OverriddenCreatedOn?: Date;
-          
+        
     @Field(() => Float, {nullable: true}) 
     TotalLineItemAmount_Base?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     TotalDiscountAmount_Base?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     TotalAmountLessFreight_Base?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     TotalAmount_Base?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     DiscountAmount_Base?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     FreightAmount_Base?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     TotalLineItemDiscountAmount_Base?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     TotalTax_Base?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8000)
     CustomerIdYomiName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     CreatedOnBehalfBy?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     ModifiedOnBehalfBy?: string;
-          
+        
     @Field({nullable: true}) 
     BillTo_Composite?: string;
-          
+        
     @Field({nullable: true}) 
     ShipTo_Composite?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     ProcessId?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     StageId?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     EntityImageId?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2500)
     TraversedPath?: string;
-          
+        
     @Field(() => Int, {nullable: true}) 
     OnHoldTime?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     LastOnHoldTime?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     SLAId?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     SLAInvokedId?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Acep_InstallmentStartDate?: Date;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Acep_gptaxscheduleidcode?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Acep_GeneratedOrderTypeCode?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     Acep_GPBatchNumber?: string;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Acep_RegisteredBycode?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Acep_OrderType?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Acep_InstallmentExpiryDate?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     Acep_SEMPAMembershipId?: string;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Acep_ChangeOrdertoInstallmenttype?: number;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     Acep_CCTransactionSucceeded?: boolean;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     Acep_ACEPMembershipHistoryId?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     Acep_parentorderid?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     acep_orgorderforrefundid?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Acep_expirationdate?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     Acep_ACEPMembershipId?: string;
-          
+        
     @Field({nullable: true}) 
     Acep_CCTransactionDetails?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     Acep_BillingOptionId?: string;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Acep_installmenttype?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(40)
     Acep_GPOrderNumber?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     acep_eventregisterid?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     acep_batchid?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     acep_printrunid?: string;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Acep_PaymentTypeCode?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Acep_installmentbilled?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     acep_eventexhibitorid?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Acep_cyclestartdate?: Date;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Acep_OrgCode?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Acep_numberofinstallments?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     acep_cmeapprovalid?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Acep_PostedDate?: Date;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     Acep_IsCRMUpdateProcessed?: boolean;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     Acep_StartCycleImmediately?: boolean;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     Acep_isrefund?: boolean;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     Acep_EMRAMembershipId?: string;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Eone_OrderStatus?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(40)
     Acep_relatedcompany?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     Acep_OrderPayer?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Eone_TestDate?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     acep_conferenceregistrationid?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     Acep_InstallmentDate?: string;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Acep_GPOrgCode?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     Acep_CheckNumber?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     Acep_PromoCode?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     eone_paymenttermsid?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     Acep_GroupBillId?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     acep_eventsponsorid?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     Acep_OrderTypeId?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     acep_salesorderid?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     eone_shippingmethodid?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     acep_membershipid?: string;
-          
+        
     @Field(() => Int, {nullable: true}) 
     acep_ordersource?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(20)
     acep_HeaderNumber?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     acep_ClientIPAddress?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     acep_ClientID?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     acep_CustomerPONumber?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     acep_TransactionID?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     acep_OrderContact?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(400)
     acep_AlternateToEmailAddresses?: string;
-          
+        
     @Field(() => Int, {nullable: true}) 
     acep_ReasonType?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     acep_MeetingRegistrationId?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     acep_shiptoemail?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     acep_TrackingNumber?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     acep_statementbatch?: string;
         
-    @Field(() => [client_membership_])
-    client_membershipsArray: client_membership_[]; // Link to client_memberships
-    
     @Field(() => [SalesOrder_])
     SalesOrdersArray: SalesOrder_[]; // Link to SalesOrders
     
     @Field(() => [SalesOrderDetail_])
     SalesOrderDetailsArray: SalesOrderDetail_[]; // Link to SalesOrderDetails
     
+    @Field(() => [client_membership_])
+    client_membershipsArray: client_membership_[]; // Link to client_memberships
+    
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for Sales Orders   
+// INPUT TYPE for Sales Orders
 //****************************************************************************
 @InputType()
 export class CreateSalesOrderInput {
@@ -27106,6 +28054,9 @@ export class CreateSalesOrderInput {
     acep_eventexhibitoridName?: string;
 
     @Field({ nullable: true })
+    OwnerId?: string;
+
+    @Field({ nullable: true })
     OwnerIdName?: string;
 
     @Field({ nullable: true })
@@ -27118,16 +28069,34 @@ export class CreateSalesOrderInput {
     OwnerIdType?: number;
 
     @Field({ nullable: true })
+    OwningUser?: string;
+
+    @Field({ nullable: true })
+    OwningTeam?: string;
+
+    @Field({ nullable: true })
+    AccountId?: string;
+
+    @Field({ nullable: true })
     AccountIdName?: string;
 
     @Field({ nullable: true })
     AccountIdYomiName?: string;
 
     @Field({ nullable: true })
+    ContactId?: string;
+
+    @Field({ nullable: true })
     ContactIdName?: string;
 
     @Field({ nullable: true })
     ContactIdYomiName?: string;
+
+    @Field({ nullable: true })
+    OpportunityId?: string;
+
+    @Field({ nullable: true })
+    QuoteId?: string;
 
     @Field(() => Int, { nullable: true })
     PriorityCode?: number;
@@ -27139,7 +28108,13 @@ export class CreateSalesOrderInput {
     SubmitDate?: Date;
 
     @Field({ nullable: true })
+    OwningBusinessUnit?: string;
+
+    @Field({ nullable: true })
     SubmitStatusDescription?: string;
+
+    @Field({ nullable: true })
+    PriceLevelId?: string;
 
     @Field({ nullable: true })
     LastBackofficeSubmit?: Date;
@@ -27193,7 +28168,13 @@ export class CreateSalesOrderInput {
     FreightTermsCode?: number;
 
     @Field({ nullable: true })
+    CreatedBy?: string;
+
+    @Field({ nullable: true })
     CreatedOn?: Date;
+
+    @Field({ nullable: true })
+    ModifiedBy?: string;
 
     @Field({ nullable: true })
     ModifiedOn?: Date;
@@ -27277,6 +28258,9 @@ export class CreateSalesOrderInput {
     DiscountPercentage?: number;
 
     @Field({ nullable: true })
+    CustomerId?: string;
+
+    @Field({ nullable: true })
     CustomerIdName?: string;
 
     @Field(() => Int, { nullable: true })
@@ -27284,6 +28268,15 @@ export class CreateSalesOrderInput {
 
     @Field({ nullable: true })
     BillTo_ContactName?: string;
+
+    @Field({ nullable: true })
+    CampaignId?: string;
+
+    @Field({ nullable: true })
+    BillTo_AddressId?: string;
+
+    @Field({ nullable: true })
+    ShipTo_AddressId?: string;
 
     @Field(() => Boolean, { nullable: true })
     IsPriceLocked?: boolean;
@@ -27296,6 +28289,9 @@ export class CreateSalesOrderInput {
 
     @Field(() => Int, { nullable: true })
     UTCConversionTimeZoneCode?: number;
+
+    @Field({ nullable: true })
+    TransactionCurrencyId?: string;
 
     @Field(() => Int, { nullable: true })
     TimeZoneRuleVersionNumber?: number;
@@ -27337,10 +28333,25 @@ export class CreateSalesOrderInput {
     CustomerIdYomiName?: string;
 
     @Field({ nullable: true })
+    CreatedOnBehalfBy?: string;
+
+    @Field({ nullable: true })
+    ModifiedOnBehalfBy?: string;
+
+    @Field({ nullable: true })
     BillTo_Composite?: string;
 
     @Field({ nullable: true })
     ShipTo_Composite?: string;
+
+    @Field({ nullable: true })
+    ProcessId?: string;
+
+    @Field({ nullable: true })
+    StageId?: string;
+
+    @Field({ nullable: true })
+    EntityImageId?: string;
 
     @Field({ nullable: true })
     TraversedPath?: string;
@@ -27350,6 +28361,12 @@ export class CreateSalesOrderInput {
 
     @Field({ nullable: true })
     LastOnHoldTime?: Date;
+
+    @Field({ nullable: true })
+    SLAId?: string;
+
+    @Field({ nullable: true })
+    SLAInvokedId?: string;
 
     @Field({ nullable: true })
     Acep_InstallmentStartDate?: Date;
@@ -27372,6 +28389,9 @@ export class CreateSalesOrderInput {
     @Field({ nullable: true })
     Acep_InstallmentExpiryDate?: Date;
 
+    @Field({ nullable: true })
+    Acep_SEMPAMembershipId?: string;
+
     @Field(() => Int, { nullable: true })
     Acep_ChangeOrdertoInstallmenttype?: number;
 
@@ -27379,13 +28399,25 @@ export class CreateSalesOrderInput {
     Acep_CCTransactionSucceeded?: boolean;
 
     @Field({ nullable: true })
+    Acep_ACEPMembershipHistoryId?: string;
+
+    @Field({ nullable: true })
     Acep_parentorderid?: string;
+
+    @Field({ nullable: true })
+    acep_orgorderforrefundid?: string;
 
     @Field({ nullable: true })
     Acep_expirationdate?: Date;
 
     @Field({ nullable: true })
+    Acep_ACEPMembershipId?: string;
+
+    @Field({ nullable: true })
     Acep_CCTransactionDetails?: string;
+
+    @Field({ nullable: true })
+    Acep_BillingOptionId?: string;
 
     @Field(() => Int, { nullable: true })
     Acep_installmenttype?: number;
@@ -27393,11 +28425,23 @@ export class CreateSalesOrderInput {
     @Field({ nullable: true })
     Acep_GPOrderNumber?: string;
 
+    @Field({ nullable: true })
+    acep_eventregisterid?: string;
+
+    @Field({ nullable: true })
+    acep_batchid?: string;
+
+    @Field({ nullable: true })
+    acep_printrunid?: string;
+
     @Field(() => Int, { nullable: true })
     Acep_PaymentTypeCode?: number;
 
     @Field(() => Int, { nullable: true })
     Acep_installmentbilled?: number;
+
+    @Field({ nullable: true })
+    acep_eventexhibitorid?: string;
 
     @Field({ nullable: true })
     Acep_cyclestartdate?: Date;
@@ -27407,6 +28451,9 @@ export class CreateSalesOrderInput {
 
     @Field(() => Int, { nullable: true })
     Acep_numberofinstallments?: number;
+
+    @Field({ nullable: true })
+    acep_cmeapprovalid?: string;
 
     @Field({ nullable: true })
     Acep_PostedDate?: Date;
@@ -27419,6 +28466,9 @@ export class CreateSalesOrderInput {
 
     @Field(() => Boolean, { nullable: true })
     Acep_isrefund?: boolean;
+
+    @Field({ nullable: true })
+    Acep_EMRAMembershipId?: string;
 
     @Field(() => Int, { nullable: true })
     Eone_OrderStatus?: number;
@@ -27433,6 +28483,9 @@ export class CreateSalesOrderInput {
     Eone_TestDate?: Date;
 
     @Field({ nullable: true })
+    acep_conferenceregistrationid?: string;
+
+    @Field({ nullable: true })
     Acep_InstallmentDate?: string;
 
     @Field(() => Int, { nullable: true })
@@ -27443,6 +28496,27 @@ export class CreateSalesOrderInput {
 
     @Field({ nullable: true })
     Acep_PromoCode?: string;
+
+    @Field({ nullable: true })
+    eone_paymenttermsid?: string;
+
+    @Field({ nullable: true })
+    Acep_GroupBillId?: string;
+
+    @Field({ nullable: true })
+    acep_eventsponsorid?: string;
+
+    @Field({ nullable: true })
+    Acep_OrderTypeId?: string;
+
+    @Field({ nullable: true })
+    acep_salesorderid?: string;
+
+    @Field({ nullable: true })
+    eone_shippingmethodid?: string;
+
+    @Field({ nullable: true })
+    acep_membershipid?: string;
 
     @Field(() => Int, { nullable: true })
     acep_ordersource?: number;
@@ -27463,21 +28537,30 @@ export class CreateSalesOrderInput {
     acep_TransactionID?: string;
 
     @Field({ nullable: true })
+    acep_OrderContact?: string;
+
+    @Field({ nullable: true })
     acep_AlternateToEmailAddresses?: string;
 
     @Field(() => Int, { nullable: true })
     acep_ReasonType?: number;
 
     @Field({ nullable: true })
+    acep_MeetingRegistrationId?: string;
+
+    @Field({ nullable: true })
     acep_shiptoemail?: string;
 
     @Field({ nullable: true })
     acep_TrackingNumber?: string;
+
+    @Field({ nullable: true })
+    acep_statementbatch?: string;
 }
     
-        
+
 //****************************************************************************
-// INPUT TYPE for Sales Orders   
+// INPUT TYPE for Sales Orders
 //****************************************************************************
 @InputType()
 export class UpdateSalesOrderInput {
@@ -27605,6 +28688,9 @@ export class UpdateSalesOrderInput {
     acep_eventexhibitoridName?: string;
 
     @Field({ nullable: true })
+    OwnerId?: string;
+
+    @Field({ nullable: true })
     OwnerIdName?: string;
 
     @Field({ nullable: true })
@@ -27617,10 +28703,22 @@ export class UpdateSalesOrderInput {
     OwnerIdType?: number;
 
     @Field({ nullable: true })
+    OwningUser?: string;
+
+    @Field({ nullable: true })
+    OwningTeam?: string;
+
+    @Field({ nullable: true })
+    AccountId?: string;
+
+    @Field({ nullable: true })
     AccountIdName?: string;
 
     @Field({ nullable: true })
     AccountIdYomiName?: string;
+
+    @Field({ nullable: true })
+    ContactId?: string;
 
     @Field({ nullable: true })
     ContactIdName?: string;
@@ -27630,6 +28728,12 @@ export class UpdateSalesOrderInput {
 
     @Field()
     SalesOrderId: string;
+
+    @Field({ nullable: true })
+    OpportunityId?: string;
+
+    @Field({ nullable: true })
+    QuoteId?: string;
 
     @Field(() => Int, { nullable: true })
     PriorityCode?: number;
@@ -27641,7 +28745,13 @@ export class UpdateSalesOrderInput {
     SubmitDate?: Date;
 
     @Field({ nullable: true })
+    OwningBusinessUnit?: string;
+
+    @Field({ nullable: true })
     SubmitStatusDescription?: string;
+
+    @Field({ nullable: true })
+    PriceLevelId?: string;
 
     @Field({ nullable: true })
     LastBackofficeSubmit?: Date;
@@ -27695,7 +28805,13 @@ export class UpdateSalesOrderInput {
     FreightTermsCode?: number;
 
     @Field({ nullable: true })
+    CreatedBy?: string;
+
+    @Field({ nullable: true })
     CreatedOn?: Date;
+
+    @Field({ nullable: true })
+    ModifiedBy?: string;
 
     @Field({ nullable: true })
     ModifiedOn?: Date;
@@ -27779,6 +28895,9 @@ export class UpdateSalesOrderInput {
     DiscountPercentage?: number;
 
     @Field({ nullable: true })
+    CustomerId?: string;
+
+    @Field({ nullable: true })
     CustomerIdName?: string;
 
     @Field(() => Int, { nullable: true })
@@ -27786,6 +28905,15 @@ export class UpdateSalesOrderInput {
 
     @Field({ nullable: true })
     BillTo_ContactName?: string;
+
+    @Field({ nullable: true })
+    CampaignId?: string;
+
+    @Field({ nullable: true })
+    BillTo_AddressId?: string;
+
+    @Field({ nullable: true })
+    ShipTo_AddressId?: string;
 
     @Field(() => Boolean, { nullable: true })
     IsPriceLocked?: boolean;
@@ -27798,6 +28926,9 @@ export class UpdateSalesOrderInput {
 
     @Field(() => Int, { nullable: true })
     UTCConversionTimeZoneCode?: number;
+
+    @Field({ nullable: true })
+    TransactionCurrencyId?: string;
 
     @Field(() => Int, { nullable: true })
     TimeZoneRuleVersionNumber?: number;
@@ -27839,10 +28970,25 @@ export class UpdateSalesOrderInput {
     CustomerIdYomiName?: string;
 
     @Field({ nullable: true })
+    CreatedOnBehalfBy?: string;
+
+    @Field({ nullable: true })
+    ModifiedOnBehalfBy?: string;
+
+    @Field({ nullable: true })
     BillTo_Composite?: string;
 
     @Field({ nullable: true })
     ShipTo_Composite?: string;
+
+    @Field({ nullable: true })
+    ProcessId?: string;
+
+    @Field({ nullable: true })
+    StageId?: string;
+
+    @Field({ nullable: true })
+    EntityImageId?: string;
 
     @Field({ nullable: true })
     TraversedPath?: string;
@@ -27852,6 +28998,12 @@ export class UpdateSalesOrderInput {
 
     @Field({ nullable: true })
     LastOnHoldTime?: Date;
+
+    @Field({ nullable: true })
+    SLAId?: string;
+
+    @Field({ nullable: true })
+    SLAInvokedId?: string;
 
     @Field({ nullable: true })
     Acep_InstallmentStartDate?: Date;
@@ -27874,6 +29026,9 @@ export class UpdateSalesOrderInput {
     @Field({ nullable: true })
     Acep_InstallmentExpiryDate?: Date;
 
+    @Field({ nullable: true })
+    Acep_SEMPAMembershipId?: string;
+
     @Field(() => Int, { nullable: true })
     Acep_ChangeOrdertoInstallmenttype?: number;
 
@@ -27881,13 +29036,25 @@ export class UpdateSalesOrderInput {
     Acep_CCTransactionSucceeded?: boolean;
 
     @Field({ nullable: true })
+    Acep_ACEPMembershipHistoryId?: string;
+
+    @Field({ nullable: true })
     Acep_parentorderid?: string;
+
+    @Field({ nullable: true })
+    acep_orgorderforrefundid?: string;
 
     @Field({ nullable: true })
     Acep_expirationdate?: Date;
 
     @Field({ nullable: true })
+    Acep_ACEPMembershipId?: string;
+
+    @Field({ nullable: true })
     Acep_CCTransactionDetails?: string;
+
+    @Field({ nullable: true })
+    Acep_BillingOptionId?: string;
 
     @Field(() => Int, { nullable: true })
     Acep_installmenttype?: number;
@@ -27895,11 +29062,23 @@ export class UpdateSalesOrderInput {
     @Field({ nullable: true })
     Acep_GPOrderNumber?: string;
 
+    @Field({ nullable: true })
+    acep_eventregisterid?: string;
+
+    @Field({ nullable: true })
+    acep_batchid?: string;
+
+    @Field({ nullable: true })
+    acep_printrunid?: string;
+
     @Field(() => Int, { nullable: true })
     Acep_PaymentTypeCode?: number;
 
     @Field(() => Int, { nullable: true })
     Acep_installmentbilled?: number;
+
+    @Field({ nullable: true })
+    acep_eventexhibitorid?: string;
 
     @Field({ nullable: true })
     Acep_cyclestartdate?: Date;
@@ -27909,6 +29088,9 @@ export class UpdateSalesOrderInput {
 
     @Field(() => Int, { nullable: true })
     Acep_numberofinstallments?: number;
+
+    @Field({ nullable: true })
+    acep_cmeapprovalid?: string;
 
     @Field({ nullable: true })
     Acep_PostedDate?: Date;
@@ -27921,6 +29103,9 @@ export class UpdateSalesOrderInput {
 
     @Field(() => Boolean, { nullable: true })
     Acep_isrefund?: boolean;
+
+    @Field({ nullable: true })
+    Acep_EMRAMembershipId?: string;
 
     @Field(() => Int, { nullable: true })
     Eone_OrderStatus?: number;
@@ -27935,6 +29120,9 @@ export class UpdateSalesOrderInput {
     Eone_TestDate?: Date;
 
     @Field({ nullable: true })
+    acep_conferenceregistrationid?: string;
+
+    @Field({ nullable: true })
     Acep_InstallmentDate?: string;
 
     @Field(() => Int, { nullable: true })
@@ -27945,6 +29133,27 @@ export class UpdateSalesOrderInput {
 
     @Field({ nullable: true })
     Acep_PromoCode?: string;
+
+    @Field({ nullable: true })
+    eone_paymenttermsid?: string;
+
+    @Field({ nullable: true })
+    Acep_GroupBillId?: string;
+
+    @Field({ nullable: true })
+    acep_eventsponsorid?: string;
+
+    @Field({ nullable: true })
+    Acep_OrderTypeId?: string;
+
+    @Field({ nullable: true })
+    acep_salesorderid?: string;
+
+    @Field({ nullable: true })
+    eone_shippingmethodid?: string;
+
+    @Field({ nullable: true })
+    acep_membershipid?: string;
 
     @Field(() => Int, { nullable: true })
     acep_ordersource?: number;
@@ -27965,16 +29174,25 @@ export class UpdateSalesOrderInput {
     acep_TransactionID?: string;
 
     @Field({ nullable: true })
+    acep_OrderContact?: string;
+
+    @Field({ nullable: true })
     acep_AlternateToEmailAddresses?: string;
 
     @Field(() => Int, { nullable: true })
     acep_ReasonType?: number;
 
     @Field({ nullable: true })
+    acep_MeetingRegistrationId?: string;
+
+    @Field({ nullable: true })
     acep_shiptoemail?: string;
 
     @Field({ nullable: true })
     acep_TrackingNumber?: string;
+
+    @Field({ nullable: true })
+    acep_statementbatch?: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -27988,8 +29206,8 @@ export class RunSalesOrderViewResult {
     @Field(() => [SalesOrder_])
     Results: SalesOrder_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -28031,15 +29249,7 @@ export class SalesOrderResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Sales Orders', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-      
-    @FieldResolver(() => [client_membership_])
-    async client_membershipsArray(@Root() salesorder_: SalesOrder_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('client _memberships', userPayload);
-        const sSQL = `SELECT * FROM [client_crm].[vwclient_memberships] WHERE [Acep_CurrentCRMOrderId]='${salesorder_.SalesOrderId}' ` + this.getRowLevelSecurityWhereClause('client _memberships', userPayload, EntityPermissionType.Read, 'AND');
-        const result = this.ArrayMapFieldNamesToCodeNames('client _memberships', await dataSource.query(sSQL));
-        return result;
-    }
-          
+    
     @FieldResolver(() => [SalesOrder_])
     async SalesOrdersArray(@Root() salesorder_: SalesOrder_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Sales Orders', userPayload);
@@ -28047,7 +29257,7 @@ export class SalesOrderResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Sales Orders', await dataSource.query(sSQL));
         return result;
     }
-          
+        
     @FieldResolver(() => [SalesOrderDetail_])
     async SalesOrderDetailsArray(@Root() salesorder_: SalesOrder_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Sales Order Details', userPayload);
@@ -28056,10 +29266,18 @@ export class SalesOrderResolver extends ResolverBase {
         return result;
     }
         
+    @FieldResolver(() => [client_membership_])
+    async client_membershipsArray(@Root() salesorder_: SalesOrder_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('client _memberships', userPayload);
+        const sSQL = `SELECT * FROM [client_crm].[vwclient_memberships] WHERE [Acep_CurrentCRMOrderId]='${salesorder_.SalesOrderId}' ` + this.getRowLevelSecurityWhereClause('client _memberships', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('client _memberships', await dataSource.query(sSQL));
+        return result;
+    }
+        
     @Mutation(() => SalesOrder_)
     async CreateSalesOrder(
         @Arg('input', () => CreateSalesOrderInput) input: CreateSalesOrderInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
+        @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.CreateRecord('Sales Orders', input, dataSource, userPayload, pubSub)
@@ -28080,325 +29298,325 @@ export class SalesOrderResolver extends ResolverBase {
 // ENTITY CLASS for Sales Order Details
 //****************************************************************************
 @ObjectType()
-export class SalesOrderDetail_ {  
+export class SalesOrderDetail_ {
     @Field({nullable: true}) 
     @MaxLength(200)
     UoMIdName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     OwnerId?: string;
-          
+        
     @Field(() => Int, {nullable: true}) 
     OwnerIdType?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     SalesOrderStateCode?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     OwningBusinessUnit?: string;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     SalesOrderIsPriceLocked?: boolean;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     OwningUser?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(600)
     SalesOrderIdName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(400)
     SalesRepIdYomiName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(400)
     SalesRepIdName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(400)
     ProductIdName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     TransactionCurrencyIdName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(400)
     ModifiedOnBehalfByYomiName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(400)
     ModifiedOnBehalfByName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(400)
     ModifiedByYomiName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(400)
     ModifiedByName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(400)
     CreatedOnBehalfByName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(400)
     CreatedOnBehalfByYomiName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(400)
     CreatedByYomiName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(400)
     CreatedByName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     acep_BillingOptionName?: string;
-          
+        
     @Field() 
     @MaxLength(16)
     SalesOrderDetailId: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     SalesOrderId?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     SalesRepId?: string;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     IsProductOverridden?: boolean;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     IsCopied?: boolean;
-          
+        
     @Field(() => Float, {nullable: true}) 
     QuantityShipped?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     LineItemNumber?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     QuantityBackordered?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     UoMId?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     QuantityCancelled?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     ProductId?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     RequestDeliveryBy?: Date;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Quantity?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     PricingErrorCode?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     ManualDiscountAmount?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(1000)
     ProductDescription?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     VolumeDiscountAmount?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     PricePerUnit?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     BaseAmount?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     ExtendedAmount?: number;
-          
+        
     @Field({nullable: true}) 
     Description?: string;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     IsPriceOverridden?: boolean;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(400)
     ShipTo_Name?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Tax?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     CreatedOn?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8000)
     ShipTo_Line1?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     CreatedBy?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     ModifiedBy?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8000)
     ShipTo_Line2?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8000)
     ShipTo_Line3?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     ModifiedOn?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(160)
     ShipTo_City?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     ShipTo_StateOrProvince?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(160)
     ShipTo_Country?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(40)
     ShipTo_PostalCode?: string;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     WillCall?: boolean;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     ShipTo_Telephone?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     ShipTo_Fax?: string;
-          
+        
     @Field(() => Int, {nullable: true}) 
     ShipTo_FreightTermsCode?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(300)
     ShipTo_ContactName?: string;
-          
+        
     @Field() 
     @MaxLength(8)
     VersionNumber: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     ShipTo_AddressId?: string;
-          
+        
     @Field(() => Int, {nullable: true}) 
     TimeZoneRuleVersionNumber?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     ImportSequenceNumber?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     UTCConversionTimeZoneCode?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     ExchangeRate?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     OverriddenCreatedOn?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     TransactionCurrencyId?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     BaseAmount_Base?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     PricePerUnit_Base?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     VolumeDiscountAmount_Base?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     ExtendedAmount_Base?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Tax_Base?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     ManualDiscountAmount_Base?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     CreatedOnBehalfBy?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     ModifiedOnBehalfBy?: string;
-          
+        
     @Field(() => Int, {nullable: true}) 
     SequenceNumber?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     ParentBundleId?: string;
-          
+        
     @Field(() => Int, {nullable: true}) 
     ProductTypeCode?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     PropertyConfigurationStatus?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     ProductAssociationId?: string;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     Acep_IsPrimary?: boolean;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     Acep_reinstate?: boolean;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(1000)
     Acep_ExistingProductDescription?: string;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     acep_IsRefunded?: boolean;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     acep_Autorenewal?: boolean;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     acep_promocode?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     acep_BillingOption?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     acep_primaryemployer?: string;
@@ -28407,14 +29625,17 @@ export class SalesOrderDetail_ {
     SalesOrderDetailsArray: SalesOrderDetail_[]; // Link to SalesOrderDetails
     
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for Sales Order Details   
+// INPUT TYPE for Sales Order Details
 //****************************************************************************
 @InputType()
 export class CreateSalesOrderDetailInput {
     @Field({ nullable: true })
     UoMIdName?: string;
+
+    @Field({ nullable: true })
+    OwnerId?: string;
 
     @Field(() => Int, { nullable: true })
     OwnerIdType?: number;
@@ -28422,8 +29643,14 @@ export class CreateSalesOrderDetailInput {
     @Field(() => Int, { nullable: true })
     SalesOrderStateCode?: number;
 
+    @Field({ nullable: true })
+    OwningBusinessUnit?: string;
+
     @Field(() => Boolean, { nullable: true })
     SalesOrderIsPriceLocked?: boolean;
+
+    @Field({ nullable: true })
+    OwningUser?: string;
 
     @Field({ nullable: true })
     SalesOrderIdName?: string;
@@ -28467,6 +29694,12 @@ export class CreateSalesOrderDetailInput {
     @Field({ nullable: true })
     acep_BillingOptionName?: string;
 
+    @Field({ nullable: true })
+    SalesOrderId?: string;
+
+    @Field({ nullable: true })
+    SalesRepId?: string;
+
     @Field(() => Boolean, { nullable: true })
     IsProductOverridden?: boolean;
 
@@ -28482,8 +29715,14 @@ export class CreateSalesOrderDetailInput {
     @Field(() => Float, { nullable: true })
     QuantityBackordered?: number;
 
+    @Field({ nullable: true })
+    UoMId?: string;
+
     @Field(() => Float, { nullable: true })
     QuantityCancelled?: number;
+
+    @Field({ nullable: true })
+    ProductId?: string;
 
     @Field({ nullable: true })
     RequestDeliveryBy?: Date;
@@ -28531,6 +29770,12 @@ export class CreateSalesOrderDetailInput {
     ShipTo_Line1?: string;
 
     @Field({ nullable: true })
+    CreatedBy?: string;
+
+    @Field({ nullable: true })
+    ModifiedBy?: string;
+
+    @Field({ nullable: true })
     ShipTo_Line2?: string;
 
     @Field({ nullable: true })
@@ -28569,6 +29814,9 @@ export class CreateSalesOrderDetailInput {
     @Field()
     VersionNumber: number;
 
+    @Field({ nullable: true })
+    ShipTo_AddressId?: string;
+
     @Field(() => Int, { nullable: true })
     TimeZoneRuleVersionNumber?: number;
 
@@ -28583,6 +29831,9 @@ export class CreateSalesOrderDetailInput {
 
     @Field({ nullable: true })
     OverriddenCreatedOn?: Date;
+
+    @Field({ nullable: true })
+    TransactionCurrencyId?: string;
 
     @Field(() => Float, { nullable: true })
     BaseAmount_Base?: number;
@@ -28602,14 +29853,26 @@ export class CreateSalesOrderDetailInput {
     @Field(() => Float, { nullable: true })
     ManualDiscountAmount_Base?: number;
 
+    @Field({ nullable: true })
+    CreatedOnBehalfBy?: string;
+
+    @Field({ nullable: true })
+    ModifiedOnBehalfBy?: string;
+
     @Field(() => Int, { nullable: true })
     SequenceNumber?: number;
+
+    @Field({ nullable: true })
+    ParentBundleId?: string;
 
     @Field(() => Int, { nullable: true })
     ProductTypeCode?: number;
 
     @Field(() => Int, { nullable: true })
     PropertyConfigurationStatus?: number;
+
+    @Field({ nullable: true })
+    ProductAssociationId?: string;
 
     @Field(() => Boolean, { nullable: true })
     Acep_IsPrimary?: boolean;
@@ -28630,17 +29893,23 @@ export class CreateSalesOrderDetailInput {
     acep_promocode?: string;
 
     @Field({ nullable: true })
+    acep_BillingOption?: string;
+
+    @Field({ nullable: true })
     acep_primaryemployer?: string;
 }
     
-        
+
 //****************************************************************************
-// INPUT TYPE for Sales Order Details   
+// INPUT TYPE for Sales Order Details
 //****************************************************************************
 @InputType()
 export class UpdateSalesOrderDetailInput {
     @Field({ nullable: true })
     UoMIdName?: string;
+
+    @Field({ nullable: true })
+    OwnerId?: string;
 
     @Field(() => Int, { nullable: true })
     OwnerIdType?: number;
@@ -28648,8 +29917,14 @@ export class UpdateSalesOrderDetailInput {
     @Field(() => Int, { nullable: true })
     SalesOrderStateCode?: number;
 
+    @Field({ nullable: true })
+    OwningBusinessUnit?: string;
+
     @Field(() => Boolean, { nullable: true })
     SalesOrderIsPriceLocked?: boolean;
+
+    @Field({ nullable: true })
+    OwningUser?: string;
 
     @Field({ nullable: true })
     SalesOrderIdName?: string;
@@ -28696,6 +29971,12 @@ export class UpdateSalesOrderDetailInput {
     @Field()
     SalesOrderDetailId: string;
 
+    @Field({ nullable: true })
+    SalesOrderId?: string;
+
+    @Field({ nullable: true })
+    SalesRepId?: string;
+
     @Field(() => Boolean, { nullable: true })
     IsProductOverridden?: boolean;
 
@@ -28711,8 +29992,14 @@ export class UpdateSalesOrderDetailInput {
     @Field(() => Float, { nullable: true })
     QuantityBackordered?: number;
 
+    @Field({ nullable: true })
+    UoMId?: string;
+
     @Field(() => Float, { nullable: true })
     QuantityCancelled?: number;
+
+    @Field({ nullable: true })
+    ProductId?: string;
 
     @Field({ nullable: true })
     RequestDeliveryBy?: Date;
@@ -28760,6 +30047,12 @@ export class UpdateSalesOrderDetailInput {
     ShipTo_Line1?: string;
 
     @Field({ nullable: true })
+    CreatedBy?: string;
+
+    @Field({ nullable: true })
+    ModifiedBy?: string;
+
+    @Field({ nullable: true })
     ShipTo_Line2?: string;
 
     @Field({ nullable: true })
@@ -28798,6 +30091,9 @@ export class UpdateSalesOrderDetailInput {
     @Field()
     VersionNumber: number;
 
+    @Field({ nullable: true })
+    ShipTo_AddressId?: string;
+
     @Field(() => Int, { nullable: true })
     TimeZoneRuleVersionNumber?: number;
 
@@ -28812,6 +30108,9 @@ export class UpdateSalesOrderDetailInput {
 
     @Field({ nullable: true })
     OverriddenCreatedOn?: Date;
+
+    @Field({ nullable: true })
+    TransactionCurrencyId?: string;
 
     @Field(() => Float, { nullable: true })
     BaseAmount_Base?: number;
@@ -28831,14 +30130,26 @@ export class UpdateSalesOrderDetailInput {
     @Field(() => Float, { nullable: true })
     ManualDiscountAmount_Base?: number;
 
+    @Field({ nullable: true })
+    CreatedOnBehalfBy?: string;
+
+    @Field({ nullable: true })
+    ModifiedOnBehalfBy?: string;
+
     @Field(() => Int, { nullable: true })
     SequenceNumber?: number;
+
+    @Field({ nullable: true })
+    ParentBundleId?: string;
 
     @Field(() => Int, { nullable: true })
     ProductTypeCode?: number;
 
     @Field(() => Int, { nullable: true })
     PropertyConfigurationStatus?: number;
+
+    @Field({ nullable: true })
+    ProductAssociationId?: string;
 
     @Field(() => Boolean, { nullable: true })
     Acep_IsPrimary?: boolean;
@@ -28857,6 +30168,9 @@ export class UpdateSalesOrderDetailInput {
 
     @Field({ nullable: true })
     acep_promocode?: string;
+
+    @Field({ nullable: true })
+    acep_BillingOption?: string;
 
     @Field({ nullable: true })
     acep_primaryemployer?: string;
@@ -28873,8 +30187,8 @@ export class RunSalesOrderDetailViewResult {
     @Field(() => [SalesOrderDetail_])
     Results: SalesOrderDetail_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -28916,7 +30230,7 @@ export class SalesOrderDetailResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Sales Order Details', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-      
+    
     @FieldResolver(() => [SalesOrderDetail_])
     async SalesOrderDetailsArray(@Root() salesorderdetail_: SalesOrderDetail_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Sales Order Details', userPayload);
@@ -28928,7 +30242,7 @@ export class SalesOrderDetailResolver extends ResolverBase {
     @Mutation(() => SalesOrderDetail_)
     async CreateSalesOrderDetail(
         @Arg('input', () => CreateSalesOrderDetailInput) input: CreateSalesOrderDetailInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
+        @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.CreateRecord('Sales Order Details', input, dataSource, userPayload, pubSub)
@@ -28949,625 +30263,625 @@ export class SalesOrderDetailResolver extends ResolverBase {
 // ENTITY CLASS for Products
 //****************************************************************************
 @ObjectType()
-export class Product_ {  
+export class Product_ {
     @Field({nullable: true}) 
     @MaxLength(200)
     acep_CountryofOriginIdName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     acep_subscriptiondetailidName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     Acep_PublicationIdName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     TransactionCurrencyIdName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(320)
     OrganizationIdName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(400)
     ModifiedByYomiName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(400)
     ModifiedByName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     acep_OrderTypeIdName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(400)
     ParentProductIdName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(1000)
     SubjectIdName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(400)
     ModifiedOnBehalfByYomiName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(400)
     ModifiedOnBehalfByName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(400)
     DefaultUoMScheduleIdName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     acep_eventproductidName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(600)
     CreatedByExternalPartyName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(900)
     CreatedByExternalPartyYomiName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(400)
     CreatedByYomiName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(400)
     CreatedByName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     PriceLevelIdName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     acep_ecmeproducttypeidName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     acep_ProductTypeIdName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(900)
     ModifiedByExternalPartyYomiName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(600)
     ModifiedByExternalPartyName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     acep_courseproductidName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(400)
     CreatedOnBehalfByYomiName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(400)
     CreatedOnBehalfByName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     acep_productidName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(900)
     acep_CMEActivityIdName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(400)
     acep_VariantParentIdName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(320)
     acep_PublisherIdName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(320)
     acep_PublisherIdYomiName?: string;
-          
+        
     @Field(() => Int, {nullable: true}) 
     EntityImage_Timestamp?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     EntityImage?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(400)
     EntityImage_URL?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     DefaultUoMIdName?: string;
-          
+        
     @Field() 
     @MaxLength(16)
     ProductId: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     DefaultUoMScheduleId?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     SubjectId?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     OrganizationId?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(400)
     Name?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     DefaultUoMId?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     PriceLevelId?: string;
-          
+        
     @Field({nullable: true}) 
     Description?: string;
-          
+        
     @Field(() => Int, {nullable: true}) 
     ProductTypeCode?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(510)
     ProductUrl?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Price?: number;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     IsKit?: boolean;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     ProductNumber?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(400)
     Size?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     CurrentCost?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     StockVolume?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     StandardCost?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     StockWeight?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     QuantityDecimal?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     QuantityOnHand?: number;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     IsStockItem?: boolean;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     SupplierName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     VendorName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     VendorPartNumber?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     CreatedOn?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     ModifiedOn?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     CreatedBy?: string;
-          
+        
     @Field(() => Int, {nullable: true}) 
     StateCode?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     ModifiedBy?: string;
-          
+        
     @Field(() => Int, {nullable: true}) 
     StatusCode?: number;
-          
+        
     @Field() 
     @MaxLength(8)
     VersionNumber: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     OverriddenCreatedOn?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     TransactionCurrencyId?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     ExchangeRate?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     UTCConversionTimeZoneCode?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     ImportSequenceNumber?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     TimeZoneRuleVersionNumber?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     CurrentCost_Base?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Price_Base?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     StandardCost_Base?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     CreatedOnBehalfBy?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     ModifiedOnBehalfBy?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     EntityImageId?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     ProcessId?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     StageId?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     ParentProductId?: string;
-          
+        
     @Field(() => Int, {nullable: true}) 
     ProductStructure?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     VendorID?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2500)
     TraversedPath?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     ValidFromDate?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     ValidToDate?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(1800)
     HierarchyPath?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     CreatedByExternalParty?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     ModifiedByExternalParty?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Eone_QuantityDamaged?: number;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     Acep_AllowWebQuantity?: boolean;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     acep_courseproductid?: string;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Acep_Duration?: number;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     Acep_Print?: boolean;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     acep_subscriptiondetailid?: string;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Acep_IntegrationPartnerCode?: number;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     Acep_Online?: boolean;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     Acep_Issue?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Acep_ExpireDate?: Date;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Eone_QuantityOnOrder?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Acep_ProductSubType?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Acep_OrgCode?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Eone_QuantityReturned?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     Acep_Volume?: string;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Acep_Frequency?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Eone_QuantityAllocated?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Acep_defaultquantity?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Acep_GPOrgCode?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Eone_QuantityAvailable?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Acep_SalesTaxOptionCode?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     acep_eventproductid?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Acep_Date?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     Acep_PublicationId?: string;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Acep_MultiYearValue?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Eone_QuantityOrdered?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     Acep_StatementDescription?: string;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     Acep_IncludeinSubscriptionIntegration?: boolean;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     acep_productid?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Eone_QuantityInService?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Eone_QuantityInUse?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Eone_QuantitySold?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(40)
     acep_ItemClassID?: string;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     acep_Optional?: boolean;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     acep_Selected?: boolean;
-          
+        
     @Field(() => Int, {nullable: true}) 
     acep_GracePeriod?: number;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     acep_IsSubscriptionSequential?: boolean;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     acep_IsSubscriptionSnappedtoMonth?: boolean;
-          
+        
     @Field(() => Int, {nullable: true}) 
     acep_ProductFamily?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     acep_CurrencyDecimal?: number;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     acep_ShowPAC?: boolean;
-          
+        
     @Field(() => Int, {nullable: true}) 
     acep_UnitType?: number;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     acep_iscollection?: boolean;
-          
+        
     @Field(() => Int, {nullable: true}) 
     acep_setautorenew?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     acep_Accessibility?: string;
-          
+        
     @Field(() => Int, {nullable: true}) 
     acep_ACEPRank?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     acep_CMEActivityId?: string;
-          
+        
     @Field(() => Int, {nullable: true}) 
     acep_Color?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     acep_CountryofOriginId?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     acep_Dimensions?: string;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     acep_Discontinued?: boolean;
-          
+        
     @Field(() => Int, {nullable: true}) 
     acep_Format?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(20)
     acep_ISBN10?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(36)
     acep_ISBN13?: string;
-          
+        
     @Field(() => Int, {nullable: true}) 
     acep_Language?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     acep_Material?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     acep_ModelNumber?: string;
-          
+        
     @Field(() => Int, {nullable: true}) 
     acep_NumberofVariants?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     acep_ProductTypeId?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(400)
     acep_ProductURL?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     acep_PublisherId?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(400)
     acep_PurchaseURL?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     acep_Ratings?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     acep_Size?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     acep_UNSPSC?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(24)
     acep_UPC?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     acep_VariantParentId?: string;
-          
+        
     @Field({nullable: true}) 
     acep_About?: string;
-          
+        
     @Field({nullable: true}) 
     acep_Compliance?: string;
-          
+        
     @Field({nullable: true}) 
     acep_ExportRestriction?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     acep_Price?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     acep_price_Base?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     acep_Edition?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     acep_OrderTypeId?: string;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     acep_PublishtoStore?: boolean;
-          
+        
     @Field(() => Float, {nullable: true}) 
     acep_cmecredithours?: number;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     acep_ecmehidden?: boolean;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(16)
     acep_ecmeproducttypeid?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     acep_importsource?: string;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     acep_publishtolms?: boolean;
-          
+        
     @Field(() => Boolean, {nullable: true}) 
     acep_issuecme?: boolean;
         
     @Field(() => [Product_])
     ProductsArray: Product_[]; // Link to Products
     
-    @Field(() => [SalesOrderDetail_])
-    SalesOrderDetailsArray: SalesOrderDetail_[]; // Link to SalesOrderDetails
-    
     @Field(() => [ProductPriceLevel_])
     ProductPriceLevelsArray: ProductPriceLevel_[]; // Link to ProductPriceLevels
     
+    @Field(() => [SalesOrderDetail_])
+    SalesOrderDetailsArray: SalesOrderDetail_[]; // Link to SalesOrderDetails
+    
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for Products   
+// INPUT TYPE for Products
 //****************************************************************************
 @InputType()
 export class CreateProductInput {
@@ -29677,7 +30991,22 @@ export class CreateProductInput {
     DefaultUoMIdName?: string;
 
     @Field({ nullable: true })
+    DefaultUoMScheduleId?: string;
+
+    @Field({ nullable: true })
+    SubjectId?: string;
+
+    @Field({ nullable: true })
+    OrganizationId?: string;
+
+    @Field({ nullable: true })
     Name?: string;
+
+    @Field({ nullable: true })
+    DefaultUoMId?: string;
+
+    @Field({ nullable: true })
+    PriceLevelId?: string;
 
     @Field({ nullable: true })
     Description?: string;
@@ -29736,8 +31065,14 @@ export class CreateProductInput {
     @Field({ nullable: true })
     ModifiedOn?: Date;
 
+    @Field({ nullable: true })
+    CreatedBy?: string;
+
     @Field(() => Int, { nullable: true })
     StateCode?: number;
+
+    @Field({ nullable: true })
+    ModifiedBy?: string;
 
     @Field(() => Int, { nullable: true })
     StatusCode?: number;
@@ -29747,6 +31082,9 @@ export class CreateProductInput {
 
     @Field({ nullable: true })
     OverriddenCreatedOn?: Date;
+
+    @Field({ nullable: true })
+    TransactionCurrencyId?: string;
 
     @Field(() => Float, { nullable: true })
     ExchangeRate?: number;
@@ -29769,6 +31107,24 @@ export class CreateProductInput {
     @Field(() => Float, { nullable: true })
     StandardCost_Base?: number;
 
+    @Field({ nullable: true })
+    CreatedOnBehalfBy?: string;
+
+    @Field({ nullable: true })
+    ModifiedOnBehalfBy?: string;
+
+    @Field({ nullable: true })
+    EntityImageId?: string;
+
+    @Field({ nullable: true })
+    ProcessId?: string;
+
+    @Field({ nullable: true })
+    StageId?: string;
+
+    @Field({ nullable: true })
+    ParentProductId?: string;
+
     @Field(() => Int, { nullable: true })
     ProductStructure?: number;
 
@@ -29787,17 +31143,29 @@ export class CreateProductInput {
     @Field({ nullable: true })
     HierarchyPath?: string;
 
+    @Field({ nullable: true })
+    CreatedByExternalParty?: string;
+
+    @Field({ nullable: true })
+    ModifiedByExternalParty?: string;
+
     @Field(() => Float, { nullable: true })
     Eone_QuantityDamaged?: number;
 
     @Field(() => Boolean, { nullable: true })
     Acep_AllowWebQuantity?: boolean;
 
+    @Field({ nullable: true })
+    acep_courseproductid?: string;
+
     @Field(() => Int, { nullable: true })
     Acep_Duration?: number;
 
     @Field(() => Boolean, { nullable: true })
     Acep_Print?: boolean;
+
+    @Field({ nullable: true })
+    acep_subscriptiondetailid?: string;
 
     @Field(() => Int, { nullable: true })
     Acep_IntegrationPartnerCode?: number;
@@ -29845,7 +31213,13 @@ export class CreateProductInput {
     Acep_SalesTaxOptionCode?: number;
 
     @Field({ nullable: true })
+    acep_eventproductid?: string;
+
+    @Field({ nullable: true })
     Acep_Date?: Date;
+
+    @Field({ nullable: true })
+    Acep_PublicationId?: string;
 
     @Field(() => Int, { nullable: true })
     Acep_MultiYearValue?: number;
@@ -29858,6 +31232,9 @@ export class CreateProductInput {
 
     @Field(() => Boolean, { nullable: true })
     Acep_IncludeinSubscriptionIntegration?: boolean;
+
+    @Field({ nullable: true })
+    acep_productid?: string;
 
     @Field(() => Float, { nullable: true })
     Eone_QuantityInService?: number;
@@ -29910,8 +31287,14 @@ export class CreateProductInput {
     @Field(() => Int, { nullable: true })
     acep_ACEPRank?: number;
 
+    @Field({ nullable: true })
+    acep_CMEActivityId?: string;
+
     @Field(() => Int, { nullable: true })
     acep_Color?: number;
+
+    @Field({ nullable: true })
+    acep_CountryofOriginId?: string;
 
     @Field({ nullable: true })
     acep_Dimensions?: string;
@@ -29941,7 +31324,13 @@ export class CreateProductInput {
     acep_NumberofVariants?: number;
 
     @Field({ nullable: true })
+    acep_ProductTypeId?: string;
+
+    @Field({ nullable: true })
     acep_ProductURL?: string;
+
+    @Field({ nullable: true })
+    acep_PublisherId?: string;
 
     @Field({ nullable: true })
     acep_PurchaseURL?: string;
@@ -29957,6 +31346,9 @@ export class CreateProductInput {
 
     @Field({ nullable: true })
     acep_UPC?: string;
+
+    @Field({ nullable: true })
+    acep_VariantParentId?: string;
 
     @Field({ nullable: true })
     acep_About?: string;
@@ -29976,6 +31368,9 @@ export class CreateProductInput {
     @Field({ nullable: true })
     acep_Edition?: string;
 
+    @Field({ nullable: true })
+    acep_OrderTypeId?: string;
+
     @Field(() => Boolean, { nullable: true })
     acep_PublishtoStore?: boolean;
 
@@ -29984,6 +31379,9 @@ export class CreateProductInput {
 
     @Field(() => Boolean, { nullable: true })
     acep_ecmehidden?: boolean;
+
+    @Field({ nullable: true })
+    acep_ecmeproducttypeid?: string;
 
     @Field({ nullable: true })
     acep_importsource?: string;
@@ -29995,9 +31393,9 @@ export class CreateProductInput {
     acep_issuecme?: boolean;
 }
     
-        
+
 //****************************************************************************
-// INPUT TYPE for Products   
+// INPUT TYPE for Products
 //****************************************************************************
 @InputType()
 export class UpdateProductInput {
@@ -30110,7 +31508,22 @@ export class UpdateProductInput {
     ProductId: string;
 
     @Field({ nullable: true })
+    DefaultUoMScheduleId?: string;
+
+    @Field({ nullable: true })
+    SubjectId?: string;
+
+    @Field({ nullable: true })
+    OrganizationId?: string;
+
+    @Field({ nullable: true })
     Name?: string;
+
+    @Field({ nullable: true })
+    DefaultUoMId?: string;
+
+    @Field({ nullable: true })
+    PriceLevelId?: string;
 
     @Field({ nullable: true })
     Description?: string;
@@ -30169,8 +31582,14 @@ export class UpdateProductInput {
     @Field({ nullable: true })
     ModifiedOn?: Date;
 
+    @Field({ nullable: true })
+    CreatedBy?: string;
+
     @Field(() => Int, { nullable: true })
     StateCode?: number;
+
+    @Field({ nullable: true })
+    ModifiedBy?: string;
 
     @Field(() => Int, { nullable: true })
     StatusCode?: number;
@@ -30180,6 +31599,9 @@ export class UpdateProductInput {
 
     @Field({ nullable: true })
     OverriddenCreatedOn?: Date;
+
+    @Field({ nullable: true })
+    TransactionCurrencyId?: string;
 
     @Field(() => Float, { nullable: true })
     ExchangeRate?: number;
@@ -30202,6 +31624,24 @@ export class UpdateProductInput {
     @Field(() => Float, { nullable: true })
     StandardCost_Base?: number;
 
+    @Field({ nullable: true })
+    CreatedOnBehalfBy?: string;
+
+    @Field({ nullable: true })
+    ModifiedOnBehalfBy?: string;
+
+    @Field({ nullable: true })
+    EntityImageId?: string;
+
+    @Field({ nullable: true })
+    ProcessId?: string;
+
+    @Field({ nullable: true })
+    StageId?: string;
+
+    @Field({ nullable: true })
+    ParentProductId?: string;
+
     @Field(() => Int, { nullable: true })
     ProductStructure?: number;
 
@@ -30220,17 +31660,29 @@ export class UpdateProductInput {
     @Field({ nullable: true })
     HierarchyPath?: string;
 
+    @Field({ nullable: true })
+    CreatedByExternalParty?: string;
+
+    @Field({ nullable: true })
+    ModifiedByExternalParty?: string;
+
     @Field(() => Float, { nullable: true })
     Eone_QuantityDamaged?: number;
 
     @Field(() => Boolean, { nullable: true })
     Acep_AllowWebQuantity?: boolean;
 
+    @Field({ nullable: true })
+    acep_courseproductid?: string;
+
     @Field(() => Int, { nullable: true })
     Acep_Duration?: number;
 
     @Field(() => Boolean, { nullable: true })
     Acep_Print?: boolean;
+
+    @Field({ nullable: true })
+    acep_subscriptiondetailid?: string;
 
     @Field(() => Int, { nullable: true })
     Acep_IntegrationPartnerCode?: number;
@@ -30278,7 +31730,13 @@ export class UpdateProductInput {
     Acep_SalesTaxOptionCode?: number;
 
     @Field({ nullable: true })
+    acep_eventproductid?: string;
+
+    @Field({ nullable: true })
     Acep_Date?: Date;
+
+    @Field({ nullable: true })
+    Acep_PublicationId?: string;
 
     @Field(() => Int, { nullable: true })
     Acep_MultiYearValue?: number;
@@ -30291,6 +31749,9 @@ export class UpdateProductInput {
 
     @Field(() => Boolean, { nullable: true })
     Acep_IncludeinSubscriptionIntegration?: boolean;
+
+    @Field({ nullable: true })
+    acep_productid?: string;
 
     @Field(() => Float, { nullable: true })
     Eone_QuantityInService?: number;
@@ -30343,8 +31804,14 @@ export class UpdateProductInput {
     @Field(() => Int, { nullable: true })
     acep_ACEPRank?: number;
 
+    @Field({ nullable: true })
+    acep_CMEActivityId?: string;
+
     @Field(() => Int, { nullable: true })
     acep_Color?: number;
+
+    @Field({ nullable: true })
+    acep_CountryofOriginId?: string;
 
     @Field({ nullable: true })
     acep_Dimensions?: string;
@@ -30374,7 +31841,13 @@ export class UpdateProductInput {
     acep_NumberofVariants?: number;
 
     @Field({ nullable: true })
+    acep_ProductTypeId?: string;
+
+    @Field({ nullable: true })
     acep_ProductURL?: string;
+
+    @Field({ nullable: true })
+    acep_PublisherId?: string;
 
     @Field({ nullable: true })
     acep_PurchaseURL?: string;
@@ -30390,6 +31863,9 @@ export class UpdateProductInput {
 
     @Field({ nullable: true })
     acep_UPC?: string;
+
+    @Field({ nullable: true })
+    acep_VariantParentId?: string;
 
     @Field({ nullable: true })
     acep_About?: string;
@@ -30409,6 +31885,9 @@ export class UpdateProductInput {
     @Field({ nullable: true })
     acep_Edition?: string;
 
+    @Field({ nullable: true })
+    acep_OrderTypeId?: string;
+
     @Field(() => Boolean, { nullable: true })
     acep_PublishtoStore?: boolean;
 
@@ -30417,6 +31896,9 @@ export class UpdateProductInput {
 
     @Field(() => Boolean, { nullable: true })
     acep_ecmehidden?: boolean;
+
+    @Field({ nullable: true })
+    acep_ecmeproducttypeid?: string;
 
     @Field({ nullable: true })
     acep_importsource?: string;
@@ -30439,8 +31921,8 @@ export class RunProductViewResult {
     @Field(() => [Product_])
     Results: Product_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -30482,7 +31964,7 @@ export class ProductResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Products', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-      
+    
     @FieldResolver(() => [Product_])
     async ProductsArray(@Root() product_: Product_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Products', userPayload);
@@ -30490,15 +31972,7 @@ export class ProductResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Products', await dataSource.query(sSQL));
         return result;
     }
-          
-    @FieldResolver(() => [SalesOrderDetail_])
-    async SalesOrderDetailsArray(@Root() product_: Product_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('Sales Order Details', userPayload);
-        const sSQL = `SELECT * FROM [client_crm].[vwSalesOrderDetails] WHERE [ProductId]='${product_.ProductId}' ` + this.getRowLevelSecurityWhereClause('Sales Order Details', userPayload, EntityPermissionType.Read, 'AND');
-        const result = this.ArrayMapFieldNamesToCodeNames('Sales Order Details', await dataSource.query(sSQL));
-        return result;
-    }
-          
+        
     @FieldResolver(() => [ProductPriceLevel_])
     async ProductPriceLevelsArray(@Root() product_: Product_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Product Price Levels', userPayload);
@@ -30507,10 +31981,18 @@ export class ProductResolver extends ResolverBase {
         return result;
     }
         
+    @FieldResolver(() => [SalesOrderDetail_])
+    async SalesOrderDetailsArray(@Root() product_: Product_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Sales Order Details', userPayload);
+        const sSQL = `SELECT * FROM [client_crm].[vwSalesOrderDetails] WHERE [ProductId]='${product_.ProductId}' ` + this.getRowLevelSecurityWhereClause('Sales Order Details', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Sales Order Details', await dataSource.query(sSQL));
+        return result;
+    }
+        
     @Mutation(() => Product_)
     async CreateProduct(
         @Arg('input', () => CreateProductInput) input: CreateProductInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
+        @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.CreateRecord('Products', input, dataSource, userPayload, pubSub)
@@ -30531,451 +32013,451 @@ export class ProductResolver extends ResolverBase {
 // ENTITY CLASS for Customer Address
 //****************************************************************************
 @ObjectType()
-export class CustomerAddress_ {  
+export class CustomerAddress_ {
     @Field() 
     @MaxLength(15)
     Customer_Number: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(65)
     Customer_Name?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(61)
     Address_1?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(61)
     Address_2?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(35)
     City?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(29)
     State?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(11)
     Zip?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     Phone_1?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     Accounts_Receivable_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(61)
     Address_3?: string;
-          
+        
     @Field() 
     @MaxLength(15)
     Address_Code: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Balance_Type?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     Bank_Branch?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(31)
     Bank_Name?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     COGS_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     Cash_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Checkbook_ID?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(31)
     Comment1?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(31)
     Comment2?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(61)
     Contact_Person?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Corporate_Customer_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(61)
     Country?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Created_Date?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Credit_Card_Exp_Date?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Credit_Card_ID?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Credit_Limit_Amount?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Credit_Limit_Period?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Credit_Limit_Period_Amount?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Credit_Limit_Type?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Currency_ID?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Customer_Class?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Customer_Discount?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Default_Cash_Account_Type?: string;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Discount_Grace_Period?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     Discounts_Avail_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     Discounts_Taken_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Document_Format_ID?: string;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Due_Date_Grace_Period?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     Fax?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     Finance_Charge_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Finance_Charge_Amt_Type?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Finance_Charge_Dollar?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Finance_Charge_ID?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Finance_Charge_Percent?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     First_Invoice_Date?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(31)
     Governmental_Corporate_ID?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(31)
     Governmental_Individual_ID?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Hold?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(201)
     INet1?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(201)
     INet2?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(201)
     INet3?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(201)
     INet4?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(201)
     INet5?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(201)
     INet6?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(201)
     INet7?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(201)
     INet8?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Inactive?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     Inventory_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Keep_Calendar_History?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Keep_Distribution_History?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Keep_Period_History?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Keep_Trx_History?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Max_Writeoff_Amount?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Maximum_Writeoff_Type?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Minimum_Payment_Dollar?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Minimum_Payment_Percent?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Minimum_Payment_Type?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Modified_Date?: Date;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Note_Index?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Order_Fulfillment_Shortage_Default?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     Payment_Terms_ID?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     Phone_2?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     Phone_3?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Post_Results_To?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(11)
     PriceLevel?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Primary_Billto_Address_Code?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Primary_Shipto_Address_Code?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Priority?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Rate_Type_ID?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Revalue_Customer?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     Sales_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Sales_Territory?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Salesperson_ID?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Salesperson_ID_from_Customer_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Shipping_Method?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Short_Name?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(11)
     Site_ID?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Statement_Address_Code?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Statement_Cycle?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(65)
     Statement_Name?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(25)
     Tax_Exempt_1?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(25)
     Tax_Exempt_2?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(25)
     Tax_Registration_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Tax_Schedule_ID?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Territory_ID?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(3)
     UPS_Zone?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     User_Defined_1?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     User_Defined_1_from_Customer_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     User_Defined_2?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     User_Defined_2_from_Customer_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     Writeoff_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Accounts_Receivable_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Cash_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Checkbook_ID_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     COGS_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Customer_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Discounts_Avail_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Discounts_Taken_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Finance_Charge_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Inventory_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Sales_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Salesperson_ID_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Writeoff_Account_Number_For_Drillback?: string;
         
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for Customer Address   
+// INPUT TYPE for Customer Address
 //****************************************************************************
 @InputType()
 export class CreateCustomerAddressInput {
@@ -31319,9 +32801,9 @@ export class CreateCustomerAddressInput {
     Writeoff_Account_Number_For_Drillback?: string;
 }
     
-        
+
 //****************************************************************************
-// INPUT TYPE for Customer Address   
+// INPUT TYPE for Customer Address
 //****************************************************************************
 @InputType()
 export class UpdateCustomerAddressInput {
@@ -31676,8 +33158,8 @@ export class RunCustomerAddressViewResult {
     @Field(() => [CustomerAddress_])
     Results: CustomerAddress_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -31723,7 +33205,7 @@ export class CustomerAddressResolver extends ResolverBase {
     @Mutation(() => CustomerAddress_)
     async CreateCustomerAddress(
         @Arg('input', () => CreateCustomerAddressInput) input: CreateCustomerAddressInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
+        @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.CreateRecord('Customer Address', input, dataSource, userPayload, pubSub)
@@ -31744,2053 +33226,2053 @@ export class CustomerAddressResolver extends ResolverBase {
 // ENTITY CLASS for Sales Line Items__client_membership
 //****************************************************************************
 @ObjectType()
-export class SalesLineItem__client_membership_ {  
+export class SalesLineItem__client_membership_ {
     @Field({nullable: true}) 
     @MaxLength(100)
     SOP_Type?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     SOP_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(31)
     Item_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(101)
     Item_Description?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     QTY?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Extended_Cost?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Extended_Price?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Unit_Cost?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Unit_Price?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Customer_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     ABC_Code?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Account_Amount?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     Accounts_Receivable_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Actual_Ship_Date?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Actual_Ship_Date_from_Sales_Transaction?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(61)
     Address_1_from_Customer_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(61)
     Address_1_from_Sales_Line_Item?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(61)
     Address_1_from_Sales_Transaction?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(61)
     Address_2_from_Customer_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(61)
     Address_2_from_Sales_Line_Item?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(61)
     Address_2_from_Sales_Transaction?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(61)
     Address_3_from_Customer_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(61)
     Address_3_from_Sales_Line_Item?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(61)
     Address_3_from_Sales_Transaction?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Address_Code_from_Customer_Master?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Aging_Bucket1?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Aging_Bucket2?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Aging_Bucket3?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Aging_Bucket4?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Aging_Bucket5?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Aging_Bucket6?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Aging_Bucket7?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Allocate_By?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Allow_Back_Orders?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(31)
     Alternate_Item_1?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(31)
     Alternate_Item_2?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Apply_Withholding?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     Assembly_Variance_Account_Number?: string;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Average_Days_To_Pay___Life?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Average_Days_To_Pay___Year?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Average_Days_to_Pay___LYR?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Back_Order_Date?: Date;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Backout_Freight_Amount?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Backout_Misc_Amount?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Backout_Sales_Amount?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Backout_Tax_Amount?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Balance_Type?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     Bank_Branch?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(31)
     Bank_Name?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Based_On_Invoice_Total?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Based_On_Invoice_Total_from_Sales_Transaction?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Batch_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Batch_Source?: string;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Break_Field_1?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Break_Field_2?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Break_Field_3?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     COD_Amount?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     COGS_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     COGS_Account_Number_from_Customer_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     COGS_Account_Number_from_Item_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     COGS_Inflation_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     COGS_Monetary_Correction_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     Cash_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Checkbook_ID?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(35)
     City_from_Customer_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(35)
     City_from_Sales_Line_Item?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(35)
     City_from_Sales_Transaction?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(31)
     Comment1_from_Customer_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(31)
     Comment2_from_Customer_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(51)
     Comment_1?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(51)
     Comment_2?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(51)
     Comment_3?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(51)
     Comment_4?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Comment_ID?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Comment_ID_from_Sales_Transaction?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Commission_Amount?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Commission_Applied_To?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Commission_Sale_Amount?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Component_Sequence?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(61)
     Contact_Person_from_Customer_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(61)
     Contact_Person_from_Sales_Line_Item?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(61)
     Contact_Person_from_Sales_Transaction?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Contract_End_Date?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(31)
     Contract_Item_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(11)
     Contract_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     Contract_Serial_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Contract_Start_Date?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Corporate_Customer_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Correction?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Correction_to_Nonexisting_Transaction?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(61)
     Country_from_Customer_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(61)
     Country_from_Sales_Line_Item?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(61)
     Country_from_Sales_Transaction?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Created_Date_from_Customer_Master?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Created_Date_from_Item_Master?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Created_Date_from_Sales_Transaction?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Credit_Card_Exp_Date?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Credit_Card_ID?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Credit_Limit_Amount?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Credit_Limit_Period?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Credit_Limit_Period_Amount?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Credit_Limit_Type?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Currency_ID?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Currency_ID_from_Customer_Master?: string;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Currency_Index?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Currency_Index_from_Sales_Transaction?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Current_Cost?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Customer_Balance?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Customer_Class?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Customer_Discount?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(65)
     Customer_Name?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(65)
     Customer_Name_from_Customer_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     Customer_PO_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     Damaged_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     Damaged_Account_Number_from_Item_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Date_Last_Repeated?: Date;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Days_to_Increment?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Decimal_Places_Currency?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Decimal_Places_Currency_from_Item_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Decimal_Places_QTYS?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Decimal_Places_QTYS_from_Item_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Default_Cash_Account_Type?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Denomination_Exchange_Rate?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Deposit_Received?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Deposits_Received?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Dest_Batch_1?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Dest_Batch_2?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Discount_Available_Amount?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Discount_Available_Freight?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Discount_Available_Misc?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Discount_Available_Sales?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Discount_Available_Taken?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Discount_Date?: Date;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Discount_Dollar_Amount?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Discount_Grace_Period?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Discount_Percent_Amount?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Discount_Returned?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Discount_Taken_Amount?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     Discounts_Available_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     Discounts_Taken_Account_Number?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Document_Amount?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Document_Date?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Document_Format_ID?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Document_ID?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     Document_Number_Corrected?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     Document_Number_Corrected_from_Sales_Transaction?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Document_Status?: string;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Drop_Ship?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     Drop_Ship_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Due_Date?: Date;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Due_Date_Grace_Period?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     EC_Transaction?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Exceptional_Demand_from_Sales_Line_Item?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Exchange_Date?: Date;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Exchange_Rate?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Exchange_Table_ID?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Existing_Qty_Available?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Existing_Qty_Selected?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Extended_Cost_from_Sales_Transaction?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     Fax_Number_from_Sales_Line_Item?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     Fax_Number_from_Sales_Transaction?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     Fax_from_Customer_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     Finance_Charge_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Finance_Charge_Amt_Type?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Finance_Charge_Dollar?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Finance_Charge_ID?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Finance_Charge_Percent?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Finance_Charges_CYTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Finance_Charges_LYR_Calendar?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     First_Invoice_Date?: Date;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Freight_Amount?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Freight_Schedule_ID?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Freight_Tax_Amount?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Freight_Taxable?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Fulfillment_Date?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Fulfillment_Date_from_Sales_Transaction?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     GL_Posting_Date?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(31)
     Governmental_Corporate_ID?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(31)
     Governmental_Individual_ID?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     High_Balance_LTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     High_Balance_LYR?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     High_Balance_YTD?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Hold?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     IV_Item_Taxable?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     In_Service_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     In_Service_Account_Number_from_Item_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     In_Use_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     In_Use_Account_Number_from_Item_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Inactive?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     Inventory_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     Inventory_Account_Number_from_Customer_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     Inventory_Account_Number_from_Item_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     Inventory_Inflation_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     Inventory_Monetary_Correction_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     Inventory_Offset_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     Inventory_Returns_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Invoice_Date?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(11)
     Item_Class_Code?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Item_Code?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Item_Code_from_Item_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(101)
     Item_Description_from_Item_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(11)
     Item_Generic_Description?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Item_Shipping_Weight?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Item_Short_Name?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Item_Tax_Schedule_ID?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Item_Tax_Schedule_ID_from_Item_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Item_Tracking_Option?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Item_Type?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Keep_Calendar_History?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Keep_Calendar_History_from_Customer_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Keep_Distribution_History?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Keep_Distribution_History_from_Customer_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Keep_Period_History?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Keep_Period_History_from_Customer_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Keep_Trx_History?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Keep_Trx_History_from_Customer_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Kit_COGS_Account_Source?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Last_Aged?: Date;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Last_Finance_Charge_Amount?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     Last_Generated_Serial_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Last_NSF_Check_Date?: Date;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Last_Payment_Amount?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Last_Payment_Date?: Date;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Last_Statement_Amount?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Last_Statement_Date?: Date;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Last_Transaction_Amount?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Last_Transaction_Date?: Date;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Line_Item_Sequence?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(11)
     Location_Code?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(11)
     Location_Code_from_Item_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(11)
     Location_Code_from_Sales_Transaction?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(11)
     Lot_Type?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     MC_Transaction_State?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     Markdown_Account_Number?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Markdown_Amount?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Markdown_Amount_from_Sales_Transaction?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Markdown_Percent?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Markdown_Type?: string;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Master_Number?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Master_Record_Type?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Max_Writeoff_Amount?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Maximum_Writeoff_Type?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Minimum_Payment_Dollar?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Minimum_Payment_Percent?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Minimum_Payment_Type?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Misc_Amount?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Misc_Schedule_ID?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Misc_Tax_Amount?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Misc_Taxable?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Modified_Date_from_Customer_Master?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Modified_Date_from_Item_Master?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Modified_Date_from_Sales_Transaction?: Date;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Non_Commissioned_Amount?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Non_Current_Scheduled_Payments?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Non_IV?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Note_Index_from_Customer_Master?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Note_Index_from_Item_Master?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Note_Index_from_Sales_Transaction?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Number_ADTP_Documents___LYR?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Number_ADTP_Documents___Life?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Number_ADTP_Documents___Year?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Number_Of_NSF_Checks_Life?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Number_Of_NSF_Checks_YTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     On_Order_Amount?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Order_Date?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Order_Fulfillment_Shortage_Default?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     Original_Number?: string;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Original_Sequence_Number_Corrected?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Original_Type?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Originating_Account_Amount?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Originating_Backout_Freight_Amount?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Originating_Backout_Misc_Amount?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Originating_Backout_Sales_Amount?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Originating_Backout_Tax_Amount?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Originating_COD_Amount?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Originating_Commission_Amount?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Originating_Commission_Sales_Amount?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Originating_Decimal_Places_Currency?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Originating_Deposit_Received?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Originating_Discount_Available_Amount?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Originating_Discount_Available_Freight?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Originating_Discount_Available_Misc?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Originating_Discount_Available_Sales?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Originating_Discount_Available_Taken?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Originating_Discount_Dollar_Amount?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Originating_Discount_Returned?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Originating_Discount_Taken_Amount?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Originating_Document_Amount?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Originating_Extended_Cost?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Originating_Extended_Cost_from_Sales_Transaction?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Originating_Extended_Price?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Originating_Freight_Amount?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Originating_Freight_Tax_Amount?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Originating_Markdown_Amount?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Originating_Markdown_Amount_from_Sales_Transaction?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Originating_Misc_Amount?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Originating_Misc_Tax_Amount?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Originating_Non_Commissioned_Amount?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Originating_Payment_Received?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Originating_Remaining_Price?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Originating_Remaining_Subtotal?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Originating_Subtotal?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Originating_Tax_Amount?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Originating_Tax_Amount_from_Sales_Transaction?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Originating_Taxable_Tax_Amount?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Originating_Taxable_Tax_Amount_from_Sales_Transaction?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Originating_Trade_Discount_Amount?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Originating_Trade_Discount_Amount_from_Sales_Transaction?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Originating_Unit_Cost?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Originating_Unit_Price?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     Packing_Slip_Number?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Payment_Received?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     Payment_Terms_ID?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     Payment_Terms_ID_from_Customer_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     Phone_1_from_Customer_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     Phone_1_from_Sales_Line_Item?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     Phone_2_from_Customer_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     Phone_2_from_Sales_Line_Item?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     Phone_3_from_Customer_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     Phone_3_from_Sales_Line_Item?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     Phone_3_from_Sales_Transaction?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     Phone_Number_1_from_Sales_Transaction?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     Phone_Number_2_from_Sales_Transaction?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     Picking_Ticket_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Post_Results_To?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Posted_Date?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Posted_User_ID?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Posting_Status?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(11)
     PriceLevel?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(11)
     PriceLevel_from_Customer_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(11)
     PriceLevel_from_Item_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(11)
     PriceLevel_from_Sales_Transaction?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(11)
     Price_Group?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Price_Method?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Primary_Billto_Address_Code?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Primary_Billto_Address_Code_from_Customer_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Primary_Shipto_Address_Code_from_Customer_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Primary_Shipto_Address_Code_from_Sales_Line_Item?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Primary_Shipto_Address_Code_from_Sales_Transaction?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Priority_from_Customer_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Prospect?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     Purch_Inflation_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     Purch_Monetary_Correction_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     Purchase_Price_Variance_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Purchasing_Status?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(9)
     Purchasing_U_Of_M?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     QTY_Allocated?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     QTY_Canceled?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     QTY_Canceled_Other?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     QTY_Damaged?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     QTY_Fulfilled?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     QTY_In_Base_U_Of_M?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     QTY_In_Service?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     QTY_In_Use?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     QTY_On_Hand?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     QTY_On_PO?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     QTY_Ordered?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     QTY_Prev_BO_On_Order?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     QTY_Prev_Back_Ordered?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     QTY_Prev_Invoiced?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     QTY_Prev_Ordered?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     QTY_Prev_Received?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     QTY_Received?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     QTY_Remaining?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     QTY_Remaining_On_BO?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     QTY_Returned?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     QTY_Selected?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     QTY_To_Back_Order?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     QTY_To_Invoice?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     QTY_To_Order?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Quote_Date?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Quote_Expiration_Date?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Rate_Calculation_Method?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Rate_Type_ID?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Rate_Type_ID_from_Customer_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(31)
     Reference?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Remaining_Price?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Remaining_Subtotal?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Repeating?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Requested_Ship_Date?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Requested_Ship_Date_from_Sales_Transaction?: Date;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Retainage?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Return_Date?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     Returns_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Revalue_Customer?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Sale_Date?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     Sales_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     Sales_Account_Number_from_Customer_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     Sales_Account_Number_from_Item_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     Sales_Discounts_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Sales_Document_Status?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     Sales_Returns_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Sales_Territory?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Sales_Territory_from_Customer_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Sales_Territory_from_Sales_Transaction?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Salesperson_ID?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Salesperson_ID_from_Customer_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Salesperson_ID_from_Sales_Transaction?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(9)
     Selling_U_Of_M?: string;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Sequence_Number_Corrected?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(65)
     ShipToName_from_Sales_Line_Item?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(65)
     ShipToName_from_Sales_Transaction?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Ship_Complete_Document?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Ship_Complete_Document_from_Customer_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Shipping_Document?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Shipping_Method?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Shipping_Method_from_Customer_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Shipping_Method_from_Sales_Transaction?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Short_Name?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Simplified?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Standard_Cost?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(29)
     State_from_Customer_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(29)
     State_from_Sales_Line_Item?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(29)
     State_from_Sales_Transaction?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Statement_Address_Code?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Statement_Cycle?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(65)
     Statement_Name?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Subtotal?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     TRX_Frequency?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(13)
     TRX_Source?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(13)
     TRX_Source_from_Sales_Transaction?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Tax_Amount?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Tax_Amount_from_Sales_Transaction?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(31)
     Tax_Commodity_Code?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Tax_Date?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Tax_Engine_Called?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(25)
     Tax_Exempt_1?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(25)
     Tax_Exempt_1_from_Customer_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(25)
     Tax_Exempt_2?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(25)
     Tax_Exempt_2_from_Customer_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Tax_Options?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(25)
     Tax_Registration_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(25)
     Tax_Registration_Number_from_Customer_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Tax_Schedule_ID_from_Customer_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Tax_Schedule_ID_from_Sales_Line_Item?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Tax_Schedule_ID_from_Sales_Transaction?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Tax_Schedule_Source_from_Sales_Line_Item?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Tax_Schedule_Source_from_Sales_Transaction?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Taxable_Tax_Amount?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Taxable_Tax_Amount_from_Sales_Transaction?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Time?: Date;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Times_Printed?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Times_Repeated?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Times_To_Repeat?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Total___FC_LTD?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Total___FC_LYR?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Total___FC_YTD?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Total___Invoices_LTD?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Total___Invoices_LYR?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Total___Invoices_YTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Amount_Of_NSF_Checks_Life?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Amount_Of_NSF_Checks_YTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Bad_Deb_LYR?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Bad_Debt_LTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Bad_Debt_YTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Cash_Received_LTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Cash_Received_LYR?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Cash_Received_YTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Costs_LTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Costs_LYR?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Costs_YTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Discounts_Available_YTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Discounts_Taken_LTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Discounts_Taken_LYR?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Discounts_Taken_YTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Finance_Charges_LTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Finance_Charges_LYR?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Finance_Charges_YTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Returns_LTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Returns_LYR?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Returns_YTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Sales_LTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Sales_LYR?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Sales_YTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Waived_FC_LTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Waived_FC_LYR?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Waived_FC_YTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Writeoffs_LTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Writeoffs_LYR?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Writeoffs_YTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Trade_Discount_Amount?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Trade_Discount_Amount_from_Sales_Transaction?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Trade_Discount_Percent?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(3)
     UPS_Zone?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(3)
     UPS_Zone_from_Customer_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(9)
     U_Of_M?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(11)
     U_Of_M_Schedule?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Unpaid_Finance_Charges_YTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Unposted_Cash_Amount?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Unposted_Other_Cash_Amount?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Unposted_Other_Sales_Amount?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Unposted_Sales_Amount?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     Unrealized_Purchase_Price_Variance_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Use_Document_ID_1?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Use_Document_ID_2?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(11)
     User_Category_Value_1?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(11)
     User_Category_Value_2?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(11)
     User_Category_Value_3?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(11)
     User_Category_Value_4?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(11)
     User_Category_Value_5?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(11)
     User_Category_Value_6?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     User_Defined_1?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     User_Defined_1_from_Customer_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     User_Defined_2?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     User_Defined_2_from_Customer_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     User_Defined_3?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     User_Defined_4?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     User_Defined_5?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     User_Defined_Date_1?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     User_Defined_Date_2?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     User_Defined_Table_1?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     User_Defined_Table_2?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     User_Defined_Table_3?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     User_To_Enter?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Valuation_Method?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     Variances_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Void_Status?: string;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Warranty_Days?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Withholding_Amount?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Write_Offs_LIFE?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Write_Offs_LYR?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Write_Offs_YTD?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     Writeoff_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(11)
     Zip_Code_from_Sales_Line_Item?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(11)
     Zip_Code_from_Sales_Transaction?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(11)
     Zip_from_Customer_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Workflow_Approval_Status_Credit_Limit?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Workflow_Priority_Credit_Limit?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Workflow_Approval_Status_Quote?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Workflow_Priority_Quote?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Accounts_Receivable_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Assembly_Variance_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Cash_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Checkbook_ID_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     COGS_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     COGS_Inflation_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     COGS_Monetary_Correction_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Customer_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Damaged_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Discounts_Available_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Discounts_Taken_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Drop_Ship_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Finance_Charge_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     In_Service_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     In_Use_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Inventory_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Inventory_Inflation_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Inventory_Monetary_Correction_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Inventory_Offset_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Inventory_Returns_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Item_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Markdown_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Purch_Inflation_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Purch_Monetary_Correction_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Purchase_Price_Variance_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Returns_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Sales_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Sales_Discounts_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Sales_Returns_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Salesperson_ID_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     SOP_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Unrealized_Purchase_Price_Variance_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Variances_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Writeoff_Account_Number_For_Drillback?: string;
-          
+        
     @Field(() => Int) 
     ID: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     SalesTransactionID?: number;
         
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for Sales Line Items__client_membership   
+// INPUT TYPE for Sales Line Items__client_membership
 //****************************************************************************
 @InputType()
 export class CreateSalesLineItem__client_membershipInput {
@@ -35490,9 +36972,9 @@ export class CreateSalesLineItem__client_membershipInput {
     SalesTransactionID?: number;
 }
     
-        
+
 //****************************************************************************
-// INPUT TYPE for Sales Line Items__client_membership   
+// INPUT TYPE for Sales Line Items__client_membership
 //****************************************************************************
 @InputType()
 export class UpdateSalesLineItem__client_membershipInput {
@@ -37206,8 +38688,8 @@ export class RunSalesLineItem__client_membershipViewResult {
     @Field(() => [SalesLineItem__client_membership_])
     Results: SalesLineItem__client_membership_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -37253,7 +38735,7 @@ export class SalesLineItem__client_membershipResolver extends ResolverBase {
     @Mutation(() => SalesLineItem__client_membership_)
     async CreateSalesLineItem__client_membership(
         @Arg('input', () => CreateSalesLineItem__client_membershipInput) input: CreateSalesLineItem__client_membershipInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
+        @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.CreateRecord('Sales Line Items__client_membership', input, dataSource, userPayload, pubSub)
@@ -37274,403 +38756,403 @@ export class SalesLineItem__client_membershipResolver extends ResolverBase {
 // ENTITY CLASS for Items
 //****************************************************************************
 @ObjectType()
-export class Item_ {  
+export class Item_ {
     @Field() 
     @MaxLength(31)
     Item_Number: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(101)
     Item_Description?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Item_Type?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     ABC_Code?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Allow_Back_Orders?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(31)
     Alternate_Item_1?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(31)
     Alternate_Item_2?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     Assembly_Variance_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     COGS_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     COGS_Inflation_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     COGS_Monetary_Correction_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(7)
     Country_Origin?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Created_Date?: Date;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Current_Cost?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     Damaged_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Decimal_Places_Currency?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Decimal_Places_QTYS?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     Drop_Ship_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     In_Service_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     In_Use_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     Inventory_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     Inventory_Inflation_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     Inventory_Monetary_Correction_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     Inventory_Offset_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     Inventory_Returns_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(11)
     Item_Class_Code?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Item_Code?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(11)
     Item_Generic_Description?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Item_Shipping_Weight?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Item_Short_Name?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Item_Tax_Schedule_ID?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Item_Tracking_Option?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Keep_Calendar_History?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Keep_Distribution_History?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Keep_Period_History?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Keep_Trx_History?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Kit_COGS_Account_Source?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     Last_Generated_Serial_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(11)
     Location_Code?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(11)
     Lot_Type?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(31)
     Manufacturer?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(31)
     Manufacturer_Item_Number?: string;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Master_Record_Type?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(101)
     Mfg__Item_Description?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Modified_Date?: Date;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Note_Index?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(11)
     PriceLevel?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(11)
     Price_Group?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Price_Method?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Primary_Mfg__Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     Purch_Inflation_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     Purch_Monetary_Correction_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Purchase_Item_Tax_Schedule_ID?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     Purchase_Price_Variance_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Purchase_Tax_Options?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(9)
     Purchasing_U_Of_M?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Revalue_Inventory?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     Sales_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     Sales_Discounts_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     Sales_Returns_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(9)
     Selling_U_Of_M?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Standard_Cost?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(31)
     Tax_Commodity_Code?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Tax_Options?: string;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Tolerance_Percentage?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(11)
     U_Of_M_Schedule?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     Unrealized_Purchase_Price_Variance_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(11)
     User_Category_Value_1?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(11)
     User_Category_Value_2?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(11)
     User_Category_Value_3?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(11)
     User_Category_Value_4?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(11)
     User_Category_Value_5?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(11)
     User_Category_Value_6?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Valuation_Method?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     Variances_Account_Number?: string;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Warranty_Days?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Assembly_Variance_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     COGS_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     COGS_Inflation_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     COGS_Monetary_Correction_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Damaged_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Drop_Ship_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     In_Service_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     In_Use_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Inventory_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Inventory_Inflation_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Inventory_Monetary_Correction_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Inventory_Offset_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Inventory_Returns_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Item_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Purch_Inflation_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Purch_Monetary_Correction_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Purchase_Price_Variance_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Sales_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Sales_Discounts_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Sales_Returns_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Unrealized_Purchase_Price_Variance_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Variances_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Use_Qty_Overage_Tolerance?: string;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Qty_Overage_Tolerance_Percentage?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Use_Qty_Shortage_Tolerance?: string;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Qty_Shortage_Tolerance_Percentage?: number;
         
@@ -37678,9 +39160,9 @@ export class Item_ {
     SalesLineItems__client_membershipArray: SalesLineItem__client_membership_[]; // Link to SalesLineItems__client_membership
     
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for Items   
+// INPUT TYPE for Items
 //****************************************************************************
 @InputType()
 export class CreateItemInput {
@@ -37991,9 +39473,9 @@ export class CreateItemInput {
     Qty_Shortage_Tolerance_Percentage?: number;
 }
     
-        
+
 //****************************************************************************
-// INPUT TYPE for Items   
+// INPUT TYPE for Items
 //****************************************************************************
 @InputType()
 export class UpdateItemInput {
@@ -38315,8 +39797,8 @@ export class RunItemViewResult {
     @Field(() => [Item_])
     Results: Item_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -38358,7 +39840,7 @@ export class ItemResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Items', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-      
+    
     @FieldResolver(() => [SalesLineItem__client_membership_])
     async SalesLineItems__client_membershipArray(@Root() item_: Item_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Sales Line Items__client_membership', userPayload);
@@ -38370,7 +39852,7 @@ export class ItemResolver extends ResolverBase {
     @Mutation(() => Item_)
     async CreateItem(
         @Arg('input', () => CreateItemInput) input: CreateItemInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
+        @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.CreateRecord('Items', input, dataSource, userPayload, pubSub)
@@ -38391,652 +39873,652 @@ export class ItemResolver extends ResolverBase {
 // ENTITY CLASS for Customers
 //****************************************************************************
 @ObjectType()
-export class Customer_ {  
+export class Customer_ {
     @Field() 
     @MaxLength(15)
     Customer_Number: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(65)
     Customer_Name?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(61)
     Address_1?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(61)
     Address_2?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(35)
     City?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(29)
     State?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(11)
     Zip?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     Phone_1?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Aging_Bucket1?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Aging_Bucket2?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Aging_Bucket3?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Aging_Bucket4?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Aging_Bucket5?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Aging_Bucket6?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Aging_Bucket7?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     Accounts_Receivable_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(61)
     Address_3?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Address_Code?: string;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Average_Days_To_Pay___Life?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Average_Days_To_Pay___Year?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Average_Days_to_Pay___LYR?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Balance_Type?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     Bank_Branch?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(31)
     Bank_Name?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     COGS_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     Cash_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Checkbook_ID?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(31)
     Comment1?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(31)
     Comment2?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(61)
     Contact_Person?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Corporate_Customer_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(61)
     Country?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Created_Date?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Credit_Card_Exp_Date?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Credit_Card_ID?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Credit_Limit_Amount?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Credit_Limit_Period?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Credit_Limit_Period_Amount?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Credit_Limit_Type?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Currency_ID?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Customer_Balance?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Customer_Class?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Customer_Discount?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Default_Cash_Account_Type?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Deposits_Received?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Discount_Grace_Period?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     Discounts_Available_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     Discounts_Taken_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Document_Format_ID?: string;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Due_Date_Grace_Period?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     Fax?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     Finance_Charge_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Finance_Charge_Amt_Type?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Finance_Charge_Dollar?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Finance_Charge_ID?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Finance_Charge_Percent?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Finance_Charges_CYTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Finance_Charges_LYR_Calendar?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     First_Invoice_Date?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(31)
     Governmental_Corporate_ID?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(31)
     Governmental_Individual_ID?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     High_Balance_LTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     High_Balance_LYR?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     High_Balance_YTD?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Hold?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Inactive?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     Inventory_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Keep_Calendar_History?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Keep_Distribution_History?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Keep_Period_History?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Keep_Trx_History?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Last_Aged?: Date;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Last_Finance_Charge_Amount?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Last_NSF_Check_Date?: Date;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Last_Payment_Amount?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Last_Payment_Date?: Date;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Last_Statement_Amount?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Last_Statement_Date?: Date;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Last_Transaction_Amount?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Last_Transaction_Date?: Date;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Max_Writeoff_Amount?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Maximum_Writeoff_Type?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Minimum_Payment_Dollar?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Minimum_Payment_Percent?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Minimum_Payment_Type?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Modified_Date?: Date;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Non_Current_Scheduled_Payments?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Note_Index?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Number_ADTP_Documents___LYR?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Number_ADTP_Documents___Life?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Number_ADTP_Documents___Year?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Number_Of_NSF_Checks_Life?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Number_Of_NSF_Checks_YTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     On_Order_Amount?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Order_Fulfillment_Shortage_Default?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     Payment_Terms_ID?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     Phone_2?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     Phone_3?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Post_Results_To?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(11)
     PriceLevel?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Primary_Billto_Address_Code?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Primary_Shipto_Address_Code?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Priority?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Rate_Type_ID?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Retainage?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Revalue_Customer?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     Sales_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     Sales_Order_Returns_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Sales_Territory?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Salesperson_ID?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Send_Email_Statements?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Ship_Complete_Document?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Shipping_Method?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Short_Name?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Statement_Address_Code?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Statement_Cycle?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(65)
     Statement_Name?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(25)
     Tax_Exempt_1?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(25)
     Tax_Exempt_2?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(25)
     Tax_Registration_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Tax_Schedule_ID?: string;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Total___FC_LTD?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Total___FC_LYR?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Total___FC_YTD?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Total___Invoices_LTD?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Total___Invoices_LYR?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Total___Invoices_YTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Amount_Of_NSF_Checks_Life?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Amount_Of_NSF_Checks_YTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Bad_Deb_LYR?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Bad_Debt_LTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Bad_Debt_YTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Cash_Received_LTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Cash_Received_LYR?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Cash_Received_YTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Costs_LTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Costs_LYR?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Costs_YTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Discounts_Available_YTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Discounts_Taken_LTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Discounts_Taken_LYR?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Discounts_Taken_YTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Finance_Charges_LTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Finance_Charges_LYR?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Finance_Charges_YTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Returns_LTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Returns_LYR?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Returns_YTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Sales_LTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Sales_LYR?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Sales_YTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Waived_FC_LTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Waived_FC_LYR?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Waived_FC_YTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Writeoffs_LTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Writeoffs_LYR?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Writeoffs_YTD?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(3)
     UPS_Zone?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Unpaid_Finance_Charges_YTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Unposted_Cash_Amount?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Unposted_Other_Cash_Amount?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Unposted_Other_Sales_Amount?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Unposted_Sales_Amount?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     User_Defined_1?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     User_Defined_2?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Write_Offs_LIFE?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Write_Offs_LYR?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Write_Offs_YTD?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     Writeoff_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Accounts_Receivable_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Cash_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Checkbook_ID_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     COGS_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Customer_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Discounts_Available_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Discounts_Taken_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Finance_Charge_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Inventory_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Sales_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Sales_Order_Returns_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Salesperson_ID_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Writeoff_Account_Number_For_Drillback?: string;
         
-    @Field(() => [SalesLineItem__client_membership_])
-    SalesLineItems__client_membershipArray: SalesLineItem__client_membership_[]; // Link to SalesLineItems__client_membership
+    @Field(() => [OrganizationLink_])
+    OrganizationLinksArray: OrganizationLink_[]; // Link to OrganizationLinks
     
     @Field(() => [CustomerAddress_])
     CustomerAddressArray: CustomerAddress_[]; // Link to CustomerAddress
@@ -39044,13 +40526,13 @@ export class Customer_ {
     @Field(() => [PersonLink_])
     PersonLinksArray: PersonLink_[]; // Link to PersonLinks
     
-    @Field(() => [OrganizationLink_])
-    OrganizationLinksArray: OrganizationLink_[]; // Link to OrganizationLinks
+    @Field(() => [SalesLineItem__client_membership_])
+    SalesLineItems__client_membershipArray: SalesLineItem__client_membership_[]; // Link to SalesLineItems__client_membership
     
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for Customers   
+// INPUT TYPE for Customers
 //****************************************************************************
 @InputType()
 export class CreateCustomerInput {
@@ -39601,9 +41083,9 @@ export class CreateCustomerInput {
     Writeoff_Account_Number_For_Drillback?: string;
 }
     
-        
+
 //****************************************************************************
-// INPUT TYPE for Customers   
+// INPUT TYPE for Customers
 //****************************************************************************
 @InputType()
 export class UpdateCustomerInput {
@@ -40165,8 +41647,8 @@ export class RunCustomerViewResult {
     @Field(() => [Customer_])
     Results: Customer_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -40208,31 +41690,7 @@ export class CustomerResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Customers', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-      
-    @FieldResolver(() => [SalesLineItem__client_membership_])
-    async SalesLineItems__client_membershipArray(@Root() customer_: Customer_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('Sales Line Items__client_membership', userPayload);
-        const sSQL = `SELECT * FROM [client_membership].[vwSalesLineItems__client_membership] WHERE [Customer Number]='${customer_.Customer_Number}' ` + this.getRowLevelSecurityWhereClause('Sales Line Items__client_membership', userPayload, EntityPermissionType.Read, 'AND');
-        const result = this.ArrayMapFieldNamesToCodeNames('Sales Line Items__client_membership', await dataSource.query(sSQL));
-        return result;
-    }
-          
-    @FieldResolver(() => [CustomerAddress_])
-    async CustomerAddressArray(@Root() customer_: Customer_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('Customer Address', userPayload);
-        const sSQL = `SELECT * FROM [client_membership].[vwCustomerAddress] WHERE [Customer Number]='${customer_.Customer_Number}' ` + this.getRowLevelSecurityWhereClause('Customer Address', userPayload, EntityPermissionType.Read, 'AND');
-        const result = this.ArrayMapFieldNamesToCodeNames('Customer Address', await dataSource.query(sSQL));
-        return result;
-    }
-          
-    @FieldResolver(() => [PersonLink_])
-    async PersonLinksArray(@Root() customer_: Customer_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('Person Links', userPayload);
-        const sSQL = `SELECT * FROM [common].[vwPersonLinks] WHERE [MembershipGreatPlainsCustomerID]='${customer_.Customer_Number}' ` + this.getRowLevelSecurityWhereClause('Person Links', userPayload, EntityPermissionType.Read, 'AND');
-        const result = this.ArrayMapFieldNamesToCodeNames('Person Links', await dataSource.query(sSQL));
-        return result;
-    }
-          
+    
     @FieldResolver(() => [OrganizationLink_])
     async OrganizationLinksArray(@Root() customer_: Customer_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Organization Links', userPayload);
@@ -40241,10 +41699,34 @@ export class CustomerResolver extends ResolverBase {
         return result;
     }
         
+    @FieldResolver(() => [CustomerAddress_])
+    async CustomerAddressArray(@Root() customer_: Customer_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Customer Address', userPayload);
+        const sSQL = `SELECT * FROM [client_membership].[vwCustomerAddress] WHERE [Customer Number]='${customer_.Customer_Number}' ` + this.getRowLevelSecurityWhereClause('Customer Address', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Customer Address', await dataSource.query(sSQL));
+        return result;
+    }
+        
+    @FieldResolver(() => [PersonLink_])
+    async PersonLinksArray(@Root() customer_: Customer_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Person Links', userPayload);
+        const sSQL = `SELECT * FROM [common].[vwPersonLinks] WHERE [MembershipGreatPlainsCustomerID]='${customer_.Customer_Number}' ` + this.getRowLevelSecurityWhereClause('Person Links', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Person Links', await dataSource.query(sSQL));
+        return result;
+    }
+        
+    @FieldResolver(() => [SalesLineItem__client_membership_])
+    async SalesLineItems__client_membershipArray(@Root() customer_: Customer_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Sales Line Items__client_membership', userPayload);
+        const sSQL = `SELECT * FROM [client_membership].[vwSalesLineItems__client_membership] WHERE [Customer Number]='${customer_.Customer_Number}' ` + this.getRowLevelSecurityWhereClause('Sales Line Items__client_membership', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Sales Line Items__client_membership', await dataSource.query(sSQL));
+        return result;
+    }
+        
     @Mutation(() => Customer_)
     async CreateCustomer(
         @Arg('input', () => CreateCustomerInput) input: CreateCustomerInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
+        @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.CreateRecord('Customers', input, dataSource, userPayload, pubSub)
@@ -40265,1315 +41747,1315 @@ export class CustomerResolver extends ResolverBase {
 // ENTITY CLASS for Sales Transactions__client_membership
 //****************************************************************************
 @ObjectType()
-export class SalesTransaction__client_membership_ {  
+export class SalesTransaction__client_membership_ {
     @Field() 
     @MaxLength(100)
     SOP_Type: string;
-          
+        
     @Field() 
     @MaxLength(21)
     SOP_Number: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Document_Date?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Customer_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(65)
     Customer_Name?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     Customer_PO_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Primary_Shipto_Address_Code?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Sales_Document_Status?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Document_Amount?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Account_Amount?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     Accounts_Receivable_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Actual_Ship_Date?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(61)
     Address_1?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(61)
     Address_1_from_Customer_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(61)
     Address_2?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(61)
     Address_2_from_Customer_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(61)
     Address_3?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(61)
     Address_3_from_Customer_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Address_Code_from_Customer_Master?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Aging_Bucket1?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Aging_Bucket2?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Aging_Bucket3?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Aging_Bucket4?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Aging_Bucket5?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Aging_Bucket6?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Aging_Bucket7?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Allocate_By?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Apply_Withholding?: string;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Average_Days_To_Pay___Life?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Average_Days_To_Pay___Year?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Average_Days_to_Pay___LYR?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Back_Order_Date?: Date;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Backout_Freight_Amount?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Backout_Misc_Amount?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Backout_Tax_Amount?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Balance_Type?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     Bank_Branch?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(31)
     Bank_Name?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Based_On_Invoice_Total?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Batch_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Batch_Source?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     COD_Amount?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     COGS_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     Cash_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Checkbook_ID?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(35)
     City?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(35)
     City_from_Customer_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(31)
     Comment1_from_Customer_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(31)
     Comment2_from_Customer_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(51)
     Comment_1?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(51)
     Comment_2?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(51)
     Comment_3?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(51)
     Comment_4?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Comment_ID?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Commission_Amount?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Commission_Applied_To?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Commission_Sale_Amount?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(61)
     Contact_Person?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(61)
     Contact_Person_from_Customer_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Corporate_Customer_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Correction?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Correction_to_Nonexisting_Transaction?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(61)
     Country?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(61)
     Country_from_Customer_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Created_Date?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Created_Date_from_Customer_Master?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Credit_Card_Exp_Date?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Credit_Card_ID?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Credit_Limit_Amount?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Credit_Limit_Period?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Credit_Limit_Period_Amount?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Credit_Limit_Type?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Currency_ID?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Currency_ID_from_Customer_Master?: string;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Currency_Index?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Customer_Balance?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Customer_Class?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Customer_Discount?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(65)
     Customer_Name_from_Customer_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Date_Last_Repeated?: Date;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Days_to_Increment?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Default_Cash_Account_Type?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Denomination_Exchange_Rate?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Deposit_Received?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Deposits_Received?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Dest_Batch_1?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Dest_Batch_2?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Discount_Available_Amount?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Discount_Available_Freight?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Discount_Available_Misc?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Discount_Available_Taken?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Discount_Date?: Date;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Discount_Dollar_Amount?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Discount_Grace_Period?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Discount_Percent_Amount?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Discount_Returned?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Discount_Taken_Amount?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     Discounts_Available_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     Discounts_Taken_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Document_Format_ID?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Document_ID?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     Document_Number_Corrected?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Document_Status?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Due_Date?: Date;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Due_Date_Grace_Period?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     EC_Transaction?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Exceptional_Demand_from_Sales_Transaction?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Exchange_Date?: Date;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Exchange_Rate?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Exchange_Table_ID?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Extended_Cost?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     Fax_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     Fax_from_Customer_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     Finance_Charge_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Finance_Charge_Amt_Type?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Finance_Charge_Dollar?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Finance_Charge_ID?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Finance_Charge_Percent?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Finance_Charges_CYTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Finance_Charges_LYR_Calendar?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     First_Invoice_Date?: Date;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Freight_Amount?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Freight_Schedule_ID?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Freight_Tax_Amount?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Freight_Taxable?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Fulfillment_Date?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     GL_Posting_Date?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(31)
     Governmental_Corporate_ID?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(31)
     Governmental_Individual_ID?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     High_Balance_LTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     High_Balance_LYR?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     High_Balance_YTD?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Hold?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Inactive?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     Inventory_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Invoice_Date?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Keep_Calendar_History?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Keep_Distribution_History?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Keep_Period_History?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Keep_Trx_History?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Last_Aged?: Date;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Last_Finance_Charge_Amount?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Last_NSF_Check_Date?: Date;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Last_Payment_Amount?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Last_Payment_Date?: Date;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Last_Statement_Amount?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Last_Statement_Date?: Date;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Last_Transaction_Amount?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Last_Transaction_Date?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(11)
     Location_Code?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     MC_Transaction_State?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Markdown_Amount?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Master_Number?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Max_Writeoff_Amount?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Maximum_Writeoff_Type?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Minimum_Payment_Dollar?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Minimum_Payment_Percent?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Minimum_Payment_Type?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Misc_Amount?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Misc_Schedule_ID?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Misc_Tax_Amount?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Misc_Taxable?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Modified_Date?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Modified_Date_from_Customer_Master?: Date;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Non_Commissioned_Amount?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Non_Current_Scheduled_Payments?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Note_Index?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Note_Index_from_Customer_Master?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Number_ADTP_Documents___LYR?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Number_ADTP_Documents___Life?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Number_ADTP_Documents___Year?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Number_Of_NSF_Checks_Life?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Number_Of_NSF_Checks_YTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     On_Order_Amount?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Order_Date?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Order_Fulfillment_Shortage_Default?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     Original_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Original_Type?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Originating_Account_Amount?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Originating_Backout_Freight_Amount?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Originating_Backout_Misc_Amount?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Originating_Backout_Tax_Amount?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Originating_COD_Amount?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Originating_Commission_Amount?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Originating_Commission_Sales_Amount?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Originating_Deposit_Received?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Originating_Discount_Available_Amount?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Originating_Discount_Available_Freight?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Originating_Discount_Available_Misc?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Originating_Discount_Available_Taken?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Originating_Discount_Dollar_Amount?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Originating_Discount_Returned?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Originating_Discount_Taken_Amount?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Originating_Document_Amount?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Originating_Extended_Cost?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Originating_Freight_Amount?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Originating_Freight_Tax_Amount?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Originating_Markdown_Amount?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Originating_Misc_Amount?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Originating_Misc_Tax_Amount?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Originating_Non_Commissioned_Amount?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Originating_Payment_Received?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Originating_Remaining_Subtotal?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Originating_Subtotal?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Originating_Tax_Amount?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Originating_Taxable_Tax_Amount?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Originating_Trade_Discount_Amount?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     Packing_Slip_Number?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Payment_Received?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     Payment_Terms_ID?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     Payment_Terms_ID_from_Customer_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     Phone_1_from_Customer_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     Phone_2_from_Customer_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     Phone_3?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     Phone_3_from_Customer_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     Phone_Number_1?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     Phone_Number_2?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     Picking_Ticket_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Post_Results_To?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Posted_Date?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Posted_User_ID?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Posting_Status?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(11)
     PriceLevel?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(11)
     PriceLevel_from_Customer_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Primary_Billto_Address_Code?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Primary_Billto_Address_Code_from_Customer_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Primary_Shipto_Address_Code_from_Customer_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Priority_from_Customer_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Prospect?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Quote_Date?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Quote_Expiration_Date?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Rate_Calculation_Method?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Rate_Type_ID?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Rate_Type_ID_from_Customer_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(31)
     Reference?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Remaining_Subtotal?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Repeating?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Requested_Ship_Date?: Date;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Retainage?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Return_Date?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Revalue_Customer?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Sale_Date?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     Sales_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Sales_Territory?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Sales_Territory_from_Customer_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Salesperson_ID?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Salesperson_ID_from_Customer_Master?: string;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Sequence_Number_Corrected?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(65)
     ShipToName?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Ship_Complete_Document?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Ship_Complete_Document_from_Customer_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Shipping_Document?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Shipping_Method?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Shipping_Method_from_Customer_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Short_Name?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Simplified?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(29)
     State?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(29)
     State_from_Customer_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Statement_Address_Code?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Statement_Cycle?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(65)
     Statement_Name?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Subtotal?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     TRX_Frequency?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(13)
     TRX_Source?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Tax_Amount?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Tax_Date?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Tax_Engine_Called?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(25)
     Tax_Exempt_1?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(25)
     Tax_Exempt_1_from_Customer_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(25)
     Tax_Exempt_2?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(25)
     Tax_Exempt_2_from_Customer_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(25)
     Tax_Registration_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(25)
     Tax_Registration_Number_from_Customer_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Tax_Schedule_ID?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Tax_Schedule_ID_from_Customer_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Tax_Schedule_Source?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Taxable_Tax_Amount?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     Time?: Date;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Times_Printed?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Times_Repeated?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Times_To_Repeat?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Total___FC_LTD?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Total___FC_LYR?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Total___FC_YTD?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Total___Invoices_LTD?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Total___Invoices_LYR?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Total___Invoices_YTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Amount_Of_NSF_Checks_Life?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Amount_Of_NSF_Checks_YTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Bad_Deb_LYR?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Bad_Debt_LTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Bad_Debt_YTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Cash_Received_LTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Cash_Received_LYR?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Cash_Received_YTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Costs_LTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Costs_LYR?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Costs_YTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Discounts_Available_YTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Discounts_Taken_LTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Discounts_Taken_LYR?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Discounts_Taken_YTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Finance_Charges_LTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Finance_Charges_LYR?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Finance_Charges_YTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Returns_LTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Returns_LYR?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Returns_YTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Sales_LTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Sales_LYR?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Sales_YTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Waived_FC_LTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Waived_FC_LYR?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Waived_FC_YTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Writeoffs_LTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Writeoffs_LYR?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Total_Writeoffs_YTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Trade_Discount_Amount?: number;
-          
+        
     @Field(() => Int, {nullable: true}) 
     Trade_Discount_Percent?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(3)
     UPS_Zone?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(3)
     UPS_Zone_from_Customer_Master?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Unpaid_Finance_Charges_YTD?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Unposted_Cash_Amount?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Unposted_Other_Cash_Amount?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Unposted_Other_Sales_Amount?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Unposted_Sales_Amount?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Use_Document_ID_1?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     Use_Document_ID_2?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     User_Defined_1?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     User_Defined_1_from_Customer_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     User_Defined_2?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     User_Defined_2_from_Customer_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     User_Defined_3?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     User_Defined_4?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     User_Defined_5?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     User_Defined_Date_1?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(8)
     User_Defined_Date_2?: Date;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     User_Defined_Table_1?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     User_Defined_Table_2?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(21)
     User_Defined_Table_3?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(15)
     User_To_Enter?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Void_Status?: string;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Withholding_Amount?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Write_Offs_LIFE?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Write_Offs_LYR?: number;
-          
+        
     @Field(() => Float, {nullable: true}) 
     Write_Offs_YTD?: number;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(129)
     Writeoff_Account_Number?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(11)
     Zip_Code?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(11)
     Zip_from_Customer_Master?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Workflow_Approval_Status_Credit_Limit?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Workflow_Priority_Credit_Limit?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Workflow_Approval_Status_Quote?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Workflow_Priority_Quote?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Accounts_Receivable_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Cash_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Checkbook_ID_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     COGS_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Customer_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Discounts_Available_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Discounts_Taken_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Finance_Charge_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Inventory_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Sales_Account_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Salesperson_ID_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     SOP_Number_For_Drillback?: string;
-          
+        
     @Field({nullable: true}) 
     @MaxLength(2042)
     Writeoff_Account_Number_For_Drillback?: string;
-          
+        
     @Field(() => Int) 
     ID: number;
         
@@ -41581,9 +43063,9 @@ export class SalesTransaction__client_membership_ {
     SalesLineItems__client_membershipArray: SalesLineItem__client_membership_[]; // Link to SalesLineItems__client_membership
     
 }
-        
+
 //****************************************************************************
-// INPUT TYPE for Sales Transactions__client_membership   
+// INPUT TYPE for Sales Transactions__client_membership
 //****************************************************************************
 @InputType()
 export class CreateSalesTransaction__client_membershipInput {
@@ -42686,9 +44168,9 @@ export class CreateSalesTransaction__client_membershipInput {
     Writeoff_Account_Number_For_Drillback?: string;
 }
     
-        
+
 //****************************************************************************
-// INPUT TYPE for Sales Transactions__client_membership   
+// INPUT TYPE for Sales Transactions__client_membership
 //****************************************************************************
 @InputType()
 export class UpdateSalesTransaction__client_membershipInput {
@@ -43805,8 +45287,8 @@ export class RunSalesTransaction__client_membershipViewResult {
     @Field(() => [SalesTransaction__client_membership_])
     Results: SalesTransaction__client_membership_[];
 
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
 
     @Field(() => Int, {nullable: true})
     RowCount: number;
@@ -43848,7 +45330,7 @@ export class SalesTransaction__client_membershipResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Sales Transactions__client_membership', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-      
+    
     @FieldResolver(() => [SalesLineItem__client_membership_])
     async SalesLineItems__client_membershipArray(@Root() salestransaction__client_membership_: SalesTransaction__client_membership_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Sales Line Items__client_membership', userPayload);
@@ -43860,7 +45342,7 @@ export class SalesTransaction__client_membershipResolver extends ResolverBase {
     @Mutation(() => SalesTransaction__client_membership_)
     async CreateSalesTransaction__client_membership(
         @Arg('input', () => CreateSalesTransaction__client_membershipInput) input: CreateSalesTransaction__client_membershipInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
+        @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.CreateRecord('Sales Transactions__client_membership', input, dataSource, userPayload, pubSub)

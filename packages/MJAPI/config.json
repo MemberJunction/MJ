@@ -1,9 +1,9 @@
 {
   "userHandling": {
-    "autoCreateNewUsers": false,
+    "autoCreateNewUsers": true,
     "newUserLimitedToAuthorizedDomains": false,
     "newUserAuthorizedDomains": [],
-    "newUserRoles": [],
+    "newUserRoles": ["developer"],
     "updateCacheWhenNotFound": true,
     "updateCacheWhenNotFoundDelay": 5000,
     "contextUserForNewUserCreation": "fill.in.user.email.here@whatever.com"
@@ -13,10 +13,10 @@
     "requestTimeout": 30000,
     "metadataCacheRefreshInterval": 180000
   },
-  "viewingSystem" : {
+  "viewingSystem": {
     "enableSmartFilters": true
   },
-  "askSkip" : {
+  "askSkip": {
     "organizationInfo": ""
   }
 }

@@ -38,7 +38,7 @@ const downloadFromUrl = async (url: string, fileName: string, contentType?: stri
 };
 
 const FileDownloadQuery = gql`
-  query FileDownloadUrl($FileID: Int!) {
+  query FileDownloadUrl($FileID: String!) {
     File(ID: $FileID) {
       ContentType
       DownloadUrl
@@ -200,7 +200,7 @@ export class FilesGridComponent implements OnInit, OnChanges {
     const result = await rv.RunView({
       EntityName: 'Files',
       ResultType: 'entity_object',
-      ...(this.CategoryID !== undefined && { ExtraFilter: `CategoryID=${this.CategoryID}` }),
+      ...(this.CategoryID !== undefined && { ExtraFilter: `CategoryID='${this.CategoryID}'` }),
     });
     if (result.Success) {
       this.files = <FileEntity[]>result.Results ?? [];

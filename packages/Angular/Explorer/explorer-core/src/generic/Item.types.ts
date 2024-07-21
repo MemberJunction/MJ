@@ -48,12 +48,12 @@ export class TreeItem extends Item {
  * Report Categories, Query Categories, etc.
  */
 export class Folder {
-    public ID: number;
-    public ParentFolderID?: number | null;
+    public ID: string;
+    public ParentFolderID?: string | null;
     public Name: string;
     public Description: string | null;
 
-    constructor(id: number, folderName: string){
+    constructor(id: string, folderName: string){
         this.ID = id;
         this.Name = folderName;
         this.Description = "";
@@ -61,9 +61,9 @@ export class Folder {
 }
 
 export class TreeFolder extends Folder {
-    public EntityID: number;
+    public EntityID: string;
 
-    constructor(entityID: number, id: number, folderName: string){
+    constructor(entityID: string, id: string, folderName: string){
         super(id, folderName);
         this.EntityID = entityID;
     }

@@ -17,5 +17,6 @@ export * from './Angular/angular-codegen'
 export * from './Angular/related-entity-components';
 export * from './Angular/user-view-grid-related-entity-component';
 export * from './Angular/join-grid-related-entity-component';
+export * from './Angular/timeline-related-entity-component';    
 
 export * from './runCodeGen'

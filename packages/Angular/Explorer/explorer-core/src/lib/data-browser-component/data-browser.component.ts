@@ -2,21 +2,25 @@ import { Component } from '@angular/core';
 import { Router } from '@angular/router'
 import { ApplicationInfo, Metadata, RunView } from '@memberjunction/core';
 import { ApplicationEntity, UserApplicationEntity } from '@memberjunction/core-entities';
-import { SharedService } from '@memberjunction/ng-shared';
+import { RegisterClass } from '@memberjunction/global';
+import { BaseNavigationComponent, SharedService } from '@memberjunction/ng-shared';
 
 @Component({
   selector: 'app-data-browser',
   templateUrl: './data-browser.component.html',
   styleUrls: ['./data-browser.component.css', '../../shared/first-tab-styles.css']
 })
-export class DataBrowserComponent {
+@RegisterClass(BaseNavigationComponent, 'Data')
+export class DataBrowserComponent extends BaseNavigationComponent {
   public showLoader: boolean = true;
 
   public AllApplications: ApplicationEntity[] = [];
   public SelectedApplications: ApplicationEntity[] = [];
   public UnselectedApplications: ApplicationEntity[] = [];
 
-  constructor(public sharedService: SharedService, private router: Router) {}
+  constructor(public sharedService: SharedService, private router: Router) {
+    super();
+  }
 
   ngOnInit(): void {
     this.LoadData();
@@ -26,7 +30,8 @@ export class DataBrowserComponent {
     const rv = new RunView();
     const results = await rv.RunView<ApplicationEntity>({
       EntityName: 'Applications',
-      ResultType: 'entity_object'
+      ResultType: 'entity_object',
+      OrderBy: 'Name'
     })
     if (results && results.Success) {
       this.AllApplications = results.Results;
@@ -35,8 +40,8 @@ export class DataBrowserComponent {
     const userApps = await rv.RunView<UserApplicationEntity>({
       EntityName: 'User Applications',
       ResultType: 'entity_object',
-      ExtraFilter: `UserID = ${new Metadata().CurrentUser.ID}`,
-      OrderBy: 'Sequence'
+      ExtraFilter: `UserID = '${new Metadata().CurrentUser.ID}'`,
+      OrderBy: 'Sequence, Application'
     })
     if (userApps && userApps.Success) {
       const apps = userApps.Results.map(ua => this.AllApplications.find(a => a.ID === ua.ApplicationID && ua.IsActive)).filter(a => a)// filter out null entries
@@ -75,9 +80,9 @@ export class DataBrowserComponent {
       const rv = new RunView();
       const userApps = await rv.RunView<UserApplicationEntity>({
         EntityName: 'User Applications',
-        ExtraFilter: `UserID=${md.CurrentUser.ID}`,
+        ExtraFilter: `UserID='${md.CurrentUser.ID}'`,
         ResultType: 'entity_object',
-        OrderBy: 'Sequence',
+        OrderBy: 'Sequence, Application',
       });
       // userApps.results is the current DB state, we need to now compare it to the SelectedApplications array
       // and if there are changes either update sequence values or set IsActive=false for records that are not selected anyomre. We

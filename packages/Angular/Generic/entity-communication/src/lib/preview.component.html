@@ -1,0 +1,45 @@
+<div> 
+  <div *ngIf="step === 1" class="step-1">
+    <h2>Select a Template</h2>
+    <ul>
+      <li *ngFor="let template of templates" (click)="selectTemplate(template)">
+        {{ template.Name }}
+      </li>
+    </ul>
+  </div>
+
+  <div *ngIf="step === 2" class="step-2">
+    @if(!loading) {
+      @if (previewMessages.length === 0) {
+          <h2>No Messages Available</h2>
+          <button kendoButton (click)="goBack()">Back</button>
+      }
+      @else {
+        <h2>Preview {{ selectedTemplate?.Name }}</h2>
+        <button kendoButton (click)="goBack()">Back</button>
+        <div class="vcr-controls">
+          <button (click)="firstMessage()" aria-label="First" [disabled]="currentMessageIndex === 0">
+            <span class="fas fa-angle-double-left"></span>
+          </button>
+          <button (click)="previousMessage()" aria-label="Previous" [disabled]="currentMessageIndex === 0">
+            <span class="fas fa-angle-left"></span>
+          </button>
+          <span class="index-indicator">{{ currentMessageIndex + 1 }} of {{ previewMessages.length }}</span>
+          <button (click)="nextMessage()" aria-label="Next" [disabled]="currentMessageIndex >= previewMessages.length - 1">
+            <span class="fas fa-angle-right"></span>
+          </button>
+          <button (click)="lastMessage()" aria-label="Last" [disabled]="currentMessageIndex >= previewMessages.length - 1">
+            <span class="fas fa-angle-double-right"></span>
+          </button>
+        </div>
+        <div class="template-preview">
+          <div class="subject-line">{{currentPreviewItemSubject()}}</div>
+          <div class="preview-body" [innerHTML]="currentPreviewItemBody()"></div>
+        </div>  
+      }
+    }
+    @else {
+      <kendo-loader></kendo-loader> 
+    }
+  </div>
+</div>

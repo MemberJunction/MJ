@@ -19,18 +19,18 @@ import { FileCategoryEntity } from '@memberjunction/core-entities';
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="Description"
-            Type="textarea"
+            FieldName="ParentID"
+            Type="textbox"
             [EditMode]="EditMode"
+            LinkType="Record"
+            LinkComponentType="Dropdown"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="ParentID"
-            Type="numerictextbox"
+            FieldName="Description"
+            Type="textarea"
             [EditMode]="EditMode"
-            LinkType="Record"
-            LinkComponentType="Dropdown"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"

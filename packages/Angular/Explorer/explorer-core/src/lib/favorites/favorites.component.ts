@@ -1,7 +1,8 @@
 import { Component } from '@angular/core';
 import { Router } from '@angular/router';
-import { Metadata, RunView, EntityRecordNameInput, CompositeKey, EntityRecordNameResult } from '@memberjunction/core';
+import { Metadata, RunView, EntityRecordNameInput, CompositeKey, EntityRecordNameResult, LogError } from '@memberjunction/core';
 import { UserFavoriteEntity } from '@memberjunction/core-entities';
+import { SharedService } from '@memberjunction/ng-shared';
 
 @Component({
   selector: 'app-favorites',
@@ -17,14 +18,22 @@ export class FavoritesComponent {
   async ngOnInit() {
     const md = new Metadata();
     const rv = new RunView();
-    let sFilter = `UserID=${md.CurrentUser.ID}`
-    if (this.ExtraFilter)
+    let sFilter = `UserID='${md.CurrentUser.ID}'`;
+    if (this.ExtraFilter){
       sFilter += `AND (${this.ExtraFilter})`
+    }
 
     const viewResults = await rv.RunView({
       EntityName: 'User Favorites',
       ExtraFilter: sFilter
-    })
+    });
+
+    if(!viewResults.Success){
+      LogError(viewResults.ErrorMessage);
+      SharedService.Instance.CreateSimpleNotification("Unable to load User Favorites");
+      return;
+    }
+
     this.favorites = viewResults.Results // set the result in the list and let the below happen after async and it will update via data binding when done
 
     const input: EntityRecordNameInput[] = this.favorites.map(fav => {
@@ -43,6 +52,7 @@ export class FavoritesComponent {
       });
     }
   }
+
   favoriteItemClick(fav: UserFavoriteEntity) {
     if (fav) {
       if (fav.Entity === 'User Views') {
@@ -75,6 +85,7 @@ export class FavoritesComponent {
       }
     }
   }
+  
   favoriteItemDisplayName(fav: any) {
     if (fav) {
       if (fav.RecordName) {

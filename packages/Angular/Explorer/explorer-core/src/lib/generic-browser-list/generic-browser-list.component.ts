@@ -29,7 +29,7 @@ export class GenericBrowserListComponent implements OnInit{
   @Input() public CategoryEntityName: string = '';
   @Input() public selectedFolderID: number | null = null;
   @Input() public showNotifications: boolean = true;
-  @Input() public categoryEntityID: number | null = null;
+  @Input() public categoryEntityID: string | null = null;
   @Input() public displayAsGrid: boolean = false;
   @Input() public resourceName: string = "Resource";
   /**
@@ -359,12 +359,12 @@ export class GenericBrowserListComponent implements OnInit{
     return false;
   }
 
-  private async doesFolderHaveChildren(folderID: number): Promise<boolean>{
+  private async doesFolderHaveChildren(folderID: string): Promise<boolean>{
     const md: Metadata = new Metadata();
     const rv: RunView = new RunView();
     const folderResult = await rv.RunView({
       EntityName:this.CategoryEntityName,
-      ExtraFilter: "ParentID = " + folderID
+      ExtraFilter: `ParentID ='${folderID}'`
     });
 
     return folderResult && folderResult.Success && folderResult.Results.length > 0;

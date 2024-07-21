@@ -4,13 +4,10 @@
   "description": "",
   "main": "index.js",
   "private": true,
+  "type": "module",
   "scripts": {
-    "clean": "rimraf dist",
-    "build": "rimraf dist && tsc",
-    "start": "ts-node-dev -r dotenv/config src/index.ts",
-    "start2": "tsx -r dotenv/config src/index.ts",
+    "start": "node --experimental-specifier-resolution=node --import ./register.js -r dotenv/config ./src/index.ts",
     "test": "echo \"Error: no test specified\" && exit 1",
-    "codegen": "cpy --flat ../codegen/output/entities/*.ts src/generated",
     "check-types": "tsc -noEmit",
     "zip": "zip -qr deploy.zip ./node_modules ./dist ./package.json ./config.json"
   },
@@ -18,10 +15,9 @@
   "author": "",
   "license": "ISC",
   "devDependencies": {
-    "cpy-cli": "^5.0.0",
-    "rimraf": "5.0.7",
+    "dotenv": "16.4.5",
+    "nodemon": "^3.1.4",
     "ts-node": "^10.9.2",
-    "ts-node-dev": "^2.0.0",
     "typescript": "^5.4.5"
   },
   "dependencies": {

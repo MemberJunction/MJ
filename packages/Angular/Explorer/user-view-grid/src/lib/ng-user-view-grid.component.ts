@@ -22,10 +22,11 @@ import { BaseFormComponentEvent, BaseFormComponentEventCodes, FormEditingComplet
 import { EntityCommunicationsEngineClient } from '@memberjunction/entity-communications-client';
 import { CommunicationEngineBase, Message } from '@memberjunction/communication-types';
 import { TemplateEngineBase } from '@memberjunction/templates-base-types';
+import { EntityCommunicationParams } from '@memberjunction/entity-communications-base';
 
 
 export type GridRowClickedEvent = {
-  entityId: number;
+  entityId: string;
   entityName: string;
   CompositeKey: CompositeKey;
 }
@@ -149,11 +150,11 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
     return this._pendingRecords;
   }
 
-  public get ViewID(): number {
+  public get ViewID(): string {
     if (this.Params && this.Params.ViewID)
       return this.Params.ViewID;
     else
-      return 0;
+      return "";
   }
 
   /**
@@ -375,8 +376,6 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
     for (const col of args) {
       const c = col.column as ColumnComponent;
       const viewCol = this.viewColumns.find(vc => vc.Name === c.field);
-      const visCol = this.visibleColumns.find(vc => vc.Name === c.field);
-      const visCols = this.visibleColumns;
       if (viewCol) 
         viewCol.width = col.newWidth;
     }
@@ -474,9 +473,9 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
   public createFormGroup(dataItem: any): FormGroup {
     const groupFields: any = {};
     this.viewColumns.forEach((vc: ViewColumnInfo) => {
-      if (vc.EntityField.AllowUpdateAPI && 
-          vc.EntityField.IsVirtual === false &&
-          vc.EntityField.AllowUpdateInView)
+      if (vc.EntityField?.AllowUpdateAPI && 
+          vc.EntityField?.IsVirtual === false &&
+          vc.EntityField?.AllowUpdateInView)
         groupFields[vc.Name] = dataItem[vc.Name];
     });
 
@@ -689,7 +688,7 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
       }
       else if (!params.ViewEntity && (params.ViewID || params.ViewName)) {
         // this is NOT a dyamic view as we got either the ViewID or ViewName, so we can get the ViewEntity
-        if (params.ViewID && params.ViewID > 0) {
+        if (params.ViewID && params.ViewID.length > 0) {
           this._viewEntity = <UserViewEntityExtended>await ViewInfo.GetViewEntity(params.ViewID); 
         }
         else if (params.ViewName) {
@@ -740,7 +739,7 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
                                                                                                 });
         if (cols) {
           this.viewColumns = cols
-          const tempCols = cols.filter(x => x.hidden === false).sort((a,b) => {
+          const tempCols = cols.filter(x => x.hidden === false && x.EntityField/*make sure there is an entity field linked*/).sort((a,b) => {
             const aOrder = a.orderIndex != null ? a.orderIndex : 9999;
             const bOrder = b.orderIndex != null ? b.orderIndex : 9999;
             return aOrder - bOrder;
@@ -783,14 +782,14 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
   GetColumnTitle(col: ViewColumnInfo) {
     if (col.DisplayName)
       return col.DisplayName; // use view's display name first if it exists
-    else if (col.EntityField.DisplayName )
+    else if (col.EntityField?.DisplayName )
       return col.EntityField.DisplayName; // then use entity display name, if that exist
     else
       return col.Name; // otherwise just use the column name
   }
 
   GetColumnCellStyle(col: ViewColumnInfo) {
-    switch (col.EntityField.Type.trim().toLowerCase()) {
+    switch (col.EntityField?.Type.trim().toLowerCase()) {
       case "money":
       case 'decimal':
       case 'real':
@@ -1035,6 +1034,7 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
   }
 
 
+  public showTemplatePreviewDialog: boolean = false;
   /**
    * Handles communication functionality for a given view, only available if the entity being displayed supports communication.
    */
@@ -1042,31 +1042,41 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
     if (!this.Params)
       return;
 
-    const msg: Message = new Message();
-    msg.From = "amith@bluecypress.io"
-    msg.Body = "This is a test message";
-    msg.Subject = "Test Subject";
+    this.showTemplatePreviewDialog = true;
 
-    const sendGrid = CommunicationEngineBase.Instance.Providers.find(p => p.Name === "SendGrid")
-    if (!sendGrid)
-      throw new Error("SendGrid provider not found");
+    // const msg: Message = new Message();
+    // msg.From = "amith@bluecypress.io"
+    // msg.Body = "This is a test message";
+    // msg.Subject = "Test Subject";
 
-    const email = sendGrid.MessageTypes.find(mt => mt.Name === "Email");
-    if (!email) 
-      throw new Error("Email message type not found");
-    msg.MessageType = email;
+    // const sendGrid = CommunicationEngineBase.Instance.Providers.find(p => p.Name === "SendGrid")
+    // if (!sendGrid)
+    //   throw new Error("SendGrid provider not found");
+
+    // const email = sendGrid.MessageTypes.find(mt => mt.Name === "Email");
+    // if (!email) 
+    //   throw new Error("Email message type not found");
+    // msg.MessageType = email;
 
 
-    msg.BodyTemplate = TemplateEngineBase.Instance.FindTemplate('Test Template')
-    msg.HTMLBodyTemplate = msg.BodyTemplate;
-    msg.SubjectTemplate = TemplateEngineBase.Instance.FindTemplate('Test Subject Template')
+    // msg.HTMLBodyTemplate =  TemplateEngineBase.Instance.FindTemplate('User/Roles Demo')
+    // msg.SubjectTemplate = TemplateEngineBase.Instance.FindTemplate('Test Subject Template')
     
-    const result = await EntityCommunicationsEngineClient.Instance.RunEntityCommunication(this._entityInfo!.ID, this.Params, "SendGrid", "Email", msg);
-    if (result && result.Success) {
-      this.CreateSimpleNotification("Communication Sent", 'success', 2000)
-    }
-    else
-      this.CreateSimpleNotification("Error sending communication", 'error', 5000)
+    // const commParams: EntityCommunicationParams = {
+    //   EntityID: this._entityInfo!.ID, 
+    //   RunViewParams: this.Params, 
+    //   ProviderName: "SendGrid", 
+    //   ProviderMessageTypeName: "Email", 
+    //   Message: msg,
+    //   PreviewOnly: true,
+    //   IncludeProcessedMessages: true
+    // }
+    // const result = await EntityCommunicationsEngineClient.Instance.RunEntityCommunication(commParams);
+    // if (result && result.Success) {
+    //   this.CreateSimpleNotification("Communication Sent", 'success', 2000)
+    // }
+    // else
+    //   this.CreateSimpleNotification("Error sending communication", 'error', 5000)
   }
 
 
@@ -1153,7 +1163,7 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
 
     const rvResult: RunViewResult = await rv.RunView({
       EntityName: 'Lists',
-      ExtraFilter: `UserID = ${md.CurrentUser.ID} AND EntityID = ${this._entityInfo.ID}`,
+      ExtraFilter: `UserID = '${md.CurrentUser.ID}' AND EntityID = '${this._entityInfo.ID}'`,
       ResultType: 'entity_object'
     });
 

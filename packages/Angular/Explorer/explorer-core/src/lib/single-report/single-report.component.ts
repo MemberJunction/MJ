@@ -9,7 +9,7 @@ import { SkipColumnInfo, SkipAPIAnalysisCompleteResponse } from '@memberjunction
   styleUrls: ['./single-report.component.css']
 })
 export class SingleReportComponent implements OnInit {
-  @Input() reportId!: number;  
+  @Input() reportId!: string;  
   @Output() public loadComplete: EventEmitter<any> = new EventEmitter<any>();
   @Output() public loadStarted: EventEmitter<any> = new EventEmitter<any>();
 

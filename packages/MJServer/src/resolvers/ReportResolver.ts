@@ -9,7 +9,7 @@ import { UserCache } from '@memberjunction/sqlserver-dataprovider';
 @ObjectType()
 export class RunReportResultType {
   @Field()
-  ReportID: number;
+  ReportID: string;
 
   @Field()
   Success: boolean;
@@ -30,7 +30,7 @@ export class RunReportResultType {
 @ObjectType()
 export class CreateReportResultType {
   @Field()
-  ReportID: number;
+  ReportID: string;
 
   @Field()
   ReportName: string;
@@ -45,7 +45,7 @@ export class CreateReportResultType {
 @Resolver(RunReportResultType)
 export class ReportResolverExtended {
   @Query(() => RunReportResultType)
-  async GetReportData(@Arg('ReportID', () => Int) ReportID: number, @Ctx() {}: AppContext): Promise<RunReportResultType> {
+  async GetReportData(@Arg('ReportID', () => String) ReportID: string, @Ctx() {}: AppContext): Promise<RunReportResultType> {
     const runReport = new RunReport();
     const result = await runReport.RunReport({ ReportID: ReportID });
     return {
@@ -62,7 +62,7 @@ export class ReportResolverExtended {
    * This mutation will create a new report from a conversation detail ID
    */
   @Mutation(() => CreateReportResultType)
-  async CreateReportFromConversationDetailID(@Arg('ConversationDetailID', () => Int) ConversationDetailID: number, 
+  async CreateReportFromConversationDetailID(@Arg('ConversationDetailID', () => String) ConversationDetailID: string, 
                                              @Ctx() {dataSource, userPayload}: AppContext): Promise<CreateReportResultType> {
     try {
       const md = new Metadata();
@@ -128,7 +128,7 @@ export class ReportResolverExtended {
       }
       else {
         return {
-          ReportID: -1,
+          ReportID: "",
           ReportName: '',
           Success: false,
           ErrorMessage: 'Unable to save new report'
@@ -137,7 +137,7 @@ export class ReportResolverExtended {
     }
     catch (ex) {
       return {
-        ReportID: -1,
+        ReportID: "",
         ReportName: '',
         Success: false,
         ErrorMessage: 'Unable to create new report: ' + ex.message

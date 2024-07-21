@@ -4,7 +4,7 @@ export abstract class BaseInfo {
     /**
      * Primary Key
      */
-    ID: number = null
+    ID: any = null
 
     protected copyInitData(initData: any) {
         if (initData) {
@@ -28,4 +28,9 @@ export abstract class BaseInfo {
         }
     }
 
+    constructor(initData: any = null) {
+        if (initData) {
+            this.copyInitData(initData);
+        }
+    }
 }

@@ -9,6 +9,7 @@ import { QueryCategoryInfo, QueryFieldInfo, QueryInfo, QueryPermissionInfo } fro
 import { LogError, LogStatus } from "./logging";
 import { LibraryInfo } from "./libraryInfo";
 import { CompositeKey } from "./compositeKey";
+import { ExplorerNavigationItem } from "./explorerNavigationItem";
 
 /**
  * Class used to access a wide array of MemberJunction metadata, to instantiate derived classes of BaseEntity for record access and manipulation and more. This class uses a provider model where different providers transparently plug-in to implement the functionality needed based on where the code is running. The provider in use is generally not of any importance to users of the class and code can be written indepdenent of tier/provider.
@@ -66,7 +67,7 @@ export class Metadata {
      * @param entityID 
      * @returns 
      */
-    public EntityByID(entityID: number): EntityInfo {
+    public EntityByID(entityID: string): EntityInfo {
         return this.Entities.find(e => e.ID === entityID);
     }
 
@@ -110,11 +111,25 @@ export class Metadata {
     }
 
     /**
+     * Returns all of the ExplorerNavigationItems that are visible to the user, sorted by Sequence. Filtered by the IsActive bit.
+     */
+    public get VisibleExplorerNavigationItems(): ExplorerNavigationItem[] {
+        return Metadata.Provider.VisibleExplorerNavigationItems;
+    }
+
+    /**
+     * Returns all of the ExplorerNavigationItems, including those that are not visible. This is useful for admin tools and other places where you need to see all of the navigation items, not just the ones that are visible to the user.
+     */
+    public get AllExplorerNavigationItems(): ExplorerNavigationItem[] {
+        return Metadata.Provider.AllExplorerNavigationItems;
+    }
+
+    /**
      * Helper function to return an Entity Name from a given Entity ID.
      * @param entityName 
      * @returns 
      */
-    public EntityIDFromName(entityName: string): number {
+    public EntityIDFromName(entityName: string): string {
         let entity = this.Entities.find(e => e.Name == entityName);
         if (entity != null)
             return entity.ID;
@@ -127,7 +142,7 @@ export class Metadata {
      * @param entityID 
      * @returns 
      */
-    public EntityNameFromID(entityID: number): string {
+    public EntityNameFromID(entityID: string): string {
         let entity = this.Entities.find(e => e.ID == entityID);
         if(entity){
             return entity.Name;
@@ -142,7 +157,7 @@ export class Metadata {
      * Helper function to return an EntityInfo from an Entity ID
      * @param entityID
      */
-    public EntityFromEntityID(entityID: number): EntityInfo | null {
+    public EntityFromEntityID(entityID: string): EntityInfo | null {
         let entity = this.Entities.find(e => e.ID == entityID);
         if(entity){
             return entity;
@@ -160,7 +175,7 @@ export class Metadata {
      * @param primaryKey 
      * @returns 
      */
-    public async GetRecordFavoriteStatus(userId: number, entityName: string, primaryKey: CompositeKey): Promise<boolean> {
+    public async GetRecordFavoriteStatus(userId: string, entityName: string, primaryKey: CompositeKey): Promise<boolean> {
         return await Metadata.Provider.GetRecordFavoriteStatus(userId, entityName, primaryKey);
     }
 
@@ -172,7 +187,7 @@ export class Metadata {
      * @param isFavorite 
      * @param contextUser 
      */
-    public async SetRecordFavoriteStatus(userId: number, entityName: string, primaryKey: CompositeKey, isFavorite: boolean, contextUser: UserInfo = null) {
+    public async SetRecordFavoriteStatus(userId: string, entityName: string, primaryKey: CompositeKey, isFavorite: boolean, contextUser: UserInfo = null) {
         await Metadata.Provider.SetRecordFavoriteStatus(userId, entityName, primaryKey, isFavorite, contextUser);
     }
 
@@ -222,7 +237,11 @@ export class Metadata {
      * @returns 
      */
     public async MergeRecords(request: RecordMergeRequest, contextUser?: UserInfo): Promise<RecordMergeResult> {
-        return await Metadata.Provider.MergeRecords(request, contextUser);
+        const e = this.EntityByName(request.EntityName);
+        if (e.AllowRecordMerge)
+            return await Metadata.Provider.MergeRecords(request, contextUser);
+        else
+            throw new Error(`Entity ${request.EntityName} does not allow record merging, check the AllowRecordMerge property in the entity metadata`);
     }
 
     /**

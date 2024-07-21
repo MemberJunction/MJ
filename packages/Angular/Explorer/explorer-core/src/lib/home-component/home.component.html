@@ -6,7 +6,7 @@
     </div>
     <div class="main-area"> 
         <div class="nav-container">
-            <div class="nav-item" (click)="navigate('askskip')">
+            <!-- <div class="nav-item" (click)="navigate('askskip')">
                 <span class="fa-solid fa-user fa-4x sky-blue"></span>
                 <span>Ask Skip</span>
             </div>
@@ -33,7 +33,13 @@
             <div class="nav-item" (click)="navigate('settings')">
                 <span class="fa-solid fa-gear fa-4x sky-blue"></span>
                 <span>Settings</span>
-            </div>
+            </div> -->
+            @for (item of HomeItems; track item) {
+                <div class="nav-item" (click)="navigate(item.Route)">
+                    <span [ngClass]="'fa-solid fa-4x sky-blue ' + item.IconCSSClass"></span>
+                    <span>{{item.Name}}</span>
+                </div>
+            }
         </div>
 
         <app-favorites class="home-favorites"></app-favorites>
