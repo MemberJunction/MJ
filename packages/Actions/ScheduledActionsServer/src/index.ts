@@ -5,12 +5,10 @@ import { UserCache } from "@memberjunction/sqlserver-dataprovider";
 import { currentUserEmail, serverPort } from "./config";
 import { handleServerInit } from './util';
 import { ScheduledActionEngine } from '@memberjunction/scheduled-actions';
-import { LoadGeneratedEntities } from 'mj_generatedentities';
 import {LoadMistralEmbedding} from '@memberjunction/ai-mistral';
 import {LoadOpenAIEmbedding} from '@memberjunction/ai-openai';
 import {LoadPineconeVectorDB} from '@memberjunction/ai-vectors-pinecone';
 
-LoadGeneratedEntities();
 LoadMistralEmbedding();
 LoadOpenAIEmbedding();
 LoadPineconeVectorDB();
