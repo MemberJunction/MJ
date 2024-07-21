@@ -474,7 +474,28 @@ export abstract class ProviderBase implements IMetadataProvider {
                 if (status) {
                     const serverTimestamp = status.LatestUpdateDate.getTime();
                     const localTimestamp = new Date(val);
-                    return localTimestamp.getTime() >= serverTimestamp;
+                    if (localTimestamp.getTime() >= serverTimestamp) {
+                        // this situation means our local cache timestamp is >= the server timestamp, so we're most likely up to date
+                        // in this situation, the last thing we check is for each entity, if the rowcount is the same as the server, if it is, we're good
+                        // iterate through all of the entities and check the row counts
+                        const localDataset = await this.GetCachedDataset(datasetName, itemFilters);
+                        for (const eu of status.EntityUpdateDates) {
+                            const localEntity = localDataset.Results.find(e => e.EntityID === eu.EntityID);
+                            if (localEntity && localEntity.Results.length === eu.RowCount) {
+                                return true;
+                            }
+                            else {
+                                // we either couldn't find the entity in the local cache or the row count is different, so we're out of date
+                                // the RowCount being different picks up on DELETED rows. The UpdatedAt check which is handled above would pick up 
+                                // on any new rows or updated rows. This approach makes sure we detect deleted rows and refresh the cache.
+                                return false;
+                            }
+                        }
+                    }
+                    else {
+                        // our local cache timestamp is < the server timestamp, so we're out of date
+                        return false;                
+                    }
                 }
                 else {
                     return false;
@@ -589,7 +610,8 @@ export abstract class ProviderBase implements IMetadataProvider {
                 return {
                     ID: e.EntityID,
                     Type: e.EntityName,
-                    UpdatedAt: e.UpdateDate
+                    UpdatedAt: e.UpdateDate,
+                    RowCount: e.RowCount
                 }
             });
 
@@ -597,7 +619,8 @@ export abstract class ProviderBase implements IMetadataProvider {
             ret.push({
                 ID: "",
                 Type: 'All Entity Metadata',
-                UpdatedAt: d.LatestUpdateDate
+                UpdatedAt: d.LatestUpdateDate,
+                RowCount: d.EntityUpdateDates.reduce((a, b) => a + b.RowCount, 0)
             })
             return ret;
         }
@@ -643,6 +666,13 @@ export abstract class ProviderBase implements IMetadataProvider {
                         if (localTime.getTime() !== remoteTime.getTime()) {
                             return true; // we can short circuit the entire rest of the function 
                                          // as one obsolete is good enough to obsolete the entire local metadata
+                        }
+                        else {
+                            // here we have a match for the local and remote timestamps, so we need to check the row counts
+                            // if the row counts are different, we're obsolete
+                            if (l.RowCount !== mdRemote[i].RowCount) {
+                                return true;
+                            }
                         }
                     }
                     else 

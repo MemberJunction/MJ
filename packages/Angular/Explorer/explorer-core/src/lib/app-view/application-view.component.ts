@@ -67,7 +67,16 @@ export class ApplicationViewComponent extends BaseBrowserComponent implements On
 
                 this.userApp = userAppResult.Results[0];
 
-                const matches =  this.app.ApplicationEntities.map(ae => md.Entities.find(e => e.ID === ae.EntityID)).filter(e => e); // filter out null entries
+                const matches =  this.app.ApplicationEntities
+                                     .map(ae => md.Entities.find(e => e.ID === ae.EntityID))
+                                     .filter(e => e) // filter out null entries  
+                                     .sort((a, b) => {
+                                        if (!a || !b) {
+                                            return 0;
+                                        }
+                                        return a.Name.localeCompare(b.Name);
+                                     }); // sort by name
+
                 // store the entire list of POSSIBLE app entities in this list
                 this.AllAppEntities = <EntityEntity[]><unknown[]>matches; // we filter out null above so this cast is safe;
             
@@ -75,12 +84,10 @@ export class ApplicationViewComponent extends BaseBrowserComponent implements On
                   EntityName: 'User Application Entities',
                   ResultType: 'entity_object',
                   ExtraFilter: `UserApplicationID = '${this.userApp!.ID}'`,
-                  OrderBy: 'Sequence'
+                  OrderBy: 'Sequence, Entity'
                 })
                 if (userAppEntities && userAppEntities.Success) {
-                    this.SelectedAppEntities = this.AllAppEntities.filter(e => userAppEntities.Results.some(uae => uae.EntityID === e.ID));
-                    this.SelectedAppEntities = this.sortAppEntites(this.SelectedAppEntities);
-                    
+                    this.SelectedAppEntities = <EntityEntity[]>userAppEntities.Results.map(uae => this.AllAppEntities.find(ae => uae.EntityID === ae.ID)).filter(val => val); // now we have our selected app entities and they're sorted properly
                     this.UnselectedAppEntities = this.AllAppEntities.filter(e => !this.SelectedAppEntities.some(sa => sa.ID === e.ID));
 
                     // special case - if we have NO user app entities and the application has entities that are marked as DefaultForNewUser=1 we will add them now
@@ -152,9 +159,10 @@ export class ApplicationViewComponent extends BaseBrowserComponent implements On
             const e = this.SelectedAppEntities[index];
             const existing = existingUserAppEntities.find(uae => uae.EntityID === e.ID);
             if (existing) {
-              existing.Sequence = index;
-              existing.EntityID = e.ID;
-              userAppEntitiesToSave.push(existing);
+                if (existing.Sequence !== index) {
+                    existing.Sequence = index;
+                    userAppEntitiesToSave.push(existing);      
+                }
             } 
             else {
               // this is a new app entity that the user has selected
@@ -345,18 +353,6 @@ export class ApplicationViewComponent extends BaseBrowserComponent implements On
         event.preventDefault();
         // tell the router to go to /home
         this.router.navigate(['home']);
-    }
-
-    sortAppEntites(entities: EntityEntity[]): EntityEntity[] {
-        entities.sort(function(a, b){
-            const aName: string = a.Name.toLowerCase();
-            const bName: string = b.Name.toLowerCase();
-            if(aName < bName) { return -1; }
-            if(aName > bName) { return 1; }
-            return 0;
-        });
-
-        return entities;
     }
 } 
  

@@ -30,7 +30,8 @@ export class DataBrowserComponent extends BaseNavigationComponent {
     const rv = new RunView();
     const results = await rv.RunView<ApplicationEntity>({
       EntityName: 'Applications',
-      ResultType: 'entity_object'
+      ResultType: 'entity_object',
+      OrderBy: 'Name'
     })
     if (results && results.Success) {
       this.AllApplications = results.Results;
@@ -40,7 +41,7 @@ export class DataBrowserComponent extends BaseNavigationComponent {
       EntityName: 'User Applications',
       ResultType: 'entity_object',
       ExtraFilter: `UserID = '${new Metadata().CurrentUser.ID}'`,
-      OrderBy: 'Sequence'
+      OrderBy: 'Sequence, Application'
     })
     if (userApps && userApps.Success) {
       const apps = userApps.Results.map(ua => this.AllApplications.find(a => a.ID === ua.ApplicationID && ua.IsActive)).filter(a => a)// filter out null entries
@@ -81,7 +82,7 @@ export class DataBrowserComponent extends BaseNavigationComponent {
         EntityName: 'User Applications',
         ExtraFilter: `UserID='${md.CurrentUser.ID}'`,
         ResultType: 'entity_object',
-        OrderBy: 'Sequence',
+        OrderBy: 'Sequence, Application',
       });
       // userApps.results is the current DB state, we need to now compare it to the SelectedApplications array
       // and if there are changes either update sequence values or set IsActive=false for records that are not selected anyomre. We

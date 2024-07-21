@@ -628,11 +628,12 @@ AS
 SELECT 
     e.*,
     Entity_EntityID.[Name] AS [Entity],
-	Role_RoleName.[SQLName] as [RoleSQLName], -- custom bit here to add in this field for vwEntityPermissions
-	rlsC.Name as [CreateRLSFilter],
-	rlsR.Name as [ReadRLSFilter],
-	rlsU.Name as [UpdateRLSFilter],
-	rlsD.Name as [DeleteRLSFilter]
+    Role_RoleName.Name as RoleName,
+    Role_RoleName.[SQLName] as [RoleSQLName], -- custom bit here to add in this field for vwEntityPermissions
+    rlsC.Name as [CreateRLSFilter],
+    rlsR.Name as [ReadRLSFilter],
+    rlsU.Name as [UpdateRLSFilter],
+    rlsD.Name as [DeleteRLSFilter]
 FROM
     [__mj].[EntityPermission] AS e
 INNER JOIN

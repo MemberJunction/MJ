@@ -2,7 +2,7 @@
 * ALL ENTITIES - TypeGraphQL Type Class Definition - AUTO GENERATED FILE
 * Generated Entities and Resolvers for Server
 *
-* GENERATED: 7/20/2024, 9:35:42 AM
+* GENERATED: 7/21/2024, 10:58:05 AM
 *
 *   >>> DO NOT MODIFY THIS FILE!!!!!!!!!!!!
 *   >>> YOUR CHANGES WILL BE OVERWRITTEN
@@ -6485,6 +6485,10 @@ export class EntityPermission_ {
     @Field() 
     @MaxLength(510)
     Entity: string;
+        
+    @Field() 
+    @MaxLength(100)
+    RoleName: string;
         
     @Field({nullable: true}) 
     @MaxLength(500)
