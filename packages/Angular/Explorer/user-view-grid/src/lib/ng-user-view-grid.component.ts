@@ -376,8 +376,6 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
     for (const col of args) {
       const c = col.column as ColumnComponent;
       const viewCol = this.viewColumns.find(vc => vc.Name === c.field);
-      const visCol = this.visibleColumns.find(vc => vc.Name === c.field);
-      const visCols = this.visibleColumns;
       if (viewCol) 
         viewCol.width = col.newWidth;
     }
@@ -475,9 +473,9 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
   public createFormGroup(dataItem: any): FormGroup {
     const groupFields: any = {};
     this.viewColumns.forEach((vc: ViewColumnInfo) => {
-      if (vc.EntityField.AllowUpdateAPI && 
-          vc.EntityField.IsVirtual === false &&
-          vc.EntityField.AllowUpdateInView)
+      if (vc.EntityField?.AllowUpdateAPI && 
+          vc.EntityField?.IsVirtual === false &&
+          vc.EntityField?.AllowUpdateInView)
         groupFields[vc.Name] = dataItem[vc.Name];
     });
 
@@ -741,7 +739,7 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
                                                                                                 });
         if (cols) {
           this.viewColumns = cols
-          const tempCols = cols.filter(x => x.hidden === false).sort((a,b) => {
+          const tempCols = cols.filter(x => x.hidden === false && x.EntityField/*make sure there is an entity field linked*/).sort((a,b) => {
             const aOrder = a.orderIndex != null ? a.orderIndex : 9999;
             const bOrder = b.orderIndex != null ? b.orderIndex : 9999;
             return aOrder - bOrder;
@@ -784,14 +782,14 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
   GetColumnTitle(col: ViewColumnInfo) {
     if (col.DisplayName)
       return col.DisplayName; // use view's display name first if it exists
-    else if (col.EntityField.DisplayName )
+    else if (col.EntityField?.DisplayName )
       return col.EntityField.DisplayName; // then use entity display name, if that exist
     else
       return col.Name; // otherwise just use the column name
   }
 
   GetColumnCellStyle(col: ViewColumnInfo) {
-    switch (col.EntityField.Type.trim().toLowerCase()) {
+    switch (col.EntityField?.Type.trim().toLowerCase()) {
       case "money":
       case 'decimal':
       case 'real':

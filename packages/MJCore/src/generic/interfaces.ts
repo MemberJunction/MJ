@@ -42,6 +42,7 @@ export class MetadataInfo {
     ID: string
     Type: string
     UpdatedAt: Date
+    RowCount: number
 }
 
 export const ProviderType = {
@@ -479,4 +480,5 @@ export type DatasetStatusEntityUpdateDateType = {
     EntityName: string;
     EntityID: string;
     UpdateDate: Date;
+    RowCount: number;
 }   

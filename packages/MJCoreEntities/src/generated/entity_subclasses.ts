@@ -10654,6 +10654,15 @@ export class EntityPermissionEntity extends BaseEntity {
     }
 
     /**
+    * * Field Name: RoleName
+    * * Display Name: Role Name
+    * * SQL Data Type: nvarchar(50)
+    */
+    get RoleName(): string {  
+        return this.Get('RoleName');
+    }
+
+    /**
     * * Field Name: RoleSQLName
     * * Display Name: Role SQLName
     * * SQL Data Type: nvarchar(250)

@@ -115,6 +115,13 @@ import { EntityPermissionEntity } from '@memberjunction/core-entities';
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
+            FieldName="RoleName"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
             FieldName="RoleSQLName"
             Type="textbox"
             [EditMode]="EditMode"

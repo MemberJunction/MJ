@@ -436,46 +436,64 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
 
     protected getRunTimeViewFieldArray(params: RunViewParams, viewEntity: UserViewEntityExtended): EntityFieldInfo[] {
         const fieldList: EntityFieldInfo[] = []
+        try {
 
-        let entityInfo: EntityInfo = null;
-        if (viewEntity) {
-            entityInfo = viewEntity.ViewEntityInfo;
-        }
-        else {
-            entityInfo = this.Entities.find((e) => e.Name === params.EntityName);
-        }
-
-        if (params.Fields) {
-            // fields provided, if primary key isn't included, add it first
-            for (const ef of entityInfo.PrimaryKeys) {
-                if (params.Fields.find(f => f.trim().toLowerCase() === ef.Name.toLowerCase()) === undefined)
-                    fieldList.push(ef); // always include the primary key fields in view run time field list
-            }
-            
-            // now add the rest of the param.Fields to fields
-            params.Fields.forEach((f) => {
-                const field = entityInfo.Fields.find((field) => field.Name.trim().toLowerCase() === f.trim().toLowerCase());
-                fieldList.push(field);
-            });
-        }
-        else {
-            // fields weren't provided by the caller. So, let's do the following
-            // * if this is a defined view, using a View Name or View ID, we use the fields that are used wtihin the View and always return the ID
-            // * if this is an dynamic view, we return ALL fields in the entity using *
+            let entityInfo: EntityInfo = null;
             if (viewEntity) {
-                // saved view, figure out it's field list
-                viewEntity.Columns.forEach((c) => {
-                    if (!c.hidden) // only return the non-hidden fields
-                        fieldList.push(c.EntityField);
-                });
-                // the below shouldn't happen as the pkey fields should always be included by now, but make SURE...
+                entityInfo = viewEntity.ViewEntityInfo;
+            }
+            else {
+                entityInfo = this.Entities.find((e) => e.Name === params.EntityName);
+                if (!entityInfo)
+                    throw new Error(`Entity ${params.EntityName} not found in metadata`);
+            }
+    
+            if (params.Fields) {
+                // fields provided, if primary key isn't included, add it first
                 for (const ef of entityInfo.PrimaryKeys) {
-                    if (fieldList.find(f => f.Name?.trim().toLowerCase() === ef.Name?.toLowerCase()) === undefined)
+                    if (params.Fields.find(f => f.trim().toLowerCase() === ef.Name.toLowerCase()) === undefined)
                         fieldList.push(ef); // always include the primary key fields in view run time field list
-                }    
+                }
+                
+                // now add the rest of the param.Fields to fields
+                params.Fields.forEach((f) => {
+                    const field = entityInfo.Fields.find((field) => field.Name.trim().toLowerCase() === f.trim().toLowerCase());
+                    if (field)
+                        fieldList.push(field);
+                    else
+                        LogError(`Field ${f} not found in entity ${entityInfo.Name}`);
+                });
+            }
+            else {
+                // fields weren't provided by the caller. So, let's do the following
+                // * if this is a defined view, using a View Name or View ID, we use the fields that are used wtihin the View and always return the ID
+                // * if this is an dynamic view, we return ALL fields in the entity using *
+                if (viewEntity) {
+                    // saved view, figure out it's field list
+                    viewEntity.Columns.forEach((c) => {
+                        if (!c.hidden) { // only return the non-hidden fields
+                            if (c.EntityField) {
+                                fieldList.push(c.EntityField);
+                            }
+                            else {
+                                LogError(`View Field ${c.Name} doesn't match an Entity Field in entity ${entityInfo.Name}. This can happen if the view was saved with a field that no longer exists in the entity. It is best to update the view to remove this field.`);
+                            }
+                        }
+                    });
+                    // the below shouldn't happen as the pkey fields should always be included by now, but make SURE...
+                    for (const ef of entityInfo.PrimaryKeys) {
+                        if (fieldList.find(f => f.Name?.trim().toLowerCase() === ef.Name?.toLowerCase()) === undefined)
+                            fieldList.push(ef); // always include the primary key fields in view run time field list
+                    }    
+                }
             }
         }
-        return fieldList; // sometimes nothing is in the list and the caller will just use *
+        catch (e) {
+            LogError(e);
+        }
+        finally {
+            return fieldList;
+        }
     }
 
     protected async executeSQLForUserViewRunLogging(viewId: number, entityBaseView: string, whereSQL: string, orderBySQL: string, user: UserInfo): Promise<{ executeViewSQL: string, runID: string }> {
@@ -1903,7 +1921,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
                     if (filter) 
                         filterSQL = ' WHERE ' + filter.Filter;
                 }
-                const itemSQL = `SELECT MAX(${item.DateFieldToCheck}) AS UpdateDate, '${item.EntityID}' AS EntityID, '${item.Entity}' AS EntityName FROM [${item.EntitySchemaName}].[${item.EntityBaseView}]${filterSQL}`;
+                const itemSQL = `SELECT MAX(${item.DateFieldToCheck}) AS UpdateDate, COUNT(*) AS TheRowCount, '${item.EntityID}' AS EntityID, '${item.Entity}' AS EntityName FROM [${item.EntitySchemaName}].[${item.EntityBaseView}]${filterSQL}`;
                 combinedSQL += itemSQL;
                 if (index < items.length - 1) {
                     combinedSQL += ' UNION ALL ';
@@ -1919,6 +1937,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
                     updateDates.push({
                         EntityID: itemUpdate.EntityID, 
                         EntityName: itemUpdate.EntityName, 
+                        RowCount: itemUpdate.TheRowCount,
                         UpdateDate: updateDate
                     });
     

@@ -542,11 +542,23 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
     const existingTab = this.findExistingTab(data);
 
     if (existingTab) {
+      // merge the data that we are provided with in terms of its raw query params with the existing tab
+      // override existing values in the data.Configuration.___rawQueryParams from keys in the data.Configuration.___rawQueryParams
+      existingTab.data.Configuration.___rawQueryParams = { ...existingTab.data.Configuration.___rawQueryParams, ...data.Configuration.___rawQueryParams };
+
       const index = this.tabs.indexOf(existingTab);
+
+      // next, before we set the active tab, we need to merge the query params that we have for this tab with the query params that we have for the tab that we're about to select
+      // when the app first loads there won't be any query params for the tabs, but as we navigate around and the tabs get selected, we'll cache the query params for each tab
+      const tqp = this.tabQueryParams['tab_' + (index + 1)];
+      if (tqp)
+        this.tabQueryParams['tab_' + (index + 1)] = {...tqp, ...existingTab.data.Configuration.___rawQueryParams};  
+      else
+        this.tabQueryParams['tab_' + (index + 1)] = existingTab.data.Configuration.___rawQueryParams;
+
       // add one because the HOME tab is not in the tabs array but it IS part of our tab structure
       this.activeTabIndex = index + 1;
 
-      //this.tabstrip.selectTab(this.activeTabIndex);
 
       this.scrollIntoView();
       if (existingTab.label)
@@ -662,15 +674,18 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
     // Create a URLSearchParams object from the existing query params
     const queryParams = new URLSearchParams(existingQuery);
 
-    // Your cached query params, assuming it's an object like { key1: 'value1', key2: 'value2' }
     const tabIndex = this.tabs.indexOf(tab) + 1; // we add 1 Because the HOME tab is not in the array so we have to offset by 1 here for our data structure
-    let cachedQueryParams = this.tabQueryParams['tab_' + tabIndex]; // Replace with your actual method to get cached params
+    let cachedQueryParams = this.tabQueryParams['tab_' + tabIndex];  
     if (!cachedQueryParams) {
       // there is a case when we are first loading and cached query params might have been stuffed into a 'tab_-1' key because at the time activeTabIndex wasn't yet known. So we need to check for that
       cachedQueryParams = this.tabQueryParams['tab_-1'];
       if (cachedQueryParams) {
         delete this.tabQueryParams['tab_-1']; // remove it from the -1 key
-        this.tabQueryParams['tab_' + tabIndex] = cachedQueryParams; // stuff it into the correct key
+        const tqp = this.tabQueryParams['tab_' + tabIndex];
+        if (tqp)
+          this.tabQueryParams['tab_' + tabIndex] = {...tqp, ...cachedQueryParams}; // merge it with the existing key if it exists
+        else
+          this.tabQueryParams['tab_' + tabIndex] = {...cachedQueryParams}; // stuff it into the correct key
       }
     }
     if (cachedQueryParams) {
