@@ -158,85 +158,42 @@ CREATE TYPE [__mj].[IDListTableType] AS TABLE
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [__mj].[EntityActionFilter]'
+PRINT N'Creating [__mj].[ActionResultCode]'
 GO
-CREATE TABLE [__mj].[EntityActionFilter]
+CREATE TABLE [__mj].[ActionResultCode]
 (
-[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__EntityAct__NewID__6CA61603] DEFAULT (newsequentialid()),
-[EntityActionID] [uniqueidentifier] NOT NULL,
-[ActionFilterID] [uniqueidentifier] NOT NULL,
-[Sequence] [int] NOT NULL,
-[Status] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF__EntityAct__Statu__25EAB371] DEFAULT ('Pending'),
-[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF___mj_EntityActionFilter___mj_CreatedAt] DEFAULT (getutcdate()),
-[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF___mj_EntityActionFilter___mj_UpdatedAt] DEFAULT (getutcdate())
+[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__ActionRes__NewID__46207A68] DEFAULT (newsequentialid()),
+[ActionID] [uniqueidentifier] NOT NULL,
+[ResultCode] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+[IsSuccess] [bit] NOT NULL CONSTRAINT [DF_ActionResultCode_IsSuccess] DEFAULT ((0)),
+[Description] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__ActionRes____mj___60A4C411] DEFAULT (getutcdate()),
+[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__ActionRes____mj___6198E84A] DEFAULT (getutcdate())
 )
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating primary key [PK_EntityActionFilter_ID] on [__mj].[EntityActionFilter]'
+PRINT N'Creating primary key [PK_ActionResultCode_ID] on [__mj].[ActionResultCode]'
 GO
-ALTER TABLE [__mj].[EntityActionFilter] ADD CONSTRAINT [PK_EntityActionFilter_ID] PRIMARY KEY CLUSTERED ([ID])
+ALTER TABLE [__mj].[ActionResultCode] ADD CONSTRAINT [PK_ActionResultCode_ID] PRIMARY KEY CLUSTERED ([ID])
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating trigger [__mj].[trgUpdateEntityActionFilter] on [__mj].[EntityActionFilter]'
+PRINT N'Creating trigger [__mj].[trgUpdateActionResultCode] on [__mj].[ActionResultCode]'
 GO
 
-CREATE TRIGGER [__mj].[trgUpdateEntityActionFilter]
-ON [__mj].[EntityActionFilter]
+CREATE TRIGGER [__mj].[trgUpdateActionResultCode]
+ON [__mj].[ActionResultCode]
 AFTER UPDATE
 AS
 BEGIN
     SET NOCOUNT ON;
     UPDATE 
-        [__mj].[EntityActionFilter]
+        [__mj].[ActionResultCode]
     SET 
         __mj_UpdatedAt = GETUTCDATE()
     FROM 
-        [__mj].[EntityActionFilter] AS _organicTable
-    INNER JOIN 
-        INSERTED AS I ON 
-        _organicTable.[ID] = I.[ID];
-END;
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[EntityDocumentRun]'
-GO
-CREATE TABLE [__mj].[EntityDocumentRun]
-(
-[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__EntityDoc__NewID__53A55E0F] DEFAULT (newsequentialid()),
-[EntityDocumentID] [uniqueidentifier] NOT NULL,
-[StartedAt] [datetime] NULL,
-[EndedAt] [datetime] NULL,
-[Status] [nvarchar] (15) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_EntityDocumentRun_Status] DEFAULT (N'Pending'),
-[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF___mj_EntityDocumentRun___mj_CreatedAt] DEFAULT (getutcdate()),
-[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF___mj_EntityDocumentRun___mj_UpdatedAt] DEFAULT (getutcdate())
-)
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating primary key [PK_EntityDocumentRun_ID] on [__mj].[EntityDocumentRun]'
-GO
-ALTER TABLE [__mj].[EntityDocumentRun] ADD CONSTRAINT [PK_EntityDocumentRun_ID] PRIMARY KEY CLUSTERED ([ID])
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating trigger [__mj].[trgUpdateEntityDocumentRun] on [__mj].[EntityDocumentRun]'
-GO
-
-CREATE TRIGGER [__mj].[trgUpdateEntityDocumentRun]
-ON [__mj].[EntityDocumentRun]
-AFTER UPDATE
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[EntityDocumentRun]
-    SET 
-        __mj_UpdatedAt = GETUTCDATE()
-    FROM 
-        [__mj].[EntityDocumentRun] AS _organicTable
+        [__mj].[ActionResultCode] AS _organicTable
     INNER JOIN 
         INSERTED AS I ON 
         _organicTable.[ID] = I.[ID];
@@ -287,2390 +244,128 @@ END;
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [__mj].[EntityDocumentType]'
+PRINT N'Creating [__mj].[EntityField]'
 GO
-CREATE TABLE [__mj].[EntityDocumentType]
+CREATE TABLE [__mj].[EntityField]
 (
-[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__EntityDocum__ID___4C842A8B] DEFAULT (newsequentialid()),
-[Name] [nvarchar] (100) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-[Description] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF___mj_EntityDocumentType___mj_CreatedAt] DEFAULT (getutcdate()),
-[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF___mj_EntityDocumentType___mj_UpdatedAt] DEFAULT (getutcdate())
-)
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating primary key [PK_EntityDocumentType_ID] on [__mj].[EntityDocumentType]'
-GO
-ALTER TABLE [__mj].[EntityDocumentType] ADD CONSTRAINT [PK_EntityDocumentType_ID] PRIMARY KEY CLUSTERED ([ID])
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating trigger [__mj].[trgUpdateEntityDocumentType] on [__mj].[EntityDocumentType]'
-GO
-
-CREATE TRIGGER [__mj].[trgUpdateEntityDocumentType]
-ON [__mj].[EntityDocumentType]
-AFTER UPDATE
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[EntityDocumentType]
-    SET 
-        __mj_UpdatedAt = GETUTCDATE()
-    FROM 
-        [__mj].[EntityDocumentType] AS _organicTable
-    INNER JOIN 
-        INSERTED AS I ON 
-        _organicTable.[ID] = I.[ID];
-END;
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[ScheduledActionParam]'
-GO
-CREATE TABLE [__mj].[ScheduledActionParam]
-(
-[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__ScheduledAct__ID__7885D5B6] DEFAULT (newsequentialid()),
-[ScheduledActionID] [uniqueidentifier] NOT NULL,
-[ActionParamID] [uniqueidentifier] NOT NULL,
-[ValueType] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-[Value] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[Comments] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__Scheduled____mj___3CFAFB94] DEFAULT (getutcdate()),
-[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__Scheduled____mj___3DEF1FCD] DEFAULT (getutcdate())
-)
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating primary key [PK__Schedule__3214EC27EB11011E] on [__mj].[ScheduledActionParam]'
-GO
-ALTER TABLE [__mj].[ScheduledActionParam] ADD CONSTRAINT [PK__Schedule__3214EC27EB11011E] PRIMARY KEY CLUSTERED ([ID])
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating trigger [__mj].[trgUpdateScheduledActionParam] on [__mj].[ScheduledActionParam]'
-GO
-
-CREATE TRIGGER [__mj].[trgUpdateScheduledActionParam]
-ON [__mj].[ScheduledActionParam]
-AFTER UPDATE
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[ScheduledActionParam]
-    SET 
-        __mj_UpdatedAt = GETUTCDATE()
-    FROM 
-        [__mj].[ScheduledActionParam] AS _organicTable
-    INNER JOIN 
-        INSERTED AS I ON 
-        _organicTable.[ID] = I.[ID];
-END;
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[ExplorerNavigationItem]'
-GO
-CREATE TABLE [__mj].[ExplorerNavigationItem]
-(
-[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__ExplorerNavi__ID__02D946F7] DEFAULT (newsequentialid()),
-[Sequence] [int] NOT NULL,
-[Name] [nvarchar] (100) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-[Route] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-[IsActive] [bit] NOT NULL CONSTRAINT [DF__ExplorerN__IsAct__750028EC] DEFAULT ((1)),
-[ShowInHomeScreen] [bit] NOT NULL CONSTRAINT [DF_ExplorerNavigationItem_ShowOnHomeScreen] DEFAULT ((0)),
-[ShowInNavigationDrawer] [bit] NOT NULL CONSTRAINT [DF_ExplorerNavigationItem_ShowOnNavigationDrawer] DEFAULT ((0)),
-[IconCSSClass] [nvarchar] (100) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[Description] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[Comments] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__ExplorerN____mj___7F92C5F8] DEFAULT (getutcdate()),
-[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__ExplorerN____mj___0086EA31] DEFAULT (getutcdate())
-)
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating primary key [PK__Explorer__3214EC271BB186EE] on [__mj].[ExplorerNavigationItem]'
-GO
-ALTER TABLE [__mj].[ExplorerNavigationItem] ADD CONSTRAINT [PK__Explorer__3214EC271BB186EE] PRIMARY KEY CLUSTERED ([ID])
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Adding constraints to [__mj].[ExplorerNavigationItem]'
-GO
-ALTER TABLE [__mj].[ExplorerNavigationItem] ADD CONSTRAINT [UQ_ExplorerNavigationItem_Name] UNIQUE NONCLUSTERED ([Name])
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Adding constraints to [__mj].[ExplorerNavigationItem]'
-GO
-ALTER TABLE [__mj].[ExplorerNavigationItem] ADD CONSTRAINT [UQ_ExplorerNavigationItem_Route] UNIQUE NONCLUSTERED ([Route])
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating trigger [__mj].[trgUpdateExplorerNavigationItem] on [__mj].[ExplorerNavigationItem]'
-GO
-
-CREATE TRIGGER [__mj].[trgUpdateExplorerNavigationItem]
-ON [__mj].[ExplorerNavigationItem]
-AFTER UPDATE
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[ExplorerNavigationItem]
-    SET 
-        __mj_UpdatedAt = GETUTCDATE()
-    FROM 
-        [__mj].[ExplorerNavigationItem] AS _organicTable
-    INNER JOIN 
-        INSERTED AS I ON 
-        _organicTable.[ID] = I.[ID];
-END;
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[Application]'
-GO
-CREATE TABLE [__mj].[Application]
-(
-[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__Application__ID___3694E96C] DEFAULT (newsequentialid()),
-[Name] [nvarchar] (100) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-[Description] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[Icon] [nvarchar] (500) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[DefaultForNewUser] [bit] NOT NULL CONSTRAINT [DF_Application_DefaultForNewUser] DEFAULT ((1)),
-[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF___mj_Application___mj_CreatedAt] DEFAULT (getutcdate()),
-[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF___mj_Application___mj_UpdatedAt] DEFAULT (getutcdate())
-)
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating primary key [PK_Application_ID] on [__mj].[Application]'
-GO
-ALTER TABLE [__mj].[Application] ADD CONSTRAINT [PK_Application_ID] PRIMARY KEY CLUSTERED ([ID])
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Adding constraints to [__mj].[Application]'
-GO
-ALTER TABLE [__mj].[Application] ADD CONSTRAINT [UQ_Application_Name] UNIQUE NONCLUSTERED ([Name])
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating trigger [__mj].[trgUpdateApplication] on [__mj].[Application]'
-GO
-
-CREATE TRIGGER [__mj].[trgUpdateApplication]
-ON [__mj].[Application]
-AFTER UPDATE
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[Application]
-    SET 
-        __mj_UpdatedAt = GETUTCDATE()
-    FROM 
-        [__mj].[Application] AS _organicTable
-    INNER JOIN 
-        INSERTED AS I ON 
-        _organicTable.[ID] = I.[ID];
-END;
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[ListCategory]'
-GO
-CREATE TABLE [__mj].[ListCategory]
-(
-[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__ListCateg__NewID__2A393428] DEFAULT (newsequentialid()),
-[Name] [nvarchar] (100) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-[Description] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[ParentID] [uniqueidentifier] NULL,
-[UserID] [uniqueidentifier] NOT NULL,
-[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__ListCateg____mj___6A2E2E4B] DEFAULT (getutcdate()),
-[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__ListCateg____mj___6B225284] DEFAULT (getutcdate())
-)
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating primary key [PK_ListCategory_ID] on [__mj].[ListCategory]'
-GO
-ALTER TABLE [__mj].[ListCategory] ADD CONSTRAINT [PK_ListCategory_ID] PRIMARY KEY CLUSTERED ([ID])
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating trigger [__mj].[trgUpdateListCategory] on [__mj].[ListCategory]'
-GO
-
-CREATE TRIGGER [__mj].[trgUpdateListCategory]
-ON [__mj].[ListCategory]
-AFTER UPDATE
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[ListCategory]
-    SET 
-        __mj_UpdatedAt = GETUTCDATE()
-    FROM 
-        [__mj].[ListCategory] AS _organicTable
-    INNER JOIN 
-        INSERTED AS I ON 
-        _organicTable.[ID] = I.[ID];
-END;
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[ActionExecutionLog]'
-GO
-CREATE TABLE [__mj].[ActionExecutionLog]
-(
-[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__ActionExe__NewID__39BAA383] DEFAULT (newsequentialid()),
-[ActionID] [uniqueidentifier] NOT NULL,
-[StartedAt] [datetime] NOT NULL CONSTRAINT [DF__ActionExe__Start__38FD87E5] DEFAULT (getdate()),
-[EndedAt] [datetime] NULL,
-[Params] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[ResultCode] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[UserID] [uniqueidentifier] NOT NULL,
-[RetentionPeriod] [int] NULL,
-[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__ActionExe____mj___647554F5] DEFAULT (getutcdate()),
-[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__ActionExe____mj___6569792E] DEFAULT (getutcdate())
-)
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating primary key [PK_ActionExecutionLog_ID] on [__mj].[ActionExecutionLog]'
-GO
-ALTER TABLE [__mj].[ActionExecutionLog] ADD CONSTRAINT [PK_ActionExecutionLog_ID] PRIMARY KEY CLUSTERED ([ID])
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating trigger [__mj].[trgUpdateActionExecutionLog] on [__mj].[ActionExecutionLog]'
-GO
-
-CREATE TRIGGER [__mj].[trgUpdateActionExecutionLog]
-ON [__mj].[ActionExecutionLog]
-AFTER UPDATE
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[ActionExecutionLog]
-    SET 
-        __mj_UpdatedAt = GETUTCDATE()
-    FROM 
-        [__mj].[ActionExecutionLog] AS _organicTable
-    INNER JOIN 
-        INSERTED AS I ON 
-        _organicTable.[ID] = I.[ID];
-END;
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[AIModelAction]'
-GO
-CREATE TABLE [__mj].[AIModelAction]
-(
-[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__AIModelAc__NewID__4FA9E4A2] DEFAULT (newsequentialid()),
-[AIModelID] [uniqueidentifier] NOT NULL,
-[AIActionID] [uniqueidentifier] NOT NULL,
-[IsActive] [bit] NOT NULL CONSTRAINT [DF_AIModelAction_IsActive] DEFAULT ((1)),
-[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__AIModelAc____mj___127129CF] DEFAULT (getutcdate()),
-[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__AIModelAc____mj___13654E08] DEFAULT (getutcdate())
-)
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating primary key [PK_AIModelAction_ID] on [__mj].[AIModelAction]'
-GO
-ALTER TABLE [__mj].[AIModelAction] ADD CONSTRAINT [PK_AIModelAction_ID] PRIMARY KEY CLUSTERED ([ID])
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating trigger [__mj].[trgUpdateAIModelAction] on [__mj].[AIModelAction]'
-GO
-
-CREATE TRIGGER [__mj].[trgUpdateAIModelAction]
-ON [__mj].[AIModelAction]
-AFTER UPDATE
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[AIModelAction]
-    SET 
-        __mj_UpdatedAt = GETUTCDATE()
-    FROM 
-        [__mj].[AIModelAction] AS _organicTable
-    INNER JOIN 
-        INSERTED AS I ON 
-        _organicTable.[ID] = I.[ID];
-END;
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[Library]'
-GO
-CREATE TABLE [__mj].[Library]
-(
-[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__Library__ID___523D03E1] DEFAULT (newsequentialid()),
-[Name] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-[Description] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[Status] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF__Library__Status__740A0A71] DEFAULT ('Pending'),
-[TypeDefinitions] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[SampleCode] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF___mj_Library___mj_CreatedAt] DEFAULT (getutcdate()),
-[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF___mj_Library___mj_UpdatedAt] DEFAULT (getutcdate())
-)
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating primary key [PK_Library_ID] on [__mj].[Library]'
-GO
-ALTER TABLE [__mj].[Library] ADD CONSTRAINT [PK_Library_ID] PRIMARY KEY CLUSTERED ([ID])
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Adding constraints to [__mj].[Library]'
-GO
-ALTER TABLE [__mj].[Library] ADD CONSTRAINT [UQ_Library_Name] UNIQUE NONCLUSTERED ([Name])
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating trigger [__mj].[trgUpdateLibrary] on [__mj].[Library]'
-GO
-
-CREATE TRIGGER [__mj].[trgUpdateLibrary]
-ON [__mj].[Library]
-AFTER UPDATE
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[Library]
-    SET 
-        __mj_UpdatedAt = GETUTCDATE()
-    FROM 
-        [__mj].[Library] AS _organicTable
-    INNER JOIN 
-        INSERTED AS I ON 
-        _organicTable.[ID] = I.[ID];
-END;
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[AIModel]'
-GO
-CREATE TABLE [__mj].[AIModel]
-(
-[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__AIModel__ID___34ACA0FA] DEFAULT (newsequentialid()),
-[Name] [nvarchar] (50) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-[Description] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[Vendor] [nvarchar] (50) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[AIModelTypeID] [uniqueidentifier] NOT NULL,
-[PowerRank] [int] NULL,
-[IsActive] [bit] NOT NULL CONSTRAINT [DF_AIModel_IsActive] DEFAULT ((1)),
-[DriverClass] [nvarchar] (100) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[DriverImportPath] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[APIName] [nvarchar] (100) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__AIModel____mj_Cr__0EA098EB] DEFAULT (getutcdate()),
-[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__AIModel____mj_Up__0F94BD24] DEFAULT (getutcdate())
-)
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating primary key [PK_AIModel_ID] on [__mj].[AIModel]'
-GO
-ALTER TABLE [__mj].[AIModel] ADD CONSTRAINT [PK_AIModel_ID] PRIMARY KEY CLUSTERED ([ID])
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating trigger [__mj].[trgUpdateAIModel] on [__mj].[AIModel]'
-GO
-
-CREATE TRIGGER [__mj].[trgUpdateAIModel]
-ON [__mj].[AIModel]
-AFTER UPDATE
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[AIModel]
-    SET 
-        __mj_UpdatedAt = GETUTCDATE()
-    FROM 
-        [__mj].[AIModel] AS _organicTable
-    INNER JOIN 
-        INSERTED AS I ON 
-        _organicTable.[ID] = I.[ID];
-END;
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[ListDetail]'
-GO
-CREATE TABLE [__mj].[ListDetail]
-(
-[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__ListDetai__NewID__3A6F9BF1] DEFAULT (newsequentialid()),
-[ListID] [uniqueidentifier] NOT NULL,
-[RecordID] [nvarchar] (445) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-[Sequence] [int] NOT NULL CONSTRAINT [DF_ListDetail_Sequence] DEFAULT ((0)),
-[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__ListDetai____mj___7F5E555B] DEFAULT (getutcdate()),
-[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__ListDetai____mj___00527994] DEFAULT (getutcdate())
-)
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating primary key [PK_ListDetail_ID] on [__mj].[ListDetail]'
-GO
-ALTER TABLE [__mj].[ListDetail] ADD CONSTRAINT [PK_ListDetail_ID] PRIMARY KEY CLUSTERED ([ID])
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating index [IX_ListDetail_ListID] on [__mj].[ListDetail]'
-GO
-CREATE NONCLUSTERED INDEX [IX_ListDetail_ListID] ON [__mj].[ListDetail] ([ListID])
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating index [IX_ListDetail_RecordID] on [__mj].[ListDetail]'
-GO
-CREATE NONCLUSTERED INDEX [IX_ListDetail_RecordID] ON [__mj].[ListDetail] ([RecordID])
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating trigger [__mj].[trgUpdateListDetail] on [__mj].[ListDetail]'
-GO
-
-CREATE TRIGGER [__mj].[trgUpdateListDetail]
-ON [__mj].[ListDetail]
-AFTER UPDATE
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[ListDetail]
-    SET 
-        __mj_UpdatedAt = GETUTCDATE()
-    FROM 
-        [__mj].[ListDetail] AS _organicTable
-    INNER JOIN 
-        INSERTED AS I ON 
-        _organicTable.[ID] = I.[ID];
-END;
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[ActionContextType]'
-GO
-CREATE TABLE [__mj].[ActionContextType]
-(
-[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__ActionConte__ID___30DC1016] DEFAULT (newsequentialid()),
-[Name] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-[Description] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__ActionCon____mj___5EBC7B9F] DEFAULT (getutcdate()),
-[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__ActionCon____mj___5FB09FD8] DEFAULT (getutcdate())
-)
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating primary key [PK_ActionContextType] on [__mj].[ActionContextType]'
-GO
-ALTER TABLE [__mj].[ActionContextType] ADD CONSTRAINT [PK_ActionContextType] PRIMARY KEY CLUSTERED ([ID])
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating trigger [__mj].[trgUpdateActionContextType] on [__mj].[ActionContextType]'
-GO
-
-CREATE TRIGGER [__mj].[trgUpdateActionContextType]
-ON [__mj].[ActionContextType]
-AFTER UPDATE
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[ActionContextType]
-    SET 
-        __mj_UpdatedAt = GETUTCDATE()
-    FROM 
-        [__mj].[ActionContextType] AS _organicTable
-    INNER JOIN 
-        INSERTED AS I ON 
-        _organicTable.[ID] = I.[ID];
-END;
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[Workflow]'
-GO
-CREATE TABLE [__mj].[Workflow]
-(
-[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__Workflow__ID___6ED9428F] DEFAULT (newsequentialid()),
-[Name] [nvarchar] (100) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-[Description] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[WorkflowEngineID] [uniqueidentifier] NOT NULL,
-[ExternalSystemRecordID] [nvarchar] (100) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-[AutoRunEnabled] [bit] NOT NULL CONSTRAINT [DF_Workflow_AutoRunEnabled] DEFAULT ((0)),
-[AutoRunIntervalUnits] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[AutoRunInterval] [int] NULL,
-[SubclassName] [nvarchar] (200) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__Workflow____mj_C__06FF7723] DEFAULT (getutcdate()),
-[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__Workflow____mj_U__07F39B5C] DEFAULT (getutcdate())
-)
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating primary key [PK_Workflow_ID] on [__mj].[Workflow]'
-GO
-ALTER TABLE [__mj].[Workflow] ADD CONSTRAINT [PK_Workflow_ID] PRIMARY KEY CLUSTERED ([ID])
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Adding constraints to [__mj].[Workflow]'
-GO
-ALTER TABLE [__mj].[Workflow] ADD CONSTRAINT [UQ_Workflow_Name] UNIQUE NONCLUSTERED ([Name])
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating trigger [__mj].[trgUpdateWorkflow] on [__mj].[Workflow]'
-GO
-
-CREATE TRIGGER [__mj].[trgUpdateWorkflow]
-ON [__mj].[Workflow]
-AFTER UPDATE
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[Workflow]
-    SET 
-        __mj_UpdatedAt = GETUTCDATE()
-    FROM 
-        [__mj].[Workflow] AS _organicTable
-    INNER JOIN 
-        INSERTED AS I ON 
-        _organicTable.[ID] = I.[ID];
-END;
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[ActionContext]'
-GO
-CREATE TABLE [__mj].[ActionContext]
-(
-[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__ActionCon__NewID__22D73E2B] DEFAULT (newsequentialid()),
-[ActionID] [uniqueidentifier] NOT NULL,
-[ContextTypeID] [uniqueidentifier] NULL,
-[Status] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF__ActionCon__Statu__12D7DEFD] DEFAULT ('Pending'),
-[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__ActionCon____mj___628D0C83] DEFAULT (getutcdate()),
-[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__ActionCon____mj___638130BC] DEFAULT (getutcdate())
-)
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating primary key [PK_ActionContext_ID] on [__mj].[ActionContext]'
-GO
-ALTER TABLE [__mj].[ActionContext] ADD CONSTRAINT [PK_ActionContext_ID] PRIMARY KEY CLUSTERED ([ID])
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating trigger [__mj].[trgUpdateActionContext] on [__mj].[ActionContext]'
-GO
-
-CREATE TRIGGER [__mj].[trgUpdateActionContext]
-ON [__mj].[ActionContext]
-AFTER UPDATE
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[ActionContext]
-    SET 
-        __mj_UpdatedAt = GETUTCDATE()
-    FROM 
-        [__mj].[ActionContext] AS _organicTable
-    INNER JOIN 
-        INSERTED AS I ON 
-        _organicTable.[ID] = I.[ID];
-END;
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[Query]'
-GO
-CREATE TABLE [__mj].[Query]
-(
-[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__Query__ID___5701B8FE] DEFAULT (newsequentialid()),
-[Name] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-[CategoryID] [uniqueidentifier] NULL,
-[UserQuestion] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[Description] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[SQL] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[TechnicalDescription] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[OriginalSQL] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[Feedback] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[Status] [nvarchar] (15) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_Quey_Status] DEFAULT (N'Pending'),
-[QualityRank] [int] NULL CONSTRAINT [DF_Quey_QualityRank] DEFAULT ((0)),
-[ExecutionCostRank] [int] NULL,
-[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF___mj_Query___mj_CreatedAt] DEFAULT (getutcdate()),
-[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF___mj_Query___mj_UpdatedAt] DEFAULT (getutcdate())
-)
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating primary key [PK_Query_ID] on [__mj].[Query]'
-GO
-ALTER TABLE [__mj].[Query] ADD CONSTRAINT [PK_Query_ID] PRIMARY KEY CLUSTERED ([ID])
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating trigger [__mj].[trgUpdateQuery] on [__mj].[Query]'
-GO
-
-CREATE TRIGGER [__mj].[trgUpdateQuery]
-ON [__mj].[Query]
-AFTER UPDATE
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[Query]
-    SET 
-        __mj_UpdatedAt = GETUTCDATE()
-    FROM 
-        [__mj].[Query] AS _organicTable
-    INNER JOIN 
-        INSERTED AS I ON 
-        _organicTable.[ID] = I.[ID];
-END;
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[WorkflowEngine]'
-GO
-CREATE TABLE [__mj].[WorkflowEngine]
-(
-[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__WorkflowEng__ID___6FCD66C8] DEFAULT (newsequentialid()),
-[Name] [nvarchar] (100) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-[Description] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[DriverPath] [nvarchar] (500) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-[DriverClass] [nvarchar] (100) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__WorkflowE____mj___08E7BF95] DEFAULT (getutcdate()),
-[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__WorkflowE____mj___09DBE3CE] DEFAULT (getutcdate())
-)
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating primary key [PK_WorkflowEngine] on [__mj].[WorkflowEngine]'
-GO
-ALTER TABLE [__mj].[WorkflowEngine] ADD CONSTRAINT [PK_WorkflowEngine] PRIMARY KEY CLUSTERED ([ID])
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Adding constraints to [__mj].[WorkflowEngine]'
-GO
-ALTER TABLE [__mj].[WorkflowEngine] ADD CONSTRAINT [IX_WorkflowEngine] UNIQUE NONCLUSTERED ([Name])
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating trigger [__mj].[trgUpdateWorkflowEngine] on [__mj].[WorkflowEngine]'
-GO
-
-CREATE TRIGGER [__mj].[trgUpdateWorkflowEngine]
-ON [__mj].[WorkflowEngine]
-AFTER UPDATE
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[WorkflowEngine]
-    SET 
-        __mj_UpdatedAt = GETUTCDATE()
-    FROM 
-        [__mj].[WorkflowEngine] AS _organicTable
-    INNER JOIN 
-        INSERTED AS I ON 
-        _organicTable.[ID] = I.[ID];
-END;
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[AIModelType]'
-GO
-CREATE TABLE [__mj].[AIModelType]
-(
-[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__AIModelType__ID___35A0C533] DEFAULT (newsequentialid()),
-[Name] [nvarchar] (50) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-[Description] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__AIModelTy____mj___14597241] DEFAULT (getutcdate()),
-[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__AIModelTy____mj___154D967A] DEFAULT (getutcdate())
-)
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating primary key [PK_AIModelType_ID] on [__mj].[AIModelType]'
-GO
-ALTER TABLE [__mj].[AIModelType] ADD CONSTRAINT [PK_AIModelType_ID] PRIMARY KEY CLUSTERED ([ID])
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating trigger [__mj].[trgUpdateAIModelType] on [__mj].[AIModelType]'
-GO
-
-CREATE TRIGGER [__mj].[trgUpdateAIModelType]
-ON [__mj].[AIModelType]
-AFTER UPDATE
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[AIModelType]
-    SET 
-        __mj_UpdatedAt = GETUTCDATE()
-    FROM 
-        [__mj].[AIModelType] AS _organicTable
-    INNER JOIN 
-        INSERTED AS I ON 
-        _organicTable.[ID] = I.[ID];
-END;
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[AIAction]'
-GO
-CREATE TABLE [__mj].[AIAction]
-(
-[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__AIAction__ID___33B87CC1] DEFAULT (newsequentialid()),
-[Name] [nvarchar] (50) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-[Description] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[DefaultPrompt] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[DefaultModelID] [uniqueidentifier] NULL,
-[IsActive] [bit] NOT NULL CONSTRAINT [DF_AIAction_IsActive] DEFAULT ((1)),
-[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__AIAction____mj_C__1088E15D] DEFAULT (getutcdate()),
-[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__AIAction____mj_U__117D0596] DEFAULT (getutcdate())
-)
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating primary key [PK_AIAction_ID] on [__mj].[AIAction]'
-GO
-ALTER TABLE [__mj].[AIAction] ADD CONSTRAINT [PK_AIAction_ID] PRIMARY KEY CLUSTERED ([ID])
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating trigger [__mj].[trgUpdateAIAction] on [__mj].[AIAction]'
-GO
-
-CREATE TRIGGER [__mj].[trgUpdateAIAction]
-ON [__mj].[AIAction]
-AFTER UPDATE
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[AIAction]
-    SET 
-        __mj_UpdatedAt = GETUTCDATE()
-    FROM 
-        [__mj].[AIAction] AS _organicTable
-    INNER JOIN 
-        INSERTED AS I ON 
-        _organicTable.[ID] = I.[ID];
-END;
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[RecommendationRun]'
-GO
-CREATE TABLE [__mj].[RecommendationRun]
-(
-[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__Recommendat__ID___5CBA9254] DEFAULT (newsequentialid()),
-[RecommendationProviderID] [uniqueidentifier] NOT NULL,
-[StartDate] [datetime] NOT NULL,
-[EndDate] [datetime] NULL,
-[Status] [nvarchar] (50) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-[Description] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[RunByUserID] [uniqueidentifier] NOT NULL,
-[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__Recommend____mj___02F9DC15] DEFAULT (getutcdate()),
-[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__Recommend____mj___03EE004E] DEFAULT (getutcdate())
-)
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating primary key [PK_RecommendationRun_ID] on [__mj].[RecommendationRun]'
-GO
-ALTER TABLE [__mj].[RecommendationRun] ADD CONSTRAINT [PK_RecommendationRun_ID] PRIMARY KEY CLUSTERED ([ID])
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating trigger [__mj].[trgUpdateRecommendationRun] on [__mj].[RecommendationRun]'
-GO
-
-CREATE TRIGGER [__mj].[trgUpdateRecommendationRun]
-ON [__mj].[RecommendationRun]
-AFTER UPDATE
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[RecommendationRun]
-    SET 
-        __mj_UpdatedAt = GETUTCDATE()
-    FROM 
-        [__mj].[RecommendationRun] AS _organicTable
-    INNER JOIN 
-        INSERTED AS I ON 
-        _organicTable.[ID] = I.[ID];
-END;
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[RecommendationProvider]'
-GO
-CREATE TABLE [__mj].[RecommendationProvider]
-(
-[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__Recommendat__ID___5BC66E1B] DEFAULT (newsequentialid()),
-[Name] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-[Description] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__Recommend____mj___011193A3] DEFAULT (getutcdate()),
-[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__Recommend____mj___0205B7DC] DEFAULT (getutcdate())
-)
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating primary key [PK_RecommendationProvider_ID] on [__mj].[RecommendationProvider]'
-GO
-ALTER TABLE [__mj].[RecommendationProvider] ADD CONSTRAINT [PK_RecommendationProvider_ID] PRIMARY KEY CLUSTERED ([ID])
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating trigger [__mj].[trgUpdateRecommendationProvider] on [__mj].[RecommendationProvider]'
-GO
-
-CREATE TRIGGER [__mj].[trgUpdateRecommendationProvider]
-ON [__mj].[RecommendationProvider]
-AFTER UPDATE
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[RecommendationProvider]
-    SET 
-        __mj_UpdatedAt = GETUTCDATE()
-    FROM 
-        [__mj].[RecommendationProvider] AS _organicTable
-    INNER JOIN 
-        INSERTED AS I ON 
-        _organicTable.[ID] = I.[ID];
-END;
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[ConversationDetail]'
-GO
-CREATE TABLE [__mj].[ConversationDetail]
-(
-[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__Conversatio__ID___42069C18] DEFAULT (newsequentialid()),
-[ConversationID] [uniqueidentifier] NOT NULL,
-[ExternalID] [nvarchar] (100) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[Role] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_ConversationDetail_Role] DEFAULT (user_name()),
-[Message] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-[Error] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[HiddenToUser] [bit] NOT NULL CONSTRAINT [DF_ConversationDetail_HiddenToUser] DEFAULT ((0)),
-[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__Conversat____mj___32DDF961] DEFAULT (getutcdate()),
-[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__Conversat____mj___33D21D9A] DEFAULT (getutcdate())
-)
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating primary key [PK_ConversationDetail_ID] on [__mj].[ConversationDetail]'
-GO
-ALTER TABLE [__mj].[ConversationDetail] ADD CONSTRAINT [PK_ConversationDetail_ID] PRIMARY KEY CLUSTERED ([ID])
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating trigger [__mj].[trgUpdateConversationDetail] on [__mj].[ConversationDetail]'
-GO
-
-CREATE TRIGGER [__mj].[trgUpdateConversationDetail]
-ON [__mj].[ConversationDetail]
-AFTER UPDATE
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[ConversationDetail]
-    SET 
-        __mj_UpdatedAt = GETUTCDATE()
-    FROM 
-        [__mj].[ConversationDetail] AS _organicTable
-    INNER JOIN 
-        INSERTED AS I ON 
-        _organicTable.[ID] = I.[ID];
-END;
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[Conversation]'
-GO
-CREATE TABLE [__mj].[Conversation]
-(
-[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__Conversatio__ID___411277DF] DEFAULT (newsequentialid()),
-[UserID] [uniqueidentifier] NOT NULL,
-[ExternalID] [nvarchar] (500) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[Name] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[Description] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[Type] [nvarchar] (50) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_Conversation_Type] DEFAULT (N'Skip'),
-[IsArchived] [bit] NOT NULL CONSTRAINT [DF_Conversation_IsArchived] DEFAULT ((0)),
-[LinkedEntityID] [uniqueidentifier] NULL,
-[LinkedRecordID] [nvarchar] (500) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[DataContextID] [uniqueidentifier] NULL,
-[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__Conversat____mj___34C641D3] DEFAULT (getutcdate()),
-[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__Conversat____mj___35BA660C] DEFAULT (getutcdate())
-)
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating primary key [PK_Conversation_ID] on [__mj].[Conversation]'
-GO
-ALTER TABLE [__mj].[Conversation] ADD CONSTRAINT [PK_Conversation_ID] PRIMARY KEY CLUSTERED ([ID])
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating trigger [__mj].[trgUpdateConversation] on [__mj].[Conversation]'
-GO
-
-CREATE TRIGGER [__mj].[trgUpdateConversation]
-ON [__mj].[Conversation]
-AFTER UPDATE
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[Conversation]
-    SET 
-        __mj_UpdatedAt = GETUTCDATE()
-    FROM 
-        [__mj].[Conversation] AS _organicTable
-    INNER JOIN 
-        INSERTED AS I ON 
-        _organicTable.[ID] = I.[ID];
-END;
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[QueryField]'
-GO
-CREATE TABLE [__mj].[QueryField]
-(
-[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__QueryFiel__NewID__43F9062B] DEFAULT (newsequentialid()),
-[QueryID] [uniqueidentifier] NOT NULL,
-[Name] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-[Description] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[Sequence] [int] NOT NULL,
-[SQLBaseType] [nvarchar] (50) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-[SQLFullType] [nvarchar] (100) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-[SourceEntityID] [uniqueidentifier] NULL,
-[SourceFieldName] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[IsComputed] [bit] NOT NULL CONSTRAINT [DF_QueryField_IsComputed] DEFAULT ((0)),
-[ComputationDescription] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[IsSummary] [bit] NOT NULL CONSTRAINT [DF_QueryField_IsSummary] DEFAULT ((0)),
-[SummaryDescription] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF___mj_QueryField___mj_CreatedAt] DEFAULT (getutcdate()),
-[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF___mj_QueryField___mj_UpdatedAt] DEFAULT (getutcdate())
-)
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating primary key [PK_QueryField_ID] on [__mj].[QueryField]'
-GO
-ALTER TABLE [__mj].[QueryField] ADD CONSTRAINT [PK_QueryField_ID] PRIMARY KEY CLUSTERED ([ID])
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating trigger [__mj].[trgUpdateQueryField] on [__mj].[QueryField]'
-GO
-
-CREATE TRIGGER [__mj].[trgUpdateQueryField]
-ON [__mj].[QueryField]
-AFTER UPDATE
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[QueryField]
-    SET 
-        __mj_UpdatedAt = GETUTCDATE()
-    FROM 
-        [__mj].[QueryField] AS _organicTable
-    INNER JOIN 
-        INSERTED AS I ON 
-        _organicTable.[ID] = I.[ID];
-END;
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[UserViewRunDetail]'
-GO
-CREATE TABLE [__mj].[UserViewRunDetail]
-(
-[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__UserViewR__NewID__086E2C09] DEFAULT (newsequentialid()),
-[UserViewRunID] [uniqueidentifier] NOT NULL,
-[RecordID] [nvarchar] (450) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__UserViewR____mj___032EE63F] DEFAULT (getutcdate()),
-[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__UserViewR____mj___04230A78] DEFAULT (getutcdate())
-)
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating primary key [PK_UserViewRunDetail_ID] on [__mj].[UserViewRunDetail]'
-GO
-ALTER TABLE [__mj].[UserViewRunDetail] ADD CONSTRAINT [PK_UserViewRunDetail_ID] PRIMARY KEY CLUSTERED ([ID])
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating index [IX_UserViewRunDetail_RecordID] on [__mj].[UserViewRunDetail]'
-GO
-CREATE NONCLUSTERED INDEX [IX_UserViewRunDetail_RecordID] ON [__mj].[UserViewRunDetail] ([RecordID])
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating trigger [__mj].[trgUpdateUserViewRunDetail] on [__mj].[UserViewRunDetail]'
-GO
-
-CREATE TRIGGER [__mj].[trgUpdateUserViewRunDetail]
-ON [__mj].[UserViewRunDetail]
-AFTER UPDATE
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[UserViewRunDetail]
-    SET 
-        __mj_UpdatedAt = GETUTCDATE()
-    FROM 
-        [__mj].[UserViewRunDetail] AS _organicTable
-    INNER JOIN 
-        INSERTED AS I ON 
-        _organicTable.[ID] = I.[ID];
-END;
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[RecordMergeLog]'
-GO
-CREATE TABLE [__mj].[RecordMergeLog]
-(
-[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__RecordMerge__ID___5EA2DAC6] DEFAULT (newsequentialid()),
+[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF_EntityField_ID_] DEFAULT (newsequentialid()),
 [EntityID] [uniqueidentifier] NOT NULL,
-[SurvivingRecordID] [nvarchar] (450) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-[InitiatedByUserID] [uniqueidentifier] NOT NULL,
-[ApprovalStatus] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_RecordMergeLog_ApprovalStatus] DEFAULT (N'Pending'),
-[ApprovedByUserID] [uniqueidentifier] NULL,
-[ProcessingStatus] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_RecordMergeLog_Status] DEFAULT (N'Pending'),
-[ProcessingStartedAt] [datetime] NOT NULL CONSTRAINT [DF_RecordMergeLog_StartedAt] DEFAULT (getdate()),
-[ProcessingEndedAt] [datetime] NULL,
-[ProcessingLog] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[Sequence] [int] NOT NULL CONSTRAINT [DF_EntityField_Sequence] DEFAULT ((0)),
+[Name] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+[DisplayName] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[Description] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[AutoUpdateDescription] [bit] NOT NULL CONSTRAINT [DF_EntityField_AutoUpdateDescription] DEFAULT ((1)),
+[IsPrimaryKey] [bit] NOT NULL CONSTRAINT [DF_EntityField_IsPrimaryKey] DEFAULT ((0)),
+[IsUnique] [bit] NOT NULL CONSTRAINT [DF_EntityField_IsUnique] DEFAULT ((0)),
+[Category] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[Type] [nvarchar] (100) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+[Length] [int] NULL,
+[Precision] [int] NULL,
+[Scale] [int] NULL,
+[AllowsNull] [bit] NOT NULL CONSTRAINT [DF_EntityField_AllowsNull] DEFAULT ((1)),
+[DefaultValue] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[AutoIncrement] [bit] NOT NULL CONSTRAINT [DF_EntityField_AutoIncrement] DEFAULT ((0)),
+[ValueListType] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_EntityField_ValueListType] DEFAULT (N'None'),
+[ExtendedType] [nvarchar] (50) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[CodeType] [nvarchar] (50) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[DefaultInView] [bit] NOT NULL CONSTRAINT [DF_EntityField_DefaultInGrid] DEFAULT ((0)),
+[ViewCellTemplate] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[DefaultColumnWidth] [int] NULL,
+[AllowUpdateAPI] [bit] NOT NULL CONSTRAINT [DF_EntityField_AllowEditAPI] DEFAULT ((1)),
+[AllowUpdateInView] [bit] NOT NULL CONSTRAINT [DF_EntityField_AllowViewEditing] DEFAULT ((1)),
+[IncludeInUserSearchAPI] [bit] NOT NULL CONSTRAINT [DF_EntityField_IncludeInUserSearchAPI] DEFAULT ((0)),
+[FullTextSearchEnabled] [bit] NOT NULL CONSTRAINT [DF_EntityField_FullTextSearchEnabled] DEFAULT ((0)),
+[UserSearchParamFormatAPI] [nvarchar] (500) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[IncludeInGeneratedForm] [bit] NOT NULL CONSTRAINT [DF_EntityField_IncludeInGeneratedForm] DEFAULT ((1)),
+[GeneratedFormSection] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_EntityField_GeneratedFormSection] DEFAULT (N'Details'),
+[IsVirtual] [bit] NOT NULL CONSTRAINT [DF_EntityField_IsVirtual] DEFAULT ((0)),
+[IsNameField] [bit] NOT NULL CONSTRAINT [DF_EntityField_IsNameField] DEFAULT ((0)),
+[RelatedEntityID] [uniqueidentifier] NULL,
+[RelatedEntityFieldName] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[IncludeRelatedEntityNameFieldInBaseView] [bit] NOT NULL CONSTRAINT [DF_EntityField_IncludeRelatedEntityNameFieldInBaseView] DEFAULT ((1)),
+[RelatedEntityNameFieldMap] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[RelatedEntityDisplayType] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_EntityField_RelatedEntityDisplayType] DEFAULT (N'Search'),
+[EntityIDFieldName] [nvarchar] (100) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF___mj_EntityField___mj_CreatedAt] DEFAULT (getutcdate()),
+[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF___mj_EntityField___mj_UpdatedAt] DEFAULT (getutcdate())
+)
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating primary key [PK_EntityField] on [__mj].[EntityField]'
+GO
+ALTER TABLE [__mj].[EntityField] ADD CONSTRAINT [PK_EntityField] PRIMARY KEY CLUSTERED ([ID])
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating index [UQ_EntityField_EntityID_Name] on [__mj].[EntityField]'
+GO
+CREATE UNIQUE NONCLUSTERED INDEX [UQ_EntityField_EntityID_Name] ON [__mj].[EntityField] ([EntityID], [Name])
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating trigger [__mj].[trgUpdateEntityField] on [__mj].[EntityField]'
+GO
+
+CREATE TRIGGER [__mj].[trgUpdateEntityField]
+ON [__mj].[EntityField]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[EntityField]
+    SET 
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM 
+        [__mj].[EntityField] AS _organicTable
+    INNER JOIN 
+        INSERTED AS I ON 
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[VersionInstallation]'
+GO
+CREATE TABLE [__mj].[VersionInstallation]
+(
+[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__VersionIn__NewID__1A8CDC44] DEFAULT (newsequentialid()),
+[MajorVersion] [int] NOT NULL,
+[MinorVersion] [int] NOT NULL,
+[PatchVersion] [int] NOT NULL,
+[Type] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_VersionInstallation_Type] DEFAULT (N'System'),
+[InstalledAt] [datetime] NOT NULL,
+[Status] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_VersionInstallation_Status] DEFAULT (N'Pending'),
+[InstallLog] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
 [Comments] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__RecordMer____mj___3C67639B] DEFAULT (getutcdate()),
-[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__RecordMer____mj___3D5B87D4] DEFAULT (getutcdate())
+[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__VersionIn____mj___55331165] DEFAULT (getutcdate()),
+[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__VersionIn____mj___5627359E] DEFAULT (getutcdate())
 )
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating primary key [PK_RecordMergeLog_ID] on [__mj].[RecordMergeLog]'
+PRINT N'Creating primary key [PK_VersionInstallation_ID] on [__mj].[VersionInstallation]'
 GO
-ALTER TABLE [__mj].[RecordMergeLog] ADD CONSTRAINT [PK_RecordMergeLog_ID] PRIMARY KEY CLUSTERED ([ID])
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating index [IX_RecordMergeLog] on [__mj].[RecordMergeLog]'
-GO
-CREATE NONCLUSTERED INDEX [IX_RecordMergeLog] ON [__mj].[RecordMergeLog] ([SurvivingRecordID])
+ALTER TABLE [__mj].[VersionInstallation] ADD CONSTRAINT [PK_VersionInstallation_ID] PRIMARY KEY CLUSTERED ([ID])
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating trigger [__mj].[trgUpdateRecordMergeLog] on [__mj].[RecordMergeLog]'
+PRINT N'Creating trigger [__mj].[trgUpdateVersionInstallation] on [__mj].[VersionInstallation]'
 GO
 
-CREATE TRIGGER [__mj].[trgUpdateRecordMergeLog]
-ON [__mj].[RecordMergeLog]
+CREATE TRIGGER [__mj].[trgUpdateVersionInstallation]
+ON [__mj].[VersionInstallation]
 AFTER UPDATE
 AS
 BEGIN
     SET NOCOUNT ON;
     UPDATE 
-        [__mj].[RecordMergeLog]
+        [__mj].[VersionInstallation]
     SET 
         __mj_UpdatedAt = GETUTCDATE()
     FROM 
-        [__mj].[RecordMergeLog] AS _organicTable
-    INNER JOIN 
-        INSERTED AS I ON 
-        _organicTable.[ID] = I.[ID];
-END;
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[QueryCategory]'
-GO
-CREATE TABLE [__mj].[QueryCategory]
-(
-[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__QueryCatego__ID___57F5DD37] DEFAULT (newsequentialid()),
-[Name] [nvarchar] (50) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-[ParentID] [uniqueidentifier] NULL,
-[Description] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[UserID] [uniqueidentifier] NOT NULL,
-[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF___mj_QueryCategory___mj_CreatedAt] DEFAULT (getutcdate()),
-[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF___mj_QueryCategory___mj_UpdatedAt] DEFAULT (getutcdate())
-)
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating primary key [PK_QueryCategory_ID] on [__mj].[QueryCategory]'
-GO
-ALTER TABLE [__mj].[QueryCategory] ADD CONSTRAINT [PK_QueryCategory_ID] PRIMARY KEY CLUSTERED ([ID])
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating trigger [__mj].[trgUpdateQueryCategory] on [__mj].[QueryCategory]'
-GO
-
-CREATE TRIGGER [__mj].[trgUpdateQueryCategory]
-ON [__mj].[QueryCategory]
-AFTER UPDATE
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[QueryCategory]
-    SET 
-        __mj_UpdatedAt = GETUTCDATE()
-    FROM 
-        [__mj].[QueryCategory] AS _organicTable
-    INNER JOIN 
-        INSERTED AS I ON 
-        _organicTable.[ID] = I.[ID];
-END;
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[WorkflowRun]'
-GO
-CREATE TABLE [__mj].[WorkflowRun]
-(
-[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__WorkflowR__NewID__25FE8EF0] DEFAULT (newsequentialid()),
-[WorkflowID] [uniqueidentifier] NOT NULL,
-[ExternalSystemRecordID] [nvarchar] (500) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-[StartedAt] [datetime] NOT NULL,
-[EndedAt] [datetime] NULL,
-[Status] [nchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_WorkflowRun_Status] DEFAULT (N'Pending'),
-[Results] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__WorkflowR____mj___05172EB1] DEFAULT (getutcdate()),
-[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__WorkflowR____mj___060B52EA] DEFAULT (getutcdate())
-)
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating primary key [PK_WorkflowRun_ID] on [__mj].[WorkflowRun]'
-GO
-ALTER TABLE [__mj].[WorkflowRun] ADD CONSTRAINT [PK_WorkflowRun_ID] PRIMARY KEY CLUSTERED ([ID])
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating trigger [__mj].[trgUpdateWorkflowRun] on [__mj].[WorkflowRun]'
-GO
-
-CREATE TRIGGER [__mj].[trgUpdateWorkflowRun]
-ON [__mj].[WorkflowRun]
-AFTER UPDATE
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[WorkflowRun]
-    SET 
-        __mj_UpdatedAt = GETUTCDATE()
-    FROM 
-        [__mj].[WorkflowRun] AS _organicTable
-    INNER JOIN 
-        INSERTED AS I ON 
-        _organicTable.[ID] = I.[ID];
-END;
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[ApplicationSetting]'
-GO
-CREATE TABLE [__mj].[ApplicationSetting]
-(
-[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__Applicati__NewID__18849841] DEFAULT (newsequentialid()),
-[ApplicationID] [uniqueidentifier] NOT NULL,
-[Name] [nvarchar] (100) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-[Value] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-[Comments] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF___mj_ApplicationSetting___mj_CreatedAt] DEFAULT (getutcdate()),
-[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF___mj_ApplicationSetting___mj_UpdatedAt] DEFAULT (getutcdate())
-)
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating primary key [PK_ApplicationSetting_ID] on [__mj].[ApplicationSetting]'
-GO
-ALTER TABLE [__mj].[ApplicationSetting] ADD CONSTRAINT [PK_ApplicationSetting_ID] PRIMARY KEY CLUSTERED ([ID])
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating trigger [__mj].[trgUpdateApplicationSetting] on [__mj].[ApplicationSetting]'
-GO
-
-CREATE TRIGGER [__mj].[trgUpdateApplicationSetting]
-ON [__mj].[ApplicationSetting]
-AFTER UPDATE
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[ApplicationSetting]
-    SET 
-        __mj_UpdatedAt = GETUTCDATE()
-    FROM 
-        [__mj].[ApplicationSetting] AS _organicTable
-    INNER JOIN 
-        INSERTED AS I ON 
-        _organicTable.[ID] = I.[ID];
-END;
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[ActionCategory]'
-GO
-CREATE TABLE [__mj].[ActionCategory]
-(
-[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__ActionCateg__ID___2FE7EBDD] DEFAULT (newsequentialid()),
-[Name] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-[Description] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[ParentID] [uniqueidentifier] NULL,
-[Status] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF__ActionCat__Statu__6DA65A4E] DEFAULT ('Pending'),
-[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF___mj_ActionCategory___mj_CreatedAt] DEFAULT (getutcdate()),
-[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF___mj_ActionCategory___mj_UpdatedAt] DEFAULT (getutcdate())
-)
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating primary key [PK__ActionCa__3214EC27BA2348AF] on [__mj].[ActionCategory]'
-GO
-ALTER TABLE [__mj].[ActionCategory] ADD CONSTRAINT [PK__ActionCa__3214EC27BA2348AF] PRIMARY KEY CLUSTERED ([ID])
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating trigger [__mj].[trgUpdateActionCategory] on [__mj].[ActionCategory]'
-GO
-
-CREATE TRIGGER [__mj].[trgUpdateActionCategory]
-ON [__mj].[ActionCategory]
-AFTER UPDATE
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[ActionCategory]
-    SET 
-        __mj_UpdatedAt = GETUTCDATE()
-    FROM 
-        [__mj].[ActionCategory] AS _organicTable
-    INNER JOIN 
-        INSERTED AS I ON 
-        _organicTable.[ID] = I.[ID];
-END;
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[TemplateCategory]'
-GO
-CREATE TABLE [__mj].[TemplateCategory]
-(
-[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__TemplateCat__ID___673820C7] DEFAULT (newsequentialid()),
-[Name] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-[Description] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[ParentID] [uniqueidentifier] NULL,
-[UserID] [uniqueidentifier] NOT NULL,
-[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__TemplateC____mj___77882969] DEFAULT (getutcdate()),
-[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__TemplateC____mj___787C4DA2] DEFAULT (getutcdate())
-)
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating primary key [PK_TemplateCategory_ID] on [__mj].[TemplateCategory]'
-GO
-ALTER TABLE [__mj].[TemplateCategory] ADD CONSTRAINT [PK_TemplateCategory_ID] PRIMARY KEY CLUSTERED ([ID])
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating trigger [__mj].[trgUpdateTemplateCategory] on [__mj].[TemplateCategory]'
-GO
-
-CREATE TRIGGER [__mj].[trgUpdateTemplateCategory]
-ON [__mj].[TemplateCategory]
-AFTER UPDATE
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[TemplateCategory]
-    SET 
-        __mj_UpdatedAt = GETUTCDATE()
-    FROM 
-        [__mj].[TemplateCategory] AS _organicTable
-    INNER JOIN 
-        INSERTED AS I ON 
-        _organicTable.[ID] = I.[ID];
-END;
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[EntityDocumentSetting]'
-GO
-CREATE TABLE [__mj].[EntityDocumentSetting]
-(
-[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__EntityDoc__NewID__5E22EC82] DEFAULT (newsequentialid()),
-[EntityDocumentID] [uniqueidentifier] NOT NULL,
-[Name] [nvarchar] (100) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-[Value] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-[Comments] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF___mj_EntityDocumentSetting___mj_CreatedAt] DEFAULT (getutcdate()),
-[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF___mj_EntityDocumentSetting___mj_UpdatedAt] DEFAULT (getutcdate())
-)
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating primary key [PK_EntityDocumentSetting_ID] on [__mj].[EntityDocumentSetting]'
-GO
-ALTER TABLE [__mj].[EntityDocumentSetting] ADD CONSTRAINT [PK_EntityDocumentSetting_ID] PRIMARY KEY CLUSTERED ([ID])
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating trigger [__mj].[trgUpdateEntityDocumentSetting] on [__mj].[EntityDocumentSetting]'
-GO
-
-CREATE TRIGGER [__mj].[trgUpdateEntityDocumentSetting]
-ON [__mj].[EntityDocumentSetting]
-AFTER UPDATE
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[EntityDocumentSetting]
-    SET 
-        __mj_UpdatedAt = GETUTCDATE()
-    FROM 
-        [__mj].[EntityDocumentSetting] AS _organicTable
-    INNER JOIN 
-        INSERTED AS I ON 
-        _organicTable.[ID] = I.[ID];
-END;
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[TemplateContentType]'
-GO
-CREATE TABLE [__mj].[TemplateContentType]
-(
-[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__TemplateCon__ID___682C4500] DEFAULT (newsequentialid()),
-[Name] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-[Description] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[CodeType] [nvarchar] (25) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_TemplateContentType_CodeType] DEFAULT (N'Other'),
-[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__TemplateC____mj___7D4102BF] DEFAULT (getutcdate()),
-[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__TemplateC____mj___7E3526F8] DEFAULT (getutcdate())
-)
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating primary key [PK_TemplateContentType_ID] on [__mj].[TemplateContentType]'
-GO
-ALTER TABLE [__mj].[TemplateContentType] ADD CONSTRAINT [PK_TemplateContentType_ID] PRIMARY KEY CLUSTERED ([ID])
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating trigger [__mj].[trgUpdateTemplateContentType] on [__mj].[TemplateContentType]'
-GO
-
-CREATE TRIGGER [__mj].[trgUpdateTemplateContentType]
-ON [__mj].[TemplateContentType]
-AFTER UPDATE
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[TemplateContentType]
-    SET 
-        __mj_UpdatedAt = GETUTCDATE()
-    FROM 
-        [__mj].[TemplateContentType] AS _organicTable
-    INNER JOIN 
-        INSERTED AS I ON 
-        _organicTable.[ID] = I.[ID];
-END;
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[FileEntityRecordLink]'
-GO
-CREATE TABLE [__mj].[FileEntityRecordLink]
-(
-[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__FileEntit__NewID__0D9CF57A] DEFAULT (newsequentialid()),
-[FileID] [uniqueidentifier] NOT NULL,
-[EntityID] [uniqueidentifier] NOT NULL,
-[RecordID] [nvarchar] (750) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__FileEntit____mj___534AC8F3] DEFAULT (getutcdate()),
-[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__FileEntit____mj___543EED2C] DEFAULT (getutcdate())
-)
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating primary key [PK_FileEntityRecordLink_ID] on [__mj].[FileEntityRecordLink]'
-GO
-ALTER TABLE [__mj].[FileEntityRecordLink] ADD CONSTRAINT [PK_FileEntityRecordLink_ID] PRIMARY KEY CLUSTERED ([ID])
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating trigger [__mj].[trgUpdateFileEntityRecordLink] on [__mj].[FileEntityRecordLink]'
-GO
-
-CREATE TRIGGER [__mj].[trgUpdateFileEntityRecordLink]
-ON [__mj].[FileEntityRecordLink]
-AFTER UPDATE
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[FileEntityRecordLink]
-    SET 
-        __mj_UpdatedAt = GETUTCDATE()
-    FROM 
-        [__mj].[FileEntityRecordLink] AS _organicTable
-    INNER JOIN 
-        INSERTED AS I ON 
-        _organicTable.[ID] = I.[ID];
-END;
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[Template]'
-GO
-CREATE TABLE [__mj].[Template]
-(
-[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__Template__ID___6643FC8E] DEFAULT (newsequentialid()),
-[Name] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-[Description] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[CategoryID] [uniqueidentifier] NULL,
-[UserPrompt] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[UserID] [uniqueidentifier] NOT NULL,
-[ActiveAt] [datetime] NULL,
-[DisabledAt] [datetime] NULL,
-[IsActive] [bit] NOT NULL CONSTRAINT [DF_Template_IsActive] DEFAULT ((1)),
-[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__Template____mj_C__759FE0F7] DEFAULT (getutcdate()),
-[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__Template____mj_U__76940530] DEFAULT (getutcdate())
-)
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating primary key [PK_Template_ID] on [__mj].[Template]'
-GO
-ALTER TABLE [__mj].[Template] ADD CONSTRAINT [PK_Template_ID] PRIMARY KEY CLUSTERED ([ID])
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating trigger [__mj].[trgUpdateTemplate] on [__mj].[Template]'
-GO
-
-CREATE TRIGGER [__mj].[trgUpdateTemplate]
-ON [__mj].[Template]
-AFTER UPDATE
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[Template]
-    SET 
-        __mj_UpdatedAt = GETUTCDATE()
-    FROM 
-        [__mj].[Template] AS _organicTable
-    INNER JOIN 
-        INSERTED AS I ON 
-        _organicTable.[ID] = I.[ID];
-END;
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[TemplateContent]'
-GO
-CREATE TABLE [__mj].[TemplateContent]
-(
-[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__TemplateC__NewID__338D9438] DEFAULT (newsequentialid()),
-[TemplateID] [uniqueidentifier] NOT NULL,
-[TypeID] [uniqueidentifier] NOT NULL,
-[TemplateText] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[Priority] [int] NOT NULL,
-[IsActive] [bit] NOT NULL CONSTRAINT [DF__TemplateC__IsAct__347CC29D] DEFAULT ((1)),
-[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__TemplateC____mj___797071DB] DEFAULT (getutcdate()),
-[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__TemplateC____mj___7A649614] DEFAULT (getutcdate())
-)
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating primary key [PK_TemplateContent_ID] on [__mj].[TemplateContent]'
-GO
-ALTER TABLE [__mj].[TemplateContent] ADD CONSTRAINT [PK_TemplateContent_ID] PRIMARY KEY CLUSTERED ([ID])
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating trigger [__mj].[trgUpdateTemplateContent] on [__mj].[TemplateContent]'
-GO
-
-CREATE TRIGGER [__mj].[trgUpdateTemplateContent]
-ON [__mj].[TemplateContent]
-AFTER UPDATE
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[TemplateContent]
-    SET 
-        __mj_UpdatedAt = GETUTCDATE()
-    FROM 
-        [__mj].[TemplateContent] AS _organicTable
-    INNER JOIN 
-        INSERTED AS I ON 
-        _organicTable.[ID] = I.[ID];
-END;
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[SchemaInfo]'
-GO
-CREATE TABLE [__mj].[SchemaInfo]
-(
-[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__SchemaInf__NewID__1AC1E66E] DEFAULT (newsequentialid()),
-[SchemaName] [nvarchar] (50) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-[EntityIDMin] [int] NOT NULL,
-[EntityIDMax] [int] NOT NULL,
-[Comments] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__SchemaInf____mj___3896D2B7] DEFAULT (getutcdate()),
-[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__SchemaInf____mj___398AF6F0] DEFAULT (getutcdate())
-)
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating primary key [PK_SchemaInfo_ID] on [__mj].[SchemaInfo]'
-GO
-ALTER TABLE [__mj].[SchemaInfo] ADD CONSTRAINT [PK_SchemaInfo_ID] PRIMARY KEY CLUSTERED ([ID])
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Adding constraints to [__mj].[SchemaInfo]'
-GO
-ALTER TABLE [__mj].[SchemaInfo] ADD CONSTRAINT [IX_SchemaInfo] UNIQUE NONCLUSTERED ([SchemaName])
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating trigger [__mj].[trgUpdateSchemaInfo] on [__mj].[SchemaInfo]'
-GO
-
-CREATE TRIGGER [__mj].[trgUpdateSchemaInfo]
-ON [__mj].[SchemaInfo]
-AFTER UPDATE
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[SchemaInfo]
-    SET 
-        __mj_UpdatedAt = GETUTCDATE()
-    FROM 
-        [__mj].[SchemaInfo] AS _organicTable
-    INNER JOIN 
-        INSERTED AS I ON 
-        _organicTable.[ID] = I.[ID];
-END;
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[UserNotification]'
-GO
-CREATE TABLE [__mj].[UserNotification]
-(
-[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__UserNotif__NewID__5E77F23D] DEFAULT (newsequentialid()),
-[UserID] [uniqueidentifier] NOT NULL,
-[Title] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[Message] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[ResourceTypeID] [uniqueidentifier] NULL,
-[ResourceRecordID] [int] NULL,
-[ResourceConfiguration] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[Unread] [bit] NOT NULL CONSTRAINT [DF_Table_1_MarkedAsRead] DEFAULT ((1)),
-[ReadAt] [datetime] NULL,
-[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__UserNotif____mj___36AE8A45] DEFAULT (getutcdate()),
-[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__UserNotif____mj___37A2AE7E] DEFAULT (getutcdate())
-)
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating primary key [PK_UserNotification_ID] on [__mj].[UserNotification]'
-GO
-ALTER TABLE [__mj].[UserNotification] ADD CONSTRAINT [PK_UserNotification_ID] PRIMARY KEY CLUSTERED ([ID])
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating index [IX_UserNotification_UserID] on [__mj].[UserNotification]'
-GO
-CREATE NONCLUSTERED INDEX [IX_UserNotification_UserID] ON [__mj].[UserNotification] ([UserID])
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating trigger [__mj].[trgUpdateUserNotification] on [__mj].[UserNotification]'
-GO
-
-CREATE TRIGGER [__mj].[trgUpdateUserNotification]
-ON [__mj].[UserNotification]
-AFTER UPDATE
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[UserNotification]
-    SET 
-        __mj_UpdatedAt = GETUTCDATE()
-    FROM 
-        [__mj].[UserNotification] AS _organicTable
-    INNER JOIN 
-        INSERTED AS I ON 
-        _organicTable.[ID] = I.[ID];
-END;
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[CompanyIntegrationRunAPILog]'
-GO
-CREATE TABLE [__mj].[CompanyIntegrationRunAPILog]
-(
-[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__CompanyIn__NewID__5740E4C9] DEFAULT (newsequentialid()),
-[CompanyIntegrationRunID] [uniqueidentifier] NOT NULL,
-[ExecutedAt] [datetime] NOT NULL CONSTRAINT [DF_CompanyIntegrationRunAPILog_ExecutedAt] DEFAULT (getdate()),
-[IsSuccess] [bit] NOT NULL CONSTRAINT [DF__CompanyIn__IsSuc__753864A1] DEFAULT ((0)),
-[RequestMethod] [nvarchar] (12) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[URL] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[Parameters] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__CompanyIn____mj___7B8DC477] DEFAULT (getutcdate()),
-[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__CompanyIn____mj___7C81E8B0] DEFAULT (getutcdate())
-)
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating primary key [PK_CompanyIntegrationRunAPILog_ID] on [__mj].[CompanyIntegrationRunAPILog]'
-GO
-ALTER TABLE [__mj].[CompanyIntegrationRunAPILog] ADD CONSTRAINT [PK_CompanyIntegrationRunAPILog_ID] PRIMARY KEY CLUSTERED ([ID])
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating trigger [__mj].[trgUpdateCompanyIntegrationRunAPILog] on [__mj].[CompanyIntegrationRunAPILog]'
-GO
-
-CREATE TRIGGER [__mj].[trgUpdateCompanyIntegrationRunAPILog]
-ON [__mj].[CompanyIntegrationRunAPILog]
-AFTER UPDATE
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[CompanyIntegrationRunAPILog]
-    SET 
-        __mj_UpdatedAt = GETUTCDATE()
-    FROM 
-        [__mj].[CompanyIntegrationRunAPILog] AS _organicTable
-    INNER JOIN 
-        INSERTED AS I ON 
-        _organicTable.[ID] = I.[ID];
-END;
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[RecordMergeDeletionLog]'
-GO
-CREATE TABLE [__mj].[RecordMergeDeletionLog]
-(
-[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__RecordMer__NewID__06BAEDC1] DEFAULT (newsequentialid()),
-[RecordMergeLogID] [uniqueidentifier] NOT NULL,
-[DeletedRecordID] [nvarchar] (750) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-[Status] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_RecordMergeDeletionLog_Status] DEFAULT (N'Pending'),
-[ProcessingLog] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__RecordMer____mj___3E4FAC0D] DEFAULT (getutcdate()),
-[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__RecordMer____mj___3F43D046] DEFAULT (getutcdate())
-)
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating primary key [PK_RecordMergeDeletionLog_ID] on [__mj].[RecordMergeDeletionLog]'
-GO
-ALTER TABLE [__mj].[RecordMergeDeletionLog] ADD CONSTRAINT [PK_RecordMergeDeletionLog_ID] PRIMARY KEY CLUSTERED ([ID])
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating trigger [__mj].[trgUpdateRecordMergeDeletionLog] on [__mj].[RecordMergeDeletionLog]'
-GO
-
-CREATE TRIGGER [__mj].[trgUpdateRecordMergeDeletionLog]
-ON [__mj].[RecordMergeDeletionLog]
-AFTER UPDATE
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[RecordMergeDeletionLog]
-    SET 
-        __mj_UpdatedAt = GETUTCDATE()
-    FROM 
-        [__mj].[RecordMergeDeletionLog] AS _organicTable
-    INNER JOIN 
-        INSERTED AS I ON 
-        _organicTable.[ID] = I.[ID];
-END;
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[CompanyIntegrationRecordMap]'
-GO
-CREATE TABLE [__mj].[CompanyIntegrationRecordMap]
-(
-[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__CompanyIn__NewID__4DB77A8F] DEFAULT (newsequentialid()),
-[CompanyIntegrationID] [uniqueidentifier] NOT NULL,
-[ExternalSystemRecordID] [nvarchar] (750) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-[EntityID] [uniqueidentifier] NOT NULL,
-[EntityRecordID] [nvarchar] (750) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__CompanyIn____mj___3A7F1B29] DEFAULT (getutcdate()),
-[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__CompanyIn____mj___3B733F62] DEFAULT (getutcdate())
-)
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating primary key [PK_CompanyIntegrationRecordMap_ID] on [__mj].[CompanyIntegrationRecordMap]'
-GO
-ALTER TABLE [__mj].[CompanyIntegrationRecordMap] ADD CONSTRAINT [PK_CompanyIntegrationRecordMap_ID] PRIMARY KEY CLUSTERED ([ID])
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating trigger [__mj].[trgUpdateCompanyIntegrationRecordMap] on [__mj].[CompanyIntegrationRecordMap]'
-GO
-
-CREATE TRIGGER [__mj].[trgUpdateCompanyIntegrationRecordMap]
-ON [__mj].[CompanyIntegrationRecordMap]
-AFTER UPDATE
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[CompanyIntegrationRecordMap]
-    SET 
-        __mj_UpdatedAt = GETUTCDATE()
-    FROM 
-        [__mj].[CompanyIntegrationRecordMap] AS _organicTable
-    INNER JOIN 
-        INSERTED AS I ON 
-        _organicTable.[ID] = I.[ID];
-END;
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[File]'
-GO
-CREATE TABLE [__mj].[File]
-(
-[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__File__ID___4E6C72FD] DEFAULT (newsequentialid()),
-[Name] [nvarchar] (500) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-[Description] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[CategoryID] [uniqueidentifier] NULL,
-[ProviderID] [uniqueidentifier] NOT NULL,
-[ContentType] [nvarchar] (50) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[ProviderKey] [nvarchar] (500) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[Status] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_File_Status] DEFAULT (N'Pending'),
-[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__File____mj_Creat__4F7A380F] DEFAULT (getutcdate()),
-[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__File____mj_Updat__506E5C48] DEFAULT (getutcdate())
-)
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating primary key [PK_File_ID] on [__mj].[File]'
-GO
-ALTER TABLE [__mj].[File] ADD CONSTRAINT [PK_File_ID] PRIMARY KEY CLUSTERED ([ID])
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating trigger [__mj].[trgUpdateFile] on [__mj].[File]'
-GO
-
-CREATE TRIGGER [__mj].[trgUpdateFile]
-ON [__mj].[File]
-AFTER UPDATE
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[File]
-    SET 
-        __mj_UpdatedAt = GETUTCDATE()
-    FROM 
-        [__mj].[File] AS _organicTable
-    INNER JOIN 
-        INSERTED AS I ON 
-        _organicTable.[ID] = I.[ID];
-END;
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[CompanyIntegration]'
-GO
-CREATE TABLE [__mj].[CompanyIntegration]
-(
-[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__CompanyInte__ID___3E360B34] DEFAULT (newsequentialid()),
-[CompanyID] [uniqueidentifier] NOT NULL,
-[IntegrationID] [uniqueidentifier] NOT NULL,
-[IsActive] [bit] NULL,
-[AccessToken] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[RefreshToken] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[TokenExpirationDate] [datetime] NULL,
-[APIKey] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[ExternalSystemID] [nvarchar] (100) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[IsExternalSystemReadOnly] [bit] NOT NULL CONSTRAINT [DF__CompanyIn__IsExt__6A07746E] DEFAULT ((0)),
-[ClientID] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[ClientSecret] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[CustomAttribute1] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__CompanyIn____mj___6E33C959] DEFAULT (getutcdate()),
-[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__CompanyIn____mj___6F27ED92] DEFAULT (getutcdate())
-)
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating primary key [PK_CompanyIntegration_ID] on [__mj].[CompanyIntegration]'
-GO
-ALTER TABLE [__mj].[CompanyIntegration] ADD CONSTRAINT [PK_CompanyIntegration_ID] PRIMARY KEY CLUSTERED ([ID])
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating trigger [__mj].[trgUpdateCompanyIntegration] on [__mj].[CompanyIntegration]'
-GO
-
-CREATE TRIGGER [__mj].[trgUpdateCompanyIntegration]
-ON [__mj].[CompanyIntegration]
-AFTER UPDATE
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[CompanyIntegration]
-    SET 
-        __mj_UpdatedAt = GETUTCDATE()
-    FROM 
-        [__mj].[CompanyIntegration] AS _organicTable
-    INNER JOIN 
-        INSERTED AS I ON 
-        _organicTable.[ID] = I.[ID];
-END;
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[CommunicationProvider]'
-GO
-CREATE TABLE [__mj].[CommunicationProvider]
-(
-[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__Communicati__ID___3A657A50] DEFAULT (newsequentialid()),
-[Name] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-[Description] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[Status] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF__Communica__Statu__602F90FB] DEFAULT ('Disabled'),
-[SupportsSending] [bit] NOT NULL CONSTRAINT [DF__Communica__Suppo__6217D96D] DEFAULT ((1)),
-[SupportsReceiving] [bit] NOT NULL CONSTRAINT [DF__Communica__Suppo__630BFDA6] DEFAULT ((0)),
-[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__Communica____mj___6C1676BD] DEFAULT (getutcdate()),
-[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__Communica____mj___6D0A9AF6] DEFAULT (getutcdate())
-)
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating primary key [PK_CommunicationProvider_ID] on [__mj].[CommunicationProvider]'
-GO
-ALTER TABLE [__mj].[CommunicationProvider] ADD CONSTRAINT [PK_CommunicationProvider_ID] PRIMARY KEY CLUSTERED ([ID])
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Adding constraints to [__mj].[CommunicationProvider]'
-GO
-ALTER TABLE [__mj].[CommunicationProvider] ADD CONSTRAINT [UQ_CommunicationProvider_Name] UNIQUE NONCLUSTERED ([Name])
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating trigger [__mj].[trgUpdateCommunicationProvider] on [__mj].[CommunicationProvider]'
-GO
-
-CREATE TRIGGER [__mj].[trgUpdateCommunicationProvider]
-ON [__mj].[CommunicationProvider]
-AFTER UPDATE
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[CommunicationProvider]
-    SET 
-        __mj_UpdatedAt = GETUTCDATE()
-    FROM 
-        [__mj].[CommunicationProvider] AS _organicTable
-    INNER JOIN 
-        INSERTED AS I ON 
-        _organicTable.[ID] = I.[ID];
-END;
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[Integration]'
-GO
-CREATE TABLE [__mj].[Integration]
-(
-[Name] [nvarchar] (100) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-[Description] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[NavigationBaseURL] [nvarchar] (500) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[ClassName] [nvarchar] (100) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[ImportPath] [nvarchar] (100) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[BatchMaxRequestCount] [int] NOT NULL CONSTRAINT [DF__Integrati__Batch__522FEADD] DEFAULT ((-1)),
-[BatchRequestWaitTime] [int] NOT NULL CONSTRAINT [DF__Integrati__Batch__53240F16] DEFAULT ((-1)),
-[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__Integrati____mj___6C4B80E7] DEFAULT (getutcdate()),
-[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__Integrati____mj___6D3FA520] DEFAULT (getutcdate()),
-[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__Integration__ID___5148DFA8] DEFAULT (newsequentialid())
-)
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating primary key [PK_Integration_ID] on [__mj].[Integration]'
-GO
-ALTER TABLE [__mj].[Integration] ADD CONSTRAINT [PK_Integration_ID] PRIMARY KEY CLUSTERED ([ID])
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Adding constraints to [__mj].[Integration]'
-GO
-ALTER TABLE [__mj].[Integration] ADD CONSTRAINT [UQ_Integration_Name] UNIQUE NONCLUSTERED ([Name])
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating trigger [__mj].[trgUpdateIntegration] on [__mj].[Integration]'
-GO
-
-CREATE TRIGGER [__mj].[trgUpdateIntegration]
-ON [__mj].[Integration]
-AFTER UPDATE
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[Integration]
-    SET 
-        __mj_UpdatedAt = GETUTCDATE()
-    FROM 
-        [__mj].[Integration] AS _organicTable
-    INNER JOIN 
-        INSERTED AS I ON 
-        _organicTable.[ID] = I.[ID];
-END;
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[CommunicationLog]'
-GO
-CREATE TABLE [__mj].[CommunicationLog]
-(
-[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__Communica__NewID__62B29775] DEFAULT (newsequentialid()),
-[CommunicationProviderID] [uniqueidentifier] NOT NULL,
-[CommunicationProviderMessageTypeID] [uniqueidentifier] NOT NULL,
-[CommunicationRunID] [uniqueidentifier] NULL,
-[Direction] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-[MessageDate] [datetime] NOT NULL,
-[Status] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_CommunicationLog_Status] DEFAULT (N'Pending'),
-[MessageContent] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[ErrorMessage] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__Communica____mj___71CF5013] DEFAULT (getutcdate()),
-[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__Communica____mj___72C3744C] DEFAULT (getutcdate())
-)
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating primary key [PK_CommunicationLog_ID] on [__mj].[CommunicationLog]'
-GO
-ALTER TABLE [__mj].[CommunicationLog] ADD CONSTRAINT [PK_CommunicationLog_ID] PRIMARY KEY CLUSTERED ([ID])
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating trigger [__mj].[trgUpdateCommunicationLog] on [__mj].[CommunicationLog]'
-GO
-
-CREATE TRIGGER [__mj].[trgUpdateCommunicationLog]
-ON [__mj].[CommunicationLog]
-AFTER UPDATE
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[CommunicationLog]
-    SET 
-        __mj_UpdatedAt = GETUTCDATE()
-    FROM 
-        [__mj].[CommunicationLog] AS _organicTable
-    INNER JOIN 
-        INSERTED AS I ON 
-        _organicTable.[ID] = I.[ID];
-END;
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[Dashboard]'
-GO
-CREATE TABLE [__mj].[Dashboard]
-(
-[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__Dashboard__NewID__51F21FC7] DEFAULT (newsequentialid()),
-[Name] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-[Description] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[UserID] [uniqueidentifier] NOT NULL,
-[CategoryID] [uniqueidentifier] NULL,
-[UIConfigDetails] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__Dashboard____mj___1BFA9409] DEFAULT (getutcdate()),
-[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__Dashboard____mj___1CEEB842] DEFAULT (getutcdate())
-)
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating primary key [PK_Dashboard_ID] on [__mj].[Dashboard]'
-GO
-ALTER TABLE [__mj].[Dashboard] ADD CONSTRAINT [PK_Dashboard_ID] PRIMARY KEY CLUSTERED ([ID])
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating trigger [__mj].[trgUpdateDashboard] on [__mj].[Dashboard]'
-GO
-
-CREATE TRIGGER [__mj].[trgUpdateDashboard]
-ON [__mj].[Dashboard]
-AFTER UPDATE
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[Dashboard]
-    SET 
-        __mj_UpdatedAt = GETUTCDATE()
-    FROM 
-        [__mj].[Dashboard] AS _organicTable
-    INNER JOIN 
-        INSERTED AS I ON 
-        _organicTable.[ID] = I.[ID];
-END;
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[VectorDatabase]'
-GO
-CREATE TABLE [__mj].[VectorDatabase]
-(
-[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__VectorDatab__ID___6DE51E56] DEFAULT (newsequentialid()),
-[Name] [nvarchar] (100) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-[Description] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[DefaultURL] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[ClassKey] [nvarchar] (100) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__VectorDat____mj___42203CF1] DEFAULT (getutcdate()),
-[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__VectorDat____mj___4314612A] DEFAULT (getutcdate())
-)
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating primary key [PK_VectorDatabase_ID] on [__mj].[VectorDatabase]'
-GO
-ALTER TABLE [__mj].[VectorDatabase] ADD CONSTRAINT [PK_VectorDatabase_ID] PRIMARY KEY CLUSTERED ([ID])
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating trigger [__mj].[trgUpdateVectorDatabase] on [__mj].[VectorDatabase]'
-GO
-
-CREATE TRIGGER [__mj].[trgUpdateVectorDatabase]
-ON [__mj].[VectorDatabase]
-AFTER UPDATE
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[VectorDatabase]
-    SET 
-        __mj_UpdatedAt = GETUTCDATE()
-    FROM 
-        [__mj].[VectorDatabase] AS _organicTable
-    INNER JOIN 
-        INSERTED AS I ON 
-        _organicTable.[ID] = I.[ID];
-END;
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[Workspace]'
-GO
-CREATE TABLE [__mj].[Workspace]
-(
-[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__Workspace__ID___70C18B01] DEFAULT (newsequentialid()),
-[Name] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-[Description] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[UserID] [uniqueidentifier] NOT NULL,
-[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__Workspace____mj___2B3CD799] DEFAULT (getutcdate()),
-[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__Workspace____mj___2C30FBD2] DEFAULT (getutcdate())
-)
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating primary key [PK_Workspace_ID] on [__mj].[Workspace]'
-GO
-ALTER TABLE [__mj].[Workspace] ADD CONSTRAINT [PK_Workspace_ID] PRIMARY KEY CLUSTERED ([ID])
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating trigger [__mj].[trgUpdateWorkspace] on [__mj].[Workspace]'
-GO
-
-CREATE TRIGGER [__mj].[trgUpdateWorkspace]
-ON [__mj].[Workspace]
-AFTER UPDATE
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[Workspace]
-    SET 
-        __mj_UpdatedAt = GETUTCDATE()
-    FROM 
-        [__mj].[Workspace] AS _organicTable
-    INNER JOIN 
-        INSERTED AS I ON 
-        _organicTable.[ID] = I.[ID];
-END;
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[CompanyIntegrationRunDetail]'
-GO
-CREATE TABLE [__mj].[CompanyIntegrationRunDetail]
-(
-[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__CompanyInte__ID___401E53A6] DEFAULT (newsequentialid()),
-[CompanyIntegrationRunID] [uniqueidentifier] NOT NULL,
-[EntityID] [uniqueidentifier] NOT NULL,
-[RecordID] [nvarchar] (450) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-[Action] [nchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-[ExecutedAt] [datetime] NOT NULL CONSTRAINT [DF_CompanyIntegrationRunDetail_ExecutedAt] DEFAULT (getdate()),
-[IsSuccess] [bit] NOT NULL CONSTRAINT [DF__CompanyIn__IsSuc__2AA05119] DEFAULT ((0)),
-[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__CompanyIn____mj___73ECA2AF] DEFAULT (getutcdate()),
-[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__CompanyIn____mj___74E0C6E8] DEFAULT (getutcdate())
-)
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating primary key [PK_CompanyIntegrationRunDetail_ID] on [__mj].[CompanyIntegrationRunDetail]'
-GO
-ALTER TABLE [__mj].[CompanyIntegrationRunDetail] ADD CONSTRAINT [PK_CompanyIntegrationRunDetail_ID] PRIMARY KEY CLUSTERED ([ID])
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating trigger [__mj].[trgUpdateCompanyIntegrationRunDetail] on [__mj].[CompanyIntegrationRunDetail]'
-GO
-
-CREATE TRIGGER [__mj].[trgUpdateCompanyIntegrationRunDetail]
-ON [__mj].[CompanyIntegrationRunDetail]
-AFTER UPDATE
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[CompanyIntegrationRunDetail]
-    SET 
-        __mj_UpdatedAt = GETUTCDATE()
-    FROM 
-        [__mj].[CompanyIntegrationRunDetail] AS _organicTable
-    INNER JOIN 
-        INSERTED AS I ON 
-        _organicTable.[ID] = I.[ID];
-END;
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[UserApplicationEntity]'
-GO
-CREATE TABLE [__mj].[UserApplicationEntity]
-(
-[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__UserAppli__NewID__4A70F990] DEFAULT (newsequentialid()),
-[UserApplicationID] [uniqueidentifier] NOT NULL,
-[EntityID] [uniqueidentifier] NOT NULL,
-[Sequence] [int] NOT NULL CONSTRAINT [DF_UserApplicationEntity_Sequence] DEFAULT ((0)),
-[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__UserAppli____mj___77BD3393] DEFAULT (getutcdate()),
-[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__UserAppli____mj___78B157CC] DEFAULT (getutcdate())
-)
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating primary key [PK_UserApplicationEntity_ID] on [__mj].[UserApplicationEntity]'
-GO
-ALTER TABLE [__mj].[UserApplicationEntity] ADD CONSTRAINT [PK_UserApplicationEntity_ID] PRIMARY KEY CLUSTERED ([ID])
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating trigger [__mj].[trgUpdateUserApplicationEntity] on [__mj].[UserApplicationEntity]'
-GO
-
-CREATE TRIGGER [__mj].[trgUpdateUserApplicationEntity]
-ON [__mj].[UserApplicationEntity]
-AFTER UPDATE
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[UserApplicationEntity]
-    SET 
-        __mj_UpdatedAt = GETUTCDATE()
-    FROM 
-        [__mj].[UserApplicationEntity] AS _organicTable
-    INNER JOIN 
-        INSERTED AS I ON 
-        _organicTable.[ID] = I.[ID];
-END;
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[UserApplication]'
-GO
-CREATE TABLE [__mj].[UserApplication]
-(
-[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__UserApplica__ID___6A148D72] DEFAULT (newsequentialid()),
-[UserID] [uniqueidentifier] NOT NULL,
-[ApplicationID] [uniqueidentifier] NOT NULL,
-[Sequence] [int] NOT NULL CONSTRAINT [DF_UserApplication_Sequence] DEFAULT ((0)),
-[IsActive] [bit] NOT NULL CONSTRAINT [DF_UserApplication_IsActive] DEFAULT ((1)),
-[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__UserAppli____mj___79A57C05] DEFAULT (getutcdate()),
-[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__UserAppli____mj___7A99A03E] DEFAULT (getutcdate())
-)
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating primary key [PK_UserApplication_ID] on [__mj].[UserApplication]'
-GO
-ALTER TABLE [__mj].[UserApplication] ADD CONSTRAINT [PK_UserApplication_ID] PRIMARY KEY CLUSTERED ([ID])
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating trigger [__mj].[trgUpdateUserApplication] on [__mj].[UserApplication]'
-GO
-
-CREATE TRIGGER [__mj].[trgUpdateUserApplication]
-ON [__mj].[UserApplication]
-AFTER UPDATE
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[UserApplication]
-    SET 
-        __mj_UpdatedAt = GETUTCDATE()
-    FROM 
-        [__mj].[UserApplication] AS _organicTable
-    INNER JOIN 
-        INSERTED AS I ON 
-        _organicTable.[ID] = I.[ID];
-END;
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[Entity]'
-GO
-CREATE TABLE [__mj].[Entity]
-(
-[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF_Entity_ID_] DEFAULT (newsequentialid()),
-[ParentID] [uniqueidentifier] NULL,
-[Name] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-[NameSuffix] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[Description] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[AutoUpdateDescription] [bit] NOT NULL CONSTRAINT [DF_Entity_AutoUpdateDescription] DEFAULT ((1)),
-[BaseTable] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-[BaseView] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-[BaseViewGenerated] [bit] NOT NULL CONSTRAINT [DF_Entity_BaseViewGenerated] DEFAULT ((1)),
-[SchemaName] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_Entity_Schema] DEFAULT (N'dbo'),
-[VirtualEntity] [bit] NOT NULL CONSTRAINT [DF_Entity_VirtualEntity] DEFAULT ((0)),
-[TrackRecordChanges] [bit] NOT NULL CONSTRAINT [DF_Entity_TrackRecordChanges] DEFAULT ((1)),
-[AuditRecordAccess] [bit] NOT NULL CONSTRAINT [DF_Entity_AuditRecordAccess] DEFAULT ((1)),
-[AuditViewRuns] [bit] NOT NULL CONSTRAINT [DF_Entity_AuditViewRuns] DEFAULT ((1)),
-[IncludeInAPI] [bit] NOT NULL CONSTRAINT [DF_Entity_IncludeInAPI] DEFAULT ((0)),
-[AllowAllRowsAPI] [bit] NOT NULL CONSTRAINT [DF_Entity_AllowReturnAllAPI] DEFAULT ((0)),
-[AllowUpdateAPI] [bit] NOT NULL CONSTRAINT [DF_Entity_AllowEditsAPI] DEFAULT ((0)),
-[AllowCreateAPI] [bit] NOT NULL CONSTRAINT [DF_Entity_AllowCreateAPI] DEFAULT ((0)),
-[AllowDeleteAPI] [bit] NOT NULL CONSTRAINT [DF_Entity_AllowDeleteAPI] DEFAULT ((0)),
-[CustomResolverAPI] [bit] NOT NULL CONSTRAINT [DF_Entity_CustomResolverAPI] DEFAULT ((0)),
-[AllowUserSearchAPI] [bit] NOT NULL CONSTRAINT [DF_Entity_AllowUserSearchAPI] DEFAULT ((0)),
-[FullTextSearchEnabled] [bit] NOT NULL CONSTRAINT [DF_Entity_FullTextSearchEnabled] DEFAULT ((0)),
-[FullTextCatalog] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[FullTextCatalogGenerated] [bit] NOT NULL CONSTRAINT [DF_Entity_FullTextCatalogGenerated] DEFAULT ((1)),
-[FullTextIndex] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[FullTextIndexGenerated] [bit] NOT NULL CONSTRAINT [DF_Entity_FullTextIndexGenerated] DEFAULT ((1)),
-[FullTextSearchFunction] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[FullTextSearchFunctionGenerated] [bit] NOT NULL CONSTRAINT [DF_Entity_FullTextSearchFunctionGenerated] DEFAULT ((1)),
-[UserViewMaxRows] [int] NULL CONSTRAINT [DF_Entity_UserViewMaxRows] DEFAULT ((1000)),
-[spCreate] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[spUpdate] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[spDelete] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[spCreateGenerated] [bit] NOT NULL CONSTRAINT [DF_Entity_spCreateGenerated] DEFAULT ((1)),
-[spUpdateGenerated] [bit] NOT NULL CONSTRAINT [DF_Entity_spUpdateGenerated] DEFAULT ((1)),
-[spDeleteGenerated] [bit] NOT NULL CONSTRAINT [DF_Entity_spDeleteGenerated] DEFAULT ((1)),
-[CascadeDeletes] [bit] NOT NULL CONSTRAINT [DF_Entity_CascadeDeletes] DEFAULT ((0)),
-[DeleteType] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_Entity_DeleteType] DEFAULT (N'Hard'),
-[AllowRecordMerge] [bit] NOT NULL CONSTRAINT [DF_Entity_AllowRecordMerge] DEFAULT ((0)),
-[spMatch] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[RelationshipDefaultDisplayType] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF__Entity__Relation__0F008B9E] DEFAULT ('Search'),
-[UserFormGenerated] [bit] NOT NULL CONSTRAINT [DF_Entity_UserFormGenerated] DEFAULT ((1)),
-[EntityObjectSubclassName] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[EntityObjectSubclassImport] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[PreferredCommunicationField] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[Icon] [nvarchar] (500) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF___mj_Entity___mj_CreatedAt] DEFAULT (getutcdate()),
-[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF___mj_Entity___mj_UpdatedAt] DEFAULT (getutcdate())
-)
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating primary key [PK_Entity] on [__mj].[Entity]'
-GO
-ALTER TABLE [__mj].[Entity] ADD CONSTRAINT [PK_Entity] PRIMARY KEY CLUSTERED ([ID])
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating index [UQ_Entity_Name] on [__mj].[Entity]'
-GO
-CREATE UNIQUE NONCLUSTERED INDEX [UQ_Entity_Name] ON [__mj].[Entity] ([Name])
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating trigger [__mj].[trgUpdateEntity] on [__mj].[Entity]'
-GO
-
-CREATE TRIGGER [__mj].[trgUpdateEntity]
-ON [__mj].[Entity]
-AFTER UPDATE
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[Entity]
-    SET 
-        __mj_UpdatedAt = GETUTCDATE()
-    FROM 
-        [__mj].[Entity] AS _organicTable
+        [__mj].[VersionInstallation] AS _organicTable
     INNER JOIN 
         INSERTED AS I ON 
         _organicTable.[ID] = I.[ID];
@@ -2782,81 +477,41 @@ END;
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [__mj].[EntityField]'
+PRINT N'Creating [__mj].[FileEntityRecordLink]'
 GO
-CREATE TABLE [__mj].[EntityField]
+CREATE TABLE [__mj].[FileEntityRecordLink]
 (
-[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF_EntityField_ID_] DEFAULT (newsequentialid()),
+[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__FileEntit__NewID__0D9CF57A] DEFAULT (newsequentialid()),
+[FileID] [uniqueidentifier] NOT NULL,
 [EntityID] [uniqueidentifier] NOT NULL,
-[Sequence] [int] NOT NULL CONSTRAINT [DF_EntityField_Sequence] DEFAULT ((0)),
-[Name] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-[DisplayName] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[Description] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[AutoUpdateDescription] [bit] NOT NULL CONSTRAINT [DF_EntityField_AutoUpdateDescription] DEFAULT ((1)),
-[IsPrimaryKey] [bit] NOT NULL CONSTRAINT [DF_EntityField_IsPrimaryKey] DEFAULT ((0)),
-[IsUnique] [bit] NOT NULL CONSTRAINT [DF_EntityField_IsUnique] DEFAULT ((0)),
-[Category] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[Type] [nvarchar] (100) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-[Length] [int] NULL,
-[Precision] [int] NULL,
-[Scale] [int] NULL,
-[AllowsNull] [bit] NOT NULL CONSTRAINT [DF_EntityField_AllowsNull] DEFAULT ((1)),
-[DefaultValue] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[AutoIncrement] [bit] NOT NULL CONSTRAINT [DF_EntityField_AutoIncrement] DEFAULT ((0)),
-[ValueListType] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_EntityField_ValueListType] DEFAULT (N'None'),
-[ExtendedType] [nvarchar] (50) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[CodeType] [nvarchar] (50) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[DefaultInView] [bit] NOT NULL CONSTRAINT [DF_EntityField_DefaultInGrid] DEFAULT ((0)),
-[ViewCellTemplate] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[DefaultColumnWidth] [int] NULL,
-[AllowUpdateAPI] [bit] NOT NULL CONSTRAINT [DF_EntityField_AllowEditAPI] DEFAULT ((1)),
-[AllowUpdateInView] [bit] NOT NULL CONSTRAINT [DF_EntityField_AllowViewEditing] DEFAULT ((1)),
-[IncludeInUserSearchAPI] [bit] NOT NULL CONSTRAINT [DF_EntityField_IncludeInUserSearchAPI] DEFAULT ((0)),
-[FullTextSearchEnabled] [bit] NOT NULL CONSTRAINT [DF_EntityField_FullTextSearchEnabled] DEFAULT ((0)),
-[UserSearchParamFormatAPI] [nvarchar] (500) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[IncludeInGeneratedForm] [bit] NOT NULL CONSTRAINT [DF_EntityField_IncludeInGeneratedForm] DEFAULT ((1)),
-[GeneratedFormSection] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_EntityField_GeneratedFormSection] DEFAULT (N'Details'),
-[IsVirtual] [bit] NOT NULL CONSTRAINT [DF_EntityField_IsVirtual] DEFAULT ((0)),
-[IsNameField] [bit] NOT NULL CONSTRAINT [DF_EntityField_IsNameField] DEFAULT ((0)),
-[RelatedEntityID] [uniqueidentifier] NULL,
-[RelatedEntityFieldName] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[IncludeRelatedEntityNameFieldInBaseView] [bit] NOT NULL CONSTRAINT [DF_EntityField_IncludeRelatedEntityNameFieldInBaseView] DEFAULT ((1)),
-[RelatedEntityNameFieldMap] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[RelatedEntityDisplayType] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_EntityField_RelatedEntityDisplayType] DEFAULT (N'Search'),
-[EntityIDFieldName] [nvarchar] (100) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF___mj_EntityField___mj_CreatedAt] DEFAULT (getutcdate()),
-[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF___mj_EntityField___mj_UpdatedAt] DEFAULT (getutcdate())
+[RecordID] [nvarchar] (750) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__FileEntit____mj___534AC8F3] DEFAULT (getutcdate()),
+[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__FileEntit____mj___543EED2C] DEFAULT (getutcdate())
 )
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating primary key [PK_EntityField] on [__mj].[EntityField]'
+PRINT N'Creating primary key [PK_FileEntityRecordLink_ID] on [__mj].[FileEntityRecordLink]'
 GO
-ALTER TABLE [__mj].[EntityField] ADD CONSTRAINT [PK_EntityField] PRIMARY KEY CLUSTERED ([ID])
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating index [UQ_EntityField_EntityID_Name] on [__mj].[EntityField]'
-GO
-CREATE UNIQUE NONCLUSTERED INDEX [UQ_EntityField_EntityID_Name] ON [__mj].[EntityField] ([EntityID], [Name])
+ALTER TABLE [__mj].[FileEntityRecordLink] ADD CONSTRAINT [PK_FileEntityRecordLink_ID] PRIMARY KEY CLUSTERED ([ID])
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating trigger [__mj].[trgUpdateEntityField] on [__mj].[EntityField]'
+PRINT N'Creating trigger [__mj].[trgUpdateFileEntityRecordLink] on [__mj].[FileEntityRecordLink]'
 GO
 
-CREATE TRIGGER [__mj].[trgUpdateEntityField]
-ON [__mj].[EntityField]
+CREATE TRIGGER [__mj].[trgUpdateFileEntityRecordLink]
+ON [__mj].[FileEntityRecordLink]
 AFTER UPDATE
 AS
 BEGIN
     SET NOCOUNT ON;
     UPDATE 
-        [__mj].[EntityField]
+        [__mj].[FileEntityRecordLink]
     SET 
         __mj_UpdatedAt = GETUTCDATE()
     FROM 
-        [__mj].[EntityField] AS _organicTable
+        [__mj].[FileEntityRecordLink] AS _organicTable
     INNER JOIN 
         INSERTED AS I ON 
         _organicTable.[ID] = I.[ID];
@@ -2864,42 +519,1227 @@ END;
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [__mj].[RecordChangeReplayRun]'
+PRINT N'Creating [__mj].[ReportSnapshot]'
 GO
-CREATE TABLE [__mj].[RecordChangeReplayRun]
+CREATE TABLE [__mj].[ReportSnapshot]
 (
-[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__RecordChang__ID___5DAEB68D] DEFAULT (newsequentialid()),
+[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__ReportSna__NewID__11387C34] DEFAULT (newsequentialid()),
+[ReportID] [uniqueidentifier] NOT NULL,
+[ResultSet] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+[UserID] [uniqueidentifier] NOT NULL,
+[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__ReportSna____mj___2583FE43] DEFAULT (getutcdate()),
+[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__ReportSna____mj___2678227C] DEFAULT (getutcdate())
+)
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating primary key [PK_ReportSnapshot_ID] on [__mj].[ReportSnapshot]'
+GO
+ALTER TABLE [__mj].[ReportSnapshot] ADD CONSTRAINT [PK_ReportSnapshot_ID] PRIMARY KEY CLUSTERED ([ID])
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating trigger [__mj].[trgUpdateReportSnapshot] on [__mj].[ReportSnapshot]'
+GO
+
+CREATE TRIGGER [__mj].[trgUpdateReportSnapshot]
+ON [__mj].[ReportSnapshot]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[ReportSnapshot]
+    SET 
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM 
+        [__mj].[ReportSnapshot] AS _organicTable
+    INNER JOIN 
+        INSERTED AS I ON 
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[EntityDocument]'
+GO
+CREATE TABLE [__mj].[EntityDocument]
+(
+[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__EntityDocum__ID___4B900652] DEFAULT (newsequentialid()),
+[Name] [nvarchar] (250) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+[TypeID] [uniqueidentifier] NOT NULL,
+[EntityID] [uniqueidentifier] NOT NULL,
+[VectorDatabaseID] [uniqueidentifier] NOT NULL,
+[Status] [nvarchar] (15) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_EntityDocument_Status] DEFAULT (N'Active'),
+[TemplateID] [uniqueidentifier] NOT NULL,
+[AIModelID] [uniqueidentifier] NOT NULL,
+[PotentialMatchThreshold] [numeric] (12, 11) NOT NULL CONSTRAINT [DF_EntityDocument_PotentialMatchThreshold] DEFAULT ((1)),
+[AbsoluteMatchThreshold] [numeric] (12, 11) NOT NULL CONSTRAINT [DF_EntityDocument_AbsoluteMatchTreshhold] DEFAULT ((1)),
+[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF___mj_EntityDocument___mj_CreatedAt] DEFAULT (getutcdate()),
+[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF___mj_EntityDocument___mj_UpdatedAt] DEFAULT (getutcdate())
+)
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating primary key [PK_EntityDocument_ID] on [__mj].[EntityDocument]'
+GO
+ALTER TABLE [__mj].[EntityDocument] ADD CONSTRAINT [PK_EntityDocument_ID] PRIMARY KEY CLUSTERED ([ID])
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating index [UQ_EntityDocument_Name] on [__mj].[EntityDocument]'
+GO
+CREATE UNIQUE NONCLUSTERED INDEX [UQ_EntityDocument_Name] ON [__mj].[EntityDocument] ([Name])
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating trigger [__mj].[trgUpdateEntityDocument] on [__mj].[EntityDocument]'
+GO
+
+CREATE TRIGGER [__mj].[trgUpdateEntityDocument]
+ON [__mj].[EntityDocument]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[EntityDocument]
+    SET 
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM 
+        [__mj].[EntityDocument] AS _organicTable
+    INNER JOIN 
+        INSERTED AS I ON 
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[VectorDatabase]'
+GO
+CREATE TABLE [__mj].[VectorDatabase]
+(
+[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__VectorDatab__ID___6DE51E56] DEFAULT (newsequentialid()),
+[Name] [nvarchar] (100) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+[Description] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[DefaultURL] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[ClassKey] [nvarchar] (100) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__VectorDat____mj___42203CF1] DEFAULT (getutcdate()),
+[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__VectorDat____mj___4314612A] DEFAULT (getutcdate())
+)
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating primary key [PK_VectorDatabase_ID] on [__mj].[VectorDatabase]'
+GO
+ALTER TABLE [__mj].[VectorDatabase] ADD CONSTRAINT [PK_VectorDatabase_ID] PRIMARY KEY CLUSTERED ([ID])
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating trigger [__mj].[trgUpdateVectorDatabase] on [__mj].[VectorDatabase]'
+GO
+
+CREATE TRIGGER [__mj].[trgUpdateVectorDatabase]
+ON [__mj].[VectorDatabase]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[VectorDatabase]
+    SET 
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM 
+        [__mj].[VectorDatabase] AS _organicTable
+    INNER JOIN 
+        INSERTED AS I ON 
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[ActionParam]'
+GO
+CREATE TABLE [__mj].[ActionParam]
+(
+[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__ActionParam__ID___32C45888] DEFAULT (newsequentialid()),
+[ActionID] [uniqueidentifier] NOT NULL,
+[Name] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+[DefaultValue] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[Type] [nchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+[ValueType] [nvarchar] (30) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+[IsArray] [bit] NOT NULL CONSTRAINT [DF__ActionPar__IsArr__714CCE00] DEFAULT ((0)),
+[Description] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[IsRequired] [bit] NOT NULL CONSTRAINT [DF__ActionPar__IsReq__7240F239] DEFAULT ((1)),
+[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__ActionPar____mj___665D9D67] DEFAULT (getutcdate()),
+[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__ActionPar____mj___6751C1A0] DEFAULT (getutcdate())
+)
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating primary key [PK_ActionParam_1] on [__mj].[ActionParam]'
+GO
+ALTER TABLE [__mj].[ActionParam] ADD CONSTRAINT [PK_ActionParam_1] PRIMARY KEY CLUSTERED ([ID])
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating trigger [__mj].[trgUpdateActionParam] on [__mj].[ActionParam]'
+GO
+
+CREATE TRIGGER [__mj].[trgUpdateActionParam]
+ON [__mj].[ActionParam]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[ActionParam]
+    SET 
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM 
+        [__mj].[ActionParam] AS _organicTable
+    INNER JOIN 
+        INSERTED AS I ON 
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[DataContextItem]'
+GO
+CREATE TABLE [__mj].[DataContextItem]
+(
+[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__DataConte__NewID__2B976CB5] DEFAULT (newsequentialid()),
+[DataContextID] [uniqueidentifier] NOT NULL,
+[Type] [nvarchar] (50) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+[ViewID] [uniqueidentifier] NULL,
+[QueryID] [uniqueidentifier] NULL,
+[EntityID] [uniqueidentifier] NULL,
+[RecordID] [nvarchar] (450) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[SQL] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[DataJSON] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[LastRefreshedAt] [datetime] NULL,
+[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__DataConte____mj___44088563] DEFAULT (getutcdate()),
+[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__DataConte____mj___44FCA99C] DEFAULT (getutcdate())
+)
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating primary key [PK_DataContextItem_ID] on [__mj].[DataContextItem]'
+GO
+ALTER TABLE [__mj].[DataContextItem] ADD CONSTRAINT [PK_DataContextItem_ID] PRIMARY KEY CLUSTERED ([ID])
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating trigger [__mj].[trgUpdateDataContextItem] on [__mj].[DataContextItem]'
+GO
+
+CREATE TRIGGER [__mj].[trgUpdateDataContextItem]
+ON [__mj].[DataContextItem]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[DataContextItem]
+    SET 
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM 
+        [__mj].[DataContextItem] AS _organicTable
+    INNER JOIN 
+        INSERTED AS I ON 
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[RecommendationRun]'
+GO
+CREATE TABLE [__mj].[RecommendationRun]
+(
+[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__Recommendat__ID___5CBA9254] DEFAULT (newsequentialid()),
+[RecommendationProviderID] [uniqueidentifier] NOT NULL,
+[StartDate] [datetime] NOT NULL,
+[EndDate] [datetime] NULL,
+[Status] [nvarchar] (50) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+[Description] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[RunByUserID] [uniqueidentifier] NOT NULL,
+[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__Recommend____mj___02F9DC15] DEFAULT (getutcdate()),
+[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__Recommend____mj___03EE004E] DEFAULT (getutcdate())
+)
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating primary key [PK_RecommendationRun_ID] on [__mj].[RecommendationRun]'
+GO
+ALTER TABLE [__mj].[RecommendationRun] ADD CONSTRAINT [PK_RecommendationRun_ID] PRIMARY KEY CLUSTERED ([ID])
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating trigger [__mj].[trgUpdateRecommendationRun] on [__mj].[RecommendationRun]'
+GO
+
+CREATE TRIGGER [__mj].[trgUpdateRecommendationRun]
+ON [__mj].[RecommendationRun]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[RecommendationRun]
+    SET 
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM 
+        [__mj].[RecommendationRun] AS _organicTable
+    INNER JOIN 
+        INSERTED AS I ON 
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[EntityDocumentSetting]'
+GO
+CREATE TABLE [__mj].[EntityDocumentSetting]
+(
+[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__EntityDoc__NewID__5E22EC82] DEFAULT (newsequentialid()),
+[EntityDocumentID] [uniqueidentifier] NOT NULL,
+[Name] [nvarchar] (100) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+[Value] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+[Comments] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF___mj_EntityDocumentSetting___mj_CreatedAt] DEFAULT (getutcdate()),
+[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF___mj_EntityDocumentSetting___mj_UpdatedAt] DEFAULT (getutcdate())
+)
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating primary key [PK_EntityDocumentSetting_ID] on [__mj].[EntityDocumentSetting]'
+GO
+ALTER TABLE [__mj].[EntityDocumentSetting] ADD CONSTRAINT [PK_EntityDocumentSetting_ID] PRIMARY KEY CLUSTERED ([ID])
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating trigger [__mj].[trgUpdateEntityDocumentSetting] on [__mj].[EntityDocumentSetting]'
+GO
+
+CREATE TRIGGER [__mj].[trgUpdateEntityDocumentSetting]
+ON [__mj].[EntityDocumentSetting]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[EntityDocumentSetting]
+    SET 
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM 
+        [__mj].[EntityDocumentSetting] AS _organicTable
+    INNER JOIN 
+        INSERTED AS I ON 
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[Recommendation]'
+GO
+CREATE TABLE [__mj].[Recommendation]
+(
+[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__Recommendat__ID___5AD249E2] DEFAULT (newsequentialid()),
+[RecommendationRunID] [uniqueidentifier] NOT NULL,
+[SourceEntityID] [uniqueidentifier] NOT NULL,
+[SourceEntityRecordID] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__Recommend____mj___7F294B31] DEFAULT (getutcdate()),
+[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__Recommend____mj___001D6F6A] DEFAULT (getutcdate())
+)
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating primary key [PK_Recommendation_ID] on [__mj].[Recommendation]'
+GO
+ALTER TABLE [__mj].[Recommendation] ADD CONSTRAINT [PK_Recommendation_ID] PRIMARY KEY CLUSTERED ([ID])
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating trigger [__mj].[trgUpdateRecommendation] on [__mj].[Recommendation]'
+GO
+
+CREATE TRIGGER [__mj].[trgUpdateRecommendation]
+ON [__mj].[Recommendation]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[Recommendation]
+    SET 
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM 
+        [__mj].[Recommendation] AS _organicTable
+    INNER JOIN 
+        INSERTED AS I ON 
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[RecommendationItem]'
+GO
+CREATE TABLE [__mj].[RecommendationItem]
+(
+[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__Recommend__NewID__6371B184] DEFAULT (newsequentialid()),
+[RecommendationID] [uniqueidentifier] NOT NULL,
+[DestinationEntityID] [uniqueidentifier] NOT NULL,
+[DestinationEntityRecordID] [nvarchar] (450) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+[MatchProbability] [decimal] (18, 15) NULL,
+[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__Recommend____mj___04E22487] DEFAULT (getutcdate()),
+[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__Recommend____mj___05D648C0] DEFAULT (getutcdate())
+)
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating primary key [PK_RecommendationItem_ID] on [__mj].[RecommendationItem]'
+GO
+ALTER TABLE [__mj].[RecommendationItem] ADD CONSTRAINT [PK_RecommendationItem_ID] PRIMARY KEY CLUSTERED ([ID])
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating index [IX_RecommendationItem_EntityID] on [__mj].[RecommendationItem]'
+GO
+CREATE NONCLUSTERED INDEX [IX_RecommendationItem_EntityID] ON [__mj].[RecommendationItem] ([DestinationEntityID])
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating index [IX_RecommendationItem_EntityRecordID] on [__mj].[RecommendationItem]'
+GO
+CREATE NONCLUSTERED INDEX [IX_RecommendationItem_EntityRecordID] ON [__mj].[RecommendationItem] ([DestinationEntityRecordID])
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating trigger [__mj].[trgUpdateRecommendationItem] on [__mj].[RecommendationItem]'
+GO
+
+CREATE TRIGGER [__mj].[trgUpdateRecommendationItem]
+ON [__mj].[RecommendationItem]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[RecommendationItem]
+    SET 
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM 
+        [__mj].[RecommendationItem] AS _organicTable
+    INNER JOIN 
+        INSERTED AS I ON 
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[CompanyIntegrationRecordMap]'
+GO
+CREATE TABLE [__mj].[CompanyIntegrationRecordMap]
+(
+[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__CompanyIn__NewID__4DB77A8F] DEFAULT (newsequentialid()),
+[CompanyIntegrationID] [uniqueidentifier] NOT NULL,
+[ExternalSystemRecordID] [nvarchar] (750) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+[EntityID] [uniqueidentifier] NOT NULL,
+[EntityRecordID] [nvarchar] (750) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__CompanyIn____mj___3A7F1B29] DEFAULT (getutcdate()),
+[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__CompanyIn____mj___3B733F62] DEFAULT (getutcdate())
+)
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating primary key [PK_CompanyIntegrationRecordMap_ID] on [__mj].[CompanyIntegrationRecordMap]'
+GO
+ALTER TABLE [__mj].[CompanyIntegrationRecordMap] ADD CONSTRAINT [PK_CompanyIntegrationRecordMap_ID] PRIMARY KEY CLUSTERED ([ID])
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating trigger [__mj].[trgUpdateCompanyIntegrationRecordMap] on [__mj].[CompanyIntegrationRecordMap]'
+GO
+
+CREATE TRIGGER [__mj].[trgUpdateCompanyIntegrationRecordMap]
+ON [__mj].[CompanyIntegrationRecordMap]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[CompanyIntegrationRecordMap]
+    SET 
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM 
+        [__mj].[CompanyIntegrationRecordMap] AS _organicTable
+    INNER JOIN 
+        INSERTED AS I ON 
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[RecordMergeDeletionLog]'
+GO
+CREATE TABLE [__mj].[RecordMergeDeletionLog]
+(
+[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__RecordMer__NewID__06BAEDC1] DEFAULT (newsequentialid()),
+[RecordMergeLogID] [uniqueidentifier] NOT NULL,
+[DeletedRecordID] [nvarchar] (750) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+[Status] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_RecordMergeDeletionLog_Status] DEFAULT (N'Pending'),
+[ProcessingLog] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__RecordMer____mj___3E4FAC0D] DEFAULT (getutcdate()),
+[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__RecordMer____mj___3F43D046] DEFAULT (getutcdate())
+)
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating primary key [PK_RecordMergeDeletionLog_ID] on [__mj].[RecordMergeDeletionLog]'
+GO
+ALTER TABLE [__mj].[RecordMergeDeletionLog] ADD CONSTRAINT [PK_RecordMergeDeletionLog_ID] PRIMARY KEY CLUSTERED ([ID])
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating trigger [__mj].[trgUpdateRecordMergeDeletionLog] on [__mj].[RecordMergeDeletionLog]'
+GO
+
+CREATE TRIGGER [__mj].[trgUpdateRecordMergeDeletionLog]
+ON [__mj].[RecordMergeDeletionLog]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[RecordMergeDeletionLog]
+    SET 
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM 
+        [__mj].[RecordMergeDeletionLog] AS _organicTable
+    INNER JOIN 
+        INSERTED AS I ON 
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[Employee]'
+GO
+CREATE TABLE [__mj].[Employee]
+(
+[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__Employee__ID___47BF756E] DEFAULT (newsequentialid()),
+[BCMID] [uniqueidentifier] NOT NULL CONSTRAINT [DF_Employee_BCMID] DEFAULT (newid()),
+[FirstName] [nvarchar] (30) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+[LastName] [nvarchar] (50) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+[CompanyID] [uniqueidentifier] NOT NULL,
+[SupervisorID] [uniqueidentifier] NULL,
+[Title] [nvarchar] (50) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[Email] [nvarchar] (100) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+[Phone] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[Active] [bit] NOT NULL CONSTRAINT [DF__Employee__Active__5D95E53A] DEFAULT ((1)),
+[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF___mj_Employee___mj_CreatedAt] DEFAULT (getutcdate()),
+[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF___mj_Employee___mj_UpdatedAt] DEFAULT (getutcdate())
+)
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating primary key [PK_Employee_ID] on [__mj].[Employee]'
+GO
+ALTER TABLE [__mj].[Employee] ADD CONSTRAINT [PK_Employee_ID] PRIMARY KEY CLUSTERED ([ID])
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Adding constraints to [__mj].[Employee]'
+GO
+ALTER TABLE [__mj].[Employee] ADD CONSTRAINT [UQ__Employee__Email] UNIQUE NONCLUSTERED ([Email])
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating trigger [__mj].[trgUpdateEmployee] on [__mj].[Employee]'
+GO
+
+CREATE TRIGGER [__mj].[trgUpdateEmployee]
+ON [__mj].[Employee]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[Employee]
+    SET 
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM 
+        [__mj].[Employee] AS _organicTable
+    INNER JOIN 
+        INSERTED AS I ON 
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[UserFavorite]'
+GO
+CREATE TABLE [__mj].[UserFavorite]
+(
+[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__UserFavor__NewID__54EE8803] DEFAULT (newsequentialid()),
+[UserID] [uniqueidentifier] NOT NULL,
+[EntityID] [uniqueidentifier] NOT NULL,
+[RecordID] [nvarchar] (450) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__UserFavor____mj___64AA5F1F] DEFAULT (getutcdate()),
+[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__UserFavor____mj___659E8358] DEFAULT (getutcdate())
+)
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating primary key [PK_UserFavorite_ID] on [__mj].[UserFavorite]'
+GO
+ALTER TABLE [__mj].[UserFavorite] ADD CONSTRAINT [PK_UserFavorite_ID] PRIMARY KEY CLUSTERED ([ID])
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating index [IX_UserFavorite] on [__mj].[UserFavorite]'
+GO
+CREATE NONCLUSTERED INDEX [IX_UserFavorite] ON [__mj].[UserFavorite] ([RecordID])
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating trigger [__mj].[trgUpdateUserFavorite] on [__mj].[UserFavorite]'
+GO
+
+CREATE TRIGGER [__mj].[trgUpdateUserFavorite]
+ON [__mj].[UserFavorite]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[UserFavorite]
+    SET 
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM 
+        [__mj].[UserFavorite] AS _organicTable
+    INNER JOIN 
+        INSERTED AS I ON 
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[Company]'
+GO
+CREATE TABLE [__mj].[Company]
+(
+[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__Company__ID___3D41E6FB] DEFAULT (newsequentialid()),
+[Name] [nvarchar] (50) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+[Description] [nvarchar] (200) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+[Website] [nvarchar] (100) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[LogoURL] [nvarchar] (500) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[Domain] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF___mj_Company___mj_CreatedAt] DEFAULT (getutcdate()),
+[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF___mj_Company___mj_UpdatedAt] DEFAULT (getutcdate())
+)
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating primary key [PK_Company_ID] on [__mj].[Company]'
+GO
+ALTER TABLE [__mj].[Company] ADD CONSTRAINT [PK_Company_ID] PRIMARY KEY CLUSTERED ([ID])
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Adding constraints to [__mj].[Company]'
+GO
+ALTER TABLE [__mj].[Company] ADD CONSTRAINT [UQ_Company_Name] UNIQUE NONCLUSTERED ([Name])
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating trigger [__mj].[trgUpdateCompany] on [__mj].[Company]'
+GO
+
+CREATE TRIGGER [__mj].[trgUpdateCompany]
+ON [__mj].[Company]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[Company]
+    SET 
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM 
+        [__mj].[Company] AS _organicTable
+    INNER JOIN 
+        INSERTED AS I ON 
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[UserApplicationEntity]'
+GO
+CREATE TABLE [__mj].[UserApplicationEntity]
+(
+[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__UserAppli__NewID__4A70F990] DEFAULT (newsequentialid()),
+[UserApplicationID] [uniqueidentifier] NOT NULL,
+[EntityID] [uniqueidentifier] NOT NULL,
+[Sequence] [int] NOT NULL CONSTRAINT [DF_UserApplicationEntity_Sequence] DEFAULT ((0)),
+[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__UserAppli____mj___77BD3393] DEFAULT (getutcdate()),
+[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__UserAppli____mj___78B157CC] DEFAULT (getutcdate())
+)
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating primary key [PK_UserApplicationEntity_ID] on [__mj].[UserApplicationEntity]'
+GO
+ALTER TABLE [__mj].[UserApplicationEntity] ADD CONSTRAINT [PK_UserApplicationEntity_ID] PRIMARY KEY CLUSTERED ([ID])
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating trigger [__mj].[trgUpdateUserApplicationEntity] on [__mj].[UserApplicationEntity]'
+GO
+
+CREATE TRIGGER [__mj].[trgUpdateUserApplicationEntity]
+ON [__mj].[UserApplicationEntity]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[UserApplicationEntity]
+    SET 
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM 
+        [__mj].[UserApplicationEntity] AS _organicTable
+    INNER JOIN 
+        INSERTED AS I ON 
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[ApplicationEntity]'
+GO
+CREATE TABLE [__mj].[ApplicationEntity]
+(
+[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__Applicati__NewID__0E0709CE] DEFAULT (newsequentialid()),
+[ApplicationID] [uniqueidentifier] NOT NULL,
+[EntityID] [uniqueidentifier] NOT NULL,
+[Sequence] [int] NOT NULL,
+[DefaultForNewUser] [bit] NOT NULL CONSTRAINT [DF_ApplicationEntity_DefaultForNewUser] DEFAULT ((1)),
+[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF___mj_ApplicationEntity___mj_CreatedAt] DEFAULT (getutcdate()),
+[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF___mj_ApplicationEntity___mj_UpdatedAt] DEFAULT (getutcdate())
+)
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating primary key [PK_ApplicationEntity_ID] on [__mj].[ApplicationEntity]'
+GO
+ALTER TABLE [__mj].[ApplicationEntity] ADD CONSTRAINT [PK_ApplicationEntity_ID] PRIMARY KEY CLUSTERED ([ID])
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating trigger [__mj].[trgUpdateApplicationEntity] on [__mj].[ApplicationEntity]'
+GO
+
+CREATE TRIGGER [__mj].[trgUpdateApplicationEntity]
+ON [__mj].[ApplicationEntity]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[ApplicationEntity]
+    SET 
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM 
+        [__mj].[ApplicationEntity] AS _organicTable
+    INNER JOIN 
+        INSERTED AS I ON 
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[EntityPermission]'
+GO
+CREATE TABLE [__mj].[EntityPermission]
+(
+[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__EntityPer__NewID__66B83283] DEFAULT (newsequentialid()),
+[EntityID] [uniqueidentifier] NOT NULL,
+[RoleID] [uniqueidentifier] NOT NULL,
+[CanCreate] [bit] NOT NULL CONSTRAINT [DF_EntityPermission_CanCreate] DEFAULT ((0)),
+[CanRead] [bit] NOT NULL CONSTRAINT [DF_EntityPermission_CanRead] DEFAULT ((0)),
+[CanUpdate] [bit] NOT NULL CONSTRAINT [DF_EntityPermission_CanUpdate] DEFAULT ((0)),
+[CanDelete] [bit] NOT NULL CONSTRAINT [DF_EntityPermission_CanDelete] DEFAULT ((0)),
+[ReadRLSFilterID] [uniqueidentifier] NULL,
+[CreateRLSFilterID] [uniqueidentifier] NULL,
+[UpdateRLSFilterID] [uniqueidentifier] NULL,
+[DeleteRLSFilterID] [uniqueidentifier] NULL,
+[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF___mj_EntityPermission___mj_CreatedAt] DEFAULT (getutcdate()),
+[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF___mj_EntityPermission___mj_UpdatedAt] DEFAULT (getutcdate())
+)
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating primary key [PK_EntityPermission_ID] on [__mj].[EntityPermission]'
+GO
+ALTER TABLE [__mj].[EntityPermission] ADD CONSTRAINT [PK_EntityPermission_ID] PRIMARY KEY CLUSTERED ([ID])
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating trigger [__mj].[trgUpdateEntityPermission] on [__mj].[EntityPermission]'
+GO
+
+CREATE TRIGGER [__mj].[trgUpdateEntityPermission]
+ON [__mj].[EntityPermission]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[EntityPermission]
+    SET 
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM 
+        [__mj].[EntityPermission] AS _organicTable
+    INNER JOIN 
+        INSERTED AS I ON 
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[QueryCategory]'
+GO
+CREATE TABLE [__mj].[QueryCategory]
+(
+[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__QueryCatego__ID___57F5DD37] DEFAULT (newsequentialid()),
+[Name] [nvarchar] (50) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+[ParentID] [uniqueidentifier] NULL,
+[Description] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[UserID] [uniqueidentifier] NOT NULL,
+[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF___mj_QueryCategory___mj_CreatedAt] DEFAULT (getutcdate()),
+[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF___mj_QueryCategory___mj_UpdatedAt] DEFAULT (getutcdate())
+)
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating primary key [PK_QueryCategory_ID] on [__mj].[QueryCategory]'
+GO
+ALTER TABLE [__mj].[QueryCategory] ADD CONSTRAINT [PK_QueryCategory_ID] PRIMARY KEY CLUSTERED ([ID])
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating trigger [__mj].[trgUpdateQueryCategory] on [__mj].[QueryCategory]'
+GO
+
+CREATE TRIGGER [__mj].[trgUpdateQueryCategory]
+ON [__mj].[QueryCategory]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[QueryCategory]
+    SET 
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM 
+        [__mj].[QueryCategory] AS _organicTable
+    INNER JOIN 
+        INSERTED AS I ON 
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[Action]'
+GO
+CREATE TABLE [__mj].[Action]
+(
+[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__Action__ID___2EF3C7A4] DEFAULT (newsequentialid()),
+[CategoryID] [uniqueidentifier] NULL,
+[Name] [nvarchar] (425) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+[Description] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[Type] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_Action_Type] DEFAULT (N'Generated'),
+[UserPrompt] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[UserComments] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[Code] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[CodeComments] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[CodeApprovalStatus] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF__Action__CodeAppr__745357DD] DEFAULT (N'Pending'),
+[CodeApprovalComments] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[CodeApprovedByUserID] [uniqueidentifier] NULL,
+[CodeApprovedAt] [datetime] NULL,
+[CodeLocked] [bit] NOT NULL CONSTRAINT [DF_Action_CodeLocked] DEFAULT ((0)),
+[ForceCodeGeneration] [bit] NOT NULL CONSTRAINT [DF_Action_ForceGeneration] DEFAULT ((0)),
+[RetentionPeriod] [int] NULL,
+[Status] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF__Action__Status__763BA04F] DEFAULT (N'Pending'),
+[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF___mj_Action___mj_CreatedAt] DEFAULT (getutcdate()),
+[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF___mj_Action___mj_UpdatedAt] DEFAULT (getutcdate())
+)
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating primary key [PK_Action_ID] on [__mj].[Action]'
+GO
+ALTER TABLE [__mj].[Action] ADD CONSTRAINT [PK_Action_ID] PRIMARY KEY CLUSTERED ([ID])
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Adding constraints to [__mj].[Action]'
+GO
+ALTER TABLE [__mj].[Action] ADD CONSTRAINT [UQ_Action_Name] UNIQUE NONCLUSTERED ([Name])
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating trigger [__mj].[trgUpdateAction] on [__mj].[Action]'
+GO
+
+CREATE TRIGGER [__mj].[trgUpdateAction]
+ON [__mj].[Action]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[Action]
+    SET 
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM 
+        [__mj].[Action] AS _organicTable
+    INNER JOIN 
+        INSERTED AS I ON 
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[QueryPermission]'
+GO
+CREATE TABLE [__mj].[QueryPermission]
+(
+[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__QueryPerm__NewID__4F6AB8D7] DEFAULT (newsequentialid()),
+[QueryID] [uniqueidentifier] NOT NULL,
+[RoleID] [uniqueidentifier] NOT NULL,
+[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF___mj_QueryPermission___mj_CreatedAt] DEFAULT (getutcdate()),
+[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF___mj_QueryPermission___mj_UpdatedAt] DEFAULT (getutcdate())
+)
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating primary key [PK_QueryPermission_ID] on [__mj].[QueryPermission]'
+GO
+ALTER TABLE [__mj].[QueryPermission] ADD CONSTRAINT [PK_QueryPermission_ID] PRIMARY KEY CLUSTERED ([ID])
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating trigger [__mj].[trgUpdateQueryPermission] on [__mj].[QueryPermission]'
+GO
+
+CREATE TRIGGER [__mj].[trgUpdateQueryPermission]
+ON [__mj].[QueryPermission]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[QueryPermission]
+    SET 
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM 
+        [__mj].[QueryPermission] AS _organicTable
+    INNER JOIN 
+        INSERTED AS I ON 
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[EntityActionFilter]'
+GO
+CREATE TABLE [__mj].[EntityActionFilter]
+(
+[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__EntityAct__NewID__6CA61603] DEFAULT (newsequentialid()),
+[EntityActionID] [uniqueidentifier] NOT NULL,
+[ActionFilterID] [uniqueidentifier] NOT NULL,
+[Sequence] [int] NOT NULL,
+[Status] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF__EntityAct__Statu__25EAB371] DEFAULT ('Pending'),
+[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF___mj_EntityActionFilter___mj_CreatedAt] DEFAULT (getutcdate()),
+[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF___mj_EntityActionFilter___mj_UpdatedAt] DEFAULT (getutcdate())
+)
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating primary key [PK_EntityActionFilter_ID] on [__mj].[EntityActionFilter]'
+GO
+ALTER TABLE [__mj].[EntityActionFilter] ADD CONSTRAINT [PK_EntityActionFilter_ID] PRIMARY KEY CLUSTERED ([ID])
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating trigger [__mj].[trgUpdateEntityActionFilter] on [__mj].[EntityActionFilter]'
+GO
+
+CREATE TRIGGER [__mj].[trgUpdateEntityActionFilter]
+ON [__mj].[EntityActionFilter]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[EntityActionFilter]
+    SET 
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM 
+        [__mj].[EntityActionFilter] AS _organicTable
+    INNER JOIN 
+        INSERTED AS I ON 
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[Query]'
+GO
+CREATE TABLE [__mj].[Query]
+(
+[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__Query__ID___5701B8FE] DEFAULT (newsequentialid()),
+[Name] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+[CategoryID] [uniqueidentifier] NULL,
+[UserQuestion] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[Description] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[SQL] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[TechnicalDescription] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[OriginalSQL] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[Feedback] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[Status] [nvarchar] (15) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_Quey_Status] DEFAULT (N'Pending'),
+[QualityRank] [int] NULL CONSTRAINT [DF_Quey_QualityRank] DEFAULT ((0)),
+[ExecutionCostRank] [int] NULL,
+[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF___mj_Query___mj_CreatedAt] DEFAULT (getutcdate()),
+[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF___mj_Query___mj_UpdatedAt] DEFAULT (getutcdate())
+)
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating primary key [PK_Query_ID] on [__mj].[Query]'
+GO
+ALTER TABLE [__mj].[Query] ADD CONSTRAINT [PK_Query_ID] PRIMARY KEY CLUSTERED ([ID])
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating trigger [__mj].[trgUpdateQuery] on [__mj].[Query]'
+GO
+
+CREATE TRIGGER [__mj].[trgUpdateQuery]
+ON [__mj].[Query]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[Query]
+    SET 
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM 
+        [__mj].[Query] AS _organicTable
+    INNER JOIN 
+        INSERTED AS I ON 
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[WorkflowRun]'
+GO
+CREATE TABLE [__mj].[WorkflowRun]
+(
+[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__WorkflowR__NewID__25FE8EF0] DEFAULT (newsequentialid()),
+[WorkflowID] [uniqueidentifier] NOT NULL,
+[ExternalSystemRecordID] [nvarchar] (500) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
 [StartedAt] [datetime] NOT NULL,
 [EndedAt] [datetime] NULL,
-[Status] [nvarchar] (50) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+[Status] [nchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_WorkflowRun_Status] DEFAULT (N'Pending'),
+[Results] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__WorkflowR____mj___05172EB1] DEFAULT (getutcdate()),
+[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__WorkflowR____mj___060B52EA] DEFAULT (getutcdate())
+)
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating primary key [PK_WorkflowRun_ID] on [__mj].[WorkflowRun]'
+GO
+ALTER TABLE [__mj].[WorkflowRun] ADD CONSTRAINT [PK_WorkflowRun_ID] PRIMARY KEY CLUSTERED ([ID])
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating trigger [__mj].[trgUpdateWorkflowRun] on [__mj].[WorkflowRun]'
+GO
+
+CREATE TRIGGER [__mj].[trgUpdateWorkflowRun]
+ON [__mj].[WorkflowRun]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[WorkflowRun]
+    SET 
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM 
+        [__mj].[WorkflowRun] AS _organicTable
+    INNER JOIN 
+        INSERTED AS I ON 
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[ListDetail]'
+GO
+CREATE TABLE [__mj].[ListDetail]
+(
+[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__ListDetai__NewID__3A6F9BF1] DEFAULT (newsequentialid()),
+[ListID] [uniqueidentifier] NOT NULL,
+[RecordID] [nvarchar] (445) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+[Sequence] [int] NOT NULL CONSTRAINT [DF_ListDetail_Sequence] DEFAULT ((0)),
+[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__ListDetai____mj___7F5E555B] DEFAULT (getutcdate()),
+[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__ListDetai____mj___00527994] DEFAULT (getutcdate())
+)
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating primary key [PK_ListDetail_ID] on [__mj].[ListDetail]'
+GO
+ALTER TABLE [__mj].[ListDetail] ADD CONSTRAINT [PK_ListDetail_ID] PRIMARY KEY CLUSTERED ([ID])
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating index [IX_ListDetail_ListID] on [__mj].[ListDetail]'
+GO
+CREATE NONCLUSTERED INDEX [IX_ListDetail_ListID] ON [__mj].[ListDetail] ([ListID])
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating index [IX_ListDetail_RecordID] on [__mj].[ListDetail]'
+GO
+CREATE NONCLUSTERED INDEX [IX_ListDetail_RecordID] ON [__mj].[ListDetail] ([RecordID])
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating trigger [__mj].[trgUpdateListDetail] on [__mj].[ListDetail]'
+GO
+
+CREATE TRIGGER [__mj].[trgUpdateListDetail]
+ON [__mj].[ListDetail]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[ListDetail]
+    SET 
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM 
+        [__mj].[ListDetail] AS _organicTable
+    INNER JOIN 
+        INSERTED AS I ON 
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[UserViewRunDetail]'
+GO
+CREATE TABLE [__mj].[UserViewRunDetail]
+(
+[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__UserViewR__NewID__086E2C09] DEFAULT (newsequentialid()),
+[UserViewRunID] [uniqueidentifier] NOT NULL,
+[RecordID] [nvarchar] (450) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__UserViewR____mj___032EE63F] DEFAULT (getutcdate()),
+[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__UserViewR____mj___04230A78] DEFAULT (getutcdate())
+)
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating primary key [PK_UserViewRunDetail_ID] on [__mj].[UserViewRunDetail]'
+GO
+ALTER TABLE [__mj].[UserViewRunDetail] ADD CONSTRAINT [PK_UserViewRunDetail_ID] PRIMARY KEY CLUSTERED ([ID])
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating index [IX_UserViewRunDetail_RecordID] on [__mj].[UserViewRunDetail]'
+GO
+CREATE NONCLUSTERED INDEX [IX_UserViewRunDetail_RecordID] ON [__mj].[UserViewRunDetail] ([RecordID])
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating trigger [__mj].[trgUpdateUserViewRunDetail] on [__mj].[UserViewRunDetail]'
+GO
+
+CREATE TRIGGER [__mj].[trgUpdateUserViewRunDetail]
+ON [__mj].[UserViewRunDetail]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[UserViewRunDetail]
+    SET 
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM 
+        [__mj].[UserViewRunDetail] AS _organicTable
+    INNER JOIN 
+        INSERTED AS I ON 
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[UserNotification]'
+GO
+CREATE TABLE [__mj].[UserNotification]
+(
+[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__UserNotif__NewID__5E77F23D] DEFAULT (newsequentialid()),
 [UserID] [uniqueidentifier] NOT NULL,
-[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__RecordCha____mj___06CA6CF9] DEFAULT (getutcdate()),
-[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__RecordCha____mj___07BE9132] DEFAULT (getutcdate())
+[Title] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[Message] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[ResourceTypeID] [uniqueidentifier] NULL,
+[ResourceRecordID] [int] NULL,
+[ResourceConfiguration] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[Unread] [bit] NOT NULL CONSTRAINT [DF_Table_1_MarkedAsRead] DEFAULT ((1)),
+[ReadAt] [datetime] NULL,
+[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__UserNotif____mj___36AE8A45] DEFAULT (getutcdate()),
+[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__UserNotif____mj___37A2AE7E] DEFAULT (getutcdate())
 )
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating primary key [PK_RecordChangeReplayRun_ID] on [__mj].[RecordChangeReplayRun]'
+PRINT N'Creating primary key [PK_UserNotification_ID] on [__mj].[UserNotification]'
 GO
-ALTER TABLE [__mj].[RecordChangeReplayRun] ADD CONSTRAINT [PK_RecordChangeReplayRun_ID] PRIMARY KEY CLUSTERED ([ID])
+ALTER TABLE [__mj].[UserNotification] ADD CONSTRAINT [PK_UserNotification_ID] PRIMARY KEY CLUSTERED ([ID])
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating trigger [__mj].[trgUpdateRecordChangeReplayRun] on [__mj].[RecordChangeReplayRun]'
+PRINT N'Creating index [IX_UserNotification_UserID] on [__mj].[UserNotification]'
+GO
+CREATE NONCLUSTERED INDEX [IX_UserNotification_UserID] ON [__mj].[UserNotification] ([UserID])
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating trigger [__mj].[trgUpdateUserNotification] on [__mj].[UserNotification]'
 GO
 
-CREATE TRIGGER [__mj].[trgUpdateRecordChangeReplayRun]
-ON [__mj].[RecordChangeReplayRun]
+CREATE TRIGGER [__mj].[trgUpdateUserNotification]
+ON [__mj].[UserNotification]
 AFTER UPDATE
 AS
 BEGIN
     SET NOCOUNT ON;
     UPDATE 
-        [__mj].[RecordChangeReplayRun]
+        [__mj].[UserNotification]
     SET 
         __mj_UpdatedAt = GETUTCDATE()
     FROM 
-        [__mj].[RecordChangeReplayRun] AS _organicTable
+        [__mj].[UserNotification] AS _organicTable
     INNER JOIN 
         INSERTED AS I ON 
         _organicTable.[ID] = I.[ID];
@@ -2907,173 +1747,47 @@ END;
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [__mj].[EntityActionInvocation]'
+PRINT N'Creating [__mj].[Conversation]'
 GO
-CREATE TABLE [__mj].[EntityActionInvocation]
+CREATE TABLE [__mj].[Conversation]
 (
-[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__EntityAct__NewID__7817C8AF] DEFAULT (newsequentialid()),
-[EntityActionID] [uniqueidentifier] NOT NULL,
-[InvocationTypeID] [uniqueidentifier] NOT NULL,
-[Status] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF__EntityAct__Statu__315C661D] DEFAULT ('Pending'),
-[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF___mj_EntityActionInvocation___mj_CreatedAt] DEFAULT (getutcdate()),
-[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF___mj_EntityActionInvocation___mj_UpdatedAt] DEFAULT (getutcdate())
-)
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating primary key [PK_EntityActionInvocation_ID] on [__mj].[EntityActionInvocation]'
-GO
-ALTER TABLE [__mj].[EntityActionInvocation] ADD CONSTRAINT [PK_EntityActionInvocation_ID] PRIMARY KEY CLUSTERED ([ID])
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating trigger [__mj].[trgUpdateEntityActionInvocation] on [__mj].[EntityActionInvocation]'
-GO
-
-CREATE TRIGGER [__mj].[trgUpdateEntityActionInvocation]
-ON [__mj].[EntityActionInvocation]
-AFTER UPDATE
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[EntityActionInvocation]
-    SET 
-        __mj_UpdatedAt = GETUTCDATE()
-    FROM 
-        [__mj].[EntityActionInvocation] AS _organicTable
-    INNER JOIN 
-        INSERTED AS I ON 
-        _organicTable.[ID] = I.[ID];
-END;
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[LibraryItem]'
-GO
-CREATE TABLE [__mj].[LibraryItem]
-(
-[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__LibraryIt__NewID__20AFC9EE] DEFAULT (newsequentialid()),
-[Name] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-[LibraryID] [uniqueidentifier] NOT NULL,
-[Type] [nvarchar] (50) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__LibraryIt____mj___08B2B56B] DEFAULT (getutcdate()),
-[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__LibraryIt____mj___09A6D9A4] DEFAULT (getutcdate())
-)
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating primary key [PK_LibraryItem_ID] on [__mj].[LibraryItem]'
-GO
-ALTER TABLE [__mj].[LibraryItem] ADD CONSTRAINT [PK_LibraryItem_ID] PRIMARY KEY CLUSTERED ([ID])
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating trigger [__mj].[trgUpdateLibraryItem] on [__mj].[LibraryItem]'
-GO
-
-CREATE TRIGGER [__mj].[trgUpdateLibraryItem]
-ON [__mj].[LibraryItem]
-AFTER UPDATE
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[LibraryItem]
-    SET 
-        __mj_UpdatedAt = GETUTCDATE()
-    FROM 
-        [__mj].[LibraryItem] AS _organicTable
-    INNER JOIN 
-        INSERTED AS I ON 
-        _organicTable.[ID] = I.[ID];
-END;
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[ActionAuthorization]'
-GO
-CREATE TABLE [__mj].[ActionAuthorization]
-(
-[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__ActionAut__NewID__194DD3F1] DEFAULT (newsequentialid()),
-[ActionID] [uniqueidentifier] NOT NULL,
-[AuthorizationID] [uniqueidentifier] NOT NULL,
-[Comments] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__ActionAut____mj___5CD4332D] DEFAULT (getutcdate()),
-[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__ActionAut____mj___5DC85766] DEFAULT (getutcdate())
-)
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating primary key [PK_ActionAuthorization_ID] on [__mj].[ActionAuthorization]'
-GO
-ALTER TABLE [__mj].[ActionAuthorization] ADD CONSTRAINT [PK_ActionAuthorization_ID] PRIMARY KEY CLUSTERED ([ID])
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating trigger [__mj].[trgUpdateActionAuthorization] on [__mj].[ActionAuthorization]'
-GO
-
-CREATE TRIGGER [__mj].[trgUpdateActionAuthorization]
-ON [__mj].[ActionAuthorization]
-AFTER UPDATE
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[ActionAuthorization]
-    SET 
-        __mj_UpdatedAt = GETUTCDATE()
-    FROM 
-        [__mj].[ActionAuthorization] AS _organicTable
-    INNER JOIN 
-        INSERTED AS I ON 
-        _organicTable.[ID] = I.[ID];
-END;
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[EntityRelationshipDisplayComponent]'
-GO
-CREATE TABLE [__mj].[EntityRelationshipDisplayComponent]
-(
-[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__EntityRelat__ID___4D784EC4] DEFAULT (newsequentialid()),
-[Name] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__Conversatio__ID___411277DF] DEFAULT (newsequentialid()),
+[UserID] [uniqueidentifier] NOT NULL,
+[ExternalID] [nvarchar] (500) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[Name] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
 [Description] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[RelationshipType] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__EntityRel____mj___7282B1D3] DEFAULT (getutcdate()),
-[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__EntityRel____mj___7376D60C] DEFAULT (getutcdate())
+[Type] [nvarchar] (50) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_Conversation_Type] DEFAULT (N'Skip'),
+[IsArchived] [bit] NOT NULL CONSTRAINT [DF_Conversation_IsArchived] DEFAULT ((0)),
+[LinkedEntityID] [uniqueidentifier] NULL,
+[LinkedRecordID] [nvarchar] (500) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[DataContextID] [uniqueidentifier] NULL,
+[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__Conversat____mj___34C641D3] DEFAULT (getutcdate()),
+[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__Conversat____mj___35BA660C] DEFAULT (getutcdate())
 )
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating primary key [PK_EntityRelationshipDisplayComponent_ID] on [__mj].[EntityRelationshipDisplayComponent]'
+PRINT N'Creating primary key [PK_Conversation_ID] on [__mj].[Conversation]'
 GO
-ALTER TABLE [__mj].[EntityRelationshipDisplayComponent] ADD CONSTRAINT [PK_EntityRelationshipDisplayComponent_ID] PRIMARY KEY CLUSTERED ([ID])
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Adding constraints to [__mj].[EntityRelationshipDisplayComponent]'
-GO
-ALTER TABLE [__mj].[EntityRelationshipDisplayComponent] ADD CONSTRAINT [UQ__EntityRe__737584F667950678] UNIQUE NONCLUSTERED ([Name])
+ALTER TABLE [__mj].[Conversation] ADD CONSTRAINT [PK_Conversation_ID] PRIMARY KEY CLUSTERED ([ID])
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating trigger [__mj].[trgUpdateEntityRelationshipDisplayComponent] on [__mj].[EntityRelationshipDisplayComponent]'
+PRINT N'Creating trigger [__mj].[trgUpdateConversation] on [__mj].[Conversation]'
 GO
 
-CREATE TRIGGER [__mj].[trgUpdateEntityRelationshipDisplayComponent]
-ON [__mj].[EntityRelationshipDisplayComponent]
+CREATE TRIGGER [__mj].[trgUpdateConversation]
+ON [__mj].[Conversation]
 AFTER UPDATE
 AS
 BEGIN
     SET NOCOUNT ON;
     UPDATE 
-        [__mj].[EntityRelationshipDisplayComponent]
+        [__mj].[Conversation]
     SET 
         __mj_UpdatedAt = GETUTCDATE()
     FROM 
-        [__mj].[EntityRelationshipDisplayComponent] AS _organicTable
+        [__mj].[Conversation] AS _organicTable
     INNER JOIN 
         INSERTED AS I ON 
         _organicTable.[ID] = I.[ID];
@@ -3081,41 +1795,134 @@ END;
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [__mj].[EntityAction]'
+PRINT N'Creating [__mj].[DashboardCategory]'
 GO
-CREATE TABLE [__mj].[EntityAction]
+CREATE TABLE [__mj].[DashboardCategory]
 (
-[EntityID] [uniqueidentifier] NOT NULL,
-[ActionID] [uniqueidentifier] NOT NULL,
-[Status] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF__EntityAct__Statu__1E4991A9] DEFAULT ('Pending'),
-[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF___mj_EntityAction___mj_CreatedAt] DEFAULT (getutcdate()),
-[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF___mj_EntityAction___mj_UpdatedAt] DEFAULT (getutcdate()),
-[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__EntityActio__ID___48B399A7] DEFAULT (newsequentialid())
+[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__DashboardCa__ID___42FAC051] DEFAULT (newsequentialid()),
+[Name] [nvarchar] (100) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+[Description] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[ParentID] [uniqueidentifier] NULL,
+[UserID] [uniqueidentifier] NOT NULL,
+[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__Dashboard____mj___49C15EB9] DEFAULT (getutcdate()),
+[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__Dashboard____mj___4AB582F2] DEFAULT (getutcdate())
 )
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating primary key [PK_EntityAction_ID] on [__mj].[EntityAction]'
+PRINT N'Creating primary key [PK_DashboardCategory_ID] on [__mj].[DashboardCategory]'
 GO
-ALTER TABLE [__mj].[EntityAction] ADD CONSTRAINT [PK_EntityAction_ID] PRIMARY KEY CLUSTERED ([ID])
+ALTER TABLE [__mj].[DashboardCategory] ADD CONSTRAINT [PK_DashboardCategory_ID] PRIMARY KEY CLUSTERED ([ID])
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating trigger [__mj].[trgUpdateEntityAction] on [__mj].[EntityAction]'
+PRINT N'Creating trigger [__mj].[trgUpdateDashboardCategory] on [__mj].[DashboardCategory]'
 GO
 
-CREATE TRIGGER [__mj].[trgUpdateEntityAction]
-ON [__mj].[EntityAction]
+CREATE TRIGGER [__mj].[trgUpdateDashboardCategory]
+ON [__mj].[DashboardCategory]
 AFTER UPDATE
 AS
 BEGIN
     SET NOCOUNT ON;
     UPDATE 
-        [__mj].[EntityAction]
+        [__mj].[DashboardCategory]
     SET 
         __mj_UpdatedAt = GETUTCDATE()
     FROM 
-        [__mj].[EntityAction] AS _organicTable
+        [__mj].[DashboardCategory] AS _organicTable
+    INNER JOIN 
+        INSERTED AS I ON 
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[Application]'
+GO
+CREATE TABLE [__mj].[Application]
+(
+[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__Application__ID___3694E96C] DEFAULT (newsequentialid()),
+[Name] [nvarchar] (100) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+[Description] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[Icon] [nvarchar] (500) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[DefaultForNewUser] [bit] NOT NULL CONSTRAINT [DF_Application_DefaultForNewUser] DEFAULT ((1)),
+[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF___mj_Application___mj_CreatedAt] DEFAULT (getutcdate()),
+[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF___mj_Application___mj_UpdatedAt] DEFAULT (getutcdate())
+)
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating primary key [PK_Application_ID] on [__mj].[Application]'
+GO
+ALTER TABLE [__mj].[Application] ADD CONSTRAINT [PK_Application_ID] PRIMARY KEY CLUSTERED ([ID])
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Adding constraints to [__mj].[Application]'
+GO
+ALTER TABLE [__mj].[Application] ADD CONSTRAINT [UQ_Application_Name] UNIQUE NONCLUSTERED ([Name])
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating trigger [__mj].[trgUpdateApplication] on [__mj].[Application]'
+GO
+
+CREATE TRIGGER [__mj].[trgUpdateApplication]
+ON [__mj].[Application]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[Application]
+    SET 
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM 
+        [__mj].[Application] AS _organicTable
+    INNER JOIN 
+        INSERTED AS I ON 
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[UserApplication]'
+GO
+CREATE TABLE [__mj].[UserApplication]
+(
+[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__UserApplica__ID___6A148D72] DEFAULT (newsequentialid()),
+[UserID] [uniqueidentifier] NOT NULL,
+[ApplicationID] [uniqueidentifier] NOT NULL,
+[Sequence] [int] NOT NULL CONSTRAINT [DF_UserApplication_Sequence] DEFAULT ((0)),
+[IsActive] [bit] NOT NULL CONSTRAINT [DF_UserApplication_IsActive] DEFAULT ((1)),
+[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__UserAppli____mj___79A57C05] DEFAULT (getutcdate()),
+[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__UserAppli____mj___7A99A03E] DEFAULT (getutcdate())
+)
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating primary key [PK_UserApplication_ID] on [__mj].[UserApplication]'
+GO
+ALTER TABLE [__mj].[UserApplication] ADD CONSTRAINT [PK_UserApplication_ID] PRIMARY KEY CLUSTERED ([ID])
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating trigger [__mj].[trgUpdateUserApplication] on [__mj].[UserApplication]'
+GO
+
+CREATE TRIGGER [__mj].[trgUpdateUserApplication]
+ON [__mj].[UserApplication]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[UserApplication]
+    SET 
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM 
+        [__mj].[UserApplication] AS _organicTable
     INNER JOIN 
         INSERTED AS I ON 
         _organicTable.[ID] = I.[ID];
@@ -3210,6 +2017,3604 @@ BEGIN
         __mj_UpdatedAt = GETUTCDATE()
     FROM 
         [__mj].[List] AS _organicTable
+    INNER JOIN 
+        INSERTED AS I ON 
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[ScheduledAction]'
+GO
+CREATE TABLE [__mj].[ScheduledAction]
+(
+[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__ScheduledAct__ID__4A14FF90] DEFAULT (newsequentialid()),
+[Name] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+[Description] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[CreatedByUserID] [uniqueidentifier] NOT NULL,
+[ActionID] [uniqueidentifier] NOT NULL,
+[Type] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+[CronExpression] [nvarchar] (100) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[Timezone] [nvarchar] (100) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+[Status] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF__Scheduled__Statu__4B0923C9] DEFAULT ('Pending'),
+[IntervalDays] [int] NULL,
+[DayOfWeek] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[DayOfMonth] [int] NULL,
+[Month] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[CustomCronExpression] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__Scheduled____mj___0AB9948A] DEFAULT (getutcdate()),
+[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__Scheduled____mj___0BADB8C3] DEFAULT (getutcdate())
+)
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating primary key [PK__Schedule__3214EC27A259AC9E] on [__mj].[ScheduledAction]'
+GO
+ALTER TABLE [__mj].[ScheduledAction] ADD CONSTRAINT [PK__Schedule__3214EC27A259AC9E] PRIMARY KEY CLUSTERED ([ID])
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating trigger [__mj].[trgUpdateScheduledAction] on [__mj].[ScheduledAction]'
+GO
+
+CREATE TRIGGER [__mj].[trgUpdateScheduledAction]
+ON [__mj].[ScheduledAction]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[ScheduledAction]
+    SET 
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM 
+        [__mj].[ScheduledAction] AS _organicTable
+    INNER JOIN 
+        INSERTED AS I ON 
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[AuditLog]'
+GO
+CREATE TABLE [__mj].[AuditLog]
+(
+[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__AuditLog__NewID__405D7F71] DEFAULT (newsequentialid()),
+[UserID] [uniqueidentifier] NOT NULL,
+[AuditLogTypeID] [uniqueidentifier] NOT NULL,
+[AuthorizationID] [uniqueidentifier] NULL,
+[Status] [nvarchar] (50) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_AuditLog_Status] DEFAULT (N'Allow'),
+[Description] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[Details] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[EntityID] [uniqueidentifier] NULL,
+[RecordID] [nvarchar] (450) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__AuditLog____mj_C__0AD00807] DEFAULT (getutcdate()),
+[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__AuditLog____mj_U__0BC42C40] DEFAULT (getutcdate())
+)
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating primary key [PK_AuditLog_ID] on [__mj].[AuditLog]'
+GO
+ALTER TABLE [__mj].[AuditLog] ADD CONSTRAINT [PK_AuditLog_ID] PRIMARY KEY CLUSTERED ([ID])
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating trigger [__mj].[trgUpdateAuditLog] on [__mj].[AuditLog]'
+GO
+
+CREATE TRIGGER [__mj].[trgUpdateAuditLog]
+ON [__mj].[AuditLog]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[AuditLog]
+    SET 
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM 
+        [__mj].[AuditLog] AS _organicTable
+    INNER JOIN 
+        INSERTED AS I ON 
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[ScheduledActionParam]'
+GO
+CREATE TABLE [__mj].[ScheduledActionParam]
+(
+[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__ScheduledAct__ID__7885D5B6] DEFAULT (newsequentialid()),
+[ScheduledActionID] [uniqueidentifier] NOT NULL,
+[ActionParamID] [uniqueidentifier] NOT NULL,
+[ValueType] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+[Value] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[Comments] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__Scheduled____mj___3CFAFB94] DEFAULT (getutcdate()),
+[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__Scheduled____mj___3DEF1FCD] DEFAULT (getutcdate())
+)
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating primary key [PK__Schedule__3214EC27EB11011E] on [__mj].[ScheduledActionParam]'
+GO
+ALTER TABLE [__mj].[ScheduledActionParam] ADD CONSTRAINT [PK__Schedule__3214EC27EB11011E] PRIMARY KEY CLUSTERED ([ID])
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating trigger [__mj].[trgUpdateScheduledActionParam] on [__mj].[ScheduledActionParam]'
+GO
+
+CREATE TRIGGER [__mj].[trgUpdateScheduledActionParam]
+ON [__mj].[ScheduledActionParam]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[ScheduledActionParam]
+    SET 
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM 
+        [__mj].[ScheduledActionParam] AS _organicTable
+    INNER JOIN 
+        INSERTED AS I ON 
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[Library]'
+GO
+CREATE TABLE [__mj].[Library]
+(
+[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__Library__ID___523D03E1] DEFAULT (newsequentialid()),
+[Name] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+[Description] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[Status] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF__Library__Status__740A0A71] DEFAULT ('Pending'),
+[TypeDefinitions] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[SampleCode] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF___mj_Library___mj_CreatedAt] DEFAULT (getutcdate()),
+[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF___mj_Library___mj_UpdatedAt] DEFAULT (getutcdate())
+)
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating primary key [PK_Library_ID] on [__mj].[Library]'
+GO
+ALTER TABLE [__mj].[Library] ADD CONSTRAINT [PK_Library_ID] PRIMARY KEY CLUSTERED ([ID])
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Adding constraints to [__mj].[Library]'
+GO
+ALTER TABLE [__mj].[Library] ADD CONSTRAINT [UQ_Library_Name] UNIQUE NONCLUSTERED ([Name])
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating trigger [__mj].[trgUpdateLibrary] on [__mj].[Library]'
+GO
+
+CREATE TRIGGER [__mj].[trgUpdateLibrary]
+ON [__mj].[Library]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[Library]
+    SET 
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM 
+        [__mj].[Library] AS _organicTable
+    INNER JOIN 
+        INSERTED AS I ON 
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[CompanyIntegrationRun]'
+GO
+CREATE TABLE [__mj].[CompanyIntegrationRun]
+(
+[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__CompanyInte__ID___3F2A2F6D] DEFAULT (newsequentialid()),
+[CompanyIntegrationID] [uniqueidentifier] NOT NULL,
+[RunByUserID] [uniqueidentifier] NOT NULL,
+[StartedAt] [datetime] NULL,
+[EndedAt] [datetime] NULL,
+[TotalRecords] [int] NOT NULL,
+[Comments] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__CompanyIn____mj___72045A3D] DEFAULT (getutcdate()),
+[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__CompanyIn____mj___72F87E76] DEFAULT (getutcdate())
+)
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating primary key [PK_CompanyIntegrationRun_ID] on [__mj].[CompanyIntegrationRun]'
+GO
+ALTER TABLE [__mj].[CompanyIntegrationRun] ADD CONSTRAINT [PK_CompanyIntegrationRun_ID] PRIMARY KEY CLUSTERED ([ID])
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating trigger [__mj].[trgUpdateCompanyIntegrationRun] on [__mj].[CompanyIntegrationRun]'
+GO
+
+CREATE TRIGGER [__mj].[trgUpdateCompanyIntegrationRun]
+ON [__mj].[CompanyIntegrationRun]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[CompanyIntegrationRun]
+    SET 
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM 
+        [__mj].[CompanyIntegrationRun] AS _organicTable
+    INNER JOIN 
+        INSERTED AS I ON 
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[UserView]'
+GO
+CREATE TABLE [__mj].[UserView]
+(
+[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__UserView__ID___6B08B1AB] DEFAULT (newsequentialid()),
+[UserID] [uniqueidentifier] NOT NULL,
+[EntityID] [uniqueidentifier] NOT NULL,
+[Name] [nvarchar] (100) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+[Description] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[CategoryID] [uniqueidentifier] NULL,
+[IsShared] [bit] NOT NULL CONSTRAINT [DF_UserView_IsShared] DEFAULT ((0)),
+[IsDefault] [bit] NOT NULL CONSTRAINT [DF_UserView_IsDefault] DEFAULT ((0)),
+[GridState] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[FilterState] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[CustomFilterState] [bit] NOT NULL CONSTRAINT [DF_UserView_CustomFilterState] DEFAULT ((0)),
+[SmartFilterEnabled] [bit] NOT NULL CONSTRAINT [DF_UserView_SmartFilterEnabled] DEFAULT ((0)),
+[SmartFilterPrompt] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[SmartFilterWhereClause] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[SmartFilterExplanation] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[WhereClause] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[CustomWhereClause] [bit] NOT NULL CONSTRAINT [DF_UserView_CustomWhereClause] DEFAULT ((0)),
+[SortState] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF___mj_UserView___mj_CreatedAt] DEFAULT (getutcdate()),
+[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF___mj_UserView___mj_UpdatedAt] DEFAULT (getutcdate())
+)
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating primary key [PK_UserView] on [__mj].[UserView]'
+GO
+ALTER TABLE [__mj].[UserView] ADD CONSTRAINT [PK_UserView] PRIMARY KEY CLUSTERED ([ID])
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating trigger [__mj].[trgUpdateUserView] on [__mj].[UserView]'
+GO
+
+CREATE TRIGGER [__mj].[trgUpdateUserView]
+ON [__mj].[UserView]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[UserView]
+    SET 
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM 
+        [__mj].[UserView] AS _organicTable
+    INNER JOIN 
+        INSERTED AS I ON 
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[ActionContextType]'
+GO
+CREATE TABLE [__mj].[ActionContextType]
+(
+[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__ActionConte__ID___30DC1016] DEFAULT (newsequentialid()),
+[Name] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+[Description] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__ActionCon____mj___5EBC7B9F] DEFAULT (getutcdate()),
+[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__ActionCon____mj___5FB09FD8] DEFAULT (getutcdate())
+)
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating primary key [PK_ActionContextType] on [__mj].[ActionContextType]'
+GO
+ALTER TABLE [__mj].[ActionContextType] ADD CONSTRAINT [PK_ActionContextType] PRIMARY KEY CLUSTERED ([ID])
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating trigger [__mj].[trgUpdateActionContextType] on [__mj].[ActionContextType]'
+GO
+
+CREATE TRIGGER [__mj].[trgUpdateActionContextType]
+ON [__mj].[ActionContextType]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[ActionContextType]
+    SET 
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM 
+        [__mj].[ActionContextType] AS _organicTable
+    INNER JOIN 
+        INSERTED AS I ON 
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[EntityDocumentType]'
+GO
+CREATE TABLE [__mj].[EntityDocumentType]
+(
+[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__EntityDocum__ID___4C842A8B] DEFAULT (newsequentialid()),
+[Name] [nvarchar] (100) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+[Description] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF___mj_EntityDocumentType___mj_CreatedAt] DEFAULT (getutcdate()),
+[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF___mj_EntityDocumentType___mj_UpdatedAt] DEFAULT (getutcdate())
+)
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating primary key [PK_EntityDocumentType_ID] on [__mj].[EntityDocumentType]'
+GO
+ALTER TABLE [__mj].[EntityDocumentType] ADD CONSTRAINT [PK_EntityDocumentType_ID] PRIMARY KEY CLUSTERED ([ID])
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating trigger [__mj].[trgUpdateEntityDocumentType] on [__mj].[EntityDocumentType]'
+GO
+
+CREATE TRIGGER [__mj].[trgUpdateEntityDocumentType]
+ON [__mj].[EntityDocumentType]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[EntityDocumentType]
+    SET 
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM 
+        [__mj].[EntityDocumentType] AS _organicTable
+    INNER JOIN 
+        INSERTED AS I ON 
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[Workflow]'
+GO
+CREATE TABLE [__mj].[Workflow]
+(
+[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__Workflow__ID___6ED9428F] DEFAULT (newsequentialid()),
+[Name] [nvarchar] (100) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+[Description] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[WorkflowEngineID] [uniqueidentifier] NOT NULL,
+[ExternalSystemRecordID] [nvarchar] (100) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+[AutoRunEnabled] [bit] NOT NULL CONSTRAINT [DF_Workflow_AutoRunEnabled] DEFAULT ((0)),
+[AutoRunIntervalUnits] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[AutoRunInterval] [int] NULL,
+[SubclassName] [nvarchar] (200) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__Workflow____mj_C__06FF7723] DEFAULT (getutcdate()),
+[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__Workflow____mj_U__07F39B5C] DEFAULT (getutcdate())
+)
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating primary key [PK_Workflow_ID] on [__mj].[Workflow]'
+GO
+ALTER TABLE [__mj].[Workflow] ADD CONSTRAINT [PK_Workflow_ID] PRIMARY KEY CLUSTERED ([ID])
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Adding constraints to [__mj].[Workflow]'
+GO
+ALTER TABLE [__mj].[Workflow] ADD CONSTRAINT [UQ_Workflow_Name] UNIQUE NONCLUSTERED ([Name])
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating trigger [__mj].[trgUpdateWorkflow] on [__mj].[Workflow]'
+GO
+
+CREATE TRIGGER [__mj].[trgUpdateWorkflow]
+ON [__mj].[Workflow]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[Workflow]
+    SET 
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM 
+        [__mj].[Workflow] AS _organicTable
+    INNER JOIN 
+        INSERTED AS I ON 
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[VectorIndex]'
+GO
+CREATE TABLE [__mj].[VectorIndex]
+(
+[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__VectorInd__NewID__1103720A] DEFAULT (newsequentialid()),
+[Name] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+[Description] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[VectorDatabaseID] [uniqueidentifier] NOT NULL,
+[EmbeddingModelID] [uniqueidentifier] NOT NULL,
+[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__VectorInd____mj___4037F47F] DEFAULT (getutcdate()),
+[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__VectorInd____mj___412C18B8] DEFAULT (getutcdate())
+)
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating primary key [PK_VectorIndex_ID] on [__mj].[VectorIndex]'
+GO
+ALTER TABLE [__mj].[VectorIndex] ADD CONSTRAINT [PK_VectorIndex_ID] PRIMARY KEY CLUSTERED ([ID])
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating trigger [__mj].[trgUpdateVectorIndex] on [__mj].[VectorIndex]'
+GO
+
+CREATE TRIGGER [__mj].[trgUpdateVectorIndex]
+ON [__mj].[VectorIndex]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[VectorIndex]
+    SET 
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM 
+        [__mj].[VectorIndex] AS _organicTable
+    INNER JOIN 
+        INSERTED AS I ON 
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[EntityAction]'
+GO
+CREATE TABLE [__mj].[EntityAction]
+(
+[EntityID] [uniqueidentifier] NOT NULL,
+[ActionID] [uniqueidentifier] NOT NULL,
+[Status] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF__EntityAct__Statu__1E4991A9] DEFAULT ('Pending'),
+[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF___mj_EntityAction___mj_CreatedAt] DEFAULT (getutcdate()),
+[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF___mj_EntityAction___mj_UpdatedAt] DEFAULT (getutcdate()),
+[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__EntityActio__ID___48B399A7] DEFAULT (newsequentialid())
+)
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating primary key [PK_EntityAction_ID] on [__mj].[EntityAction]'
+GO
+ALTER TABLE [__mj].[EntityAction] ADD CONSTRAINT [PK_EntityAction_ID] PRIMARY KEY CLUSTERED ([ID])
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating trigger [__mj].[trgUpdateEntityAction] on [__mj].[EntityAction]'
+GO
+
+CREATE TRIGGER [__mj].[trgUpdateEntityAction]
+ON [__mj].[EntityAction]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[EntityAction]
+    SET 
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM 
+        [__mj].[EntityAction] AS _organicTable
+    INNER JOIN 
+        INSERTED AS I ON 
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[RecordChangeReplayRun]'
+GO
+CREATE TABLE [__mj].[RecordChangeReplayRun]
+(
+[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__RecordChang__ID___5DAEB68D] DEFAULT (newsequentialid()),
+[StartedAt] [datetime] NOT NULL,
+[EndedAt] [datetime] NULL,
+[Status] [nvarchar] (50) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+[UserID] [uniqueidentifier] NOT NULL,
+[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__RecordCha____mj___06CA6CF9] DEFAULT (getutcdate()),
+[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__RecordCha____mj___07BE9132] DEFAULT (getutcdate())
+)
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating primary key [PK_RecordChangeReplayRun_ID] on [__mj].[RecordChangeReplayRun]'
+GO
+ALTER TABLE [__mj].[RecordChangeReplayRun] ADD CONSTRAINT [PK_RecordChangeReplayRun_ID] PRIMARY KEY CLUSTERED ([ID])
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating trigger [__mj].[trgUpdateRecordChangeReplayRun] on [__mj].[RecordChangeReplayRun]'
+GO
+
+CREATE TRIGGER [__mj].[trgUpdateRecordChangeReplayRun]
+ON [__mj].[RecordChangeReplayRun]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[RecordChangeReplayRun]
+    SET 
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM 
+        [__mj].[RecordChangeReplayRun] AS _organicTable
+    INNER JOIN 
+        INSERTED AS I ON 
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[EntityActionInvocationType]'
+GO
+CREATE TABLE [__mj].[EntityActionInvocationType]
+(
+[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__EntityActio__ID___49A7BDE0] DEFAULT (newsequentialid()),
+[Name] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+[Description] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[DisplaySequence] [int] NOT NULL CONSTRAINT [DF_EntityActionInvocationType_DisplaySequence] DEFAULT ((0)),
+[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF___mj_EntityActionInvocationType___mj_CreatedAt] DEFAULT (getutcdate()),
+[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF___mj_EntityActionInvocationType___mj_UpdatedAt] DEFAULT (getutcdate())
+)
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating primary key [PK_EntityActionInvocationType_ID] on [__mj].[EntityActionInvocationType]'
+GO
+ALTER TABLE [__mj].[EntityActionInvocationType] ADD CONSTRAINT [PK_EntityActionInvocationType_ID] PRIMARY KEY CLUSTERED ([ID])
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating trigger [__mj].[trgUpdateEntityActionInvocationType] on [__mj].[EntityActionInvocationType]'
+GO
+
+CREATE TRIGGER [__mj].[trgUpdateEntityActionInvocationType]
+ON [__mj].[EntityActionInvocationType]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[EntityActionInvocationType]
+    SET 
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM 
+        [__mj].[EntityActionInvocationType] AS _organicTable
+    INNER JOIN 
+        INSERTED AS I ON 
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[EntityCommunicationField]'
+GO
+CREATE TABLE [__mj].[EntityCommunicationField]
+(
+[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__EntityCom__NewID__4B10180E] DEFAULT (newsequentialid()),
+[EntityCommunicationMessageTypeID] [uniqueidentifier] NOT NULL,
+[FieldName] [nvarchar] (500) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+[Priority] [int] NOT NULL,
+[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF___mj_EntityCommunicationField___mj_CreatedAt] DEFAULT (getutcdate()),
+[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF___mj_EntityCommunicationField___mj_UpdatedAt] DEFAULT (getutcdate())
+)
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating primary key [PK_EntityCommunicationField_ID] on [__mj].[EntityCommunicationField]'
+GO
+ALTER TABLE [__mj].[EntityCommunicationField] ADD CONSTRAINT [PK_EntityCommunicationField_ID] PRIMARY KEY CLUSTERED ([ID])
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating trigger [__mj].[trgUpdateEntityCommunicationField] on [__mj].[EntityCommunicationField]'
+GO
+
+CREATE TRIGGER [__mj].[trgUpdateEntityCommunicationField]
+ON [__mj].[EntityCommunicationField]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[EntityCommunicationField]
+    SET 
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM 
+        [__mj].[EntityCommunicationField] AS _organicTable
+    INNER JOIN 
+        INSERTED AS I ON 
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[ActionCategory]'
+GO
+CREATE TABLE [__mj].[ActionCategory]
+(
+[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__ActionCateg__ID___2FE7EBDD] DEFAULT (newsequentialid()),
+[Name] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+[Description] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[ParentID] [uniqueidentifier] NULL,
+[Status] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF__ActionCat__Statu__6DA65A4E] DEFAULT ('Pending'),
+[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF___mj_ActionCategory___mj_CreatedAt] DEFAULT (getutcdate()),
+[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF___mj_ActionCategory___mj_UpdatedAt] DEFAULT (getutcdate())
+)
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating primary key [PK__ActionCa__3214EC27BA2348AF] on [__mj].[ActionCategory]'
+GO
+ALTER TABLE [__mj].[ActionCategory] ADD CONSTRAINT [PK__ActionCa__3214EC27BA2348AF] PRIMARY KEY CLUSTERED ([ID])
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating trigger [__mj].[trgUpdateActionCategory] on [__mj].[ActionCategory]'
+GO
+
+CREATE TRIGGER [__mj].[trgUpdateActionCategory]
+ON [__mj].[ActionCategory]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[ActionCategory]
+    SET 
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM 
+        [__mj].[ActionCategory] AS _organicTable
+    INNER JOIN 
+        INSERTED AS I ON 
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[TemplateContent]'
+GO
+CREATE TABLE [__mj].[TemplateContent]
+(
+[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__TemplateC__NewID__338D9438] DEFAULT (newsequentialid()),
+[TemplateID] [uniqueidentifier] NOT NULL,
+[TypeID] [uniqueidentifier] NOT NULL,
+[TemplateText] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[Priority] [int] NOT NULL,
+[IsActive] [bit] NOT NULL CONSTRAINT [DF__TemplateC__IsAct__347CC29D] DEFAULT ((1)),
+[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__TemplateC____mj___797071DB] DEFAULT (getutcdate()),
+[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__TemplateC____mj___7A649614] DEFAULT (getutcdate())
+)
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating primary key [PK_TemplateContent_ID] on [__mj].[TemplateContent]'
+GO
+ALTER TABLE [__mj].[TemplateContent] ADD CONSTRAINT [PK_TemplateContent_ID] PRIMARY KEY CLUSTERED ([ID])
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating trigger [__mj].[trgUpdateTemplateContent] on [__mj].[TemplateContent]'
+GO
+
+CREATE TRIGGER [__mj].[trgUpdateTemplateContent]
+ON [__mj].[TemplateContent]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[TemplateContent]
+    SET 
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM 
+        [__mj].[TemplateContent] AS _organicTable
+    INNER JOIN 
+        INSERTED AS I ON 
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[TemplateParam]'
+GO
+CREATE TABLE [__mj].[TemplateParam]
+(
+[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__TemplateP__NewID__3E0B22AB] DEFAULT (newsequentialid()),
+[TemplateID] [uniqueidentifier] NOT NULL,
+[Name] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+[Description] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[Type] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF__TemplatePa__Type__4A6C03BC] DEFAULT ('Scalar'),
+[DefaultValue] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[IsRequired] [bit] NOT NULL CONSTRAINT [DF_TemplateParam_IsRequired] DEFAULT ((0)),
+[LinkedParameterName] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[LinkedParameterField] [nvarchar] (500) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[ExtraFilter] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[EntityID] [uniqueidentifier] NULL,
+[RecordID] [nvarchar] (2000) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__TemplateP____mj___7B58BA4D] DEFAULT (getutcdate()),
+[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__TemplateP____mj___7C4CDE86] DEFAULT (getutcdate())
+)
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating primary key [PK_TemplateParam_ID] on [__mj].[TemplateParam]'
+GO
+ALTER TABLE [__mj].[TemplateParam] ADD CONSTRAINT [PK_TemplateParam_ID] PRIMARY KEY CLUSTERED ([ID])
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating trigger [__mj].[trgUpdateTemplateParam] on [__mj].[TemplateParam]'
+GO
+
+CREATE TRIGGER [__mj].[trgUpdateTemplateParam]
+ON [__mj].[TemplateParam]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[TemplateParam]
+    SET 
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM 
+        [__mj].[TemplateParam] AS _organicTable
+    INNER JOIN 
+        INSERTED AS I ON 
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[CommunicationBaseMessageType]'
+GO
+CREATE TABLE [__mj].[CommunicationBaseMessageType]
+(
+[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__Communicati__ID___39715617] DEFAULT (newsequentialid()),
+[Type] [nvarchar] (100) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+[SupportsAttachments] [bit] NOT NULL CONSTRAINT [DF__Communica__Suppo__68C4D6FC] DEFAULT ((0)),
+[SupportsSubjectLine] [bit] NOT NULL CONSTRAINT [DF__Communica__Suppo__69B8FB35] DEFAULT ((0)),
+[SupportsHtml] [bit] NOT NULL CONSTRAINT [DF__Communica__Suppo__6AAD1F6E] DEFAULT ((0)),
+[MaxBytes] [int] NULL,
+[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__Communica____mj___73B79885] DEFAULT (getutcdate()),
+[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__Communica____mj___74ABBCBE] DEFAULT (getutcdate())
+)
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating primary key [PK_CommunicationBaseMessageType_ID] on [__mj].[CommunicationBaseMessageType]'
+GO
+ALTER TABLE [__mj].[CommunicationBaseMessageType] ADD CONSTRAINT [PK_CommunicationBaseMessageType_ID] PRIMARY KEY CLUSTERED ([ID])
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Adding constraints to [__mj].[CommunicationBaseMessageType]'
+GO
+ALTER TABLE [__mj].[CommunicationBaseMessageType] ADD CONSTRAINT [UQ_CommunicationBaseMessageType_Type] UNIQUE NONCLUSTERED ([Type])
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating trigger [__mj].[trgUpdateCommunicationBaseMessageType] on [__mj].[CommunicationBaseMessageType]'
+GO
+
+CREATE TRIGGER [__mj].[trgUpdateCommunicationBaseMessageType]
+ON [__mj].[CommunicationBaseMessageType]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[CommunicationBaseMessageType]
+    SET 
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM 
+        [__mj].[CommunicationBaseMessageType] AS _organicTable
+    INNER JOIN 
+        INSERTED AS I ON 
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[QueryField]'
+GO
+CREATE TABLE [__mj].[QueryField]
+(
+[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__QueryFiel__NewID__43F9062B] DEFAULT (newsequentialid()),
+[QueryID] [uniqueidentifier] NOT NULL,
+[Name] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+[Description] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[Sequence] [int] NOT NULL,
+[SQLBaseType] [nvarchar] (50) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+[SQLFullType] [nvarchar] (100) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+[SourceEntityID] [uniqueidentifier] NULL,
+[SourceFieldName] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[IsComputed] [bit] NOT NULL CONSTRAINT [DF_QueryField_IsComputed] DEFAULT ((0)),
+[ComputationDescription] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[IsSummary] [bit] NOT NULL CONSTRAINT [DF_QueryField_IsSummary] DEFAULT ((0)),
+[SummaryDescription] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF___mj_QueryField___mj_CreatedAt] DEFAULT (getutcdate()),
+[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF___mj_QueryField___mj_UpdatedAt] DEFAULT (getutcdate())
+)
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating primary key [PK_QueryField_ID] on [__mj].[QueryField]'
+GO
+ALTER TABLE [__mj].[QueryField] ADD CONSTRAINT [PK_QueryField_ID] PRIMARY KEY CLUSTERED ([ID])
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating trigger [__mj].[trgUpdateQueryField] on [__mj].[QueryField]'
+GO
+
+CREATE TRIGGER [__mj].[trgUpdateQueryField]
+ON [__mj].[QueryField]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[QueryField]
+    SET 
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM 
+        [__mj].[QueryField] AS _organicTable
+    INNER JOIN 
+        INSERTED AS I ON 
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[CompanyIntegrationRunAPILog]'
+GO
+CREATE TABLE [__mj].[CompanyIntegrationRunAPILog]
+(
+[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__CompanyIn__NewID__5740E4C9] DEFAULT (newsequentialid()),
+[CompanyIntegrationRunID] [uniqueidentifier] NOT NULL,
+[ExecutedAt] [datetime] NOT NULL CONSTRAINT [DF_CompanyIntegrationRunAPILog_ExecutedAt] DEFAULT (getdate()),
+[IsSuccess] [bit] NOT NULL CONSTRAINT [DF__CompanyIn__IsSuc__753864A1] DEFAULT ((0)),
+[RequestMethod] [nvarchar] (12) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[URL] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[Parameters] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__CompanyIn____mj___7B8DC477] DEFAULT (getutcdate()),
+[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__CompanyIn____mj___7C81E8B0] DEFAULT (getutcdate())
+)
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating primary key [PK_CompanyIntegrationRunAPILog_ID] on [__mj].[CompanyIntegrationRunAPILog]'
+GO
+ALTER TABLE [__mj].[CompanyIntegrationRunAPILog] ADD CONSTRAINT [PK_CompanyIntegrationRunAPILog_ID] PRIMARY KEY CLUSTERED ([ID])
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating trigger [__mj].[trgUpdateCompanyIntegrationRunAPILog] on [__mj].[CompanyIntegrationRunAPILog]'
+GO
+
+CREATE TRIGGER [__mj].[trgUpdateCompanyIntegrationRunAPILog]
+ON [__mj].[CompanyIntegrationRunAPILog]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[CompanyIntegrationRunAPILog]
+    SET 
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM 
+        [__mj].[CompanyIntegrationRunAPILog] AS _organicTable
+    INNER JOIN 
+        INSERTED AS I ON 
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[EntityActionParam]'
+GO
+CREATE TABLE [__mj].[EntityActionParam]
+(
+[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__EntityAct__NewID__03897B5B] DEFAULT (newsequentialid()),
+[EntityActionID] [uniqueidentifier] NOT NULL,
+[ActionParamID] [uniqueidentifier] NOT NULL,
+[ValueType] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+[Value] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[Comments] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__EntityAct____mj___52EAD640] DEFAULT (getutcdate()),
+[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__EntityAct____mj___53DEFA79] DEFAULT (getutcdate())
+)
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating primary key [PK_EntityActionParam_ID] on [__mj].[EntityActionParam]'
+GO
+ALTER TABLE [__mj].[EntityActionParam] ADD CONSTRAINT [PK_EntityActionParam_ID] PRIMARY KEY CLUSTERED ([ID])
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating trigger [__mj].[trgUpdateEntityActionParam] on [__mj].[EntityActionParam]'
+GO
+
+CREATE TRIGGER [__mj].[trgUpdateEntityActionParam]
+ON [__mj].[EntityActionParam]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[EntityActionParam]
+    SET 
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM 
+        [__mj].[EntityActionParam] AS _organicTable
+    INNER JOIN 
+        INSERTED AS I ON 
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[ConversationDetail]'
+GO
+CREATE TABLE [__mj].[ConversationDetail]
+(
+[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__Conversatio__ID___42069C18] DEFAULT (newsequentialid()),
+[ConversationID] [uniqueidentifier] NOT NULL,
+[ExternalID] [nvarchar] (100) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[Role] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_ConversationDetail_Role] DEFAULT (user_name()),
+[Message] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+[Error] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[HiddenToUser] [bit] NOT NULL CONSTRAINT [DF_ConversationDetail_HiddenToUser] DEFAULT ((0)),
+[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__Conversat____mj___32DDF961] DEFAULT (getutcdate()),
+[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__Conversat____mj___33D21D9A] DEFAULT (getutcdate())
+)
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating primary key [PK_ConversationDetail_ID] on [__mj].[ConversationDetail]'
+GO
+ALTER TABLE [__mj].[ConversationDetail] ADD CONSTRAINT [PK_ConversationDetail_ID] PRIMARY KEY CLUSTERED ([ID])
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating trigger [__mj].[trgUpdateConversationDetail] on [__mj].[ConversationDetail]'
+GO
+
+CREATE TRIGGER [__mj].[trgUpdateConversationDetail]
+ON [__mj].[ConversationDetail]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[ConversationDetail]
+    SET 
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM 
+        [__mj].[ConversationDetail] AS _organicTable
+    INNER JOIN 
+        INSERTED AS I ON 
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[EmployeeSkill]'
+GO
+CREATE TABLE [__mj].[EmployeeSkill]
+(
+[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__EmployeeS__NewID__04138B40] DEFAULT (newsequentialid()),
+[EmployeeID] [uniqueidentifier] NOT NULL,
+[SkillID] [uniqueidentifier] NOT NULL,
+[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF___mj_EmployeeSkill___mj_CreatedAt] DEFAULT (getutcdate()),
+[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF___mj_EmployeeSkill___mj_UpdatedAt] DEFAULT (getutcdate())
+)
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating primary key [PK_EmployeeSkill_ID] on [__mj].[EmployeeSkill]'
+GO
+ALTER TABLE [__mj].[EmployeeSkill] ADD CONSTRAINT [PK_EmployeeSkill_ID] PRIMARY KEY CLUSTERED ([ID])
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating trigger [__mj].[trgUpdateEmployeeSkill] on [__mj].[EmployeeSkill]'
+GO
+
+CREATE TRIGGER [__mj].[trgUpdateEmployeeSkill]
+ON [__mj].[EmployeeSkill]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[EmployeeSkill]
+    SET 
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM 
+        [__mj].[EmployeeSkill] AS _organicTable
+    INNER JOIN 
+        INSERTED AS I ON 
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[ListCategory]'
+GO
+CREATE TABLE [__mj].[ListCategory]
+(
+[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__ListCateg__NewID__2A393428] DEFAULT (newsequentialid()),
+[Name] [nvarchar] (100) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+[Description] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[ParentID] [uniqueidentifier] NULL,
+[UserID] [uniqueidentifier] NOT NULL,
+[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__ListCateg____mj___6A2E2E4B] DEFAULT (getutcdate()),
+[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__ListCateg____mj___6B225284] DEFAULT (getutcdate())
+)
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating primary key [PK_ListCategory_ID] on [__mj].[ListCategory]'
+GO
+ALTER TABLE [__mj].[ListCategory] ADD CONSTRAINT [PK_ListCategory_ID] PRIMARY KEY CLUSTERED ([ID])
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating trigger [__mj].[trgUpdateListCategory] on [__mj].[ListCategory]'
+GO
+
+CREATE TRIGGER [__mj].[trgUpdateListCategory]
+ON [__mj].[ListCategory]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[ListCategory]
+    SET 
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM 
+        [__mj].[ListCategory] AS _organicTable
+    INNER JOIN 
+        INSERTED AS I ON 
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[Dashboard]'
+GO
+CREATE TABLE [__mj].[Dashboard]
+(
+[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__Dashboard__NewID__51F21FC7] DEFAULT (newsequentialid()),
+[Name] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+[Description] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[UserID] [uniqueidentifier] NOT NULL,
+[CategoryID] [uniqueidentifier] NULL,
+[UIConfigDetails] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__Dashboard____mj___1BFA9409] DEFAULT (getutcdate()),
+[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__Dashboard____mj___1CEEB842] DEFAULT (getutcdate())
+)
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating primary key [PK_Dashboard_ID] on [__mj].[Dashboard]'
+GO
+ALTER TABLE [__mj].[Dashboard] ADD CONSTRAINT [PK_Dashboard_ID] PRIMARY KEY CLUSTERED ([ID])
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating trigger [__mj].[trgUpdateDashboard] on [__mj].[Dashboard]'
+GO
+
+CREATE TRIGGER [__mj].[trgUpdateDashboard]
+ON [__mj].[Dashboard]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[Dashboard]
+    SET 
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM 
+        [__mj].[Dashboard] AS _organicTable
+    INNER JOIN 
+        INSERTED AS I ON 
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[CommunicationProviderMessageType]'
+GO
+CREATE TABLE [__mj].[CommunicationProviderMessageType]
+(
+[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__Communicati__ID___3B599E89] DEFAULT (newsequentialid()),
+[CommunicationProviderID] [uniqueidentifier] NOT NULL,
+[CommunicationBaseMessageTypeID] [uniqueidentifier] NOT NULL,
+[Name] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+[Status] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF__Communica__Statu__6F71D48B] DEFAULT ('Disabled'),
+[AdditionalAttributes] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__Communica____mj___6FE707A1] DEFAULT (getutcdate()),
+[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__Communica____mj___70DB2BDA] DEFAULT (getutcdate())
+)
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating primary key [PK_CommunicationProviderMessageType_ID] on [__mj].[CommunicationProviderMessageType]'
+GO
+ALTER TABLE [__mj].[CommunicationProviderMessageType] ADD CONSTRAINT [PK_CommunicationProviderMessageType_ID] PRIMARY KEY CLUSTERED ([ID])
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating trigger [__mj].[trgUpdateCommunicationProviderMessageType] on [__mj].[CommunicationProviderMessageType]'
+GO
+
+CREATE TRIGGER [__mj].[trgUpdateCommunicationProviderMessageType]
+ON [__mj].[CommunicationProviderMessageType]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[CommunicationProviderMessageType]
+    SET 
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM 
+        [__mj].[CommunicationProviderMessageType] AS _organicTable
+    INNER JOIN 
+        INSERTED AS I ON 
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[QueueTask]'
+GO
+CREATE TABLE [__mj].[QueueTask]
+(
+[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__QueueTask__NewID__58F42311] DEFAULT (newsequentialid()),
+[QueueID] [uniqueidentifier] NOT NULL,
+[Status] [nchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_QueueTask_Status] DEFAULT (N'Pending'),
+[StartedAt] [datetime] NULL,
+[EndedAt] [datetime] NULL,
+[Data] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[Options] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[Output] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[ErrorMessage] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[Comments] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__QueueTask____mj___1A124B97] DEFAULT (getutcdate()),
+[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__QueueTask____mj___1B066FD0] DEFAULT (getutcdate())
+)
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating primary key [PK_QueueTask_ID] on [__mj].[QueueTask]'
+GO
+ALTER TABLE [__mj].[QueueTask] ADD CONSTRAINT [PK_QueueTask_ID] PRIMARY KEY CLUSTERED ([ID])
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating trigger [__mj].[trgUpdateQueueTask] on [__mj].[QueueTask]'
+GO
+
+CREATE TRIGGER [__mj].[trgUpdateQueueTask]
+ON [__mj].[QueueTask]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[QueueTask]
+    SET 
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM 
+        [__mj].[QueueTask] AS _organicTable
+    INNER JOIN 
+        INSERTED AS I ON 
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[AIModelAction]'
+GO
+CREATE TABLE [__mj].[AIModelAction]
+(
+[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__AIModelAc__NewID__4FA9E4A2] DEFAULT (newsequentialid()),
+[AIModelID] [uniqueidentifier] NOT NULL,
+[AIActionID] [uniqueidentifier] NOT NULL,
+[IsActive] [bit] NOT NULL CONSTRAINT [DF_AIModelAction_IsActive] DEFAULT ((1)),
+[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__AIModelAc____mj___127129CF] DEFAULT (getutcdate()),
+[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__AIModelAc____mj___13654E08] DEFAULT (getutcdate())
+)
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating primary key [PK_AIModelAction_ID] on [__mj].[AIModelAction]'
+GO
+ALTER TABLE [__mj].[AIModelAction] ADD CONSTRAINT [PK_AIModelAction_ID] PRIMARY KEY CLUSTERED ([ID])
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating trigger [__mj].[trgUpdateAIModelAction] on [__mj].[AIModelAction]'
+GO
+
+CREATE TRIGGER [__mj].[trgUpdateAIModelAction]
+ON [__mj].[AIModelAction]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[AIModelAction]
+    SET 
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM 
+        [__mj].[AIModelAction] AS _organicTable
+    INNER JOIN 
+        INSERTED AS I ON 
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[AIAction]'
+GO
+CREATE TABLE [__mj].[AIAction]
+(
+[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__AIAction__ID___33B87CC1] DEFAULT (newsequentialid()),
+[Name] [nvarchar] (50) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+[Description] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[DefaultPrompt] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[DefaultModelID] [uniqueidentifier] NULL,
+[IsActive] [bit] NOT NULL CONSTRAINT [DF_AIAction_IsActive] DEFAULT ((1)),
+[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__AIAction____mj_C__1088E15D] DEFAULT (getutcdate()),
+[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__AIAction____mj_U__117D0596] DEFAULT (getutcdate())
+)
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating primary key [PK_AIAction_ID] on [__mj].[AIAction]'
+GO
+ALTER TABLE [__mj].[AIAction] ADD CONSTRAINT [PK_AIAction_ID] PRIMARY KEY CLUSTERED ([ID])
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating trigger [__mj].[trgUpdateAIAction] on [__mj].[AIAction]'
+GO
+
+CREATE TRIGGER [__mj].[trgUpdateAIAction]
+ON [__mj].[AIAction]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[AIAction]
+    SET 
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM 
+        [__mj].[AIAction] AS _organicTable
+    INNER JOIN 
+        INSERTED AS I ON 
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[Workspace]'
+GO
+CREATE TABLE [__mj].[Workspace]
+(
+[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__Workspace__ID___70C18B01] DEFAULT (newsequentialid()),
+[Name] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+[Description] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[UserID] [uniqueidentifier] NOT NULL,
+[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__Workspace____mj___2B3CD799] DEFAULT (getutcdate()),
+[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__Workspace____mj___2C30FBD2] DEFAULT (getutcdate())
+)
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating primary key [PK_Workspace_ID] on [__mj].[Workspace]'
+GO
+ALTER TABLE [__mj].[Workspace] ADD CONSTRAINT [PK_Workspace_ID] PRIMARY KEY CLUSTERED ([ID])
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating trigger [__mj].[trgUpdateWorkspace] on [__mj].[Workspace]'
+GO
+
+CREATE TRIGGER [__mj].[trgUpdateWorkspace]
+ON [__mj].[Workspace]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[Workspace]
+    SET 
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM 
+        [__mj].[Workspace] AS _organicTable
+    INNER JOIN 
+        INSERTED AS I ON 
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[CompanyIntegrationRunDetail]'
+GO
+CREATE TABLE [__mj].[CompanyIntegrationRunDetail]
+(
+[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__CompanyInte__ID___401E53A6] DEFAULT (newsequentialid()),
+[CompanyIntegrationRunID] [uniqueidentifier] NOT NULL,
+[EntityID] [uniqueidentifier] NOT NULL,
+[RecordID] [nvarchar] (450) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+[Action] [nchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+[ExecutedAt] [datetime] NOT NULL CONSTRAINT [DF_CompanyIntegrationRunDetail_ExecutedAt] DEFAULT (getdate()),
+[IsSuccess] [bit] NOT NULL CONSTRAINT [DF__CompanyIn__IsSuc__2AA05119] DEFAULT ((0)),
+[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__CompanyIn____mj___73ECA2AF] DEFAULT (getutcdate()),
+[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__CompanyIn____mj___74E0C6E8] DEFAULT (getutcdate())
+)
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating primary key [PK_CompanyIntegrationRunDetail_ID] on [__mj].[CompanyIntegrationRunDetail]'
+GO
+ALTER TABLE [__mj].[CompanyIntegrationRunDetail] ADD CONSTRAINT [PK_CompanyIntegrationRunDetail_ID] PRIMARY KEY CLUSTERED ([ID])
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating trigger [__mj].[trgUpdateCompanyIntegrationRunDetail] on [__mj].[CompanyIntegrationRunDetail]'
+GO
+
+CREATE TRIGGER [__mj].[trgUpdateCompanyIntegrationRunDetail]
+ON [__mj].[CompanyIntegrationRunDetail]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[CompanyIntegrationRunDetail]
+    SET 
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM 
+        [__mj].[CompanyIntegrationRunDetail] AS _organicTable
+    INNER JOIN 
+        INSERTED AS I ON 
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[WorkspaceItem]'
+GO
+CREATE TABLE [__mj].[WorkspaceItem]
+(
+[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__Workspace__NewID__307C1D63] DEFAULT (newsequentialid()),
+[Name] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+[Description] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[WorkspaceID] [uniqueidentifier] NOT NULL,
+[ResourceTypeID] [uniqueidentifier] NOT NULL,
+[ResourceRecordID] [nvarchar] (2000) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[Sequence] [int] NOT NULL,
+[Configuration] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__Workspace____mj___2D25200B] DEFAULT (getutcdate()),
+[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__Workspace____mj___2E194444] DEFAULT (getutcdate())
+)
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating primary key [PK_WorkspaceItem_ID] on [__mj].[WorkspaceItem]'
+GO
+ALTER TABLE [__mj].[WorkspaceItem] ADD CONSTRAINT [PK_WorkspaceItem_ID] PRIMARY KEY CLUSTERED ([ID])
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating trigger [__mj].[trgUpdateWorkspaceItem] on [__mj].[WorkspaceItem]'
+GO
+
+CREATE TRIGGER [__mj].[trgUpdateWorkspaceItem]
+ON [__mj].[WorkspaceItem]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[WorkspaceItem]
+    SET 
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM 
+        [__mj].[WorkspaceItem] AS _organicTable
+    INNER JOIN 
+        INSERTED AS I ON 
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[UserRecordLog]'
+GO
+CREATE TABLE [__mj].[UserRecordLog]
+(
+[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__UserRecor__NewID__68F580B0] DEFAULT (newsequentialid()),
+[UserID] [uniqueidentifier] NOT NULL,
+[EntityID] [uniqueidentifier] NOT NULL,
+[RecordID] [nvarchar] (450) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+[EarliestAt] [datetime] NOT NULL CONSTRAINT [DF_UserRecordLog_EarliestAt] DEFAULT (getdate()),
+[LatestAt] [datetime] NOT NULL CONSTRAINT [DF_UserRecordLog_LatestAt] DEFAULT (getdate()),
+[TotalCount] [int] NOT NULL CONSTRAINT [DF_UserRecordLog_TotalCount] DEFAULT ((0)),
+[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__UserRecor____mj___701C11CB] DEFAULT (getutcdate()),
+[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__UserRecor____mj___71103604] DEFAULT (getutcdate())
+)
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating primary key [PK_UserRecordLog_ID] on [__mj].[UserRecordLog]'
+GO
+ALTER TABLE [__mj].[UserRecordLog] ADD CONSTRAINT [PK_UserRecordLog_ID] PRIMARY KEY CLUSTERED ([ID])
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating index [IX_UserRecordLog] on [__mj].[UserRecordLog]'
+GO
+CREATE NONCLUSTERED INDEX [IX_UserRecordLog] ON [__mj].[UserRecordLog] ([RecordID])
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating trigger [__mj].[trgUpdateUserRecordLog] on [__mj].[UserRecordLog]'
+GO
+
+CREATE TRIGGER [__mj].[trgUpdateUserRecordLog]
+ON [__mj].[UserRecordLog]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[UserRecordLog]
+    SET 
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM 
+        [__mj].[UserRecordLog] AS _organicTable
+    INNER JOIN 
+        INSERTED AS I ON 
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[flyway_schema_history]'
+GO
+CREATE TABLE [__mj].[flyway_schema_history]
+(
+[installed_rank] [int] NOT NULL,
+[version] [nvarchar] (50) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[description] [nvarchar] (200) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[type] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+[script] [nvarchar] (1000) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+[checksum] [int] NULL,
+[installed_by] [nvarchar] (100) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+[installed_on] [datetime] NOT NULL CONSTRAINT [DF__flyway_sc__insta__304E3948] DEFAULT (getdate()),
+[execution_time] [int] NOT NULL,
+[success] [bit] NOT NULL,
+[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__flyway_sc____mj___31425D81] DEFAULT (getutcdate()),
+[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__flyway_sc____mj___323681BA] DEFAULT (getutcdate())
+)
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating primary key [flyway_schema_history_pk] on [__mj].[flyway_schema_history]'
+GO
+ALTER TABLE [__mj].[flyway_schema_history] ADD CONSTRAINT [flyway_schema_history_pk] PRIMARY KEY CLUSTERED ([installed_rank])
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating index [flyway_schema_history_s_idx] on [__mj].[flyway_schema_history]'
+GO
+CREATE NONCLUSTERED INDEX [flyway_schema_history_s_idx] ON [__mj].[flyway_schema_history] ([success])
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating trigger [__mj].[trgUpdateflyway_schema_history] on [__mj].[flyway_schema_history]'
+GO
+
+CREATE TRIGGER [__mj].[trgUpdateflyway_schema_history]
+ON [__mj].[flyway_schema_history]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[flyway_schema_history]
+    SET 
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM 
+        [__mj].[flyway_schema_history] AS _organicTable
+    INNER JOIN 
+        INSERTED AS I ON 
+        _organicTable.[installed_rank] = I.[installed_rank];
+END;
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[EntityFieldValue]'
+GO
+CREATE TABLE [__mj].[EntityFieldValue]
+(
+[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF_EntityFieldValue_ID_] DEFAULT (newsequentialid()),
+[EntityFieldID] [uniqueidentifier] NOT NULL,
+[Sequence] [int] NOT NULL,
+[Value] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+[Code] [nvarchar] (50) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[Description] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF___mj_EntityFieldValue___mj_CreatedAt] DEFAULT (getutcdate()),
+[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF___mj_EntityFieldValue___mj_UpdatedAt] DEFAULT (getutcdate())
+)
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating primary key [PK_EntityFieldValue_1] on [__mj].[EntityFieldValue]'
+GO
+ALTER TABLE [__mj].[EntityFieldValue] ADD CONSTRAINT [PK_EntityFieldValue_1] PRIMARY KEY CLUSTERED ([ID])
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating trigger [__mj].[trgUpdateEntityFieldValue] on [__mj].[EntityFieldValue]'
+GO
+
+CREATE TRIGGER [__mj].[trgUpdateEntityFieldValue]
+ON [__mj].[EntityFieldValue]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[EntityFieldValue]
+    SET 
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM 
+        [__mj].[EntityFieldValue] AS _organicTable
+    INNER JOIN 
+        INSERTED AS I ON 
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[ActionContext]'
+GO
+CREATE TABLE [__mj].[ActionContext]
+(
+[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__ActionCon__NewID__22D73E2B] DEFAULT (newsequentialid()),
+[ActionID] [uniqueidentifier] NOT NULL,
+[ContextTypeID] [uniqueidentifier] NULL,
+[Status] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF__ActionCon__Statu__12D7DEFD] DEFAULT ('Pending'),
+[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__ActionCon____mj___628D0C83] DEFAULT (getutcdate()),
+[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__ActionCon____mj___638130BC] DEFAULT (getutcdate())
+)
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating primary key [PK_ActionContext_ID] on [__mj].[ActionContext]'
+GO
+ALTER TABLE [__mj].[ActionContext] ADD CONSTRAINT [PK_ActionContext_ID] PRIMARY KEY CLUSTERED ([ID])
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating trigger [__mj].[trgUpdateActionContext] on [__mj].[ActionContext]'
+GO
+
+CREATE TRIGGER [__mj].[trgUpdateActionContext]
+ON [__mj].[ActionContext]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[ActionContext]
+    SET 
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM 
+        [__mj].[ActionContext] AS _organicTable
+    INNER JOIN 
+        INSERTED AS I ON 
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[EntityRecordDocument]'
+GO
+CREATE TABLE [__mj].[EntityRecordDocument]
+(
+[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__EntityRec__NewID__0819264E] DEFAULT (newsequentialid()),
+[EntityID] [uniqueidentifier] NOT NULL,
+[RecordID] [nvarchar] (450) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+[EntityDocumentID] [uniqueidentifier] NOT NULL,
+[DocumentText] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[VectorIndexID] [uniqueidentifier] NOT NULL,
+[VectorID] [nvarchar] (50) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[VectorJSON] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[EntityRecordUpdatedAt] [datetime] NOT NULL,
+[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF___mj_EntityRecordDocument___mj_CreatedAt] DEFAULT (getutcdate()),
+[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF___mj_EntityRecordDocument___mj_UpdatedAt] DEFAULT (getutcdate())
+)
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating primary key [PK_EntityRecordDocument_ID] on [__mj].[EntityRecordDocument]'
+GO
+ALTER TABLE [__mj].[EntityRecordDocument] ADD CONSTRAINT [PK_EntityRecordDocument_ID] PRIMARY KEY CLUSTERED ([ID])
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating index [IX_EntityRecordDocument_RecordID] on [__mj].[EntityRecordDocument]'
+GO
+CREATE NONCLUSTERED INDEX [IX_EntityRecordDocument_RecordID] ON [__mj].[EntityRecordDocument] ([RecordID])
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating trigger [__mj].[trgUpdateEntityRecordDocument] on [__mj].[EntityRecordDocument]'
+GO
+
+CREATE TRIGGER [__mj].[trgUpdateEntityRecordDocument]
+ON [__mj].[EntityRecordDocument]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[EntityRecordDocument]
+    SET 
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM 
+        [__mj].[EntityRecordDocument] AS _organicTable
+    INNER JOIN 
+        INSERTED AS I ON 
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[ActionLibrary]'
+GO
+CREATE TABLE [__mj].[ActionLibrary]
+(
+[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__ActionLibrar__ID__330DA5F4] DEFAULT (newsequentialid()),
+[ActionID] [uniqueidentifier] NOT NULL,
+[LibraryID] [uniqueidentifier] NOT NULL,
+[ItemsUsed] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF___mj_ActionLibrary___mj_CreatedAt] DEFAULT (getutcdate()),
+[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF___mj_ActionLibrary___mj_UpdatedAt] DEFAULT (getutcdate())
+)
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating primary key [PK_ActionLibrary_New_ID] on [__mj].[ActionLibrary]'
+GO
+ALTER TABLE [__mj].[ActionLibrary] ADD CONSTRAINT [PK_ActionLibrary_New_ID] PRIMARY KEY CLUSTERED ([ID])
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating trigger [__mj].[trgUpdateActionLibrary] on [__mj].[ActionLibrary]'
+GO
+
+CREATE TRIGGER [__mj].[trgUpdateActionLibrary]
+ON [__mj].[ActionLibrary]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[ActionLibrary]
+    SET 
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM 
+        [__mj].[ActionLibrary] AS _organicTable
+    INNER JOIN 
+        INSERTED AS I ON 
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[ActionExecutionLog]'
+GO
+CREATE TABLE [__mj].[ActionExecutionLog]
+(
+[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__ActionExe__NewID__39BAA383] DEFAULT (newsequentialid()),
+[ActionID] [uniqueidentifier] NOT NULL,
+[StartedAt] [datetime] NOT NULL CONSTRAINT [DF__ActionExe__Start__38FD87E5] DEFAULT (getdate()),
+[EndedAt] [datetime] NULL,
+[Params] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[ResultCode] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[UserID] [uniqueidentifier] NOT NULL,
+[RetentionPeriod] [int] NULL,
+[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__ActionExe____mj___647554F5] DEFAULT (getutcdate()),
+[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__ActionExe____mj___6569792E] DEFAULT (getutcdate())
+)
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating primary key [PK_ActionExecutionLog_ID] on [__mj].[ActionExecutionLog]'
+GO
+ALTER TABLE [__mj].[ActionExecutionLog] ADD CONSTRAINT [PK_ActionExecutionLog_ID] PRIMARY KEY CLUSTERED ([ID])
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating trigger [__mj].[trgUpdateActionExecutionLog] on [__mj].[ActionExecutionLog]'
+GO
+
+CREATE TRIGGER [__mj].[trgUpdateActionExecutionLog]
+ON [__mj].[ActionExecutionLog]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[ActionExecutionLog]
+    SET 
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM 
+        [__mj].[ActionExecutionLog] AS _organicTable
+    INNER JOIN 
+        INSERTED AS I ON 
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[FileStorageProvider]'
+GO
+CREATE TABLE [__mj].[FileStorageProvider]
+(
+[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__FileStorage__ID___5054BB6F] DEFAULT (newsequentialid()),
+[Name] [nvarchar] (50) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+[Description] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[ServerDriverKey] [nvarchar] (100) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+[ClientDriverKey] [nvarchar] (100) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+[Priority] [int] NOT NULL CONSTRAINT [DF_FileProvider_Priority] DEFAULT ((0)),
+[IsActive] [bit] NOT NULL CONSTRAINT [DF_FileProvider_IsActive] DEFAULT ((1)),
+[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__FileStora____mj___4D91EF9D] DEFAULT (getutcdate()),
+[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__FileStora____mj___4E8613D6] DEFAULT (getutcdate())
+)
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating primary key [PK_FileStorageProvider_ID] on [__mj].[FileStorageProvider]'
+GO
+ALTER TABLE [__mj].[FileStorageProvider] ADD CONSTRAINT [PK_FileStorageProvider_ID] PRIMARY KEY CLUSTERED ([ID])
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating trigger [__mj].[trgUpdateFileStorageProvider] on [__mj].[FileStorageProvider]'
+GO
+
+CREATE TRIGGER [__mj].[trgUpdateFileStorageProvider]
+ON [__mj].[FileStorageProvider]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[FileStorageProvider]
+    SET 
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM 
+        [__mj].[FileStorageProvider] AS _organicTable
+    INNER JOIN 
+        INSERTED AS I ON 
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[DuplicateRunDetail]'
+GO
+CREATE TABLE [__mj].[DuplicateRunDetail]
+(
+[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__DuplicateRu__ID___46CB5135] DEFAULT (newsequentialid()),
+[DuplicateRunID] [uniqueidentifier] NOT NULL,
+[RecordID] [nvarchar] (500) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+[MatchStatus] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_DuplicateRunDetail_MatchStatus] DEFAULT (N'Pending'),
+[SkippedReason] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[MatchErrorMessage] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[MergeStatus] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_DuplicateRunDetail_MergeStatus] DEFAULT (N'Not Applicable'),
+[MergeErrorMessage] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__Duplicate____mj___5AEBEABB] DEFAULT (getutcdate()),
+[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__Duplicate____mj___5BE00EF4] DEFAULT (getutcdate())
+)
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating primary key [PK_DuplicateRunDetail_ID] on [__mj].[DuplicateRunDetail]'
+GO
+ALTER TABLE [__mj].[DuplicateRunDetail] ADD CONSTRAINT [PK_DuplicateRunDetail_ID] PRIMARY KEY CLUSTERED ([ID])
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating trigger [__mj].[trgUpdateDuplicateRunDetail] on [__mj].[DuplicateRunDetail]'
+GO
+
+CREATE TRIGGER [__mj].[trgUpdateDuplicateRunDetail]
+ON [__mj].[DuplicateRunDetail]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[DuplicateRunDetail]
+    SET 
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM 
+        [__mj].[DuplicateRunDetail] AS _organicTable
+    INNER JOIN 
+        INSERTED AS I ON 
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[EntitySetting]'
+GO
+CREATE TABLE [__mj].[EntitySetting]
+(
+[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__EntitySet__NewID__2D4AAAFD] DEFAULT (newsequentialid()),
+[EntityID] [uniqueidentifier] NOT NULL,
+[Name] [nvarchar] (100) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+[Value] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+[Comments] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF___mj_EntitySetting___mj_CreatedAt] DEFAULT (getutcdate()),
+[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF___mj_EntitySetting___mj_UpdatedAt] DEFAULT (getutcdate())
+)
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating primary key [PK_EntitySetting_ID] on [__mj].[EntitySetting]'
+GO
+ALTER TABLE [__mj].[EntitySetting] ADD CONSTRAINT [PK_EntitySetting_ID] PRIMARY KEY CLUSTERED ([ID])
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating trigger [__mj].[trgUpdateEntitySetting] on [__mj].[EntitySetting]'
+GO
+
+CREATE TRIGGER [__mj].[trgUpdateEntitySetting]
+ON [__mj].[EntitySetting]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[EntitySetting]
+    SET 
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM 
+        [__mj].[EntitySetting] AS _organicTable
+    INNER JOIN 
+        INSERTED AS I ON 
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[Entity]'
+GO
+CREATE TABLE [__mj].[Entity]
+(
+[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF_Entity_ID_] DEFAULT (newsequentialid()),
+[ParentID] [uniqueidentifier] NULL,
+[Name] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+[NameSuffix] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[Description] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[AutoUpdateDescription] [bit] NOT NULL CONSTRAINT [DF_Entity_AutoUpdateDescription] DEFAULT ((1)),
+[BaseTable] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+[BaseView] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+[BaseViewGenerated] [bit] NOT NULL CONSTRAINT [DF_Entity_BaseViewGenerated] DEFAULT ((1)),
+[SchemaName] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_Entity_Schema] DEFAULT (N'dbo'),
+[VirtualEntity] [bit] NOT NULL CONSTRAINT [DF_Entity_VirtualEntity] DEFAULT ((0)),
+[TrackRecordChanges] [bit] NOT NULL CONSTRAINT [DF_Entity_TrackRecordChanges] DEFAULT ((1)),
+[AuditRecordAccess] [bit] NOT NULL CONSTRAINT [DF_Entity_AuditRecordAccess] DEFAULT ((1)),
+[AuditViewRuns] [bit] NOT NULL CONSTRAINT [DF_Entity_AuditViewRuns] DEFAULT ((1)),
+[IncludeInAPI] [bit] NOT NULL CONSTRAINT [DF_Entity_IncludeInAPI] DEFAULT ((0)),
+[AllowAllRowsAPI] [bit] NOT NULL CONSTRAINT [DF_Entity_AllowReturnAllAPI] DEFAULT ((0)),
+[AllowUpdateAPI] [bit] NOT NULL CONSTRAINT [DF_Entity_AllowEditsAPI] DEFAULT ((0)),
+[AllowCreateAPI] [bit] NOT NULL CONSTRAINT [DF_Entity_AllowCreateAPI] DEFAULT ((0)),
+[AllowDeleteAPI] [bit] NOT NULL CONSTRAINT [DF_Entity_AllowDeleteAPI] DEFAULT ((0)),
+[CustomResolverAPI] [bit] NOT NULL CONSTRAINT [DF_Entity_CustomResolverAPI] DEFAULT ((0)),
+[AllowUserSearchAPI] [bit] NOT NULL CONSTRAINT [DF_Entity_AllowUserSearchAPI] DEFAULT ((0)),
+[FullTextSearchEnabled] [bit] NOT NULL CONSTRAINT [DF_Entity_FullTextSearchEnabled] DEFAULT ((0)),
+[FullTextCatalog] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[FullTextCatalogGenerated] [bit] NOT NULL CONSTRAINT [DF_Entity_FullTextCatalogGenerated] DEFAULT ((1)),
+[FullTextIndex] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[FullTextIndexGenerated] [bit] NOT NULL CONSTRAINT [DF_Entity_FullTextIndexGenerated] DEFAULT ((1)),
+[FullTextSearchFunction] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[FullTextSearchFunctionGenerated] [bit] NOT NULL CONSTRAINT [DF_Entity_FullTextSearchFunctionGenerated] DEFAULT ((1)),
+[UserViewMaxRows] [int] NULL CONSTRAINT [DF_Entity_UserViewMaxRows] DEFAULT ((1000)),
+[spCreate] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[spUpdate] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[spDelete] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[spCreateGenerated] [bit] NOT NULL CONSTRAINT [DF_Entity_spCreateGenerated] DEFAULT ((1)),
+[spUpdateGenerated] [bit] NOT NULL CONSTRAINT [DF_Entity_spUpdateGenerated] DEFAULT ((1)),
+[spDeleteGenerated] [bit] NOT NULL CONSTRAINT [DF_Entity_spDeleteGenerated] DEFAULT ((1)),
+[CascadeDeletes] [bit] NOT NULL CONSTRAINT [DF_Entity_CascadeDeletes] DEFAULT ((0)),
+[DeleteType] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_Entity_DeleteType] DEFAULT (N'Hard'),
+[AllowRecordMerge] [bit] NOT NULL CONSTRAINT [DF_Entity_AllowRecordMerge] DEFAULT ((0)),
+[spMatch] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[RelationshipDefaultDisplayType] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF__Entity__Relation__0F008B9E] DEFAULT ('Search'),
+[UserFormGenerated] [bit] NOT NULL CONSTRAINT [DF_Entity_UserFormGenerated] DEFAULT ((1)),
+[EntityObjectSubclassName] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[EntityObjectSubclassImport] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[PreferredCommunicationField] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[Icon] [nvarchar] (500) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF___mj_Entity___mj_CreatedAt] DEFAULT (getutcdate()),
+[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF___mj_Entity___mj_UpdatedAt] DEFAULT (getutcdate())
+)
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating primary key [PK_Entity] on [__mj].[Entity]'
+GO
+ALTER TABLE [__mj].[Entity] ADD CONSTRAINT [PK_Entity] PRIMARY KEY CLUSTERED ([ID])
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating index [UQ_Entity_Name] on [__mj].[Entity]'
+GO
+CREATE UNIQUE NONCLUSTERED INDEX [UQ_Entity_Name] ON [__mj].[Entity] ([Name])
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating trigger [__mj].[trgUpdateEntity] on [__mj].[Entity]'
+GO
+
+CREATE TRIGGER [__mj].[trgUpdateEntity]
+ON [__mj].[Entity]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[Entity]
+    SET 
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM 
+        [__mj].[Entity] AS _organicTable
+    INNER JOIN 
+        INSERTED AS I ON 
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[FileCategory]'
+GO
+CREATE TABLE [__mj].[FileCategory]
+(
+[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__FileCategor__ID___4F609736] DEFAULT (newsequentialid()),
+[Name] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+[ParentID] [uniqueidentifier] NULL,
+[Description] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__FileCateg____mj___51628081] DEFAULT (getutcdate()),
+[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__FileCateg____mj___5256A4BA] DEFAULT (getutcdate())
+)
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating primary key [PK_FileCategory_ID] on [__mj].[FileCategory]'
+GO
+ALTER TABLE [__mj].[FileCategory] ADD CONSTRAINT [PK_FileCategory_ID] PRIMARY KEY CLUSTERED ([ID])
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating trigger [__mj].[trgUpdateFileCategory] on [__mj].[FileCategory]'
+GO
+
+CREATE TRIGGER [__mj].[trgUpdateFileCategory]
+ON [__mj].[FileCategory]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[FileCategory]
+    SET 
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM 
+        [__mj].[FileCategory] AS _organicTable
+    INNER JOIN 
+        INSERTED AS I ON 
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[EntityRelationship]'
+GO
+CREATE TABLE [__mj].[EntityRelationship]
+(
+[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__EntityRel__NewID__184F8E17] DEFAULT (newsequentialid()),
+[EntityID] [uniqueidentifier] NOT NULL,
+[Sequence] [int] NOT NULL CONSTRAINT [DF_EntityRelationship_Sequence] DEFAULT ((0)),
+[RelatedEntityID] [uniqueidentifier] NOT NULL,
+[BundleInAPI] [bit] NOT NULL CONSTRAINT [DF_admin.EntityRelationships_BundleInAPI] DEFAULT ((1)),
+[IncludeInParentAllQuery] [bit] NOT NULL CONSTRAINT [DF_EntityRelationship_IncludeInParentAllQuery] DEFAULT ((0)),
+[Type] [nchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_EntityRelationship_Type] DEFAULT (N'One To Many'),
+[EntityKeyField] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[RelatedEntityJoinField] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+[JoinView] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[JoinEntityJoinField] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[JoinEntityInverseJoinField] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[DisplayInForm] [bit] NOT NULL CONSTRAINT [DF_EntityRelationship_DisplayInForm] DEFAULT ((1)),
+[DisplayLocation] [nvarchar] (50) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_EntityRelationship_DisplayLocation] DEFAULT (N'After Field Tabs'),
+[DisplayName] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[DisplayIconType] [nvarchar] (50) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_EntityRelationship_DisplayIconType] DEFAULT (N'Related Entity Icon'),
+[DisplayIcon] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[DisplayUserViewID] [uniqueidentifier] NULL,
+[DisplayComponentID] [uniqueidentifier] NULL,
+[DisplayComponentConfiguration] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF___mj_EntityRelationship___mj_CreatedAt] DEFAULT (getutcdate()),
+[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF___mj_EntityRelationship___mj_UpdatedAt] DEFAULT (getutcdate())
+)
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating primary key [PK_EntityRelationship_ID] on [__mj].[EntityRelationship]'
+GO
+ALTER TABLE [__mj].[EntityRelationship] ADD CONSTRAINT [PK_EntityRelationship_ID] PRIMARY KEY CLUSTERED ([ID])
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating trigger [__mj].[trgUpdateEntityRelationship] on [__mj].[EntityRelationship]'
+GO
+
+CREATE TRIGGER [__mj].[trgUpdateEntityRelationship]
+ON [__mj].[EntityRelationship]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[EntityRelationship]
+    SET 
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM 
+        [__mj].[EntityRelationship] AS _organicTable
+    INNER JOIN 
+        INSERTED AS I ON 
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[File]'
+GO
+CREATE TABLE [__mj].[File]
+(
+[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__File__ID___4E6C72FD] DEFAULT (newsequentialid()),
+[Name] [nvarchar] (500) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+[Description] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[CategoryID] [uniqueidentifier] NULL,
+[ProviderID] [uniqueidentifier] NOT NULL,
+[ContentType] [nvarchar] (50) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[ProviderKey] [nvarchar] (500) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[Status] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_File_Status] DEFAULT (N'Pending'),
+[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__File____mj_Creat__4F7A380F] DEFAULT (getutcdate()),
+[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__File____mj_Updat__506E5C48] DEFAULT (getutcdate())
+)
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating primary key [PK_File_ID] on [__mj].[File]'
+GO
+ALTER TABLE [__mj].[File] ADD CONSTRAINT [PK_File_ID] PRIMARY KEY CLUSTERED ([ID])
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating trigger [__mj].[trgUpdateFile] on [__mj].[File]'
+GO
+
+CREATE TRIGGER [__mj].[trgUpdateFile]
+ON [__mj].[File]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[File]
+    SET 
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM 
+        [__mj].[File] AS _organicTable
+    INNER JOIN 
+        INSERTED AS I ON 
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[TemplateCategory]'
+GO
+CREATE TABLE [__mj].[TemplateCategory]
+(
+[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__TemplateCat__ID___673820C7] DEFAULT (newsequentialid()),
+[Name] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+[Description] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[ParentID] [uniqueidentifier] NULL,
+[UserID] [uniqueidentifier] NOT NULL,
+[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__TemplateC____mj___77882969] DEFAULT (getutcdate()),
+[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__TemplateC____mj___787C4DA2] DEFAULT (getutcdate())
+)
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating primary key [PK_TemplateCategory_ID] on [__mj].[TemplateCategory]'
+GO
+ALTER TABLE [__mj].[TemplateCategory] ADD CONSTRAINT [PK_TemplateCategory_ID] PRIMARY KEY CLUSTERED ([ID])
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating trigger [__mj].[trgUpdateTemplateCategory] on [__mj].[TemplateCategory]'
+GO
+
+CREATE TRIGGER [__mj].[trgUpdateTemplateCategory]
+ON [__mj].[TemplateCategory]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[TemplateCategory]
+    SET 
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM 
+        [__mj].[TemplateCategory] AS _organicTable
+    INNER JOIN 
+        INSERTED AS I ON 
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[DuplicateRunDetailMatch]'
+GO
+CREATE TABLE [__mj].[DuplicateRunDetailMatch]
+(
+[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__Duplicate__NewID__37FD439A] DEFAULT (newsequentialid()),
+[DuplicateRunDetailID] [uniqueidentifier] NOT NULL,
+[MatchSource] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_DuplicateRunDetailMatch_MatchSource] DEFAULT (N'Vector'),
+[MatchRecordID] [nvarchar] (500) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+[MatchProbability] [numeric] (12, 11) NOT NULL CONSTRAINT [DF_DuplicateRunDetailMatch_MatchProbability] DEFAULT ((0)),
+[MatchedAt] [datetime] NOT NULL CONSTRAINT [DF_DuplicateRunDetailMatch_MatchedAt] DEFAULT (getdate()),
+[Action] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_DuplicateRunDetailMatch_Action] DEFAULT (N'Ignore'),
+[ApprovalStatus] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_DuplicateRunDetailMatch_ApprovalStatus] DEFAULT (N'Pending'),
+[RecordMergeLogID] [uniqueidentifier] NULL,
+[MergeStatus] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_DuplicateRunDetailMatch_MergeStatus] DEFAULT (N'Pending'),
+[MergedAt] [datetime] NOT NULL CONSTRAINT [DF_DuplicateRunDetailMatch_MergedAt] DEFAULT (getdate()),
+[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__Duplicate____mj___571B59D7] DEFAULT (getutcdate()),
+[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__Duplicate____mj___580F7E10] DEFAULT (getutcdate())
+)
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating primary key [PK_DuplicateRunDetailMatch_ID] on [__mj].[DuplicateRunDetailMatch]'
+GO
+ALTER TABLE [__mj].[DuplicateRunDetailMatch] ADD CONSTRAINT [PK_DuplicateRunDetailMatch_ID] PRIMARY KEY CLUSTERED ([ID])
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating trigger [__mj].[trgUpdateDuplicateRunDetailMatch] on [__mj].[DuplicateRunDetailMatch]'
+GO
+
+CREATE TRIGGER [__mj].[trgUpdateDuplicateRunDetailMatch]
+ON [__mj].[DuplicateRunDetailMatch]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[DuplicateRunDetailMatch]
+    SET 
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM 
+        [__mj].[DuplicateRunDetailMatch] AS _organicTable
+    INNER JOIN 
+        INSERTED AS I ON 
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[Template]'
+GO
+CREATE TABLE [__mj].[Template]
+(
+[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__Template__ID___6643FC8E] DEFAULT (newsequentialid()),
+[Name] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+[Description] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[CategoryID] [uniqueidentifier] NULL,
+[UserPrompt] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[UserID] [uniqueidentifier] NOT NULL,
+[ActiveAt] [datetime] NULL,
+[DisabledAt] [datetime] NULL,
+[IsActive] [bit] NOT NULL CONSTRAINT [DF_Template_IsActive] DEFAULT ((1)),
+[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__Template____mj_C__759FE0F7] DEFAULT (getutcdate()),
+[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__Template____mj_U__76940530] DEFAULT (getutcdate())
+)
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating primary key [PK_Template_ID] on [__mj].[Template]'
+GO
+ALTER TABLE [__mj].[Template] ADD CONSTRAINT [PK_Template_ID] PRIMARY KEY CLUSTERED ([ID])
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating trigger [__mj].[trgUpdateTemplate] on [__mj].[Template]'
+GO
+
+CREATE TRIGGER [__mj].[trgUpdateTemplate]
+ON [__mj].[Template]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[Template]
+    SET 
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM 
+        [__mj].[Template] AS _organicTable
+    INNER JOIN 
+        INSERTED AS I ON 
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[EntityCommunicationMessageType]'
+GO
+CREATE TABLE [__mj].[EntityCommunicationMessageType]
+(
+[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__EntityCommu__ID___4A9BE219] DEFAULT (newsequentialid()),
+[EntityID] [uniqueidentifier] NOT NULL,
+[BaseMessageTypeID] [uniqueidentifier] NOT NULL,
+[IsActive] [bit] NOT NULL CONSTRAINT [DF__EntityCom__IsAct__36A5CD88] DEFAULT ((1)),
+[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF___mj_EntityCommunicationMessageType___mj_CreatedAt] DEFAULT (getutcdate()),
+[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF___mj_EntityCommunicationMessageType___mj_UpdatedAt] DEFAULT (getutcdate())
+)
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating primary key [PK_EntityCommunicationMessageType_ID] on [__mj].[EntityCommunicationMessageType]'
+GO
+ALTER TABLE [__mj].[EntityCommunicationMessageType] ADD CONSTRAINT [PK_EntityCommunicationMessageType_ID] PRIMARY KEY CLUSTERED ([ID])
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating trigger [__mj].[trgUpdateEntityCommunicationMessageType] on [__mj].[EntityCommunicationMessageType]'
+GO
+
+CREATE TRIGGER [__mj].[trgUpdateEntityCommunicationMessageType]
+ON [__mj].[EntityCommunicationMessageType]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[EntityCommunicationMessageType]
+    SET 
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM 
+        [__mj].[EntityCommunicationMessageType] AS _organicTable
+    INNER JOIN 
+        INSERTED AS I ON 
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[ActionAuthorization]'
+GO
+CREATE TABLE [__mj].[ActionAuthorization]
+(
+[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__ActionAut__NewID__194DD3F1] DEFAULT (newsequentialid()),
+[ActionID] [uniqueidentifier] NOT NULL,
+[AuthorizationID] [uniqueidentifier] NOT NULL,
+[Comments] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__ActionAut____mj___5CD4332D] DEFAULT (getutcdate()),
+[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__ActionAut____mj___5DC85766] DEFAULT (getutcdate())
+)
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating primary key [PK_ActionAuthorization_ID] on [__mj].[ActionAuthorization]'
+GO
+ALTER TABLE [__mj].[ActionAuthorization] ADD CONSTRAINT [PK_ActionAuthorization_ID] PRIMARY KEY CLUSTERED ([ID])
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating trigger [__mj].[trgUpdateActionAuthorization] on [__mj].[ActionAuthorization]'
+GO
+
+CREATE TRIGGER [__mj].[trgUpdateActionAuthorization]
+ON [__mj].[ActionAuthorization]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[ActionAuthorization]
+    SET 
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM 
+        [__mj].[ActionAuthorization] AS _organicTable
+    INNER JOIN 
+        INSERTED AS I ON 
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[LibraryItem]'
+GO
+CREATE TABLE [__mj].[LibraryItem]
+(
+[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__LibraryIt__NewID__20AFC9EE] DEFAULT (newsequentialid()),
+[Name] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+[LibraryID] [uniqueidentifier] NOT NULL,
+[Type] [nvarchar] (50) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__LibraryIt____mj___08B2B56B] DEFAULT (getutcdate()),
+[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__LibraryIt____mj___09A6D9A4] DEFAULT (getutcdate())
+)
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating primary key [PK_LibraryItem_ID] on [__mj].[LibraryItem]'
+GO
+ALTER TABLE [__mj].[LibraryItem] ADD CONSTRAINT [PK_LibraryItem_ID] PRIMARY KEY CLUSTERED ([ID])
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating trigger [__mj].[trgUpdateLibraryItem] on [__mj].[LibraryItem]'
+GO
+
+CREATE TRIGGER [__mj].[trgUpdateLibraryItem]
+ON [__mj].[LibraryItem]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[LibraryItem]
+    SET 
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM 
+        [__mj].[LibraryItem] AS _organicTable
+    INNER JOIN 
+        INSERTED AS I ON 
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[EntityActionInvocation]'
+GO
+CREATE TABLE [__mj].[EntityActionInvocation]
+(
+[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__EntityAct__NewID__7817C8AF] DEFAULT (newsequentialid()),
+[EntityActionID] [uniqueidentifier] NOT NULL,
+[InvocationTypeID] [uniqueidentifier] NOT NULL,
+[Status] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF__EntityAct__Statu__315C661D] DEFAULT ('Pending'),
+[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF___mj_EntityActionInvocation___mj_CreatedAt] DEFAULT (getutcdate()),
+[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF___mj_EntityActionInvocation___mj_UpdatedAt] DEFAULT (getutcdate())
+)
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating primary key [PK_EntityActionInvocation_ID] on [__mj].[EntityActionInvocation]'
+GO
+ALTER TABLE [__mj].[EntityActionInvocation] ADD CONSTRAINT [PK_EntityActionInvocation_ID] PRIMARY KEY CLUSTERED ([ID])
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating trigger [__mj].[trgUpdateEntityActionInvocation] on [__mj].[EntityActionInvocation]'
+GO
+
+CREATE TRIGGER [__mj].[trgUpdateEntityActionInvocation]
+ON [__mj].[EntityActionInvocation]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[EntityActionInvocation]
+    SET 
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM 
+        [__mj].[EntityActionInvocation] AS _organicTable
+    INNER JOIN 
+        INSERTED AS I ON 
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[EntityRelationshipDisplayComponent]'
+GO
+CREATE TABLE [__mj].[EntityRelationshipDisplayComponent]
+(
+[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__EntityRelat__ID___4D784EC4] DEFAULT (newsequentialid()),
+[Name] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+[Description] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[RelationshipType] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__EntityRel____mj___7282B1D3] DEFAULT (getutcdate()),
+[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__EntityRel____mj___7376D60C] DEFAULT (getutcdate())
+)
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating primary key [PK_EntityRelationshipDisplayComponent_ID] on [__mj].[EntityRelationshipDisplayComponent]'
+GO
+ALTER TABLE [__mj].[EntityRelationshipDisplayComponent] ADD CONSTRAINT [PK_EntityRelationshipDisplayComponent_ID] PRIMARY KEY CLUSTERED ([ID])
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Adding constraints to [__mj].[EntityRelationshipDisplayComponent]'
+GO
+ALTER TABLE [__mj].[EntityRelationshipDisplayComponent] ADD CONSTRAINT [UQ__EntityRe__737584F667950678] UNIQUE NONCLUSTERED ([Name])
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating trigger [__mj].[trgUpdateEntityRelationshipDisplayComponent] on [__mj].[EntityRelationshipDisplayComponent]'
+GO
+
+CREATE TRIGGER [__mj].[trgUpdateEntityRelationshipDisplayComponent]
+ON [__mj].[EntityRelationshipDisplayComponent]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[EntityRelationshipDisplayComponent]
+    SET 
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM 
+        [__mj].[EntityRelationshipDisplayComponent] AS _organicTable
+    INNER JOIN 
+        INSERTED AS I ON 
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[CompanyIntegration]'
+GO
+CREATE TABLE [__mj].[CompanyIntegration]
+(
+[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__CompanyInte__ID___3E360B34] DEFAULT (newsequentialid()),
+[CompanyID] [uniqueidentifier] NOT NULL,
+[IntegrationID] [uniqueidentifier] NOT NULL,
+[IsActive] [bit] NULL,
+[AccessToken] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[RefreshToken] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[TokenExpirationDate] [datetime] NULL,
+[APIKey] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[ExternalSystemID] [nvarchar] (100) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[IsExternalSystemReadOnly] [bit] NOT NULL CONSTRAINT [DF__CompanyIn__IsExt__6A07746E] DEFAULT ((0)),
+[ClientID] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[ClientSecret] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[CustomAttribute1] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__CompanyIn____mj___6E33C959] DEFAULT (getutcdate()),
+[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__CompanyIn____mj___6F27ED92] DEFAULT (getutcdate())
+)
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating primary key [PK_CompanyIntegration_ID] on [__mj].[CompanyIntegration]'
+GO
+ALTER TABLE [__mj].[CompanyIntegration] ADD CONSTRAINT [PK_CompanyIntegration_ID] PRIMARY KEY CLUSTERED ([ID])
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating trigger [__mj].[trgUpdateCompanyIntegration] on [__mj].[CompanyIntegration]'
+GO
+
+CREATE TRIGGER [__mj].[trgUpdateCompanyIntegration]
+ON [__mj].[CompanyIntegration]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[CompanyIntegration]
+    SET 
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM 
+        [__mj].[CompanyIntegration] AS _organicTable
+    INNER JOIN 
+        INSERTED AS I ON 
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[Integration]'
+GO
+CREATE TABLE [__mj].[Integration]
+(
+[Name] [nvarchar] (100) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+[Description] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[NavigationBaseURL] [nvarchar] (500) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[ClassName] [nvarchar] (100) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[ImportPath] [nvarchar] (100) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[BatchMaxRequestCount] [int] NOT NULL CONSTRAINT [DF__Integrati__Batch__522FEADD] DEFAULT ((-1)),
+[BatchRequestWaitTime] [int] NOT NULL CONSTRAINT [DF__Integrati__Batch__53240F16] DEFAULT ((-1)),
+[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__Integrati____mj___6C4B80E7] DEFAULT (getutcdate()),
+[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__Integrati____mj___6D3FA520] DEFAULT (getutcdate()),
+[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__Integration__ID___5148DFA8] DEFAULT (newsequentialid())
+)
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating primary key [PK_Integration_ID] on [__mj].[Integration]'
+GO
+ALTER TABLE [__mj].[Integration] ADD CONSTRAINT [PK_Integration_ID] PRIMARY KEY CLUSTERED ([ID])
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Adding constraints to [__mj].[Integration]'
+GO
+ALTER TABLE [__mj].[Integration] ADD CONSTRAINT [UQ_Integration_Name] UNIQUE NONCLUSTERED ([Name])
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating trigger [__mj].[trgUpdateIntegration] on [__mj].[Integration]'
+GO
+
+CREATE TRIGGER [__mj].[trgUpdateIntegration]
+ON [__mj].[Integration]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[Integration]
+    SET 
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM 
+        [__mj].[Integration] AS _organicTable
+    INNER JOIN 
+        INSERTED AS I ON 
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[CommunicationRun]'
+GO
+CREATE TABLE [__mj].[CommunicationRun]
+(
+[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__Communicati__ID___3C4DC2C2] DEFAULT (newsequentialid()),
+[UserID] [uniqueidentifier] NOT NULL,
+[Direction] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+[Status] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+[StartedAt] [datetime] NULL,
+[EndedAt] [datetime] NULL,
+[Comments] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[ErrorMessage] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__Communica____mj___6DFEBF2F] DEFAULT (getutcdate()),
+[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__Communica____mj___6EF2E368] DEFAULT (getutcdate())
+)
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating primary key [PK_CommunicationRun_ID] on [__mj].[CommunicationRun]'
+GO
+ALTER TABLE [__mj].[CommunicationRun] ADD CONSTRAINT [PK_CommunicationRun_ID] PRIMARY KEY CLUSTERED ([ID])
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating trigger [__mj].[trgUpdateCommunicationRun] on [__mj].[CommunicationRun]'
+GO
+
+CREATE TRIGGER [__mj].[trgUpdateCommunicationRun]
+ON [__mj].[CommunicationRun]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[CommunicationRun]
+    SET 
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM 
+        [__mj].[CommunicationRun] AS _organicTable
+    INNER JOIN 
+        INSERTED AS I ON 
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[AIModelType]'
+GO
+CREATE TABLE [__mj].[AIModelType]
+(
+[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__AIModelType__ID___35A0C533] DEFAULT (newsequentialid()),
+[Name] [nvarchar] (50) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+[Description] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__AIModelTy____mj___14597241] DEFAULT (getutcdate()),
+[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__AIModelTy____mj___154D967A] DEFAULT (getutcdate())
+)
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating primary key [PK_AIModelType_ID] on [__mj].[AIModelType]'
+GO
+ALTER TABLE [__mj].[AIModelType] ADD CONSTRAINT [PK_AIModelType_ID] PRIMARY KEY CLUSTERED ([ID])
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating trigger [__mj].[trgUpdateAIModelType] on [__mj].[AIModelType]'
+GO
+
+CREATE TRIGGER [__mj].[trgUpdateAIModelType]
+ON [__mj].[AIModelType]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[AIModelType]
+    SET 
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM 
+        [__mj].[AIModelType] AS _organicTable
+    INNER JOIN 
+        INSERTED AS I ON 
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[Role]'
+GO
+CREATE TABLE [__mj].[Role]
+(
+[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__Role__ID___62736BAA] DEFAULT (newsequentialid()),
+[Name] [nvarchar] (50) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+[Description] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[DirectoryID] [nvarchar] (250) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[SQLName] [nvarchar] (250) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF___mj_Role___mj_CreatedAt] DEFAULT (getutcdate()),
+[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF___mj_Role___mj_UpdatedAt] DEFAULT (getutcdate())
+)
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating primary key [PK_Role_ID] on [__mj].[Role]'
+GO
+ALTER TABLE [__mj].[Role] ADD CONSTRAINT [PK_Role_ID] PRIMARY KEY CLUSTERED ([ID])
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Adding constraints to [__mj].[Role]'
+GO
+ALTER TABLE [__mj].[Role] ADD CONSTRAINT [UQ__Role__737584F6A210197E] UNIQUE NONCLUSTERED ([Name])
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating trigger [__mj].[trgUpdateRole] on [__mj].[Role]'
+GO
+
+CREATE TRIGGER [__mj].[trgUpdateRole]
+ON [__mj].[Role]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[Role]
+    SET 
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM 
+        [__mj].[Role] AS _organicTable
+    INNER JOIN 
+        INSERTED AS I ON 
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[Queue]'
+GO
+CREATE TABLE [__mj].[Queue]
+(
+[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__Queue__ID___58EA0170] DEFAULT (newsequentialid()),
+[Name] [nvarchar] (50) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+[Description] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[QueueTypeID] [uniqueidentifier] NOT NULL,
+[IsActive] [bit] NOT NULL CONSTRAINT [DF_Queue_IsActive] DEFAULT ((0)),
+[ProcessPID] [int] NULL,
+[ProcessPlatform] [nvarchar] (30) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[ProcessVersion] [nvarchar] (15) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[ProcessCwd] [nvarchar] (100) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[ProcessIPAddress] [nvarchar] (50) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[ProcessMacAddress] [nvarchar] (50) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[ProcessOSName] [nvarchar] (25) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[ProcessOSVersion] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[ProcessHostName] [nvarchar] (50) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[ProcessUserID] [nvarchar] (25) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[ProcessUserName] [nvarchar] (50) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[LastHeartbeat] [datetime] NOT NULL CONSTRAINT [DF_Queue_LastHeartbeat] DEFAULT (getdate()),
+[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__Queue____mj_Crea__182A0325] DEFAULT (getutcdate()),
+[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__Queue____mj_Upda__191E275E] DEFAULT (getutcdate())
+)
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating primary key [PK_Queue_ID] on [__mj].[Queue]'
+GO
+ALTER TABLE [__mj].[Queue] ADD CONSTRAINT [PK_Queue_ID] PRIMARY KEY CLUSTERED ([ID])
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating trigger [__mj].[trgUpdateQueue] on [__mj].[Queue]'
+GO
+
+CREATE TRIGGER [__mj].[trgUpdateQueue]
+ON [__mj].[Queue]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[Queue]
+    SET 
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM 
+        [__mj].[Queue] AS _organicTable
+    INNER JOIN 
+        INSERTED AS I ON 
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[CommunicationLog]'
+GO
+CREATE TABLE [__mj].[CommunicationLog]
+(
+[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__Communica__NewID__62B29775] DEFAULT (newsequentialid()),
+[CommunicationProviderID] [uniqueidentifier] NOT NULL,
+[CommunicationProviderMessageTypeID] [uniqueidentifier] NOT NULL,
+[CommunicationRunID] [uniqueidentifier] NULL,
+[Direction] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+[MessageDate] [datetime] NOT NULL,
+[Status] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_CommunicationLog_Status] DEFAULT (N'Pending'),
+[MessageContent] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[ErrorMessage] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__Communica____mj___71CF5013] DEFAULT (getutcdate()),
+[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__Communica____mj___72C3744C] DEFAULT (getutcdate())
+)
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating primary key [PK_CommunicationLog_ID] on [__mj].[CommunicationLog]'
+GO
+ALTER TABLE [__mj].[CommunicationLog] ADD CONSTRAINT [PK_CommunicationLog_ID] PRIMARY KEY CLUSTERED ([ID])
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating trigger [__mj].[trgUpdateCommunicationLog] on [__mj].[CommunicationLog]'
+GO
+
+CREATE TRIGGER [__mj].[trgUpdateCommunicationLog]
+ON [__mj].[CommunicationLog]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[CommunicationLog]
+    SET 
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM 
+        [__mj].[CommunicationLog] AS _organicTable
+    INNER JOIN 
+        INSERTED AS I ON 
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[IntegrationURLFormat]'
+GO
+CREATE TABLE [__mj].[IntegrationURLFormat]
+(
+[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__Integrati__NewID__17265FB4] DEFAULT (newsequentialid()),
+[IntegrationID] [uniqueidentifier] NOT NULL,
+[EntityID] [uniqueidentifier] NOT NULL,
+[URLFormat] [nvarchar] (500) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+[Comments] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__Integrati____mj___6A633875] DEFAULT (getutcdate()),
+[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__Integrati____mj___6B575CAE] DEFAULT (getutcdate())
+)
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating primary key [PK_IntegrationURLFormat_ID] on [__mj].[IntegrationURLFormat]'
+GO
+ALTER TABLE [__mj].[IntegrationURLFormat] ADD CONSTRAINT [PK_IntegrationURLFormat_ID] PRIMARY KEY CLUSTERED ([ID])
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating trigger [__mj].[trgUpdateIntegrationURLFormat] on [__mj].[IntegrationURLFormat]'
+GO
+
+CREATE TRIGGER [__mj].[trgUpdateIntegrationURLFormat]
+ON [__mj].[IntegrationURLFormat]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[IntegrationURLFormat]
+    SET 
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM 
+        [__mj].[IntegrationURLFormat] AS _organicTable
+    INNER JOIN 
+        INSERTED AS I ON 
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[CommunicationProvider]'
+GO
+CREATE TABLE [__mj].[CommunicationProvider]
+(
+[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__Communicati__ID___3A657A50] DEFAULT (newsequentialid()),
+[Name] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+[Description] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[Status] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF__Communica__Statu__602F90FB] DEFAULT ('Disabled'),
+[SupportsSending] [bit] NOT NULL CONSTRAINT [DF__Communica__Suppo__6217D96D] DEFAULT ((1)),
+[SupportsReceiving] [bit] NOT NULL CONSTRAINT [DF__Communica__Suppo__630BFDA6] DEFAULT ((0)),
+[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__Communica____mj___6C1676BD] DEFAULT (getutcdate()),
+[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__Communica____mj___6D0A9AF6] DEFAULT (getutcdate())
+)
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating primary key [PK_CommunicationProvider_ID] on [__mj].[CommunicationProvider]'
+GO
+ALTER TABLE [__mj].[CommunicationProvider] ADD CONSTRAINT [PK_CommunicationProvider_ID] PRIMARY KEY CLUSTERED ([ID])
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Adding constraints to [__mj].[CommunicationProvider]'
+GO
+ALTER TABLE [__mj].[CommunicationProvider] ADD CONSTRAINT [UQ_CommunicationProvider_Name] UNIQUE NONCLUSTERED ([Name])
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating trigger [__mj].[trgUpdateCommunicationProvider] on [__mj].[CommunicationProvider]'
+GO
+
+CREATE TRIGGER [__mj].[trgUpdateCommunicationProvider]
+ON [__mj].[CommunicationProvider]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[CommunicationProvider]
+    SET 
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM 
+        [__mj].[CommunicationProvider] AS _organicTable
+    INNER JOIN 
+        INSERTED AS I ON 
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[WorkflowEngine]'
+GO
+CREATE TABLE [__mj].[WorkflowEngine]
+(
+[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__WorkflowEng__ID___6FCD66C8] DEFAULT (newsequentialid()),
+[Name] [nvarchar] (100) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+[Description] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[DriverPath] [nvarchar] (500) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+[DriverClass] [nvarchar] (100) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__WorkflowE____mj___08E7BF95] DEFAULT (getutcdate()),
+[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__WorkflowE____mj___09DBE3CE] DEFAULT (getutcdate())
+)
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating primary key [PK_WorkflowEngine] on [__mj].[WorkflowEngine]'
+GO
+ALTER TABLE [__mj].[WorkflowEngine] ADD CONSTRAINT [PK_WorkflowEngine] PRIMARY KEY CLUSTERED ([ID])
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Adding constraints to [__mj].[WorkflowEngine]'
+GO
+ALTER TABLE [__mj].[WorkflowEngine] ADD CONSTRAINT [IX_WorkflowEngine] UNIQUE NONCLUSTERED ([Name])
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating trigger [__mj].[trgUpdateWorkflowEngine] on [__mj].[WorkflowEngine]'
+GO
+
+CREATE TRIGGER [__mj].[trgUpdateWorkflowEngine]
+ON [__mj].[WorkflowEngine]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[WorkflowEngine]
+    SET 
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM 
+        [__mj].[WorkflowEngine] AS _organicTable
+    INNER JOIN 
+        INSERTED AS I ON 
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[EntityDocumentRun]'
+GO
+CREATE TABLE [__mj].[EntityDocumentRun]
+(
+[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__EntityDoc__NewID__53A55E0F] DEFAULT (newsequentialid()),
+[EntityDocumentID] [uniqueidentifier] NOT NULL,
+[StartedAt] [datetime] NULL,
+[EndedAt] [datetime] NULL,
+[Status] [nvarchar] (15) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_EntityDocumentRun_Status] DEFAULT (N'Pending'),
+[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF___mj_EntityDocumentRun___mj_CreatedAt] DEFAULT (getutcdate()),
+[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF___mj_EntityDocumentRun___mj_UpdatedAt] DEFAULT (getutcdate())
+)
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating primary key [PK_EntityDocumentRun_ID] on [__mj].[EntityDocumentRun]'
+GO
+ALTER TABLE [__mj].[EntityDocumentRun] ADD CONSTRAINT [PK_EntityDocumentRun_ID] PRIMARY KEY CLUSTERED ([ID])
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating trigger [__mj].[trgUpdateEntityDocumentRun] on [__mj].[EntityDocumentRun]'
+GO
+
+CREATE TRIGGER [__mj].[trgUpdateEntityDocumentRun]
+ON [__mj].[EntityDocumentRun]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[EntityDocumentRun]
+    SET 
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM 
+        [__mj].[EntityDocumentRun] AS _organicTable
+    INNER JOIN 
+        INSERTED AS I ON 
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[AIModel]'
+GO
+CREATE TABLE [__mj].[AIModel]
+(
+[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__AIModel__ID___34ACA0FA] DEFAULT (newsequentialid()),
+[Name] [nvarchar] (50) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+[Description] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[Vendor] [nvarchar] (50) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[AIModelTypeID] [uniqueidentifier] NOT NULL,
+[PowerRank] [int] NULL,
+[IsActive] [bit] NOT NULL CONSTRAINT [DF_AIModel_IsActive] DEFAULT ((1)),
+[DriverClass] [nvarchar] (100) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[DriverImportPath] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[APIName] [nvarchar] (100) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__AIModel____mj_Cr__0EA098EB] DEFAULT (getutcdate()),
+[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__AIModel____mj_Up__0F94BD24] DEFAULT (getutcdate())
+)
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating primary key [PK_AIModel_ID] on [__mj].[AIModel]'
+GO
+ALTER TABLE [__mj].[AIModel] ADD CONSTRAINT [PK_AIModel_ID] PRIMARY KEY CLUSTERED ([ID])
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating trigger [__mj].[trgUpdateAIModel] on [__mj].[AIModel]'
+GO
+
+CREATE TRIGGER [__mj].[trgUpdateAIModel]
+ON [__mj].[AIModel]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[AIModel]
+    SET 
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM 
+        [__mj].[AIModel] AS _organicTable
+    INNER JOIN 
+        INSERTED AS I ON 
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[ExplorerNavigationItem]'
+GO
+CREATE TABLE [__mj].[ExplorerNavigationItem]
+(
+[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__ExplorerNavi__ID__02D946F7] DEFAULT (newsequentialid()),
+[Sequence] [int] NOT NULL,
+[Name] [nvarchar] (100) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+[Route] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+[IsActive] [bit] NOT NULL CONSTRAINT [DF__ExplorerN__IsAct__750028EC] DEFAULT ((1)),
+[ShowInHomeScreen] [bit] NOT NULL CONSTRAINT [DF_ExplorerNavigationItem_ShowOnHomeScreen] DEFAULT ((0)),
+[ShowInNavigationDrawer] [bit] NOT NULL CONSTRAINT [DF_ExplorerNavigationItem_ShowOnNavigationDrawer] DEFAULT ((0)),
+[IconCSSClass] [nvarchar] (100) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[Description] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[Comments] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__ExplorerN____mj___7F92C5F8] DEFAULT (getutcdate()),
+[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__ExplorerN____mj___0086EA31] DEFAULT (getutcdate())
+)
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating primary key [PK__Explorer__3214EC271BB186EE] on [__mj].[ExplorerNavigationItem]'
+GO
+ALTER TABLE [__mj].[ExplorerNavigationItem] ADD CONSTRAINT [PK__Explorer__3214EC271BB186EE] PRIMARY KEY CLUSTERED ([ID])
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Adding constraints to [__mj].[ExplorerNavigationItem]'
+GO
+ALTER TABLE [__mj].[ExplorerNavigationItem] ADD CONSTRAINT [UQ_ExplorerNavigationItem_Name] UNIQUE NONCLUSTERED ([Name])
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Adding constraints to [__mj].[ExplorerNavigationItem]'
+GO
+ALTER TABLE [__mj].[ExplorerNavigationItem] ADD CONSTRAINT [UQ_ExplorerNavigationItem_Route] UNIQUE NONCLUSTERED ([Route])
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating trigger [__mj].[trgUpdateExplorerNavigationItem] on [__mj].[ExplorerNavigationItem]'
+GO
+
+CREATE TRIGGER [__mj].[trgUpdateExplorerNavigationItem]
+ON [__mj].[ExplorerNavigationItem]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[ExplorerNavigationItem]
+    SET 
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM 
+        [__mj].[ExplorerNavigationItem] AS _organicTable
+    INNER JOIN 
+        INSERTED AS I ON 
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[UserViewCategory]'
+GO
+CREATE TABLE [__mj].[UserViewCategory]
+(
+[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__UserViewCat__ID___6BFCD5E4] DEFAULT (newsequentialid()),
+[Name] [nvarchar] (100) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+[Description] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[ParentID] [uniqueidentifier] NULL,
+[EntityID] [uniqueidentifier] NOT NULL,
+[UserID] [uniqueidentifier] NOT NULL,
+[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__UserViewC____mj___47D91647] DEFAULT (getutcdate()),
+[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__UserViewC____mj___48CD3A80] DEFAULT (getutcdate())
+)
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating primary key [PK_UserViewCategory_ID] on [__mj].[UserViewCategory]'
+GO
+ALTER TABLE [__mj].[UserViewCategory] ADD CONSTRAINT [PK_UserViewCategory_ID] PRIMARY KEY CLUSTERED ([ID])
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating trigger [__mj].[trgUpdateUserViewCategory] on [__mj].[UserViewCategory]'
+GO
+
+CREATE TRIGGER [__mj].[trgUpdateUserViewCategory]
+ON [__mj].[UserViewCategory]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[UserViewCategory]
+    SET 
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM 
+        [__mj].[UserViewCategory] AS _organicTable
+    INNER JOIN 
+        INSERTED AS I ON 
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[DataContext]'
+GO
+CREATE TABLE [__mj].[DataContext]
+(
+[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__DataContext__ID___43EEE48A] DEFAULT (newsequentialid()),
+[Name] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+[Description] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[UserID] [uniqueidentifier] NOT NULL,
+[LastRefreshedAt] [datetime] NULL,
+[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__DataConte____mj___45F0CDD5] DEFAULT (getutcdate()),
+[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__DataConte____mj___46E4F20E] DEFAULT (getutcdate())
+)
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating primary key [PK_DataContext_ID] on [__mj].[DataContext]'
+GO
+ALTER TABLE [__mj].[DataContext] ADD CONSTRAINT [PK_DataContext_ID] PRIMARY KEY CLUSTERED ([ID])
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating trigger [__mj].[trgUpdateDataContext] on [__mj].[DataContext]'
+GO
+
+CREATE TRIGGER [__mj].[trgUpdateDataContext]
+ON [__mj].[DataContext]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[DataContext]
+    SET 
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM 
+        [__mj].[DataContext] AS _organicTable
+    INNER JOIN 
+        INSERTED AS I ON 
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[ReportCategory]'
+GO
+CREATE TABLE [__mj].[ReportCategory]
+(
+[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__ReportCateg__ID___608B2338] DEFAULT (newsequentialid()),
+[Name] [nvarchar] (100) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+[Description] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[ParentID] [uniqueidentifier] NULL,
+[UserID] [uniqueidentifier] NOT NULL,
+[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__ReportCat____mj___4BA9A72B] DEFAULT (getutcdate()),
+[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__ReportCat____mj___4C9DCB64] DEFAULT (getutcdate())
+)
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating primary key [PK_ReportCategory_ID] on [__mj].[ReportCategory]'
+GO
+ALTER TABLE [__mj].[ReportCategory] ADD CONSTRAINT [PK_ReportCategory_ID] PRIMARY KEY CLUSTERED ([ID])
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating trigger [__mj].[trgUpdateReportCategory] on [__mj].[ReportCategory]'
+GO
+
+CREATE TRIGGER [__mj].[trgUpdateReportCategory]
+ON [__mj].[ReportCategory]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[ReportCategory]
+    SET 
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM 
+        [__mj].[ReportCategory] AS _organicTable
+    INNER JOIN 
+        INSERTED AS I ON 
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[ErrorLog]'
+GO
+CREATE TABLE [__mj].[ErrorLog]
+(
+[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__ErrorLog__NewID__35DFF0FE] DEFAULT (newsequentialid()),
+[CompanyIntegrationRunID] [uniqueidentifier] NULL,
+[CompanyIntegrationRunDetailID] [uniqueidentifier] NULL,
+[Code] [nchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[Message] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[CreatedBy] [nvarchar] (50) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_ErrorLog_CreatedBy] DEFAULT (suser_name()),
+[Status] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[Category] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[Details] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__ErrorLog____mj_C__75D4EB21] DEFAULT (getutcdate()),
+[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__ErrorLog____mj_U__76C90F5A] DEFAULT (getutcdate())
+)
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating primary key [PK_ErrorLog_ID] on [__mj].[ErrorLog]'
+GO
+ALTER TABLE [__mj].[ErrorLog] ADD CONSTRAINT [PK_ErrorLog_ID] PRIMARY KEY CLUSTERED ([ID])
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating trigger [__mj].[trgUpdateErrorLog] on [__mj].[ErrorLog]'
+GO
+
+CREATE TRIGGER [__mj].[trgUpdateErrorLog]
+ON [__mj].[ErrorLog]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[ErrorLog]
+    SET 
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM 
+        [__mj].[ErrorLog] AS _organicTable
+    INNER JOIN 
+        INSERTED AS I ON 
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[TemplateContentType]'
+GO
+CREATE TABLE [__mj].[TemplateContentType]
+(
+[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__TemplateCon__ID___682C4500] DEFAULT (newsequentialid()),
+[Name] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+[Description] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[CodeType] [nvarchar] (25) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_TemplateContentType_CodeType] DEFAULT (N'Other'),
+[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__TemplateC____mj___7D4102BF] DEFAULT (getutcdate()),
+[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__TemplateC____mj___7E3526F8] DEFAULT (getutcdate())
+)
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating primary key [PK_TemplateContentType_ID] on [__mj].[TemplateContentType]'
+GO
+ALTER TABLE [__mj].[TemplateContentType] ADD CONSTRAINT [PK_TemplateContentType_ID] PRIMARY KEY CLUSTERED ([ID])
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating trigger [__mj].[trgUpdateTemplateContentType] on [__mj].[TemplateContentType]'
+GO
+
+CREATE TRIGGER [__mj].[trgUpdateTemplateContentType]
+ON [__mj].[TemplateContentType]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[TemplateContentType]
+    SET 
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM 
+        [__mj].[TemplateContentType] AS _organicTable
+    INNER JOIN 
+        INSERTED AS I ON 
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[ApplicationSetting]'
+GO
+CREATE TABLE [__mj].[ApplicationSetting]
+(
+[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__Applicati__NewID__18849841] DEFAULT (newsequentialid()),
+[ApplicationID] [uniqueidentifier] NOT NULL,
+[Name] [nvarchar] (100) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+[Value] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+[Comments] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF___mj_ApplicationSetting___mj_CreatedAt] DEFAULT (getutcdate()),
+[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF___mj_ApplicationSetting___mj_UpdatedAt] DEFAULT (getutcdate())
+)
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating primary key [PK_ApplicationSetting_ID] on [__mj].[ApplicationSetting]'
+GO
+ALTER TABLE [__mj].[ApplicationSetting] ADD CONSTRAINT [PK_ApplicationSetting_ID] PRIMARY KEY CLUSTERED ([ID])
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating trigger [__mj].[trgUpdateApplicationSetting] on [__mj].[ApplicationSetting]'
+GO
+
+CREATE TRIGGER [__mj].[trgUpdateApplicationSetting]
+ON [__mj].[ApplicationSetting]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[ApplicationSetting]
+    SET 
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM 
+        [__mj].[ApplicationSetting] AS _organicTable
+    INNER JOIN 
+        INSERTED AS I ON 
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[RecommendationProvider]'
+GO
+CREATE TABLE [__mj].[RecommendationProvider]
+(
+[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__Recommendat__ID___5BC66E1B] DEFAULT (newsequentialid()),
+[Name] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+[Description] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__Recommend____mj___011193A3] DEFAULT (getutcdate()),
+[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__Recommend____mj___0205B7DC] DEFAULT (getutcdate())
+)
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating primary key [PK_RecommendationProvider_ID] on [__mj].[RecommendationProvider]'
+GO
+ALTER TABLE [__mj].[RecommendationProvider] ADD CONSTRAINT [PK_RecommendationProvider_ID] PRIMARY KEY CLUSTERED ([ID])
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating trigger [__mj].[trgUpdateRecommendationProvider] on [__mj].[RecommendationProvider]'
+GO
+
+CREATE TRIGGER [__mj].[trgUpdateRecommendationProvider]
+ON [__mj].[RecommendationProvider]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[RecommendationProvider]
+    SET 
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM 
+        [__mj].[RecommendationProvider] AS _organicTable
+    INNER JOIN 
+        INSERTED AS I ON 
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[DuplicateRun]'
+GO
+CREATE TABLE [__mj].[DuplicateRun]
+(
+[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__DuplicateRu__ID___45D72CFC] DEFAULT (newsequentialid()),
+[EntityID] [uniqueidentifier] NOT NULL,
+[StartedByUserID] [uniqueidentifier] NOT NULL,
+[SourceListID] [uniqueidentifier] NOT NULL,
+[StartedAt] [datetime] NOT NULL CONSTRAINT [DF_DuplicateRun_StartedAt] DEFAULT (getdate()),
+[EndedAt] [datetime] NULL,
+[ApprovalStatus] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_DuplicateRun_ApprovalStatus] DEFAULT (N'Pending'),
+[ApprovalComments] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[ApprovedByUserID] [uniqueidentifier] NULL,
+[ProcessingStatus] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_DuplicateRun_ProcessingStatus] DEFAULT (N'Pending'),
+[ProcessingErrorMessage] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__Duplicate____mj___5903A249] DEFAULT (getutcdate()),
+[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__Duplicate____mj___59F7C682] DEFAULT (getutcdate())
+)
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating primary key [PK_DuplicateRun_ID] on [__mj].[DuplicateRun]'
+GO
+ALTER TABLE [__mj].[DuplicateRun] ADD CONSTRAINT [PK_DuplicateRun_ID] PRIMARY KEY CLUSTERED ([ID])
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating trigger [__mj].[trgUpdateDuplicateRun] on [__mj].[DuplicateRun]'
+GO
+
+CREATE TRIGGER [__mj].[trgUpdateDuplicateRun]
+ON [__mj].[DuplicateRun]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[DuplicateRun]
+    SET 
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM 
+        [__mj].[DuplicateRun] AS _organicTable
+    INNER JOIN 
+        INSERTED AS I ON 
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[RecordMergeLog]'
+GO
+CREATE TABLE [__mj].[RecordMergeLog]
+(
+[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__RecordMerge__ID___5EA2DAC6] DEFAULT (newsequentialid()),
+[EntityID] [uniqueidentifier] NOT NULL,
+[SurvivingRecordID] [nvarchar] (450) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+[InitiatedByUserID] [uniqueidentifier] NOT NULL,
+[ApprovalStatus] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_RecordMergeLog_ApprovalStatus] DEFAULT (N'Pending'),
+[ApprovedByUserID] [uniqueidentifier] NULL,
+[ProcessingStatus] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_RecordMergeLog_Status] DEFAULT (N'Pending'),
+[ProcessingStartedAt] [datetime] NOT NULL CONSTRAINT [DF_RecordMergeLog_StartedAt] DEFAULT (getdate()),
+[ProcessingEndedAt] [datetime] NULL,
+[ProcessingLog] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[Comments] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__RecordMer____mj___3C67639B] DEFAULT (getutcdate()),
+[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__RecordMer____mj___3D5B87D4] DEFAULT (getutcdate())
+)
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating primary key [PK_RecordMergeLog_ID] on [__mj].[RecordMergeLog]'
+GO
+ALTER TABLE [__mj].[RecordMergeLog] ADD CONSTRAINT [PK_RecordMergeLog_ID] PRIMARY KEY CLUSTERED ([ID])
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating index [IX_RecordMergeLog] on [__mj].[RecordMergeLog]'
+GO
+CREATE NONCLUSTERED INDEX [IX_RecordMergeLog] ON [__mj].[RecordMergeLog] ([SurvivingRecordID])
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating trigger [__mj].[trgUpdateRecordMergeLog] on [__mj].[RecordMergeLog]'
+GO
+
+CREATE TRIGGER [__mj].[trgUpdateRecordMergeLog]
+ON [__mj].[RecordMergeLog]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[RecordMergeLog]
+    SET 
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM 
+        [__mj].[RecordMergeLog] AS _organicTable
+    INNER JOIN 
+        INSERTED AS I ON 
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[SchemaInfo]'
+GO
+CREATE TABLE [__mj].[SchemaInfo]
+(
+[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__SchemaInf__NewID__1AC1E66E] DEFAULT (newsequentialid()),
+[SchemaName] [nvarchar] (50) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+[EntityIDMin] [int] NOT NULL,
+[EntityIDMax] [int] NOT NULL,
+[Comments] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__SchemaInf____mj___3896D2B7] DEFAULT (getutcdate()),
+[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__SchemaInf____mj___398AF6F0] DEFAULT (getutcdate())
+)
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating primary key [PK_SchemaInfo_ID] on [__mj].[SchemaInfo]'
+GO
+ALTER TABLE [__mj].[SchemaInfo] ADD CONSTRAINT [PK_SchemaInfo_ID] PRIMARY KEY CLUSTERED ([ID])
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Adding constraints to [__mj].[SchemaInfo]'
+GO
+ALTER TABLE [__mj].[SchemaInfo] ADD CONSTRAINT [IX_SchemaInfo] UNIQUE NONCLUSTERED ([SchemaName])
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating trigger [__mj].[trgUpdateSchemaInfo] on [__mj].[SchemaInfo]'
+GO
+
+CREATE TRIGGER [__mj].[trgUpdateSchemaInfo]
+ON [__mj].[SchemaInfo]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[SchemaInfo]
+    SET 
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM 
+        [__mj].[SchemaInfo] AS _organicTable
     INNER JOIN 
         INSERTED AS I ON 
         _organicTable.[ID] = I.[ID];
@@ -3345,2357 +5750,6 @@ BEGIN
         __mj_UpdatedAt = GETUTCDATE()
     FROM 
         [__mj].[EmployeeRole] AS _organicTable
-    INNER JOIN 
-        INSERTED AS I ON 
-        _organicTable.[ID] = I.[ID];
-END;
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[RecommendationItem]'
-GO
-CREATE TABLE [__mj].[RecommendationItem]
-(
-[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__Recommend__NewID__6371B184] DEFAULT (newsequentialid()),
-[RecommendationID] [uniqueidentifier] NOT NULL,
-[DestinationEntityID] [uniqueidentifier] NOT NULL,
-[DestinationEntityRecordID] [nvarchar] (450) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-[MatchProbability] [decimal] (18, 15) NULL,
-[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__Recommend____mj___04E22487] DEFAULT (getutcdate()),
-[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__Recommend____mj___05D648C0] DEFAULT (getutcdate())
-)
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating primary key [PK_RecommendationItem_ID] on [__mj].[RecommendationItem]'
-GO
-ALTER TABLE [__mj].[RecommendationItem] ADD CONSTRAINT [PK_RecommendationItem_ID] PRIMARY KEY CLUSTERED ([ID])
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating index [IX_RecommendationItem_EntityID] on [__mj].[RecommendationItem]'
-GO
-CREATE NONCLUSTERED INDEX [IX_RecommendationItem_EntityID] ON [__mj].[RecommendationItem] ([DestinationEntityID])
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating index [IX_RecommendationItem_EntityRecordID] on [__mj].[RecommendationItem]'
-GO
-CREATE NONCLUSTERED INDEX [IX_RecommendationItem_EntityRecordID] ON [__mj].[RecommendationItem] ([DestinationEntityRecordID])
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating trigger [__mj].[trgUpdateRecommendationItem] on [__mj].[RecommendationItem]'
-GO
-
-CREATE TRIGGER [__mj].[trgUpdateRecommendationItem]
-ON [__mj].[RecommendationItem]
-AFTER UPDATE
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[RecommendationItem]
-    SET 
-        __mj_UpdatedAt = GETUTCDATE()
-    FROM 
-        [__mj].[RecommendationItem] AS _organicTable
-    INNER JOIN 
-        INSERTED AS I ON 
-        _organicTable.[ID] = I.[ID];
-END;
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[DuplicateRunDetail]'
-GO
-CREATE TABLE [__mj].[DuplicateRunDetail]
-(
-[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__DuplicateRu__ID___46CB5135] DEFAULT (newsequentialid()),
-[DuplicateRunID] [uniqueidentifier] NOT NULL,
-[RecordID] [nvarchar] (500) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-[MatchStatus] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_DuplicateRunDetail_MatchStatus] DEFAULT (N'Pending'),
-[SkippedReason] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[MatchErrorMessage] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[MergeStatus] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_DuplicateRunDetail_MergeStatus] DEFAULT (N'Not Applicable'),
-[MergeErrorMessage] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__Duplicate____mj___5AEBEABB] DEFAULT (getutcdate()),
-[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__Duplicate____mj___5BE00EF4] DEFAULT (getutcdate())
-)
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating primary key [PK_DuplicateRunDetail_ID] on [__mj].[DuplicateRunDetail]'
-GO
-ALTER TABLE [__mj].[DuplicateRunDetail] ADD CONSTRAINT [PK_DuplicateRunDetail_ID] PRIMARY KEY CLUSTERED ([ID])
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating trigger [__mj].[trgUpdateDuplicateRunDetail] on [__mj].[DuplicateRunDetail]'
-GO
-
-CREATE TRIGGER [__mj].[trgUpdateDuplicateRunDetail]
-ON [__mj].[DuplicateRunDetail]
-AFTER UPDATE
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[DuplicateRunDetail]
-    SET 
-        __mj_UpdatedAt = GETUTCDATE()
-    FROM 
-        [__mj].[DuplicateRunDetail] AS _organicTable
-    INNER JOIN 
-        INSERTED AS I ON 
-        _organicTable.[ID] = I.[ID];
-END;
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[Recommendation]'
-GO
-CREATE TABLE [__mj].[Recommendation]
-(
-[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__Recommendat__ID___5AD249E2] DEFAULT (newsequentialid()),
-[RecommendationRunID] [uniqueidentifier] NOT NULL,
-[SourceEntityID] [uniqueidentifier] NOT NULL,
-[SourceEntityRecordID] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__Recommend____mj___7F294B31] DEFAULT (getutcdate()),
-[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__Recommend____mj___001D6F6A] DEFAULT (getutcdate())
-)
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating primary key [PK_Recommendation_ID] on [__mj].[Recommendation]'
-GO
-ALTER TABLE [__mj].[Recommendation] ADD CONSTRAINT [PK_Recommendation_ID] PRIMARY KEY CLUSTERED ([ID])
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating trigger [__mj].[trgUpdateRecommendation] on [__mj].[Recommendation]'
-GO
-
-CREATE TRIGGER [__mj].[trgUpdateRecommendation]
-ON [__mj].[Recommendation]
-AFTER UPDATE
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[Recommendation]
-    SET 
-        __mj_UpdatedAt = GETUTCDATE()
-    FROM 
-        [__mj].[Recommendation] AS _organicTable
-    INNER JOIN 
-        INSERTED AS I ON 
-        _organicTable.[ID] = I.[ID];
-END;
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[EntitySetting]'
-GO
-CREATE TABLE [__mj].[EntitySetting]
-(
-[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__EntitySet__NewID__2D4AAAFD] DEFAULT (newsequentialid()),
-[EntityID] [uniqueidentifier] NOT NULL,
-[Name] [nvarchar] (100) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-[Value] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-[Comments] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF___mj_EntitySetting___mj_CreatedAt] DEFAULT (getutcdate()),
-[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF___mj_EntitySetting___mj_UpdatedAt] DEFAULT (getutcdate())
-)
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating primary key [PK_EntitySetting_ID] on [__mj].[EntitySetting]'
-GO
-ALTER TABLE [__mj].[EntitySetting] ADD CONSTRAINT [PK_EntitySetting_ID] PRIMARY KEY CLUSTERED ([ID])
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating trigger [__mj].[trgUpdateEntitySetting] on [__mj].[EntitySetting]'
-GO
-
-CREATE TRIGGER [__mj].[trgUpdateEntitySetting]
-ON [__mj].[EntitySetting]
-AFTER UPDATE
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[EntitySetting]
-    SET 
-        __mj_UpdatedAt = GETUTCDATE()
-    FROM 
-        [__mj].[EntitySetting] AS _organicTable
-    INNER JOIN 
-        INSERTED AS I ON 
-        _organicTable.[ID] = I.[ID];
-END;
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[EntityCommunicationMessageType]'
-GO
-CREATE TABLE [__mj].[EntityCommunicationMessageType]
-(
-[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__EntityCommu__ID___4A9BE219] DEFAULT (newsequentialid()),
-[EntityID] [uniqueidentifier] NOT NULL,
-[BaseMessageTypeID] [uniqueidentifier] NOT NULL,
-[IsActive] [bit] NOT NULL CONSTRAINT [DF__EntityCom__IsAct__36A5CD88] DEFAULT ((1)),
-[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF___mj_EntityCommunicationMessageType___mj_CreatedAt] DEFAULT (getutcdate()),
-[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF___mj_EntityCommunicationMessageType___mj_UpdatedAt] DEFAULT (getutcdate())
-)
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating primary key [PK_EntityCommunicationMessageType_ID] on [__mj].[EntityCommunicationMessageType]'
-GO
-ALTER TABLE [__mj].[EntityCommunicationMessageType] ADD CONSTRAINT [PK_EntityCommunicationMessageType_ID] PRIMARY KEY CLUSTERED ([ID])
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating trigger [__mj].[trgUpdateEntityCommunicationMessageType] on [__mj].[EntityCommunicationMessageType]'
-GO
-
-CREATE TRIGGER [__mj].[trgUpdateEntityCommunicationMessageType]
-ON [__mj].[EntityCommunicationMessageType]
-AFTER UPDATE
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[EntityCommunicationMessageType]
-    SET 
-        __mj_UpdatedAt = GETUTCDATE()
-    FROM 
-        [__mj].[EntityCommunicationMessageType] AS _organicTable
-    INNER JOIN 
-        INSERTED AS I ON 
-        _organicTable.[ID] = I.[ID];
-END;
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[DuplicateRun]'
-GO
-CREATE TABLE [__mj].[DuplicateRun]
-(
-[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__DuplicateRu__ID___45D72CFC] DEFAULT (newsequentialid()),
-[EntityID] [uniqueidentifier] NOT NULL,
-[StartedByUserID] [uniqueidentifier] NOT NULL,
-[SourceListID] [uniqueidentifier] NOT NULL,
-[StartedAt] [datetime] NOT NULL CONSTRAINT [DF_DuplicateRun_StartedAt] DEFAULT (getdate()),
-[EndedAt] [datetime] NULL,
-[ApprovalStatus] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_DuplicateRun_ApprovalStatus] DEFAULT (N'Pending'),
-[ApprovalComments] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[ApprovedByUserID] [uniqueidentifier] NULL,
-[ProcessingStatus] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_DuplicateRun_ProcessingStatus] DEFAULT (N'Pending'),
-[ProcessingErrorMessage] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__Duplicate____mj___5903A249] DEFAULT (getutcdate()),
-[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__Duplicate____mj___59F7C682] DEFAULT (getutcdate())
-)
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating primary key [PK_DuplicateRun_ID] on [__mj].[DuplicateRun]'
-GO
-ALTER TABLE [__mj].[DuplicateRun] ADD CONSTRAINT [PK_DuplicateRun_ID] PRIMARY KEY CLUSTERED ([ID])
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating trigger [__mj].[trgUpdateDuplicateRun] on [__mj].[DuplicateRun]'
-GO
-
-CREATE TRIGGER [__mj].[trgUpdateDuplicateRun]
-ON [__mj].[DuplicateRun]
-AFTER UPDATE
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[DuplicateRun]
-    SET 
-        __mj_UpdatedAt = GETUTCDATE()
-    FROM 
-        [__mj].[DuplicateRun] AS _organicTable
-    INNER JOIN 
-        INSERTED AS I ON 
-        _organicTable.[ID] = I.[ID];
-END;
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[ReportCategory]'
-GO
-CREATE TABLE [__mj].[ReportCategory]
-(
-[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__ReportCateg__ID___608B2338] DEFAULT (newsequentialid()),
-[Name] [nvarchar] (100) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-[Description] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[ParentID] [uniqueidentifier] NULL,
-[UserID] [uniqueidentifier] NOT NULL,
-[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__ReportCat____mj___4BA9A72B] DEFAULT (getutcdate()),
-[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__ReportCat____mj___4C9DCB64] DEFAULT (getutcdate())
-)
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating primary key [PK_ReportCategory_ID] on [__mj].[ReportCategory]'
-GO
-ALTER TABLE [__mj].[ReportCategory] ADD CONSTRAINT [PK_ReportCategory_ID] PRIMARY KEY CLUSTERED ([ID])
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating trigger [__mj].[trgUpdateReportCategory] on [__mj].[ReportCategory]'
-GO
-
-CREATE TRIGGER [__mj].[trgUpdateReportCategory]
-ON [__mj].[ReportCategory]
-AFTER UPDATE
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[ReportCategory]
-    SET 
-        __mj_UpdatedAt = GETUTCDATE()
-    FROM 
-        [__mj].[ReportCategory] AS _organicTable
-    INNER JOIN 
-        INSERTED AS I ON 
-        _organicTable.[ID] = I.[ID];
-END;
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[DashboardCategory]'
-GO
-CREATE TABLE [__mj].[DashboardCategory]
-(
-[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__DashboardCa__ID___42FAC051] DEFAULT (newsequentialid()),
-[Name] [nvarchar] (100) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-[Description] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[ParentID] [uniqueidentifier] NULL,
-[UserID] [uniqueidentifier] NOT NULL,
-[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__Dashboard____mj___49C15EB9] DEFAULT (getutcdate()),
-[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__Dashboard____mj___4AB582F2] DEFAULT (getutcdate())
-)
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating primary key [PK_DashboardCategory_ID] on [__mj].[DashboardCategory]'
-GO
-ALTER TABLE [__mj].[DashboardCategory] ADD CONSTRAINT [PK_DashboardCategory_ID] PRIMARY KEY CLUSTERED ([ID])
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating trigger [__mj].[trgUpdateDashboardCategory] on [__mj].[DashboardCategory]'
-GO
-
-CREATE TRIGGER [__mj].[trgUpdateDashboardCategory]
-ON [__mj].[DashboardCategory]
-AFTER UPDATE
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[DashboardCategory]
-    SET 
-        __mj_UpdatedAt = GETUTCDATE()
-    FROM 
-        [__mj].[DashboardCategory] AS _organicTable
-    INNER JOIN 
-        INSERTED AS I ON 
-        _organicTable.[ID] = I.[ID];
-END;
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[AuditLog]'
-GO
-CREATE TABLE [__mj].[AuditLog]
-(
-[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__AuditLog__NewID__405D7F71] DEFAULT (newsequentialid()),
-[UserID] [uniqueidentifier] NOT NULL,
-[AuditLogTypeID] [uniqueidentifier] NOT NULL,
-[AuthorizationID] [uniqueidentifier] NULL,
-[Status] [nvarchar] (50) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_AuditLog_Status] DEFAULT (N'Allow'),
-[Description] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[Details] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[EntityID] [uniqueidentifier] NULL,
-[RecordID] [nvarchar] (450) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__AuditLog____mj_C__0AD00807] DEFAULT (getutcdate()),
-[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__AuditLog____mj_U__0BC42C40] DEFAULT (getutcdate())
-)
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating primary key [PK_AuditLog_ID] on [__mj].[AuditLog]'
-GO
-ALTER TABLE [__mj].[AuditLog] ADD CONSTRAINT [PK_AuditLog_ID] PRIMARY KEY CLUSTERED ([ID])
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating trigger [__mj].[trgUpdateAuditLog] on [__mj].[AuditLog]'
-GO
-
-CREATE TRIGGER [__mj].[trgUpdateAuditLog]
-ON [__mj].[AuditLog]
-AFTER UPDATE
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[AuditLog]
-    SET 
-        __mj_UpdatedAt = GETUTCDATE()
-    FROM 
-        [__mj].[AuditLog] AS _organicTable
-    INNER JOIN 
-        INSERTED AS I ON 
-        _organicTable.[ID] = I.[ID];
-END;
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[Company]'
-GO
-CREATE TABLE [__mj].[Company]
-(
-[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__Company__ID___3D41E6FB] DEFAULT (newsequentialid()),
-[Name] [nvarchar] (50) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-[Description] [nvarchar] (200) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-[Website] [nvarchar] (100) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[LogoURL] [nvarchar] (500) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[Domain] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF___mj_Company___mj_CreatedAt] DEFAULT (getutcdate()),
-[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF___mj_Company___mj_UpdatedAt] DEFAULT (getutcdate())
-)
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating primary key [PK_Company_ID] on [__mj].[Company]'
-GO
-ALTER TABLE [__mj].[Company] ADD CONSTRAINT [PK_Company_ID] PRIMARY KEY CLUSTERED ([ID])
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Adding constraints to [__mj].[Company]'
-GO
-ALTER TABLE [__mj].[Company] ADD CONSTRAINT [UQ_Company_Name] UNIQUE NONCLUSTERED ([Name])
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating trigger [__mj].[trgUpdateCompany] on [__mj].[Company]'
-GO
-
-CREATE TRIGGER [__mj].[trgUpdateCompany]
-ON [__mj].[Company]
-AFTER UPDATE
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[Company]
-    SET 
-        __mj_UpdatedAt = GETUTCDATE()
-    FROM 
-        [__mj].[Company] AS _organicTable
-    INNER JOIN 
-        INSERTED AS I ON 
-        _organicTable.[ID] = I.[ID];
-END;
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[DataContextItem]'
-GO
-CREATE TABLE [__mj].[DataContextItem]
-(
-[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__DataConte__NewID__2B976CB5] DEFAULT (newsequentialid()),
-[DataContextID] [uniqueidentifier] NOT NULL,
-[Type] [nvarchar] (50) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-[ViewID] [uniqueidentifier] NULL,
-[QueryID] [uniqueidentifier] NULL,
-[EntityID] [uniqueidentifier] NULL,
-[RecordID] [nvarchar] (450) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[SQL] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[DataJSON] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[LastRefreshedAt] [datetime] NULL,
-[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__DataConte____mj___44088563] DEFAULT (getutcdate()),
-[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__DataConte____mj___44FCA99C] DEFAULT (getutcdate())
-)
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating primary key [PK_DataContextItem_ID] on [__mj].[DataContextItem]'
-GO
-ALTER TABLE [__mj].[DataContextItem] ADD CONSTRAINT [PK_DataContextItem_ID] PRIMARY KEY CLUSTERED ([ID])
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating trigger [__mj].[trgUpdateDataContextItem] on [__mj].[DataContextItem]'
-GO
-
-CREATE TRIGGER [__mj].[trgUpdateDataContextItem]
-ON [__mj].[DataContextItem]
-AFTER UPDATE
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[DataContextItem]
-    SET 
-        __mj_UpdatedAt = GETUTCDATE()
-    FROM 
-        [__mj].[DataContextItem] AS _organicTable
-    INNER JOIN 
-        INSERTED AS I ON 
-        _organicTable.[ID] = I.[ID];
-END;
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[ActionLibrary]'
-GO
-CREATE TABLE [__mj].[ActionLibrary]
-(
-[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__ActionLibrar__ID__330DA5F4] DEFAULT (newsequentialid()),
-[ActionID] [uniqueidentifier] NOT NULL,
-[LibraryID] [uniqueidentifier] NOT NULL,
-[ItemsUsed] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF___mj_ActionLibrary___mj_CreatedAt] DEFAULT (getutcdate()),
-[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF___mj_ActionLibrary___mj_UpdatedAt] DEFAULT (getutcdate())
-)
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating primary key [PK_ActionLibrary_New_ID] on [__mj].[ActionLibrary]'
-GO
-ALTER TABLE [__mj].[ActionLibrary] ADD CONSTRAINT [PK_ActionLibrary_New_ID] PRIMARY KEY CLUSTERED ([ID])
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating trigger [__mj].[trgUpdateActionLibrary] on [__mj].[ActionLibrary]'
-GO
-
-CREATE TRIGGER [__mj].[trgUpdateActionLibrary]
-ON [__mj].[ActionLibrary]
-AFTER UPDATE
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[ActionLibrary]
-    SET 
-        __mj_UpdatedAt = GETUTCDATE()
-    FROM 
-        [__mj].[ActionLibrary] AS _organicTable
-    INNER JOIN 
-        INSERTED AS I ON 
-        _organicTable.[ID] = I.[ID];
-END;
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[EntityRecordDocument]'
-GO
-CREATE TABLE [__mj].[EntityRecordDocument]
-(
-[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__EntityRec__NewID__0819264E] DEFAULT (newsequentialid()),
-[EntityID] [uniqueidentifier] NOT NULL,
-[RecordID] [nvarchar] (450) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-[EntityDocumentID] [uniqueidentifier] NOT NULL,
-[DocumentText] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[VectorIndexID] [uniqueidentifier] NOT NULL,
-[VectorID] [nvarchar] (50) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[VectorJSON] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[EntityRecordUpdatedAt] [datetime] NOT NULL,
-[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF___mj_EntityRecordDocument___mj_CreatedAt] DEFAULT (getutcdate()),
-[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF___mj_EntityRecordDocument___mj_UpdatedAt] DEFAULT (getutcdate())
-)
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating primary key [PK_EntityRecordDocument_ID] on [__mj].[EntityRecordDocument]'
-GO
-ALTER TABLE [__mj].[EntityRecordDocument] ADD CONSTRAINT [PK_EntityRecordDocument_ID] PRIMARY KEY CLUSTERED ([ID])
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating index [IX_EntityRecordDocument_RecordID] on [__mj].[EntityRecordDocument]'
-GO
-CREATE NONCLUSTERED INDEX [IX_EntityRecordDocument_RecordID] ON [__mj].[EntityRecordDocument] ([RecordID])
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating trigger [__mj].[trgUpdateEntityRecordDocument] on [__mj].[EntityRecordDocument]'
-GO
-
-CREATE TRIGGER [__mj].[trgUpdateEntityRecordDocument]
-ON [__mj].[EntityRecordDocument]
-AFTER UPDATE
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[EntityRecordDocument]
-    SET 
-        __mj_UpdatedAt = GETUTCDATE()
-    FROM 
-        [__mj].[EntityRecordDocument] AS _organicTable
-    INNER JOIN 
-        INSERTED AS I ON 
-        _organicTable.[ID] = I.[ID];
-END;
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[TemplateParam]'
-GO
-CREATE TABLE [__mj].[TemplateParam]
-(
-[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__TemplateP__NewID__3E0B22AB] DEFAULT (newsequentialid()),
-[TemplateID] [uniqueidentifier] NOT NULL,
-[Name] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-[Description] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[Type] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF__TemplatePa__Type__4A6C03BC] DEFAULT ('Scalar'),
-[DefaultValue] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[IsRequired] [bit] NOT NULL CONSTRAINT [DF_TemplateParam_IsRequired] DEFAULT ((0)),
-[LinkedParameterName] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[LinkedParameterField] [nvarchar] (500) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[ExtraFilter] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[EntityID] [uniqueidentifier] NULL,
-[RecordID] [nvarchar] (2000) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__TemplateP____mj___7B58BA4D] DEFAULT (getutcdate()),
-[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__TemplateP____mj___7C4CDE86] DEFAULT (getutcdate())
-)
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating primary key [PK_TemplateParam_ID] on [__mj].[TemplateParam]'
-GO
-ALTER TABLE [__mj].[TemplateParam] ADD CONSTRAINT [PK_TemplateParam_ID] PRIMARY KEY CLUSTERED ([ID])
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating trigger [__mj].[trgUpdateTemplateParam] on [__mj].[TemplateParam]'
-GO
-
-CREATE TRIGGER [__mj].[trgUpdateTemplateParam]
-ON [__mj].[TemplateParam]
-AFTER UPDATE
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[TemplateParam]
-    SET 
-        __mj_UpdatedAt = GETUTCDATE()
-    FROM 
-        [__mj].[TemplateParam] AS _organicTable
-    INNER JOIN 
-        INSERTED AS I ON 
-        _organicTable.[ID] = I.[ID];
-END;
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[ActionResultCode]'
-GO
-CREATE TABLE [__mj].[ActionResultCode]
-(
-[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__ActionRes__NewID__46207A68] DEFAULT (newsequentialid()),
-[ActionID] [uniqueidentifier] NOT NULL,
-[ResultCode] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-[IsSuccess] [bit] NOT NULL CONSTRAINT [DF_ActionResultCode_IsSuccess] DEFAULT ((0)),
-[Description] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__ActionRes____mj___60A4C411] DEFAULT (getutcdate()),
-[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__ActionRes____mj___6198E84A] DEFAULT (getutcdate())
-)
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating primary key [PK_ActionResultCode_ID] on [__mj].[ActionResultCode]'
-GO
-ALTER TABLE [__mj].[ActionResultCode] ADD CONSTRAINT [PK_ActionResultCode_ID] PRIMARY KEY CLUSTERED ([ID])
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating trigger [__mj].[trgUpdateActionResultCode] on [__mj].[ActionResultCode]'
-GO
-
-CREATE TRIGGER [__mj].[trgUpdateActionResultCode]
-ON [__mj].[ActionResultCode]
-AFTER UPDATE
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[ActionResultCode]
-    SET 
-        __mj_UpdatedAt = GETUTCDATE()
-    FROM 
-        [__mj].[ActionResultCode] AS _organicTable
-    INNER JOIN 
-        INSERTED AS I ON 
-        _organicTable.[ID] = I.[ID];
-END;
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[QueryPermission]'
-GO
-CREATE TABLE [__mj].[QueryPermission]
-(
-[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__QueryPerm__NewID__4F6AB8D7] DEFAULT (newsequentialid()),
-[QueryID] [uniqueidentifier] NOT NULL,
-[RoleID] [uniqueidentifier] NOT NULL,
-[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF___mj_QueryPermission___mj_CreatedAt] DEFAULT (getutcdate()),
-[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF___mj_QueryPermission___mj_UpdatedAt] DEFAULT (getutcdate())
-)
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating primary key [PK_QueryPermission_ID] on [__mj].[QueryPermission]'
-GO
-ALTER TABLE [__mj].[QueryPermission] ADD CONSTRAINT [PK_QueryPermission_ID] PRIMARY KEY CLUSTERED ([ID])
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating trigger [__mj].[trgUpdateQueryPermission] on [__mj].[QueryPermission]'
-GO
-
-CREATE TRIGGER [__mj].[trgUpdateQueryPermission]
-ON [__mj].[QueryPermission]
-AFTER UPDATE
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[QueryPermission]
-    SET 
-        __mj_UpdatedAt = GETUTCDATE()
-    FROM 
-        [__mj].[QueryPermission] AS _organicTable
-    INNER JOIN 
-        INSERTED AS I ON 
-        _organicTable.[ID] = I.[ID];
-END;
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[VectorIndex]'
-GO
-CREATE TABLE [__mj].[VectorIndex]
-(
-[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__VectorInd__NewID__1103720A] DEFAULT (newsequentialid()),
-[Name] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-[Description] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[VectorDatabaseID] [uniqueidentifier] NOT NULL,
-[EmbeddingModelID] [uniqueidentifier] NOT NULL,
-[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__VectorInd____mj___4037F47F] DEFAULT (getutcdate()),
-[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__VectorInd____mj___412C18B8] DEFAULT (getutcdate())
-)
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating primary key [PK_VectorIndex_ID] on [__mj].[VectorIndex]'
-GO
-ALTER TABLE [__mj].[VectorIndex] ADD CONSTRAINT [PK_VectorIndex_ID] PRIMARY KEY CLUSTERED ([ID])
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating trigger [__mj].[trgUpdateVectorIndex] on [__mj].[VectorIndex]'
-GO
-
-CREATE TRIGGER [__mj].[trgUpdateVectorIndex]
-ON [__mj].[VectorIndex]
-AFTER UPDATE
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[VectorIndex]
-    SET 
-        __mj_UpdatedAt = GETUTCDATE()
-    FROM 
-        [__mj].[VectorIndex] AS _organicTable
-    INNER JOIN 
-        INSERTED AS I ON 
-        _organicTable.[ID] = I.[ID];
-END;
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[UserFavorite]'
-GO
-CREATE TABLE [__mj].[UserFavorite]
-(
-[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__UserFavor__NewID__54EE8803] DEFAULT (newsequentialid()),
-[UserID] [uniqueidentifier] NOT NULL,
-[EntityID] [uniqueidentifier] NOT NULL,
-[RecordID] [nvarchar] (450) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__UserFavor____mj___64AA5F1F] DEFAULT (getutcdate()),
-[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__UserFavor____mj___659E8358] DEFAULT (getutcdate())
-)
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating primary key [PK_UserFavorite_ID] on [__mj].[UserFavorite]'
-GO
-ALTER TABLE [__mj].[UserFavorite] ADD CONSTRAINT [PK_UserFavorite_ID] PRIMARY KEY CLUSTERED ([ID])
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating index [IX_UserFavorite] on [__mj].[UserFavorite]'
-GO
-CREATE NONCLUSTERED INDEX [IX_UserFavorite] ON [__mj].[UserFavorite] ([RecordID])
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating trigger [__mj].[trgUpdateUserFavorite] on [__mj].[UserFavorite]'
-GO
-
-CREATE TRIGGER [__mj].[trgUpdateUserFavorite]
-ON [__mj].[UserFavorite]
-AFTER UPDATE
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[UserFavorite]
-    SET 
-        __mj_UpdatedAt = GETUTCDATE()
-    FROM 
-        [__mj].[UserFavorite] AS _organicTable
-    INNER JOIN 
-        INSERTED AS I ON 
-        _organicTable.[ID] = I.[ID];
-END;
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[Employee]'
-GO
-CREATE TABLE [__mj].[Employee]
-(
-[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__Employee__ID___47BF756E] DEFAULT (newsequentialid()),
-[BCMID] [uniqueidentifier] NOT NULL CONSTRAINT [DF_Employee_BCMID] DEFAULT (newid()),
-[FirstName] [nvarchar] (30) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-[LastName] [nvarchar] (50) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-[CompanyID] [uniqueidentifier] NOT NULL,
-[SupervisorID] [uniqueidentifier] NULL,
-[Title] [nvarchar] (50) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[Email] [nvarchar] (100) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-[Phone] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[Active] [bit] NOT NULL CONSTRAINT [DF__Employee__Active__5D95E53A] DEFAULT ((1)),
-[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF___mj_Employee___mj_CreatedAt] DEFAULT (getutcdate()),
-[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF___mj_Employee___mj_UpdatedAt] DEFAULT (getutcdate())
-)
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating primary key [PK_Employee_ID] on [__mj].[Employee]'
-GO
-ALTER TABLE [__mj].[Employee] ADD CONSTRAINT [PK_Employee_ID] PRIMARY KEY CLUSTERED ([ID])
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Adding constraints to [__mj].[Employee]'
-GO
-ALTER TABLE [__mj].[Employee] ADD CONSTRAINT [UQ__Employee__Email] UNIQUE NONCLUSTERED ([Email])
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating trigger [__mj].[trgUpdateEmployee] on [__mj].[Employee]'
-GO
-
-CREATE TRIGGER [__mj].[trgUpdateEmployee]
-ON [__mj].[Employee]
-AFTER UPDATE
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[Employee]
-    SET 
-        __mj_UpdatedAt = GETUTCDATE()
-    FROM 
-        [__mj].[Employee] AS _organicTable
-    INNER JOIN 
-        INSERTED AS I ON 
-        _organicTable.[ID] = I.[ID];
-END;
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[CompanyIntegrationRun]'
-GO
-CREATE TABLE [__mj].[CompanyIntegrationRun]
-(
-[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__CompanyInte__ID___3F2A2F6D] DEFAULT (newsequentialid()),
-[CompanyIntegrationID] [uniqueidentifier] NOT NULL,
-[RunByUserID] [uniqueidentifier] NOT NULL,
-[StartedAt] [datetime] NULL,
-[EndedAt] [datetime] NULL,
-[TotalRecords] [int] NOT NULL,
-[Comments] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__CompanyIn____mj___72045A3D] DEFAULT (getutcdate()),
-[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__CompanyIn____mj___72F87E76] DEFAULT (getutcdate())
-)
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating primary key [PK_CompanyIntegrationRun_ID] on [__mj].[CompanyIntegrationRun]'
-GO
-ALTER TABLE [__mj].[CompanyIntegrationRun] ADD CONSTRAINT [PK_CompanyIntegrationRun_ID] PRIMARY KEY CLUSTERED ([ID])
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating trigger [__mj].[trgUpdateCompanyIntegrationRun] on [__mj].[CompanyIntegrationRun]'
-GO
-
-CREATE TRIGGER [__mj].[trgUpdateCompanyIntegrationRun]
-ON [__mj].[CompanyIntegrationRun]
-AFTER UPDATE
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[CompanyIntegrationRun]
-    SET 
-        __mj_UpdatedAt = GETUTCDATE()
-    FROM 
-        [__mj].[CompanyIntegrationRun] AS _organicTable
-    INNER JOIN 
-        INSERTED AS I ON 
-        _organicTable.[ID] = I.[ID];
-END;
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[CommunicationProviderMessageType]'
-GO
-CREATE TABLE [__mj].[CommunicationProviderMessageType]
-(
-[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__Communicati__ID___3B599E89] DEFAULT (newsequentialid()),
-[CommunicationProviderID] [uniqueidentifier] NOT NULL,
-[CommunicationBaseMessageTypeID] [uniqueidentifier] NOT NULL,
-[Name] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-[Status] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF__Communica__Statu__6F71D48B] DEFAULT ('Disabled'),
-[AdditionalAttributes] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__Communica____mj___6FE707A1] DEFAULT (getutcdate()),
-[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__Communica____mj___70DB2BDA] DEFAULT (getutcdate())
-)
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating primary key [PK_CommunicationProviderMessageType_ID] on [__mj].[CommunicationProviderMessageType]'
-GO
-ALTER TABLE [__mj].[CommunicationProviderMessageType] ADD CONSTRAINT [PK_CommunicationProviderMessageType_ID] PRIMARY KEY CLUSTERED ([ID])
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating trigger [__mj].[trgUpdateCommunicationProviderMessageType] on [__mj].[CommunicationProviderMessageType]'
-GO
-
-CREATE TRIGGER [__mj].[trgUpdateCommunicationProviderMessageType]
-ON [__mj].[CommunicationProviderMessageType]
-AFTER UPDATE
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[CommunicationProviderMessageType]
-    SET 
-        __mj_UpdatedAt = GETUTCDATE()
-    FROM 
-        [__mj].[CommunicationProviderMessageType] AS _organicTable
-    INNER JOIN 
-        INSERTED AS I ON 
-        _organicTable.[ID] = I.[ID];
-END;
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[QueueTask]'
-GO
-CREATE TABLE [__mj].[QueueTask]
-(
-[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__QueueTask__NewID__58F42311] DEFAULT (newsequentialid()),
-[QueueID] [uniqueidentifier] NOT NULL,
-[Status] [nchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_QueueTask_Status] DEFAULT (N'Pending'),
-[StartedAt] [datetime] NULL,
-[EndedAt] [datetime] NULL,
-[Data] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[Options] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[Output] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[ErrorMessage] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[Comments] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__QueueTask____mj___1A124B97] DEFAULT (getutcdate()),
-[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__QueueTask____mj___1B066FD0] DEFAULT (getutcdate())
-)
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating primary key [PK_QueueTask_ID] on [__mj].[QueueTask]'
-GO
-ALTER TABLE [__mj].[QueueTask] ADD CONSTRAINT [PK_QueueTask_ID] PRIMARY KEY CLUSTERED ([ID])
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating trigger [__mj].[trgUpdateQueueTask] on [__mj].[QueueTask]'
-GO
-
-CREATE TRIGGER [__mj].[trgUpdateQueueTask]
-ON [__mj].[QueueTask]
-AFTER UPDATE
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[QueueTask]
-    SET 
-        __mj_UpdatedAt = GETUTCDATE()
-    FROM 
-        [__mj].[QueueTask] AS _organicTable
-    INNER JOIN 
-        INSERTED AS I ON 
-        _organicTable.[ID] = I.[ID];
-END;
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[Role]'
-GO
-CREATE TABLE [__mj].[Role]
-(
-[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__Role__ID___62736BAA] DEFAULT (newsequentialid()),
-[Name] [nvarchar] (50) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-[Description] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[DirectoryID] [nvarchar] (250) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[SQLName] [nvarchar] (250) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF___mj_Role___mj_CreatedAt] DEFAULT (getutcdate()),
-[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF___mj_Role___mj_UpdatedAt] DEFAULT (getutcdate())
-)
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating primary key [PK_Role_ID] on [__mj].[Role]'
-GO
-ALTER TABLE [__mj].[Role] ADD CONSTRAINT [PK_Role_ID] PRIMARY KEY CLUSTERED ([ID])
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Adding constraints to [__mj].[Role]'
-GO
-ALTER TABLE [__mj].[Role] ADD CONSTRAINT [UQ__Role__737584F6A210197E] UNIQUE NONCLUSTERED ([Name])
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating trigger [__mj].[trgUpdateRole] on [__mj].[Role]'
-GO
-
-CREATE TRIGGER [__mj].[trgUpdateRole]
-ON [__mj].[Role]
-AFTER UPDATE
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[Role]
-    SET 
-        __mj_UpdatedAt = GETUTCDATE()
-    FROM 
-        [__mj].[Role] AS _organicTable
-    INNER JOIN 
-        INSERTED AS I ON 
-        _organicTable.[ID] = I.[ID];
-END;
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[CommunicationBaseMessageType]'
-GO
-CREATE TABLE [__mj].[CommunicationBaseMessageType]
-(
-[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__Communicati__ID___39715617] DEFAULT (newsequentialid()),
-[Type] [nvarchar] (100) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-[SupportsAttachments] [bit] NOT NULL CONSTRAINT [DF__Communica__Suppo__68C4D6FC] DEFAULT ((0)),
-[SupportsSubjectLine] [bit] NOT NULL CONSTRAINT [DF__Communica__Suppo__69B8FB35] DEFAULT ((0)),
-[SupportsHtml] [bit] NOT NULL CONSTRAINT [DF__Communica__Suppo__6AAD1F6E] DEFAULT ((0)),
-[MaxBytes] [int] NULL,
-[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__Communica____mj___73B79885] DEFAULT (getutcdate()),
-[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__Communica____mj___74ABBCBE] DEFAULT (getutcdate())
-)
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating primary key [PK_CommunicationBaseMessageType_ID] on [__mj].[CommunicationBaseMessageType]'
-GO
-ALTER TABLE [__mj].[CommunicationBaseMessageType] ADD CONSTRAINT [PK_CommunicationBaseMessageType_ID] PRIMARY KEY CLUSTERED ([ID])
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Adding constraints to [__mj].[CommunicationBaseMessageType]'
-GO
-ALTER TABLE [__mj].[CommunicationBaseMessageType] ADD CONSTRAINT [UQ_CommunicationBaseMessageType_Type] UNIQUE NONCLUSTERED ([Type])
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating trigger [__mj].[trgUpdateCommunicationBaseMessageType] on [__mj].[CommunicationBaseMessageType]'
-GO
-
-CREATE TRIGGER [__mj].[trgUpdateCommunicationBaseMessageType]
-ON [__mj].[CommunicationBaseMessageType]
-AFTER UPDATE
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[CommunicationBaseMessageType]
-    SET 
-        __mj_UpdatedAt = GETUTCDATE()
-    FROM 
-        [__mj].[CommunicationBaseMessageType] AS _organicTable
-    INNER JOIN 
-        INSERTED AS I ON 
-        _organicTable.[ID] = I.[ID];
-END;
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[Queue]'
-GO
-CREATE TABLE [__mj].[Queue]
-(
-[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__Queue__ID___58EA0170] DEFAULT (newsequentialid()),
-[Name] [nvarchar] (50) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-[Description] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[QueueTypeID] [uniqueidentifier] NOT NULL,
-[IsActive] [bit] NOT NULL CONSTRAINT [DF_Queue_IsActive] DEFAULT ((0)),
-[ProcessPID] [int] NULL,
-[ProcessPlatform] [nvarchar] (30) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[ProcessVersion] [nvarchar] (15) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[ProcessCwd] [nvarchar] (100) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[ProcessIPAddress] [nvarchar] (50) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[ProcessMacAddress] [nvarchar] (50) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[ProcessOSName] [nvarchar] (25) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[ProcessOSVersion] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[ProcessHostName] [nvarchar] (50) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[ProcessUserID] [nvarchar] (25) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[ProcessUserName] [nvarchar] (50) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[LastHeartbeat] [datetime] NOT NULL CONSTRAINT [DF_Queue_LastHeartbeat] DEFAULT (getdate()),
-[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__Queue____mj_Crea__182A0325] DEFAULT (getutcdate()),
-[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__Queue____mj_Upda__191E275E] DEFAULT (getutcdate())
-)
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating primary key [PK_Queue_ID] on [__mj].[Queue]'
-GO
-ALTER TABLE [__mj].[Queue] ADD CONSTRAINT [PK_Queue_ID] PRIMARY KEY CLUSTERED ([ID])
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating trigger [__mj].[trgUpdateQueue] on [__mj].[Queue]'
-GO
-
-CREATE TRIGGER [__mj].[trgUpdateQueue]
-ON [__mj].[Queue]
-AFTER UPDATE
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[Queue]
-    SET 
-        __mj_UpdatedAt = GETUTCDATE()
-    FROM 
-        [__mj].[Queue] AS _organicTable
-    INNER JOIN 
-        INSERTED AS I ON 
-        _organicTable.[ID] = I.[ID];
-END;
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[CommunicationRun]'
-GO
-CREATE TABLE [__mj].[CommunicationRun]
-(
-[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__Communicati__ID___3C4DC2C2] DEFAULT (newsequentialid()),
-[UserID] [uniqueidentifier] NOT NULL,
-[Direction] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-[Status] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-[StartedAt] [datetime] NULL,
-[EndedAt] [datetime] NULL,
-[Comments] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[ErrorMessage] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__Communica____mj___6DFEBF2F] DEFAULT (getutcdate()),
-[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__Communica____mj___6EF2E368] DEFAULT (getutcdate())
-)
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating primary key [PK_CommunicationRun_ID] on [__mj].[CommunicationRun]'
-GO
-ALTER TABLE [__mj].[CommunicationRun] ADD CONSTRAINT [PK_CommunicationRun_ID] PRIMARY KEY CLUSTERED ([ID])
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating trigger [__mj].[trgUpdateCommunicationRun] on [__mj].[CommunicationRun]'
-GO
-
-CREATE TRIGGER [__mj].[trgUpdateCommunicationRun]
-ON [__mj].[CommunicationRun]
-AFTER UPDATE
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[CommunicationRun]
-    SET 
-        __mj_UpdatedAt = GETUTCDATE()
-    FROM 
-        [__mj].[CommunicationRun] AS _organicTable
-    INNER JOIN 
-        INSERTED AS I ON 
-        _organicTable.[ID] = I.[ID];
-END;
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[UserRecordLog]'
-GO
-CREATE TABLE [__mj].[UserRecordLog]
-(
-[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__UserRecor__NewID__68F580B0] DEFAULT (newsequentialid()),
-[UserID] [uniqueidentifier] NOT NULL,
-[EntityID] [uniqueidentifier] NOT NULL,
-[RecordID] [nvarchar] (450) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-[EarliestAt] [datetime] NOT NULL CONSTRAINT [DF_UserRecordLog_EarliestAt] DEFAULT (getdate()),
-[LatestAt] [datetime] NOT NULL CONSTRAINT [DF_UserRecordLog_LatestAt] DEFAULT (getdate()),
-[TotalCount] [int] NOT NULL CONSTRAINT [DF_UserRecordLog_TotalCount] DEFAULT ((0)),
-[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__UserRecor____mj___701C11CB] DEFAULT (getutcdate()),
-[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__UserRecor____mj___71103604] DEFAULT (getutcdate())
-)
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating primary key [PK_UserRecordLog_ID] on [__mj].[UserRecordLog]'
-GO
-ALTER TABLE [__mj].[UserRecordLog] ADD CONSTRAINT [PK_UserRecordLog_ID] PRIMARY KEY CLUSTERED ([ID])
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating index [IX_UserRecordLog] on [__mj].[UserRecordLog]'
-GO
-CREATE NONCLUSTERED INDEX [IX_UserRecordLog] ON [__mj].[UserRecordLog] ([RecordID])
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating trigger [__mj].[trgUpdateUserRecordLog] on [__mj].[UserRecordLog]'
-GO
-
-CREATE TRIGGER [__mj].[trgUpdateUserRecordLog]
-ON [__mj].[UserRecordLog]
-AFTER UPDATE
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[UserRecordLog]
-    SET 
-        __mj_UpdatedAt = GETUTCDATE()
-    FROM 
-        [__mj].[UserRecordLog] AS _organicTable
-    INNER JOIN 
-        INSERTED AS I ON 
-        _organicTable.[ID] = I.[ID];
-END;
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[ReportSnapshot]'
-GO
-CREATE TABLE [__mj].[ReportSnapshot]
-(
-[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__ReportSna__NewID__11387C34] DEFAULT (newsequentialid()),
-[ReportID] [uniqueidentifier] NOT NULL,
-[ResultSet] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-[UserID] [uniqueidentifier] NOT NULL,
-[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__ReportSna____mj___2583FE43] DEFAULT (getutcdate()),
-[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__ReportSna____mj___2678227C] DEFAULT (getutcdate())
-)
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating primary key [PK_ReportSnapshot_ID] on [__mj].[ReportSnapshot]'
-GO
-ALTER TABLE [__mj].[ReportSnapshot] ADD CONSTRAINT [PK_ReportSnapshot_ID] PRIMARY KEY CLUSTERED ([ID])
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating trigger [__mj].[trgUpdateReportSnapshot] on [__mj].[ReportSnapshot]'
-GO
-
-CREATE TRIGGER [__mj].[trgUpdateReportSnapshot]
-ON [__mj].[ReportSnapshot]
-AFTER UPDATE
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[ReportSnapshot]
-    SET 
-        __mj_UpdatedAt = GETUTCDATE()
-    FROM 
-        [__mj].[ReportSnapshot] AS _organicTable
-    INNER JOIN 
-        INSERTED AS I ON 
-        _organicTable.[ID] = I.[ID];
-END;
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[EntityRelationship]'
-GO
-CREATE TABLE [__mj].[EntityRelationship]
-(
-[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__EntityRel__NewID__184F8E17] DEFAULT (newsequentialid()),
-[EntityID] [uniqueidentifier] NOT NULL,
-[Sequence] [int] NOT NULL CONSTRAINT [DF_EntityRelationship_Sequence] DEFAULT ((0)),
-[RelatedEntityID] [uniqueidentifier] NOT NULL,
-[BundleInAPI] [bit] NOT NULL CONSTRAINT [DF_admin.EntityRelationships_BundleInAPI] DEFAULT ((1)),
-[IncludeInParentAllQuery] [bit] NOT NULL CONSTRAINT [DF_EntityRelationship_IncludeInParentAllQuery] DEFAULT ((0)),
-[Type] [nchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_EntityRelationship_Type] DEFAULT (N'One To Many'),
-[EntityKeyField] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[RelatedEntityJoinField] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-[JoinView] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[JoinEntityJoinField] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[JoinEntityInverseJoinField] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[DisplayInForm] [bit] NOT NULL CONSTRAINT [DF_EntityRelationship_DisplayInForm] DEFAULT ((1)),
-[DisplayLocation] [nvarchar] (50) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_EntityRelationship_DisplayLocation] DEFAULT (N'After Field Tabs'),
-[DisplayName] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[DisplayIconType] [nvarchar] (50) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_EntityRelationship_DisplayIconType] DEFAULT (N'Related Entity Icon'),
-[DisplayIcon] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[DisplayUserViewID] [uniqueidentifier] NULL,
-[DisplayComponentID] [uniqueidentifier] NULL,
-[DisplayComponentConfiguration] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF___mj_EntityRelationship___mj_CreatedAt] DEFAULT (getutcdate()),
-[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF___mj_EntityRelationship___mj_UpdatedAt] DEFAULT (getutcdate())
-)
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating primary key [PK_EntityRelationship_ID] on [__mj].[EntityRelationship]'
-GO
-ALTER TABLE [__mj].[EntityRelationship] ADD CONSTRAINT [PK_EntityRelationship_ID] PRIMARY KEY CLUSTERED ([ID])
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating trigger [__mj].[trgUpdateEntityRelationship] on [__mj].[EntityRelationship]'
-GO
-
-CREATE TRIGGER [__mj].[trgUpdateEntityRelationship]
-ON [__mj].[EntityRelationship]
-AFTER UPDATE
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[EntityRelationship]
-    SET 
-        __mj_UpdatedAt = GETUTCDATE()
-    FROM 
-        [__mj].[EntityRelationship] AS _organicTable
-    INNER JOIN 
-        INSERTED AS I ON 
-        _organicTable.[ID] = I.[ID];
-END;
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[VersionInstallation]'
-GO
-CREATE TABLE [__mj].[VersionInstallation]
-(
-[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__VersionIn__NewID__1A8CDC44] DEFAULT (newsequentialid()),
-[MajorVersion] [int] NOT NULL,
-[MinorVersion] [int] NOT NULL,
-[PatchVersion] [int] NOT NULL,
-[Type] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_VersionInstallation_Type] DEFAULT (N'System'),
-[InstalledAt] [datetime] NOT NULL,
-[Status] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_VersionInstallation_Status] DEFAULT (N'Pending'),
-[InstallLog] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[Comments] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__VersionIn____mj___55331165] DEFAULT (getutcdate()),
-[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__VersionIn____mj___5627359E] DEFAULT (getutcdate())
-)
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating primary key [PK_VersionInstallation_ID] on [__mj].[VersionInstallation]'
-GO
-ALTER TABLE [__mj].[VersionInstallation] ADD CONSTRAINT [PK_VersionInstallation_ID] PRIMARY KEY CLUSTERED ([ID])
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating trigger [__mj].[trgUpdateVersionInstallation] on [__mj].[VersionInstallation]'
-GO
-
-CREATE TRIGGER [__mj].[trgUpdateVersionInstallation]
-ON [__mj].[VersionInstallation]
-AFTER UPDATE
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[VersionInstallation]
-    SET 
-        __mj_UpdatedAt = GETUTCDATE()
-    FROM 
-        [__mj].[VersionInstallation] AS _organicTable
-    INNER JOIN 
-        INSERTED AS I ON 
-        _organicTable.[ID] = I.[ID];
-END;
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[FileCategory]'
-GO
-CREATE TABLE [__mj].[FileCategory]
-(
-[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__FileCategor__ID___4F609736] DEFAULT (newsequentialid()),
-[Name] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-[ParentID] [uniqueidentifier] NULL,
-[Description] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__FileCateg____mj___51628081] DEFAULT (getutcdate()),
-[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__FileCateg____mj___5256A4BA] DEFAULT (getutcdate())
-)
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating primary key [PK_FileCategory_ID] on [__mj].[FileCategory]'
-GO
-ALTER TABLE [__mj].[FileCategory] ADD CONSTRAINT [PK_FileCategory_ID] PRIMARY KEY CLUSTERED ([ID])
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating trigger [__mj].[trgUpdateFileCategory] on [__mj].[FileCategory]'
-GO
-
-CREATE TRIGGER [__mj].[trgUpdateFileCategory]
-ON [__mj].[FileCategory]
-AFTER UPDATE
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[FileCategory]
-    SET 
-        __mj_UpdatedAt = GETUTCDATE()
-    FROM 
-        [__mj].[FileCategory] AS _organicTable
-    INNER JOIN 
-        INSERTED AS I ON 
-        _organicTable.[ID] = I.[ID];
-END;
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[DuplicateRunDetailMatch]'
-GO
-CREATE TABLE [__mj].[DuplicateRunDetailMatch]
-(
-[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__Duplicate__NewID__37FD439A] DEFAULT (newsequentialid()),
-[DuplicateRunDetailID] [uniqueidentifier] NOT NULL,
-[MatchSource] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_DuplicateRunDetailMatch_MatchSource] DEFAULT (N'Vector'),
-[MatchRecordID] [nvarchar] (500) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-[MatchProbability] [numeric] (12, 11) NOT NULL CONSTRAINT [DF_DuplicateRunDetailMatch_MatchProbability] DEFAULT ((0)),
-[MatchedAt] [datetime] NOT NULL CONSTRAINT [DF_DuplicateRunDetailMatch_MatchedAt] DEFAULT (getdate()),
-[Action] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_DuplicateRunDetailMatch_Action] DEFAULT (N'Ignore'),
-[ApprovalStatus] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_DuplicateRunDetailMatch_ApprovalStatus] DEFAULT (N'Pending'),
-[RecordMergeLogID] [uniqueidentifier] NULL,
-[MergeStatus] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_DuplicateRunDetailMatch_MergeStatus] DEFAULT (N'Pending'),
-[MergedAt] [datetime] NOT NULL CONSTRAINT [DF_DuplicateRunDetailMatch_MergedAt] DEFAULT (getdate()),
-[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__Duplicate____mj___571B59D7] DEFAULT (getutcdate()),
-[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__Duplicate____mj___580F7E10] DEFAULT (getutcdate())
-)
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating primary key [PK_DuplicateRunDetailMatch_ID] on [__mj].[DuplicateRunDetailMatch]'
-GO
-ALTER TABLE [__mj].[DuplicateRunDetailMatch] ADD CONSTRAINT [PK_DuplicateRunDetailMatch_ID] PRIMARY KEY CLUSTERED ([ID])
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating trigger [__mj].[trgUpdateDuplicateRunDetailMatch] on [__mj].[DuplicateRunDetailMatch]'
-GO
-
-CREATE TRIGGER [__mj].[trgUpdateDuplicateRunDetailMatch]
-ON [__mj].[DuplicateRunDetailMatch]
-AFTER UPDATE
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[DuplicateRunDetailMatch]
-    SET 
-        __mj_UpdatedAt = GETUTCDATE()
-    FROM 
-        [__mj].[DuplicateRunDetailMatch] AS _organicTable
-    INNER JOIN 
-        INSERTED AS I ON 
-        _organicTable.[ID] = I.[ID];
-END;
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[FileStorageProvider]'
-GO
-CREATE TABLE [__mj].[FileStorageProvider]
-(
-[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__FileStorage__ID___5054BB6F] DEFAULT (newsequentialid()),
-[Name] [nvarchar] (50) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-[Description] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[ServerDriverKey] [nvarchar] (100) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-[ClientDriverKey] [nvarchar] (100) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-[Priority] [int] NOT NULL CONSTRAINT [DF_FileProvider_Priority] DEFAULT ((0)),
-[IsActive] [bit] NOT NULL CONSTRAINT [DF_FileProvider_IsActive] DEFAULT ((1)),
-[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__FileStora____mj___4D91EF9D] DEFAULT (getutcdate()),
-[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__FileStora____mj___4E8613D6] DEFAULT (getutcdate())
-)
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating primary key [PK_FileStorageProvider_ID] on [__mj].[FileStorageProvider]'
-GO
-ALTER TABLE [__mj].[FileStorageProvider] ADD CONSTRAINT [PK_FileStorageProvider_ID] PRIMARY KEY CLUSTERED ([ID])
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating trigger [__mj].[trgUpdateFileStorageProvider] on [__mj].[FileStorageProvider]'
-GO
-
-CREATE TRIGGER [__mj].[trgUpdateFileStorageProvider]
-ON [__mj].[FileStorageProvider]
-AFTER UPDATE
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[FileStorageProvider]
-    SET 
-        __mj_UpdatedAt = GETUTCDATE()
-    FROM 
-        [__mj].[FileStorageProvider] AS _organicTable
-    INNER JOIN 
-        INSERTED AS I ON 
-        _organicTable.[ID] = I.[ID];
-END;
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[UserViewCategory]'
-GO
-CREATE TABLE [__mj].[UserViewCategory]
-(
-[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__UserViewCat__ID___6BFCD5E4] DEFAULT (newsequentialid()),
-[Name] [nvarchar] (100) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-[Description] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[ParentID] [uniqueidentifier] NULL,
-[EntityID] [uniqueidentifier] NOT NULL,
-[UserID] [uniqueidentifier] NOT NULL,
-[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__UserViewC____mj___47D91647] DEFAULT (getutcdate()),
-[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__UserViewC____mj___48CD3A80] DEFAULT (getutcdate())
-)
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating primary key [PK_UserViewCategory_ID] on [__mj].[UserViewCategory]'
-GO
-ALTER TABLE [__mj].[UserViewCategory] ADD CONSTRAINT [PK_UserViewCategory_ID] PRIMARY KEY CLUSTERED ([ID])
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating trigger [__mj].[trgUpdateUserViewCategory] on [__mj].[UserViewCategory]'
-GO
-
-CREATE TRIGGER [__mj].[trgUpdateUserViewCategory]
-ON [__mj].[UserViewCategory]
-AFTER UPDATE
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[UserViewCategory]
-    SET 
-        __mj_UpdatedAt = GETUTCDATE()
-    FROM 
-        [__mj].[UserViewCategory] AS _organicTable
-    INNER JOIN 
-        INSERTED AS I ON 
-        _organicTable.[ID] = I.[ID];
-END;
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[IntegrationURLFormat]'
-GO
-CREATE TABLE [__mj].[IntegrationURLFormat]
-(
-[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__Integrati__NewID__17265FB4] DEFAULT (newsequentialid()),
-[IntegrationID] [uniqueidentifier] NOT NULL,
-[EntityID] [uniqueidentifier] NOT NULL,
-[URLFormat] [nvarchar] (500) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-[Comments] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__Integrati____mj___6A633875] DEFAULT (getutcdate()),
-[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__Integrati____mj___6B575CAE] DEFAULT (getutcdate())
-)
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating primary key [PK_IntegrationURLFormat_ID] on [__mj].[IntegrationURLFormat]'
-GO
-ALTER TABLE [__mj].[IntegrationURLFormat] ADD CONSTRAINT [PK_IntegrationURLFormat_ID] PRIMARY KEY CLUSTERED ([ID])
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating trigger [__mj].[trgUpdateIntegrationURLFormat] on [__mj].[IntegrationURLFormat]'
-GO
-
-CREATE TRIGGER [__mj].[trgUpdateIntegrationURLFormat]
-ON [__mj].[IntegrationURLFormat]
-AFTER UPDATE
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[IntegrationURLFormat]
-    SET 
-        __mj_UpdatedAt = GETUTCDATE()
-    FROM 
-        [__mj].[IntegrationURLFormat] AS _organicTable
-    INNER JOIN 
-        INSERTED AS I ON 
-        _organicTable.[ID] = I.[ID];
-END;
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[ScheduledAction]'
-GO
-CREATE TABLE [__mj].[ScheduledAction]
-(
-[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__ScheduledAct__ID__4A14FF90] DEFAULT (newsequentialid()),
-[Name] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-[Description] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[CreatedByUserID] [uniqueidentifier] NOT NULL,
-[ActionID] [uniqueidentifier] NOT NULL,
-[Type] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-[CronExpression] [nvarchar] (100) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[Timezone] [nvarchar] (100) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-[Status] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF__Scheduled__Statu__4B0923C9] DEFAULT ('Pending'),
-[IntervalDays] [int] NULL,
-[DayOfWeek] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[DayOfMonth] [int] NULL,
-[Month] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[CustomCronExpression] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__Scheduled____mj___0AB9948A] DEFAULT (getutcdate()),
-[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__Scheduled____mj___0BADB8C3] DEFAULT (getutcdate())
-)
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating primary key [PK__Schedule__3214EC27A259AC9E] on [__mj].[ScheduledAction]'
-GO
-ALTER TABLE [__mj].[ScheduledAction] ADD CONSTRAINT [PK__Schedule__3214EC27A259AC9E] PRIMARY KEY CLUSTERED ([ID])
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating trigger [__mj].[trgUpdateScheduledAction] on [__mj].[ScheduledAction]'
-GO
-
-CREATE TRIGGER [__mj].[trgUpdateScheduledAction]
-ON [__mj].[ScheduledAction]
-AFTER UPDATE
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[ScheduledAction]
-    SET 
-        __mj_UpdatedAt = GETUTCDATE()
-    FROM 
-        [__mj].[ScheduledAction] AS _organicTable
-    INNER JOIN 
-        INSERTED AS I ON 
-        _organicTable.[ID] = I.[ID];
-END;
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[DataContext]'
-GO
-CREATE TABLE [__mj].[DataContext]
-(
-[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__DataContext__ID___43EEE48A] DEFAULT (newsequentialid()),
-[Name] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-[Description] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[UserID] [uniqueidentifier] NOT NULL,
-[LastRefreshedAt] [datetime] NULL,
-[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__DataConte____mj___45F0CDD5] DEFAULT (getutcdate()),
-[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__DataConte____mj___46E4F20E] DEFAULT (getutcdate())
-)
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating primary key [PK_DataContext_ID] on [__mj].[DataContext]'
-GO
-ALTER TABLE [__mj].[DataContext] ADD CONSTRAINT [PK_DataContext_ID] PRIMARY KEY CLUSTERED ([ID])
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating trigger [__mj].[trgUpdateDataContext] on [__mj].[DataContext]'
-GO
-
-CREATE TRIGGER [__mj].[trgUpdateDataContext]
-ON [__mj].[DataContext]
-AFTER UPDATE
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[DataContext]
-    SET 
-        __mj_UpdatedAt = GETUTCDATE()
-    FROM 
-        [__mj].[DataContext] AS _organicTable
-    INNER JOIN 
-        INSERTED AS I ON 
-        _organicTable.[ID] = I.[ID];
-END;
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[EntityDocument]'
-GO
-CREATE TABLE [__mj].[EntityDocument]
-(
-[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__EntityDocum__ID___4B900652] DEFAULT (newsequentialid()),
-[Name] [nvarchar] (250) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-[TypeID] [uniqueidentifier] NOT NULL,
-[EntityID] [uniqueidentifier] NOT NULL,
-[VectorDatabaseID] [uniqueidentifier] NOT NULL,
-[Status] [nvarchar] (15) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_EntityDocument_Status] DEFAULT (N'Active'),
-[TemplateID] [uniqueidentifier] NOT NULL,
-[AIModelID] [uniqueidentifier] NOT NULL,
-[PotentialMatchThreshold] [numeric] (12, 11) NOT NULL CONSTRAINT [DF_EntityDocument_PotentialMatchThreshold] DEFAULT ((1)),
-[AbsoluteMatchThreshold] [numeric] (12, 11) NOT NULL CONSTRAINT [DF_EntityDocument_AbsoluteMatchTreshhold] DEFAULT ((1)),
-[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF___mj_EntityDocument___mj_CreatedAt] DEFAULT (getutcdate()),
-[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF___mj_EntityDocument___mj_UpdatedAt] DEFAULT (getutcdate())
-)
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating primary key [PK_EntityDocument_ID] on [__mj].[EntityDocument]'
-GO
-ALTER TABLE [__mj].[EntityDocument] ADD CONSTRAINT [PK_EntityDocument_ID] PRIMARY KEY CLUSTERED ([ID])
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating index [UQ_EntityDocument_Name] on [__mj].[EntityDocument]'
-GO
-CREATE UNIQUE NONCLUSTERED INDEX [UQ_EntityDocument_Name] ON [__mj].[EntityDocument] ([Name])
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating trigger [__mj].[trgUpdateEntityDocument] on [__mj].[EntityDocument]'
-GO
-
-CREATE TRIGGER [__mj].[trgUpdateEntityDocument]
-ON [__mj].[EntityDocument]
-AFTER UPDATE
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[EntityDocument]
-    SET 
-        __mj_UpdatedAt = GETUTCDATE()
-    FROM 
-        [__mj].[EntityDocument] AS _organicTable
-    INNER JOIN 
-        INSERTED AS I ON 
-        _organicTable.[ID] = I.[ID];
-END;
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[EntityFieldValue]'
-GO
-CREATE TABLE [__mj].[EntityFieldValue]
-(
-[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF_EntityFieldValue_ID_] DEFAULT (newsequentialid()),
-[EntityFieldID] [uniqueidentifier] NOT NULL,
-[Sequence] [int] NOT NULL,
-[Value] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-[Code] [nvarchar] (50) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[Description] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF___mj_EntityFieldValue___mj_CreatedAt] DEFAULT (getutcdate()),
-[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF___mj_EntityFieldValue___mj_UpdatedAt] DEFAULT (getutcdate())
-)
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating primary key [PK_EntityFieldValue_1] on [__mj].[EntityFieldValue]'
-GO
-ALTER TABLE [__mj].[EntityFieldValue] ADD CONSTRAINT [PK_EntityFieldValue_1] PRIMARY KEY CLUSTERED ([ID])
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating trigger [__mj].[trgUpdateEntityFieldValue] on [__mj].[EntityFieldValue]'
-GO
-
-CREATE TRIGGER [__mj].[trgUpdateEntityFieldValue]
-ON [__mj].[EntityFieldValue]
-AFTER UPDATE
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[EntityFieldValue]
-    SET 
-        __mj_UpdatedAt = GETUTCDATE()
-    FROM 
-        [__mj].[EntityFieldValue] AS _organicTable
-    INNER JOIN 
-        INSERTED AS I ON 
-        _organicTable.[ID] = I.[ID];
-END;
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[EmployeeSkill]'
-GO
-CREATE TABLE [__mj].[EmployeeSkill]
-(
-[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__EmployeeS__NewID__04138B40] DEFAULT (newsequentialid()),
-[EmployeeID] [uniqueidentifier] NOT NULL,
-[SkillID] [uniqueidentifier] NOT NULL,
-[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF___mj_EmployeeSkill___mj_CreatedAt] DEFAULT (getutcdate()),
-[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF___mj_EmployeeSkill___mj_UpdatedAt] DEFAULT (getutcdate())
-)
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating primary key [PK_EmployeeSkill_ID] on [__mj].[EmployeeSkill]'
-GO
-ALTER TABLE [__mj].[EmployeeSkill] ADD CONSTRAINT [PK_EmployeeSkill_ID] PRIMARY KEY CLUSTERED ([ID])
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating trigger [__mj].[trgUpdateEmployeeSkill] on [__mj].[EmployeeSkill]'
-GO
-
-CREATE TRIGGER [__mj].[trgUpdateEmployeeSkill]
-ON [__mj].[EmployeeSkill]
-AFTER UPDATE
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[EmployeeSkill]
-    SET 
-        __mj_UpdatedAt = GETUTCDATE()
-    FROM 
-        [__mj].[EmployeeSkill] AS _organicTable
-    INNER JOIN 
-        INSERTED AS I ON 
-        _organicTable.[ID] = I.[ID];
-END;
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[WorkspaceItem]'
-GO
-CREATE TABLE [__mj].[WorkspaceItem]
-(
-[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__Workspace__NewID__307C1D63] DEFAULT (newsequentialid()),
-[Name] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-[Description] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[WorkspaceID] [uniqueidentifier] NOT NULL,
-[ResourceTypeID] [uniqueidentifier] NOT NULL,
-[ResourceRecordID] [nvarchar] (2000) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[Sequence] [int] NOT NULL,
-[Configuration] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__Workspace____mj___2D25200B] DEFAULT (getutcdate()),
-[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__Workspace____mj___2E194444] DEFAULT (getutcdate())
-)
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating primary key [PK_WorkspaceItem_ID] on [__mj].[WorkspaceItem]'
-GO
-ALTER TABLE [__mj].[WorkspaceItem] ADD CONSTRAINT [PK_WorkspaceItem_ID] PRIMARY KEY CLUSTERED ([ID])
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating trigger [__mj].[trgUpdateWorkspaceItem] on [__mj].[WorkspaceItem]'
-GO
-
-CREATE TRIGGER [__mj].[trgUpdateWorkspaceItem]
-ON [__mj].[WorkspaceItem]
-AFTER UPDATE
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[WorkspaceItem]
-    SET 
-        __mj_UpdatedAt = GETUTCDATE()
-    FROM 
-        [__mj].[WorkspaceItem] AS _organicTable
-    INNER JOIN 
-        INSERTED AS I ON 
-        _organicTable.[ID] = I.[ID];
-END;
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[ErrorLog]'
-GO
-CREATE TABLE [__mj].[ErrorLog]
-(
-[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__ErrorLog__NewID__35DFF0FE] DEFAULT (newsequentialid()),
-[CompanyIntegrationRunID] [uniqueidentifier] NULL,
-[CompanyIntegrationRunDetailID] [uniqueidentifier] NULL,
-[Code] [nchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[Message] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[CreatedBy] [nvarchar] (50) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_ErrorLog_CreatedBy] DEFAULT (suser_name()),
-[Status] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[Category] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[Details] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__ErrorLog____mj_C__75D4EB21] DEFAULT (getutcdate()),
-[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__ErrorLog____mj_U__76C90F5A] DEFAULT (getutcdate())
-)
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating primary key [PK_ErrorLog_ID] on [__mj].[ErrorLog]'
-GO
-ALTER TABLE [__mj].[ErrorLog] ADD CONSTRAINT [PK_ErrorLog_ID] PRIMARY KEY CLUSTERED ([ID])
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating trigger [__mj].[trgUpdateErrorLog] on [__mj].[ErrorLog]'
-GO
-
-CREATE TRIGGER [__mj].[trgUpdateErrorLog]
-ON [__mj].[ErrorLog]
-AFTER UPDATE
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[ErrorLog]
-    SET 
-        __mj_UpdatedAt = GETUTCDATE()
-    FROM 
-        [__mj].[ErrorLog] AS _organicTable
-    INNER JOIN 
-        INSERTED AS I ON 
-        _organicTable.[ID] = I.[ID];
-END;
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[UserView]'
-GO
-CREATE TABLE [__mj].[UserView]
-(
-[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__UserView__ID___6B08B1AB] DEFAULT (newsequentialid()),
-[UserID] [uniqueidentifier] NOT NULL,
-[EntityID] [uniqueidentifier] NOT NULL,
-[Name] [nvarchar] (100) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-[Description] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[CategoryID] [uniqueidentifier] NULL,
-[IsShared] [bit] NOT NULL CONSTRAINT [DF_UserView_IsShared] DEFAULT ((0)),
-[IsDefault] [bit] NOT NULL CONSTRAINT [DF_UserView_IsDefault] DEFAULT ((0)),
-[GridState] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[FilterState] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[CustomFilterState] [bit] NOT NULL CONSTRAINT [DF_UserView_CustomFilterState] DEFAULT ((0)),
-[SmartFilterEnabled] [bit] NOT NULL CONSTRAINT [DF_UserView_SmartFilterEnabled] DEFAULT ((0)),
-[SmartFilterPrompt] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[SmartFilterWhereClause] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[SmartFilterExplanation] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[WhereClause] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[CustomWhereClause] [bit] NOT NULL CONSTRAINT [DF_UserView_CustomWhereClause] DEFAULT ((0)),
-[SortState] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF___mj_UserView___mj_CreatedAt] DEFAULT (getutcdate()),
-[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF___mj_UserView___mj_UpdatedAt] DEFAULT (getutcdate())
-)
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating primary key [PK_UserView] on [__mj].[UserView]'
-GO
-ALTER TABLE [__mj].[UserView] ADD CONSTRAINT [PK_UserView] PRIMARY KEY CLUSTERED ([ID])
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating trigger [__mj].[trgUpdateUserView] on [__mj].[UserView]'
-GO
-
-CREATE TRIGGER [__mj].[trgUpdateUserView]
-ON [__mj].[UserView]
-AFTER UPDATE
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[UserView]
-    SET 
-        __mj_UpdatedAt = GETUTCDATE()
-    FROM 
-        [__mj].[UserView] AS _organicTable
-    INNER JOIN 
-        INSERTED AS I ON 
-        _organicTable.[ID] = I.[ID];
-END;
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[ApplicationEntity]'
-GO
-CREATE TABLE [__mj].[ApplicationEntity]
-(
-[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__Applicati__NewID__0E0709CE] DEFAULT (newsequentialid()),
-[ApplicationID] [uniqueidentifier] NOT NULL,
-[EntityID] [uniqueidentifier] NOT NULL,
-[Sequence] [int] NOT NULL,
-[DefaultForNewUser] [bit] NOT NULL CONSTRAINT [DF_ApplicationEntity_DefaultForNewUser] DEFAULT ((1)),
-[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF___mj_ApplicationEntity___mj_CreatedAt] DEFAULT (getutcdate()),
-[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF___mj_ApplicationEntity___mj_UpdatedAt] DEFAULT (getutcdate())
-)
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating primary key [PK_ApplicationEntity_ID] on [__mj].[ApplicationEntity]'
-GO
-ALTER TABLE [__mj].[ApplicationEntity] ADD CONSTRAINT [PK_ApplicationEntity_ID] PRIMARY KEY CLUSTERED ([ID])
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating trigger [__mj].[trgUpdateApplicationEntity] on [__mj].[ApplicationEntity]'
-GO
-
-CREATE TRIGGER [__mj].[trgUpdateApplicationEntity]
-ON [__mj].[ApplicationEntity]
-AFTER UPDATE
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[ApplicationEntity]
-    SET 
-        __mj_UpdatedAt = GETUTCDATE()
-    FROM 
-        [__mj].[ApplicationEntity] AS _organicTable
-    INNER JOIN 
-        INSERTED AS I ON 
-        _organicTable.[ID] = I.[ID];
-END;
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[EntityPermission]'
-GO
-CREATE TABLE [__mj].[EntityPermission]
-(
-[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__EntityPer__NewID__66B83283] DEFAULT (newsequentialid()),
-[EntityID] [uniqueidentifier] NOT NULL,
-[RoleID] [uniqueidentifier] NOT NULL,
-[CanCreate] [bit] NOT NULL CONSTRAINT [DF_EntityPermission_CanCreate] DEFAULT ((0)),
-[CanRead] [bit] NOT NULL CONSTRAINT [DF_EntityPermission_CanRead] DEFAULT ((0)),
-[CanUpdate] [bit] NOT NULL CONSTRAINT [DF_EntityPermission_CanUpdate] DEFAULT ((0)),
-[CanDelete] [bit] NOT NULL CONSTRAINT [DF_EntityPermission_CanDelete] DEFAULT ((0)),
-[ReadRLSFilterID] [uniqueidentifier] NULL,
-[CreateRLSFilterID] [uniqueidentifier] NULL,
-[UpdateRLSFilterID] [uniqueidentifier] NULL,
-[DeleteRLSFilterID] [uniqueidentifier] NULL,
-[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF___mj_EntityPermission___mj_CreatedAt] DEFAULT (getutcdate()),
-[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF___mj_EntityPermission___mj_UpdatedAt] DEFAULT (getutcdate())
-)
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating primary key [PK_EntityPermission_ID] on [__mj].[EntityPermission]'
-GO
-ALTER TABLE [__mj].[EntityPermission] ADD CONSTRAINT [PK_EntityPermission_ID] PRIMARY KEY CLUSTERED ([ID])
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating trigger [__mj].[trgUpdateEntityPermission] on [__mj].[EntityPermission]'
-GO
-
-CREATE TRIGGER [__mj].[trgUpdateEntityPermission]
-ON [__mj].[EntityPermission]
-AFTER UPDATE
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[EntityPermission]
-    SET 
-        __mj_UpdatedAt = GETUTCDATE()
-    FROM 
-        [__mj].[EntityPermission] AS _organicTable
-    INNER JOIN 
-        INSERTED AS I ON 
-        _organicTable.[ID] = I.[ID];
-END;
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[EntityActionParam]'
-GO
-CREATE TABLE [__mj].[EntityActionParam]
-(
-[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__EntityAct__NewID__03897B5B] DEFAULT (newsequentialid()),
-[EntityActionID] [uniqueidentifier] NOT NULL,
-[ActionParamID] [uniqueidentifier] NOT NULL,
-[ValueType] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-[Value] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[Comments] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__EntityAct____mj___52EAD640] DEFAULT (getutcdate()),
-[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__EntityAct____mj___53DEFA79] DEFAULT (getutcdate())
-)
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating primary key [PK_EntityActionParam_ID] on [__mj].[EntityActionParam]'
-GO
-ALTER TABLE [__mj].[EntityActionParam] ADD CONSTRAINT [PK_EntityActionParam_ID] PRIMARY KEY CLUSTERED ([ID])
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating trigger [__mj].[trgUpdateEntityActionParam] on [__mj].[EntityActionParam]'
-GO
-
-CREATE TRIGGER [__mj].[trgUpdateEntityActionParam]
-ON [__mj].[EntityActionParam]
-AFTER UPDATE
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[EntityActionParam]
-    SET 
-        __mj_UpdatedAt = GETUTCDATE()
-    FROM 
-        [__mj].[EntityActionParam] AS _organicTable
-    INNER JOIN 
-        INSERTED AS I ON 
-        _organicTable.[ID] = I.[ID];
-END;
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[Action]'
-GO
-CREATE TABLE [__mj].[Action]
-(
-[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__Action__ID___2EF3C7A4] DEFAULT (newsequentialid()),
-[CategoryID] [uniqueidentifier] NULL,
-[Name] [nvarchar] (425) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-[Description] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[Type] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_Action_Type] DEFAULT (N'Generated'),
-[UserPrompt] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[UserComments] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[Code] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[CodeComments] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[CodeApprovalStatus] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF__Action__CodeAppr__745357DD] DEFAULT (N'Pending'),
-[CodeApprovalComments] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[CodeApprovedByUserID] [uniqueidentifier] NULL,
-[CodeApprovedAt] [datetime] NULL,
-[CodeLocked] [bit] NOT NULL CONSTRAINT [DF_Action_CodeLocked] DEFAULT ((0)),
-[ForceCodeGeneration] [bit] NOT NULL CONSTRAINT [DF_Action_ForceGeneration] DEFAULT ((0)),
-[RetentionPeriod] [int] NULL,
-[Status] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF__Action__Status__763BA04F] DEFAULT (N'Pending'),
-[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF___mj_Action___mj_CreatedAt] DEFAULT (getutcdate()),
-[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF___mj_Action___mj_UpdatedAt] DEFAULT (getutcdate())
-)
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating primary key [PK_Action_ID] on [__mj].[Action]'
-GO
-ALTER TABLE [__mj].[Action] ADD CONSTRAINT [PK_Action_ID] PRIMARY KEY CLUSTERED ([ID])
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Adding constraints to [__mj].[Action]'
-GO
-ALTER TABLE [__mj].[Action] ADD CONSTRAINT [UQ_Action_Name] UNIQUE NONCLUSTERED ([Name])
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating trigger [__mj].[trgUpdateAction] on [__mj].[Action]'
-GO
-
-CREATE TRIGGER [__mj].[trgUpdateAction]
-ON [__mj].[Action]
-AFTER UPDATE
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[Action]
-    SET 
-        __mj_UpdatedAt = GETUTCDATE()
-    FROM 
-        [__mj].[Action] AS _organicTable
-    INNER JOIN 
-        INSERTED AS I ON 
-        _organicTable.[ID] = I.[ID];
-END;
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[EntityCommunicationField]'
-GO
-CREATE TABLE [__mj].[EntityCommunicationField]
-(
-[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__EntityCom__NewID__4B10180E] DEFAULT (newsequentialid()),
-[EntityCommunicationMessageTypeID] [uniqueidentifier] NOT NULL,
-[FieldName] [nvarchar] (500) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-[Priority] [int] NOT NULL,
-[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF___mj_EntityCommunicationField___mj_CreatedAt] DEFAULT (getutcdate()),
-[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF___mj_EntityCommunicationField___mj_UpdatedAt] DEFAULT (getutcdate())
-)
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating primary key [PK_EntityCommunicationField_ID] on [__mj].[EntityCommunicationField]'
-GO
-ALTER TABLE [__mj].[EntityCommunicationField] ADD CONSTRAINT [PK_EntityCommunicationField_ID] PRIMARY KEY CLUSTERED ([ID])
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating trigger [__mj].[trgUpdateEntityCommunicationField] on [__mj].[EntityCommunicationField]'
-GO
-
-CREATE TRIGGER [__mj].[trgUpdateEntityCommunicationField]
-ON [__mj].[EntityCommunicationField]
-AFTER UPDATE
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[EntityCommunicationField]
-    SET 
-        __mj_UpdatedAt = GETUTCDATE()
-    FROM 
-        [__mj].[EntityCommunicationField] AS _organicTable
-    INNER JOIN 
-        INSERTED AS I ON 
-        _organicTable.[ID] = I.[ID];
-END;
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[EntityActionInvocationType]'
-GO
-CREATE TABLE [__mj].[EntityActionInvocationType]
-(
-[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__EntityActio__ID___49A7BDE0] DEFAULT (newsequentialid()),
-[Name] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-[Description] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[DisplaySequence] [int] NOT NULL CONSTRAINT [DF_EntityActionInvocationType_DisplaySequence] DEFAULT ((0)),
-[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF___mj_EntityActionInvocationType___mj_CreatedAt] DEFAULT (getutcdate()),
-[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF___mj_EntityActionInvocationType___mj_UpdatedAt] DEFAULT (getutcdate())
-)
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating primary key [PK_EntityActionInvocationType_ID] on [__mj].[EntityActionInvocationType]'
-GO
-ALTER TABLE [__mj].[EntityActionInvocationType] ADD CONSTRAINT [PK_EntityActionInvocationType_ID] PRIMARY KEY CLUSTERED ([ID])
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating trigger [__mj].[trgUpdateEntityActionInvocationType] on [__mj].[EntityActionInvocationType]'
-GO
-
-CREATE TRIGGER [__mj].[trgUpdateEntityActionInvocationType]
-ON [__mj].[EntityActionInvocationType]
-AFTER UPDATE
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[EntityActionInvocationType]
-    SET 
-        __mj_UpdatedAt = GETUTCDATE()
-    FROM 
-        [__mj].[EntityActionInvocationType] AS _organicTable
-    INNER JOIN 
-        INSERTED AS I ON 
-        _organicTable.[ID] = I.[ID];
-END;
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[ActionParam]'
-GO
-CREATE TABLE [__mj].[ActionParam]
-(
-[ID] [uniqueidentifier] NOT NULL CONSTRAINT [DF__ActionParam__ID___32C45888] DEFAULT (newsequentialid()),
-[ActionID] [uniqueidentifier] NOT NULL,
-[Name] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-[DefaultValue] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[Type] [nchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-[ValueType] [nvarchar] (30) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-[IsArray] [bit] NOT NULL CONSTRAINT [DF__ActionPar__IsArr__714CCE00] DEFAULT ((0)),
-[Description] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[IsRequired] [bit] NOT NULL CONSTRAINT [DF__ActionPar__IsReq__7240F239] DEFAULT ((1)),
-[__mj_CreatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__ActionPar____mj___665D9D67] DEFAULT (getutcdate()),
-[__mj_UpdatedAt] [datetimeoffset] NOT NULL CONSTRAINT [DF__ActionPar____mj___6751C1A0] DEFAULT (getutcdate())
-)
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating primary key [PK_ActionParam_1] on [__mj].[ActionParam]'
-GO
-ALTER TABLE [__mj].[ActionParam] ADD CONSTRAINT [PK_ActionParam_1] PRIMARY KEY CLUSTERED ([ID])
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating trigger [__mj].[trgUpdateActionParam] on [__mj].[ActionParam]'
-GO
-
-CREATE TRIGGER [__mj].[trgUpdateActionParam]
-ON [__mj].[ActionParam]
-AFTER UPDATE
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[ActionParam]
-    SET 
-        __mj_UpdatedAt = GETUTCDATE()
-    FROM 
-        [__mj].[ActionParam] AS _organicTable
     INNER JOIN 
         INSERTED AS I ON 
         _organicTable.[ID] = I.[ID];
@@ -6096,395 +6150,6 @@ ALTER TABLE [__mj].[UserRole] ADD CONSTRAINT [PK_UserRole_ID] PRIMARY KEY CLUSTE
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [__mj].[vwExplorerNavigationItems]'
-GO
-
-
-CREATE VIEW [__mj].[vwExplorerNavigationItems]
-AS
-SELECT 
-    e.*
-FROM
-    [__mj].[ExplorerNavigationItem] AS e
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[spDeleteUserRole]'
-GO
-
-
-CREATE PROCEDURE [__mj].[spDeleteUserRole]
-    @ID uniqueidentifier
-AS  
-BEGIN
-    SET NOCOUNT ON;
-
-    DELETE FROM 
-        [__mj].[UserRole]
-    WHERE 
-        [ID] = @ID
-
-
-    SELECT @ID AS [ID] -- Return the primary key to indicate we successfully deleted the record
-END
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[vwCompanies]'
-GO
-
-
-CREATE VIEW [__mj].[vwCompanies]
-AS
-SELECT 
-    c.*
-FROM
-    [__mj].[Company] AS c
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[spCreateCompany]'
-GO
-
-
-CREATE PROCEDURE [__mj].[spCreateCompany]
-    @Name nvarchar(50),
-    @Description nvarchar(200),
-    @Website nvarchar(100),
-    @LogoURL nvarchar(500),
-    @Domain nvarchar(255)
-AS
-BEGIN
-    SET NOCOUNT ON;
-    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
-    INSERT INTO 
-    [__mj].[Company]
-        (
-            [Name],
-            [Description],
-            [Website],
-            [LogoURL],
-            [Domain],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-        )
-    OUTPUT INSERTED.[ID] INTO @InsertedRow
-    VALUES
-        (
-            @Name,
-            @Description,
-            @Website,
-            @LogoURL,
-            @Domain,
-            GETUTCDATE(),
-            GETUTCDATE()
-        )
-    -- return the new record from the base view, which might have some calculated fields
-    SELECT * FROM [__mj].[vwCompanies] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
-END
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[vwRecordChanges]'
-GO
-
-
-CREATE VIEW [__mj].[vwRecordChanges]
-AS
-SELECT 
-    r.*,
-    Entity_EntityID.[Name] AS [Entity],
-    User_UserID.[Name] AS [User],
-    Integration_IntegrationID.[Name] AS [Integration]
-FROM
-    [__mj].[RecordChange] AS r
-INNER JOIN
-    [__mj].[Entity] AS Entity_EntityID
-  ON
-    [r].[EntityID] = Entity_EntityID.[ID]
-INNER JOIN
-    [__mj].[User] AS User_UserID
-  ON
-    [r].[UserID] = User_UserID.[ID]
-LEFT OUTER JOIN
-    [__mj].[Integration] AS Integration_IntegrationID
-  ON
-    [r].[IntegrationID] = Integration_IntegrationID.[ID]
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[spUpdateRecordChange]'
-GO
-
-
-CREATE PROCEDURE [__mj].[spUpdateRecordChange]
-    @ID uniqueidentifier,
-    @EntityID uniqueidentifier,
-    @RecordID nvarchar(750),
-    @UserID uniqueidentifier,
-    @Type nvarchar(20),
-    @Source nvarchar(20),
-    @ChangedAt datetimeoffset,
-    @ChangesJSON nvarchar(MAX),
-    @ChangesDescription nvarchar(MAX),
-    @FullRecordJSON nvarchar(MAX),
-    @Status nvarchar(50),
-    @ErrorLog nvarchar(MAX),
-    @ReplayRunID uniqueidentifier,
-    @IntegrationID uniqueidentifier,
-    @Comments nvarchar(MAX)
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[RecordChange]
-    SET 
-        [EntityID] = @EntityID,
-        [RecordID] = @RecordID,
-        [UserID] = @UserID,
-        [Type] = @Type,
-        [Source] = @Source,
-        [ChangedAt] = @ChangedAt,
-        [ChangesJSON] = @ChangesJSON,
-        [ChangesDescription] = @ChangesDescription,
-        [FullRecordJSON] = @FullRecordJSON,
-        [Status] = @Status,
-        [ErrorLog] = @ErrorLog,
-        [ReplayRunID] = @ReplayRunID,
-        [IntegrationID] = @IntegrationID,
-        [Comments] = @Comments
-    WHERE
-        [ID] = @ID
-
-    -- return the updated record so the caller can see the updated values and any calculated fields
-    SELECT 
-                                        * 
-                                    FROM 
-                                        [__mj].[vwRecordChanges] 
-                                    WHERE
-                                        [ID] = @ID
-                                    
-END
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[vwAuthorizations]'
-GO
-
-
-CREATE VIEW [__mj].[vwAuthorizations]
-AS
-SELECT 
-    a.*,
-    Authorization_ParentID.[Name] AS [Parent]
-FROM
-    [__mj].[Authorization] AS a
-LEFT OUTER JOIN
-    [__mj].[Authorization] AS Authorization_ParentID
-  ON
-    [a].[ParentID] = Authorization_ParentID.[ID]
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[vwScheduledActionParams]'
-GO
-
-
-CREATE VIEW [__mj].[vwScheduledActionParams]
-AS
-SELECT 
-    s.*
-FROM
-    [__mj].[ScheduledActionParam] AS s
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[spCreateScheduledActionParam]'
-GO
-
-
-CREATE PROCEDURE [__mj].[spCreateScheduledActionParam]
-    @ScheduledActionID uniqueidentifier,
-    @ActionParamID uniqueidentifier,
-    @ValueType nvarchar(20),
-    @Value nvarchar(MAX),
-    @Comments nvarchar(MAX)
-AS
-BEGIN
-    SET NOCOUNT ON;
-    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
-    INSERT INTO 
-    [__mj].[ScheduledActionParam]
-        (
-            [ScheduledActionID],
-            [ActionParamID],
-            [ValueType],
-            [Value],
-            [Comments]
-        )
-    OUTPUT INSERTED.[ID] INTO @InsertedRow
-    VALUES
-        (
-            @ScheduledActionID,
-            @ActionParamID,
-            @ValueType,
-            @Value,
-            @Comments
-        )
-    -- return the new record from the base view, which might have some calculated fields
-    SELECT * FROM [__mj].[vwScheduledActionParams] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
-END
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[spDeleteActionContextType]'
-GO
-
-
-CREATE PROCEDURE [__mj].[spDeleteActionContextType]
-    @ID uniqueidentifier
-AS  
-BEGIN
-    SET NOCOUNT ON;
-
-    DELETE FROM 
-        [__mj].[ActionContextType]
-    WHERE 
-        [ID] = @ID
-
-
-    SELECT @ID AS [ID] -- Return the primary key to indicate we successfully deleted the record
-END
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[vwAuditLogTypes]'
-GO
-
-
-CREATE VIEW [__mj].[vwAuditLogTypes]
-AS
-SELECT 
-    a.*,
-    AuditLogType_ParentID.[Name] AS [Parent]
-FROM
-    [__mj].[AuditLogType] AS a
-LEFT OUTER JOIN
-    [__mj].[AuditLogType] AS AuditLogType_ParentID
-  ON
-    [a].[ParentID] = AuditLogType_ParentID.[ID]
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[vwScheduledActions]'
-GO
-
-
-CREATE VIEW [__mj].[vwScheduledActions]
-AS
-SELECT 
-    s.*
-FROM
-    [__mj].[ScheduledAction] AS s
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[spCreateScheduledAction]'
-GO
-
-
-CREATE PROCEDURE [__mj].[spCreateScheduledAction]
-    @Name nvarchar(255),
-    @Description nvarchar(MAX),
-    @CreatedByUserID uniqueidentifier,
-    @ActionID uniqueidentifier,
-    @Type nvarchar(20),
-    @CronExpression nvarchar(100),
-    @Timezone nvarchar(100),
-    @Status nvarchar(20),
-    @IntervalDays int,
-    @DayOfWeek nvarchar(20),
-    @DayOfMonth int,
-    @Month nvarchar(20),
-    @CustomCronExpression nvarchar(255)
-AS
-BEGIN
-    SET NOCOUNT ON;
-    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
-    INSERT INTO 
-    [__mj].[ScheduledAction]
-        (
-            [Name],
-            [Description],
-            [CreatedByUserID],
-            [ActionID],
-            [Type],
-            [CronExpression],
-            [Timezone],
-            [Status],
-            [IntervalDays],
-            [DayOfWeek],
-            [DayOfMonth],
-            [Month],
-            [CustomCronExpression]
-        )
-    OUTPUT INSERTED.[ID] INTO @InsertedRow
-    VALUES
-        (
-            @Name,
-            @Description,
-            @CreatedByUserID,
-            @ActionID,
-            @Type,
-            @CronExpression,
-            @Timezone,
-            @Status,
-            @IntervalDays,
-            @DayOfWeek,
-            @DayOfMonth,
-            @Month,
-            @CustomCronExpression
-        )
-    -- return the new record from the base view, which might have some calculated fields
-    SELECT * FROM [__mj].[vwScheduledActions] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
-END
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[spDeleteActionContext]'
-GO
-
-
-CREATE PROCEDURE [__mj].[spDeleteActionContext]
-    @ID uniqueidentifier
-AS  
-BEGIN
-    SET NOCOUNT ON;
-
-    DELETE FROM 
-        [__mj].[ActionContext]
-    WHERE 
-        [ID] = @ID
-
-
-    SELECT @ID AS [ID] -- Return the primary key to indicate we successfully deleted the record
-END
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[vwVectorDatabases]'
-GO
-
-
-CREATE VIEW [__mj].[vwVectorDatabases]
-AS
-SELECT 
-    v.*
-FROM
-    [__mj].[VectorDatabase] AS v
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
 PRINT N'Creating [__mj].[vwAuditLogs]'
 GO
 
@@ -6508,92 +6173,125 @@ LEFT OUTER JOIN
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [__mj].[spCreateExplorerNavigationItem]'
+PRINT N'Creating [__mj].[vwScheduledActions]'
 GO
 
 
-CREATE PROCEDURE [__mj].[spCreateExplorerNavigationItem]
-    @Sequence int,
-    @Name nvarchar(100),
-    @Route nvarchar(255),
-    @IsActive bit,
-    @ShowInHomeScreen bit,
-    @ShowInNavigationDrawer bit,
-    @IconCSSClass nvarchar(100),
+CREATE VIEW [__mj].[vwScheduledActions]
+AS
+SELECT 
+    s.*
+FROM
+    [__mj].[ScheduledAction] AS s
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[spUpdateScheduledAction]'
+GO
+
+
+CREATE PROCEDURE [__mj].[spUpdateScheduledAction]
+    @ID uniqueidentifier,
+    @Name nvarchar(255),
     @Description nvarchar(MAX),
-    @Comments nvarchar(MAX)
+    @CreatedByUserID uniqueidentifier,
+    @ActionID uniqueidentifier,
+    @Type nvarchar(20),
+    @CronExpression nvarchar(100),
+    @Timezone nvarchar(100),
+    @Status nvarchar(20),
+    @IntervalDays int,
+    @DayOfWeek nvarchar(20),
+    @DayOfMonth int,
+    @Month nvarchar(20),
+    @CustomCronExpression nvarchar(255)
 AS
 BEGIN
     SET NOCOUNT ON;
-    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
-    INSERT INTO 
-    [__mj].[ExplorerNavigationItem]
-        (
-            [Sequence],
-            [Name],
-            [Route],
-            [IsActive],
-            [ShowInHomeScreen],
-            [ShowInNavigationDrawer],
-            [IconCSSClass],
-            [Description],
-            [Comments]
-        )
-    OUTPUT INSERTED.[ID] INTO @InsertedRow
-    VALUES
-        (
-            @Sequence,
-            @Name,
-            @Route,
-            @IsActive,
-            @ShowInHomeScreen,
-            @ShowInNavigationDrawer,
-            @IconCSSClass,
-            @Description,
-            @Comments
-        )
-    -- return the new record from the base view, which might have some calculated fields
-    SELECT * FROM [__mj].[vwExplorerNavigationItems] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
-END
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[spDeleteEntityActionFilter]'
-GO
-
-
-CREATE PROCEDURE [__mj].[spDeleteEntityActionFilter]
-    @ID uniqueidentifier
-AS  
-BEGIN
-    SET NOCOUNT ON;
-
-    DELETE FROM 
-        [__mj].[EntityActionFilter]
-    WHERE 
+    UPDATE 
+        [__mj].[ScheduledAction]
+    SET 
+        [Name] = @Name,
+        [Description] = @Description,
+        [CreatedByUserID] = @CreatedByUserID,
+        [ActionID] = @ActionID,
+        [Type] = @Type,
+        [CronExpression] = @CronExpression,
+        [Timezone] = @Timezone,
+        [Status] = @Status,
+        [IntervalDays] = @IntervalDays,
+        [DayOfWeek] = @DayOfWeek,
+        [DayOfMonth] = @DayOfMonth,
+        [Month] = @Month,
+        [CustomCronExpression] = @CustomCronExpression
+    WHERE
         [ID] = @ID
 
-
-    SELECT @ID AS [ID] -- Return the primary key to indicate we successfully deleted the record
+    -- return the updated record so the caller can see the updated values and any calculated fields
+    SELECT 
+                                        * 
+                                    FROM 
+                                        [__mj].[vwScheduledActions] 
+                                    WHERE
+                                        [ID] = @ID
+                                    
 END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [__mj].[vwDataContexts]'
+PRINT N'Creating [__mj].[vwActionContexts]'
 GO
 
 
-CREATE VIEW [__mj].[vwDataContexts]
+CREATE VIEW [__mj].[vwActionContexts]
+AS
+SELECT 
+    a.*,
+    Action_ActionID.[Name] AS [Action],
+    ActionContextType_ContextTypeID.[Name] AS [ContextType]
+FROM
+    [__mj].[ActionContext] AS a
+INNER JOIN
+    [__mj].[Action] AS Action_ActionID
+  ON
+    [a].[ActionID] = Action_ActionID.[ID]
+LEFT OUTER JOIN
+    [__mj].[ActionContextType] AS ActionContextType_ContextTypeID
+  ON
+    [a].[ContextTypeID] = ActionContextType_ContextTypeID.[ID]
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[vwDataContextItems]'
+GO
+
+
+CREATE VIEW [__mj].[vwDataContextItems]
 AS
 SELECT 
     d.*,
-    User_UserID.[Name] AS [User]
+    DataContext_DataContextID.[Name] AS [DataContext],
+    UserView_ViewID.[Name] AS [View],
+    Query_QueryID.[Name] AS [Query],
+    Entity_EntityID.[Name] AS [Entity]
 FROM
-    [__mj].[DataContext] AS d
+    [__mj].[DataContextItem] AS d
 INNER JOIN
-    [__mj].[User] AS User_UserID
+    [__mj].[DataContext] AS DataContext_DataContextID
   ON
-    [d].[UserID] = User_UserID.[ID]
+    [d].[DataContextID] = DataContext_DataContextID.[ID]
+LEFT OUTER JOIN
+    [__mj].[UserView] AS UserView_ViewID
+  ON
+    [d].[ViewID] = UserView_ViewID.[ID]
+LEFT OUTER JOIN
+    [__mj].[Query] AS Query_QueryID
+  ON
+    [d].[QueryID] = Query_QueryID.[ID]
+LEFT OUTER JOIN
+    [__mj].[Entity] AS Entity_EntityID
+  ON
+    [d].[EntityID] = Entity_EntityID.[ID]
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
@@ -6610,28 +6308,41 @@ FROM
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [__mj].[spUpdateCompany]'
+PRINT N'Creating [__mj].[vwScheduledActionParams]'
 GO
 
 
-CREATE PROCEDURE [__mj].[spUpdateCompany]
+CREATE VIEW [__mj].[vwScheduledActionParams]
+AS
+SELECT 
+    s.*
+FROM
+    [__mj].[ScheduledActionParam] AS s
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[spUpdateScheduledActionParam]'
+GO
+
+
+CREATE PROCEDURE [__mj].[spUpdateScheduledActionParam]
     @ID uniqueidentifier,
-    @Name nvarchar(50),
-    @Description nvarchar(200),
-    @Website nvarchar(100),
-    @LogoURL nvarchar(500),
-    @Domain nvarchar(255)
+    @ScheduledActionID uniqueidentifier,
+    @ActionParamID uniqueidentifier,
+    @ValueType nvarchar(20),
+    @Value nvarchar(MAX),
+    @Comments nvarchar(MAX)
 AS
 BEGIN
     SET NOCOUNT ON;
     UPDATE 
-        [__mj].[Company]
+        [__mj].[ScheduledActionParam]
     SET 
-        [Name] = @Name,
-        [Description] = @Description,
-        [Website] = @Website,
-        [LogoURL] = @LogoURL,
-        [Domain] = @Domain
+        [ScheduledActionID] = @ScheduledActionID,
+        [ActionParamID] = @ActionParamID,
+        [ValueType] = @ValueType,
+        [Value] = @Value,
+        [Comments] = @Comments
     WHERE
         [ID] = @ID
 
@@ -6639,7 +6350,7 @@ BEGIN
     SELECT 
                                         * 
                                     FROM 
-                                        [__mj].[vwCompanies] 
+                                        [__mj].[vwScheduledActionParams] 
                                     WHERE
                                         [ID] = @ID
                                     
@@ -6647,24 +6358,222 @@ END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [__mj].[spDeleteActionFilter]'
+PRINT N'Creating [__mj].[vwActionExecutionLogs]'
 GO
 
 
-CREATE PROCEDURE [__mj].[spDeleteActionFilter]
-    @ID uniqueidentifier
-AS  
+CREATE VIEW [__mj].[vwActionExecutionLogs]
+AS
+SELECT 
+    a.*,
+    Action_ActionID.[Name] AS [Action],
+    User_UserID.[Name] AS [User]
+FROM
+    [__mj].[ActionExecutionLog] AS a
+INNER JOIN
+    [__mj].[Action] AS Action_ActionID
+  ON
+    [a].[ActionID] = Action_ActionID.[ID]
+INNER JOIN
+    [__mj].[User] AS User_UserID
+  ON
+    [a].[UserID] = User_UserID.[ID]
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[vwEntityRecordDocuments]'
+GO
+
+
+CREATE VIEW [__mj].[vwEntityRecordDocuments]
+AS
+SELECT 
+    e.*
+FROM
+    [__mj].[EntityRecordDocument] AS e
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[vwRowLevelSecurityFilters]'
+GO
+
+
+CREATE VIEW [__mj].[vwRowLevelSecurityFilters]
+AS
+SELECT 
+    r.*
+FROM
+    [__mj].[RowLevelSecurityFilter] AS r
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[vwExplorerNavigationItems]'
+GO
+
+
+CREATE VIEW [__mj].[vwExplorerNavigationItems]
+AS
+SELECT 
+    e.*
+FROM
+    [__mj].[ExplorerNavigationItem] AS e
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[spUpdateExplorerNavigationItem]'
+GO
+
+
+CREATE PROCEDURE [__mj].[spUpdateExplorerNavigationItem]
+    @ID uniqueidentifier,
+    @Sequence int,
+    @Name nvarchar(100),
+    @Route nvarchar(255),
+    @IsActive bit,
+    @ShowInHomeScreen bit,
+    @ShowInNavigationDrawer bit,
+    @IconCSSClass nvarchar(100),
+    @Description nvarchar(MAX),
+    @Comments nvarchar(MAX)
+AS
 BEGIN
     SET NOCOUNT ON;
-
-    DELETE FROM 
-        [__mj].[ActionFilter]
-    WHERE 
+    UPDATE 
+        [__mj].[ExplorerNavigationItem]
+    SET 
+        [Sequence] = @Sequence,
+        [Name] = @Name,
+        [Route] = @Route,
+        [IsActive] = @IsActive,
+        [ShowInHomeScreen] = @ShowInHomeScreen,
+        [ShowInNavigationDrawer] = @ShowInNavigationDrawer,
+        [IconCSSClass] = @IconCSSClass,
+        [Description] = @Description,
+        [Comments] = @Comments
+    WHERE
         [ID] = @ID
 
-
-    SELECT @ID AS [ID] -- Return the primary key to indicate we successfully deleted the record
+    -- return the updated record so the caller can see the updated values and any calculated fields
+    SELECT 
+                                        * 
+                                    FROM 
+                                        [__mj].[vwExplorerNavigationItems] 
+                                    WHERE
+                                        [ID] = @ID
+                                    
 END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[vwActionParams]'
+GO
+
+
+CREATE VIEW [__mj].[vwActionParams]
+AS
+SELECT 
+    a.*,
+    Action_ActionID.[Name] AS [Action]
+FROM
+    [__mj].[ActionParam] AS a
+INNER JOIN
+    [__mj].[Action] AS Action_ActionID
+  ON
+    [a].[ActionID] = Action_ActionID.[ID]
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[vwEntityDocumentRuns]'
+GO
+
+
+CREATE VIEW [__mj].[vwEntityDocumentRuns]
+AS
+SELECT 
+    e.*,
+    EntityDocument_EntityDocumentID.[Name] AS [EntityDocument]
+FROM
+    [__mj].[EntityDocumentRun] AS e
+INNER JOIN
+    [__mj].[EntityDocument] AS EntityDocument_EntityDocumentID
+  ON
+    [e].[EntityDocumentID] = EntityDocument_EntityDocumentID.[ID]
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[spCreateEntityDocumentRun]'
+GO
+
+
+CREATE PROCEDURE [__mj].[spCreateEntityDocumentRun]
+    @EntityDocumentID uniqueidentifier,
+    @StartedAt datetime,
+    @EndedAt datetime,
+    @Status nvarchar(15)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
+    INSERT INTO 
+    [__mj].[EntityDocumentRun]
+        (
+            [EntityDocumentID],
+            [StartedAt],
+            [EndedAt],
+            [Status]
+        )
+    OUTPUT INSERTED.[ID] INTO @InsertedRow
+    VALUES
+        (
+            @EntityDocumentID,
+            @StartedAt,
+            @EndedAt,
+            @Status
+        )
+    -- return the new record from the base view, which might have some calculated fields
+    SELECT * FROM [__mj].[vwEntityDocumentRuns] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
+END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[vwAuditLogTypes]'
+GO
+
+
+CREATE VIEW [__mj].[vwAuditLogTypes]
+AS
+SELECT 
+    a.*,
+    AuditLogType_ParentID.[Name] AS [Parent]
+FROM
+    [__mj].[AuditLogType] AS a
+LEFT OUTER JOIN
+    [__mj].[AuditLogType] AS AuditLogType_ParentID
+  ON
+    [a].[ParentID] = AuditLogType_ParentID.[ID]
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[vwActionLibraries]'
+GO
+
+
+CREATE VIEW [__mj].[vwActionLibraries]
+AS
+SELECT 
+    a.*,
+    Action_ActionID.[Name] AS [Action],
+    Library_LibraryID.[Name] AS [Library]
+FROM
+    [__mj].[ActionLibrary] AS a
+INNER JOIN
+    [__mj].[Action] AS Action_ActionID
+  ON
+    [a].[ActionID] = Action_ActionID.[ID]
+INNER JOIN
+    [__mj].[Library] AS Library_LibraryID
+  ON
+    [a].[LibraryID] = Library_LibraryID.[ID]
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
@@ -6688,6 +6597,834 @@ INNER JOIN
     [__mj].[Entity] AS Entity_EntityID
   ON
     [e].[EntityID] = Entity_EntityID.[ID]
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[spCreateEntityDocument]'
+GO
+
+
+CREATE PROCEDURE [__mj].[spCreateEntityDocument]
+    @Name nvarchar(250),
+    @TypeID uniqueidentifier,
+    @EntityID uniqueidentifier,
+    @VectorDatabaseID uniqueidentifier,
+    @Status nvarchar(15),
+    @TemplateID uniqueidentifier,
+    @AIModelID uniqueidentifier,
+    @PotentialMatchThreshold numeric(12, 11),
+    @AbsoluteMatchThreshold numeric(12, 11)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
+    INSERT INTO 
+    [__mj].[EntityDocument]
+        (
+            [Name],
+            [TypeID],
+            [EntityID],
+            [VectorDatabaseID],
+            [Status],
+            [TemplateID],
+            [AIModelID],
+            [PotentialMatchThreshold],
+            [AbsoluteMatchThreshold]
+        )
+    OUTPUT INSERTED.[ID] INTO @InsertedRow
+    VALUES
+        (
+            @Name,
+            @TypeID,
+            @EntityID,
+            @VectorDatabaseID,
+            @Status,
+            @TemplateID,
+            @AIModelID,
+            @PotentialMatchThreshold,
+            @AbsoluteMatchThreshold
+        )
+    -- return the new record from the base view, which might have some calculated fields
+    SELECT * FROM [__mj].[vwEntityDocuments] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
+END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[spCreateAuditLog]'
+GO
+
+
+CREATE PROCEDURE [__mj].[spCreateAuditLog]
+    @UserID uniqueidentifier,
+    @AuditLogTypeID uniqueidentifier,
+    @AuthorizationID uniqueidentifier,
+    @Status nvarchar(50),
+    @Description nvarchar(MAX),
+    @Details nvarchar(MAX),
+    @EntityID uniqueidentifier,
+    @RecordID nvarchar(450)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
+    INSERT INTO 
+    [__mj].[AuditLog]
+        (
+            [UserID],
+            [AuditLogTypeID],
+            [AuthorizationID],
+            [Status],
+            [Description],
+            [Details],
+            [EntityID],
+            [RecordID]
+        )
+    OUTPUT INSERTED.[ID] INTO @InsertedRow
+    VALUES
+        (
+            @UserID,
+            @AuditLogTypeID,
+            @AuthorizationID,
+            @Status,
+            @Description,
+            @Details,
+            @EntityID,
+            @RecordID
+        )
+    -- return the new record from the base view, which might have some calculated fields
+    SELECT * FROM [__mj].[vwAuditLogs] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
+END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[vwLibraries]'
+GO
+
+
+CREATE VIEW [__mj].[vwLibraries]
+AS
+SELECT 
+    l.*
+FROM
+    [__mj].[Library] AS l
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[vwVectorDatabases]'
+GO
+
+
+CREATE VIEW [__mj].[vwVectorDatabases]
+AS
+SELECT 
+    v.*
+FROM
+    [__mj].[VectorDatabase] AS v
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[spCreateVectorDatabase]'
+GO
+
+
+CREATE PROCEDURE [__mj].[spCreateVectorDatabase]
+    @Name nvarchar(100),
+    @Description nvarchar(MAX),
+    @DefaultURL nvarchar(255),
+    @ClassKey nvarchar(100)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
+    INSERT INTO 
+    [__mj].[VectorDatabase]
+        (
+            [Name],
+            [Description],
+            [DefaultURL],
+            [ClassKey]
+        )
+    OUTPUT INSERTED.[ID] INTO @InsertedRow
+    VALUES
+        (
+            @Name,
+            @Description,
+            @DefaultURL,
+            @ClassKey
+        )
+    -- return the new record from the base view, which might have some calculated fields
+    SELECT * FROM [__mj].[vwVectorDatabases] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
+END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[spUpdateAuditLog]'
+GO
+
+
+CREATE PROCEDURE [__mj].[spUpdateAuditLog]
+    @ID uniqueidentifier,
+    @UserID uniqueidentifier,
+    @AuditLogTypeID uniqueidentifier,
+    @AuthorizationID uniqueidentifier,
+    @Status nvarchar(50),
+    @Description nvarchar(MAX),
+    @Details nvarchar(MAX),
+    @EntityID uniqueidentifier,
+    @RecordID nvarchar(450)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[AuditLog]
+    SET 
+        [UserID] = @UserID,
+        [AuditLogTypeID] = @AuditLogTypeID,
+        [AuthorizationID] = @AuthorizationID,
+        [Status] = @Status,
+        [Description] = @Description,
+        [Details] = @Details,
+        [EntityID] = @EntityID,
+        [RecordID] = @RecordID
+    WHERE
+        [ID] = @ID
+
+    -- return the updated record so the caller can see the updated values and any calculated fields
+    SELECT 
+                                        * 
+                                    FROM 
+                                        [__mj].[vwAuditLogs] 
+                                    WHERE
+                                        [ID] = @ID
+                                    
+END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[spCreateActionParam]'
+GO
+
+
+CREATE PROCEDURE [__mj].[spCreateActionParam]
+    @ActionID uniqueidentifier,
+    @Name nvarchar(255),
+    @DefaultValue nvarchar(MAX),
+    @Type nchar(10),
+    @ValueType nvarchar(30),
+    @IsArray bit,
+    @Description nvarchar(MAX),
+    @IsRequired bit
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
+    INSERT INTO 
+    [__mj].[ActionParam]
+        (
+            [ActionID],
+            [Name],
+            [DefaultValue],
+            [Type],
+            [ValueType],
+            [IsArray],
+            [Description],
+            [IsRequired]
+        )
+    OUTPUT INSERTED.[ID] INTO @InsertedRow
+    VALUES
+        (
+            @ActionID,
+            @Name,
+            @DefaultValue,
+            @Type,
+            @ValueType,
+            @IsArray,
+            @Description,
+            @IsRequired
+        )
+    -- return the new record from the base view, which might have some calculated fields
+    SELECT * FROM [__mj].[vwActionParams] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
+END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[spCreateDataContextItem]'
+GO
+
+
+CREATE PROCEDURE [__mj].[spCreateDataContextItem]
+    @DataContextID uniqueidentifier,
+    @Type nvarchar(50),
+    @ViewID uniqueidentifier,
+    @QueryID uniqueidentifier,
+    @EntityID uniqueidentifier,
+    @RecordID nvarchar(450),
+    @SQL nvarchar(MAX),
+    @DataJSON nvarchar(MAX),
+    @LastRefreshedAt datetime
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
+    INSERT INTO 
+    [__mj].[DataContextItem]
+        (
+            [DataContextID],
+            [Type],
+            [ViewID],
+            [QueryID],
+            [EntityID],
+            [RecordID],
+            [SQL],
+            [DataJSON],
+            [LastRefreshedAt]
+        )
+    OUTPUT INSERTED.[ID] INTO @InsertedRow
+    VALUES
+        (
+            @DataContextID,
+            @Type,
+            @ViewID,
+            @QueryID,
+            @EntityID,
+            @RecordID,
+            @SQL,
+            @DataJSON,
+            @LastRefreshedAt
+        )
+    -- return the new record from the base view, which might have some calculated fields
+    SELECT * FROM [__mj].[vwDataContextItems] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
+END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[spCreateActionContext]'
+GO
+
+
+CREATE PROCEDURE [__mj].[spCreateActionContext]
+    @ActionID uniqueidentifier,
+    @ContextTypeID uniqueidentifier,
+    @Status nvarchar(20)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
+    INSERT INTO 
+    [__mj].[ActionContext]
+        (
+            [ActionID],
+            [ContextTypeID],
+            [Status]
+        )
+    OUTPUT INSERTED.[ID] INTO @InsertedRow
+    VALUES
+        (
+            @ActionID,
+            @ContextTypeID,
+            @Status
+        )
+    -- return the new record from the base view, which might have some calculated fields
+    SELECT * FROM [__mj].[vwActionContexts] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
+END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[spCreateEntityRecordDocument]'
+GO
+
+
+CREATE PROCEDURE [__mj].[spCreateEntityRecordDocument]
+    @EntityID uniqueidentifier,
+    @RecordID nvarchar(450),
+    @EntityDocumentID uniqueidentifier,
+    @DocumentText nvarchar(MAX),
+    @VectorIndexID uniqueidentifier,
+    @VectorID nvarchar(50),
+    @VectorJSON nvarchar(MAX),
+    @EntityRecordUpdatedAt datetime
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
+    INSERT INTO 
+    [__mj].[EntityRecordDocument]
+        (
+            [EntityID],
+            [RecordID],
+            [EntityDocumentID],
+            [DocumentText],
+            [VectorIndexID],
+            [VectorID],
+            [VectorJSON],
+            [EntityRecordUpdatedAt]
+        )
+    OUTPUT INSERTED.[ID] INTO @InsertedRow
+    VALUES
+        (
+            @EntityID,
+            @RecordID,
+            @EntityDocumentID,
+            @DocumentText,
+            @VectorIndexID,
+            @VectorID,
+            @VectorJSON,
+            @EntityRecordUpdatedAt
+        )
+    -- return the new record from the base view, which might have some calculated fields
+    SELECT * FROM [__mj].[vwEntityRecordDocuments] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
+END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[vwAIModels]'
+GO
+
+
+CREATE VIEW [__mj].[vwAIModels]
+AS
+SELECT 
+    a.*,
+    AIModelType_AIModelTypeID.[Name] AS [AIModelType]
+FROM
+    [__mj].[AIModel] AS a
+INNER JOIN
+    [__mj].[AIModelType] AS AIModelType_AIModelTypeID
+  ON
+    [a].[AIModelTypeID] = AIModelType_AIModelTypeID.[ID]
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[spCreateActionExecutionLog]'
+GO
+
+
+CREATE PROCEDURE [__mj].[spCreateActionExecutionLog]
+    @ActionID uniqueidentifier,
+    @StartedAt datetime,
+    @EndedAt datetime,
+    @Params nvarchar(MAX),
+    @ResultCode nvarchar(255),
+    @UserID uniqueidentifier,
+    @RetentionPeriod int
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
+    INSERT INTO 
+    [__mj].[ActionExecutionLog]
+        (
+            [ActionID],
+            [StartedAt],
+            [EndedAt],
+            [Params],
+            [ResultCode],
+            [UserID],
+            [RetentionPeriod]
+        )
+    OUTPUT INSERTED.[ID] INTO @InsertedRow
+    VALUES
+        (
+            @ActionID,
+            @StartedAt,
+            @EndedAt,
+            @Params,
+            @ResultCode,
+            @UserID,
+            @RetentionPeriod
+        )
+    -- return the new record from the base view, which might have some calculated fields
+    SELECT * FROM [__mj].[vwActionExecutionLogs] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
+END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[spUpdateEntityDocumentRun]'
+GO
+
+
+CREATE PROCEDURE [__mj].[spUpdateEntityDocumentRun]
+    @ID uniqueidentifier,
+    @EntityDocumentID uniqueidentifier,
+    @StartedAt datetime,
+    @EndedAt datetime,
+    @Status nvarchar(15)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[EntityDocumentRun]
+    SET 
+        [EntityDocumentID] = @EntityDocumentID,
+        [StartedAt] = @StartedAt,
+        [EndedAt] = @EndedAt,
+        [Status] = @Status
+    WHERE
+        [ID] = @ID
+
+    -- return the updated record so the caller can see the updated values and any calculated fields
+    SELECT 
+                                        * 
+                                    FROM 
+                                        [__mj].[vwEntityDocumentRuns] 
+                                    WHERE
+                                        [ID] = @ID
+                                    
+END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[vwAIActions]'
+GO
+
+
+CREATE VIEW [__mj].[vwAIActions]
+AS
+SELECT 
+    a.*,
+    AIModel_DefaultModelID.[Name] AS [DefaultModel]
+FROM
+    [__mj].[AIAction] AS a
+LEFT OUTER JOIN
+    [__mj].[AIModel] AS AIModel_DefaultModelID
+  ON
+    [a].[DefaultModelID] = AIModel_DefaultModelID.[ID]
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[spCreateActionLibrary]'
+GO
+
+
+CREATE PROCEDURE [__mj].[spCreateActionLibrary]
+    @ActionID uniqueidentifier,
+    @LibraryID uniqueidentifier,
+    @ItemsUsed nvarchar(MAX)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
+    INSERT INTO 
+    [__mj].[ActionLibrary]
+        (
+            [ActionID],
+            [LibraryID],
+            [ItemsUsed]
+        )
+    OUTPUT INSERTED.[ID] INTO @InsertedRow
+    VALUES
+        (
+            @ActionID,
+            @LibraryID,
+            @ItemsUsed
+        )
+    -- return the new record from the base view, which might have some calculated fields
+    SELECT * FROM [__mj].[vwActionLibraries] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
+END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[spUpdateEntityDocument]'
+GO
+
+
+CREATE PROCEDURE [__mj].[spUpdateEntityDocument]
+    @ID uniqueidentifier,
+    @Name nvarchar(250),
+    @TypeID uniqueidentifier,
+    @EntityID uniqueidentifier,
+    @VectorDatabaseID uniqueidentifier,
+    @Status nvarchar(15),
+    @TemplateID uniqueidentifier,
+    @AIModelID uniqueidentifier,
+    @PotentialMatchThreshold numeric(12, 11),
+    @AbsoluteMatchThreshold numeric(12, 11)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[EntityDocument]
+    SET 
+        [Name] = @Name,
+        [TypeID] = @TypeID,
+        [EntityID] = @EntityID,
+        [VectorDatabaseID] = @VectorDatabaseID,
+        [Status] = @Status,
+        [TemplateID] = @TemplateID,
+        [AIModelID] = @AIModelID,
+        [PotentialMatchThreshold] = @PotentialMatchThreshold,
+        [AbsoluteMatchThreshold] = @AbsoluteMatchThreshold
+    WHERE
+        [ID] = @ID
+
+    -- return the updated record so the caller can see the updated values and any calculated fields
+    SELECT 
+                                        * 
+                                    FROM 
+                                        [__mj].[vwEntityDocuments] 
+                                    WHERE
+                                        [ID] = @ID
+                                    
+END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[vwAIModelActions]'
+GO
+
+
+CREATE VIEW [__mj].[vwAIModelActions]
+AS
+SELECT 
+    a.*,
+    AIModel_AIModelID.[Name] AS [AIModel],
+    AIAction_AIActionID.[Name] AS [AIAction]
+FROM
+    [__mj].[AIModelAction] AS a
+INNER JOIN
+    [__mj].[AIModel] AS AIModel_AIModelID
+  ON
+    [a].[AIModelID] = AIModel_AIModelID.[ID]
+INNER JOIN
+    [__mj].[AIAction] AS AIAction_AIActionID
+  ON
+    [a].[AIActionID] = AIAction_AIActionID.[ID]
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[spDeleteflyway_schema_history]'
+GO
+
+
+CREATE PROCEDURE [__mj].[spDeleteflyway_schema_history]
+    @installed_rank int
+AS  
+BEGIN
+    SET NOCOUNT ON;
+
+    DELETE FROM 
+        [__mj].[flyway_schema_history]
+    WHERE 
+        [installed_rank] = @installed_rank
+
+
+    SELECT @installed_rank AS [installed_rank] -- Return the primary key to indicate we successfully deleted the record
+END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[spCreateLibrary]'
+GO
+
+
+CREATE PROCEDURE [__mj].[spCreateLibrary]
+    @Name nvarchar(255),
+    @Description nvarchar(MAX),
+    @Status nvarchar(20),
+    @TypeDefinitions nvarchar(MAX),
+    @SampleCode nvarchar(MAX)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
+    INSERT INTO 
+    [__mj].[Library]
+        (
+            [Name],
+            [Description],
+            [Status],
+            [TypeDefinitions],
+            [SampleCode]
+        )
+    OUTPUT INSERTED.[ID] INTO @InsertedRow
+    VALUES
+        (
+            @Name,
+            @Description,
+            @Status,
+            @TypeDefinitions,
+            @SampleCode
+        )
+    -- return the new record from the base view, which might have some calculated fields
+    SELECT * FROM [__mj].[vwLibraries] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
+END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[spUpdateVectorDatabase]'
+GO
+
+
+CREATE PROCEDURE [__mj].[spUpdateVectorDatabase]
+    @ID uniqueidentifier,
+    @Name nvarchar(100),
+    @Description nvarchar(MAX),
+    @DefaultURL nvarchar(255),
+    @ClassKey nvarchar(100)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[VectorDatabase]
+    SET 
+        [Name] = @Name,
+        [Description] = @Description,
+        [DefaultURL] = @DefaultURL,
+        [ClassKey] = @ClassKey
+    WHERE
+        [ID] = @ID
+
+    -- return the updated record so the caller can see the updated values and any calculated fields
+    SELECT 
+                                        * 
+                                    FROM 
+                                        [__mj].[vwVectorDatabases] 
+                                    WHERE
+                                        [ID] = @ID
+                                    
+END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[vwEntityAIActions]'
+GO
+
+
+CREATE VIEW [__mj].[vwEntityAIActions]
+AS
+SELECT 
+    e.*,
+    Entity_EntityID.[Name] AS [Entity],
+    AIModel_AIModelID.[Name] AS [AIModel],
+    AIAction_AIActionID.[Name] AS [AIAction],
+    Entity_OutputEntityID.[Name] AS [OutputEntity]
+FROM
+    [__mj].[EntityAIAction] AS e
+INNER JOIN
+    [__mj].[Entity] AS Entity_EntityID
+  ON
+    [e].[EntityID] = Entity_EntityID.[ID]
+INNER JOIN
+    [__mj].[AIModel] AS AIModel_AIModelID
+  ON
+    [e].[AIModelID] = AIModel_AIModelID.[ID]
+INNER JOIN
+    [__mj].[AIAction] AS AIAction_AIActionID
+  ON
+    [e].[AIActionID] = AIAction_AIActionID.[ID]
+LEFT OUTER JOIN
+    [__mj].[Entity] AS Entity_OutputEntityID
+  ON
+    [e].[OutputEntityID] = Entity_OutputEntityID.[ID]
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[spDeleteScheduledAction]'
+GO
+
+
+CREATE PROCEDURE [__mj].[spDeleteScheduledAction]
+    @ID uniqueidentifier
+AS  
+BEGIN
+    SET NOCOUNT ON;
+
+    DELETE FROM 
+        [__mj].[ScheduledAction]
+    WHERE 
+        [ID] = @ID
+
+
+    SELECT @ID AS [ID] -- Return the primary key to indicate we successfully deleted the record
+END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[spUpdateActionParam]'
+GO
+
+
+CREATE PROCEDURE [__mj].[spUpdateActionParam]
+    @ID uniqueidentifier,
+    @ActionID uniqueidentifier,
+    @Name nvarchar(255),
+    @DefaultValue nvarchar(MAX),
+    @Type nchar(10),
+    @ValueType nvarchar(30),
+    @IsArray bit,
+    @Description nvarchar(MAX),
+    @IsRequired bit
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[ActionParam]
+    SET 
+        [ActionID] = @ActionID,
+        [Name] = @Name,
+        [DefaultValue] = @DefaultValue,
+        [Type] = @Type,
+        [ValueType] = @ValueType,
+        [IsArray] = @IsArray,
+        [Description] = @Description,
+        [IsRequired] = @IsRequired
+    WHERE
+        [ID] = @ID
+
+    -- return the updated record so the caller can see the updated values and any calculated fields
+    SELECT 
+                                        * 
+                                    FROM 
+                                        [__mj].[vwActionParams] 
+                                    WHERE
+                                        [ID] = @ID
+                                    
+END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[spUpdateDataContextItem]'
+GO
+
+
+CREATE PROCEDURE [__mj].[spUpdateDataContextItem]
+    @ID uniqueidentifier,
+    @DataContextID uniqueidentifier,
+    @Type nvarchar(50),
+    @ViewID uniqueidentifier,
+    @QueryID uniqueidentifier,
+    @EntityID uniqueidentifier,
+    @RecordID nvarchar(450),
+    @SQL nvarchar(MAX),
+    @DataJSON nvarchar(MAX),
+    @LastRefreshedAt datetime
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[DataContextItem]
+    SET 
+        [DataContextID] = @DataContextID,
+        [Type] = @Type,
+        [ViewID] = @ViewID,
+        [QueryID] = @QueryID,
+        [EntityID] = @EntityID,
+        [RecordID] = @RecordID,
+        [SQL] = @SQL,
+        [DataJSON] = @DataJSON,
+        [LastRefreshedAt] = @LastRefreshedAt
+    WHERE
+        [ID] = @ID
+
+    -- return the updated record so the caller can see the updated values and any calculated fields
+    SELECT 
+                                        * 
+                                    FROM 
+                                        [__mj].[vwDataContextItems] 
+                                    WHERE
+                                        [ID] = @ID
+                                    
+END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
@@ -6845,18 +7582,18 @@ END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [__mj].[spDeleteActionResultCode]'
+PRINT N'Creating [__mj].[spDeleteScheduledActionParam]'
 GO
 
 
-CREATE PROCEDURE [__mj].[spDeleteActionResultCode]
+CREATE PROCEDURE [__mj].[spDeleteScheduledActionParam]
     @ID uniqueidentifier
 AS  
 BEGIN
     SET NOCOUNT ON;
 
     DELETE FROM 
-        [__mj].[ActionResultCode]
+        [__mj].[ScheduledActionParam]
     WHERE 
         [ID] = @ID
 
@@ -6866,124 +7603,24 @@ END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [__mj].[vwDataContextItems]'
+PRINT N'Creating [__mj].[spUpdateActionContext]'
 GO
 
 
-CREATE VIEW [__mj].[vwDataContextItems]
-AS
-SELECT 
-    d.*,
-    DataContext_DataContextID.[Name] AS [DataContext],
-    UserView_ViewID.[Name] AS [View],
-    Query_QueryID.[Name] AS [Query],
-    Entity_EntityID.[Name] AS [Entity]
-FROM
-    [__mj].[DataContextItem] AS d
-INNER JOIN
-    [__mj].[DataContext] AS DataContext_DataContextID
-  ON
-    [d].[DataContextID] = DataContext_DataContextID.[ID]
-LEFT OUTER JOIN
-    [__mj].[UserView] AS UserView_ViewID
-  ON
-    [d].[ViewID] = UserView_ViewID.[ID]
-LEFT OUTER JOIN
-    [__mj].[Query] AS Query_QueryID
-  ON
-    [d].[QueryID] = Query_QueryID.[ID]
-LEFT OUTER JOIN
-    [__mj].[Entity] AS Entity_EntityID
-  ON
-    [d].[EntityID] = Entity_EntityID.[ID]
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[spCreateAuditLog]'
-GO
-
-
-CREATE PROCEDURE [__mj].[spCreateAuditLog]
-    @UserID uniqueidentifier,
-    @AuditLogTypeID uniqueidentifier,
-    @AuthorizationID uniqueidentifier,
-    @Status nvarchar(50),
-    @Description nvarchar(MAX),
-    @Details nvarchar(MAX),
-    @EntityID uniqueidentifier,
-    @RecordID nvarchar(450)
-AS
-BEGIN
-    SET NOCOUNT ON;
-    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
-    INSERT INTO 
-    [__mj].[AuditLog]
-        (
-            [UserID],
-            [AuditLogTypeID],
-            [AuthorizationID],
-            [Status],
-            [Description],
-            [Details],
-            [EntityID],
-            [RecordID]
-        )
-    OUTPUT INSERTED.[ID] INTO @InsertedRow
-    VALUES
-        (
-            @UserID,
-            @AuditLogTypeID,
-            @AuthorizationID,
-            @Status,
-            @Description,
-            @Details,
-            @EntityID,
-            @RecordID
-        )
-    -- return the new record from the base view, which might have some calculated fields
-    SELECT * FROM [__mj].[vwAuditLogs] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
-END
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[spUpdateScheduledAction]'
-GO
-
-
-CREATE PROCEDURE [__mj].[spUpdateScheduledAction]
+CREATE PROCEDURE [__mj].[spUpdateActionContext]
     @ID uniqueidentifier,
-    @Name nvarchar(255),
-    @Description nvarchar(MAX),
-    @CreatedByUserID uniqueidentifier,
     @ActionID uniqueidentifier,
-    @Type nvarchar(20),
-    @CronExpression nvarchar(100),
-    @Timezone nvarchar(100),
-    @Status nvarchar(20),
-    @IntervalDays int,
-    @DayOfWeek nvarchar(20),
-    @DayOfMonth int,
-    @Month nvarchar(20),
-    @CustomCronExpression nvarchar(255)
+    @ContextTypeID uniqueidentifier,
+    @Status nvarchar(20)
 AS
 BEGIN
     SET NOCOUNT ON;
     UPDATE 
-        [__mj].[ScheduledAction]
+        [__mj].[ActionContext]
     SET 
-        [Name] = @Name,
-        [Description] = @Description,
-        [CreatedByUserID] = @CreatedByUserID,
         [ActionID] = @ActionID,
-        [Type] = @Type,
-        [CronExpression] = @CronExpression,
-        [Timezone] = @Timezone,
-        [Status] = @Status,
-        [IntervalDays] = @IntervalDays,
-        [DayOfWeek] = @DayOfWeek,
-        [DayOfMonth] = @DayOfMonth,
-        [Month] = @Month,
-        [CustomCronExpression] = @CustomCronExpression
+        [ContextTypeID] = @ContextTypeID,
+        [Status] = @Status
     WHERE
         [ID] = @ID
 
@@ -6991,7 +7628,7 @@ BEGIN
     SELECT 
                                         * 
                                     FROM 
-                                        [__mj].[vwScheduledActions] 
+                                        [__mj].[vwActionContexts] 
                                     WHERE
                                         [ID] = @ID
                                     
@@ -6999,482 +7636,12 @@ END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [__mj].[vwActionLibraries]'
+PRINT N'Creating [__mj].[spUpdateEntityRecordDocument]'
 GO
 
 
-CREATE VIEW [__mj].[vwActionLibraries]
-AS
-SELECT 
-    a.*,
-    Action_ActionID.[Name] AS [Action],
-    Library_LibraryID.[Name] AS [Library]
-FROM
-    [__mj].[ActionLibrary] AS a
-INNER JOIN
-    [__mj].[Action] AS Action_ActionID
-  ON
-    [a].[ActionID] = Action_ActionID.[ID]
-INNER JOIN
-    [__mj].[Library] AS Library_LibraryID
-  ON
-    [a].[LibraryID] = Library_LibraryID.[ID]
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[vwEntityRecordDocuments]'
-GO
-
-
-CREATE VIEW [__mj].[vwEntityRecordDocuments]
-AS
-SELECT 
-    e.*
-FROM
-    [__mj].[EntityRecordDocument] AS e
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[spUpdateScheduledActionParam]'
-GO
-
-
-CREATE PROCEDURE [__mj].[spUpdateScheduledActionParam]
+CREATE PROCEDURE [__mj].[spUpdateEntityRecordDocument]
     @ID uniqueidentifier,
-    @ScheduledActionID uniqueidentifier,
-    @ActionParamID uniqueidentifier,
-    @ValueType nvarchar(20),
-    @Value nvarchar(MAX),
-    @Comments nvarchar(MAX)
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[ScheduledActionParam]
-    SET 
-        [ScheduledActionID] = @ScheduledActionID,
-        [ActionParamID] = @ActionParamID,
-        [ValueType] = @ValueType,
-        [Value] = @Value,
-        [Comments] = @Comments
-    WHERE
-        [ID] = @ID
-
-    -- return the updated record so the caller can see the updated values and any calculated fields
-    SELECT 
-                                        * 
-                                    FROM 
-                                        [__mj].[vwScheduledActionParams] 
-                                    WHERE
-                                        [ID] = @ID
-                                    
-END
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[vwActionParams]'
-GO
-
-
-CREATE VIEW [__mj].[vwActionParams]
-AS
-SELECT 
-    a.*,
-    Action_ActionID.[Name] AS [Action]
-FROM
-    [__mj].[ActionParam] AS a
-INNER JOIN
-    [__mj].[Action] AS Action_ActionID
-  ON
-    [a].[ActionID] = Action_ActionID.[ID]
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[spCreateVectorDatabase]'
-GO
-
-
-CREATE PROCEDURE [__mj].[spCreateVectorDatabase]
-    @Name nvarchar(100),
-    @Description nvarchar(MAX),
-    @DefaultURL nvarchar(255),
-    @ClassKey nvarchar(100)
-AS
-BEGIN
-    SET NOCOUNT ON;
-    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
-    INSERT INTO 
-    [__mj].[VectorDatabase]
-        (
-            [Name],
-            [Description],
-            [DefaultURL],
-            [ClassKey]
-        )
-    OUTPUT INSERTED.[ID] INTO @InsertedRow
-    VALUES
-        (
-            @Name,
-            @Description,
-            @DefaultURL,
-            @ClassKey
-        )
-    -- return the new record from the base view, which might have some calculated fields
-    SELECT * FROM [__mj].[vwVectorDatabases] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
-END
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[spUpdateAuditLog]'
-GO
-
-
-CREATE PROCEDURE [__mj].[spUpdateAuditLog]
-    @ID uniqueidentifier,
-    @UserID uniqueidentifier,
-    @AuditLogTypeID uniqueidentifier,
-    @AuthorizationID uniqueidentifier,
-    @Status nvarchar(50),
-    @Description nvarchar(MAX),
-    @Details nvarchar(MAX),
-    @EntityID uniqueidentifier,
-    @RecordID nvarchar(450)
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[AuditLog]
-    SET 
-        [UserID] = @UserID,
-        [AuditLogTypeID] = @AuditLogTypeID,
-        [AuthorizationID] = @AuthorizationID,
-        [Status] = @Status,
-        [Description] = @Description,
-        [Details] = @Details,
-        [EntityID] = @EntityID,
-        [RecordID] = @RecordID
-    WHERE
-        [ID] = @ID
-
-    -- return the updated record so the caller can see the updated values and any calculated fields
-    SELECT 
-                                        * 
-                                    FROM 
-                                        [__mj].[vwAuditLogs] 
-                                    WHERE
-                                        [ID] = @ID
-                                    
-END
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[spUpdateExplorerNavigationItem]'
-GO
-
-
-CREATE PROCEDURE [__mj].[spUpdateExplorerNavigationItem]
-    @ID uniqueidentifier,
-    @Sequence int,
-    @Name nvarchar(100),
-    @Route nvarchar(255),
-    @IsActive bit,
-    @ShowInHomeScreen bit,
-    @ShowInNavigationDrawer bit,
-    @IconCSSClass nvarchar(100),
-    @Description nvarchar(MAX),
-    @Comments nvarchar(MAX)
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[ExplorerNavigationItem]
-    SET 
-        [Sequence] = @Sequence,
-        [Name] = @Name,
-        [Route] = @Route,
-        [IsActive] = @IsActive,
-        [ShowInHomeScreen] = @ShowInHomeScreen,
-        [ShowInNavigationDrawer] = @ShowInNavigationDrawer,
-        [IconCSSClass] = @IconCSSClass,
-        [Description] = @Description,
-        [Comments] = @Comments
-    WHERE
-        [ID] = @ID
-
-    -- return the updated record so the caller can see the updated values and any calculated fields
-    SELECT 
-                                        * 
-                                    FROM 
-                                        [__mj].[vwExplorerNavigationItems] 
-                                    WHERE
-                                        [ID] = @ID
-                                    
-END
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[vwListCategories]'
-GO
-
-
-CREATE VIEW [__mj].[vwListCategories]
-AS
-SELECT 
-    l.*
-FROM
-    [__mj].[ListCategory] AS l
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[spCreateDataContext]'
-GO
-
-
-CREATE PROCEDURE [__mj].[spCreateDataContext]
-    @Name nvarchar(255),
-    @Description nvarchar(MAX),
-    @UserID uniqueidentifier,
-    @LastRefreshedAt datetime
-AS
-BEGIN
-    SET NOCOUNT ON;
-    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
-    INSERT INTO 
-    [__mj].[DataContext]
-        (
-            [Name],
-            [Description],
-            [UserID],
-            [LastRefreshedAt]
-        )
-    OUTPUT INSERTED.[ID] INTO @InsertedRow
-    VALUES
-        (
-            @Name,
-            @Description,
-            @UserID,
-            @LastRefreshedAt
-        )
-    -- return the new record from the base view, which might have some calculated fields
-    SELECT * FROM [__mj].[vwDataContexts] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
-END
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[vwLibraries]'
-GO
-
-
-CREATE VIEW [__mj].[vwLibraries]
-AS
-SELECT 
-    l.*
-FROM
-    [__mj].[Library] AS l
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[spCreateEntityDocument]'
-GO
-
-
-CREATE PROCEDURE [__mj].[spCreateEntityDocument]
-    @Name nvarchar(250),
-    @TypeID uniqueidentifier,
-    @EntityID uniqueidentifier,
-    @VectorDatabaseID uniqueidentifier,
-    @Status nvarchar(15),
-    @TemplateID uniqueidentifier,
-    @AIModelID uniqueidentifier,
-    @PotentialMatchThreshold numeric(12, 11),
-    @AbsoluteMatchThreshold numeric(12, 11)
-AS
-BEGIN
-    SET NOCOUNT ON;
-    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
-    INSERT INTO 
-    [__mj].[EntityDocument]
-        (
-            [Name],
-            [TypeID],
-            [EntityID],
-            [VectorDatabaseID],
-            [Status],
-            [TemplateID],
-            [AIModelID],
-            [PotentialMatchThreshold],
-            [AbsoluteMatchThreshold]
-        )
-    OUTPUT INSERTED.[ID] INTO @InsertedRow
-    VALUES
-        (
-            @Name,
-            @TypeID,
-            @EntityID,
-            @VectorDatabaseID,
-            @Status,
-            @TemplateID,
-            @AIModelID,
-            @PotentialMatchThreshold,
-            @AbsoluteMatchThreshold
-        )
-    -- return the new record from the base view, which might have some calculated fields
-    SELECT * FROM [__mj].[vwEntityDocuments] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
-END
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[vwAIModelActions]'
-GO
-
-
-CREATE VIEW [__mj].[vwAIModelActions]
-AS
-SELECT 
-    a.*,
-    AIModel_AIModelID.[Name] AS [AIModel],
-    AIAction_AIActionID.[Name] AS [AIAction]
-FROM
-    [__mj].[AIModelAction] AS a
-INNER JOIN
-    [__mj].[AIModel] AS AIModel_AIModelID
-  ON
-    [a].[AIModelID] = AIModel_AIModelID.[ID]
-INNER JOIN
-    [__mj].[AIAction] AS AIAction_AIActionID
-  ON
-    [a].[AIActionID] = AIAction_AIActionID.[ID]
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[vwActionExecutionLogs]'
-GO
-
-
-CREATE VIEW [__mj].[vwActionExecutionLogs]
-AS
-SELECT 
-    a.*,
-    Action_ActionID.[Name] AS [Action],
-    User_UserID.[Name] AS [User]
-FROM
-    [__mj].[ActionExecutionLog] AS a
-INNER JOIN
-    [__mj].[Action] AS Action_ActionID
-  ON
-    [a].[ActionID] = Action_ActionID.[ID]
-INNER JOIN
-    [__mj].[User] AS User_UserID
-  ON
-    [a].[UserID] = User_UserID.[ID]
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[spCreateDataContextItem]'
-GO
-
-
-CREATE PROCEDURE [__mj].[spCreateDataContextItem]
-    @DataContextID uniqueidentifier,
-    @Type nvarchar(50),
-    @ViewID uniqueidentifier,
-    @QueryID uniqueidentifier,
-    @EntityID uniqueidentifier,
-    @RecordID nvarchar(450),
-    @SQL nvarchar(MAX),
-    @DataJSON nvarchar(MAX),
-    @LastRefreshedAt datetime
-AS
-BEGIN
-    SET NOCOUNT ON;
-    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
-    INSERT INTO 
-    [__mj].[DataContextItem]
-        (
-            [DataContextID],
-            [Type],
-            [ViewID],
-            [QueryID],
-            [EntityID],
-            [RecordID],
-            [SQL],
-            [DataJSON],
-            [LastRefreshedAt]
-        )
-    OUTPUT INSERTED.[ID] INTO @InsertedRow
-    VALUES
-        (
-            @DataContextID,
-            @Type,
-            @ViewID,
-            @QueryID,
-            @EntityID,
-            @RecordID,
-            @SQL,
-            @DataJSON,
-            @LastRefreshedAt
-        )
-    -- return the new record from the base view, which might have some calculated fields
-    SELECT * FROM [__mj].[vwDataContextItems] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
-END
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[vwAIModels]'
-GO
-
-
-CREATE VIEW [__mj].[vwAIModels]
-AS
-SELECT 
-    a.*,
-    AIModelType_AIModelTypeID.[Name] AS [AIModelType]
-FROM
-    [__mj].[AIModel] AS a
-INNER JOIN
-    [__mj].[AIModelType] AS AIModelType_AIModelTypeID
-  ON
-    [a].[AIModelTypeID] = AIModelType_AIModelTypeID.[ID]
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[spCreateActionLibrary]'
-GO
-
-
-CREATE PROCEDURE [__mj].[spCreateActionLibrary]
-    @ActionID uniqueidentifier,
-    @LibraryID uniqueidentifier,
-    @ItemsUsed nvarchar(MAX)
-AS
-BEGIN
-    SET NOCOUNT ON;
-    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
-    INSERT INTO 
-    [__mj].[ActionLibrary]
-        (
-            [ActionID],
-            [LibraryID],
-            [ItemsUsed]
-        )
-    OUTPUT INSERTED.[ID] INTO @InsertedRow
-    VALUES
-        (
-            @ActionID,
-            @LibraryID,
-            @ItemsUsed
-        )
-    -- return the new record from the base view, which might have some calculated fields
-    SELECT * FROM [__mj].[vwActionLibraries] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
-END
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[spCreateEntityRecordDocument]'
-GO
-
-
-CREATE PROCEDURE [__mj].[spCreateEntityRecordDocument]
     @EntityID uniqueidentifier,
     @RecordID nvarchar(450),
     @EntityDocumentID uniqueidentifier,
@@ -7486,463 +7653,17 @@ CREATE PROCEDURE [__mj].[spCreateEntityRecordDocument]
 AS
 BEGIN
     SET NOCOUNT ON;
-    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
-    INSERT INTO 
-    [__mj].[EntityRecordDocument]
-        (
-            [EntityID],
-            [RecordID],
-            [EntityDocumentID],
-            [DocumentText],
-            [VectorIndexID],
-            [VectorID],
-            [VectorJSON],
-            [EntityRecordUpdatedAt]
-        )
-    OUTPUT INSERTED.[ID] INTO @InsertedRow
-    VALUES
-        (
-            @EntityID,
-            @RecordID,
-            @EntityDocumentID,
-            @DocumentText,
-            @VectorIndexID,
-            @VectorID,
-            @VectorJSON,
-            @EntityRecordUpdatedAt
-        )
-    -- return the new record from the base view, which might have some calculated fields
-    SELECT * FROM [__mj].[vwEntityRecordDocuments] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
-END
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[vwAIModelTypes]'
-GO
-
-
-CREATE VIEW [__mj].[vwAIModelTypes]
-AS
-SELECT 
-    a.*
-FROM
-    [__mj].[AIModelType] AS a
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[spCreateActionParam]'
-GO
-
-
-CREATE PROCEDURE [__mj].[spCreateActionParam]
-    @ActionID uniqueidentifier,
-    @Name nvarchar(255),
-    @DefaultValue nvarchar(MAX),
-    @Type nchar(10),
-    @ValueType nvarchar(30),
-    @IsArray bit,
-    @Description nvarchar(MAX),
-    @IsRequired bit
-AS
-BEGIN
-    SET NOCOUNT ON;
-    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
-    INSERT INTO 
-    [__mj].[ActionParam]
-        (
-            [ActionID],
-            [Name],
-            [DefaultValue],
-            [Type],
-            [ValueType],
-            [IsArray],
-            [Description],
-            [IsRequired]
-        )
-    OUTPUT INSERTED.[ID] INTO @InsertedRow
-    VALUES
-        (
-            @ActionID,
-            @Name,
-            @DefaultValue,
-            @Type,
-            @ValueType,
-            @IsArray,
-            @Description,
-            @IsRequired
-        )
-    -- return the new record from the base view, which might have some calculated fields
-    SELECT * FROM [__mj].[vwActionParams] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
-END
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[spUpdateVectorDatabase]'
-GO
-
-
-CREATE PROCEDURE [__mj].[spUpdateVectorDatabase]
-    @ID uniqueidentifier,
-    @Name nvarchar(100),
-    @Description nvarchar(MAX),
-    @DefaultURL nvarchar(255),
-    @ClassKey nvarchar(100)
-AS
-BEGIN
-    SET NOCOUNT ON;
     UPDATE 
-        [__mj].[VectorDatabase]
+        [__mj].[EntityRecordDocument]
     SET 
-        [Name] = @Name,
-        [Description] = @Description,
-        [DefaultURL] = @DefaultURL,
-        [ClassKey] = @ClassKey
-    WHERE
-        [ID] = @ID
-
-    -- return the updated record so the caller can see the updated values and any calculated fields
-    SELECT 
-                                        * 
-                                    FROM 
-                                        [__mj].[vwVectorDatabases] 
-                                    WHERE
-                                        [ID] = @ID
-                                    
-END
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[vwAIActions]'
-GO
-
-
-CREATE VIEW [__mj].[vwAIActions]
-AS
-SELECT 
-    a.*,
-    AIModel_DefaultModelID.[Name] AS [DefaultModel]
-FROM
-    [__mj].[AIAction] AS a
-LEFT OUTER JOIN
-    [__mj].[AIModel] AS AIModel_DefaultModelID
-  ON
-    [a].[DefaultModelID] = AIModel_DefaultModelID.[ID]
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[spCreateListCategory]'
-GO
-
-
-CREATE PROCEDURE [__mj].[spCreateListCategory]
-    @Name nvarchar(100),
-    @Description nvarchar(MAX),
-    @ParentID uniqueidentifier,
-    @UserID uniqueidentifier
-AS
-BEGIN
-    SET NOCOUNT ON;
-    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
-    INSERT INTO 
-    [__mj].[ListCategory]
-        (
-            [Name],
-            [Description],
-            [ParentID],
-            [UserID]
-        )
-    OUTPUT INSERTED.[ID] INTO @InsertedRow
-    VALUES
-        (
-            @Name,
-            @Description,
-            @ParentID,
-            @UserID
-        )
-    -- return the new record from the base view, which might have some calculated fields
-    SELECT * FROM [__mj].[vwListCategories] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
-END
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[spUpdateDataContext]'
-GO
-
-
-CREATE PROCEDURE [__mj].[spUpdateDataContext]
-    @ID uniqueidentifier,
-    @Name nvarchar(255),
-    @Description nvarchar(MAX),
-    @UserID uniqueidentifier,
-    @LastRefreshedAt datetime
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[DataContext]
-    SET 
-        [Name] = @Name,
-        [Description] = @Description,
-        [UserID] = @UserID,
-        [LastRefreshedAt] = @LastRefreshedAt
-    WHERE
-        [ID] = @ID
-
-    -- return the updated record so the caller can see the updated values and any calculated fields
-    SELECT 
-                                        * 
-                                    FROM 
-                                        [__mj].[vwDataContexts] 
-                                    WHERE
-                                        [ID] = @ID
-                                    
-END
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[vwEntityAIActions]'
-GO
-
-
-CREATE VIEW [__mj].[vwEntityAIActions]
-AS
-SELECT 
-    e.*,
-    Entity_EntityID.[Name] AS [Entity],
-    AIModel_AIModelID.[Name] AS [AIModel],
-    AIAction_AIActionID.[Name] AS [AIAction],
-    Entity_OutputEntityID.[Name] AS [OutputEntity]
-FROM
-    [__mj].[EntityAIAction] AS e
-INNER JOIN
-    [__mj].[Entity] AS Entity_EntityID
-  ON
-    [e].[EntityID] = Entity_EntityID.[ID]
-INNER JOIN
-    [__mj].[AIModel] AS AIModel_AIModelID
-  ON
-    [e].[AIModelID] = AIModel_AIModelID.[ID]
-INNER JOIN
-    [__mj].[AIAction] AS AIAction_AIActionID
-  ON
-    [e].[AIActionID] = AIAction_AIActionID.[ID]
-LEFT OUTER JOIN
-    [__mj].[Entity] AS Entity_OutputEntityID
-  ON
-    [e].[OutputEntityID] = Entity_OutputEntityID.[ID]
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[spDeleteCompany]'
-GO
-
-
-CREATE PROCEDURE [__mj].[spDeleteCompany]
-    @ID uniqueidentifier
-AS  
-BEGIN
-    SET NOCOUNT ON;
-
-    DELETE FROM 
-        [__mj].[Company]
-    WHERE 
-        [ID] = @ID
-
-
-    SELECT @ID AS [ID] -- Return the primary key to indicate we successfully deleted the record
-END
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[spCreateLibrary]'
-GO
-
-
-CREATE PROCEDURE [__mj].[spCreateLibrary]
-    @Name nvarchar(255),
-    @Description nvarchar(MAX),
-    @Status nvarchar(20),
-    @TypeDefinitions nvarchar(MAX),
-    @SampleCode nvarchar(MAX)
-AS
-BEGIN
-    SET NOCOUNT ON;
-    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
-    INSERT INTO 
-    [__mj].[Library]
-        (
-            [Name],
-            [Description],
-            [Status],
-            [TypeDefinitions],
-            [SampleCode]
-        )
-    OUTPUT INSERTED.[ID] INTO @InsertedRow
-    VALUES
-        (
-            @Name,
-            @Description,
-            @Status,
-            @TypeDefinitions,
-            @SampleCode
-        )
-    -- return the new record from the base view, which might have some calculated fields
-    SELECT * FROM [__mj].[vwLibraries] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
-END
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[spUpdateEntityDocument]'
-GO
-
-
-CREATE PROCEDURE [__mj].[spUpdateEntityDocument]
-    @ID uniqueidentifier,
-    @Name nvarchar(250),
-    @TypeID uniqueidentifier,
-    @EntityID uniqueidentifier,
-    @VectorDatabaseID uniqueidentifier,
-    @Status nvarchar(15),
-    @TemplateID uniqueidentifier,
-    @AIModelID uniqueidentifier,
-    @PotentialMatchThreshold numeric(12, 11),
-    @AbsoluteMatchThreshold numeric(12, 11)
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[EntityDocument]
-    SET 
-        [Name] = @Name,
-        [TypeID] = @TypeID,
-        [EntityID] = @EntityID,
-        [VectorDatabaseID] = @VectorDatabaseID,
-        [Status] = @Status,
-        [TemplateID] = @TemplateID,
-        [AIModelID] = @AIModelID,
-        [PotentialMatchThreshold] = @PotentialMatchThreshold,
-        [AbsoluteMatchThreshold] = @AbsoluteMatchThreshold
-    WHERE
-        [ID] = @ID
-
-    -- return the updated record so the caller can see the updated values and any calculated fields
-    SELECT 
-                                        * 
-                                    FROM 
-                                        [__mj].[vwEntityDocuments] 
-                                    WHERE
-                                        [ID] = @ID
-                                    
-END
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[spCreateAIModelAction]'
-GO
-
-
-CREATE PROCEDURE [__mj].[spCreateAIModelAction]
-    @AIModelID uniqueidentifier,
-    @AIActionID uniqueidentifier,
-    @IsActive bit
-AS
-BEGIN
-    SET NOCOUNT ON;
-    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
-    INSERT INTO 
-    [__mj].[AIModelAction]
-        (
-            [AIModelID],
-            [AIActionID],
-            [IsActive]
-        )
-    OUTPUT INSERTED.[ID] INTO @InsertedRow
-    VALUES
-        (
-            @AIModelID,
-            @AIActionID,
-            @IsActive
-        )
-    -- return the new record from the base view, which might have some calculated fields
-    SELECT * FROM [__mj].[vwAIModelActions] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
-END
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[spCreateActionExecutionLog]'
-GO
-
-
-CREATE PROCEDURE [__mj].[spCreateActionExecutionLog]
-    @ActionID uniqueidentifier,
-    @StartedAt datetime,
-    @EndedAt datetime,
-    @Params nvarchar(MAX),
-    @ResultCode nvarchar(255),
-    @UserID uniqueidentifier,
-    @RetentionPeriod int
-AS
-BEGIN
-    SET NOCOUNT ON;
-    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
-    INSERT INTO 
-    [__mj].[ActionExecutionLog]
-        (
-            [ActionID],
-            [StartedAt],
-            [EndedAt],
-            [Params],
-            [ResultCode],
-            [UserID],
-            [RetentionPeriod]
-        )
-    OUTPUT INSERTED.[ID] INTO @InsertedRow
-    VALUES
-        (
-            @ActionID,
-            @StartedAt,
-            @EndedAt,
-            @Params,
-            @ResultCode,
-            @UserID,
-            @RetentionPeriod
-        )
-    -- return the new record from the base view, which might have some calculated fields
-    SELECT * FROM [__mj].[vwActionExecutionLogs] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
-END
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[spUpdateDataContextItem]'
-GO
-
-
-CREATE PROCEDURE [__mj].[spUpdateDataContextItem]
-    @ID uniqueidentifier,
-    @DataContextID uniqueidentifier,
-    @Type nvarchar(50),
-    @ViewID uniqueidentifier,
-    @QueryID uniqueidentifier,
-    @EntityID uniqueidentifier,
-    @RecordID nvarchar(450),
-    @SQL nvarchar(MAX),
-    @DataJSON nvarchar(MAX),
-    @LastRefreshedAt datetime
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[DataContextItem]
-    SET 
-        [DataContextID] = @DataContextID,
-        [Type] = @Type,
-        [ViewID] = @ViewID,
-        [QueryID] = @QueryID,
         [EntityID] = @EntityID,
         [RecordID] = @RecordID,
-        [SQL] = @SQL,
-        [DataJSON] = @DataJSON,
-        [LastRefreshedAt] = @LastRefreshedAt
+        [EntityDocumentID] = @EntityDocumentID,
+        [DocumentText] = @DocumentText,
+        [VectorIndexID] = @VectorIndexID,
+        [VectorID] = @VectorID,
+        [VectorJSON] = @VectorJSON,
+        [EntityRecordUpdatedAt] = @EntityRecordUpdatedAt
     WHERE
         [ID] = @ID
 
@@ -7950,7 +7671,7 @@ BEGIN
     SELECT 
                                         * 
                                     FROM 
-                                        [__mj].[vwDataContextItems] 
+                                        [__mj].[vwEntityRecordDocuments] 
                                     WHERE
                                         [ID] = @ID
                                     
@@ -8008,24 +7729,110 @@ END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [__mj].[spDeleteScheduledAction]'
+PRINT N'Creating [__mj].[spDeleteExplorerNavigationItem]'
 GO
 
 
-CREATE PROCEDURE [__mj].[spDeleteScheduledAction]
+CREATE PROCEDURE [__mj].[spDeleteExplorerNavigationItem]
     @ID uniqueidentifier
 AS  
 BEGIN
     SET NOCOUNT ON;
 
     DELETE FROM 
-        [__mj].[ScheduledAction]
+        [__mj].[ExplorerNavigationItem]
     WHERE 
         [ID] = @ID
 
 
     SELECT @ID AS [ID] -- Return the primary key to indicate we successfully deleted the record
 END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[spUpdateActionExecutionLog]'
+GO
+
+
+CREATE PROCEDURE [__mj].[spUpdateActionExecutionLog]
+    @ID uniqueidentifier,
+    @ActionID uniqueidentifier,
+    @StartedAt datetime,
+    @EndedAt datetime,
+    @Params nvarchar(MAX),
+    @ResultCode nvarchar(255),
+    @UserID uniqueidentifier,
+    @RetentionPeriod int
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[ActionExecutionLog]
+    SET 
+        [ActionID] = @ActionID,
+        [StartedAt] = @StartedAt,
+        [EndedAt] = @EndedAt,
+        [Params] = @Params,
+        [ResultCode] = @ResultCode,
+        [UserID] = @UserID,
+        [RetentionPeriod] = @RetentionPeriod
+    WHERE
+        [ID] = @ID
+
+    -- return the updated record so the caller can see the updated values and any calculated fields
+    SELECT 
+                                        * 
+                                    FROM 
+                                        [__mj].[vwActionExecutionLogs] 
+                                    WHERE
+                                        [ID] = @ID
+                                    
+END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[spCreateAIModelAction]'
+GO
+
+
+CREATE PROCEDURE [__mj].[spCreateAIModelAction]
+    @AIModelID uniqueidentifier,
+    @AIActionID uniqueidentifier,
+    @IsActive bit
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
+    INSERT INTO 
+    [__mj].[AIModelAction]
+        (
+            [AIModelID],
+            [AIActionID],
+            [IsActive]
+        )
+    OUTPUT INSERTED.[ID] INTO @InsertedRow
+    VALUES
+        (
+            @AIModelID,
+            @AIActionID,
+            @IsActive
+        )
+    -- return the new record from the base view, which might have some calculated fields
+    SELECT * FROM [__mj].[vwAIModelActions] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
+END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[vwCompanies]'
+GO
+
+
+CREATE VIEW [__mj].[vwCompanies]
+AS
+SELECT 
+    c.*
+FROM
+    [__mj].[Company] AS c
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
@@ -8055,142 +7862,6 @@ BEGIN
                                         * 
                                     FROM 
                                         [__mj].[vwActionLibraries] 
-                                    WHERE
-                                        [ID] = @ID
-                                    
-END
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[spUpdateEntityRecordDocument]'
-GO
-
-
-CREATE PROCEDURE [__mj].[spUpdateEntityRecordDocument]
-    @ID uniqueidentifier,
-    @EntityID uniqueidentifier,
-    @RecordID nvarchar(450),
-    @EntityDocumentID uniqueidentifier,
-    @DocumentText nvarchar(MAX),
-    @VectorIndexID uniqueidentifier,
-    @VectorID nvarchar(50),
-    @VectorJSON nvarchar(MAX),
-    @EntityRecordUpdatedAt datetime
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[EntityRecordDocument]
-    SET 
-        [EntityID] = @EntityID,
-        [RecordID] = @RecordID,
-        [EntityDocumentID] = @EntityDocumentID,
-        [DocumentText] = @DocumentText,
-        [VectorIndexID] = @VectorIndexID,
-        [VectorID] = @VectorID,
-        [VectorJSON] = @VectorJSON,
-        [EntityRecordUpdatedAt] = @EntityRecordUpdatedAt
-    WHERE
-        [ID] = @ID
-
-    -- return the updated record so the caller can see the updated values and any calculated fields
-    SELECT 
-                                        * 
-                                    FROM 
-                                        [__mj].[vwEntityRecordDocuments] 
-                                    WHERE
-                                        [ID] = @ID
-                                    
-END
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[spCreateAIModelType]'
-GO
-
-
-CREATE PROCEDURE [__mj].[spCreateAIModelType]
-    @Name nvarchar(50),
-    @Description nvarchar(MAX)
-AS
-BEGIN
-    SET NOCOUNT ON;
-    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
-    INSERT INTO 
-    [__mj].[AIModelType]
-        (
-            [Name],
-            [Description]
-        )
-    OUTPUT INSERTED.[ID] INTO @InsertedRow
-    VALUES
-        (
-            @Name,
-            @Description
-        )
-    -- return the new record from the base view, which might have some calculated fields
-    SELECT * FROM [__mj].[vwAIModelTypes] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
-END
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[spDeleteExplorerNavigationItem]'
-GO
-
-
-CREATE PROCEDURE [__mj].[spDeleteExplorerNavigationItem]
-    @ID uniqueidentifier
-AS  
-BEGIN
-    SET NOCOUNT ON;
-
-    DELETE FROM 
-        [__mj].[ExplorerNavigationItem]
-    WHERE 
-        [ID] = @ID
-
-
-    SELECT @ID AS [ID] -- Return the primary key to indicate we successfully deleted the record
-END
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[spUpdateActionParam]'
-GO
-
-
-CREATE PROCEDURE [__mj].[spUpdateActionParam]
-    @ID uniqueidentifier,
-    @ActionID uniqueidentifier,
-    @Name nvarchar(255),
-    @DefaultValue nvarchar(MAX),
-    @Type nchar(10),
-    @ValueType nvarchar(30),
-    @IsArray bit,
-    @Description nvarchar(MAX),
-    @IsRequired bit
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[ActionParam]
-    SET 
-        [ActionID] = @ActionID,
-        [Name] = @Name,
-        [DefaultValue] = @DefaultValue,
-        [Type] = @Type,
-        [ValueType] = @ValueType,
-        [IsArray] = @IsArray,
-        [Description] = @Description,
-        [IsRequired] = @IsRequired
-    WHERE
-        [ID] = @ID
-
-    -- return the updated record so the caller can see the updated values and any calculated fields
-    SELECT 
-                                        * 
-                                    FROM 
-                                        [__mj].[vwActionParams] 
                                     WHERE
                                         [ID] = @ID
                                     
@@ -8236,47 +7907,46 @@ END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [__mj].[spDeleteScheduledActionParam]'
+PRINT N'Creating [__mj].[vwEmployeeRoles]'
 GO
 
 
-CREATE PROCEDURE [__mj].[spDeleteScheduledActionParam]
-    @ID uniqueidentifier
-AS  
-BEGIN
-    SET NOCOUNT ON;
-
-    DELETE FROM 
-        [__mj].[ScheduledActionParam]
-    WHERE 
-        [ID] = @ID
-
-
-    SELECT @ID AS [ID] -- Return the primary key to indicate we successfully deleted the record
-END
+CREATE VIEW [__mj].[vwEmployeeRoles]
+AS
+SELECT 
+    e.*,
+    Role_RoleID.[Name] AS [Role]
+FROM
+    [__mj].[EmployeeRole] AS e
+INNER JOIN
+    [__mj].[Role] AS Role_RoleID
+  ON
+    [e].[RoleID] = Role_RoleID.[ID]
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [__mj].[spUpdateListCategory]'
+PRINT N'Creating [__mj].[spUpdateLibrary]'
 GO
 
 
-CREATE PROCEDURE [__mj].[spUpdateListCategory]
+CREATE PROCEDURE [__mj].[spUpdateLibrary]
     @ID uniqueidentifier,
-    @Name nvarchar(100),
+    @Name nvarchar(255),
     @Description nvarchar(MAX),
-    @ParentID uniqueidentifier,
-    @UserID uniqueidentifier
+    @Status nvarchar(20),
+    @TypeDefinitions nvarchar(MAX),
+    @SampleCode nvarchar(MAX)
 AS
 BEGIN
     SET NOCOUNT ON;
     UPDATE 
-        [__mj].[ListCategory]
+        [__mj].[Library]
     SET 
         [Name] = @Name,
         [Description] = @Description,
-        [ParentID] = @ParentID,
-        [UserID] = @UserID
+        [Status] = @Status,
+        [TypeDefinitions] = @TypeDefinitions,
+        [SampleCode] = @SampleCode
     WHERE
         [ID] = @ID
 
@@ -8284,7 +7954,7 @@ BEGIN
     SELECT 
                                         * 
                                     FROM 
-                                        [__mj].[vwListCategories] 
+                                        [__mj].[vwLibraries] 
                                     WHERE
                                         [ID] = @ID
                                     
@@ -8364,338 +8034,6 @@ FROM
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [__mj].[spUpdateLibrary]'
-GO
-
-
-CREATE PROCEDURE [__mj].[spUpdateLibrary]
-    @ID uniqueidentifier,
-    @Name nvarchar(255),
-    @Description nvarchar(MAX),
-    @Status nvarchar(20),
-    @TypeDefinitions nvarchar(MAX),
-    @SampleCode nvarchar(MAX)
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[Library]
-    SET 
-        [Name] = @Name,
-        [Description] = @Description,
-        [Status] = @Status,
-        [TypeDefinitions] = @TypeDefinitions,
-        [SampleCode] = @SampleCode
-    WHERE
-        [ID] = @ID
-
-    -- return the updated record so the caller can see the updated values and any calculated fields
-    SELECT 
-                                        * 
-                                    FROM 
-                                        [__mj].[vwLibraries] 
-                                    WHERE
-                                        [ID] = @ID
-                                    
-END
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[spUpdateAIModelAction]'
-GO
-
-
-CREATE PROCEDURE [__mj].[spUpdateAIModelAction]
-    @ID uniqueidentifier,
-    @AIModelID uniqueidentifier,
-    @AIActionID uniqueidentifier,
-    @IsActive bit
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[AIModelAction]
-    SET 
-        [AIModelID] = @AIModelID,
-        [AIActionID] = @AIActionID,
-        [IsActive] = @IsActive
-    WHERE
-        [ID] = @ID
-
-    -- return the updated record so the caller can see the updated values and any calculated fields
-    SELECT 
-                                        * 
-                                    FROM 
-                                        [__mj].[vwAIModelActions] 
-                                    WHERE
-                                        [ID] = @ID
-                                    
-END
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[vwEmployeeRoles]'
-GO
-
-
-CREATE VIEW [__mj].[vwEmployeeRoles]
-AS
-SELECT 
-    e.*,
-    Role_RoleID.[Name] AS [Role]
-FROM
-    [__mj].[EmployeeRole] AS e
-INNER JOIN
-    [__mj].[Role] AS Role_RoleID
-  ON
-    [e].[RoleID] = Role_RoleID.[ID]
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[spUpdateActionExecutionLog]'
-GO
-
-
-CREATE PROCEDURE [__mj].[spUpdateActionExecutionLog]
-    @ID uniqueidentifier,
-    @ActionID uniqueidentifier,
-    @StartedAt datetime,
-    @EndedAt datetime,
-    @Params nvarchar(MAX),
-    @ResultCode nvarchar(255),
-    @UserID uniqueidentifier,
-    @RetentionPeriod int
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[ActionExecutionLog]
-    SET 
-        [ActionID] = @ActionID,
-        [StartedAt] = @StartedAt,
-        [EndedAt] = @EndedAt,
-        [Params] = @Params,
-        [ResultCode] = @ResultCode,
-        [UserID] = @UserID,
-        [RetentionPeriod] = @RetentionPeriod
-    WHERE
-        [ID] = @ID
-
-    -- return the updated record so the caller can see the updated values and any calculated fields
-    SELECT 
-                                        * 
-                                    FROM 
-                                        [__mj].[vwActionExecutionLogs] 
-                                    WHERE
-                                        [ID] = @ID
-                                    
-END
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[spUpdateAIModel]'
-GO
-
-
-CREATE PROCEDURE [__mj].[spUpdateAIModel]
-    @ID uniqueidentifier,
-    @Name nvarchar(50),
-    @Description nvarchar(MAX),
-    @Vendor nvarchar(50),
-    @AIModelTypeID uniqueidentifier,
-    @PowerRank int,
-    @IsActive bit,
-    @DriverClass nvarchar(100),
-    @DriverImportPath nvarchar(255),
-    @APIName nvarchar(100)
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[AIModel]
-    SET 
-        [Name] = @Name,
-        [Description] = @Description,
-        [Vendor] = @Vendor,
-        [AIModelTypeID] = @AIModelTypeID,
-        [PowerRank] = @PowerRank,
-        [IsActive] = @IsActive,
-        [DriverClass] = @DriverClass,
-        [DriverImportPath] = @DriverImportPath,
-        [APIName] = @APIName
-    WHERE
-        [ID] = @ID
-
-    -- return the updated record so the caller can see the updated values and any calculated fields
-    SELECT 
-                                        * 
-                                    FROM 
-                                        [__mj].[vwAIModels] 
-                                    WHERE
-                                        [ID] = @ID
-                                    
-END
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[vwEmployeeSkills]'
-GO
-
-
-CREATE VIEW [__mj].[vwEmployeeSkills]
-AS
-SELECT 
-    e.*,
-    Skill_SkillID.[Name] AS [Skill]
-FROM
-    [__mj].[EmployeeSkill] AS e
-INNER JOIN
-    [__mj].[Skill] AS Skill_SkillID
-  ON
-    [e].[SkillID] = Skill_SkillID.[ID]
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[spUpdateAIModelType]'
-GO
-
-
-CREATE PROCEDURE [__mj].[spUpdateAIModelType]
-    @ID uniqueidentifier,
-    @Name nvarchar(50),
-    @Description nvarchar(MAX)
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[AIModelType]
-    SET 
-        [Name] = @Name,
-        [Description] = @Description
-    WHERE
-        [ID] = @ID
-
-    -- return the updated record so the caller can see the updated values and any calculated fields
-    SELECT 
-                                        * 
-                                    FROM 
-                                        [__mj].[vwAIModelTypes] 
-                                    WHERE
-                                        [ID] = @ID
-                                    
-END
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[vwUserFavorites]'
-GO
-
-CREATE VIEW [__mj].[vwUserFavorites]
-AS
-SELECT 
-	uf.*,
-	e.Name Entity,
-	e.BaseTable EntityBaseTable,
-	e.BaseView EntityBaseView
-FROM 
-	[__mj].UserFavorite uf
-INNER JOIN
-	vwEntities e
-ON
-	uf.EntityID = e.ID
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[spCreateUserFavorite]'
-GO
-
-
-CREATE PROCEDURE [__mj].[spCreateUserFavorite]
-    @UserID uniqueidentifier,
-    @EntityID uniqueidentifier,
-    @RecordID nvarchar(450)
-AS
-BEGIN
-    SET NOCOUNT ON;
-    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
-    INSERT INTO 
-    [__mj].[UserFavorite]
-        (
-            [UserID],
-            [EntityID],
-            [RecordID]
-        )
-    OUTPUT INSERTED.[ID] INTO @InsertedRow
-    VALUES
-        (
-            @UserID,
-            @EntityID,
-            @RecordID
-        )
-    -- return the new record from the base view, which might have some calculated fields
-    SELECT * FROM [__mj].[vwUserFavorites] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
-END
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[spDeleteDataContext]'
-GO
-
-
-CREATE PROCEDURE [__mj].[spDeleteDataContext]
-    @ID uniqueidentifier
-AS  
-BEGIN
-    SET NOCOUNT ON;
-
-    DELETE FROM 
-        [__mj].[DataContext]
-    WHERE 
-        [ID] = @ID
-
-
-    SELECT @ID AS [ID] -- Return the primary key to indicate we successfully deleted the record
-END
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[spUpdateAIAction]'
-GO
-
-
-CREATE PROCEDURE [__mj].[spUpdateAIAction]
-    @ID uniqueidentifier,
-    @Name nvarchar(50),
-    @Description nvarchar(MAX),
-    @DefaultPrompt nvarchar(MAX),
-    @DefaultModelID uniqueidentifier,
-    @IsActive bit
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[AIAction]
-    SET 
-        [Name] = @Name,
-        [Description] = @Description,
-        [DefaultPrompt] = @DefaultPrompt,
-        [DefaultModelID] = @DefaultModelID,
-        [IsActive] = @IsActive
-    WHERE
-        [ID] = @ID
-
-    -- return the updated record so the caller can see the updated values and any calculated fields
-    SELECT 
-                                        * 
-                                    FROM 
-                                        [__mj].[vwAIActions] 
-                                    WHERE
-                                        [ID] = @ID
-                                    
-END
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
 PRINT N'Creating [__mj].[vwEmployees]'
 GO
 
@@ -8765,6 +8103,102 @@ END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
+PRINT N'Creating [__mj].[spUpdateAIModel]'
+GO
+
+
+CREATE PROCEDURE [__mj].[spUpdateAIModel]
+    @ID uniqueidentifier,
+    @Name nvarchar(50),
+    @Description nvarchar(MAX),
+    @Vendor nvarchar(50),
+    @AIModelTypeID uniqueidentifier,
+    @PowerRank int,
+    @IsActive bit,
+    @DriverClass nvarchar(100),
+    @DriverImportPath nvarchar(255),
+    @APIName nvarchar(100)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[AIModel]
+    SET 
+        [Name] = @Name,
+        [Description] = @Description,
+        [Vendor] = @Vendor,
+        [AIModelTypeID] = @AIModelTypeID,
+        [PowerRank] = @PowerRank,
+        [IsActive] = @IsActive,
+        [DriverClass] = @DriverClass,
+        [DriverImportPath] = @DriverImportPath,
+        [APIName] = @APIName
+    WHERE
+        [ID] = @ID
+
+    -- return the updated record so the caller can see the updated values and any calculated fields
+    SELECT 
+                                        * 
+                                    FROM 
+                                        [__mj].[vwAIModels] 
+                                    WHERE
+                                        [ID] = @ID
+                                    
+END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[vwUserFavorites]'
+GO
+
+CREATE VIEW [__mj].[vwUserFavorites]
+AS
+SELECT 
+	uf.*,
+	e.Name Entity,
+	e.BaseTable EntityBaseTable,
+	e.BaseView EntityBaseView
+FROM 
+	[__mj].UserFavorite uf
+INNER JOIN
+	vwEntities e
+ON
+	uf.EntityID = e.ID
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[spCreateUserFavorite]'
+GO
+
+
+CREATE PROCEDURE [__mj].[spCreateUserFavorite]
+    @UserID uniqueidentifier,
+    @EntityID uniqueidentifier,
+    @RecordID nvarchar(450)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
+    INSERT INTO 
+    [__mj].[UserFavorite]
+        (
+            [UserID],
+            [EntityID],
+            [RecordID]
+        )
+    OUTPUT INSERTED.[ID] INTO @InsertedRow
+    VALUES
+        (
+            @UserID,
+            @EntityID,
+            @RecordID
+        )
+    -- return the new record from the base view, which might have some calculated fields
+    SELECT * FROM [__mj].[vwUserFavorites] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
+END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
 PRINT N'Creating [__mj].[spDeleteDataContextItem]'
 GO
 
@@ -8783,6 +8217,189 @@ BEGIN
 
     SELECT @ID AS [ID] -- Return the primary key to indicate we successfully deleted the record
 END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[spUpdateAIModelAction]'
+GO
+
+
+CREATE PROCEDURE [__mj].[spUpdateAIModelAction]
+    @ID uniqueidentifier,
+    @AIModelID uniqueidentifier,
+    @AIActionID uniqueidentifier,
+    @IsActive bit
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[AIModelAction]
+    SET 
+        [AIModelID] = @AIModelID,
+        [AIActionID] = @AIActionID,
+        [IsActive] = @IsActive
+    WHERE
+        [ID] = @ID
+
+    -- return the updated record so the caller can see the updated values and any calculated fields
+    SELECT 
+                                        * 
+                                    FROM 
+                                        [__mj].[vwAIModelActions] 
+                                    WHERE
+                                        [ID] = @ID
+                                    
+END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[spCreateCompany]'
+GO
+
+
+CREATE PROCEDURE [__mj].[spCreateCompany]
+    @Name nvarchar(50),
+    @Description nvarchar(200),
+    @Website nvarchar(100),
+    @LogoURL nvarchar(500),
+    @Domain nvarchar(255)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
+    INSERT INTO 
+    [__mj].[Company]
+        (
+            [Name],
+            [Description],
+            [Website],
+            [LogoURL],
+            [Domain],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+        )
+    OUTPUT INSERTED.[ID] INTO @InsertedRow
+    VALUES
+        (
+            @Name,
+            @Description,
+            @Website,
+            @LogoURL,
+            @Domain,
+            GETUTCDATE(),
+            GETUTCDATE()
+        )
+    -- return the new record from the base view, which might have some calculated fields
+    SELECT * FROM [__mj].[vwCompanies] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
+END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[vwUserViewCategories]'
+GO
+
+
+CREATE VIEW [__mj].[vwUserViewCategories]
+AS
+SELECT 
+    u.*,
+    UserViewCategory_ParentID.[Name] AS [Parent],
+    User_UserID.[Name] AS [User]
+FROM
+    [__mj].[UserViewCategory] AS u
+LEFT OUTER JOIN
+    [__mj].[UserViewCategory] AS UserViewCategory_ParentID
+  ON
+    [u].[ParentID] = UserViewCategory_ParentID.[ID]
+INNER JOIN
+    [__mj].[User] AS User_UserID
+  ON
+    [u].[UserID] = User_UserID.[ID]
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[spUpdateAIAction]'
+GO
+
+
+CREATE PROCEDURE [__mj].[spUpdateAIAction]
+    @ID uniqueidentifier,
+    @Name nvarchar(50),
+    @Description nvarchar(MAX),
+    @DefaultPrompt nvarchar(MAX),
+    @DefaultModelID uniqueidentifier,
+    @IsActive bit
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[AIAction]
+    SET 
+        [Name] = @Name,
+        [Description] = @Description,
+        [DefaultPrompt] = @DefaultPrompt,
+        [DefaultModelID] = @DefaultModelID,
+        [IsActive] = @IsActive
+    WHERE
+        [ID] = @ID
+
+    -- return the updated record so the caller can see the updated values and any calculated fields
+    SELECT 
+                                        * 
+                                    FROM 
+                                        [__mj].[vwAIActions] 
+                                    WHERE
+                                        [ID] = @ID
+                                    
+END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[spUpdateEmployeeCompanyIntegration]'
+GO
+
+
+CREATE PROCEDURE [__mj].[spUpdateEmployeeCompanyIntegration]
+    @ID uniqueidentifier,
+    @EmployeeID uniqueidentifier,
+    @CompanyIntegrationID uniqueidentifier,
+    @ExternalSystemRecordID nvarchar(750),
+    @IsActive bit
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[EmployeeCompanyIntegration]
+    SET 
+        [EmployeeID] = @EmployeeID,
+        [CompanyIntegrationID] = @CompanyIntegrationID,
+        [ExternalSystemRecordID] = @ExternalSystemRecordID,
+        [IsActive] = @IsActive
+    WHERE
+        [ID] = @ID
+
+    -- return the updated record so the caller can see the updated values and any calculated fields
+    SELECT 
+                                        * 
+                                    FROM 
+                                        [__mj].[vwEmployeeCompanyIntegrations] 
+                                    WHERE
+                                        [ID] = @ID
+                                    
+END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[vwFileStorageProviders]'
+GO
+
+
+CREATE VIEW [__mj].[vwFileStorageProviders]
+AS
+SELECT 
+    f.*
+FROM
+    [__mj].[FileStorageProvider] AS f
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
@@ -8837,64 +8454,6 @@ END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [__mj].[spUpdateEmployeeCompanyIntegration]'
-GO
-
-
-CREATE PROCEDURE [__mj].[spUpdateEmployeeCompanyIntegration]
-    @ID uniqueidentifier,
-    @EmployeeID uniqueidentifier,
-    @CompanyIntegrationID uniqueidentifier,
-    @ExternalSystemRecordID nvarchar(750),
-    @IsActive bit
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[EmployeeCompanyIntegration]
-    SET 
-        [EmployeeID] = @EmployeeID,
-        [CompanyIntegrationID] = @CompanyIntegrationID,
-        [ExternalSystemRecordID] = @ExternalSystemRecordID,
-        [IsActive] = @IsActive
-    WHERE
-        [ID] = @ID
-
-    -- return the updated record so the caller can see the updated values and any calculated fields
-    SELECT 
-                                        * 
-                                    FROM 
-                                        [__mj].[vwEmployeeCompanyIntegrations] 
-                                    WHERE
-                                        [ID] = @ID
-                                    
-END
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[vwReportCategories]'
-GO
-
-
-CREATE VIEW [__mj].[vwReportCategories]
-AS
-SELECT 
-    r.*,
-    ReportCategory_ParentID.[Name] AS [Parent],
-    User_UserID.[Name] AS [User]
-FROM
-    [__mj].[ReportCategory] AS r
-LEFT OUTER JOIN
-    [__mj].[ReportCategory] AS ReportCategory_ParentID
-  ON
-    [r].[ParentID] = ReportCategory_ParentID.[ID]
-INNER JOIN
-    [__mj].[User] AS User_UserID
-  ON
-    [r].[UserID] = User_UserID.[ID]
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
 PRINT N'Creating [__mj].[spUpdateEmployeeRole]'
 GO
 
@@ -8926,127 +8485,6 @@ END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [__mj].[vwDashboardCategories]'
-GO
-
-
-CREATE VIEW [__mj].[vwDashboardCategories]
-AS
-SELECT 
-    d.*,
-    DashboardCategory_ParentID.[Name] AS [Parent],
-    User_UserID.[Name] AS [User]
-FROM
-    [__mj].[DashboardCategory] AS d
-LEFT OUTER JOIN
-    [__mj].[DashboardCategory] AS DashboardCategory_ParentID
-  ON
-    [d].[ParentID] = DashboardCategory_ParentID.[ID]
-INNER JOIN
-    [__mj].[User] AS User_UserID
-  ON
-    [d].[UserID] = User_UserID.[ID]
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[spUpdateEmployeeSkill]'
-GO
-
-
-CREATE PROCEDURE [__mj].[spUpdateEmployeeSkill]
-    @ID uniqueidentifier,
-    @EmployeeID uniqueidentifier,
-    @SkillID uniqueidentifier
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[EmployeeSkill]
-    SET 
-        [EmployeeID] = @EmployeeID,
-        [SkillID] = @SkillID
-    WHERE
-        [ID] = @ID
-
-    -- return the updated record so the caller can see the updated values and any calculated fields
-    SELECT 
-                                        * 
-                                    FROM 
-                                        [__mj].[vwEmployeeSkills] 
-                                    WHERE
-                                        [ID] = @ID
-                                    
-END
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[spDeleteActionLibrary]'
-GO
-
-
-CREATE PROCEDURE [__mj].[spDeleteActionLibrary]
-    @ID uniqueidentifier
-AS  
-BEGIN
-    SET NOCOUNT ON;
-
-    DELETE FROM 
-        [__mj].[ActionLibrary]
-    WHERE 
-        [ID] = @ID
-
-
-    SELECT @ID AS [ID] -- Return the primary key to indicate we successfully deleted the record
-END
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[vwFileStorageProviders]'
-GO
-
-
-CREATE VIEW [__mj].[vwFileStorageProviders]
-AS
-SELECT 
-    f.*
-FROM
-    [__mj].[FileStorageProvider] AS f
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[spUpdateUserFavorite]'
-GO
-
-
-CREATE PROCEDURE [__mj].[spUpdateUserFavorite]
-    @ID uniqueidentifier,
-    @UserID uniqueidentifier,
-    @EntityID uniqueidentifier,
-    @RecordID nvarchar(450)
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[UserFavorite]
-    SET 
-        [UserID] = @UserID,
-        [EntityID] = @EntityID,
-        [RecordID] = @RecordID
-    WHERE
-        [ID] = @ID
-
-    -- return the updated record so the caller can see the updated values and any calculated fields
-    SELECT 
-                                        * 
-                                    FROM 
-                                        [__mj].[vwUserFavorites] 
-                                    WHERE
-                                        [ID] = @ID
-                                    
-END
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
 PRINT N'Creating [__mj].[spDeleteActionParam]'
 GO
 
@@ -9068,26 +8506,21 @@ END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [__mj].[vwUserViewCategories]'
+PRINT N'Creating [__mj].[vwDataContexts]'
 GO
 
 
-CREATE VIEW [__mj].[vwUserViewCategories]
+CREATE VIEW [__mj].[vwDataContexts]
 AS
 SELECT 
-    u.*,
-    UserViewCategory_ParentID.[Name] AS [Parent],
+    d.*,
     User_UserID.[Name] AS [User]
 FROM
-    [__mj].[UserViewCategory] AS u
-LEFT OUTER JOIN
-    [__mj].[UserViewCategory] AS UserViewCategory_ParentID
-  ON
-    [u].[ParentID] = UserViewCategory_ParentID.[ID]
+    [__mj].[DataContext] AS d
 INNER JOIN
     [__mj].[User] AS User_UserID
   ON
-    [u].[UserID] = User_UserID.[ID]
+    [d].[UserID] = User_UserID.[ID]
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
@@ -9134,6 +8567,164 @@ END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
+PRINT N'Creating [__mj].[spDeleteActionContext]'
+GO
+
+
+CREATE PROCEDURE [__mj].[spDeleteActionContext]
+    @ID uniqueidentifier
+AS  
+BEGIN
+    SET NOCOUNT ON;
+
+    DELETE FROM 
+        [__mj].[ActionContext]
+    WHERE 
+        [ID] = @ID
+
+
+    SELECT @ID AS [ID] -- Return the primary key to indicate we successfully deleted the record
+END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[vwDashboardCategories]'
+GO
+
+
+CREATE VIEW [__mj].[vwDashboardCategories]
+AS
+SELECT 
+    d.*,
+    DashboardCategory_ParentID.[Name] AS [Parent],
+    User_UserID.[Name] AS [User]
+FROM
+    [__mj].[DashboardCategory] AS d
+LEFT OUTER JOIN
+    [__mj].[DashboardCategory] AS DashboardCategory_ParentID
+  ON
+    [d].[ParentID] = DashboardCategory_ParentID.[ID]
+INNER JOIN
+    [__mj].[User] AS User_UserID
+  ON
+    [d].[UserID] = User_UserID.[ID]
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[spUpdateUserFavorite]'
+GO
+
+
+CREATE PROCEDURE [__mj].[spUpdateUserFavorite]
+    @ID uniqueidentifier,
+    @UserID uniqueidentifier,
+    @EntityID uniqueidentifier,
+    @RecordID nvarchar(450)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[UserFavorite]
+    SET 
+        [UserID] = @UserID,
+        [EntityID] = @EntityID,
+        [RecordID] = @RecordID
+    WHERE
+        [ID] = @ID
+
+    -- return the updated record so the caller can see the updated values and any calculated fields
+    SELECT 
+                                        * 
+                                    FROM 
+                                        [__mj].[vwUserFavorites] 
+                                    WHERE
+                                        [ID] = @ID
+                                    
+END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[spDeleteActionLibrary]'
+GO
+
+
+CREATE PROCEDURE [__mj].[spDeleteActionLibrary]
+    @ID uniqueidentifier
+AS  
+BEGIN
+    SET NOCOUNT ON;
+
+    DELETE FROM 
+        [__mj].[ActionLibrary]
+    WHERE 
+        [ID] = @ID
+
+
+    SELECT @ID AS [ID] -- Return the primary key to indicate we successfully deleted the record
+END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[vwReportCategories]'
+GO
+
+
+CREATE VIEW [__mj].[vwReportCategories]
+AS
+SELECT 
+    r.*,
+    ReportCategory_ParentID.[Name] AS [Parent],
+    User_UserID.[Name] AS [User]
+FROM
+    [__mj].[ReportCategory] AS r
+LEFT OUTER JOIN
+    [__mj].[ReportCategory] AS ReportCategory_ParentID
+  ON
+    [r].[ParentID] = ReportCategory_ParentID.[ID]
+INNER JOIN
+    [__mj].[User] AS User_UserID
+  ON
+    [r].[UserID] = User_UserID.[ID]
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[spUpdateCompany]'
+GO
+
+
+CREATE PROCEDURE [__mj].[spUpdateCompany]
+    @ID uniqueidentifier,
+    @Name nvarchar(50),
+    @Description nvarchar(200),
+    @Website nvarchar(100),
+    @LogoURL nvarchar(500),
+    @Domain nvarchar(255)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[Company]
+    SET 
+        [Name] = @Name,
+        [Description] = @Description,
+        [Website] = @Website,
+        [LogoURL] = @LogoURL,
+        [Domain] = @Domain
+    WHERE
+        [ID] = @ID
+
+    -- return the updated record so the caller can see the updated values and any calculated fields
+    SELECT 
+                                        * 
+                                    FROM 
+                                        [__mj].[vwCompanies] 
+                                    WHERE
+                                        [ID] = @ID
+                                    
+END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
 PRINT N'Creating [__mj].[spDeleteActionExecutionLog]'
 GO
 
@@ -9155,61 +8746,27 @@ END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [__mj].[vwFiles]'
+PRINT N'Creating [__mj].[spCreateUserViewCategory]'
 GO
 
 
-CREATE VIEW [__mj].[vwFiles]
-AS
-SELECT 
-    f.*,
-    FileCategory_CategoryID.[Name] AS [Category],
-    FileStorageProvider_ProviderID.[Name] AS [Provider]
-FROM
-    [__mj].[File] AS f
-LEFT OUTER JOIN
-    [__mj].[FileCategory] AS FileCategory_CategoryID
-  ON
-    [f].[CategoryID] = FileCategory_CategoryID.[ID]
-INNER JOIN
-    [__mj].[FileStorageProvider] AS FileStorageProvider_ProviderID
-  ON
-    [f].[ProviderID] = FileStorageProvider_ProviderID.[ID]
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[vwCommunicationProviders]'
-GO
-
-
-CREATE VIEW [__mj].[vwCommunicationProviders]
-AS
-SELECT 
-    c.*
-FROM
-    [__mj].[CommunicationProvider] AS c
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[spCreateReportCategory]'
-GO
-
-
-CREATE PROCEDURE [__mj].[spCreateReportCategory]
+CREATE PROCEDURE [__mj].[spCreateUserViewCategory]
     @Name nvarchar(100),
     @Description nvarchar(MAX),
     @ParentID uniqueidentifier,
+    @EntityID uniqueidentifier,
     @UserID uniqueidentifier
 AS
 BEGIN
     SET NOCOUNT ON;
     DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
     INSERT INTO 
-    [__mj].[ReportCategory]
+    [__mj].[UserViewCategory]
         (
             [Name],
             [Description],
             [ParentID],
+            [EntityID],
             [UserID]
         )
     OUTPUT INSERTED.[ID] INTO @InsertedRow
@@ -9218,31 +8775,11 @@ BEGIN
             @Name,
             @Description,
             @ParentID,
+            @EntityID,
             @UserID
         )
     -- return the new record from the base view, which might have some calculated fields
-    SELECT * FROM [__mj].[vwReportCategories] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
-END
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[spDeleteAIModelAction]'
-GO
-
-
-CREATE PROCEDURE [__mj].[spDeleteAIModelAction]
-    @ID uniqueidentifier
-AS  
-BEGIN
-    SET NOCOUNT ON;
-
-    DELETE FROM 
-        [__mj].[AIModelAction]
-    WHERE 
-        [ID] = @ID
-
-
-    SELECT @ID AS [ID] -- Return the primary key to indicate we successfully deleted the record
+    SELECT * FROM [__mj].[vwUserViewCategories] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
 END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
@@ -9267,75 +8804,6 @@ INNER JOIN
     [__mj].[CommunicationProviderMessageType] AS CommunicationProviderMessageType_CommunicationProviderMessageTypeID
   ON
     [c].[CommunicationProviderMessageTypeID] = CommunicationProviderMessageType_CommunicationProviderMessageTypeID.[ID]
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[spCreateDashboardCategory]'
-GO
-
-
-CREATE PROCEDURE [__mj].[spCreateDashboardCategory]
-    @Name nvarchar(100),
-    @Description nvarchar(MAX),
-    @ParentID uniqueidentifier,
-    @UserID uniqueidentifier
-AS
-BEGIN
-    SET NOCOUNT ON;
-    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
-    INSERT INTO 
-    [__mj].[DashboardCategory]
-        (
-            [Name],
-            [Description],
-            [ParentID],
-            [UserID]
-        )
-    OUTPUT INSERTED.[ID] INTO @InsertedRow
-    VALUES
-        (
-            @Name,
-            @Description,
-            @ParentID,
-            @UserID
-        )
-    -- return the new record from the base view, which might have some calculated fields
-    SELECT * FROM [__mj].[vwDashboardCategories] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
-END
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[spDeleteAIModel]'
-GO
-
-
-CREATE PROCEDURE [__mj].[spDeleteAIModel]
-    @ID uniqueidentifier
-AS  
-BEGIN
-    SET NOCOUNT ON;
-
-    DELETE FROM 
-        [__mj].[AIModel]
-    WHERE 
-        [ID] = @ID
-
-
-    SELECT @ID AS [ID] -- Return the primary key to indicate we successfully deleted the record
-END
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[vwCommunicationBaseMessageTypes]'
-GO
-
-
-CREATE VIEW [__mj].[vwCommunicationBaseMessageTypes]
-AS
-SELECT 
-    c.*
-FROM
-    [__mj].[CommunicationBaseMessageType] AS c
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
@@ -9380,18 +8848,18 @@ END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [__mj].[spDeleteAIModelType]'
+PRINT N'Creating [__mj].[spDeleteAIModel]'
 GO
 
 
-CREATE PROCEDURE [__mj].[spDeleteAIModelType]
+CREATE PROCEDURE [__mj].[spDeleteAIModel]
     @ID uniqueidentifier
 AS  
 BEGIN
     SET NOCOUNT ON;
 
     DELETE FROM 
-        [__mj].[AIModelType]
+        [__mj].[AIModel]
     WHERE 
         [ID] = @ID
 
@@ -9401,45 +8869,107 @@ END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [__mj].[vwCommunicationRuns]'
+PRINT N'Creating [__mj].[vwCommunicationProviders]'
 GO
 
 
-CREATE VIEW [__mj].[vwCommunicationRuns]
+CREATE VIEW [__mj].[vwCommunicationProviders]
 AS
 SELECT 
-    c.*,
-    User_UserID.[Name] AS [User]
+    c.*
 FROM
-    [__mj].[CommunicationRun] AS c
-INNER JOIN
-    [__mj].[User] AS User_UserID
-  ON
-    [c].[UserID] = User_UserID.[ID]
+    [__mj].[CommunicationProvider] AS c
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [__mj].[spCreateUserViewCategory]'
+PRINT N'Creating [__mj].[spCreateDataContext]'
 GO
 
 
-CREATE PROCEDURE [__mj].[spCreateUserViewCategory]
+CREATE PROCEDURE [__mj].[spCreateDataContext]
+    @Name nvarchar(255),
+    @Description nvarchar(MAX),
+    @UserID uniqueidentifier,
+    @LastRefreshedAt datetime
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
+    INSERT INTO 
+    [__mj].[DataContext]
+        (
+            [Name],
+            [Description],
+            [UserID],
+            [LastRefreshedAt]
+        )
+    OUTPUT INSERTED.[ID] INTO @InsertedRow
+    VALUES
+        (
+            @Name,
+            @Description,
+            @UserID,
+            @LastRefreshedAt
+        )
+    -- return the new record from the base view, which might have some calculated fields
+    SELECT * FROM [__mj].[vwDataContexts] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
+END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[spDeleteAIModelAction]'
+GO
+
+
+CREATE PROCEDURE [__mj].[spDeleteAIModelAction]
+    @ID uniqueidentifier
+AS  
+BEGIN
+    SET NOCOUNT ON;
+
+    DELETE FROM 
+        [__mj].[AIModelAction]
+    WHERE 
+        [ID] = @ID
+
+
+    SELECT @ID AS [ID] -- Return the primary key to indicate we successfully deleted the record
+END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[vwListCategories]'
+GO
+
+
+CREATE VIEW [__mj].[vwListCategories]
+AS
+SELECT 
+    l.*
+FROM
+    [__mj].[ListCategory] AS l
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[spCreateReportCategory]'
+GO
+
+
+CREATE PROCEDURE [__mj].[spCreateReportCategory]
     @Name nvarchar(100),
     @Description nvarchar(MAX),
     @ParentID uniqueidentifier,
-    @EntityID uniqueidentifier,
     @UserID uniqueidentifier
 AS
 BEGIN
     SET NOCOUNT ON;
     DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
     INSERT INTO 
-    [__mj].[UserViewCategory]
+    [__mj].[ReportCategory]
         (
             [Name],
             [Description],
             [ParentID],
-            [EntityID],
             [UserID]
         )
     OUTPUT INSERTED.[ID] INTO @InsertedRow
@@ -9448,11 +8978,10 @@ BEGIN
             @Name,
             @Description,
             @ParentID,
-            @EntityID,
             @UserID
         )
     -- return the new record from the base view, which might have some calculated fields
-    SELECT * FROM [__mj].[vwUserViewCategories] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
+    SELECT * FROM [__mj].[vwReportCategories] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
 END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
@@ -9501,46 +9030,37 @@ INNER JOIN
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [__mj].[spCreateFile]'
+PRINT N'Creating [__mj].[spCreateDashboardCategory]'
 GO
 
 
-CREATE PROCEDURE [__mj].[spCreateFile]
-    @Name nvarchar(500),
+CREATE PROCEDURE [__mj].[spCreateDashboardCategory]
+    @Name nvarchar(100),
     @Description nvarchar(MAX),
-    @CategoryID uniqueidentifier,
-    @ProviderID uniqueidentifier,
-    @ContentType nvarchar(50),
-    @ProviderKey nvarchar(500),
-    @Status nvarchar(20)
+    @ParentID uniqueidentifier,
+    @UserID uniqueidentifier
 AS
 BEGIN
     SET NOCOUNT ON;
     DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
     INSERT INTO 
-    [__mj].[File]
+    [__mj].[DashboardCategory]
         (
             [Name],
             [Description],
-            [CategoryID],
-            [ProviderID],
-            [ContentType],
-            [ProviderKey],
-            [Status]
+            [ParentID],
+            [UserID]
         )
     OUTPUT INSERTED.[ID] INTO @InsertedRow
     VALUES
         (
             @Name,
             @Description,
-            @CategoryID,
-            @ProviderID,
-            @ContentType,
-            @ProviderKey,
-            @Status
+            @ParentID,
+            @UserID
         )
     -- return the new record from the base view, which might have some calculated fields
-    SELECT * FROM [__mj].[vwFiles] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
+    SELECT * FROM [__mj].[vwDashboardCategories] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
 END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
@@ -9566,84 +9086,45 @@ END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [__mj].[spDeleteUserFavorite]'
+PRINT N'Creating [__mj].[vwCommunicationRuns]'
 GO
 
 
-CREATE PROCEDURE [__mj].[spDeleteUserFavorite]
-    @ID uniqueidentifier
-AS  
-BEGIN
-    SET NOCOUNT ON;
-
-    DELETE FROM 
-        [__mj].[UserFavorite]
-    WHERE 
-        [ID] = @ID
-
-
-    SELECT @ID AS [ID] -- Return the primary key to indicate we successfully deleted the record
-END
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[spCreateCommunicationProvider]'
-GO
-
-
-CREATE PROCEDURE [__mj].[spCreateCommunicationProvider]
-    @Name nvarchar(255),
-    @Description nvarchar(MAX),
-    @Status nvarchar(20),
-    @SupportsSending bit,
-    @SupportsReceiving bit
+CREATE VIEW [__mj].[vwCommunicationRuns]
 AS
-BEGIN
-    SET NOCOUNT ON;
-    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
-    INSERT INTO 
-    [__mj].[CommunicationProvider]
-        (
-            [Name],
-            [Description],
-            [Status],
-            [SupportsSending],
-            [SupportsReceiving]
-        )
-    OUTPUT INSERTED.[ID] INTO @InsertedRow
-    VALUES
-        (
-            @Name,
-            @Description,
-            @Status,
-            @SupportsSending,
-            @SupportsReceiving
-        )
-    -- return the new record from the base view, which might have some calculated fields
-    SELECT * FROM [__mj].[vwCommunicationProviders] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
-END
+SELECT 
+    c.*,
+    User_UserID.[Name] AS [User]
+FROM
+    [__mj].[CommunicationRun] AS c
+INNER JOIN
+    [__mj].[User] AS User_UserID
+  ON
+    [c].[UserID] = User_UserID.[ID]
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [__mj].[spUpdateReportCategory]'
+PRINT N'Creating [__mj].[spUpdateUserViewCategory]'
 GO
 
 
-CREATE PROCEDURE [__mj].[spUpdateReportCategory]
+CREATE PROCEDURE [__mj].[spUpdateUserViewCategory]
     @ID uniqueidentifier,
     @Name nvarchar(100),
     @Description nvarchar(MAX),
     @ParentID uniqueidentifier,
+    @EntityID uniqueidentifier,
     @UserID uniqueidentifier
 AS
 BEGIN
     SET NOCOUNT ON;
     UPDATE 
-        [__mj].[ReportCategory]
+        [__mj].[UserViewCategory]
     SET 
         [Name] = @Name,
         [Description] = @Description,
         [ParentID] = @ParentID,
+        [EntityID] = @EntityID,
         [UserID] = @UserID
     WHERE
         [ID] = @ID
@@ -9652,7 +9133,7 @@ BEGIN
     SELECT 
                                         * 
                                     FROM 
-                                        [__mj].[vwReportCategories] 
+                                        [__mj].[vwUserViewCategories] 
                                     WHERE
                                         [ID] = @ID
                                     
@@ -9660,16 +9141,16 @@ END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [__mj].[vwOutputTriggerTypes]'
+PRINT N'Creating [__mj].[vwQueueTypes]'
 GO
 
 
-CREATE VIEW [__mj].[vwOutputTriggerTypes]
+CREATE VIEW [__mj].[vwQueueTypes]
 AS
 SELECT 
-    o.*
+    q.*
 FROM
-    [__mj].[OutputTriggerType] AS o
+    [__mj].[QueueType] AS q
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
@@ -9741,105 +9222,6 @@ END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [__mj].[spUpdateDashboardCategory]'
-GO
-
-
-CREATE PROCEDURE [__mj].[spUpdateDashboardCategory]
-    @ID uniqueidentifier,
-    @Name nvarchar(100),
-    @Description nvarchar(MAX),
-    @ParentID uniqueidentifier,
-    @UserID uniqueidentifier
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[DashboardCategory]
-    SET 
-        [Name] = @Name,
-        [Description] = @Description,
-        [ParentID] = @ParentID,
-        [UserID] = @UserID
-    WHERE
-        [ID] = @ID
-
-    -- return the updated record so the caller can see the updated values and any calculated fields
-    SELECT 
-                                        * 
-                                    FROM 
-                                        [__mj].[vwDashboardCategories] 
-                                    WHERE
-                                        [ID] = @ID
-                                    
-END
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[vwQueueTypes]'
-GO
-
-
-CREATE VIEW [__mj].[vwQueueTypes]
-AS
-SELECT 
-    q.*
-FROM
-    [__mj].[QueueType] AS q
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[vwIntegrations]'
-GO
-
-
-CREATE VIEW [__mj].[vwIntegrations]
-AS
-SELECT 
-    i.*
-FROM
-    [__mj].[Integration] AS i
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[spCreateCommunicationBaseMessageType]'
-GO
-
-
-CREATE PROCEDURE [__mj].[spCreateCommunicationBaseMessageType]
-    @Type nvarchar(100),
-    @SupportsAttachments bit,
-    @SupportsSubjectLine bit,
-    @SupportsHtml bit,
-    @MaxBytes int
-AS
-BEGIN
-    SET NOCOUNT ON;
-    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
-    INSERT INTO 
-    [__mj].[CommunicationBaseMessageType]
-        (
-            [Type],
-            [SupportsAttachments],
-            [SupportsSubjectLine],
-            [SupportsHtml],
-            [MaxBytes]
-        )
-    OUTPUT INSERTED.[ID] INTO @InsertedRow
-    VALUES
-        (
-            @Type,
-            @SupportsAttachments,
-            @SupportsSubjectLine,
-            @SupportsHtml,
-            @MaxBytes
-        )
-    -- return the new record from the base view, which might have some calculated fields
-    SELECT * FROM [__mj].[vwCommunicationBaseMessageTypes] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
-END
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
 PRINT N'Creating [__mj].[spUpdateFileStorageProvider]'
 GO
 
@@ -9902,16 +9284,341 @@ LEFT OUTER JOIN
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [__mj].[vwRoles]'
+PRINT N'Creating [__mj].[spDeleteUserFavorite]'
 GO
 
 
-CREATE VIEW [__mj].[vwRoles]
+CREATE PROCEDURE [__mj].[spDeleteUserFavorite]
+    @ID uniqueidentifier
+AS  
+BEGIN
+    SET NOCOUNT ON;
+
+    DELETE FROM 
+        [__mj].[UserFavorite]
+    WHERE 
+        [ID] = @ID
+
+
+    SELECT @ID AS [ID] -- Return the primary key to indicate we successfully deleted the record
+END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[spCreateCommunicationProvider]'
+GO
+
+
+CREATE PROCEDURE [__mj].[spCreateCommunicationProvider]
+    @Name nvarchar(255),
+    @Description nvarchar(MAX),
+    @Status nvarchar(20),
+    @SupportsSending bit,
+    @SupportsReceiving bit
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
+    INSERT INTO 
+    [__mj].[CommunicationProvider]
+        (
+            [Name],
+            [Description],
+            [Status],
+            [SupportsSending],
+            [SupportsReceiving]
+        )
+    OUTPUT INSERTED.[ID] INTO @InsertedRow
+    VALUES
+        (
+            @Name,
+            @Description,
+            @Status,
+            @SupportsSending,
+            @SupportsReceiving
+        )
+    -- return the new record from the base view, which might have some calculated fields
+    SELECT * FROM [__mj].[vwCommunicationProviders] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
+END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[spUpdateDataContext]'
+GO
+
+
+CREATE PROCEDURE [__mj].[spUpdateDataContext]
+    @ID uniqueidentifier,
+    @Name nvarchar(255),
+    @Description nvarchar(MAX),
+    @UserID uniqueidentifier,
+    @LastRefreshedAt datetime
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[DataContext]
+    SET 
+        [Name] = @Name,
+        [Description] = @Description,
+        [UserID] = @UserID,
+        [LastRefreshedAt] = @LastRefreshedAt
+    WHERE
+        [ID] = @ID
+
+    -- return the updated record so the caller can see the updated values and any calculated fields
+    SELECT 
+                                        * 
+                                    FROM 
+                                        [__mj].[vwDataContexts] 
+                                    WHERE
+                                        [ID] = @ID
+                                    
+END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[vwQueueTasks]'
+GO
+
+
+CREATE VIEW [__mj].[vwQueueTasks]
 AS
 SELECT 
-    r.*
+    q.*,
+    Queue_QueueID.[Name] AS [Queue]
 FROM
-    [__mj].[Role] AS r
+    [__mj].[QueueTask] AS q
+INNER JOIN
+    [__mj].[Queue] AS Queue_QueueID
+  ON
+    [q].[QueueID] = Queue_QueueID.[ID]
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[spDeleteCompany]'
+GO
+
+
+CREATE PROCEDURE [__mj].[spDeleteCompany]
+    @ID uniqueidentifier
+AS  
+BEGIN
+    SET NOCOUNT ON;
+
+    DELETE FROM 
+        [__mj].[Company]
+    WHERE 
+        [ID] = @ID
+
+
+    SELECT @ID AS [ID] -- Return the primary key to indicate we successfully deleted the record
+END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[spCreateListCategory]'
+GO
+
+
+CREATE PROCEDURE [__mj].[spCreateListCategory]
+    @Name nvarchar(100),
+    @Description nvarchar(MAX),
+    @ParentID uniqueidentifier,
+    @UserID uniqueidentifier
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
+    INSERT INTO 
+    [__mj].[ListCategory]
+        (
+            [Name],
+            [Description],
+            [ParentID],
+            [UserID]
+        )
+    OUTPUT INSERTED.[ID] INTO @InsertedRow
+    VALUES
+        (
+            @Name,
+            @Description,
+            @ParentID,
+            @UserID
+        )
+    -- return the new record from the base view, which might have some calculated fields
+    SELECT * FROM [__mj].[vwListCategories] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
+END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[spUpdateReportCategory]'
+GO
+
+
+CREATE PROCEDURE [__mj].[spUpdateReportCategory]
+    @ID uniqueidentifier,
+    @Name nvarchar(100),
+    @Description nvarchar(MAX),
+    @ParentID uniqueidentifier,
+    @UserID uniqueidentifier
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[ReportCategory]
+    SET 
+        [Name] = @Name,
+        [Description] = @Description,
+        [ParentID] = @ParentID,
+        [UserID] = @UserID
+    WHERE
+        [ID] = @ID
+
+    -- return the updated record so the caller can see the updated values and any calculated fields
+    SELECT 
+                                        * 
+                                    FROM 
+                                        [__mj].[vwReportCategories] 
+                                    WHERE
+                                        [ID] = @ID
+                                    
+END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[vwAIModelTypes]'
+GO
+
+
+CREATE VIEW [__mj].[vwAIModelTypes]
+AS
+SELECT 
+    a.*
+FROM
+    [__mj].[AIModelType] AS a
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[vwEmployeeSkills]'
+GO
+
+
+CREATE VIEW [__mj].[vwEmployeeSkills]
+AS
+SELECT 
+    e.*,
+    Skill_SkillID.[Name] AS [Skill]
+FROM
+    [__mj].[EmployeeSkill] AS e
+INNER JOIN
+    [__mj].[Skill] AS Skill_SkillID
+  ON
+    [e].[SkillID] = Skill_SkillID.[ID]
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[spCreateCommunicationProviderMessageType]'
+GO
+
+
+CREATE PROCEDURE [__mj].[spCreateCommunicationProviderMessageType]
+    @CommunicationProviderID uniqueidentifier,
+    @CommunicationBaseMessageTypeID uniqueidentifier,
+    @Name nvarchar(255),
+    @Status nvarchar(20),
+    @AdditionalAttributes nvarchar(MAX)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
+    INSERT INTO 
+    [__mj].[CommunicationProviderMessageType]
+        (
+            [CommunicationProviderID],
+            [CommunicationBaseMessageTypeID],
+            [Name],
+            [Status],
+            [AdditionalAttributes]
+        )
+    OUTPUT INSERTED.[ID] INTO @InsertedRow
+    VALUES
+        (
+            @CommunicationProviderID,
+            @CommunicationBaseMessageTypeID,
+            @Name,
+            @Status,
+            @AdditionalAttributes
+        )
+    -- return the new record from the base view, which might have some calculated fields
+    SELECT * FROM [__mj].[vwCommunicationProviderMessageTypes] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
+END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[spUpdateDashboardCategory]'
+GO
+
+
+CREATE PROCEDURE [__mj].[spUpdateDashboardCategory]
+    @ID uniqueidentifier,
+    @Name nvarchar(100),
+    @Description nvarchar(MAX),
+    @ParentID uniqueidentifier,
+    @UserID uniqueidentifier
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[DashboardCategory]
+    SET 
+        [Name] = @Name,
+        [Description] = @Description,
+        [ParentID] = @ParentID,
+        [UserID] = @UserID
+    WHERE
+        [ID] = @ID
+
+    -- return the updated record so the caller can see the updated values and any calculated fields
+    SELECT 
+                                        * 
+                                    FROM 
+                                        [__mj].[vwDashboardCategories] 
+                                    WHERE
+                                        [ID] = @ID
+                                    
+END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[vwQueues]'
+GO
+
+
+CREATE VIEW [__mj].[vwQueues]
+AS
+SELECT 
+    q.*,
+    QueueType_QueueTypeID.[Name] AS [QueueType]
+FROM
+    [__mj].[Queue] AS q
+INNER JOIN
+    [__mj].[QueueType] AS QueueType_QueueTypeID
+  ON
+    [q].[QueueTypeID] = QueueType_QueueTypeID.[ID]
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[vwIntegrations]'
+GO
+
+
+CREATE VIEW [__mj].[vwIntegrations]
+AS
+SELECT 
+    i.*
+FROM
+    [__mj].[Integration] AS i
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
@@ -9959,292 +9666,6 @@ END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [__mj].[spUpdateUserViewCategory]'
-GO
-
-
-CREATE PROCEDURE [__mj].[spUpdateUserViewCategory]
-    @ID uniqueidentifier,
-    @Name nvarchar(100),
-    @Description nvarchar(MAX),
-    @ParentID uniqueidentifier,
-    @EntityID uniqueidentifier,
-    @UserID uniqueidentifier
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[UserViewCategory]
-    SET 
-        [Name] = @Name,
-        [Description] = @Description,
-        [ParentID] = @ParentID,
-        [EntityID] = @EntityID,
-        [UserID] = @UserID
-    WHERE
-        [ID] = @ID
-
-    -- return the updated record so the caller can see the updated values and any calculated fields
-    SELECT 
-                                        * 
-                                    FROM 
-                                        [__mj].[vwUserViewCategories] 
-                                    WHERE
-                                        [ID] = @ID
-                                    
-END
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[vwQueueTasks]'
-GO
-
-
-CREATE VIEW [__mj].[vwQueueTasks]
-AS
-SELECT 
-    q.*,
-    Queue_QueueID.[Name] AS [Queue]
-FROM
-    [__mj].[QueueTask] AS q
-INNER JOIN
-    [__mj].[Queue] AS Queue_QueueID
-  ON
-    [q].[QueueID] = Queue_QueueID.[ID]
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[vwSkills]'
-GO
-
-
-CREATE VIEW [__mj].[vwSkills]
-AS
-SELECT 
-    s.*,
-    Skill_ParentID.[Name] AS [Parent]
-FROM
-    [__mj].[Skill] AS s
-LEFT OUTER JOIN
-    [__mj].[Skill] AS Skill_ParentID
-  ON
-    [s].[ParentID] = Skill_ParentID.[ID]
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[spCreateCommunicationProviderMessageType]'
-GO
-
-
-CREATE PROCEDURE [__mj].[spCreateCommunicationProviderMessageType]
-    @CommunicationProviderID uniqueidentifier,
-    @CommunicationBaseMessageTypeID uniqueidentifier,
-    @Name nvarchar(255),
-    @Status nvarchar(20),
-    @AdditionalAttributes nvarchar(MAX)
-AS
-BEGIN
-    SET NOCOUNT ON;
-    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
-    INSERT INTO 
-    [__mj].[CommunicationProviderMessageType]
-        (
-            [CommunicationProviderID],
-            [CommunicationBaseMessageTypeID],
-            [Name],
-            [Status],
-            [AdditionalAttributes]
-        )
-    OUTPUT INSERTED.[ID] INTO @InsertedRow
-    VALUES
-        (
-            @CommunicationProviderID,
-            @CommunicationBaseMessageTypeID,
-            @Name,
-            @Status,
-            @AdditionalAttributes
-        )
-    -- return the new record from the base view, which might have some calculated fields
-    SELECT * FROM [__mj].[vwCommunicationProviderMessageTypes] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
-END
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[spUpdateFile]'
-GO
-
-
-CREATE PROCEDURE [__mj].[spUpdateFile]
-    @ID uniqueidentifier,
-    @Name nvarchar(500),
-    @Description nvarchar(MAX),
-    @CategoryID uniqueidentifier,
-    @ProviderID uniqueidentifier,
-    @ContentType nvarchar(50),
-    @ProviderKey nvarchar(500),
-    @Status nvarchar(20)
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[File]
-    SET 
-        [Name] = @Name,
-        [Description] = @Description,
-        [CategoryID] = @CategoryID,
-        [ProviderID] = @ProviderID,
-        [ContentType] = @ContentType,
-        [ProviderKey] = @ProviderKey,
-        [Status] = @Status
-    WHERE
-        [ID] = @ID
-
-    -- return the updated record so the caller can see the updated values and any calculated fields
-    SELECT 
-                                        * 
-                                    FROM 
-                                        [__mj].[vwFiles] 
-                                    WHERE
-                                        [ID] = @ID
-                                    
-END
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[vwQueues]'
-GO
-
-
-CREATE VIEW [__mj].[vwQueues]
-AS
-SELECT 
-    q.*,
-    QueueType_QueueTypeID.[Name] AS [QueueType]
-FROM
-    [__mj].[Queue] AS q
-INNER JOIN
-    [__mj].[QueueType] AS QueueType_QueueTypeID
-  ON
-    [q].[QueueTypeID] = QueueType_QueueTypeID.[ID]
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[vwCompanyIntegrations]'
-GO
-
-CREATE VIEW [__mj].[vwCompanyIntegrations] 
-AS
-SELECT 
-  ci.*,
-  c.Name Company,
-  i.Name Integration,
-  i.ClassName DriverClassName,
-  i.ImportPath DriverImportPath,
-  cir.ID LastRunID,
-  cir.StartedAt LastRunStartedAt,
-  cir.EndedAt LastRunEndedAt
-FROM 
-  __mj.CompanyIntegration ci
-INNER JOIN
-  __mj.Company c ON ci.CompanyID = c.ID
-INNER JOIN
-  __mj.Integration i ON ci.IntegrationID = i.ID
-LEFT OUTER JOIN
-  __mj.CompanyIntegrationRun cir 
-ON 
-  ci.ID = cir.CompanyIntegrationID AND
-  cir.ID = (SELECT TOP 1 cirInner.ID FROM __mj.CompanyIntegrationRun cirInner WHERE cirInner.CompanyIntegrationID = ci.ID ORDER BY StartedAt DESC)  
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[spUpdateCompanyIntegration]'
-GO
-
-
-CREATE PROCEDURE [__mj].[spUpdateCompanyIntegration]
-    @ID uniqueidentifier,
-    @CompanyID uniqueidentifier,
-    @IntegrationID uniqueidentifier,
-    @IsActive bit,
-    @AccessToken nvarchar(255),
-    @RefreshToken nvarchar(255),
-    @TokenExpirationDate datetime,
-    @APIKey nvarchar(255),
-    @ExternalSystemID nvarchar(100),
-    @IsExternalSystemReadOnly bit,
-    @ClientID nvarchar(255),
-    @ClientSecret nvarchar(255),
-    @CustomAttribute1 nvarchar(255)
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[CompanyIntegration]
-    SET 
-        [CompanyID] = @CompanyID,
-        [IntegrationID] = @IntegrationID,
-        [IsActive] = @IsActive,
-        [AccessToken] = @AccessToken,
-        [RefreshToken] = @RefreshToken,
-        [TokenExpirationDate] = @TokenExpirationDate,
-        [APIKey] = @APIKey,
-        [ExternalSystemID] = @ExternalSystemID,
-        [IsExternalSystemReadOnly] = @IsExternalSystemReadOnly,
-        [ClientID] = @ClientID,
-        [ClientSecret] = @ClientSecret,
-        [CustomAttribute1] = @CustomAttribute1
-    WHERE
-        [ID] = @ID
-
-    -- return the updated record so the caller can see the updated values and any calculated fields
-    SELECT 
-                                        * 
-                                    FROM 
-                                        [__mj].[vwCompanyIntegrations] 
-                                    WHERE
-                                        [ID] = @ID
-                                    
-END
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[spUpdateCommunicationProvider]'
-GO
-
-
-CREATE PROCEDURE [__mj].[spUpdateCommunicationProvider]
-    @ID uniqueidentifier,
-    @Name nvarchar(255),
-    @Description nvarchar(MAX),
-    @Status nvarchar(20),
-    @SupportsSending bit,
-    @SupportsReceiving bit
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[CommunicationProvider]
-    SET 
-        [Name] = @Name,
-        [Description] = @Description,
-        [Status] = @Status,
-        [SupportsSending] = @SupportsSending,
-        [SupportsReceiving] = @SupportsReceiving
-    WHERE
-        [ID] = @ID
-
-    -- return the updated record so the caller can see the updated values and any calculated fields
-    SELECT 
-                                        * 
-                                    FROM 
-                                        [__mj].[vwCommunicationProviders] 
-                                    WHERE
-                                        [ID] = @ID
-                                    
-END
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
 PRINT N'Creating [__mj].[spCreateDashboard]'
 GO
 
@@ -10283,57 +9704,21 @@ END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [__mj].[vwIntegrationURLFormats]'
+PRINT N'Creating [__mj].[vwSkills]'
 GO
 
-CREATE VIEW [__mj].[vwIntegrationURLFormats]
+
+CREATE VIEW [__mj].[vwSkills]
 AS
 SELECT 
-	iuf.*,
-	i.Name Integration,
-	i.NavigationBaseURL,
-	i.NavigationBaseURL + iuf.URLFormat FullURLFormat
+    s.*,
+    Skill_ParentID.[Name] AS [Parent]
 FROM
-	__mj.IntegrationURLFormat iuf
-INNER JOIN
-	__mj.Integration i
-ON
-	iuf.IntegrationID = i.ID
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[spUpdateIntegrationURLFormat]'
-GO
-
-
-CREATE PROCEDURE [__mj].[spUpdateIntegrationURLFormat]
-    @ID uniqueidentifier,
-    @IntegrationID uniqueidentifier,
-    @EntityID uniqueidentifier,
-    @URLFormat nvarchar(500),
-    @Comments nvarchar(MAX)
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[IntegrationURLFormat]
-    SET 
-        [IntegrationID] = @IntegrationID,
-        [EntityID] = @EntityID,
-        [URLFormat] = @URLFormat,
-        [Comments] = @Comments
-    WHERE
-        [ID] = @ID
-
-    -- return the updated record so the caller can see the updated values and any calculated fields
-    SELECT 
-                                        * 
-                                    FROM 
-                                        [__mj].[vwIntegrationURLFormats] 
-                                    WHERE
-                                        [ID] = @ID
-                                    
-END
+    [__mj].[Skill] AS s
+LEFT OUTER JOIN
+    [__mj].[Skill] AS Skill_ParentID
+  ON
+    [s].[ParentID] = Skill_ParentID.[ID]
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
@@ -10430,32 +9815,41 @@ END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [__mj].[spUpdateIntegration]'
+PRINT N'Creating [__mj].[vwRoles]'
 GO
 
 
-CREATE PROCEDURE [__mj].[spUpdateIntegration]
-    @Name nvarchar(100),
-    @Description nvarchar(255),
-    @NavigationBaseURL nvarchar(500),
-    @ClassName nvarchar(100),
-    @ImportPath nvarchar(100),
-    @BatchMaxRequestCount int,
-    @BatchRequestWaitTime int,
-    @ID uniqueidentifier
+CREATE VIEW [__mj].[vwRoles]
+AS
+SELECT 
+    r.*
+FROM
+    [__mj].[Role] AS r
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[spUpdateCommunicationProvider]'
+GO
+
+
+CREATE PROCEDURE [__mj].[spUpdateCommunicationProvider]
+    @ID uniqueidentifier,
+    @Name nvarchar(255),
+    @Description nvarchar(MAX),
+    @Status nvarchar(20),
+    @SupportsSending bit,
+    @SupportsReceiving bit
 AS
 BEGIN
     SET NOCOUNT ON;
     UPDATE 
-        [__mj].[Integration]
+        [__mj].[CommunicationProvider]
     SET 
         [Name] = @Name,
         [Description] = @Description,
-        [NavigationBaseURL] = @NavigationBaseURL,
-        [ClassName] = @ClassName,
-        [ImportPath] = @ImportPath,
-        [BatchMaxRequestCount] = @BatchMaxRequestCount,
-        [BatchRequestWaitTime] = @BatchRequestWaitTime
+        [Status] = @Status,
+        [SupportsSending] = @SupportsSending,
+        [SupportsReceiving] = @SupportsReceiving
     WHERE
         [ID] = @ID
 
@@ -10463,7 +9857,7 @@ BEGIN
     SELECT 
                                         * 
                                     FROM 
-                                        [__mj].[vwIntegrations] 
+                                        [__mj].[vwCommunicationProviders] 
                                     WHERE
                                         [ID] = @ID
                                     
@@ -10471,28 +9865,74 @@ END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [__mj].[spUpdateCommunicationProviderMessageType]'
+PRINT N'Creating [__mj].[spCreateAIModelType]'
 GO
 
 
-CREATE PROCEDURE [__mj].[spUpdateCommunicationProviderMessageType]
+CREATE PROCEDURE [__mj].[spCreateAIModelType]
+    @Name nvarchar(50),
+    @Description nvarchar(MAX)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
+    INSERT INTO 
+    [__mj].[AIModelType]
+        (
+            [Name],
+            [Description]
+        )
+    OUTPUT INSERTED.[ID] INTO @InsertedRow
+    VALUES
+        (
+            @Name,
+            @Description
+        )
+    -- return the new record from the base view, which might have some calculated fields
+    SELECT * FROM [__mj].[vwAIModelTypes] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
+END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[vwIntegrationURLFormats]'
+GO
+
+CREATE VIEW [__mj].[vwIntegrationURLFormats]
+AS
+SELECT 
+	iuf.*,
+	i.Name Integration,
+	i.NavigationBaseURL,
+	i.NavigationBaseURL + iuf.URLFormat FullURLFormat
+FROM
+	__mj.IntegrationURLFormat iuf
+INNER JOIN
+	__mj.Integration i
+ON
+	iuf.IntegrationID = i.ID
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[spUpdateIntegrationURLFormat]'
+GO
+
+
+CREATE PROCEDURE [__mj].[spUpdateIntegrationURLFormat]
     @ID uniqueidentifier,
-    @CommunicationProviderID uniqueidentifier,
-    @CommunicationBaseMessageTypeID uniqueidentifier,
-    @Name nvarchar(255),
-    @Status nvarchar(20),
-    @AdditionalAttributes nvarchar(MAX)
+    @IntegrationID uniqueidentifier,
+    @EntityID uniqueidentifier,
+    @URLFormat nvarchar(500),
+    @Comments nvarchar(MAX)
 AS
 BEGIN
     SET NOCOUNT ON;
     UPDATE 
-        [__mj].[CommunicationProviderMessageType]
+        [__mj].[IntegrationURLFormat]
     SET 
-        [CommunicationProviderID] = @CommunicationProviderID,
-        [CommunicationBaseMessageTypeID] = @CommunicationBaseMessageTypeID,
-        [Name] = @Name,
-        [Status] = @Status,
-        [AdditionalAttributes] = @AdditionalAttributes
+        [IntegrationID] = @IntegrationID,
+        [EntityID] = @EntityID,
+        [URLFormat] = @URLFormat,
+        [Comments] = @Comments
     WHERE
         [ID] = @ID
 
@@ -10500,7 +9940,42 @@ BEGIN
     SELECT 
                                         * 
                                     FROM 
-                                        [__mj].[vwCommunicationProviderMessageTypes] 
+                                        [__mj].[vwIntegrationURLFormats] 
+                                    WHERE
+                                        [ID] = @ID
+                                    
+END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[spUpdateListCategory]'
+GO
+
+
+CREATE PROCEDURE [__mj].[spUpdateListCategory]
+    @ID uniqueidentifier,
+    @Name nvarchar(100),
+    @Description nvarchar(MAX),
+    @ParentID uniqueidentifier,
+    @UserID uniqueidentifier
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[ListCategory]
+    SET 
+        [Name] = @Name,
+        [Description] = @Description,
+        [ParentID] = @ParentID,
+        [UserID] = @UserID
+    WHERE
+        [ID] = @ID
+
+    -- return the updated record so the caller can see the updated values and any calculated fields
+    SELECT 
+                                        * 
+                                    FROM 
+                                        [__mj].[vwListCategories] 
                                     WHERE
                                         [ID] = @ID
                                     
@@ -10579,63 +10054,22 @@ END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [__mj].[spCreateRole]'
+PRINT N'Creating [__mj].[spUpdateEmployeeSkill]'
 GO
 
 
-CREATE PROCEDURE [__mj].[spCreateRole]
-    @Name nvarchar(50),
-    @Description nvarchar(MAX),
-    @DirectoryID nvarchar(250),
-    @SQLName nvarchar(250)
-AS
-BEGIN
-    SET NOCOUNT ON;
-    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
-    INSERT INTO 
-    [__mj].[Role]
-        (
-            [Name],
-            [Description],
-            [DirectoryID],
-            [SQLName]
-        )
-    OUTPUT INSERTED.[ID] INTO @InsertedRow
-    VALUES
-        (
-            @Name,
-            @Description,
-            @DirectoryID,
-            @SQLName
-        )
-    -- return the new record from the base view, which might have some calculated fields
-    SELECT * FROM [__mj].[vwRoles] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
-END
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[spUpdateCommunicationBaseMessageType]'
-GO
-
-
-CREATE PROCEDURE [__mj].[spUpdateCommunicationBaseMessageType]
+CREATE PROCEDURE [__mj].[spUpdateEmployeeSkill]
     @ID uniqueidentifier,
-    @Type nvarchar(100),
-    @SupportsAttachments bit,
-    @SupportsSubjectLine bit,
-    @SupportsHtml bit,
-    @MaxBytes int
+    @EmployeeID uniqueidentifier,
+    @SkillID uniqueidentifier
 AS
 BEGIN
     SET NOCOUNT ON;
     UPDATE 
-        [__mj].[CommunicationBaseMessageType]
+        [__mj].[EmployeeSkill]
     SET 
-        [Type] = @Type,
-        [SupportsAttachments] = @SupportsAttachments,
-        [SupportsSubjectLine] = @SupportsSubjectLine,
-        [SupportsHtml] = @SupportsHtml,
-        [MaxBytes] = @MaxBytes
+        [EmployeeID] = @EmployeeID,
+        [SkillID] = @SkillID
     WHERE
         [ID] = @ID
 
@@ -10643,7 +10077,44 @@ BEGIN
     SELECT 
                                         * 
                                     FROM 
-                                        [__mj].[vwCommunicationBaseMessageTypes] 
+                                        [__mj].[vwEmployeeSkills] 
+                                    WHERE
+                                        [ID] = @ID
+                                    
+END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[spUpdateCommunicationProviderMessageType]'
+GO
+
+
+CREATE PROCEDURE [__mj].[spUpdateCommunicationProviderMessageType]
+    @ID uniqueidentifier,
+    @CommunicationProviderID uniqueidentifier,
+    @CommunicationBaseMessageTypeID uniqueidentifier,
+    @Name nvarchar(255),
+    @Status nvarchar(20),
+    @AdditionalAttributes nvarchar(MAX)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[CommunicationProviderMessageType]
+    SET 
+        [CommunicationProviderID] = @CommunicationProviderID,
+        [CommunicationBaseMessageTypeID] = @CommunicationBaseMessageTypeID,
+        [Name] = @Name,
+        [Status] = @Status,
+        [AdditionalAttributes] = @AdditionalAttributes
+    WHERE
+        [ID] = @ID
+
+    -- return the updated record so the caller can see the updated values and any calculated fields
+    SELECT 
+                                        * 
+                                    FROM 
+                                        [__mj].[vwCommunicationProviderMessageTypes] 
                                     WHERE
                                         [ID] = @ID
                                     
@@ -10684,6 +10155,41 @@ BEGIN
                                     WHERE
                                         [ID] = @ID
                                     
+END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[spCreateRole]'
+GO
+
+
+CREATE PROCEDURE [__mj].[spCreateRole]
+    @Name nvarchar(50),
+    @Description nvarchar(MAX),
+    @DirectoryID nvarchar(250),
+    @SQLName nvarchar(250)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
+    INSERT INTO 
+    [__mj].[Role]
+        (
+            [Name],
+            [Description],
+            [DirectoryID],
+            [SQLName]
+        )
+    OUTPUT INSERTED.[ID] INTO @InsertedRow
+    VALUES
+        (
+            @Name,
+            @Description,
+            @DirectoryID,
+            @SQLName
+        )
+    -- return the new record from the base view, which might have some calculated fields
+    SELECT * FROM [__mj].[vwRoles] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
 END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
@@ -10729,6 +10235,27 @@ END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
+PRINT N'Creating [__mj].[spDeleteUserViewCategory]'
+GO
+
+
+CREATE PROCEDURE [__mj].[spDeleteUserViewCategory]
+    @ID uniqueidentifier
+AS  
+BEGIN
+    SET NOCOUNT ON;
+
+    DELETE FROM 
+        [__mj].[UserViewCategory]
+    WHERE 
+        [ID] = @ID
+
+
+    SELECT @ID AS [ID] -- Return the primary key to indicate we successfully deleted the record
+END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
 PRINT N'Creating [__mj].[spUpdateQueueTask]'
 GO
 
@@ -10767,6 +10294,99 @@ BEGIN
                                         * 
                                     FROM 
                                         [__mj].[vwQueueTasks] 
+                                    WHERE
+                                        [ID] = @ID
+                                    
+END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[spUpdateIntegration]'
+GO
+
+
+CREATE PROCEDURE [__mj].[spUpdateIntegration]
+    @Name nvarchar(100),
+    @Description nvarchar(255),
+    @NavigationBaseURL nvarchar(500),
+    @ClassName nvarchar(100),
+    @ImportPath nvarchar(100),
+    @BatchMaxRequestCount int,
+    @BatchRequestWaitTime int,
+    @ID uniqueidentifier
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[Integration]
+    SET 
+        [Name] = @Name,
+        [Description] = @Description,
+        [NavigationBaseURL] = @NavigationBaseURL,
+        [ClassName] = @ClassName,
+        [ImportPath] = @ImportPath,
+        [BatchMaxRequestCount] = @BatchMaxRequestCount,
+        [BatchRequestWaitTime] = @BatchRequestWaitTime
+    WHERE
+        [ID] = @ID
+
+    -- return the updated record so the caller can see the updated values and any calculated fields
+    SELECT 
+                                        * 
+                                    FROM 
+                                        [__mj].[vwIntegrations] 
+                                    WHERE
+                                        [ID] = @ID
+                                    
+END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[spDeleteDataContext]'
+GO
+
+
+CREATE PROCEDURE [__mj].[spDeleteDataContext]
+    @ID uniqueidentifier
+AS  
+BEGIN
+    SET NOCOUNT ON;
+
+    DELETE FROM 
+        [__mj].[DataContext]
+    WHERE 
+        [ID] = @ID
+
+
+    SELECT @ID AS [ID] -- Return the primary key to indicate we successfully deleted the record
+END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[spUpdateAIModelType]'
+GO
+
+
+CREATE PROCEDURE [__mj].[spUpdateAIModelType]
+    @ID uniqueidentifier,
+    @Name nvarchar(50),
+    @Description nvarchar(MAX)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[AIModelType]
+    SET 
+        [Name] = @Name,
+        [Description] = @Description
+    WHERE
+        [ID] = @ID
+
+    -- return the updated record so the caller can see the updated values and any calculated fields
+    SELECT 
+                                        * 
+                                    FROM 
+                                        [__mj].[vwAIModelTypes] 
                                     WHERE
                                         [ID] = @ID
                                     
@@ -10910,18 +10530,49 @@ END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [__mj].[spDeleteUserViewCategory]'
+PRINT N'Creating [__mj].[vwFileCategories]'
 GO
 
 
-CREATE PROCEDURE [__mj].[spDeleteUserViewCategory]
+CREATE VIEW [__mj].[vwFileCategories]
+AS
+SELECT 
+    f.*,
+    FileCategory_ParentID.[Name] AS [Parent]
+FROM
+    [__mj].[FileCategory] AS f
+LEFT OUTER JOIN
+    [__mj].[FileCategory] AS FileCategory_ParentID
+  ON
+    [f].[ParentID] = FileCategory_ParentID.[ID]
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[vwDuplicateRunDetailMatches]'
+GO
+
+
+CREATE VIEW [__mj].[vwDuplicateRunDetailMatches]
+AS
+SELECT 
+    d.*
+FROM
+    [__mj].[DuplicateRunDetailMatch] AS d
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[spDeleteCommunicationProviderMessageType]'
+GO
+
+
+CREATE PROCEDURE [__mj].[spDeleteCommunicationProviderMessageType]
     @ID uniqueidentifier
 AS  
 BEGIN
     SET NOCOUNT ON;
 
     DELETE FROM 
-        [__mj].[UserViewCategory]
+        [__mj].[CommunicationProviderMessageType]
     WHERE 
         [ID] = @ID
 
@@ -10931,24 +10582,26 @@ END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [__mj].[spDeleteFile]'
+PRINT N'Creating [__mj].[vwFileEntityRecordLinks]'
 GO
 
 
-CREATE PROCEDURE [__mj].[spDeleteFile]
-    @ID uniqueidentifier
-AS  
-BEGIN
-    SET NOCOUNT ON;
-
-    DELETE FROM 
-        [__mj].[File]
-    WHERE 
-        [ID] = @ID
-
-
-    SELECT @ID AS [ID] -- Return the primary key to indicate we successfully deleted the record
-END
+CREATE VIEW [__mj].[vwFileEntityRecordLinks]
+AS
+SELECT 
+    f.*,
+    File_FileID.[Name] AS [File],
+    Entity_EntityID.[Name] AS [Entity]
+FROM
+    [__mj].[FileEntityRecordLink] AS f
+INNER JOIN
+    [__mj].[File] AS File_FileID
+  ON
+    [f].[FileID] = File_FileID.[ID]
+INNER JOIN
+    [__mj].[Entity] AS Entity_EntityID
+  ON
+    [f].[EntityID] = Entity_EntityID.[ID]
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
@@ -10973,21 +10626,49 @@ END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [__mj].[vwFileCategories]'
+PRINT N'Creating [__mj].[vwTemplateCategories]'
 GO
 
 
-CREATE VIEW [__mj].[vwFileCategories]
+CREATE VIEW [__mj].[vwTemplateCategories]
+AS
+SELECT 
+    t.*,
+    TemplateCategory_ParentID.[Name] AS [Parent],
+    User_UserID.[Name] AS [User]
+FROM
+    [__mj].[TemplateCategory] AS t
+LEFT OUTER JOIN
+    [__mj].[TemplateCategory] AS TemplateCategory_ParentID
+  ON
+    [t].[ParentID] = TemplateCategory_ParentID.[ID]
+INNER JOIN
+    [__mj].[User] AS User_UserID
+  ON
+    [t].[UserID] = User_UserID.[ID]
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[vwFiles]'
+GO
+
+
+CREATE VIEW [__mj].[vwFiles]
 AS
 SELECT 
     f.*,
-    FileCategory_ParentID.[Name] AS [Parent]
+    FileCategory_CategoryID.[Name] AS [Category],
+    FileStorageProvider_ProviderID.[Name] AS [Provider]
 FROM
-    [__mj].[FileCategory] AS f
+    [__mj].[File] AS f
 LEFT OUTER JOIN
-    [__mj].[FileCategory] AS FileCategory_ParentID
+    [__mj].[FileCategory] AS FileCategory_CategoryID
   ON
-    [f].[ParentID] = FileCategory_ParentID.[ID]
+    [f].[CategoryID] = FileCategory_CategoryID.[ID]
+INNER JOIN
+    [__mj].[FileStorageProvider] AS FileStorageProvider_ProviderID
+  ON
+    [f].[ProviderID] = FileStorageProvider_ProviderID.[ID]
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
@@ -11009,6 +10690,359 @@ BEGIN
 
     SELECT @ID AS [ID] -- Return the primary key to indicate we successfully deleted the record
 END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[spCreateEntityField]'
+GO
+
+
+CREATE PROCEDURE [__mj].[spCreateEntityField]
+    @DisplayName nvarchar(255),
+    @Description nvarchar(MAX),
+    @AutoUpdateDescription bit,
+    @IsPrimaryKey bit,
+    @IsUnique bit,
+    @Category nvarchar(255),
+    @ValueListType nvarchar(20),
+    @ExtendedType nvarchar(50),
+    @CodeType nvarchar(50),
+    @DefaultInView bit,
+    @ViewCellTemplate nvarchar(MAX),
+    @DefaultColumnWidth int,
+    @AllowUpdateAPI bit,
+    @AllowUpdateInView bit,
+    @IncludeInUserSearchAPI bit,
+    @FullTextSearchEnabled bit,
+    @UserSearchParamFormatAPI nvarchar(500),
+    @IncludeInGeneratedForm bit,
+    @GeneratedFormSection nvarchar(10),
+    @IsNameField bit,
+    @RelatedEntityID uniqueidentifier,
+    @RelatedEntityFieldName nvarchar(255),
+    @IncludeRelatedEntityNameFieldInBaseView bit,
+    @RelatedEntityNameFieldMap nvarchar(255),
+    @RelatedEntityDisplayType nvarchar(20),
+    @EntityIDFieldName nvarchar(100)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
+    INSERT INTO 
+    [__mj].[EntityField]
+        (
+            [DisplayName],
+            [Description],
+            [AutoUpdateDescription],
+            [IsPrimaryKey],
+            [IsUnique],
+            [Category],
+            [ValueListType],
+            [ExtendedType],
+            [CodeType],
+            [DefaultInView],
+            [ViewCellTemplate],
+            [DefaultColumnWidth],
+            [AllowUpdateAPI],
+            [AllowUpdateInView],
+            [IncludeInUserSearchAPI],
+            [FullTextSearchEnabled],
+            [UserSearchParamFormatAPI],
+            [IncludeInGeneratedForm],
+            [GeneratedFormSection],
+            [IsNameField],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [RelatedEntityNameFieldMap],
+            [RelatedEntityDisplayType],
+            [EntityIDFieldName]
+        )
+    OUTPUT INSERTED.[ID] INTO @InsertedRow
+    VALUES
+        (
+            @DisplayName,
+            @Description,
+            @AutoUpdateDescription,
+            @IsPrimaryKey,
+            @IsUnique,
+            @Category,
+            @ValueListType,
+            @ExtendedType,
+            @CodeType,
+            @DefaultInView,
+            @ViewCellTemplate,
+            @DefaultColumnWidth,
+            @AllowUpdateAPI,
+            @AllowUpdateInView,
+            @IncludeInUserSearchAPI,
+            @FullTextSearchEnabled,
+            @UserSearchParamFormatAPI,
+            @IncludeInGeneratedForm,
+            @GeneratedFormSection,
+            @IsNameField,
+            @RelatedEntityID,
+            @RelatedEntityFieldName,
+            @IncludeRelatedEntityNameFieldInBaseView,
+            @RelatedEntityNameFieldMap,
+            @RelatedEntityDisplayType,
+            @EntityIDFieldName
+        )
+    -- return the new record from the base view, which might have some calculated fields
+    SELECT * FROM [__mj].[vwEntityFields] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
+END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[vwTemplateContents]'
+GO
+
+
+CREATE VIEW [__mj].[vwTemplateContents]
+AS
+SELECT 
+    t.*,
+    Template_TemplateID.[Name] AS [Template],
+    TemplateContentType_TypeID.[Name] AS [Type]
+FROM
+    [__mj].[TemplateContent] AS t
+INNER JOIN
+    [__mj].[Template] AS Template_TemplateID
+  ON
+    [t].[TemplateID] = Template_TemplateID.[ID]
+INNER JOIN
+    [__mj].[TemplateContentType] AS TemplateContentType_TypeID
+  ON
+    [t].[TypeID] = TemplateContentType_TypeID.[ID]
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[vwVersionInstallations]'
+GO
+
+
+CREATE VIEW [__mj].[vwVersionInstallations]
+AS
+SELECT 
+    v.*,
+	CONVERT(nvarchar(100),v.MajorVersion) + '.' + CONVERT(nvarchar(100),v.MinorVersion) + '.' + CONVERT(nvarchar(100),v.PatchVersion,100) AS CompleteVersion
+FROM
+    [__mj].[VersionInstallation] AS v
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[spCreateVersionInstallation]'
+GO
+
+
+CREATE PROCEDURE [__mj].[spCreateVersionInstallation]
+    @MajorVersion int,
+    @MinorVersion int,
+    @PatchVersion int,
+    @Type nvarchar(20),
+    @InstalledAt datetime,
+    @Status nvarchar(20),
+    @InstallLog nvarchar(MAX),
+    @Comments nvarchar(MAX)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
+    INSERT INTO 
+    [__mj].[VersionInstallation]
+        (
+            [MajorVersion],
+            [MinorVersion],
+            [PatchVersion],
+            [Type],
+            [InstalledAt],
+            [Status],
+            [InstallLog],
+            [Comments]
+        )
+    OUTPUT INSERTED.[ID] INTO @InsertedRow
+    VALUES
+        (
+            @MajorVersion,
+            @MinorVersion,
+            @PatchVersion,
+            @Type,
+            @InstalledAt,
+            @Status,
+            @InstallLog,
+            @Comments
+        )
+    -- return the new record from the base view, which might have some calculated fields
+    SELECT * FROM [__mj].[vwVersionInstallations] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
+END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[spDeleteAIModelType]'
+GO
+
+
+CREATE PROCEDURE [__mj].[spDeleteAIModelType]
+    @ID uniqueidentifier
+AS  
+BEGIN
+    SET NOCOUNT ON;
+
+    DELETE FROM 
+        [__mj].[AIModelType]
+    WHERE 
+        [ID] = @ID
+
+
+    SELECT @ID AS [ID] -- Return the primary key to indicate we successfully deleted the record
+END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[vwUsers]'
+GO
+
+CREATE VIEW [__mj].[vwUsers] 
+AS
+SELECT 
+	u.*,
+	u.FirstName + ' ' + u.LastName FirstLast,
+	e.FirstLast EmployeeFirstLast,
+	e.Email EmployeeEmail,
+	e.Title EmployeeTitle,
+	e.Supervisor EmployeeSupervisor,
+	e.SupervisorEmail EmployeeSupervisorEmail
+FROM 
+	[__mj].[User] u
+LEFT OUTER JOIN
+	vwEmployees e
+ON
+	u.EmployeeID = e.ID
+
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[spCreateUser]'
+GO
+
+
+CREATE PROCEDURE [__mj].[spCreateUser]
+    @Name nvarchar(100),
+    @FirstName nvarchar(50),
+    @LastName nvarchar(50),
+    @Title nvarchar(50),
+    @Email nvarchar(100),
+    @Type nchar(15),
+    @IsActive bit,
+    @LinkedRecordType nchar(10),
+    @LinkedEntityID uniqueidentifier,
+    @LinkedEntityRecordID nvarchar(450),
+    @EmployeeID uniqueidentifier
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
+    INSERT INTO 
+    [__mj].[User]
+        (
+            [Name],
+            [FirstName],
+            [LastName],
+            [Title],
+            [Email],
+            [Type],
+            [IsActive],
+            [LinkedRecordType],
+            [LinkedEntityID],
+            [LinkedEntityRecordID],
+            [EmployeeID]
+        )
+    OUTPUT INSERTED.[ID] INTO @InsertedRow
+    VALUES
+        (
+            @Name,
+            @FirstName,
+            @LastName,
+            @Title,
+            @Email,
+            @Type,
+            @IsActive,
+            @LinkedRecordType,
+            @LinkedEntityID,
+            @LinkedEntityRecordID,
+            @EmployeeID
+        )
+    -- return the new record from the base view, which might have some calculated fields
+    SELECT * FROM [__mj].[vwUsers] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
+END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[vwTemplateParams]'
+GO
+
+
+CREATE VIEW [__mj].[vwTemplateParams]
+AS
+SELECT 
+    t.*,
+    Template_TemplateID.[Name] AS [Template],
+    Entity_EntityID.[Name] AS [Entity]
+FROM
+    [__mj].[TemplateParam] AS t
+INNER JOIN
+    [__mj].[Template] AS Template_TemplateID
+  ON
+    [t].[TemplateID] = Template_TemplateID.[ID]
+LEFT OUTER JOIN
+    [__mj].[Entity] AS Entity_EntityID
+  ON
+    [t].[EntityID] = Entity_EntityID.[ID]
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[spCreateFileEntityRecordLink]'
+GO
+
+
+CREATE PROCEDURE [__mj].[spCreateFileEntityRecordLink]
+    @FileID uniqueidentifier,
+    @EntityID uniqueidentifier,
+    @RecordID nvarchar(750)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
+    INSERT INTO 
+    [__mj].[FileEntityRecordLink]
+        (
+            [FileID],
+            [EntityID],
+            [RecordID]
+        )
+    OUTPUT INSERTED.[ID] INTO @InsertedRow
+    VALUES
+        (
+            @FileID,
+            @EntityID,
+            @RecordID
+        )
+    -- return the new record from the base view, which might have some calculated fields
+    SELECT * FROM [__mj].[vwFileEntityRecordLinks] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
+END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[vwOutputFormatTypes]'
+GO
+
+
+CREATE VIEW [__mj].[vwOutputFormatTypes]
+AS
+SELECT 
+    o.*
+FROM
+    [__mj].[OutputFormatType] AS o
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
@@ -11161,153 +11195,199 @@ END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [__mj].[spDeleteCommunicationProviderMessageType]'
+PRINT N'Creating [__mj].[vwCommunicationBaseMessageTypes]'
 GO
 
 
-CREATE PROCEDURE [__mj].[spDeleteCommunicationProviderMessageType]
-    @ID uniqueidentifier
-AS  
-BEGIN
-    SET NOCOUNT ON;
-
-    DELETE FROM 
-        [__mj].[CommunicationProviderMessageType]
-    WHERE 
-        [ID] = @ID
-
-
-    SELECT @ID AS [ID] -- Return the primary key to indicate we successfully deleted the record
-END
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[vwDuplicateRunDetailMatches]'
-GO
-
-
-CREATE VIEW [__mj].[vwDuplicateRunDetailMatches]
+CREATE VIEW [__mj].[vwCommunicationBaseMessageTypes]
 AS
 SELECT 
-    d.*
+    c.*
 FROM
-    [__mj].[DuplicateRunDetailMatch] AS d
+    [__mj].[CommunicationBaseMessageType] AS c
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [__mj].[vwResourceTypes]'
+PRINT N'Creating [__mj].[spCreateFileCategory]'
 GO
 
 
-CREATE VIEW [__mj].[vwResourceTypes]
-AS
-SELECT 
-    r.*,
-    Entity_EntityID.[Name] AS [Entity]
-FROM
-    [__mj].[ResourceType] AS r
-LEFT OUTER JOIN
-    [__mj].[Entity] AS Entity_EntityID
-  ON
-    [r].[EntityID] = Entity_EntityID.[ID]
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[vwUsers]'
-GO
-
-CREATE VIEW [__mj].[vwUsers] 
-AS
-SELECT 
-	u.*,
-	u.FirstName + ' ' + u.LastName FirstLast,
-	e.FirstLast EmployeeFirstLast,
-	e.Email EmployeeEmail,
-	e.Title EmployeeTitle,
-	e.Supervisor EmployeeSupervisor,
-	e.SupervisorEmail EmployeeSupervisorEmail
-FROM 
-	[__mj].[User] u
-LEFT OUTER JOIN
-	vwEmployees e
-ON
-	u.EmployeeID = e.ID
-
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[spCreateUser]'
-GO
-
-
-CREATE PROCEDURE [__mj].[spCreateUser]
-    @Name nvarchar(100),
-    @FirstName nvarchar(50),
-    @LastName nvarchar(50),
-    @Title nvarchar(50),
-    @Email nvarchar(100),
-    @Type nchar(15),
-    @IsActive bit,
-    @LinkedRecordType nchar(10),
-    @LinkedEntityID uniqueidentifier,
-    @LinkedEntityRecordID nvarchar(450),
-    @EmployeeID uniqueidentifier
+CREATE PROCEDURE [__mj].[spCreateFileCategory]
+    @Name nvarchar(255),
+    @ParentID uniqueidentifier,
+    @Description nvarchar(MAX)
 AS
 BEGIN
     SET NOCOUNT ON;
     DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
     INSERT INTO 
-    [__mj].[User]
+    [__mj].[FileCategory]
         (
             [Name],
-            [FirstName],
-            [LastName],
-            [Title],
-            [Email],
-            [Type],
-            [IsActive],
-            [LinkedRecordType],
-            [LinkedEntityID],
-            [LinkedEntityRecordID],
-            [EmployeeID]
+            [ParentID],
+            [Description]
         )
     OUTPUT INSERTED.[ID] INTO @InsertedRow
     VALUES
         (
             @Name,
-            @FirstName,
-            @LastName,
-            @Title,
-            @Email,
-            @Type,
-            @IsActive,
-            @LinkedRecordType,
-            @LinkedEntityID,
-            @LinkedEntityRecordID,
-            @EmployeeID
+            @ParentID,
+            @Description
         )
     -- return the new record from the base view, which might have some calculated fields
-    SELECT * FROM [__mj].[vwUsers] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
+    SELECT * FROM [__mj].[vwFileCategories] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
 END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [__mj].[vwTemplateCategories]'
+PRINT N'Creating [__mj].[vwReports]'
 GO
 
 
-CREATE VIEW [__mj].[vwTemplateCategories]
+CREATE VIEW [__mj].[vwReports]
+AS
+SELECT 
+    r.*,
+    ReportCategory_CategoryID.[Name] AS [Category],
+    User_UserID.[Name] AS [User],
+    Conversation_ConversationID.[Name] AS [Conversation],
+    DataContext_DataContextID.[Name] AS [DataContext],
+    OutputTriggerType_OutputTriggerTypeID.[Name] AS [OutputTriggerType],
+    OutputFormatType_OutputFormatTypeID.[Name] AS [OutputFormatType],
+    OutputDeliveryType_OutputDeliveryTypeID.[Name] AS [OutputDeliveryType],
+    Workflow_OutputWorkflowID.[Name] AS [OutputWorkflow]
+FROM
+    [__mj].[Report] AS r
+LEFT OUTER JOIN
+    [__mj].[ReportCategory] AS ReportCategory_CategoryID
+  ON
+    [r].[CategoryID] = ReportCategory_CategoryID.[ID]
+INNER JOIN
+    [__mj].[User] AS User_UserID
+  ON
+    [r].[UserID] = User_UserID.[ID]
+LEFT OUTER JOIN
+    [__mj].[Conversation] AS Conversation_ConversationID
+  ON
+    [r].[ConversationID] = Conversation_ConversationID.[ID]
+LEFT OUTER JOIN
+    [__mj].[DataContext] AS DataContext_DataContextID
+  ON
+    [r].[DataContextID] = DataContext_DataContextID.[ID]
+LEFT OUTER JOIN
+    [__mj].[OutputTriggerType] AS OutputTriggerType_OutputTriggerTypeID
+  ON
+    [r].[OutputTriggerTypeID] = OutputTriggerType_OutputTriggerTypeID.[ID]
+LEFT OUTER JOIN
+    [__mj].[OutputFormatType] AS OutputFormatType_OutputFormatTypeID
+  ON
+    [r].[OutputFormatTypeID] = OutputFormatType_OutputFormatTypeID.[ID]
+LEFT OUTER JOIN
+    [__mj].[OutputDeliveryType] AS OutputDeliveryType_OutputDeliveryTypeID
+  ON
+    [r].[OutputDeliveryTypeID] = OutputDeliveryType_OutputDeliveryTypeID.[ID]
+LEFT OUTER JOIN
+    [__mj].[Workflow] AS Workflow_OutputWorkflowID
+  ON
+    [r].[OutputWorkflowID] = Workflow_OutputWorkflowID.[ID]
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[vwCompanyIntegrations]'
+GO
+
+CREATE VIEW [__mj].[vwCompanyIntegrations] 
+AS
+SELECT 
+  ci.*,
+  c.Name Company,
+  i.Name Integration,
+  i.ClassName DriverClassName,
+  i.ImportPath DriverImportPath,
+  cir.ID LastRunID,
+  cir.StartedAt LastRunStartedAt,
+  cir.EndedAt LastRunEndedAt
+FROM 
+  __mj.CompanyIntegration ci
+INNER JOIN
+  __mj.Company c ON ci.CompanyID = c.ID
+INNER JOIN
+  __mj.Integration i ON ci.IntegrationID = i.ID
+LEFT OUTER JOIN
+  __mj.CompanyIntegrationRun cir 
+ON 
+  ci.ID = cir.CompanyIntegrationID AND
+  cir.ID = (SELECT TOP 1 cirInner.ID FROM __mj.CompanyIntegrationRun cirInner WHERE cirInner.CompanyIntegrationID = ci.ID ORDER BY StartedAt DESC)  
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[spUpdateCompanyIntegration]'
+GO
+
+
+CREATE PROCEDURE [__mj].[spUpdateCompanyIntegration]
+    @ID uniqueidentifier,
+    @CompanyID uniqueidentifier,
+    @IntegrationID uniqueidentifier,
+    @IsActive bit,
+    @AccessToken nvarchar(255),
+    @RefreshToken nvarchar(255),
+    @TokenExpirationDate datetime,
+    @APIKey nvarchar(255),
+    @ExternalSystemID nvarchar(100),
+    @IsExternalSystemReadOnly bit,
+    @ClientID nvarchar(255),
+    @ClientSecret nvarchar(255),
+    @CustomAttribute1 nvarchar(255)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[CompanyIntegration]
+    SET 
+        [CompanyID] = @CompanyID,
+        [IntegrationID] = @IntegrationID,
+        [IsActive] = @IsActive,
+        [AccessToken] = @AccessToken,
+        [RefreshToken] = @RefreshToken,
+        [TokenExpirationDate] = @TokenExpirationDate,
+        [APIKey] = @APIKey,
+        [ExternalSystemID] = @ExternalSystemID,
+        [IsExternalSystemReadOnly] = @IsExternalSystemReadOnly,
+        [ClientID] = @ClientID,
+        [ClientSecret] = @ClientSecret,
+        [CustomAttribute1] = @CustomAttribute1
+    WHERE
+        [ID] = @ID
+
+    -- return the updated record so the caller can see the updated values and any calculated fields
+    SELECT 
+                                        * 
+                                    FROM 
+                                        [__mj].[vwCompanyIntegrations] 
+                                    WHERE
+                                        [ID] = @ID
+                                    
+END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[vwTemplates]'
+GO
+
+
+CREATE VIEW [__mj].[vwTemplates]
 AS
 SELECT 
     t.*,
-    TemplateCategory_ParentID.[Name] AS [Parent],
+    TemplateCategory_CategoryID.[Name] AS [Category],
     User_UserID.[Name] AS [User]
 FROM
-    [__mj].[TemplateCategory] AS t
+    [__mj].[Template] AS t
 LEFT OUTER JOIN
-    [__mj].[TemplateCategory] AS TemplateCategory_ParentID
+    [__mj].[TemplateCategory] AS TemplateCategory_CategoryID
   ON
-    [t].[ParentID] = TemplateCategory_ParentID.[ID]
+    [t].[CategoryID] = TemplateCategory_CategoryID.[ID]
 INNER JOIN
     [__mj].[User] AS User_UserID
   ON
@@ -11315,194 +11395,69 @@ INNER JOIN
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [__mj].[vwFileEntityRecordLinks]'
+PRINT N'Creating [__mj].[spCreateDuplicateRunDetailMatch]'
 GO
 
 
-CREATE VIEW [__mj].[vwFileEntityRecordLinks]
-AS
-SELECT 
-    f.*,
-    File_FileID.[Name] AS [File],
-    Entity_EntityID.[Name] AS [Entity]
-FROM
-    [__mj].[FileEntityRecordLink] AS f
-INNER JOIN
-    [__mj].[File] AS File_FileID
-  ON
-    [f].[FileID] = File_FileID.[ID]
-INNER JOIN
-    [__mj].[Entity] AS Entity_EntityID
-  ON
-    [f].[EntityID] = Entity_EntityID.[ID]
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[vwReportSnapshots]'
-GO
-
-
-CREATE VIEW [__mj].[vwReportSnapshots]
-AS
-SELECT 
-    r.*,
-    Report_ReportID.[Name] AS [Report],
-    User_UserID.[Name] AS [User]
-FROM
-    [__mj].[ReportSnapshot] AS r
-INNER JOIN
-    [__mj].[Report] AS Report_ReportID
-  ON
-    [r].[ReportID] = Report_ReportID.[ID]
-INNER JOIN
-    [__mj].[User] AS User_UserID
-  ON
-    [r].[UserID] = User_UserID.[ID]
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[spCreateEntityField]'
-GO
-
-
-CREATE PROCEDURE [__mj].[spCreateEntityField]
-    @DisplayName nvarchar(255),
-    @Description nvarchar(MAX),
-    @AutoUpdateDescription bit,
-    @IsPrimaryKey bit,
-    @IsUnique bit,
-    @Category nvarchar(255),
-    @ValueListType nvarchar(20),
-    @ExtendedType nvarchar(50),
-    @CodeType nvarchar(50),
-    @DefaultInView bit,
-    @ViewCellTemplate nvarchar(MAX),
-    @DefaultColumnWidth int,
-    @AllowUpdateAPI bit,
-    @AllowUpdateInView bit,
-    @IncludeInUserSearchAPI bit,
-    @FullTextSearchEnabled bit,
-    @UserSearchParamFormatAPI nvarchar(500),
-    @IncludeInGeneratedForm bit,
-    @GeneratedFormSection nvarchar(10),
-    @IsNameField bit,
-    @RelatedEntityID uniqueidentifier,
-    @RelatedEntityFieldName nvarchar(255),
-    @IncludeRelatedEntityNameFieldInBaseView bit,
-    @RelatedEntityNameFieldMap nvarchar(255),
-    @RelatedEntityDisplayType nvarchar(20),
-    @EntityIDFieldName nvarchar(100)
+CREATE PROCEDURE [__mj].[spCreateDuplicateRunDetailMatch]
+    @DuplicateRunDetailID uniqueidentifier,
+    @MatchSource nvarchar(20),
+    @MatchRecordID nvarchar(500),
+    @MatchProbability numeric(12, 11),
+    @MatchedAt datetime,
+    @Action nvarchar(20),
+    @ApprovalStatus nvarchar(20),
+    @RecordMergeLogID uniqueidentifier,
+    @MergeStatus nvarchar(20),
+    @MergedAt datetime
 AS
 BEGIN
     SET NOCOUNT ON;
     DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
     INSERT INTO 
-    [__mj].[EntityField]
+    [__mj].[DuplicateRunDetailMatch]
         (
-            [DisplayName],
-            [Description],
-            [AutoUpdateDescription],
-            [IsPrimaryKey],
-            [IsUnique],
-            [Category],
-            [ValueListType],
-            [ExtendedType],
-            [CodeType],
-            [DefaultInView],
-            [ViewCellTemplate],
-            [DefaultColumnWidth],
-            [AllowUpdateAPI],
-            [AllowUpdateInView],
-            [IncludeInUserSearchAPI],
-            [FullTextSearchEnabled],
-            [UserSearchParamFormatAPI],
-            [IncludeInGeneratedForm],
-            [GeneratedFormSection],
-            [IsNameField],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [RelatedEntityNameFieldMap],
-            [RelatedEntityDisplayType],
-            [EntityIDFieldName]
+            [DuplicateRunDetailID],
+            [MatchSource],
+            [MatchRecordID],
+            [MatchProbability],
+            [MatchedAt],
+            [Action],
+            [ApprovalStatus],
+            [RecordMergeLogID],
+            [MergeStatus],
+            [MergedAt]
         )
     OUTPUT INSERTED.[ID] INTO @InsertedRow
     VALUES
         (
-            @DisplayName,
-            @Description,
-            @AutoUpdateDescription,
-            @IsPrimaryKey,
-            @IsUnique,
-            @Category,
-            @ValueListType,
-            @ExtendedType,
-            @CodeType,
-            @DefaultInView,
-            @ViewCellTemplate,
-            @DefaultColumnWidth,
-            @AllowUpdateAPI,
-            @AllowUpdateInView,
-            @IncludeInUserSearchAPI,
-            @FullTextSearchEnabled,
-            @UserSearchParamFormatAPI,
-            @IncludeInGeneratedForm,
-            @GeneratedFormSection,
-            @IsNameField,
-            @RelatedEntityID,
-            @RelatedEntityFieldName,
-            @IncludeRelatedEntityNameFieldInBaseView,
-            @RelatedEntityNameFieldMap,
-            @RelatedEntityDisplayType,
-            @EntityIDFieldName
+            @DuplicateRunDetailID,
+            @MatchSource,
+            @MatchRecordID,
+            @MatchProbability,
+            @MatchedAt,
+            @Action,
+            @ApprovalStatus,
+            @RecordMergeLogID,
+            @MergeStatus,
+            @MergedAt
         )
     -- return the new record from the base view, which might have some calculated fields
-    SELECT * FROM [__mj].[vwEntityFields] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
+    SELECT * FROM [__mj].[vwDuplicateRunDetailMatches] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
 END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [__mj].[vwTemplateContentTypes]'
+PRINT N'Creating [__mj].[vwOutputTriggerTypes]'
 GO
 
 
-CREATE VIEW [__mj].[vwTemplateContentTypes]
-AS
-SELECT 
-    t.*
-FROM
-    [__mj].[TemplateContentType] AS t
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[vwEntityDocumentSettings]'
-GO
-
-
-CREATE VIEW [__mj].[vwEntityDocumentSettings]
-AS
-SELECT 
-    e.*,
-    EntityDocument_EntityDocumentID.[Name] AS [EntityDocument]
-FROM
-    [__mj].[EntityDocumentSetting] AS e
-INNER JOIN
-    [__mj].[EntityDocument] AS EntityDocument_EntityDocumentID
-  ON
-    [e].[EntityDocumentID] = EntityDocument_EntityDocumentID.[ID]
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[vwOutputFormatTypes]'
-GO
-
-
-CREATE VIEW [__mj].[vwOutputFormatTypes]
+CREATE VIEW [__mj].[vwOutputTriggerTypes]
 AS
 SELECT 
     o.*
 FROM
-    [__mj].[OutputFormatType] AS o
+    [__mj].[OutputTriggerType] AS o
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
@@ -11617,48 +11572,231 @@ END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [__mj].[vwTemplates]'
+PRINT N'Creating [__mj].[spCreateTemplateCategory]'
 GO
 
 
-CREATE VIEW [__mj].[vwTemplates]
+CREATE PROCEDURE [__mj].[spCreateTemplateCategory]
+    @Name nvarchar(255),
+    @Description nvarchar(MAX),
+    @ParentID uniqueidentifier,
+    @UserID uniqueidentifier
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
+    INSERT INTO 
+    [__mj].[TemplateCategory]
+        (
+            [Name],
+            [Description],
+            [ParentID],
+            [UserID]
+        )
+    OUTPUT INSERTED.[ID] INTO @InsertedRow
+    VALUES
+        (
+            @Name,
+            @Description,
+            @ParentID,
+            @UserID
+        )
+    -- return the new record from the base view, which might have some calculated fields
+    SELECT * FROM [__mj].[vwTemplateCategories] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
+END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[spCreateFile]'
+GO
+
+
+CREATE PROCEDURE [__mj].[spCreateFile]
+    @Name nvarchar(500),
+    @Description nvarchar(MAX),
+    @CategoryID uniqueidentifier,
+    @ProviderID uniqueidentifier,
+    @ContentType nvarchar(50),
+    @ProviderKey nvarchar(500),
+    @Status nvarchar(20)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
+    INSERT INTO 
+    [__mj].[File]
+        (
+            [Name],
+            [Description],
+            [CategoryID],
+            [ProviderID],
+            [ContentType],
+            [ProviderKey],
+            [Status]
+        )
+    OUTPUT INSERTED.[ID] INTO @InsertedRow
+    VALUES
+        (
+            @Name,
+            @Description,
+            @CategoryID,
+            @ProviderID,
+            @ContentType,
+            @ProviderKey,
+            @Status
+        )
+    -- return the new record from the base view, which might have some calculated fields
+    SELECT * FROM [__mj].[vwFiles] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
+END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[vwReportSnapshots]'
+GO
+
+
+CREATE VIEW [__mj].[vwReportSnapshots]
 AS
 SELECT 
-    t.*,
-    TemplateCategory_CategoryID.[Name] AS [Category],
+    r.*,
+    Report_ReportID.[Name] AS [Report],
     User_UserID.[Name] AS [User]
 FROM
-    [__mj].[Template] AS t
-LEFT OUTER JOIN
-    [__mj].[TemplateCategory] AS TemplateCategory_CategoryID
+    [__mj].[ReportSnapshot] AS r
+INNER JOIN
+    [__mj].[Report] AS Report_ReportID
   ON
-    [t].[CategoryID] = TemplateCategory_CategoryID.[ID]
+    [r].[ReportID] = Report_ReportID.[ID]
 INNER JOIN
     [__mj].[User] AS User_UserID
   ON
-    [t].[UserID] = User_UserID.[ID]
+    [r].[UserID] = User_UserID.[ID]
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [__mj].[vwVersionInstallations]'
+PRINT N'Creating [__mj].[spUpdateEntityField]'
 GO
 
 
-CREATE VIEW [__mj].[vwVersionInstallations]
+CREATE PROCEDURE [__mj].[spUpdateEntityField]
+    @ID uniqueidentifier,
+    @DisplayName nvarchar(255),
+    @Description nvarchar(MAX),
+    @AutoUpdateDescription bit,
+    @IsPrimaryKey bit,
+    @IsUnique bit,
+    @Category nvarchar(255),
+    @ValueListType nvarchar(20),
+    @ExtendedType nvarchar(50),
+    @CodeType nvarchar(50),
+    @DefaultInView bit,
+    @ViewCellTemplate nvarchar(MAX),
+    @DefaultColumnWidth int,
+    @AllowUpdateAPI bit,
+    @AllowUpdateInView bit,
+    @IncludeInUserSearchAPI bit,
+    @FullTextSearchEnabled bit,
+    @UserSearchParamFormatAPI nvarchar(500),
+    @IncludeInGeneratedForm bit,
+    @GeneratedFormSection nvarchar(10),
+    @IsNameField bit,
+    @RelatedEntityID uniqueidentifier,
+    @RelatedEntityFieldName nvarchar(255),
+    @IncludeRelatedEntityNameFieldInBaseView bit,
+    @RelatedEntityNameFieldMap nvarchar(255),
+    @RelatedEntityDisplayType nvarchar(20),
+    @EntityIDFieldName nvarchar(100)
 AS
-SELECT 
-    v.*,
-	CONVERT(nvarchar(100),v.MajorVersion) + '.' + CONVERT(nvarchar(100),v.MinorVersion) + '.' + CONVERT(nvarchar(100),v.PatchVersion,100) AS CompleteVersion
-FROM
-    [__mj].[VersionInstallation] AS v
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[EntityField]
+    SET 
+        [DisplayName] = @DisplayName,
+        [Description] = @Description,
+        [AutoUpdateDescription] = @AutoUpdateDescription,
+        [IsPrimaryKey] = @IsPrimaryKey,
+        [IsUnique] = @IsUnique,
+        [Category] = @Category,
+        [ValueListType] = @ValueListType,
+        [ExtendedType] = @ExtendedType,
+        [CodeType] = @CodeType,
+        [DefaultInView] = @DefaultInView,
+        [ViewCellTemplate] = @ViewCellTemplate,
+        [DefaultColumnWidth] = @DefaultColumnWidth,
+        [AllowUpdateAPI] = @AllowUpdateAPI,
+        [AllowUpdateInView] = @AllowUpdateInView,
+        [IncludeInUserSearchAPI] = @IncludeInUserSearchAPI,
+        [FullTextSearchEnabled] = @FullTextSearchEnabled,
+        [UserSearchParamFormatAPI] = @UserSearchParamFormatAPI,
+        [IncludeInGeneratedForm] = @IncludeInGeneratedForm,
+        [GeneratedFormSection] = @GeneratedFormSection,
+        [IsNameField] = @IsNameField,
+        [RelatedEntityID] = @RelatedEntityID,
+        [RelatedEntityFieldName] = @RelatedEntityFieldName,
+        [IncludeRelatedEntityNameFieldInBaseView] = @IncludeRelatedEntityNameFieldInBaseView,
+        [RelatedEntityNameFieldMap] = @RelatedEntityNameFieldMap,
+        [RelatedEntityDisplayType] = @RelatedEntityDisplayType,
+        [EntityIDFieldName] = @EntityIDFieldName
+    WHERE
+        [ID] = @ID
+
+    -- return the updated record so the caller can see the updated values and any calculated fields
+    SELECT 
+                                        * 
+                                    FROM 
+                                        [__mj].[vwEntityFields] 
+                                    WHERE
+                                        [ID] = @ID
+                                    
+END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [__mj].[spCreateVersionInstallation]'
+PRINT N'Creating [__mj].[spCreateTemplateContent]'
 GO
 
 
-CREATE PROCEDURE [__mj].[spCreateVersionInstallation]
+CREATE PROCEDURE [__mj].[spCreateTemplateContent]
+    @TemplateID uniqueidentifier,
+    @TypeID uniqueidentifier,
+    @TemplateText nvarchar(MAX),
+    @Priority int,
+    @IsActive bit
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
+    INSERT INTO 
+    [__mj].[TemplateContent]
+        (
+            [TemplateID],
+            [TypeID],
+            [TemplateText],
+            [Priority],
+            [IsActive]
+        )
+    OUTPUT INSERTED.[ID] INTO @InsertedRow
+    VALUES
+        (
+            @TemplateID,
+            @TypeID,
+            @TemplateText,
+            @Priority,
+            @IsActive
+        )
+    -- return the new record from the base view, which might have some calculated fields
+    SELECT * FROM [__mj].[vwTemplateContents] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
+END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[spUpdateVersionInstallation]'
+GO
+
+
+CREATE PROCEDURE [__mj].[spUpdateVersionInstallation]
+    @ID uniqueidentifier,
     @MajorVersion int,
     @MinorVersion int,
     @PatchVersion int,
@@ -11670,142 +11808,17 @@ CREATE PROCEDURE [__mj].[spCreateVersionInstallation]
 AS
 BEGIN
     SET NOCOUNT ON;
-    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
-    INSERT INTO 
-    [__mj].[VersionInstallation]
-        (
-            [MajorVersion],
-            [MinorVersion],
-            [PatchVersion],
-            [Type],
-            [InstalledAt],
-            [Status],
-            [InstallLog],
-            [Comments]
-        )
-    OUTPUT INSERTED.[ID] INTO @InsertedRow
-    VALUES
-        (
-            @MajorVersion,
-            @MinorVersion,
-            @PatchVersion,
-            @Type,
-            @InstalledAt,
-            @Status,
-            @InstallLog,
-            @Comments
-        )
-    -- return the new record from the base view, which might have some calculated fields
-    SELECT * FROM [__mj].[vwVersionInstallations] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
-END
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[vwReports]'
-GO
-
-
-CREATE VIEW [__mj].[vwReports]
-AS
-SELECT 
-    r.*,
-    ReportCategory_CategoryID.[Name] AS [Category],
-    User_UserID.[Name] AS [User],
-    Conversation_ConversationID.[Name] AS [Conversation],
-    DataContext_DataContextID.[Name] AS [DataContext],
-    OutputTriggerType_OutputTriggerTypeID.[Name] AS [OutputTriggerType],
-    OutputFormatType_OutputFormatTypeID.[Name] AS [OutputFormatType],
-    OutputDeliveryType_OutputDeliveryTypeID.[Name] AS [OutputDeliveryType],
-    Workflow_OutputWorkflowID.[Name] AS [OutputWorkflow]
-FROM
-    [__mj].[Report] AS r
-LEFT OUTER JOIN
-    [__mj].[ReportCategory] AS ReportCategory_CategoryID
-  ON
-    [r].[CategoryID] = ReportCategory_CategoryID.[ID]
-INNER JOIN
-    [__mj].[User] AS User_UserID
-  ON
-    [r].[UserID] = User_UserID.[ID]
-LEFT OUTER JOIN
-    [__mj].[Conversation] AS Conversation_ConversationID
-  ON
-    [r].[ConversationID] = Conversation_ConversationID.[ID]
-LEFT OUTER JOIN
-    [__mj].[DataContext] AS DataContext_DataContextID
-  ON
-    [r].[DataContextID] = DataContext_DataContextID.[ID]
-LEFT OUTER JOIN
-    [__mj].[OutputTriggerType] AS OutputTriggerType_OutputTriggerTypeID
-  ON
-    [r].[OutputTriggerTypeID] = OutputTriggerType_OutputTriggerTypeID.[ID]
-LEFT OUTER JOIN
-    [__mj].[OutputFormatType] AS OutputFormatType_OutputFormatTypeID
-  ON
-    [r].[OutputFormatTypeID] = OutputFormatType_OutputFormatTypeID.[ID]
-LEFT OUTER JOIN
-    [__mj].[OutputDeliveryType] AS OutputDeliveryType_OutputDeliveryTypeID
-  ON
-    [r].[OutputDeliveryTypeID] = OutputDeliveryType_OutputDeliveryTypeID.[ID]
-LEFT OUTER JOIN
-    [__mj].[Workflow] AS Workflow_OutputWorkflowID
-  ON
-    [r].[OutputWorkflowID] = Workflow_OutputWorkflowID.[ID]
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[vwUserRecordLogs]'
-GO
-
-CREATE VIEW [__mj].[vwUserRecordLogs] 
-AS
-SELECT 
-	ur.*,
-	e.Name Entity,
-	u.Name UserName,
-	u.FirstLast UserFirstLast,
-	u.Email UserEmail,
-	u.EmployeeSupervisor UserSupervisor,
-	u.EmployeeSupervisorEmail UserSupervisorEmail
-FROM
-	__mj.UserRecordLog ur
-INNER JOIN
-	__mj.Entity e 
-ON
-	ur.EntityID = e.ID
-INNER JOIN
-	vwUsers u
-ON
-	ur.UserID = u.ID
-
-
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[spUpdateUserRecordLog]'
-GO
-
-
-CREATE PROCEDURE [__mj].[spUpdateUserRecordLog]
-    @ID uniqueidentifier,
-    @UserID uniqueidentifier,
-    @EntityID uniqueidentifier,
-    @RecordID nvarchar(450),
-    @EarliestAt datetime,
-    @LatestAt datetime,
-    @TotalCount int
-AS
-BEGIN
-    SET NOCOUNT ON;
     UPDATE 
-        [__mj].[UserRecordLog]
+        [__mj].[VersionInstallation]
     SET 
-        [UserID] = @UserID,
-        [EntityID] = @EntityID,
-        [RecordID] = @RecordID,
-        [EarliestAt] = @EarliestAt,
-        [LatestAt] = @LatestAt,
-        [TotalCount] = @TotalCount
+        [MajorVersion] = @MajorVersion,
+        [MinorVersion] = @MinorVersion,
+        [PatchVersion] = @PatchVersion,
+        [Type] = @Type,
+        [InstalledAt] = @InstalledAt,
+        [Status] = @Status,
+        [InstallLog] = @InstallLog,
+        [Comments] = @Comments
     WHERE
         [ID] = @ID
 
@@ -11813,86 +11826,10 @@ BEGIN
     SELECT 
                                         * 
                                     FROM 
-                                        [__mj].[vwUserRecordLogs] 
+                                        [__mj].[vwVersionInstallations] 
                                     WHERE
                                         [ID] = @ID
                                     
-END
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[vwTemplateParams]'
-GO
-
-
-CREATE VIEW [__mj].[vwTemplateParams]
-AS
-SELECT 
-    t.*,
-    Template_TemplateID.[Name] AS [Template],
-    Entity_EntityID.[Name] AS [Entity]
-FROM
-    [__mj].[TemplateParam] AS t
-INNER JOIN
-    [__mj].[Template] AS Template_TemplateID
-  ON
-    [t].[TemplateID] = Template_TemplateID.[ID]
-LEFT OUTER JOIN
-    [__mj].[Entity] AS Entity_EntityID
-  ON
-    [t].[EntityID] = Entity_EntityID.[ID]
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[spCreateDuplicateRunDetailMatch]'
-GO
-
-
-CREATE PROCEDURE [__mj].[spCreateDuplicateRunDetailMatch]
-    @DuplicateRunDetailID uniqueidentifier,
-    @MatchSource nvarchar(20),
-    @MatchRecordID nvarchar(500),
-    @MatchProbability numeric(12, 11),
-    @MatchedAt datetime,
-    @Action nvarchar(20),
-    @ApprovalStatus nvarchar(20),
-    @RecordMergeLogID uniqueidentifier,
-    @MergeStatus nvarchar(20),
-    @MergedAt datetime
-AS
-BEGIN
-    SET NOCOUNT ON;
-    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
-    INSERT INTO 
-    [__mj].[DuplicateRunDetailMatch]
-        (
-            [DuplicateRunDetailID],
-            [MatchSource],
-            [MatchRecordID],
-            [MatchProbability],
-            [MatchedAt],
-            [Action],
-            [ApprovalStatus],
-            [RecordMergeLogID],
-            [MergeStatus],
-            [MergedAt]
-        )
-    OUTPUT INSERTED.[ID] INTO @InsertedRow
-    VALUES
-        (
-            @DuplicateRunDetailID,
-            @MatchSource,
-            @MatchRecordID,
-            @MatchProbability,
-            @MatchedAt,
-            @Action,
-            @ApprovalStatus,
-            @RecordMergeLogID,
-            @MergeStatus,
-            @MergedAt
-        )
-    -- return the new record from the base view, which might have some calculated fields
-    SELECT * FROM [__mj].[vwDuplicateRunDetailMatches] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
 END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
@@ -11907,6 +11844,212 @@ SELECT
     o.*
 FROM
     [__mj].[OutputDeliveryType] AS o
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[spUpdateUser]'
+GO
+
+
+CREATE PROCEDURE [__mj].[spUpdateUser]
+    @ID uniqueidentifier,
+    @Name nvarchar(100),
+    @FirstName nvarchar(50),
+    @LastName nvarchar(50),
+    @Title nvarchar(50),
+    @Email nvarchar(100),
+    @Type nchar(15),
+    @IsActive bit,
+    @LinkedRecordType nchar(10),
+    @LinkedEntityID uniqueidentifier,
+    @LinkedEntityRecordID nvarchar(450),
+    @EmployeeID uniqueidentifier
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[User]
+    SET 
+        [Name] = @Name,
+        [FirstName] = @FirstName,
+        [LastName] = @LastName,
+        [Title] = @Title,
+        [Email] = @Email,
+        [Type] = @Type,
+        [IsActive] = @IsActive,
+        [LinkedRecordType] = @LinkedRecordType,
+        [LinkedEntityID] = @LinkedEntityID,
+        [LinkedEntityRecordID] = @LinkedEntityRecordID,
+        [EmployeeID] = @EmployeeID
+    WHERE
+        [ID] = @ID
+
+    -- return the updated record so the caller can see the updated values and any calculated fields
+    SELECT 
+                                        * 
+                                    FROM 
+                                        [__mj].[vwUsers] 
+                                    WHERE
+                                        [ID] = @ID
+                                    
+END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[spCreateTemplateParam]'
+GO
+
+
+CREATE PROCEDURE [__mj].[spCreateTemplateParam]
+    @TemplateID uniqueidentifier,
+    @Name nvarchar(255),
+    @Description nvarchar(MAX),
+    @Type nvarchar(20),
+    @DefaultValue nvarchar(MAX),
+    @IsRequired bit,
+    @LinkedParameterName nvarchar(255),
+    @LinkedParameterField nvarchar(500),
+    @ExtraFilter nvarchar(MAX),
+    @EntityID uniqueidentifier,
+    @RecordID nvarchar(2000)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
+    INSERT INTO 
+    [__mj].[TemplateParam]
+        (
+            [TemplateID],
+            [Name],
+            [Description],
+            [Type],
+            [DefaultValue],
+            [IsRequired],
+            [LinkedParameterName],
+            [LinkedParameterField],
+            [ExtraFilter],
+            [EntityID],
+            [RecordID]
+        )
+    OUTPUT INSERTED.[ID] INTO @InsertedRow
+    VALUES
+        (
+            @TemplateID,
+            @Name,
+            @Description,
+            @Type,
+            @DefaultValue,
+            @IsRequired,
+            @LinkedParameterName,
+            @LinkedParameterField,
+            @ExtraFilter,
+            @EntityID,
+            @RecordID
+        )
+    -- return the new record from the base view, which might have some calculated fields
+    SELECT * FROM [__mj].[vwTemplateParams] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
+END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[spUpdateFileEntityRecordLink]'
+GO
+
+
+CREATE PROCEDURE [__mj].[spUpdateFileEntityRecordLink]
+    @ID uniqueidentifier,
+    @FileID uniqueidentifier,
+    @EntityID uniqueidentifier,
+    @RecordID nvarchar(750)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[FileEntityRecordLink]
+    SET 
+        [FileID] = @FileID,
+        [EntityID] = @EntityID,
+        [RecordID] = @RecordID
+    WHERE
+        [ID] = @ID
+
+    -- return the updated record so the caller can see the updated values and any calculated fields
+    SELECT 
+                                        * 
+                                    FROM 
+                                        [__mj].[vwFileEntityRecordLinks] 
+                                    WHERE
+                                        [ID] = @ID
+                                    
+END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[spCreateReport]'
+GO
+
+
+CREATE PROCEDURE [__mj].[spCreateReport]
+    @Name nvarchar(255),
+    @Description nvarchar(MAX),
+    @CategoryID uniqueidentifier,
+    @UserID uniqueidentifier,
+    @SharingScope nvarchar(20),
+    @ConversationID uniqueidentifier,
+    @ConversationDetailID uniqueidentifier,
+    @DataContextID uniqueidentifier,
+    @Configuration nvarchar(MAX),
+    @OutputTriggerTypeID uniqueidentifier,
+    @OutputFormatTypeID uniqueidentifier,
+    @OutputDeliveryTypeID uniqueidentifier,
+    @OutputFrequency nvarchar(50),
+    @OutputTargetEmail nvarchar(255),
+    @OutputWorkflowID uniqueidentifier
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
+    INSERT INTO 
+    [__mj].[Report]
+        (
+            [Name],
+            [Description],
+            [CategoryID],
+            [UserID],
+            [SharingScope],
+            [ConversationID],
+            [ConversationDetailID],
+            [DataContextID],
+            [Configuration],
+            [OutputTriggerTypeID],
+            [OutputFormatTypeID],
+            [OutputDeliveryTypeID],
+            [OutputFrequency],
+            [OutputTargetEmail],
+            [OutputWorkflowID]
+        )
+    OUTPUT INSERTED.[ID] INTO @InsertedRow
+    VALUES
+        (
+            @Name,
+            @Description,
+            @CategoryID,
+            @UserID,
+            @SharingScope,
+            @ConversationID,
+            @ConversationDetailID,
+            @DataContextID,
+            @Configuration,
+            @OutputTriggerTypeID,
+            @OutputFormatTypeID,
+            @OutputDeliveryTypeID,
+            @OutputFrequency,
+            @OutputTargetEmail,
+            @OutputWorkflowID
+        )
+    -- return the new record from the base view, which might have some calculated fields
+    SELECT * FROM [__mj].[vwReports] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
+END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
@@ -12021,57 +12164,73 @@ END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [__mj].[vwTemplateContents]'
+PRINT N'Creating [__mj].[spCreateCommunicationBaseMessageType]'
 GO
 
 
-CREATE VIEW [__mj].[vwTemplateContents]
+CREATE PROCEDURE [__mj].[spCreateCommunicationBaseMessageType]
+    @Type nvarchar(100),
+    @SupportsAttachments bit,
+    @SupportsSubjectLine bit,
+    @SupportsHtml bit,
+    @MaxBytes int
 AS
-SELECT 
-    t.*,
-    Template_TemplateID.[Name] AS [Template],
-    TemplateContentType_TypeID.[Name] AS [Type]
-FROM
-    [__mj].[TemplateContent] AS t
-INNER JOIN
-    [__mj].[Template] AS Template_TemplateID
-  ON
-    [t].[TemplateID] = Template_TemplateID.[ID]
-INNER JOIN
-    [__mj].[TemplateContentType] AS TemplateContentType_TypeID
-  ON
-    [t].[TypeID] = TemplateContentType_TypeID.[ID]
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
+    INSERT INTO 
+    [__mj].[CommunicationBaseMessageType]
+        (
+            [Type],
+            [SupportsAttachments],
+            [SupportsSubjectLine],
+            [SupportsHtml],
+            [MaxBytes]
+        )
+    OUTPUT INSERTED.[ID] INTO @InsertedRow
+    VALUES
+        (
+            @Type,
+            @SupportsAttachments,
+            @SupportsSubjectLine,
+            @SupportsHtml,
+            @MaxBytes
+        )
+    -- return the new record from the base view, which might have some calculated fields
+    SELECT * FROM [__mj].[vwCommunicationBaseMessageTypes] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
+END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [__mj].[spCreateFileCategory]'
+PRINT N'Creating [__mj].[spUpdateFileCategory]'
 GO
 
 
-CREATE PROCEDURE [__mj].[spCreateFileCategory]
+CREATE PROCEDURE [__mj].[spUpdateFileCategory]
+    @ID uniqueidentifier,
     @Name nvarchar(255),
     @ParentID uniqueidentifier,
     @Description nvarchar(MAX)
 AS
 BEGIN
     SET NOCOUNT ON;
-    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
-    INSERT INTO 
-    [__mj].[FileCategory]
-        (
-            [Name],
-            [ParentID],
-            [Description]
-        )
-    OUTPUT INSERTED.[ID] INTO @InsertedRow
-    VALUES
-        (
-            @Name,
-            @ParentID,
-            @Description
-        )
-    -- return the new record from the base view, which might have some calculated fields
-    SELECT * FROM [__mj].[vwFileCategories] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
+    UPDATE 
+        [__mj].[FileCategory]
+    SET 
+        [Name] = @Name,
+        [ParentID] = @ParentID,
+        [Description] = @Description
+    WHERE
+        [ID] = @ID
+
+    -- return the updated record so the caller can see the updated values and any calculated fields
+    SELECT 
+                                        * 
+                                    FROM 
+                                        [__mj].[vwFileCategories] 
+                                    WHERE
+                                        [ID] = @ID
+                                    
 END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
@@ -12104,369 +12263,6 @@ BEGIN
         )
     -- return the new record from the base view, which might have some calculated fields
     SELECT * FROM [__mj].[vwReportSnapshots] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
-END
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[spUpdateUser]'
-GO
-
-
-CREATE PROCEDURE [__mj].[spUpdateUser]
-    @ID uniqueidentifier,
-    @Name nvarchar(100),
-    @FirstName nvarchar(50),
-    @LastName nvarchar(50),
-    @Title nvarchar(50),
-    @Email nvarchar(100),
-    @Type nchar(15),
-    @IsActive bit,
-    @LinkedRecordType nchar(10),
-    @LinkedEntityID uniqueidentifier,
-    @LinkedEntityRecordID nvarchar(450),
-    @EmployeeID uniqueidentifier
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[User]
-    SET 
-        [Name] = @Name,
-        [FirstName] = @FirstName,
-        [LastName] = @LastName,
-        [Title] = @Title,
-        [Email] = @Email,
-        [Type] = @Type,
-        [IsActive] = @IsActive,
-        [LinkedRecordType] = @LinkedRecordType,
-        [LinkedEntityID] = @LinkedEntityID,
-        [LinkedEntityRecordID] = @LinkedEntityRecordID,
-        [EmployeeID] = @EmployeeID
-    WHERE
-        [ID] = @ID
-
-    -- return the updated record so the caller can see the updated values and any calculated fields
-    SELECT 
-                                        * 
-                                    FROM 
-                                        [__mj].[vwUsers] 
-                                    WHERE
-                                        [ID] = @ID
-                                    
-END
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[spCreateTemplateCategory]'
-GO
-
-
-CREATE PROCEDURE [__mj].[spCreateTemplateCategory]
-    @Name nvarchar(255),
-    @Description nvarchar(MAX),
-    @ParentID uniqueidentifier,
-    @UserID uniqueidentifier
-AS
-BEGIN
-    SET NOCOUNT ON;
-    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
-    INSERT INTO 
-    [__mj].[TemplateCategory]
-        (
-            [Name],
-            [Description],
-            [ParentID],
-            [UserID]
-        )
-    OUTPUT INSERTED.[ID] INTO @InsertedRow
-    VALUES
-        (
-            @Name,
-            @Description,
-            @ParentID,
-            @UserID
-        )
-    -- return the new record from the base view, which might have some calculated fields
-    SELECT * FROM [__mj].[vwTemplateCategories] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
-END
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[spCreateEntityDocumentSetting]'
-GO
-
-
-CREATE PROCEDURE [__mj].[spCreateEntityDocumentSetting]
-    @EntityDocumentID uniqueidentifier,
-    @Name nvarchar(100),
-    @Value nvarchar(MAX),
-    @Comments nvarchar(MAX)
-AS
-BEGIN
-    SET NOCOUNT ON;
-    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
-    INSERT INTO 
-    [__mj].[EntityDocumentSetting]
-        (
-            [EntityDocumentID],
-            [Name],
-            [Value],
-            [Comments]
-        )
-    OUTPUT INSERTED.[ID] INTO @InsertedRow
-    VALUES
-        (
-            @EntityDocumentID,
-            @Name,
-            @Value,
-            @Comments
-        )
-    -- return the new record from the base view, which might have some calculated fields
-    SELECT * FROM [__mj].[vwEntityDocumentSettings] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
-END
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[spCreateReport]'
-GO
-
-
-CREATE PROCEDURE [__mj].[spCreateReport]
-    @Name nvarchar(255),
-    @Description nvarchar(MAX),
-    @CategoryID uniqueidentifier,
-    @UserID uniqueidentifier,
-    @SharingScope nvarchar(20),
-    @ConversationID uniqueidentifier,
-    @ConversationDetailID uniqueidentifier,
-    @DataContextID uniqueidentifier,
-    @Configuration nvarchar(MAX),
-    @OutputTriggerTypeID uniqueidentifier,
-    @OutputFormatTypeID uniqueidentifier,
-    @OutputDeliveryTypeID uniqueidentifier,
-    @OutputFrequency nvarchar(50),
-    @OutputTargetEmail nvarchar(255),
-    @OutputWorkflowID uniqueidentifier
-AS
-BEGIN
-    SET NOCOUNT ON;
-    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
-    INSERT INTO 
-    [__mj].[Report]
-        (
-            [Name],
-            [Description],
-            [CategoryID],
-            [UserID],
-            [SharingScope],
-            [ConversationID],
-            [ConversationDetailID],
-            [DataContextID],
-            [Configuration],
-            [OutputTriggerTypeID],
-            [OutputFormatTypeID],
-            [OutputDeliveryTypeID],
-            [OutputFrequency],
-            [OutputTargetEmail],
-            [OutputWorkflowID]
-        )
-    OUTPUT INSERTED.[ID] INTO @InsertedRow
-    VALUES
-        (
-            @Name,
-            @Description,
-            @CategoryID,
-            @UserID,
-            @SharingScope,
-            @ConversationID,
-            @ConversationDetailID,
-            @DataContextID,
-            @Configuration,
-            @OutputTriggerTypeID,
-            @OutputFormatTypeID,
-            @OutputDeliveryTypeID,
-            @OutputFrequency,
-            @OutputTargetEmail,
-            @OutputWorkflowID
-        )
-    -- return the new record from the base view, which might have some calculated fields
-    SELECT * FROM [__mj].[vwReports] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
-END
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[spUpdateEntityField]'
-GO
-
-
-CREATE PROCEDURE [__mj].[spUpdateEntityField]
-    @ID uniqueidentifier,
-    @DisplayName nvarchar(255),
-    @Description nvarchar(MAX),
-    @AutoUpdateDescription bit,
-    @IsPrimaryKey bit,
-    @IsUnique bit,
-    @Category nvarchar(255),
-    @ValueListType nvarchar(20),
-    @ExtendedType nvarchar(50),
-    @CodeType nvarchar(50),
-    @DefaultInView bit,
-    @ViewCellTemplate nvarchar(MAX),
-    @DefaultColumnWidth int,
-    @AllowUpdateAPI bit,
-    @AllowUpdateInView bit,
-    @IncludeInUserSearchAPI bit,
-    @FullTextSearchEnabled bit,
-    @UserSearchParamFormatAPI nvarchar(500),
-    @IncludeInGeneratedForm bit,
-    @GeneratedFormSection nvarchar(10),
-    @IsNameField bit,
-    @RelatedEntityID uniqueidentifier,
-    @RelatedEntityFieldName nvarchar(255),
-    @IncludeRelatedEntityNameFieldInBaseView bit,
-    @RelatedEntityNameFieldMap nvarchar(255),
-    @RelatedEntityDisplayType nvarchar(20),
-    @EntityIDFieldName nvarchar(100)
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[EntityField]
-    SET 
-        [DisplayName] = @DisplayName,
-        [Description] = @Description,
-        [AutoUpdateDescription] = @AutoUpdateDescription,
-        [IsPrimaryKey] = @IsPrimaryKey,
-        [IsUnique] = @IsUnique,
-        [Category] = @Category,
-        [ValueListType] = @ValueListType,
-        [ExtendedType] = @ExtendedType,
-        [CodeType] = @CodeType,
-        [DefaultInView] = @DefaultInView,
-        [ViewCellTemplate] = @ViewCellTemplate,
-        [DefaultColumnWidth] = @DefaultColumnWidth,
-        [AllowUpdateAPI] = @AllowUpdateAPI,
-        [AllowUpdateInView] = @AllowUpdateInView,
-        [IncludeInUserSearchAPI] = @IncludeInUserSearchAPI,
-        [FullTextSearchEnabled] = @FullTextSearchEnabled,
-        [UserSearchParamFormatAPI] = @UserSearchParamFormatAPI,
-        [IncludeInGeneratedForm] = @IncludeInGeneratedForm,
-        [GeneratedFormSection] = @GeneratedFormSection,
-        [IsNameField] = @IsNameField,
-        [RelatedEntityID] = @RelatedEntityID,
-        [RelatedEntityFieldName] = @RelatedEntityFieldName,
-        [IncludeRelatedEntityNameFieldInBaseView] = @IncludeRelatedEntityNameFieldInBaseView,
-        [RelatedEntityNameFieldMap] = @RelatedEntityNameFieldMap,
-        [RelatedEntityDisplayType] = @RelatedEntityDisplayType,
-        [EntityIDFieldName] = @EntityIDFieldName
-    WHERE
-        [ID] = @ID
-
-    -- return the updated record so the caller can see the updated values and any calculated fields
-    SELECT 
-                                        * 
-                                    FROM 
-                                        [__mj].[vwEntityFields] 
-                                    WHERE
-                                        [ID] = @ID
-                                    
-END
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[spCreateTemplateContentType]'
-GO
-
-
-CREATE PROCEDURE [__mj].[spCreateTemplateContentType]
-    @Name nvarchar(255),
-    @Description nvarchar(MAX),
-    @CodeType nvarchar(25)
-AS
-BEGIN
-    SET NOCOUNT ON;
-    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
-    INSERT INTO 
-    [__mj].[TemplateContentType]
-        (
-            [Name],
-            [Description],
-            [CodeType]
-        )
-    OUTPUT INSERTED.[ID] INTO @InsertedRow
-    VALUES
-        (
-            @Name,
-            @Description,
-            @CodeType
-        )
-    -- return the new record from the base view, which might have some calculated fields
-    SELECT * FROM [__mj].[vwTemplateContentTypes] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
-END
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[spCreateFileEntityRecordLink]'
-GO
-
-
-CREATE PROCEDURE [__mj].[spCreateFileEntityRecordLink]
-    @FileID uniqueidentifier,
-    @EntityID uniqueidentifier,
-    @RecordID nvarchar(750)
-AS
-BEGIN
-    SET NOCOUNT ON;
-    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
-    INSERT INTO 
-    [__mj].[FileEntityRecordLink]
-        (
-            [FileID],
-            [EntityID],
-            [RecordID]
-        )
-    OUTPUT INSERTED.[ID] INTO @InsertedRow
-    VALUES
-        (
-            @FileID,
-            @EntityID,
-            @RecordID
-        )
-    -- return the new record from the base view, which might have some calculated fields
-    SELECT * FROM [__mj].[vwFileEntityRecordLinks] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
-END
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[spUpdateReportSnapshot]'
-GO
-
-
-CREATE PROCEDURE [__mj].[spUpdateReportSnapshot]
-    @ID uniqueidentifier,
-    @ReportID uniqueidentifier,
-    @ResultSet nvarchar(MAX),
-    @UserID uniqueidentifier
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[ReportSnapshot]
-    SET 
-        [ReportID] = @ReportID,
-        [ResultSet] = @ResultSet,
-        [UserID] = @UserID
-    WHERE
-        [ID] = @ID
-
-    -- return the updated record so the caller can see the updated values and any calculated fields
-    SELECT 
-                                        * 
-                                    FROM 
-                                        [__mj].[vwReportSnapshots] 
-                                    WHERE
-                                        [ID] = @ID
-                                    
 END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
@@ -12518,34 +12314,32 @@ END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [__mj].[spUpdateVersionInstallation]'
+PRINT N'Creating [__mj].[spUpdateFile]'
 GO
 
 
-CREATE PROCEDURE [__mj].[spUpdateVersionInstallation]
+CREATE PROCEDURE [__mj].[spUpdateFile]
     @ID uniqueidentifier,
-    @MajorVersion int,
-    @MinorVersion int,
-    @PatchVersion int,
-    @Type nvarchar(20),
-    @InstalledAt datetime,
-    @Status nvarchar(20),
-    @InstallLog nvarchar(MAX),
-    @Comments nvarchar(MAX)
+    @Name nvarchar(500),
+    @Description nvarchar(MAX),
+    @CategoryID uniqueidentifier,
+    @ProviderID uniqueidentifier,
+    @ContentType nvarchar(50),
+    @ProviderKey nvarchar(500),
+    @Status nvarchar(20)
 AS
 BEGIN
     SET NOCOUNT ON;
     UPDATE 
-        [__mj].[VersionInstallation]
+        [__mj].[File]
     SET 
-        [MajorVersion] = @MajorVersion,
-        [MinorVersion] = @MinorVersion,
-        [PatchVersion] = @PatchVersion,
-        [Type] = @Type,
-        [InstalledAt] = @InstalledAt,
-        [Status] = @Status,
-        [InstallLog] = @InstallLog,
-        [Comments] = @Comments
+        [Name] = @Name,
+        [Description] = @Description,
+        [CategoryID] = @CategoryID,
+        [ProviderID] = @ProviderID,
+        [ContentType] = @ContentType,
+        [ProviderKey] = @ProviderKey,
+        [Status] = @Status
     WHERE
         [ID] = @ID
 
@@ -12553,7 +12347,7 @@ BEGIN
     SELECT 
                                         * 
                                     FROM 
-                                        [__mj].[vwVersionInstallations] 
+                                        [__mj].[vwFiles] 
                                     WHERE
                                         [ID] = @ID
                                     
@@ -12681,62 +12475,26 @@ END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [__mj].[spCreateTemplateContent]'
+PRINT N'Creating [__mj].[spUpdateTemplateCategory]'
 GO
 
 
-CREATE PROCEDURE [__mj].[spCreateTemplateContent]
-    @TemplateID uniqueidentifier,
-    @TypeID uniqueidentifier,
-    @TemplateText nvarchar(MAX),
-    @Priority int,
-    @IsActive bit
-AS
-BEGIN
-    SET NOCOUNT ON;
-    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
-    INSERT INTO 
-    [__mj].[TemplateContent]
-        (
-            [TemplateID],
-            [TypeID],
-            [TemplateText],
-            [Priority],
-            [IsActive]
-        )
-    OUTPUT INSERTED.[ID] INTO @InsertedRow
-    VALUES
-        (
-            @TemplateID,
-            @TypeID,
-            @TemplateText,
-            @Priority,
-            @IsActive
-        )
-    -- return the new record from the base view, which might have some calculated fields
-    SELECT * FROM [__mj].[vwTemplateContents] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
-END
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[spUpdateFileCategory]'
-GO
-
-
-CREATE PROCEDURE [__mj].[spUpdateFileCategory]
+CREATE PROCEDURE [__mj].[spUpdateTemplateCategory]
     @ID uniqueidentifier,
     @Name nvarchar(255),
+    @Description nvarchar(MAX),
     @ParentID uniqueidentifier,
-    @Description nvarchar(MAX)
+    @UserID uniqueidentifier
 AS
 BEGIN
     SET NOCOUNT ON;
     UPDATE 
-        [__mj].[FileCategory]
+        [__mj].[TemplateCategory]
     SET 
         [Name] = @Name,
+        [Description] = @Description,
         [ParentID] = @ParentID,
-        [Description] = @Description
+        [UserID] = @UserID
     WHERE
         [ID] = @ID
 
@@ -12744,66 +12502,10 @@ BEGIN
     SELECT 
                                         * 
                                     FROM 
-                                        [__mj].[vwFileCategories] 
+                                        [__mj].[vwTemplateCategories] 
                                     WHERE
                                         [ID] = @ID
                                     
-END
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[spCreateTemplateParam]'
-GO
-
-
-CREATE PROCEDURE [__mj].[spCreateTemplateParam]
-    @TemplateID uniqueidentifier,
-    @Name nvarchar(255),
-    @Description nvarchar(MAX),
-    @Type nvarchar(20),
-    @DefaultValue nvarchar(MAX),
-    @IsRequired bit,
-    @LinkedParameterName nvarchar(255),
-    @LinkedParameterField nvarchar(500),
-    @ExtraFilter nvarchar(MAX),
-    @EntityID uniqueidentifier,
-    @RecordID nvarchar(2000)
-AS
-BEGIN
-    SET NOCOUNT ON;
-    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
-    INSERT INTO 
-    [__mj].[TemplateParam]
-        (
-            [TemplateID],
-            [Name],
-            [Description],
-            [Type],
-            [DefaultValue],
-            [IsRequired],
-            [LinkedParameterName],
-            [LinkedParameterField],
-            [ExtraFilter],
-            [EntityID],
-            [RecordID]
-        )
-    OUTPUT INSERTED.[ID] INTO @InsertedRow
-    VALUES
-        (
-            @TemplateID,
-            @Name,
-            @Description,
-            @Type,
-            @DefaultValue,
-            @IsRequired,
-            @LinkedParameterName,
-            @LinkedParameterField,
-            @ExtraFilter,
-            @EntityID,
-            @RecordID
-        )
-    -- return the new record from the base view, which might have some calculated fields
-    SELECT * FROM [__mj].[vwTemplateParams] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
 END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
@@ -12855,25 +12557,23 @@ END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [__mj].[spUpdateTemplateCategory]'
+PRINT N'Creating [__mj].[spUpdateReportSnapshot]'
 GO
 
 
-CREATE PROCEDURE [__mj].[spUpdateTemplateCategory]
+CREATE PROCEDURE [__mj].[spUpdateReportSnapshot]
     @ID uniqueidentifier,
-    @Name nvarchar(255),
-    @Description nvarchar(MAX),
-    @ParentID uniqueidentifier,
+    @ReportID uniqueidentifier,
+    @ResultSet nvarchar(MAX),
     @UserID uniqueidentifier
 AS
 BEGIN
     SET NOCOUNT ON;
     UPDATE 
-        [__mj].[TemplateCategory]
+        [__mj].[ReportSnapshot]
     SET 
-        [Name] = @Name,
-        [Description] = @Description,
-        [ParentID] = @ParentID,
+        [ReportID] = @ReportID,
+        [ResultSet] = @ResultSet,
         [UserID] = @UserID
     WHERE
         [ID] = @ID
@@ -12882,7 +12582,7 @@ BEGIN
     SELECT 
                                         * 
                                     FROM 
-                                        [__mj].[vwTemplateCategories] 
+                                        [__mj].[vwReportSnapshots] 
                                     WHERE
                                         [ID] = @ID
                                     
@@ -12890,26 +12590,28 @@ END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [__mj].[spUpdateEntityDocumentSetting]'
+PRINT N'Creating [__mj].[spUpdateTemplateContent]'
 GO
 
 
-CREATE PROCEDURE [__mj].[spUpdateEntityDocumentSetting]
+CREATE PROCEDURE [__mj].[spUpdateTemplateContent]
     @ID uniqueidentifier,
-    @EntityDocumentID uniqueidentifier,
-    @Name nvarchar(100),
-    @Value nvarchar(MAX),
-    @Comments nvarchar(MAX)
+    @TemplateID uniqueidentifier,
+    @TypeID uniqueidentifier,
+    @TemplateText nvarchar(MAX),
+    @Priority int,
+    @IsActive bit
 AS
 BEGIN
     SET NOCOUNT ON;
     UPDATE 
-        [__mj].[EntityDocumentSetting]
+        [__mj].[TemplateContent]
     SET 
-        [EntityDocumentID] = @EntityDocumentID,
-        [Name] = @Name,
-        [Value] = @Value,
-        [Comments] = @Comments
+        [TemplateID] = @TemplateID,
+        [TypeID] = @TypeID,
+        [TemplateText] = @TemplateText,
+        [Priority] = @Priority,
+        [IsActive] = @IsActive
     WHERE
         [ID] = @ID
 
@@ -12917,7 +12619,7 @@ BEGIN
     SELECT 
                                         * 
                                     FROM 
-                                        [__mj].[vwEntityDocumentSettings] 
+                                        [__mj].[vwTemplateContents] 
                                     WHERE
                                         [ID] = @ID
                                     
@@ -12925,76 +12627,38 @@ END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [__mj].[spDeleteReportSnapshot]'
+PRINT N'Creating [__mj].[spUpdateTemplateParam]'
 GO
 
 
-CREATE PROCEDURE [__mj].[spDeleteReportSnapshot]
-    @ID uniqueidentifier
-AS  
-BEGIN
-    SET NOCOUNT ON;
-
-    DELETE FROM 
-        [__mj].[ReportSnapshot]
-    WHERE 
-        [ID] = @ID
-
-
-    SELECT @ID AS [ID] -- Return the primary key to indicate we successfully deleted the record
-END
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[spUpdateTemplateContentType]'
-GO
-
-
-CREATE PROCEDURE [__mj].[spUpdateTemplateContentType]
+CREATE PROCEDURE [__mj].[spUpdateTemplateParam]
     @ID uniqueidentifier,
+    @TemplateID uniqueidentifier,
     @Name nvarchar(255),
     @Description nvarchar(MAX),
-    @CodeType nvarchar(25)
+    @Type nvarchar(20),
+    @DefaultValue nvarchar(MAX),
+    @IsRequired bit,
+    @LinkedParameterName nvarchar(255),
+    @LinkedParameterField nvarchar(500),
+    @ExtraFilter nvarchar(MAX),
+    @EntityID uniqueidentifier,
+    @RecordID nvarchar(2000)
 AS
 BEGIN
     SET NOCOUNT ON;
     UPDATE 
-        [__mj].[TemplateContentType]
+        [__mj].[TemplateParam]
     SET 
+        [TemplateID] = @TemplateID,
         [Name] = @Name,
         [Description] = @Description,
-        [CodeType] = @CodeType
-    WHERE
-        [ID] = @ID
-
-    -- return the updated record so the caller can see the updated values and any calculated fields
-    SELECT 
-                                        * 
-                                    FROM 
-                                        [__mj].[vwTemplateContentTypes] 
-                                    WHERE
-                                        [ID] = @ID
-                                    
-END
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[spUpdateFileEntityRecordLink]'
-GO
-
-
-CREATE PROCEDURE [__mj].[spUpdateFileEntityRecordLink]
-    @ID uniqueidentifier,
-    @FileID uniqueidentifier,
-    @EntityID uniqueidentifier,
-    @RecordID nvarchar(750)
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[FileEntityRecordLink]
-    SET 
-        [FileID] = @FileID,
+        [Type] = @Type,
+        [DefaultValue] = @DefaultValue,
+        [IsRequired] = @IsRequired,
+        [LinkedParameterName] = @LinkedParameterName,
+        [LinkedParameterField] = @LinkedParameterField,
+        [ExtraFilter] = @ExtraFilter,
         [EntityID] = @EntityID,
         [RecordID] = @RecordID
     WHERE
@@ -13004,7 +12668,44 @@ BEGIN
     SELECT 
                                         * 
                                     FROM 
-                                        [__mj].[vwFileEntityRecordLinks] 
+                                        [__mj].[vwTemplateParams] 
+                                    WHERE
+                                        [ID] = @ID
+                                    
+END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[spUpdateCommunicationBaseMessageType]'
+GO
+
+
+CREATE PROCEDURE [__mj].[spUpdateCommunicationBaseMessageType]
+    @ID uniqueidentifier,
+    @Type nvarchar(100),
+    @SupportsAttachments bit,
+    @SupportsSubjectLine bit,
+    @SupportsHtml bit,
+    @MaxBytes int
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[CommunicationBaseMessageType]
+    SET 
+        [Type] = @Type,
+        [SupportsAttachments] = @SupportsAttachments,
+        [SupportsSubjectLine] = @SupportsSubjectLine,
+        [SupportsHtml] = @SupportsHtml,
+        [MaxBytes] = @MaxBytes
+    WHERE
+        [ID] = @ID
+
+    -- return the updated record so the caller can see the updated values and any calculated fields
+    SELECT 
+                                        * 
+                                    FROM 
+                                        [__mj].[vwCommunicationBaseMessageTypes] 
                                     WHERE
                                         [ID] = @ID
                                     
@@ -13076,41 +12777,18 @@ END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [__mj].[vwWorkspaceItems]'
+PRINT N'Creating [__mj].[spDeleteReportSnapshot]'
 GO
 
 
-CREATE VIEW [__mj].[vwWorkspaceItems]
-AS
-SELECT 
-    w.*,
-    Workspace_WorkspaceID.[Name] AS [Workspace],
-    ResourceType_ResourceTypeID.[Name] AS [ResourceType]
-FROM
-    [__mj].[WorkspaceItem] AS w
-INNER JOIN
-    [__mj].[Workspace] AS Workspace_WorkspaceID
-  ON
-    [w].[WorkspaceID] = Workspace_WorkspaceID.[ID]
-INNER JOIN
-    [__mj].[ResourceType] AS ResourceType_ResourceTypeID
-  ON
-    [w].[ResourceTypeID] = ResourceType_ResourceTypeID.[ID]
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[spDeleteEntity]'
-GO
-
-
-CREATE PROCEDURE [__mj].[spDeleteEntity]
+CREATE PROCEDURE [__mj].[spDeleteReportSnapshot]
     @ID uniqueidentifier
 AS  
 BEGIN
     SET NOCOUNT ON;
 
     DELETE FROM 
-        [__mj].[Entity]
+        [__mj].[ReportSnapshot]
     WHERE 
         [ID] = @ID
 
@@ -13120,39 +12798,23 @@ END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [__mj].[spUpdateTemplateContent]'
+PRINT N'Creating [__mj].[spDeleteEntityField]'
 GO
 
 
-CREATE PROCEDURE [__mj].[spUpdateTemplateContent]
-    @ID uniqueidentifier,
-    @TemplateID uniqueidentifier,
-    @TypeID uniqueidentifier,
-    @TemplateText nvarchar(MAX),
-    @Priority int,
-    @IsActive bit
-AS
+CREATE PROCEDURE [__mj].[spDeleteEntityField]
+    @ID uniqueidentifier
+AS  
 BEGIN
     SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[TemplateContent]
-    SET 
-        [TemplateID] = @TemplateID,
-        [TypeID] = @TypeID,
-        [TemplateText] = @TemplateText,
-        [Priority] = @Priority,
-        [IsActive] = @IsActive
-    WHERE
+
+    DELETE FROM 
+        [__mj].[EntityField]
+    WHERE 
         [ID] = @ID
 
-    -- return the updated record so the caller can see the updated values and any calculated fields
-    SELECT 
-                                        * 
-                                    FROM 
-                                        [__mj].[vwTemplateContents] 
-                                    WHERE
-                                        [ID] = @ID
-                                    
+
+    SELECT @ID AS [ID] -- Return the primary key to indicate we successfully deleted the record
 END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
@@ -13196,90 +12858,78 @@ END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [__mj].[spUpdateTemplateParam]'
+PRINT N'Creating [__mj].[spDeleteFile]'
 GO
 
 
-CREATE PROCEDURE [__mj].[spUpdateTemplateParam]
-    @ID uniqueidentifier,
-    @TemplateID uniqueidentifier,
-    @Name nvarchar(255),
-    @Description nvarchar(MAX),
-    @Type nvarchar(20),
-    @DefaultValue nvarchar(MAX),
-    @IsRequired bit,
-    @LinkedParameterName nvarchar(255),
-    @LinkedParameterField nvarchar(500),
-    @ExtraFilter nvarchar(MAX),
-    @EntityID uniqueidentifier,
-    @RecordID nvarchar(2000)
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[TemplateParam]
-    SET 
-        [TemplateID] = @TemplateID,
-        [Name] = @Name,
-        [Description] = @Description,
-        [Type] = @Type,
-        [DefaultValue] = @DefaultValue,
-        [IsRequired] = @IsRequired,
-        [LinkedParameterName] = @LinkedParameterName,
-        [LinkedParameterField] = @LinkedParameterField,
-        [ExtraFilter] = @ExtraFilter,
-        [EntityID] = @EntityID,
-        [RecordID] = @RecordID
-    WHERE
-        [ID] = @ID
-
-    -- return the updated record so the caller can see the updated values and any calculated fields
-    SELECT 
-                                        * 
-                                    FROM 
-                                        [__mj].[vwTemplateParams] 
-                                    WHERE
-                                        [ID] = @ID
-                                    
-END
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[vwTaggedItems]'
-GO
-
-
-CREATE VIEW [__mj].[vwTaggedItems]
-AS
-SELECT 
-    t.*,
-    Tag_TagID.[Name] AS [Tag],
-    Entity_EntityID.[Name] AS [Entity]
-FROM
-    [__mj].[TaggedItem] AS t
-INNER JOIN
-    [__mj].[Tag] AS Tag_TagID
-  ON
-    [t].[TagID] = Tag_TagID.[ID]
-INNER JOIN
-    [__mj].[Entity] AS Entity_EntityID
-  ON
-    [t].[EntityID] = Entity_EntityID.[ID]
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[spDeleteEntityField]'
-GO
-
-
-CREATE PROCEDURE [__mj].[spDeleteEntityField]
+CREATE PROCEDURE [__mj].[spDeleteFile]
     @ID uniqueidentifier
 AS  
 BEGIN
     SET NOCOUNT ON;
 
     DELETE FROM 
-        [__mj].[EntityField]
+        [__mj].[File]
+    WHERE 
+        [ID] = @ID
+
+
+    SELECT @ID AS [ID] -- Return the primary key to indicate we successfully deleted the record
+END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[vwResourceTypes]'
+GO
+
+
+CREATE VIEW [__mj].[vwResourceTypes]
+AS
+SELECT 
+    r.*,
+    Entity_EntityID.[Name] AS [Entity]
+FROM
+    [__mj].[ResourceType] AS r
+LEFT OUTER JOIN
+    [__mj].[Entity] AS Entity_EntityID
+  ON
+    [r].[EntityID] = Entity_EntityID.[ID]
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[spDeleteEntity]'
+GO
+
+
+CREATE PROCEDURE [__mj].[spDeleteEntity]
+    @ID uniqueidentifier
+AS  
+BEGIN
+    SET NOCOUNT ON;
+
+    DELETE FROM 
+        [__mj].[Entity]
+    WHERE 
+        [ID] = @ID
+
+
+    SELECT @ID AS [ID] -- Return the primary key to indicate we successfully deleted the record
+END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[spDeleteFileCategory]'
+GO
+
+
+CREATE PROCEDURE [__mj].[spDeleteFileCategory]
+    @ID uniqueidentifier
+AS  
+BEGIN
+    SET NOCOUNT ON;
+
+    DELETE FROM 
+        [__mj].[FileCategory]
     WHERE 
         [ID] = @ID
 
@@ -13328,16 +12978,44 @@ END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [__mj].[vwDatasets]'
+PRINT N'Creating [__mj].[vwEntitySettings]'
 GO
 
 
-CREATE VIEW [__mj].[vwDatasets]
+CREATE VIEW [__mj].[vwEntitySettings]
 AS
 SELECT 
-    d.*
+    e.*,
+    Entity_EntityID.[Name] AS [Entity]
 FROM
-    [__mj].[Dataset] AS d
+    [__mj].[EntitySetting] AS e
+INNER JOIN
+    [__mj].[Entity] AS Entity_EntityID
+  ON
+    [e].[EntityID] = Entity_EntityID.[ID]
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[vwWorkspaceItems]'
+GO
+
+
+CREATE VIEW [__mj].[vwWorkspaceItems]
+AS
+SELECT 
+    w.*,
+    Workspace_WorkspaceID.[Name] AS [Workspace],
+    ResourceType_ResourceTypeID.[Name] AS [ResourceType]
+FROM
+    [__mj].[WorkspaceItem] AS w
+INNER JOIN
+    [__mj].[Workspace] AS Workspace_WorkspaceID
+  ON
+    [w].[WorkspaceID] = Workspace_WorkspaceID.[ID]
+INNER JOIN
+    [__mj].[ResourceType] AS ResourceType_ResourceTypeID
+  ON
+    [w].[ResourceTypeID] = ResourceType_ResourceTypeID.[ID]
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
@@ -13354,24 +13032,233 @@ FROM
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [__mj].[spDeleteFileCategory]'
+PRINT N'Creating [__mj].[vwCompanyIntegrationRunDetails]'
+GO
+
+CREATE VIEW [__mj].[vwCompanyIntegrationRunDetails]
+AS
+SELECT 
+    cird.*,
+	e.Name Entity,
+	cir.StartedAt RunStartedAt,
+	cir.EndedAt RunEndedAt
+FROM
+	__mj.CompanyIntegrationRunDetail cird
+INNER JOIN
+    __mj.CompanyIntegrationRun cir
+ON
+    cird.CompanyIntegrationRunID = cir.ID
+INNER JOIN
+	__mj.Entity e
+ON
+	cird.EntityID = e.ID
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[vwApplicationSettings]'
 GO
 
 
-CREATE PROCEDURE [__mj].[spDeleteFileCategory]
-    @ID uniqueidentifier
-AS  
+CREATE VIEW [__mj].[vwApplicationSettings]
+AS
+SELECT 
+    a.*
+FROM
+    [__mj].[ApplicationSetting] AS a
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[vwTaggedItems]'
+GO
+
+
+CREATE VIEW [__mj].[vwTaggedItems]
+AS
+SELECT 
+    t.*,
+    Tag_TagID.[Name] AS [Tag],
+    Entity_EntityID.[Name] AS [Entity]
+FROM
+    [__mj].[TaggedItem] AS t
+INNER JOIN
+    [__mj].[Tag] AS Tag_TagID
+  ON
+    [t].[TagID] = Tag_TagID.[ID]
+INNER JOIN
+    [__mj].[Entity] AS Entity_EntityID
+  ON
+    [t].[EntityID] = Entity_EntityID.[ID]
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[vwCompanyIntegrationRuns]'
+GO
+
+
+CREATE VIEW [__mj].[vwCompanyIntegrationRuns]
+AS
+SELECT 
+    c.*,
+    User_RunByUserID.[Name] AS [RunByUser]
+FROM
+    [__mj].[CompanyIntegrationRun] AS c
+INNER JOIN
+    [__mj].[User] AS User_RunByUserID
+  ON
+    [c].[RunByUserID] = User_RunByUserID.[ID]
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[vwTemplateContentTypes]'
+GO
+
+
+CREATE VIEW [__mj].[vwTemplateContentTypes]
+AS
+SELECT 
+    t.*
+FROM
+    [__mj].[TemplateContentType] AS t
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[vwDuplicateRunDetails]'
+GO
+
+
+CREATE VIEW [__mj].[vwDuplicateRunDetails]
+AS
+SELECT 
+    d.*
+FROM
+    [__mj].[DuplicateRunDetail] AS d
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[spCreateWorkspace]'
+GO
+
+
+CREATE PROCEDURE [__mj].[spCreateWorkspace]
+    @Name nvarchar(255),
+    @Description nvarchar(MAX),
+    @UserID uniqueidentifier
+AS
 BEGIN
     SET NOCOUNT ON;
+    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
+    INSERT INTO 
+    [__mj].[Workspace]
+        (
+            [Name],
+            [Description],
+            [UserID]
+        )
+    OUTPUT INSERTED.[ID] INTO @InsertedRow
+    VALUES
+        (
+            @Name,
+            @Description,
+            @UserID
+        )
+    -- return the new record from the base view, which might have some calculated fields
+    SELECT * FROM [__mj].[vwWorkspaces] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
+END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[spUpdateCompanyIntegrationRunDetail]'
+GO
 
-    DELETE FROM 
-        [__mj].[FileCategory]
-    WHERE 
+
+CREATE PROCEDURE [__mj].[spUpdateCompanyIntegrationRunDetail]
+    @ID uniqueidentifier,
+    @CompanyIntegrationRunID uniqueidentifier,
+    @EntityID uniqueidentifier,
+    @RecordID nvarchar(450),
+    @Action nchar(20),
+    @ExecutedAt datetime,
+    @IsSuccess bit
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[CompanyIntegrationRunDetail]
+    SET 
+        [CompanyIntegrationRunID] = @CompanyIntegrationRunID,
+        [EntityID] = @EntityID,
+        [RecordID] = @RecordID,
+        [Action] = @Action,
+        [ExecutedAt] = @ExecutedAt,
+        [IsSuccess] = @IsSuccess
+    WHERE
         [ID] = @ID
 
-
-    SELECT @ID AS [ID] -- Return the primary key to indicate we successfully deleted the record
+    -- return the updated record so the caller can see the updated values and any calculated fields
+    SELECT 
+                                        * 
+                                    FROM 
+                                        [__mj].[vwCompanyIntegrationRunDetails] 
+                                    WHERE
+                                        [ID] = @ID
+                                    
 END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[vwRecommendationRuns]'
+GO
+
+
+CREATE VIEW [__mj].[vwRecommendationRuns]
+AS
+SELECT 
+    r.*,
+    RecommendationProvider_RecommendationProviderID.[Name] AS [RecommendationProvider],
+    User_RunByUserID.[Name] AS [RunByUser]
+FROM
+    [__mj].[RecommendationRun] AS r
+INNER JOIN
+    [__mj].[RecommendationProvider] AS RecommendationProvider_RecommendationProviderID
+  ON
+    [r].[RecommendationProviderID] = RecommendationProvider_RecommendationProviderID.[ID]
+INNER JOIN
+    [__mj].[User] AS User_RunByUserID
+  ON
+    [r].[RunByUserID] = User_RunByUserID.[ID]
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[vwDuplicateRuns]'
+GO
+
+
+CREATE VIEW [__mj].[vwDuplicateRuns]
+AS
+SELECT 
+    d.*,
+    Entity_EntityID.[Name] AS [Entity],
+    User_StartedByUserID.[Name] AS [StartedByUser],
+    List_SourceListID.[Name] AS [SourceList],
+    User_ApprovedByUserID.[Name] AS [ApprovedByUser]
+FROM
+    [__mj].[DuplicateRun] AS d
+INNER JOIN
+    [__mj].[Entity] AS Entity_EntityID
+  ON
+    [d].[EntityID] = Entity_EntityID.[ID]
+INNER JOIN
+    [__mj].[User] AS User_StartedByUserID
+  ON
+    [d].[StartedByUserID] = User_StartedByUserID.[ID]
+INNER JOIN
+    [__mj].[List] AS List_SourceListID
+  ON
+    [d].[SourceListID] = List_SourceListID.[ID]
+LEFT OUTER JOIN
+    [__mj].[User] AS User_ApprovedByUserID
+  ON
+    [d].[ApprovedByUserID] = User_ApprovedByUserID.[ID]
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
@@ -13419,120 +13306,101 @@ END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [__mj].[vwCompanyIntegrationRuns]'
+PRINT N'Creating [__mj].[vwUserRecordLogs]'
 GO
 
-
-CREATE VIEW [__mj].[vwCompanyIntegrationRuns]
+CREATE VIEW [__mj].[vwUserRecordLogs] 
 AS
 SELECT 
-    c.*,
-    User_RunByUserID.[Name] AS [RunByUser]
+	ur.*,
+	e.Name Entity,
+	u.Name UserName,
+	u.FirstLast UserFirstLast,
+	u.Email UserEmail,
+	u.EmployeeSupervisor UserSupervisor,
+	u.EmployeeSupervisorEmail UserSupervisorEmail
 FROM
-    [__mj].[CompanyIntegrationRun] AS c
+	__mj.UserRecordLog ur
 INNER JOIN
-    [__mj].[User] AS User_RunByUserID
-  ON
-    [c].[RunByUserID] = User_RunByUserID.[ID]
+	__mj.Entity e 
+ON
+	ur.EntityID = e.ID
+INNER JOIN
+	vwUsers u
+ON
+	ur.UserID = u.ID
+
+
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [__mj].[vwActionCategories]'
+PRINT N'Creating [__mj].[spUpdateUserRecordLog]'
 GO
 
 
-CREATE VIEW [__mj].[vwActionCategories]
-AS
-SELECT 
-    a.*,
-    ActionCategory_ParentID.[Name] AS [Parent]
-FROM
-    [__mj].[ActionCategory] AS a
-LEFT OUTER JOIN
-    [__mj].[ActionCategory] AS ActionCategory_ParentID
-  ON
-    [a].[ParentID] = ActionCategory_ParentID.[ID]
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[spCreateWorkspace]'
-GO
-
-
-CREATE PROCEDURE [__mj].[spCreateWorkspace]
-    @Name nvarchar(255),
-    @Description nvarchar(MAX),
-    @UserID uniqueidentifier
+CREATE PROCEDURE [__mj].[spUpdateUserRecordLog]
+    @ID uniqueidentifier,
+    @UserID uniqueidentifier,
+    @EntityID uniqueidentifier,
+    @RecordID nvarchar(450),
+    @EarliestAt datetime,
+    @LatestAt datetime,
+    @TotalCount int
 AS
 BEGIN
     SET NOCOUNT ON;
-    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
-    INSERT INTO 
-    [__mj].[Workspace]
-        (
-            [Name],
-            [Description],
-            [UserID]
-        )
-    OUTPUT INSERTED.[ID] INTO @InsertedRow
-    VALUES
-        (
-            @Name,
-            @Description,
-            @UserID
-        )
-    -- return the new record from the base view, which might have some calculated fields
-    SELECT * FROM [__mj].[vwWorkspaces] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
+    UPDATE 
+        [__mj].[UserRecordLog]
+    SET 
+        [UserID] = @UserID,
+        [EntityID] = @EntityID,
+        [RecordID] = @RecordID,
+        [EarliestAt] = @EarliestAt,
+        [LatestAt] = @LatestAt,
+        [TotalCount] = @TotalCount
+    WHERE
+        [ID] = @ID
+
+    -- return the updated record so the caller can see the updated values and any calculated fields
+    SELECT 
+                                        * 
+                                    FROM 
+                                        [__mj].[vwUserRecordLogs] 
+                                    WHERE
+                                        [ID] = @ID
+                                    
 END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [__mj].[vwApplications]'
+PRINT N'Creating [__mj].[vwRecommendationProviders]'
 GO
 
 
-CREATE VIEW [__mj].[vwApplications]
+CREATE VIEW [__mj].[vwRecommendationProviders]
 AS
 SELECT 
-    a.*
+    r.*
 FROM
-    [__mj].[Application] AS a
+    [__mj].[RecommendationProvider] AS r
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [__mj].[vwCompanyIntegrationRunDetails]'
+PRINT N'Creating [__mj].[vwEntityDocumentSettings]'
 GO
 
-CREATE VIEW [__mj].[vwCompanyIntegrationRunDetails]
+
+CREATE VIEW [__mj].[vwEntityDocumentSettings]
 AS
 SELECT 
-    cird.*,
-	e.Name Entity,
-	cir.StartedAt RunStartedAt,
-	cir.EndedAt RunEndedAt
+    e.*,
+    EntityDocument_EntityDocumentID.[Name] AS [EntityDocument]
 FROM
-	__mj.CompanyIntegrationRunDetail cird
+    [__mj].[EntityDocumentSetting] AS e
 INNER JOIN
-    __mj.CompanyIntegrationRun cir
-ON
-    cird.CompanyIntegrationRunID = cir.ID
-INNER JOIN
-	__mj.Entity e
-ON
-	cird.EntityID = e.ID
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[vwDuplicateRunDetails]'
-GO
-
-
-CREATE VIEW [__mj].[vwDuplicateRunDetails]
-AS
-SELECT 
-    d.*
-FROM
-    [__mj].[DuplicateRunDetail] AS d
+    [__mj].[EntityDocument] AS EntityDocument_EntityDocumentID
+  ON
+    [e].[EntityDocumentID] = EntityDocument_EntityDocumentID.[ID]
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
@@ -13677,132 +13545,47 @@ INNER JOIN
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [__mj].[vwApplicationSettings]'
+PRINT N'Creating [__mj].[spCreateDuplicateRunDetail]'
 GO
 
 
-CREATE VIEW [__mj].[vwApplicationSettings]
-AS
-SELECT 
-    a.*
-FROM
-    [__mj].[ApplicationSetting] AS a
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[spUpdateWorkspaceItem]'
-GO
-
-
-CREATE PROCEDURE [__mj].[spUpdateWorkspaceItem]
-    @ID uniqueidentifier,
-    @Name nvarchar(255),
-    @Description nvarchar(MAX),
-    @WorkspaceID uniqueidentifier,
-    @ResourceTypeID uniqueidentifier,
-    @ResourceRecordID nvarchar(2000),
-    @Sequence int,
-    @Configuration nvarchar(MAX)
+CREATE PROCEDURE [__mj].[spCreateDuplicateRunDetail]
+    @DuplicateRunID uniqueidentifier,
+    @RecordID nvarchar(500),
+    @MatchStatus nvarchar(20),
+    @SkippedReason nvarchar(MAX),
+    @MatchErrorMessage nvarchar(MAX),
+    @MergeStatus nvarchar(20),
+    @MergeErrorMessage nvarchar(MAX)
 AS
 BEGIN
     SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[WorkspaceItem]
-    SET 
-        [Name] = @Name,
-        [Description] = @Description,
-        [WorkspaceID] = @WorkspaceID,
-        [ResourceTypeID] = @ResourceTypeID,
-        [ResourceRecordID] = @ResourceRecordID,
-        [Sequence] = @Sequence,
-        [Configuration] = @Configuration
-    WHERE
-        [ID] = @ID
-
-    -- return the updated record so the caller can see the updated values and any calculated fields
-    SELECT 
-                                        * 
-                                    FROM 
-                                        [__mj].[vwWorkspaceItems] 
-                                    WHERE
-                                        [ID] = @ID
-                                    
+    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
+    INSERT INTO 
+    [__mj].[DuplicateRunDetail]
+        (
+            [DuplicateRunID],
+            [RecordID],
+            [MatchStatus],
+            [SkippedReason],
+            [MatchErrorMessage],
+            [MergeStatus],
+            [MergeErrorMessage]
+        )
+    OUTPUT INSERTED.[ID] INTO @InsertedRow
+    VALUES
+        (
+            @DuplicateRunID,
+            @RecordID,
+            @MatchStatus,
+            @SkippedReason,
+            @MatchErrorMessage,
+            @MergeStatus,
+            @MergeErrorMessage
+        )
+    -- return the new record from the base view, which might have some calculated fields
+    SELECT * FROM [__mj].[vwDuplicateRunDetails] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
 END
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[spUpdateCompanyIntegrationRunDetail]'
-GO
-
-
-CREATE PROCEDURE [__mj].[spUpdateCompanyIntegrationRunDetail]
-    @ID uniqueidentifier,
-    @CompanyIntegrationRunID uniqueidentifier,
-    @EntityID uniqueidentifier,
-    @RecordID nvarchar(450),
-    @Action nchar(20),
-    @ExecutedAt datetime,
-    @IsSuccess bit
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[CompanyIntegrationRunDetail]
-    SET 
-        [CompanyIntegrationRunID] = @CompanyIntegrationRunID,
-        [EntityID] = @EntityID,
-        [RecordID] = @RecordID,
-        [Action] = @Action,
-        [ExecutedAt] = @ExecutedAt,
-        [IsSuccess] = @IsSuccess
-    WHERE
-        [ID] = @ID
-
-    -- return the updated record so the caller can see the updated values and any calculated fields
-    SELECT 
-                                        * 
-                                    FROM 
-                                        [__mj].[vwCompanyIntegrationRunDetails] 
-                                    WHERE
-                                        [ID] = @ID
-                                    
-END
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[vwRecommendationItems]'
-GO
-
-
-CREATE VIEW [__mj].[vwRecommendationItems]
-AS
-SELECT 
-    r.*,
-    Entity_DestinationEntityID.[Name] AS [DestinationEntity]
-FROM
-    [__mj].[RecommendationItem] AS r
-INNER JOIN
-    [__mj].[Entity] AS Entity_DestinationEntityID
-  ON
-    [r].[DestinationEntityID] = Entity_DestinationEntityID.[ID]
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[vwEntitySettings]'
-GO
-
-
-CREATE VIEW [__mj].[vwEntitySettings]
-AS
-SELECT 
-    e.*,
-    Entity_EntityID.[Name] AS [Entity]
-FROM
-    [__mj].[EntitySetting] AS e
-INNER JOIN
-    [__mj].[Entity] AS Entity_EntityID
-  ON
-    [e].[EntityID] = Entity_EntityID.[ID]
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
@@ -13836,101 +13619,6 @@ BEGIN
                                         [ID] = @ID
                                     
 END
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[spCreateApplication]'
-GO
-
-
-CREATE PROCEDURE [__mj].[spCreateApplication]
-    @Name nvarchar(100),
-    @Description nvarchar(MAX),
-    @Icon nvarchar(500),
-    @DefaultForNewUser bit
-AS
-BEGIN
-    SET NOCOUNT ON;
-    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
-    INSERT INTO 
-    [__mj].[Application]
-        (
-            [Name],
-            [Description],
-            [Icon],
-            [DefaultForNewUser],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-        )
-    OUTPUT INSERTED.[ID] INTO @InsertedRow
-    VALUES
-        (
-            @Name,
-            @Description,
-            @Icon,
-            @DefaultForNewUser,
-            GETUTCDATE(),
-            GETUTCDATE()
-        )
-    -- return the new record from the base view, which might have some calculated fields
-    SELECT * FROM [__mj].[vwApplications] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
-END
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[vwEntityCommunicationMessageTypes]'
-GO
-
-
-CREATE VIEW [__mj].[vwEntityCommunicationMessageTypes]
-AS
-SELECT 
-    e.*,
-    Entity_EntityID.[Name] AS [Entity],
-    CommunicationBaseMessageType_BaseMessageTypeID.[Type] AS [BaseMessageType]
-FROM
-    [__mj].[EntityCommunicationMessageType] AS e
-INNER JOIN
-    [__mj].[Entity] AS Entity_EntityID
-  ON
-    [e].[EntityID] = Entity_EntityID.[ID]
-INNER JOIN
-    [__mj].[CommunicationBaseMessageType] AS CommunicationBaseMessageType_BaseMessageTypeID
-  ON
-    [e].[BaseMessageTypeID] = CommunicationBaseMessageType_BaseMessageTypeID.[ID]
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[vwDuplicateRuns]'
-GO
-
-
-CREATE VIEW [__mj].[vwDuplicateRuns]
-AS
-SELECT 
-    d.*,
-    Entity_EntityID.[Name] AS [Entity],
-    User_StartedByUserID.[Name] AS [StartedByUser],
-    List_SourceListID.[Name] AS [SourceList],
-    User_ApprovedByUserID.[Name] AS [ApprovedByUser]
-FROM
-    [__mj].[DuplicateRun] AS d
-INNER JOIN
-    [__mj].[Entity] AS Entity_EntityID
-  ON
-    [d].[EntityID] = Entity_EntityID.[ID]
-INNER JOIN
-    [__mj].[User] AS User_StartedByUserID
-  ON
-    [d].[StartedByUserID] = User_StartedByUserID.[ID]
-INNER JOIN
-    [__mj].[List] AS List_SourceListID
-  ON
-    [d].[SourceListID] = List_SourceListID.[ID]
-LEFT OUTER JOIN
-    [__mj].[User] AS User_ApprovedByUserID
-  ON
-    [d].[ApprovedByUserID] = User_ApprovedByUserID.[ID]
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
@@ -13977,54 +13665,96 @@ END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [__mj].[vwRecommendationProviders]'
+PRINT N'Creating [__mj].[vwRecommendationItems]'
 GO
 
 
-CREATE VIEW [__mj].[vwRecommendationProviders]
+CREATE VIEW [__mj].[vwRecommendationItems]
 AS
 SELECT 
-    r.*
+    r.*,
+    Entity_DestinationEntityID.[Name] AS [DestinationEntity]
 FROM
-    [__mj].[RecommendationProvider] AS r
+    [__mj].[RecommendationItem] AS r
+INNER JOIN
+    [__mj].[Entity] AS Entity_DestinationEntityID
+  ON
+    [r].[DestinationEntityID] = Entity_DestinationEntityID.[ID]
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [__mj].[spCreateActionCategory]'
+PRINT N'Creating [__mj].[spCreateEntitySetting]'
 GO
 
 
-CREATE PROCEDURE [__mj].[spCreateActionCategory]
-    @Name nvarchar(255),
-    @Description nvarchar(MAX),
-    @ParentID uniqueidentifier,
-    @Status nvarchar(20)
+CREATE PROCEDURE [__mj].[spCreateEntitySetting]
+    @EntityID uniqueidentifier,
+    @Name nvarchar(100),
+    @Value nvarchar(MAX),
+    @Comments nvarchar(MAX)
 AS
 BEGIN
     SET NOCOUNT ON;
     DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
     INSERT INTO 
-    [__mj].[ActionCategory]
+    [__mj].[EntitySetting]
         (
+            [EntityID],
             [Name],
-            [Description],
-            [ParentID],
-            [Status],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
+            [Value],
+            [Comments]
         )
     OUTPUT INSERTED.[ID] INTO @InsertedRow
     VALUES
         (
+            @EntityID,
             @Name,
-            @Description,
-            @ParentID,
-            @Status,
-            GETUTCDATE(),
-            GETUTCDATE()
+            @Value,
+            @Comments
         )
     -- return the new record from the base view, which might have some calculated fields
-    SELECT * FROM [__mj].[vwActionCategories] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
+    SELECT * FROM [__mj].[vwEntitySettings] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
+END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[spUpdateWorkspaceItem]'
+GO
+
+
+CREATE PROCEDURE [__mj].[spUpdateWorkspaceItem]
+    @ID uniqueidentifier,
+    @Name nvarchar(255),
+    @Description nvarchar(MAX),
+    @WorkspaceID uniqueidentifier,
+    @ResourceTypeID uniqueidentifier,
+    @ResourceRecordID nvarchar(2000),
+    @Sequence int,
+    @Configuration nvarchar(MAX)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[WorkspaceItem]
+    SET 
+        [Name] = @Name,
+        [Description] = @Description,
+        [WorkspaceID] = @WorkspaceID,
+        [ResourceTypeID] = @ResourceTypeID,
+        [ResourceRecordID] = @ResourceRecordID,
+        [Sequence] = @Sequence,
+        [Configuration] = @Configuration
+    WHERE
+        [ID] = @ID
+
+    -- return the updated record so the caller can see the updated values and any calculated fields
+    SELECT 
+                                        * 
+                                    FROM 
+                                        [__mj].[vwWorkspaceItems] 
+                                    WHERE
+                                        [ID] = @ID
+                                    
 END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
@@ -14068,26 +13798,35 @@ END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [__mj].[vwRecommendationRuns]'
+PRINT N'Creating [__mj].[spCreateTemplateContentType]'
 GO
 
 
-CREATE VIEW [__mj].[vwRecommendationRuns]
+CREATE PROCEDURE [__mj].[spCreateTemplateContentType]
+    @Name nvarchar(255),
+    @Description nvarchar(MAX),
+    @CodeType nvarchar(25)
 AS
-SELECT 
-    r.*,
-    RecommendationProvider_RecommendationProviderID.[Name] AS [RecommendationProvider],
-    User_RunByUserID.[Name] AS [RunByUser]
-FROM
-    [__mj].[RecommendationRun] AS r
-INNER JOIN
-    [__mj].[RecommendationProvider] AS RecommendationProvider_RecommendationProviderID
-  ON
-    [r].[RecommendationProviderID] = RecommendationProvider_RecommendationProviderID.[ID]
-INNER JOIN
-    [__mj].[User] AS User_RunByUserID
-  ON
-    [r].[RunByUserID] = User_RunByUserID.[ID]
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
+    INSERT INTO 
+    [__mj].[TemplateContentType]
+        (
+            [Name],
+            [Description],
+            [CodeType]
+        )
+    OUTPUT INSERTED.[ID] INTO @InsertedRow
+    VALUES
+        (
+            @Name,
+            @Description,
+            @CodeType
+        )
+    -- return the new record from the base view, which might have some calculated fields
+    SELECT * FROM [__mj].[vwTemplateContentTypes] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
+END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
@@ -14126,18 +13865,176 @@ END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [__mj].[spDeleteWorkspaceItem]'
+PRINT N'Creating [__mj].[spCreateRecommendationRun]'
 GO
 
 
-CREATE PROCEDURE [__mj].[spDeleteWorkspaceItem]
+CREATE PROCEDURE [__mj].[spCreateRecommendationRun]
+    @RecommendationProviderID uniqueidentifier,
+    @StartDate datetime,
+    @EndDate datetime,
+    @Status nvarchar(50),
+    @Description nvarchar(MAX),
+    @RunByUserID uniqueidentifier
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
+    INSERT INTO 
+    [__mj].[RecommendationRun]
+        (
+            [RecommendationProviderID],
+            [StartDate],
+            [EndDate],
+            [Status],
+            [Description],
+            [RunByUserID]
+        )
+    OUTPUT INSERTED.[ID] INTO @InsertedRow
+    VALUES
+        (
+            @RecommendationProviderID,
+            @StartDate,
+            @EndDate,
+            @Status,
+            @Description,
+            @RunByUserID
+        )
+    -- return the new record from the base view, which might have some calculated fields
+    SELECT * FROM [__mj].[vwRecommendationRuns] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
+END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[spCreateDuplicateRun]'
+GO
+
+
+CREATE PROCEDURE [__mj].[spCreateDuplicateRun]
+    @EntityID uniqueidentifier,
+    @StartedByUserID uniqueidentifier,
+    @SourceListID uniqueidentifier,
+    @StartedAt datetime,
+    @EndedAt datetime,
+    @ApprovalStatus nvarchar(20),
+    @ApprovalComments nvarchar(MAX),
+    @ApprovedByUserID uniqueidentifier,
+    @ProcessingStatus nvarchar(20),
+    @ProcessingErrorMessage nvarchar(MAX)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
+    INSERT INTO 
+    [__mj].[DuplicateRun]
+        (
+            [EntityID],
+            [StartedByUserID],
+            [SourceListID],
+            [StartedAt],
+            [EndedAt],
+            [ApprovalStatus],
+            [ApprovalComments],
+            [ApprovedByUserID],
+            [ProcessingStatus],
+            [ProcessingErrorMessage]
+        )
+    OUTPUT INSERTED.[ID] INTO @InsertedRow
+    VALUES
+        (
+            @EntityID,
+            @StartedByUserID,
+            @SourceListID,
+            @StartedAt,
+            @EndedAt,
+            @ApprovalStatus,
+            @ApprovalComments,
+            @ApprovedByUserID,
+            @ProcessingStatus,
+            @ProcessingErrorMessage
+        )
+    -- return the new record from the base view, which might have some calculated fields
+    SELECT * FROM [__mj].[vwDuplicateRuns] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
+END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[spCreateRecommendationProvider]'
+GO
+
+
+CREATE PROCEDURE [__mj].[spCreateRecommendationProvider]
+    @Name nvarchar(255),
+    @Description nvarchar(MAX)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
+    INSERT INTO 
+    [__mj].[RecommendationProvider]
+        (
+            [Name],
+            [Description]
+        )
+    OUTPUT INSERTED.[ID] INTO @InsertedRow
+    VALUES
+        (
+            @Name,
+            @Description
+        )
+    -- return the new record from the base view, which might have some calculated fields
+    SELECT * FROM [__mj].[vwRecommendationProviders] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
+END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[spCreateEntityDocumentSetting]'
+GO
+
+
+CREATE PROCEDURE [__mj].[spCreateEntityDocumentSetting]
+    @EntityDocumentID uniqueidentifier,
+    @Name nvarchar(100),
+    @Value nvarchar(MAX),
+    @Comments nvarchar(MAX)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
+    INSERT INTO 
+    [__mj].[EntityDocumentSetting]
+        (
+            [EntityDocumentID],
+            [Name],
+            [Value],
+            [Comments]
+        )
+    OUTPUT INSERTED.[ID] INTO @InsertedRow
+    VALUES
+        (
+            @EntityDocumentID,
+            @Name,
+            @Value,
+            @Comments
+        )
+    -- return the new record from the base view, which might have some calculated fields
+    SELECT * FROM [__mj].[vwEntityDocumentSettings] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
+END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[spDeleteWorkspace]'
+GO
+
+
+CREATE PROCEDURE [__mj].[spDeleteWorkspace]
     @ID uniqueidentifier
 AS  
 BEGIN
     SET NOCOUNT ON;
 
     DELETE FROM 
-        [__mj].[WorkspaceItem]
+        [__mj].[Workspace]
     WHERE 
         [ID] = @ID
 
@@ -14208,106 +14105,6 @@ END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [__mj].[spCreateRecommendationItem]'
-GO
-
-
-CREATE PROCEDURE [__mj].[spCreateRecommendationItem]
-    @RecommendationID uniqueidentifier,
-    @DestinationEntityID uniqueidentifier,
-    @DestinationEntityRecordID nvarchar(450),
-    @MatchProbability decimal(18, 15)
-AS
-BEGIN
-    SET NOCOUNT ON;
-    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
-    INSERT INTO 
-    [__mj].[RecommendationItem]
-        (
-            [RecommendationID],
-            [DestinationEntityID],
-            [DestinationEntityRecordID],
-            [MatchProbability]
-        )
-    OUTPUT INSERTED.[ID] INTO @InsertedRow
-    VALUES
-        (
-            @RecommendationID,
-            @DestinationEntityID,
-            @DestinationEntityRecordID,
-            @MatchProbability
-        )
-    -- return the new record from the base view, which might have some calculated fields
-    SELECT * FROM [__mj].[vwRecommendationItems] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
-END
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[spCreateDuplicateRunDetail]'
-GO
-
-
-CREATE PROCEDURE [__mj].[spCreateDuplicateRunDetail]
-    @DuplicateRunID uniqueidentifier,
-    @RecordID nvarchar(500),
-    @MatchStatus nvarchar(20),
-    @SkippedReason nvarchar(MAX),
-    @MatchErrorMessage nvarchar(MAX),
-    @MergeStatus nvarchar(20),
-    @MergeErrorMessage nvarchar(MAX)
-AS
-BEGIN
-    SET NOCOUNT ON;
-    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
-    INSERT INTO 
-    [__mj].[DuplicateRunDetail]
-        (
-            [DuplicateRunID],
-            [RecordID],
-            [MatchStatus],
-            [SkippedReason],
-            [MatchErrorMessage],
-            [MergeStatus],
-            [MergeErrorMessage]
-        )
-    OUTPUT INSERTED.[ID] INTO @InsertedRow
-    VALUES
-        (
-            @DuplicateRunID,
-            @RecordID,
-            @MatchStatus,
-            @SkippedReason,
-            @MatchErrorMessage,
-            @MergeStatus,
-            @MergeErrorMessage
-        )
-    -- return the new record from the base view, which might have some calculated fields
-    SELECT * FROM [__mj].[vwDuplicateRunDetails] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
-END
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[spDeleteWorkspace]'
-GO
-
-
-CREATE PROCEDURE [__mj].[spDeleteWorkspace]
-    @ID uniqueidentifier
-AS  
-BEGIN
-    SET NOCOUNT ON;
-
-    DELETE FROM 
-        [__mj].[Workspace]
-    WHERE 
-        [ID] = @ID
-
-
-    SELECT @ID AS [ID] -- Return the primary key to indicate we successfully deleted the record
-END
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
 PRINT N'Creating [__mj].[spCreateRecommendation]'
 GO
 
@@ -14340,226 +14137,6 @@ END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [__mj].[spCreateEntitySetting]'
-GO
-
-
-CREATE PROCEDURE [__mj].[spCreateEntitySetting]
-    @EntityID uniqueidentifier,
-    @Name nvarchar(100),
-    @Value nvarchar(MAX),
-    @Comments nvarchar(MAX)
-AS
-BEGIN
-    SET NOCOUNT ON;
-    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
-    INSERT INTO 
-    [__mj].[EntitySetting]
-        (
-            [EntityID],
-            [Name],
-            [Value],
-            [Comments]
-        )
-    OUTPUT INSERTED.[ID] INTO @InsertedRow
-    VALUES
-        (
-            @EntityID,
-            @Name,
-            @Value,
-            @Comments
-        )
-    -- return the new record from the base view, which might have some calculated fields
-    SELECT * FROM [__mj].[vwEntitySettings] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
-END
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[vwConversationDetails]'
-GO
-
-
-CREATE VIEW [__mj].[vwConversationDetails]
-AS
-SELECT 
-    c.*,
-    Conversation_ConversationID.[Name] AS [Conversation]
-FROM
-    [__mj].[ConversationDetail] AS c
-INNER JOIN
-    [__mj].[Conversation] AS Conversation_ConversationID
-  ON
-    [c].[ConversationID] = Conversation_ConversationID.[ID]
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[spUpdateApplication]'
-GO
-
-
-CREATE PROCEDURE [__mj].[spUpdateApplication]
-    @ID uniqueidentifier,
-    @Name nvarchar(100),
-    @Description nvarchar(MAX),
-    @Icon nvarchar(500),
-    @DefaultForNewUser bit
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[Application]
-    SET 
-        [Name] = @Name,
-        [Description] = @Description,
-        [Icon] = @Icon,
-        [DefaultForNewUser] = @DefaultForNewUser
-    WHERE
-        [ID] = @ID
-
-    -- return the updated record so the caller can see the updated values and any calculated fields
-    SELECT 
-                                        * 
-                                    FROM 
-                                        [__mj].[vwApplications] 
-                                    WHERE
-                                        [ID] = @ID
-                                    
-END
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[spCreateEntityCommunicationMessageType]'
-GO
-
-
-CREATE PROCEDURE [__mj].[spCreateEntityCommunicationMessageType]
-    @EntityID uniqueidentifier,
-    @BaseMessageTypeID uniqueidentifier,
-    @IsActive bit
-AS
-BEGIN
-    SET NOCOUNT ON;
-    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
-    INSERT INTO 
-    [__mj].[EntityCommunicationMessageType]
-        (
-            [EntityID],
-            [BaseMessageTypeID],
-            [IsActive]
-        )
-    OUTPUT INSERTED.[ID] INTO @InsertedRow
-    VALUES
-        (
-            @EntityID,
-            @BaseMessageTypeID,
-            @IsActive
-        )
-    -- return the new record from the base view, which might have some calculated fields
-    SELECT * FROM [__mj].[vwEntityCommunicationMessageTypes] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
-END
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[spCreateDuplicateRun]'
-GO
-
-
-CREATE PROCEDURE [__mj].[spCreateDuplicateRun]
-    @EntityID uniqueidentifier,
-    @StartedByUserID uniqueidentifier,
-    @SourceListID uniqueidentifier,
-    @StartedAt datetime,
-    @EndedAt datetime,
-    @ApprovalStatus nvarchar(20),
-    @ApprovalComments nvarchar(MAX),
-    @ApprovedByUserID uniqueidentifier,
-    @ProcessingStatus nvarchar(20),
-    @ProcessingErrorMessage nvarchar(MAX)
-AS
-BEGIN
-    SET NOCOUNT ON;
-    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
-    INSERT INTO 
-    [__mj].[DuplicateRun]
-        (
-            [EntityID],
-            [StartedByUserID],
-            [SourceListID],
-            [StartedAt],
-            [EndedAt],
-            [ApprovalStatus],
-            [ApprovalComments],
-            [ApprovedByUserID],
-            [ProcessingStatus],
-            [ProcessingErrorMessage]
-        )
-    OUTPUT INSERTED.[ID] INTO @InsertedRow
-    VALUES
-        (
-            @EntityID,
-            @StartedByUserID,
-            @SourceListID,
-            @StartedAt,
-            @EndedAt,
-            @ApprovalStatus,
-            @ApprovalComments,
-            @ApprovedByUserID,
-            @ProcessingStatus,
-            @ProcessingErrorMessage
-        )
-    -- return the new record from the base view, which might have some calculated fields
-    SELECT * FROM [__mj].[vwDuplicateRuns] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
-END
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[vwDatasetItems]'
-GO
-
-
-CREATE VIEW [__mj].[vwDatasetItems]
-AS
-SELECT 
-    d.*,
-    Entity_EntityID.[Name] AS [Entity]
-FROM
-    [__mj].[DatasetItem] AS d
-INNER JOIN
-    [__mj].[Entity] AS Entity_EntityID
-  ON
-    [d].[EntityID] = Entity_EntityID.[ID]
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[spCreateRecommendationProvider]'
-GO
-
-
-CREATE PROCEDURE [__mj].[spCreateRecommendationProvider]
-    @Name nvarchar(255),
-    @Description nvarchar(MAX)
-AS
-BEGIN
-    SET NOCOUNT ON;
-    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
-    INSERT INTO 
-    [__mj].[RecommendationProvider]
-        (
-            [Name],
-            [Description]
-        )
-    OUTPUT INSERTED.[ID] INTO @InsertedRow
-    VALUES
-        (
-            @Name,
-            @Description
-        )
-    -- return the new record from the base view, which might have some calculated fields
-    SELECT * FROM [__mj].[vwRecommendationProviders] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
-END
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
 PRINT N'Creating [__mj].[vwApplicationEntities]'
 GO
 
@@ -14586,26 +14163,32 @@ ON
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [__mj].[spUpdateActionCategory]'
+PRINT N'Creating [__mj].[spUpdateDuplicateRunDetail]'
 GO
 
 
-CREATE PROCEDURE [__mj].[spUpdateActionCategory]
+CREATE PROCEDURE [__mj].[spUpdateDuplicateRunDetail]
     @ID uniqueidentifier,
-    @Name nvarchar(255),
-    @Description nvarchar(MAX),
-    @ParentID uniqueidentifier,
-    @Status nvarchar(20)
+    @DuplicateRunID uniqueidentifier,
+    @RecordID nvarchar(500),
+    @MatchStatus nvarchar(20),
+    @SkippedReason nvarchar(MAX),
+    @MatchErrorMessage nvarchar(MAX),
+    @MergeStatus nvarchar(20),
+    @MergeErrorMessage nvarchar(MAX)
 AS
 BEGIN
     SET NOCOUNT ON;
     UPDATE 
-        [__mj].[ActionCategory]
+        [__mj].[DuplicateRunDetail]
     SET 
-        [Name] = @Name,
-        [Description] = @Description,
-        [ParentID] = @ParentID,
-        [Status] = @Status
+        [DuplicateRunID] = @DuplicateRunID,
+        [RecordID] = @RecordID,
+        [MatchStatus] = @MatchStatus,
+        [SkippedReason] = @SkippedReason,
+        [MatchErrorMessage] = @MatchErrorMessage,
+        [MergeStatus] = @MergeStatus,
+        [MergeErrorMessage] = @MergeErrorMessage
     WHERE
         [ID] = @ID
 
@@ -14613,7 +14196,7 @@ BEGIN
     SELECT 
                                         * 
                                     FROM 
-                                        [__mj].[vwActionCategories] 
+                                        [__mj].[vwDuplicateRunDetails] 
                                     WHERE
                                         [ID] = @ID
                                     
@@ -14621,66 +14204,58 @@ END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [__mj].[vwConversations]'
+PRINT N'Creating [__mj].[spDeleteWorkspaceItem]'
 GO
 
 
-CREATE VIEW [__mj].[vwConversations]
-AS
-SELECT 
-    c.*,
-    User_UserID.[Name] AS [User],
-    Entity_LinkedEntityID.[Name] AS [LinkedEntity]
-FROM
-    [__mj].[Conversation] AS c
-INNER JOIN
-    [__mj].[User] AS User_UserID
-  ON
-    [c].[UserID] = User_UserID.[ID]
-LEFT OUTER JOIN
-    [__mj].[Entity] AS Entity_LinkedEntityID
-  ON
-    [c].[LinkedEntityID] = Entity_LinkedEntityID.[ID]
+CREATE PROCEDURE [__mj].[spDeleteWorkspaceItem]
+    @ID uniqueidentifier
+AS  
+BEGIN
+    SET NOCOUNT ON;
+
+    DELETE FROM 
+        [__mj].[WorkspaceItem]
+    WHERE 
+        [ID] = @ID
+
+
+    SELECT @ID AS [ID] -- Return the primary key to indicate we successfully deleted the record
+END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [__mj].[spCreateRecommendationRun]'
+PRINT N'Creating [__mj].[spCreateRecommendationItem]'
 GO
 
 
-CREATE PROCEDURE [__mj].[spCreateRecommendationRun]
-    @RecommendationProviderID uniqueidentifier,
-    @StartDate datetime,
-    @EndDate datetime,
-    @Status nvarchar(50),
-    @Description nvarchar(MAX),
-    @RunByUserID uniqueidentifier
+CREATE PROCEDURE [__mj].[spCreateRecommendationItem]
+    @RecommendationID uniqueidentifier,
+    @DestinationEntityID uniqueidentifier,
+    @DestinationEntityRecordID nvarchar(450),
+    @MatchProbability decimal(18, 15)
 AS
 BEGIN
     SET NOCOUNT ON;
     DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
     INSERT INTO 
-    [__mj].[RecommendationRun]
+    [__mj].[RecommendationItem]
         (
-            [RecommendationProviderID],
-            [StartDate],
-            [EndDate],
-            [Status],
-            [Description],
-            [RunByUserID]
+            [RecommendationID],
+            [DestinationEntityID],
+            [DestinationEntityRecordID],
+            [MatchProbability]
         )
     OUTPUT INSERTED.[ID] INTO @InsertedRow
     VALUES
         (
-            @RecommendationProviderID,
-            @StartDate,
-            @EndDate,
-            @Status,
-            @Description,
-            @RunByUserID
+            @RecommendationID,
+            @DestinationEntityID,
+            @DestinationEntityRecordID,
+            @MatchProbability
         )
     -- return the new record from the base view, which might have some calculated fields
-    SELECT * FROM [__mj].[vwRecommendationRuns] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
+    SELECT * FROM [__mj].[vwRecommendationItems] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
 END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
@@ -14731,13 +14306,13 @@ ON
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [__mj].[spUpdateApplicationSetting]'
+PRINT N'Creating [__mj].[spUpdateEntitySetting]'
 GO
 
 
-CREATE PROCEDURE [__mj].[spUpdateApplicationSetting]
+CREATE PROCEDURE [__mj].[spUpdateEntitySetting]
     @ID uniqueidentifier,
-    @ApplicationID uniqueidentifier,
+    @EntityID uniqueidentifier,
     @Name nvarchar(100),
     @Value nvarchar(MAX),
     @Comments nvarchar(MAX)
@@ -14745,9 +14320,9 @@ AS
 BEGIN
     SET NOCOUNT ON;
     UPDATE 
-        [__mj].[ApplicationSetting]
+        [__mj].[EntitySetting]
     SET 
-        [ApplicationID] = @ApplicationID,
+        [EntityID] = @EntityID,
         [Name] = @Name,
         [Value] = @Value,
         [Comments] = @Comments
@@ -14758,7 +14333,7 @@ BEGIN
     SELECT 
                                         * 
                                     FROM 
-                                        [__mj].[vwApplicationSettings] 
+                                        [__mj].[vwEntitySettings] 
                                     WHERE
                                         [ID] = @ID
                                     
@@ -14766,39 +14341,47 @@ END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [__mj].[vwSchemaInfos]'
+PRINT N'Creating [__mj].[vwConversations]'
 GO
 
 
-CREATE VIEW [__mj].[vwSchemaInfos]
+CREATE VIEW [__mj].[vwConversations]
 AS
 SELECT 
-    s.*
+    c.*,
+    User_UserID.[Name] AS [User],
+    Entity_LinkedEntityID.[Name] AS [LinkedEntity]
 FROM
-    [__mj].[SchemaInfo] AS s
+    [__mj].[Conversation] AS c
+INNER JOIN
+    [__mj].[User] AS User_UserID
+  ON
+    [c].[UserID] = User_UserID.[ID]
+LEFT OUTER JOIN
+    [__mj].[Entity] AS Entity_LinkedEntityID
+  ON
+    [c].[LinkedEntityID] = Entity_LinkedEntityID.[ID]
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [__mj].[spUpdateRecommendationItem]'
+PRINT N'Creating [__mj].[spUpdateTemplateContentType]'
 GO
 
 
-CREATE PROCEDURE [__mj].[spUpdateRecommendationItem]
+CREATE PROCEDURE [__mj].[spUpdateTemplateContentType]
     @ID uniqueidentifier,
-    @RecommendationID uniqueidentifier,
-    @DestinationEntityID uniqueidentifier,
-    @DestinationEntityRecordID nvarchar(450),
-    @MatchProbability decimal(18, 15)
+    @Name nvarchar(255),
+    @Description nvarchar(MAX),
+    @CodeType nvarchar(25)
 AS
 BEGIN
     SET NOCOUNT ON;
     UPDATE 
-        [__mj].[RecommendationItem]
+        [__mj].[TemplateContentType]
     SET 
-        [RecommendationID] = @RecommendationID,
-        [DestinationEntityID] = @DestinationEntityID,
-        [DestinationEntityRecordID] = @DestinationEntityRecordID,
-        [MatchProbability] = @MatchProbability
+        [Name] = @Name,
+        [Description] = @Description,
+        [CodeType] = @CodeType
     WHERE
         [ID] = @ID
 
@@ -14806,7 +14389,7 @@ BEGIN
     SELECT 
                                         * 
                                     FROM 
-                                        [__mj].[vwRecommendationItems] 
+                                        [__mj].[vwTemplateContentTypes] 
                                     WHERE
                                         [ID] = @ID
                                     
@@ -14856,32 +14439,26 @@ ON
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [__mj].[spUpdateDuplicateRunDetail]'
+PRINT N'Creating [__mj].[spUpdateApplicationSetting]'
 GO
 
 
-CREATE PROCEDURE [__mj].[spUpdateDuplicateRunDetail]
+CREATE PROCEDURE [__mj].[spUpdateApplicationSetting]
     @ID uniqueidentifier,
-    @DuplicateRunID uniqueidentifier,
-    @RecordID nvarchar(500),
-    @MatchStatus nvarchar(20),
-    @SkippedReason nvarchar(MAX),
-    @MatchErrorMessage nvarchar(MAX),
-    @MergeStatus nvarchar(20),
-    @MergeErrorMessage nvarchar(MAX)
+    @ApplicationID uniqueidentifier,
+    @Name nvarchar(100),
+    @Value nvarchar(MAX),
+    @Comments nvarchar(MAX)
 AS
 BEGIN
     SET NOCOUNT ON;
     UPDATE 
-        [__mj].[DuplicateRunDetail]
+        [__mj].[ApplicationSetting]
     SET 
-        [DuplicateRunID] = @DuplicateRunID,
-        [RecordID] = @RecordID,
-        [MatchStatus] = @MatchStatus,
-        [SkippedReason] = @SkippedReason,
-        [MatchErrorMessage] = @MatchErrorMessage,
-        [MergeStatus] = @MergeStatus,
-        [MergeErrorMessage] = @MergeErrorMessage
+        [ApplicationID] = @ApplicationID,
+        [Name] = @Name,
+        [Value] = @Value,
+        [Comments] = @Comments
     WHERE
         [ID] = @ID
 
@@ -14889,7 +14466,128 @@ BEGIN
     SELECT 
                                         * 
                                     FROM 
-                                        [__mj].[vwDuplicateRunDetails] 
+                                        [__mj].[vwApplicationSettings] 
+                                    WHERE
+                                        [ID] = @ID
+                                    
+END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[vwDatasets]'
+GO
+
+
+CREATE VIEW [__mj].[vwDatasets]
+AS
+SELECT 
+    d.*
+FROM
+    [__mj].[Dataset] AS d
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[spUpdateRecommendationRun]'
+GO
+
+
+CREATE PROCEDURE [__mj].[spUpdateRecommendationRun]
+    @ID uniqueidentifier,
+    @RecommendationProviderID uniqueidentifier,
+    @StartDate datetime,
+    @EndDate datetime,
+    @Status nvarchar(50),
+    @Description nvarchar(MAX),
+    @RunByUserID uniqueidentifier
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[RecommendationRun]
+    SET 
+        [RecommendationProviderID] = @RecommendationProviderID,
+        [StartDate] = @StartDate,
+        [EndDate] = @EndDate,
+        [Status] = @Status,
+        [Description] = @Description,
+        [RunByUserID] = @RunByUserID
+    WHERE
+        [ID] = @ID
+
+    -- return the updated record so the caller can see the updated values and any calculated fields
+    SELECT 
+                                        * 
+                                    FROM 
+                                        [__mj].[vwRecommendationRuns] 
+                                    WHERE
+                                        [ID] = @ID
+                                    
+END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[vwUserViewRunDetails]'
+GO
+
+CREATE VIEW [__mj].[vwUserViewRunDetails]
+AS
+SELECT 
+    u.*,
+	uv.ID UserViewID,
+	uv.EntityID
+FROM
+    [__mj].[UserViewRunDetail] AS u
+INNER JOIN
+	[__mj].[UserViewRun] as uvr
+  ON
+    u.UserViewRunID = uvr.ID
+INNER JOIN
+    [__mj].[UserView] uv
+  ON
+    uvr.UserViewID = uv.ID
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[spUpdateDuplicateRun]'
+GO
+
+
+CREATE PROCEDURE [__mj].[spUpdateDuplicateRun]
+    @ID uniqueidentifier,
+    @EntityID uniqueidentifier,
+    @StartedByUserID uniqueidentifier,
+    @SourceListID uniqueidentifier,
+    @StartedAt datetime,
+    @EndedAt datetime,
+    @ApprovalStatus nvarchar(20),
+    @ApprovalComments nvarchar(MAX),
+    @ApprovedByUserID uniqueidentifier,
+    @ProcessingStatus nvarchar(20),
+    @ProcessingErrorMessage nvarchar(MAX)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[DuplicateRun]
+    SET 
+        [EntityID] = @EntityID,
+        [StartedByUserID] = @StartedByUserID,
+        [SourceListID] = @SourceListID,
+        [StartedAt] = @StartedAt,
+        [EndedAt] = @EndedAt,
+        [ApprovalStatus] = @ApprovalStatus,
+        [ApprovalComments] = @ApprovalComments,
+        [ApprovedByUserID] = @ApprovedByUserID,
+        [ProcessingStatus] = @ProcessingStatus,
+        [ProcessingErrorMessage] = @ProcessingErrorMessage
+    WHERE
+        [ID] = @ID
+
+    -- return the updated record so the caller can see the updated values and any calculated fields
+    SELECT 
+                                        * 
+                                    FROM 
+                                        [__mj].[vwDuplicateRuns] 
                                     WHERE
                                         [ID] = @ID
                                     
@@ -14920,137 +14618,6 @@ LEFT OUTER JOIN
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [__mj].[spUpdateRecommendation]'
-GO
-
-
-CREATE PROCEDURE [__mj].[spUpdateRecommendation]
-    @ID uniqueidentifier,
-    @RecommendationRunID uniqueidentifier,
-    @SourceEntityID uniqueidentifier,
-    @SourceEntityRecordID nvarchar(MAX)
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[Recommendation]
-    SET 
-        [RecommendationRunID] = @RecommendationRunID,
-        [SourceEntityID] = @SourceEntityID,
-        [SourceEntityRecordID] = @SourceEntityRecordID
-    WHERE
-        [ID] = @ID
-
-    -- return the updated record so the caller can see the updated values and any calculated fields
-    SELECT 
-                                        * 
-                                    FROM 
-                                        [__mj].[vwRecommendations] 
-                                    WHERE
-                                        [ID] = @ID
-                                    
-END
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[vwUserViewRunDetails]'
-GO
-
-CREATE VIEW [__mj].[vwUserViewRunDetails]
-AS
-SELECT 
-    u.*,
-	uv.ID UserViewID,
-	uv.EntityID
-FROM
-    [__mj].[UserViewRunDetail] AS u
-INNER JOIN
-	[__mj].[UserViewRun] as uvr
-  ON
-    u.UserViewRunID = uvr.ID
-INNER JOIN
-    [__mj].[UserView] uv
-  ON
-    uvr.UserViewID = uv.ID
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[spUpdateEntitySetting]'
-GO
-
-
-CREATE PROCEDURE [__mj].[spUpdateEntitySetting]
-    @ID uniqueidentifier,
-    @EntityID uniqueidentifier,
-    @Name nvarchar(100),
-    @Value nvarchar(MAX),
-    @Comments nvarchar(MAX)
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[EntitySetting]
-    SET 
-        [EntityID] = @EntityID,
-        [Name] = @Name,
-        [Value] = @Value,
-        [Comments] = @Comments
-    WHERE
-        [ID] = @ID
-
-    -- return the updated record so the caller can see the updated values and any calculated fields
-    SELECT 
-                                        * 
-                                    FROM 
-                                        [__mj].[vwEntitySettings] 
-                                    WHERE
-                                        [ID] = @ID
-                                    
-END
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[spCreateConversationDetail]'
-GO
-
-
-CREATE PROCEDURE [__mj].[spCreateConversationDetail]
-    @ConversationID uniqueidentifier,
-    @ExternalID nvarchar(100),
-    @Role nvarchar(20),
-    @Message nvarchar(MAX),
-    @Error nvarchar(MAX),
-    @HiddenToUser bit
-AS
-BEGIN
-    SET NOCOUNT ON;
-    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
-    INSERT INTO 
-    [__mj].[ConversationDetail]
-        (
-            [ConversationID],
-            [ExternalID],
-            [Role],
-            [Message],
-            [Error],
-            [HiddenToUser]
-        )
-    OUTPUT INSERTED.[ID] INTO @InsertedRow
-    VALUES
-        (
-            @ConversationID,
-            @ExternalID,
-            @Role,
-            @Message,
-            @Error,
-            @HiddenToUser
-        )
-    -- return the new record from the base view, which might have some calculated fields
-    SELECT * FROM [__mj].[vwConversationDetails] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
-END
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
 PRINT N'Creating [__mj].[spDeleteUserView]'
 GO
 
@@ -15072,24 +14639,22 @@ END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [__mj].[spUpdateEntityCommunicationMessageType]'
+PRINT N'Creating [__mj].[spUpdateRecommendationProvider]'
 GO
 
 
-CREATE PROCEDURE [__mj].[spUpdateEntityCommunicationMessageType]
+CREATE PROCEDURE [__mj].[spUpdateRecommendationProvider]
     @ID uniqueidentifier,
-    @EntityID uniqueidentifier,
-    @BaseMessageTypeID uniqueidentifier,
-    @IsActive bit
+    @Name nvarchar(255),
+    @Description nvarchar(MAX)
 AS
 BEGIN
     SET NOCOUNT ON;
     UPDATE 
-        [__mj].[EntityCommunicationMessageType]
+        [__mj].[RecommendationProvider]
     SET 
-        [EntityID] = @EntityID,
-        [BaseMessageTypeID] = @BaseMessageTypeID,
-        [IsActive] = @IsActive
+        [Name] = @Name,
+        [Description] = @Description
     WHERE
         [ID] = @ID
 
@@ -15097,11 +14662,39 @@ BEGIN
     SELECT 
                                         * 
                                     FROM 
-                                        [__mj].[vwEntityCommunicationMessageTypes] 
+                                        [__mj].[vwRecommendationProviders] 
                                     WHERE
                                         [ID] = @ID
                                     
 END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[vwRecordChanges]'
+GO
+
+
+CREATE VIEW [__mj].[vwRecordChanges]
+AS
+SELECT 
+    r.*,
+    Entity_EntityID.[Name] AS [Entity],
+    User_UserID.[Name] AS [User],
+    Integration_IntegrationID.[Name] AS [Integration]
+FROM
+    [__mj].[RecordChange] AS r
+INNER JOIN
+    [__mj].[Entity] AS Entity_EntityID
+  ON
+    [r].[EntityID] = Entity_EntityID.[ID]
+INNER JOIN
+    [__mj].[User] AS User_UserID
+  ON
+    [r].[UserID] = User_UserID.[ID]
+LEFT OUTER JOIN
+    [__mj].[Integration] AS Integration_IntegrationID
+  ON
+    [r].[IntegrationID] = Integration_IntegrationID.[ID]
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
@@ -15158,38 +14751,26 @@ END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [__mj].[spUpdateDuplicateRun]'
+PRINT N'Creating [__mj].[spUpdateEntityDocumentSetting]'
 GO
 
 
-CREATE PROCEDURE [__mj].[spUpdateDuplicateRun]
+CREATE PROCEDURE [__mj].[spUpdateEntityDocumentSetting]
     @ID uniqueidentifier,
-    @EntityID uniqueidentifier,
-    @StartedByUserID uniqueidentifier,
-    @SourceListID uniqueidentifier,
-    @StartedAt datetime,
-    @EndedAt datetime,
-    @ApprovalStatus nvarchar(20),
-    @ApprovalComments nvarchar(MAX),
-    @ApprovedByUserID uniqueidentifier,
-    @ProcessingStatus nvarchar(20),
-    @ProcessingErrorMessage nvarchar(MAX)
+    @EntityDocumentID uniqueidentifier,
+    @Name nvarchar(100),
+    @Value nvarchar(MAX),
+    @Comments nvarchar(MAX)
 AS
 BEGIN
     SET NOCOUNT ON;
     UPDATE 
-        [__mj].[DuplicateRun]
+        [__mj].[EntityDocumentSetting]
     SET 
-        [EntityID] = @EntityID,
-        [StartedByUserID] = @StartedByUserID,
-        [SourceListID] = @SourceListID,
-        [StartedAt] = @StartedAt,
-        [EndedAt] = @EndedAt,
-        [ApprovalStatus] = @ApprovalStatus,
-        [ApprovalComments] = @ApprovalComments,
-        [ApprovedByUserID] = @ApprovedByUserID,
-        [ProcessingStatus] = @ProcessingStatus,
-        [ProcessingErrorMessage] = @ProcessingErrorMessage
+        [EntityDocumentID] = @EntityDocumentID,
+        [Name] = @Name,
+        [Value] = @Value,
+        [Comments] = @Comments
     WHERE
         [ID] = @ID
 
@@ -15197,7 +14778,168 @@ BEGIN
     SELECT 
                                         * 
                                     FROM 
-                                        [__mj].[vwDuplicateRuns] 
+                                        [__mj].[vwEntityDocumentSettings] 
+                                    WHERE
+                                        [ID] = @ID
+                                    
+END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[vwDatasetItems]'
+GO
+
+
+CREATE VIEW [__mj].[vwDatasetItems]
+AS
+SELECT 
+    d.*,
+    Entity_EntityID.[Name] AS [Entity]
+FROM
+    [__mj].[DatasetItem] AS d
+INNER JOIN
+    [__mj].[Entity] AS Entity_EntityID
+  ON
+    [d].[EntityID] = Entity_EntityID.[ID]
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[vwApplications]'
+GO
+
+
+CREATE VIEW [__mj].[vwApplications]
+AS
+SELECT 
+    a.*
+FROM
+    [__mj].[Application] AS a
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[spUpdateRecommendation]'
+GO
+
+
+CREATE PROCEDURE [__mj].[spUpdateRecommendation]
+    @ID uniqueidentifier,
+    @RecommendationRunID uniqueidentifier,
+    @SourceEntityID uniqueidentifier,
+    @SourceEntityRecordID nvarchar(MAX)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[Recommendation]
+    SET 
+        [RecommendationRunID] = @RecommendationRunID,
+        [SourceEntityID] = @SourceEntityID,
+        [SourceEntityRecordID] = @SourceEntityRecordID
+    WHERE
+        [ID] = @ID
+
+    -- return the updated record so the caller can see the updated values and any calculated fields
+    SELECT 
+                                        * 
+                                    FROM 
+                                        [__mj].[vwRecommendations] 
+                                    WHERE
+                                        [ID] = @ID
+                                    
+END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[vwEntityPermissions]'
+GO
+
+
+CREATE VIEW [__mj].[vwEntityPermissions]
+AS
+SELECT 
+    e.*,
+    Entity_EntityID.[Name] AS [Entity],
+    Role_RoleName.Name as RoleName,
+    Role_RoleName.[SQLName] as [RoleSQLName], -- custom bit here to add in this field for vwEntityPermissions
+    rlsC.Name as [CreateRLSFilter],
+    rlsR.Name as [ReadRLSFilter],
+    rlsU.Name as [UpdateRLSFilter],
+    rlsD.Name as [DeleteRLSFilter]
+FROM
+    [__mj].[EntityPermission] AS e
+INNER JOIN
+    [__mj].[Entity] AS Entity_EntityID
+  ON
+    [e].[EntityID] = Entity_EntityID.[ID]
+INNER JOIN
+    [__mj].[Role] AS Role_RoleName
+  ON
+    [e].[RoleID] = Role_RoleName.ID
+LEFT OUTER JOIN
+	[__mj].RowLevelSecurityFilter rlsC
+  ON
+    [e].CreateRLSFilterID = rlsC.ID
+LEFT OUTER JOIN
+	[__mj].RowLevelSecurityFilter rlsR
+  ON
+    [e].ReadRLSFilterID = rlsR.ID
+LEFT OUTER JOIN
+	[__mj].RowLevelSecurityFilter rlsU
+  ON
+    [e].UpdateRLSFilterID = rlsU.ID
+LEFT OUTER JOIN
+	[__mj].RowLevelSecurityFilter rlsD
+  ON
+    [e].DeleteRLSFilterID = rlsD.ID
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[vwConversationDetails]'
+GO
+
+
+CREATE VIEW [__mj].[vwConversationDetails]
+AS
+SELECT 
+    c.*,
+    Conversation_ConversationID.[Name] AS [Conversation]
+FROM
+    [__mj].[ConversationDetail] AS c
+INNER JOIN
+    [__mj].[Conversation] AS Conversation_ConversationID
+  ON
+    [c].[ConversationID] = Conversation_ConversationID.[ID]
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[spUpdateRecommendationItem]'
+GO
+
+
+CREATE PROCEDURE [__mj].[spUpdateRecommendationItem]
+    @ID uniqueidentifier,
+    @RecommendationID uniqueidentifier,
+    @DestinationEntityID uniqueidentifier,
+    @DestinationEntityRecordID nvarchar(450),
+    @MatchProbability decimal(18, 15)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[RecommendationItem]
+    SET 
+        [RecommendationID] = @RecommendationID,
+        [DestinationEntityID] = @DestinationEntityID,
+        [DestinationEntityRecordID] = @DestinationEntityRecordID,
+        [MatchProbability] = @MatchProbability
+    WHERE
+        [ID] = @ID
+
+    -- return the updated record so the caller can see the updated values and any calculated fields
+    SELECT 
+                                        * 
+                                    FROM 
+                                        [__mj].[vwRecommendationItems] 
                                     WHERE
                                         [ID] = @ID
                                     
@@ -15255,185 +14997,62 @@ END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [__mj].[spDeleteApplication]'
+PRINT N'Creating [__mj].[spCreateUserApplicationEntity]'
 GO
 
 
-CREATE PROCEDURE [__mj].[spDeleteApplication]
-    @ID uniqueidentifier
-AS  
-BEGIN
-    SET NOCOUNT ON;
-
-    DELETE FROM 
-        [__mj].[Application]
-    WHERE 
-        [ID] = @ID
-
-
-    SELECT @ID AS [ID] -- Return the primary key to indicate we successfully deleted the record
-END
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[spUpdateRecommendationRun]'
-GO
-
-
-CREATE PROCEDURE [__mj].[spUpdateRecommendationRun]
-    @ID uniqueidentifier,
-    @RecommendationProviderID uniqueidentifier,
-    @StartDate datetime,
-    @EndDate datetime,
-    @Status nvarchar(50),
-    @Description nvarchar(MAX),
-    @RunByUserID uniqueidentifier
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[RecommendationRun]
-    SET 
-        [RecommendationProviderID] = @RecommendationProviderID,
-        [StartDate] = @StartDate,
-        [EndDate] = @EndDate,
-        [Status] = @Status,
-        [Description] = @Description,
-        [RunByUserID] = @RunByUserID
-    WHERE
-        [ID] = @ID
-
-    -- return the updated record so the caller can see the updated values and any calculated fields
-    SELECT 
-                                        * 
-                                    FROM 
-                                        [__mj].[vwRecommendationRuns] 
-                                    WHERE
-                                        [ID] = @ID
-                                    
-END
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[vwEntityPermissions]'
-GO
-
-
-CREATE VIEW [__mj].[vwEntityPermissions]
-AS
-SELECT 
-    e.*,
-    Entity_EntityID.[Name] AS [Entity],
-	Role_RoleName.[SQLName] as [RoleSQLName], -- custom bit here to add in this field for vwEntityPermissions
-	rlsC.Name as [CreateRLSFilter],
-	rlsR.Name as [ReadRLSFilter],
-	rlsU.Name as [UpdateRLSFilter],
-	rlsD.Name as [DeleteRLSFilter]
-FROM
-    [__mj].[EntityPermission] AS e
-INNER JOIN
-    [__mj].[Entity] AS Entity_EntityID
-  ON
-    [e].[EntityID] = Entity_EntityID.[ID]
-INNER JOIN
-    [__mj].[Role] AS Role_RoleName
-  ON
-    [e].[RoleID] = Role_RoleName.ID
-LEFT OUTER JOIN
-	[__mj].RowLevelSecurityFilter rlsC
-  ON
-    [e].CreateRLSFilterID = rlsC.ID
-LEFT OUTER JOIN
-	[__mj].RowLevelSecurityFilter rlsR
-  ON
-    [e].ReadRLSFilterID = rlsR.ID
-LEFT OUTER JOIN
-	[__mj].RowLevelSecurityFilter rlsU
-  ON
-    [e].UpdateRLSFilterID = rlsU.ID
-LEFT OUTER JOIN
-	[__mj].RowLevelSecurityFilter rlsD
-  ON
-    [e].DeleteRLSFilterID = rlsD.ID
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[spCreateSchemaInfo]'
-GO
-
-
-CREATE PROCEDURE [__mj].[spCreateSchemaInfo]
-    @SchemaName nvarchar(50),
-    @EntityIDMin int,
-    @EntityIDMax int,
-    @Comments nvarchar(MAX)
+CREATE PROCEDURE [__mj].[spCreateUserApplicationEntity]
+    @UserApplicationID uniqueidentifier,
+    @EntityID uniqueidentifier,
+    @Sequence int
 AS
 BEGIN
     SET NOCOUNT ON;
     DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
     INSERT INTO 
-    [__mj].[SchemaInfo]
+    [__mj].[UserApplicationEntity]
         (
-            [SchemaName],
-            [EntityIDMin],
-            [EntityIDMax],
-            [Comments]
+            [UserApplicationID],
+            [EntityID],
+            [Sequence]
         )
     OUTPUT INSERTED.[ID] INTO @InsertedRow
     VALUES
         (
-            @SchemaName,
-            @EntityIDMin,
-            @EntityIDMax,
-            @Comments
+            @UserApplicationID,
+            @EntityID,
+            @Sequence
         )
     -- return the new record from the base view, which might have some calculated fields
-    SELECT * FROM [__mj].[vwSchemaInfos] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
+    SELECT * FROM [__mj].[vwUserApplicationEntities] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
 END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [__mj].[vwCompanyIntegrationRunAPILogs]'
+PRINT N'Creating [__mj].[spCreateUserViewRunWithDetail]'
 GO
 
 
-CREATE VIEW [__mj].[vwCompanyIntegrationRunAPILogs]
+CREATE PROCEDURE [__mj].[spCreateUserViewRunWithDetail](@UserViewID uniqueidentifier, @UserEmail NVARCHAR(255), @RecordIDList __mj.IDListTableType READONLY) 
 AS
-SELECT 
-    c.*
-FROM
-    [__mj].[CompanyIntegrationRunAPILog] AS c
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[spUpdateRecommendationProvider]'
-GO
-
-
-CREATE PROCEDURE [__mj].[spUpdateRecommendationProvider]
-    @ID uniqueidentifier,
-    @Name nvarchar(255),
-    @Description nvarchar(MAX)
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[RecommendationProvider]
-    SET 
-        [Name] = @Name,
-        [Description] = @Description
-    WHERE
-        [ID] = @ID
-
-    -- return the updated record so the caller can see the updated values and any calculated fields
-    SELECT 
-                                        * 
-                                    FROM 
-                                        [__mj].[vwRecommendationProviders] 
-                                    WHERE
-                                        [ID] = @ID
-                                    
-END
+DECLARE @RunID uniqueidentifier
+DECLARE @Now DATETIME
+SELECT @Now=GETDATE()
+DECLARE @outputTable TABLE (ID uniqueidentifier, UserViewID uniqueidentifier, RunAt DATETIME, RunByUserID INT, UserView NVARCHAR(100), RunByUser NVARCHAR(100))
+DECLARE @UserID uniqueidentifier
+SELECT @UserID=ID FROM vwUsers WHERE Email=@UserEmail
+INSERT INTO @outputTable
+EXEC spCreateUserViewRun @UserViewID=@UserViewID,@RunAt=@Now,@RunByUserID=@UserID
+SELECT @RunID = ID FROM @outputTable
+INSERT INTO __mj.UserViewRunDetail 
+(
+    UserViewRunID,
+    RecordID
+)
+(
+    SELECT @RunID, ID FROM @RecordIDList
+)
+SELECT @RunID 'UserViewRunID'
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
@@ -15484,72 +15103,6 @@ END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [__mj].[spCreateUserViewRunWithDetail]'
-GO
-
-
-CREATE PROCEDURE [__mj].[spCreateUserViewRunWithDetail](@UserViewID uniqueidentifier, @UserEmail NVARCHAR(255), @RecordIDList __mj.IDListTableType READONLY) 
-AS
-DECLARE @RunID uniqueidentifier
-DECLARE @Now DATETIME
-SELECT @Now=GETDATE()
-DECLARE @outputTable TABLE (ID uniqueidentifier, UserViewID uniqueidentifier, RunAt DATETIME, RunByUserID INT, UserView NVARCHAR(100), RunByUser NVARCHAR(100))
-DECLARE @UserID uniqueidentifier
-SELECT @UserID=ID FROM vwUsers WHERE Email=@UserEmail
-INSERT INTO @outputTable
-EXEC spCreateUserViewRun @UserViewID=@UserViewID,@RunAt=@Now,@RunByUserID=@UserID
-SELECT @RunID = ID FROM @outputTable
-INSERT INTO __mj.UserViewRunDetail 
-(
-    UserViewRunID,
-    RecordID
-)
-(
-    SELECT @RunID, ID FROM @RecordIDList
-)
-SELECT @RunID 'UserViewRunID'
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[spUpdateConversationDetail]'
-GO
-
-
-CREATE PROCEDURE [__mj].[spUpdateConversationDetail]
-    @ID uniqueidentifier,
-    @ConversationID uniqueidentifier,
-    @ExternalID nvarchar(100),
-    @Role nvarchar(20),
-    @Message nvarchar(MAX),
-    @Error nvarchar(MAX),
-    @HiddenToUser bit
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[ConversationDetail]
-    SET 
-        [ConversationID] = @ConversationID,
-        [ExternalID] = @ExternalID,
-        [Role] = @Role,
-        [Message] = @Message,
-        [Error] = @Error,
-        [HiddenToUser] = @HiddenToUser
-    WHERE
-        [ID] = @ID
-
-    -- return the updated record so the caller can see the updated values and any calculated fields
-    SELECT 
-                                        * 
-                                    FROM 
-                                        [__mj].[vwConversationDetails] 
-                                    WHERE
-                                        [ID] = @ID
-                                    
-END
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
 PRINT N'Creating [__mj].[spCreateApplicationEntity]'
 GO
 
@@ -15585,79 +15138,96 @@ END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [__mj].[spUpdateConversation]'
+PRINT N'Creating [__mj].[spCreateConversationDetail]'
 GO
 
 
-CREATE PROCEDURE [__mj].[spUpdateConversation]
-    @ID uniqueidentifier,
-    @UserID uniqueidentifier,
-    @ExternalID nvarchar(500),
-    @Name nvarchar(255),
-    @Description nvarchar(MAX),
-    @Type nvarchar(50),
-    @IsArchived bit,
-    @LinkedEntityID uniqueidentifier,
-    @LinkedRecordID nvarchar(500),
-    @DataContextID uniqueidentifier
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[Conversation]
-    SET 
-        [UserID] = @UserID,
-        [ExternalID] = @ExternalID,
-        [Name] = @Name,
-        [Description] = @Description,
-        [Type] = @Type,
-        [IsArchived] = @IsArchived,
-        [LinkedEntityID] = @LinkedEntityID,
-        [LinkedRecordID] = @LinkedRecordID,
-        [DataContextID] = @DataContextID
-    WHERE
-        [ID] = @ID
-
-    -- return the updated record so the caller can see the updated values and any calculated fields
-    SELECT 
-                                        * 
-                                    FROM 
-                                        [__mj].[vwConversations] 
-                                    WHERE
-                                        [ID] = @ID
-                                    
-END
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[spCreateUserApplicationEntity]'
-GO
-
-
-CREATE PROCEDURE [__mj].[spCreateUserApplicationEntity]
-    @UserApplicationID uniqueidentifier,
-    @EntityID uniqueidentifier,
-    @Sequence int
+CREATE PROCEDURE [__mj].[spCreateConversationDetail]
+    @ConversationID uniqueidentifier,
+    @ExternalID nvarchar(100),
+    @Role nvarchar(20),
+    @Message nvarchar(MAX),
+    @Error nvarchar(MAX),
+    @HiddenToUser bit
 AS
 BEGIN
     SET NOCOUNT ON;
     DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
     INSERT INTO 
-    [__mj].[UserApplicationEntity]
+    [__mj].[ConversationDetail]
         (
-            [UserApplicationID],
-            [EntityID],
-            [Sequence]
+            [ConversationID],
+            [ExternalID],
+            [Role],
+            [Message],
+            [Error],
+            [HiddenToUser]
         )
     OUTPUT INSERTED.[ID] INTO @InsertedRow
     VALUES
         (
-            @UserApplicationID,
-            @EntityID,
-            @Sequence
+            @ConversationID,
+            @ExternalID,
+            @Role,
+            @Message,
+            @Error,
+            @HiddenToUser
         )
     -- return the new record from the base view, which might have some calculated fields
-    SELECT * FROM [__mj].[vwUserApplicationEntities] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
+    SELECT * FROM [__mj].[vwConversationDetails] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
+END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[spCreateEntityPermission]'
+GO
+
+
+CREATE PROCEDURE [__mj].[spCreateEntityPermission]
+    @EntityID uniqueidentifier,
+    @RoleID uniqueidentifier,
+    @CanCreate bit,
+    @CanRead bit,
+    @CanUpdate bit,
+    @CanDelete bit,
+    @ReadRLSFilterID uniqueidentifier,
+    @CreateRLSFilterID uniqueidentifier,
+    @UpdateRLSFilterID uniqueidentifier,
+    @DeleteRLSFilterID uniqueidentifier
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
+    INSERT INTO 
+    [__mj].[EntityPermission]
+        (
+            [EntityID],
+            [RoleID],
+            [CanCreate],
+            [CanRead],
+            [CanUpdate],
+            [CanDelete],
+            [ReadRLSFilterID],
+            [CreateRLSFilterID],
+            [UpdateRLSFilterID],
+            [DeleteRLSFilterID]
+        )
+    OUTPUT INSERTED.[ID] INTO @InsertedRow
+    VALUES
+        (
+            @EntityID,
+            @RoleID,
+            @CanCreate,
+            @CanRead,
+            @CanUpdate,
+            @CanDelete,
+            @ReadRLSFilterID,
+            @CreateRLSFilterID,
+            @UpdateRLSFilterID,
+            @DeleteRLSFilterID
+        )
+    -- return the new record from the base view, which might have some calculated fields
+    SELECT * FROM [__mj].[vwEntityPermissions] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
 END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
@@ -15717,26 +15287,34 @@ WHERE
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [__mj].[spUpdateSchemaInfo]'
+PRINT N'Creating [__mj].[spUpdateUserNotification]'
 GO
 
 
-CREATE PROCEDURE [__mj].[spUpdateSchemaInfo]
+CREATE PROCEDURE [__mj].[spUpdateUserNotification]
     @ID uniqueidentifier,
-    @SchemaName nvarchar(50),
-    @EntityIDMin int,
-    @EntityIDMax int,
-    @Comments nvarchar(MAX)
+    @UserID uniqueidentifier,
+    @Title nvarchar(255),
+    @Message nvarchar(MAX),
+    @ResourceTypeID uniqueidentifier,
+    @ResourceRecordID int,
+    @ResourceConfiguration nvarchar(MAX),
+    @Unread bit,
+    @ReadAt datetime
 AS
 BEGIN
     SET NOCOUNT ON;
     UPDATE 
-        [__mj].[SchemaInfo]
+        [__mj].[UserNotification]
     SET 
-        [SchemaName] = @SchemaName,
-        [EntityIDMin] = @EntityIDMin,
-        [EntityIDMax] = @EntityIDMax,
-        [Comments] = @Comments
+        [UserID] = @UserID,
+        [Title] = @Title,
+        [Message] = @Message,
+        [ResourceTypeID] = @ResourceTypeID,
+        [ResourceRecordID] = @ResourceRecordID,
+        [ResourceConfiguration] = @ResourceConfiguration,
+        [Unread] = @Unread,
+        [ReadAt] = @ReadAt
     WHERE
         [ID] = @ID
 
@@ -15744,7 +15322,7 @@ BEGIN
     SELECT 
                                         * 
                                     FROM 
-                                        [__mj].[vwSchemaInfos] 
+                                        [__mj].[vwUserNotifications] 
                                     WHERE
                                         [ID] = @ID
                                     
@@ -15752,55 +15330,41 @@ END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [__mj].[spCreateEntityPermission]'
+PRINT N'Creating [__mj].[spCreateApplication]'
 GO
 
 
-CREATE PROCEDURE [__mj].[spCreateEntityPermission]
-    @EntityID uniqueidentifier,
-    @RoleID uniqueidentifier,
-    @CanCreate bit,
-    @CanRead bit,
-    @CanUpdate bit,
-    @CanDelete bit,
-    @ReadRLSFilterID uniqueidentifier,
-    @CreateRLSFilterID uniqueidentifier,
-    @UpdateRLSFilterID uniqueidentifier,
-    @DeleteRLSFilterID uniqueidentifier
+CREATE PROCEDURE [__mj].[spCreateApplication]
+    @Name nvarchar(100),
+    @Description nvarchar(MAX),
+    @Icon nvarchar(500),
+    @DefaultForNewUser bit
 AS
 BEGIN
     SET NOCOUNT ON;
     DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
     INSERT INTO 
-    [__mj].[EntityPermission]
+    [__mj].[Application]
         (
-            [EntityID],
-            [RoleID],
-            [CanCreate],
-            [CanRead],
-            [CanUpdate],
-            [CanDelete],
-            [ReadRLSFilterID],
-            [CreateRLSFilterID],
-            [UpdateRLSFilterID],
-            [DeleteRLSFilterID]
+            [Name],
+            [Description],
+            [Icon],
+            [DefaultForNewUser],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
         )
     OUTPUT INSERTED.[ID] INTO @InsertedRow
     VALUES
         (
-            @EntityID,
-            @RoleID,
-            @CanCreate,
-            @CanRead,
-            @CanUpdate,
-            @CanDelete,
-            @ReadRLSFilterID,
-            @CreateRLSFilterID,
-            @UpdateRLSFilterID,
-            @DeleteRLSFilterID
+            @Name,
+            @Description,
+            @Icon,
+            @DefaultForNewUser,
+            GETUTCDATE(),
+            GETUTCDATE()
         )
     -- return the new record from the base view, which might have some calculated fields
-    SELECT * FROM [__mj].[vwEntityPermissions] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
+    SELECT * FROM [__mj].[vwApplications] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
 END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
@@ -15913,34 +15477,36 @@ END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [__mj].[spUpdateUserNotification]'
+PRINT N'Creating [__mj].[spUpdateConversation]'
 GO
 
 
-CREATE PROCEDURE [__mj].[spUpdateUserNotification]
+CREATE PROCEDURE [__mj].[spUpdateConversation]
     @ID uniqueidentifier,
     @UserID uniqueidentifier,
-    @Title nvarchar(255),
-    @Message nvarchar(MAX),
-    @ResourceTypeID uniqueidentifier,
-    @ResourceRecordID int,
-    @ResourceConfiguration nvarchar(MAX),
-    @Unread bit,
-    @ReadAt datetime
+    @ExternalID nvarchar(500),
+    @Name nvarchar(255),
+    @Description nvarchar(MAX),
+    @Type nvarchar(50),
+    @IsArchived bit,
+    @LinkedEntityID uniqueidentifier,
+    @LinkedRecordID nvarchar(500),
+    @DataContextID uniqueidentifier
 AS
 BEGIN
     SET NOCOUNT ON;
     UPDATE 
-        [__mj].[UserNotification]
+        [__mj].[Conversation]
     SET 
         [UserID] = @UserID,
-        [Title] = @Title,
-        [Message] = @Message,
-        [ResourceTypeID] = @ResourceTypeID,
-        [ResourceRecordID] = @ResourceRecordID,
-        [ResourceConfiguration] = @ResourceConfiguration,
-        [Unread] = @Unread,
-        [ReadAt] = @ReadAt
+        [ExternalID] = @ExternalID,
+        [Name] = @Name,
+        [Description] = @Description,
+        [Type] = @Type,
+        [IsArchived] = @IsArchived,
+        [LinkedEntityID] = @LinkedEntityID,
+        [LinkedRecordID] = @LinkedRecordID,
+        [DataContextID] = @DataContextID
     WHERE
         [ID] = @ID
 
@@ -15948,7 +15514,7 @@ BEGIN
     SELECT 
                                         * 
                                     FROM 
-                                        [__mj].[vwUserNotifications] 
+                                        [__mj].[vwConversations] 
                                     WHERE
                                         [ID] = @ID
                                     
@@ -15956,41 +15522,37 @@ END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [__mj].[spUpdateCompanyIntegrationRunAPILog]'
+PRINT N'Creating [__mj].[spCreateUserApplication]'
 GO
 
 
-CREATE PROCEDURE [__mj].[spUpdateCompanyIntegrationRunAPILog]
-    @ID uniqueidentifier,
-    @CompanyIntegrationRunID uniqueidentifier,
-    @ExecutedAt datetime,
-    @IsSuccess bit,
-    @RequestMethod nvarchar(12),
-    @URL nvarchar(MAX),
-    @Parameters nvarchar(MAX)
+CREATE PROCEDURE [__mj].[spCreateUserApplication]
+    @UserID uniqueidentifier,
+    @ApplicationID uniqueidentifier,
+    @Sequence int,
+    @IsActive bit
 AS
 BEGIN
     SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[CompanyIntegrationRunAPILog]
-    SET 
-        [CompanyIntegrationRunID] = @CompanyIntegrationRunID,
-        [ExecutedAt] = @ExecutedAt,
-        [IsSuccess] = @IsSuccess,
-        [RequestMethod] = @RequestMethod,
-        [URL] = @URL,
-        [Parameters] = @Parameters
-    WHERE
-        [ID] = @ID
-
-    -- return the updated record so the caller can see the updated values and any calculated fields
-    SELECT 
-                                        * 
-                                    FROM 
-                                        [__mj].[vwCompanyIntegrationRunAPILogs] 
-                                    WHERE
-                                        [ID] = @ID
-                                    
+    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
+    INSERT INTO 
+    [__mj].[UserApplication]
+        (
+            [UserID],
+            [ApplicationID],
+            [Sequence],
+            [IsActive]
+        )
+    OUTPUT INSERTED.[ID] INTO @InsertedRow
+    VALUES
+        (
+            @UserID,
+            @ApplicationID,
+            @Sequence,
+            @IsActive
+        )
+    -- return the new record from the base view, which might have some calculated fields
+    SELECT * FROM [__mj].[vwUserApplications] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
 END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
@@ -16069,77 +15631,116 @@ DROP TABLE #actual_spDeleteUnneededEntityFields
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [__mj].[spDeleteActionCategory]'
+PRINT N'Creating [__mj].[vwEntityActions]'
 GO
 
 
-CREATE PROCEDURE [__mj].[spDeleteActionCategory]
-    @ID uniqueidentifier
-AS  
-BEGIN
-    SET NOCOUNT ON;
-
-    DELETE FROM 
-        [__mj].[ActionCategory]
-    WHERE 
-        [ID] = @ID
-
-
-    SELECT @ID AS [ID] -- Return the primary key to indicate we successfully deleted the record
-END
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[spCreateUserApplication]'
-GO
-
-
-CREATE PROCEDURE [__mj].[spCreateUserApplication]
-    @UserID uniqueidentifier,
-    @ApplicationID uniqueidentifier,
-    @Sequence int,
-    @IsActive bit
-AS
-BEGIN
-    SET NOCOUNT ON;
-    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
-    INSERT INTO 
-    [__mj].[UserApplication]
-        (
-            [UserID],
-            [ApplicationID],
-            [Sequence],
-            [IsActive]
-        )
-    OUTPUT INSERTED.[ID] INTO @InsertedRow
-    VALUES
-        (
-            @UserID,
-            @ApplicationID,
-            @Sequence,
-            @IsActive
-        )
-    -- return the new record from the base view, which might have some calculated fields
-    SELECT * FROM [__mj].[vwUserApplications] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
-END
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[vwEntityActionParams]'
-GO
-
-
-CREATE VIEW [__mj].[vwEntityActionParams]
+CREATE VIEW [__mj].[vwEntityActions]
 AS
 SELECT 
     e.*,
-    ActionParam_ActionParamID.[Name] AS [ActionParam]
+    Entity_EntityID.[Name] AS [Entity],
+    Action_ActionID.[Name] AS [Action]
 FROM
-    [__mj].[EntityActionParam] AS e
+    [__mj].[EntityAction] AS e
 INNER JOIN
-    [__mj].[ActionParam] AS ActionParam_ActionParamID
+    [__mj].[Entity] AS Entity_EntityID
   ON
-    [e].[ActionParamID] = ActionParam_ActionParamID.[ID]
+    [e].[EntityID] = Entity_EntityID.[ID]
+INNER JOIN
+    [__mj].[Action] AS Action_ActionID
+  ON
+    [e].[ActionID] = Action_ActionID.[ID]
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[spUpdateConversationDetail]'
+GO
+
+
+CREATE PROCEDURE [__mj].[spUpdateConversationDetail]
+    @ID uniqueidentifier,
+    @ConversationID uniqueidentifier,
+    @ExternalID nvarchar(100),
+    @Role nvarchar(20),
+    @Message nvarchar(MAX),
+    @Error nvarchar(MAX),
+    @HiddenToUser bit
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[ConversationDetail]
+    SET 
+        [ConversationID] = @ConversationID,
+        [ExternalID] = @ExternalID,
+        [Role] = @Role,
+        [Message] = @Message,
+        [Error] = @Error,
+        [HiddenToUser] = @HiddenToUser
+    WHERE
+        [ID] = @ID
+
+    -- return the updated record so the caller can see the updated values and any calculated fields
+    SELECT 
+                                        * 
+                                    FROM 
+                                        [__mj].[vwConversationDetails] 
+                                    WHERE
+                                        [ID] = @ID
+                                    
+END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[spUpdateUserApplicationEntity]'
+GO
+
+
+CREATE PROCEDURE [__mj].[spUpdateUserApplicationEntity]
+    @ID uniqueidentifier,
+    @UserApplicationID uniqueidentifier,
+    @EntityID uniqueidentifier,
+    @Sequence int
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[UserApplicationEntity]
+    SET 
+        [UserApplicationID] = @UserApplicationID,
+        [EntityID] = @EntityID,
+        [Sequence] = @Sequence
+    WHERE
+        [ID] = @ID
+
+    -- return the updated record so the caller can see the updated values and any calculated fields
+    SELECT 
+                                        * 
+                                    FROM 
+                                        [__mj].[vwUserApplicationEntities] 
+                                    WHERE
+                                        [ID] = @ID
+                                    
+END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[vwRecordChangeReplayRuns]'
+GO
+
+
+CREATE VIEW [__mj].[vwRecordChangeReplayRuns]
+AS
+SELECT 
+    r.*,
+    User_UserID.[Name] AS [User]
+FROM
+    [__mj].[RecordChangeReplayRun] AS r
+INNER JOIN
+    [__mj].[User] AS User_UserID
+  ON
+    [r].[UserID] = User_UserID.[ID]
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
@@ -16173,26 +15774,16 @@ END;
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [__mj].[vwActions]'
+PRINT N'Creating [__mj].[vwEntityActionInvocationTypes]'
 GO
 
 
-CREATE VIEW [__mj].[vwActions]
+CREATE VIEW [__mj].[vwEntityActionInvocationTypes]
 AS
 SELECT 
-    a.*,
-    ActionCategory_CategoryID.[Name] AS [Category],
-    User_CodeApprovedByUserID.[Name] AS [CodeApprovedByUser]
+    e.*
 FROM
-    [__mj].[Action] AS a
-LEFT OUTER JOIN
-    [__mj].[ActionCategory] AS ActionCategory_CategoryID
-  ON
-    [a].[CategoryID] = ActionCategory_CategoryID.[ID]
-LEFT OUTER JOIN
-    [__mj].[User] AS User_CodeApprovedByUserID
-  ON
-    [a].[CodeApprovedByUserID] = User_CodeApprovedByUserID.[ID]
+    [__mj].[EntityActionInvocationType] AS e
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
@@ -16403,85 +15994,21 @@ END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [__mj].[vwEntityActionInvocationTypes]'
+PRINT N'Creating [__mj].[vwActionCategories]'
 GO
 
 
-CREATE VIEW [__mj].[vwEntityActionInvocationTypes]
+CREATE VIEW [__mj].[vwActionCategories]
 AS
 SELECT 
-    e.*
+    a.*,
+    ActionCategory_ParentID.[Name] AS [Parent]
 FROM
-    [__mj].[EntityActionInvocationType] AS e
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[spUpdateUserApplicationEntity]'
-GO
-
-
-CREATE PROCEDURE [__mj].[spUpdateUserApplicationEntity]
-    @ID uniqueidentifier,
-    @UserApplicationID uniqueidentifier,
-    @EntityID uniqueidentifier,
-    @Sequence int
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[UserApplicationEntity]
-    SET 
-        [UserApplicationID] = @UserApplicationID,
-        [EntityID] = @EntityID,
-        [Sequence] = @Sequence
-    WHERE
-        [ID] = @ID
-
-    -- return the updated record so the caller can see the updated values and any calculated fields
-    SELECT 
-                                        * 
-                                    FROM 
-                                        [__mj].[vwUserApplicationEntities] 
-                                    WHERE
-                                        [ID] = @ID
-                                    
-END
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[vwLibraryItems]'
-GO
-
-
-CREATE VIEW [__mj].[vwLibraryItems]
-AS
-SELECT 
-    l.*,
-    Library_LibraryID.[Name] AS [Library]
-FROM
-    [__mj].[LibraryItem] AS l
-INNER JOIN
-    [__mj].[Library] AS Library_LibraryID
+    [__mj].[ActionCategory] AS a
+LEFT OUTER JOIN
+    [__mj].[ActionCategory] AS ActionCategory_ParentID
   ON
-    [l].[LibraryID] = Library_LibraryID.[ID]
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[vwEntityActionInvocations]'
-GO
-
-
-CREATE VIEW [__mj].[vwEntityActionInvocations]
-AS
-SELECT 
-    e.*,
-    EntityActionInvocationType_InvocationTypeID.[Name] AS [InvocationType]
-FROM
-    [__mj].[EntityActionInvocation] AS e
-INNER JOIN
-    [__mj].[EntityActionInvocationType] AS EntityActionInvocationType_InvocationTypeID
-  ON
-    [e].[InvocationTypeID] = EntityActionInvocationType_InvocationTypeID.[ID]
+    [a].[ParentID] = ActionCategory_ParentID.[ID]
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
@@ -16532,78 +16059,97 @@ END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [__mj].[vwRecordChangeReplayRuns]'
+PRINT N'Creating [__mj].[vwEntityCommunicationMessageTypes]'
 GO
 
 
-CREATE VIEW [__mj].[vwRecordChangeReplayRuns]
-AS
-SELECT 
-    r.*,
-    User_UserID.[Name] AS [User]
-FROM
-    [__mj].[RecordChangeReplayRun] AS r
-INNER JOIN
-    [__mj].[User] AS User_UserID
-  ON
-    [r].[UserID] = User_UserID.[ID]
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[vwEntityActions]'
-GO
-
-
-CREATE VIEW [__mj].[vwEntityActions]
+CREATE VIEW [__mj].[vwEntityCommunicationMessageTypes]
 AS
 SELECT 
     e.*,
     Entity_EntityID.[Name] AS [Entity],
-    Action_ActionID.[Name] AS [Action]
+    CommunicationBaseMessageType_BaseMessageTypeID.[Type] AS [BaseMessageType]
 FROM
-    [__mj].[EntityAction] AS e
+    [__mj].[EntityCommunicationMessageType] AS e
 INNER JOIN
     [__mj].[Entity] AS Entity_EntityID
   ON
     [e].[EntityID] = Entity_EntityID.[ID]
 INNER JOIN
-    [__mj].[Action] AS Action_ActionID
+    [__mj].[CommunicationBaseMessageType] AS CommunicationBaseMessageType_BaseMessageTypeID
   ON
-    [e].[ActionID] = Action_ActionID.[ID]
+    [e].[BaseMessageTypeID] = CommunicationBaseMessageType_BaseMessageTypeID.[ID]
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [__mj].[spDeleteConversationDetail]'
+PRINT N'Creating [__mj].[vwEntityActionInvocations]'
 GO
 
 
-CREATE PROCEDURE [__mj].[spDeleteConversationDetail]
-    @ID uniqueidentifier
-AS  
+CREATE VIEW [__mj].[vwEntityActionInvocations]
+AS
+SELECT 
+    e.*,
+    EntityActionInvocationType_InvocationTypeID.[Name] AS [InvocationType]
+FROM
+    [__mj].[EntityActionInvocation] AS e
+INNER JOIN
+    [__mj].[EntityActionInvocationType] AS EntityActionInvocationType_InvocationTypeID
+  ON
+    [e].[InvocationTypeID] = EntityActionInvocationType_InvocationTypeID.[ID]
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[spUpdateApplication]'
+GO
+
+
+CREATE PROCEDURE [__mj].[spUpdateApplication]
+    @ID uniqueidentifier,
+    @Name nvarchar(100),
+    @Description nvarchar(MAX),
+    @Icon nvarchar(500),
+    @DefaultForNewUser bit
+AS
 BEGIN
     SET NOCOUNT ON;
-
-    DELETE FROM 
-        [__mj].[ConversationDetail]
-    WHERE 
+    UPDATE 
+        [__mj].[Application]
+    SET 
+        [Name] = @Name,
+        [Description] = @Description,
+        [Icon] = @Icon,
+        [DefaultForNewUser] = @DefaultForNewUser
+    WHERE
         [ID] = @ID
 
-
-    SELECT @ID AS [ID] -- Return the primary key to indicate we successfully deleted the record
+    -- return the updated record so the caller can see the updated values and any calculated fields
+    SELECT 
+                                        * 
+                                    FROM 
+                                        [__mj].[vwApplications] 
+                                    WHERE
+                                        [ID] = @ID
+                                    
 END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [__mj].[vwEntityRelationshipDisplayComponents]'
+PRINT N'Creating [__mj].[vwLibraryItems]'
 GO
 
 
-CREATE VIEW [__mj].[vwEntityRelationshipDisplayComponents]
+CREATE VIEW [__mj].[vwLibraryItems]
 AS
 SELECT 
-    e.*
+    l.*,
+    Library_LibraryID.[Name] AS [Library]
 FROM
-    [__mj].[EntityRelationshipDisplayComponent] AS e
+    [__mj].[LibraryItem] AS l
+INNER JOIN
+    [__mj].[Library] AS Library_LibraryID
+  ON
+    [l].[LibraryID] = Library_LibraryID.[ID]
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
@@ -16681,40 +16227,103 @@ END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [__mj].[spCreateEntityActionParam]'
+PRINT N'Creating [__mj].[vwEntityRelationshipDisplayComponents]'
 GO
 
 
-CREATE PROCEDURE [__mj].[spCreateEntityActionParam]
-    @EntityActionID uniqueidentifier,
-    @ActionParamID uniqueidentifier,
-    @ValueType nvarchar(20),
-    @Value nvarchar(MAX),
-    @Comments nvarchar(MAX)
+CREATE VIEW [__mj].[vwEntityRelationshipDisplayComponents]
+AS
+SELECT 
+    e.*
+FROM
+    [__mj].[EntityRelationshipDisplayComponent] AS e
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[spCreateEntityAction]'
+GO
+
+
+CREATE PROCEDURE [__mj].[spCreateEntityAction]
+    @EntityID uniqueidentifier,
+    @ActionID uniqueidentifier,
+    @Status nvarchar(20)
 AS
 BEGIN
     SET NOCOUNT ON;
     DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
     INSERT INTO 
-    [__mj].[EntityActionParam]
+    [__mj].[EntityAction]
         (
-            [EntityActionID],
-            [ActionParamID],
-            [ValueType],
-            [Value],
-            [Comments]
+            [EntityID],
+            [ActionID],
+            [Status]
         )
     OUTPUT INSERTED.[ID] INTO @InsertedRow
     VALUES
         (
-            @EntityActionID,
-            @ActionParamID,
-            @ValueType,
-            @Value,
-            @Comments
+            @EntityID,
+            @ActionID,
+            @Status
         )
     -- return the new record from the base view, which might have some calculated fields
-    SELECT * FROM [__mj].[vwEntityActionParams] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
+    SELECT * FROM [__mj].[vwEntityActions] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
+END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[spDeleteConversationDetail]'
+GO
+
+
+CREATE PROCEDURE [__mj].[spDeleteConversationDetail]
+    @ID uniqueidentifier
+AS  
+BEGIN
+    SET NOCOUNT ON;
+
+    DELETE FROM 
+        [__mj].[ConversationDetail]
+    WHERE 
+        [ID] = @ID
+
+
+    SELECT @ID AS [ID] -- Return the primary key to indicate we successfully deleted the record
+END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[spCreateRecordChangeReplayRun]'
+GO
+
+
+CREATE PROCEDURE [__mj].[spCreateRecordChangeReplayRun]
+    @StartedAt datetime,
+    @EndedAt datetime,
+    @Status nvarchar(50),
+    @UserID uniqueidentifier
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
+    INSERT INTO 
+    [__mj].[RecordChangeReplayRun]
+        (
+            [StartedAt],
+            [EndedAt],
+            [Status],
+            [UserID]
+        )
+    OUTPUT INSERTED.[ID] INTO @InsertedRow
+    VALUES
+        (
+            @StartedAt,
+            @EndedAt,
+            @Status,
+            @UserID
+        )
+    -- return the new record from the base view, which might have some calculated fields
+    SELECT * FROM [__mj].[vwRecordChangeReplayRuns] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
 END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
@@ -16757,77 +16366,34 @@ WHERE
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [__mj].[spCreateAction]'
+PRINT N'Creating [__mj].[spCreateEntityActionInvocationType]'
 GO
 
 
-CREATE PROCEDURE [__mj].[spCreateAction]
-    @CategoryID uniqueidentifier,
-    @Name nvarchar(425),
+CREATE PROCEDURE [__mj].[spCreateEntityActionInvocationType]
+    @Name nvarchar(255),
     @Description nvarchar(MAX),
-    @Type nvarchar(20),
-    @UserPrompt nvarchar(MAX),
-    @UserComments nvarchar(MAX),
-    @Code nvarchar(MAX),
-    @CodeComments nvarchar(MAX),
-    @CodeApprovalStatus nvarchar(20),
-    @CodeApprovalComments nvarchar(MAX),
-    @CodeApprovedByUserID uniqueidentifier,
-    @CodeApprovedAt datetime,
-    @CodeLocked bit,
-    @ForceCodeGeneration bit,
-    @RetentionPeriod int,
-    @Status nvarchar(20)
+    @DisplaySequence int
 AS
 BEGIN
     SET NOCOUNT ON;
     DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
     INSERT INTO 
-    [__mj].[Action]
+    [__mj].[EntityActionInvocationType]
         (
-            [CategoryID],
             [Name],
             [Description],
-            [Type],
-            [UserPrompt],
-            [UserComments],
-            [Code],
-            [CodeComments],
-            [CodeApprovalStatus],
-            [CodeApprovalComments],
-            [CodeApprovedByUserID],
-            [CodeApprovedAt],
-            [CodeLocked],
-            [ForceCodeGeneration],
-            [RetentionPeriod],
-            [Status],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
+            [DisplaySequence]
         )
     OUTPUT INSERTED.[ID] INTO @InsertedRow
     VALUES
         (
-            @CategoryID,
             @Name,
             @Description,
-            @Type,
-            @UserPrompt,
-            @UserComments,
-            @Code,
-            @CodeComments,
-            @CodeApprovalStatus,
-            @CodeApprovalComments,
-            @CodeApprovedByUserID,
-            @CodeApprovedAt,
-            @CodeLocked,
-            @ForceCodeGeneration,
-            @RetentionPeriod,
-            @Status,
-            GETUTCDATE(),
-            GETUTCDATE()
+            @DisplaySequence
         )
     -- return the new record from the base view, which might have some calculated fields
-    SELECT * FROM [__mj].[vwActions] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
+    SELECT * FROM [__mj].[vwEntityActionInvocationTypes] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
 END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
@@ -16926,82 +16492,91 @@ END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [__mj].[spCreateEntityActionInvocationType]'
+PRINT N'Creating [__mj].[spCreateActionCategory]'
 GO
 
 
-CREATE PROCEDURE [__mj].[spCreateEntityActionInvocationType]
+CREATE PROCEDURE [__mj].[spCreateActionCategory]
     @Name nvarchar(255),
     @Description nvarchar(MAX),
-    @DisplaySequence int
+    @ParentID uniqueidentifier,
+    @Status nvarchar(20)
 AS
 BEGIN
     SET NOCOUNT ON;
     DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
     INSERT INTO 
-    [__mj].[EntityActionInvocationType]
+    [__mj].[ActionCategory]
         (
             [Name],
             [Description],
-            [DisplaySequence]
+            [ParentID],
+            [Status],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
         )
     OUTPUT INSERTED.[ID] INTO @InsertedRow
     VALUES
         (
             @Name,
             @Description,
-            @DisplaySequence
+            @ParentID,
+            @Status,
+            GETUTCDATE(),
+            GETUTCDATE()
         )
     -- return the new record from the base view, which might have some calculated fields
-    SELECT * FROM [__mj].[vwEntityActionInvocationTypes] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
+    SELECT * FROM [__mj].[vwActionCategories] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
 END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [__mj].[vwRecordMergeDeletionLogs]'
+PRINT N'Creating [__mj].[vwCompanyIntegrationRecordMaps]'
 GO
 
 
-CREATE VIEW [__mj].[vwRecordMergeDeletionLogs]
+CREATE VIEW [__mj].[vwCompanyIntegrationRecordMaps]
 AS
 SELECT 
-    r.*
+    c.*,
+    Entity_EntityID.[Name] AS [Entity]
 FROM
-    [__mj].[RecordMergeDeletionLog] AS r
+    [__mj].[CompanyIntegrationRecordMap] AS c
+INNER JOIN
+    [__mj].[Entity] AS Entity_EntityID
+  ON
+    [c].[EntityID] = Entity_EntityID.[ID]
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [__mj].[spCreateRecordChangeReplayRun]'
+PRINT N'Creating [__mj].[spCreateLibraryItem]'
 GO
 
 
-CREATE PROCEDURE [__mj].[spCreateRecordChangeReplayRun]
-    @StartedAt datetime,
-    @EndedAt datetime,
-    @Status nvarchar(50),
-    @UserID uniqueidentifier
+CREATE PROCEDURE [__mj].[spCreateLibraryItem]
+    @Name nvarchar(255),
+    @LibraryID uniqueidentifier,
+    @Type nvarchar(50)
 AS
 BEGIN
     SET NOCOUNT ON;
     DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
     INSERT INTO 
-    [__mj].[RecordChangeReplayRun]
+    [__mj].[LibraryItem]
         (
-            [StartedAt],
-            [EndedAt],
-            [Status],
-            [UserID]
+            [Name],
+            [LibraryID],
+            [Type]
         )
     OUTPUT INSERTED.[ID] INTO @InsertedRow
     VALUES
         (
-            @StartedAt,
-            @EndedAt,
-            @Status,
-            @UserID
+            @Name,
+            @LibraryID,
+            @Type
         )
     -- return the new record from the base view, which might have some calculated fields
-    SELECT * FROM [__mj].[vwRecordChangeReplayRuns] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
+    SELECT * FROM [__mj].[vwLibraryItems] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
 END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
@@ -17040,6 +16615,104 @@ SELECT @NewID=ID FROM @InsertedRow
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
+PRINT N'Creating [__mj].[spCreateActionAuthorization]'
+GO
+
+
+CREATE PROCEDURE [__mj].[spCreateActionAuthorization]
+    @ActionID uniqueidentifier,
+    @AuthorizationID uniqueidentifier,
+    @Comments nvarchar(MAX)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
+    INSERT INTO 
+    [__mj].[ActionAuthorization]
+        (
+            [ActionID],
+            [AuthorizationID],
+            [Comments]
+        )
+    OUTPUT INSERTED.[ID] INTO @InsertedRow
+    VALUES
+        (
+            @ActionID,
+            @AuthorizationID,
+            @Comments
+        )
+    -- return the new record from the base view, which might have some calculated fields
+    SELECT * FROM [__mj].[vwActionAuthorizations] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
+END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[vwRecordMergeDeletionLogs]'
+GO
+
+
+CREATE VIEW [__mj].[vwRecordMergeDeletionLogs]
+AS
+SELECT 
+    r.*
+FROM
+    [__mj].[RecordMergeDeletionLog] AS r
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[spCreateEntityCommunicationMessageType]'
+GO
+
+
+CREATE PROCEDURE [__mj].[spCreateEntityCommunicationMessageType]
+    @EntityID uniqueidentifier,
+    @BaseMessageTypeID uniqueidentifier,
+    @IsActive bit
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
+    INSERT INTO 
+    [__mj].[EntityCommunicationMessageType]
+        (
+            [EntityID],
+            [BaseMessageTypeID],
+            [IsActive]
+        )
+    OUTPUT INSERTED.[ID] INTO @InsertedRow
+    VALUES
+        (
+            @EntityID,
+            @BaseMessageTypeID,
+            @IsActive
+        )
+    -- return the new record from the base view, which might have some calculated fields
+    SELECT * FROM [__mj].[vwEntityCommunicationMessageTypes] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
+END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[spCreateCompanyIntegrationRunAPILog]'
+GO
+
+CREATE PROC [__mj].[spCreateCompanyIntegrationRunAPILog]
+(@CompanyIntegrationRunID uniqueidentifier, @RequestMethod NVARCHAR(12), @URL NVARCHAR(MAX), @Parameters NVARCHAR(MAX)=NULL, @IsSuccess BIT)
+AS
+INSERT INTO [__mj].[CompanyIntegrationRunAPILog]
+           ([CompanyIntegrationRunID]
+           ,[RequestMethod]
+		   ,[URL]
+		   ,[Parameters]
+           ,[IsSuccess])
+     VALUES
+           (@CompanyIntegrationRunID
+           ,@RequestMethod
+		   ,@URL
+		   ,@Parameters
+           ,@IsSuccess)
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
 PRINT N'Creating [__mj].[spCreateEntityActionInvocation]'
 GO
 
@@ -17072,150 +16745,16 @@ END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [__mj].[vwQueryCategories]'
+PRINT N'Creating [__mj].[vwSchemaInfos]'
 GO
 
 
-CREATE VIEW [__mj].[vwQueryCategories]
+CREATE VIEW [__mj].[vwSchemaInfos]
 AS
 SELECT 
-    q.*,
-    QueryCategory_ParentID.[Name] AS [Parent],
-    User_UserID.[Name] AS [User]
+    s.*
 FROM
-    [__mj].[QueryCategory] AS q
-LEFT OUTER JOIN
-    [__mj].[QueryCategory] AS QueryCategory_ParentID
-  ON
-    [q].[ParentID] = QueryCategory_ParentID.[ID]
-INNER JOIN
-    [__mj].[User] AS User_UserID
-  ON
-    [q].[UserID] = User_UserID.[ID]
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[spCreateLibraryItem]'
-GO
-
-
-CREATE PROCEDURE [__mj].[spCreateLibraryItem]
-    @Name nvarchar(255),
-    @LibraryID uniqueidentifier,
-    @Type nvarchar(50)
-AS
-BEGIN
-    SET NOCOUNT ON;
-    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
-    INSERT INTO 
-    [__mj].[LibraryItem]
-        (
-            [Name],
-            [LibraryID],
-            [Type]
-        )
-    OUTPUT INSERTED.[ID] INTO @InsertedRow
-    VALUES
-        (
-            @Name,
-            @LibraryID,
-            @Type
-        )
-    -- return the new record from the base view, which might have some calculated fields
-    SELECT * FROM [__mj].[vwLibraryItems] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
-END
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[spCreateCompanyIntegrationRunAPILog]'
-GO
-
-CREATE PROC [__mj].[spCreateCompanyIntegrationRunAPILog]
-(@CompanyIntegrationRunID uniqueidentifier, @RequestMethod NVARCHAR(12), @URL NVARCHAR(MAX), @Parameters NVARCHAR(MAX)=NULL, @IsSuccess BIT)
-AS
-INSERT INTO [__mj].[CompanyIntegrationRunAPILog]
-           ([CompanyIntegrationRunID]
-           ,[RequestMethod]
-		   ,[URL]
-		   ,[Parameters]
-           ,[IsSuccess])
-     VALUES
-           (@CompanyIntegrationRunID
-           ,@RequestMethod
-		   ,@URL
-		   ,@Parameters
-           ,@IsSuccess)
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[spCreateEntityAction]'
-GO
-
-
-CREATE PROCEDURE [__mj].[spCreateEntityAction]
-    @EntityID uniqueidentifier,
-    @ActionID uniqueidentifier,
-    @Status nvarchar(20)
-AS
-BEGIN
-    SET NOCOUNT ON;
-    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
-    INSERT INTO 
-    [__mj].[EntityAction]
-        (
-            [EntityID],
-            [ActionID],
-            [Status]
-        )
-    OUTPUT INSERTED.[ID] INTO @InsertedRow
-    VALUES
-        (
-            @EntityID,
-            @ActionID,
-            @Status
-        )
-    -- return the new record from the base view, which might have some calculated fields
-    SELECT * FROM [__mj].[vwEntityActions] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
-END
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[vwCompanyIntegrationRecordMaps]'
-GO
-
-
-CREATE VIEW [__mj].[vwCompanyIntegrationRecordMaps]
-AS
-SELECT 
-    c.*,
-    Entity_EntityID.[Name] AS [Entity]
-FROM
-    [__mj].[CompanyIntegrationRecordMap] AS c
-INNER JOIN
-    [__mj].[Entity] AS Entity_EntityID
-  ON
-    [c].[EntityID] = Entity_EntityID.[ID]
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[spDeleteApplicationEntity]'
-GO
-
-
-CREATE PROCEDURE [__mj].[spDeleteApplicationEntity]
-    @ID uniqueidentifier
-AS  
-BEGIN
-    SET NOCOUNT ON;
-
-    DELETE FROM 
-        [__mj].[ApplicationEntity]
-    WHERE 
-        [ID] = @ID
-
-
-    SELECT @ID AS [ID] -- Return the primary key to indicate we successfully deleted the record
-END
+    [__mj].[SchemaInfo] AS s
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
@@ -17292,34 +16831,35 @@ INSERT INTO [__mj].[ErrorLog]
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [__mj].[spCreateActionAuthorization]'
+PRINT N'Creating [__mj].[spUpdateEntityAction]'
 GO
 
 
-CREATE PROCEDURE [__mj].[spCreateActionAuthorization]
+CREATE PROCEDURE [__mj].[spUpdateEntityAction]
+    @EntityID uniqueidentifier,
     @ActionID uniqueidentifier,
-    @AuthorizationID uniqueidentifier,
-    @Comments nvarchar(MAX)
+    @Status nvarchar(20),
+    @ID uniqueidentifier
 AS
 BEGIN
     SET NOCOUNT ON;
-    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
-    INSERT INTO 
-    [__mj].[ActionAuthorization]
-        (
-            [ActionID],
-            [AuthorizationID],
-            [Comments]
-        )
-    OUTPUT INSERTED.[ID] INTO @InsertedRow
-    VALUES
-        (
-            @ActionID,
-            @AuthorizationID,
-            @Comments
-        )
-    -- return the new record from the base view, which might have some calculated fields
-    SELECT * FROM [__mj].[vwActionAuthorizations] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
+    UPDATE 
+        [__mj].[EntityAction]
+    SET 
+        [EntityID] = @EntityID,
+        [ActionID] = @ActionID,
+        [Status] = @Status
+    WHERE
+        [ID] = @ID
+
+    -- return the updated record so the caller can see the updated values and any calculated fields
+    SELECT 
+                                        * 
+                                    FROM 
+                                        [__mj].[vwEntityActions] 
+                                    WHERE
+                                        [ID] = @ID
+                                    
 END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
@@ -17347,28 +16887,47 @@ LEFT OUTER JOIN
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [__mj].[spUpdateEntityActionParam]'
+PRINT N'Creating [__mj].[spDeleteUserApplicationEntity]'
 GO
 
 
-CREATE PROCEDURE [__mj].[spUpdateEntityActionParam]
+CREATE PROCEDURE [__mj].[spDeleteUserApplicationEntity]
+    @ID uniqueidentifier
+AS  
+BEGIN
+    SET NOCOUNT ON;
+
+    DELETE FROM 
+        [__mj].[UserApplicationEntity]
+    WHERE 
+        [ID] = @ID
+
+
+    SELECT @ID AS [ID] -- Return the primary key to indicate we successfully deleted the record
+END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[spUpdateRecordChangeReplayRun]'
+GO
+
+
+CREATE PROCEDURE [__mj].[spUpdateRecordChangeReplayRun]
     @ID uniqueidentifier,
-    @EntityActionID uniqueidentifier,
-    @ActionParamID uniqueidentifier,
-    @ValueType nvarchar(20),
-    @Value nvarchar(MAX),
-    @Comments nvarchar(MAX)
+    @StartedAt datetime,
+    @EndedAt datetime,
+    @Status nvarchar(50),
+    @UserID uniqueidentifier
 AS
 BEGIN
     SET NOCOUNT ON;
     UPDATE 
-        [__mj].[EntityActionParam]
+        [__mj].[RecordChangeReplayRun]
     SET 
-        [EntityActionID] = @EntityActionID,
-        [ActionParamID] = @ActionParamID,
-        [ValueType] = @ValueType,
-        [Value] = @Value,
-        [Comments] = @Comments
+        [StartedAt] = @StartedAt,
+        [EndedAt] = @EndedAt,
+        [Status] = @Status,
+        [UserID] = @UserID
     WHERE
         [ID] = @ID
 
@@ -17376,7 +16935,7 @@ BEGIN
     SELECT 
                                         * 
                                     FROM 
-                                        [__mj].[vwEntityActionParams] 
+                                        [__mj].[vwRecordChangeReplayRuns] 
                                     WHERE
                                         [ID] = @ID
                                     
@@ -17402,50 +16961,24 @@ WHERE
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [__mj].[spUpdateAction]'
+PRINT N'Creating [__mj].[spUpdateEntityActionInvocationType]'
 GO
 
 
-CREATE PROCEDURE [__mj].[spUpdateAction]
+CREATE PROCEDURE [__mj].[spUpdateEntityActionInvocationType]
     @ID uniqueidentifier,
-    @CategoryID uniqueidentifier,
-    @Name nvarchar(425),
+    @Name nvarchar(255),
     @Description nvarchar(MAX),
-    @Type nvarchar(20),
-    @UserPrompt nvarchar(MAX),
-    @UserComments nvarchar(MAX),
-    @Code nvarchar(MAX),
-    @CodeComments nvarchar(MAX),
-    @CodeApprovalStatus nvarchar(20),
-    @CodeApprovalComments nvarchar(MAX),
-    @CodeApprovedByUserID uniqueidentifier,
-    @CodeApprovedAt datetime,
-    @CodeLocked bit,
-    @ForceCodeGeneration bit,
-    @RetentionPeriod int,
-    @Status nvarchar(20)
+    @DisplaySequence int
 AS
 BEGIN
     SET NOCOUNT ON;
     UPDATE 
-        [__mj].[Action]
+        [__mj].[EntityActionInvocationType]
     SET 
-        [CategoryID] = @CategoryID,
         [Name] = @Name,
         [Description] = @Description,
-        [Type] = @Type,
-        [UserPrompt] = @UserPrompt,
-        [UserComments] = @UserComments,
-        [Code] = @Code,
-        [CodeComments] = @CodeComments,
-        [CodeApprovalStatus] = @CodeApprovalStatus,
-        [CodeApprovalComments] = @CodeApprovalComments,
-        [CodeApprovedByUserID] = @CodeApprovedByUserID,
-        [CodeApprovedAt] = @CodeApprovedAt,
-        [CodeLocked] = @CodeLocked,
-        [ForceCodeGeneration] = @ForceCodeGeneration,
-        [RetentionPeriod] = @RetentionPeriod,
-        [Status] = @Status
+        [DisplaySequence] = @DisplaySequence
     WHERE
         [ID] = @ID
 
@@ -17453,7 +16986,7 @@ BEGIN
     SELECT 
                                         * 
                                     FROM 
-                                        [__mj].[vwActions] 
+                                        [__mj].[vwEntityActionInvocationTypes] 
                                     WHERE
                                         [ID] = @ID
                                     
@@ -17461,71 +16994,53 @@ END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [__mj].[spCreateRecordMergeLog]'
+PRINT N'Creating [__mj].[spCreateCompanyIntegrationRecordMap]'
 GO
 
 
-CREATE PROCEDURE [__mj].[spCreateRecordMergeLog]
+CREATE PROCEDURE [__mj].[spCreateCompanyIntegrationRecordMap]
+    @CompanyIntegrationID uniqueidentifier,
+    @ExternalSystemRecordID nvarchar(750),
     @EntityID uniqueidentifier,
-    @SurvivingRecordID nvarchar(450),
-    @InitiatedByUserID uniqueidentifier,
-    @ApprovalStatus nvarchar(10),
-    @ApprovedByUserID uniqueidentifier,
-    @ProcessingStatus nvarchar(10),
-    @ProcessingStartedAt datetime,
-    @ProcessingEndedAt datetime,
-    @ProcessingLog nvarchar(MAX),
-    @Comments nvarchar(MAX)
+    @EntityRecordID nvarchar(750)
 AS
 BEGIN
     SET NOCOUNT ON;
     DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
     INSERT INTO 
-    [__mj].[RecordMergeLog]
+    [__mj].[CompanyIntegrationRecordMap]
         (
+            [CompanyIntegrationID],
+            [ExternalSystemRecordID],
             [EntityID],
-            [SurvivingRecordID],
-            [InitiatedByUserID],
-            [ApprovalStatus],
-            [ApprovedByUserID],
-            [ProcessingStatus],
-            [ProcessingStartedAt],
-            [ProcessingEndedAt],
-            [ProcessingLog],
-            [Comments]
+            [EntityRecordID]
         )
     OUTPUT INSERTED.[ID] INTO @InsertedRow
     VALUES
         (
+            @CompanyIntegrationID,
+            @ExternalSystemRecordID,
             @EntityID,
-            @SurvivingRecordID,
-            @InitiatedByUserID,
-            @ApprovalStatus,
-            @ApprovedByUserID,
-            @ProcessingStatus,
-            @ProcessingStartedAt,
-            @ProcessingEndedAt,
-            @ProcessingLog,
-            @Comments
+            @EntityRecordID
         )
     -- return the new record from the base view, which might have some calculated fields
-    SELECT * FROM [__mj].[vwRecordMergeLogs] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
+    SELECT * FROM [__mj].[vwCompanyIntegrationRecordMaps] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
 END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [__mj].[spDeleteEntityPermission]'
+PRINT N'Creating [__mj].[spDeleteApplicationEntity]'
 GO
 
 
-CREATE PROCEDURE [__mj].[spDeleteEntityPermission]
+CREATE PROCEDURE [__mj].[spDeleteApplicationEntity]
     @ID uniqueidentifier
 AS  
 BEGIN
     SET NOCOUNT ON;
 
     DELETE FROM 
-        [__mj].[EntityPermission]
+        [__mj].[ApplicationEntity]
     WHERE 
         [ID] = @ID
 
@@ -17586,24 +17101,26 @@ SELECT
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [__mj].[spUpdateEntityActionInvocationType]'
+PRINT N'Creating [__mj].[spUpdateActionCategory]'
 GO
 
 
-CREATE PROCEDURE [__mj].[spUpdateEntityActionInvocationType]
+CREATE PROCEDURE [__mj].[spUpdateActionCategory]
     @ID uniqueidentifier,
     @Name nvarchar(255),
     @Description nvarchar(MAX),
-    @DisplaySequence int
+    @ParentID uniqueidentifier,
+    @Status nvarchar(20)
 AS
 BEGIN
     SET NOCOUNT ON;
     UPDATE 
-        [__mj].[EntityActionInvocationType]
+        [__mj].[ActionCategory]
     SET 
         [Name] = @Name,
         [Description] = @Description,
-        [DisplaySequence] = @DisplaySequence
+        [ParentID] = @ParentID,
+        [Status] = @Status
     WHERE
         [ID] = @ID
 
@@ -17611,7 +17128,7 @@ BEGIN
     SELECT 
                                         * 
                                     FROM 
-                                        [__mj].[vwEntityActionInvocationTypes] 
+                                        [__mj].[vwActionCategories] 
                                     WHERE
                                         [ID] = @ID
                                     
@@ -17654,18 +17171,18 @@ END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [__mj].[spDeleteUserApplicationEntity]'
+PRINT N'Creating [__mj].[spDeleteEntityPermission]'
 GO
 
 
-CREATE PROCEDURE [__mj].[spDeleteUserApplicationEntity]
+CREATE PROCEDURE [__mj].[spDeleteEntityPermission]
     @ID uniqueidentifier
 AS  
 BEGIN
     SET NOCOUNT ON;
 
     DELETE FROM 
-        [__mj].[UserApplicationEntity]
+        [__mj].[EntityPermission]
     WHERE 
         [ID] = @ID
 
@@ -17675,26 +17192,24 @@ END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [__mj].[spUpdateRecordChangeReplayRun]'
+PRINT N'Creating [__mj].[spUpdateEntityCommunicationMessageType]'
 GO
 
 
-CREATE PROCEDURE [__mj].[spUpdateRecordChangeReplayRun]
+CREATE PROCEDURE [__mj].[spUpdateEntityCommunicationMessageType]
     @ID uniqueidentifier,
-    @StartedAt datetime,
-    @EndedAt datetime,
-    @Status nvarchar(50),
-    @UserID uniqueidentifier
+    @EntityID uniqueidentifier,
+    @BaseMessageTypeID uniqueidentifier,
+    @IsActive bit
 AS
 BEGIN
     SET NOCOUNT ON;
     UPDATE 
-        [__mj].[RecordChangeReplayRun]
+        [__mj].[EntityCommunicationMessageType]
     SET 
-        [StartedAt] = @StartedAt,
-        [EndedAt] = @EndedAt,
-        [Status] = @Status,
-        [UserID] = @UserID
+        [EntityID] = @EntityID,
+        [BaseMessageTypeID] = @BaseMessageTypeID,
+        [IsActive] = @IsActive
     WHERE
         [ID] = @ID
 
@@ -17702,7 +17217,7 @@ BEGIN
     SELECT 
                                         * 
                                     FROM 
-                                        [__mj].[vwRecordChangeReplayRuns] 
+                                        [__mj].[vwEntityCommunicationMessageTypes] 
                                     WHERE
                                         [ID] = @ID
                                     
@@ -17741,24 +17256,24 @@ WHERE
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [__mj].[spUpdateEntityActionInvocation]'
+PRINT N'Creating [__mj].[spUpdateActionAuthorization]'
 GO
 
 
-CREATE PROCEDURE [__mj].[spUpdateEntityActionInvocation]
+CREATE PROCEDURE [__mj].[spUpdateActionAuthorization]
     @ID uniqueidentifier,
-    @EntityActionID uniqueidentifier,
-    @InvocationTypeID uniqueidentifier,
-    @Status nvarchar(20)
+    @ActionID uniqueidentifier,
+    @AuthorizationID uniqueidentifier,
+    @Comments nvarchar(MAX)
 AS
 BEGIN
     SET NOCOUNT ON;
     UPDATE 
-        [__mj].[EntityActionInvocation]
+        [__mj].[ActionAuthorization]
     SET 
-        [EntityActionID] = @EntityActionID,
-        [InvocationTypeID] = @InvocationTypeID,
-        [Status] = @Status
+        [ActionID] = @ActionID,
+        [AuthorizationID] = @AuthorizationID,
+        [Comments] = @Comments
     WHERE
         [ID] = @ID
 
@@ -17766,7 +17281,7 @@ BEGIN
     SELECT 
                                         * 
                                     FROM 
-                                        [__mj].[vwEntityActionInvocations] 
+                                        [__mj].[vwActionAuthorizations] 
                                     WHERE
                                         [ID] = @ID
                                     
@@ -17774,53 +17289,71 @@ END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [__mj].[spCreateQueryCategory]'
+PRINT N'Creating [__mj].[spCreateRecordMergeLog]'
 GO
 
 
-CREATE PROCEDURE [__mj].[spCreateQueryCategory]
-    @Name nvarchar(50),
-    @ParentID uniqueidentifier,
-    @Description nvarchar(MAX),
-    @UserID uniqueidentifier
+CREATE PROCEDURE [__mj].[spCreateRecordMergeLog]
+    @EntityID uniqueidentifier,
+    @SurvivingRecordID nvarchar(450),
+    @InitiatedByUserID uniqueidentifier,
+    @ApprovalStatus nvarchar(10),
+    @ApprovedByUserID uniqueidentifier,
+    @ProcessingStatus nvarchar(10),
+    @ProcessingStartedAt datetime,
+    @ProcessingEndedAt datetime,
+    @ProcessingLog nvarchar(MAX),
+    @Comments nvarchar(MAX)
 AS
 BEGIN
     SET NOCOUNT ON;
     DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
     INSERT INTO 
-    [__mj].[QueryCategory]
+    [__mj].[RecordMergeLog]
         (
-            [Name],
-            [ParentID],
-            [Description],
-            [UserID]
+            [EntityID],
+            [SurvivingRecordID],
+            [InitiatedByUserID],
+            [ApprovalStatus],
+            [ApprovedByUserID],
+            [ProcessingStatus],
+            [ProcessingStartedAt],
+            [ProcessingEndedAt],
+            [ProcessingLog],
+            [Comments]
         )
     OUTPUT INSERTED.[ID] INTO @InsertedRow
     VALUES
         (
-            @Name,
-            @ParentID,
-            @Description,
-            @UserID
+            @EntityID,
+            @SurvivingRecordID,
+            @InitiatedByUserID,
+            @ApprovalStatus,
+            @ApprovedByUserID,
+            @ProcessingStatus,
+            @ProcessingStartedAt,
+            @ProcessingEndedAt,
+            @ProcessingLog,
+            @Comments
         )
     -- return the new record from the base view, which might have some calculated fields
-    SELECT * FROM [__mj].[vwQueryCategories] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
+    SELECT * FROM [__mj].[vwRecordMergeLogs] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
 END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [__mj].[spDeleteUserApplication]'
+PRINT N'Creating [__mj].[spDeleteApplication]'
 GO
 
 
-CREATE PROCEDURE [__mj].[spDeleteUserApplication]
+CREATE PROCEDURE [__mj].[spDeleteApplication]
     @ID uniqueidentifier
 AS  
 BEGIN
     SET NOCOUNT ON;
 
     DELETE FROM 
-        [__mj].[UserApplication]
+        [__mj].[Application]
     WHERE 
         [ID] = @ID
 
@@ -17899,24 +17432,24 @@ INNER JOIN
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [__mj].[spUpdateActionAuthorization]'
+PRINT N'Creating [__mj].[spUpdateEntityActionInvocation]'
 GO
 
 
-CREATE PROCEDURE [__mj].[spUpdateActionAuthorization]
+CREATE PROCEDURE [__mj].[spUpdateEntityActionInvocation]
     @ID uniqueidentifier,
-    @ActionID uniqueidentifier,
-    @AuthorizationID uniqueidentifier,
-    @Comments nvarchar(MAX)
+    @EntityActionID uniqueidentifier,
+    @InvocationTypeID uniqueidentifier,
+    @Status nvarchar(20)
 AS
 BEGIN
     SET NOCOUNT ON;
     UPDATE 
-        [__mj].[ActionAuthorization]
+        [__mj].[EntityActionInvocation]
     SET 
-        [ActionID] = @ActionID,
-        [AuthorizationID] = @AuthorizationID,
-        [Comments] = @Comments
+        [EntityActionID] = @EntityActionID,
+        [InvocationTypeID] = @InvocationTypeID,
+        [Status] = @Status
     WHERE
         [ID] = @ID
 
@@ -17924,7 +17457,7 @@ BEGIN
     SELECT 
                                         * 
                                     FROM 
-                                        [__mj].[vwActionAuthorizations] 
+                                        [__mj].[vwEntityActionInvocations] 
                                     WHERE
                                         [ID] = @ID
                                     
@@ -17932,61 +17465,59 @@ END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [__mj].[spCreateCompanyIntegrationRecordMap]'
+PRINT N'Creating [__mj].[spCreateSchemaInfo]'
 GO
 
 
-CREATE PROCEDURE [__mj].[spCreateCompanyIntegrationRecordMap]
-    @CompanyIntegrationID uniqueidentifier,
-    @ExternalSystemRecordID nvarchar(750),
-    @EntityID uniqueidentifier,
-    @EntityRecordID nvarchar(750)
+CREATE PROCEDURE [__mj].[spCreateSchemaInfo]
+    @SchemaName nvarchar(50),
+    @EntityIDMin int,
+    @EntityIDMax int,
+    @Comments nvarchar(MAX)
 AS
 BEGIN
     SET NOCOUNT ON;
     DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
     INSERT INTO 
-    [__mj].[CompanyIntegrationRecordMap]
+    [__mj].[SchemaInfo]
         (
-            [CompanyIntegrationID],
-            [ExternalSystemRecordID],
-            [EntityID],
-            [EntityRecordID]
+            [SchemaName],
+            [EntityIDMin],
+            [EntityIDMax],
+            [Comments]
         )
     OUTPUT INSERTED.[ID] INTO @InsertedRow
     VALUES
         (
-            @CompanyIntegrationID,
-            @ExternalSystemRecordID,
-            @EntityID,
-            @EntityRecordID
+            @SchemaName,
+            @EntityIDMin,
+            @EntityIDMax,
+            @Comments
         )
     -- return the new record from the base view, which might have some calculated fields
-    SELECT * FROM [__mj].[vwCompanyIntegrationRecordMaps] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
+    SELECT * FROM [__mj].[vwSchemaInfos] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
 END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [__mj].[vwLists]'
+PRINT N'Creating [__mj].[spDeleteUserApplication]'
 GO
 
 
-CREATE VIEW [__mj].[vwLists]
-AS
-SELECT 
-    l.*,
-    Entity_EntityID.[Name] AS [Entity],
-    User_UserID.[Name] AS [User]
-FROM
-    [__mj].[List] AS l
-INNER JOIN
-    [__mj].[Entity] AS Entity_EntityID
-  ON
-    [l].[EntityID] = Entity_EntityID.[ID]
-INNER JOIN
-    [__mj].[User] AS User_UserID
-  ON
-    [l].[UserID] = User_UserID.[ID]
+CREATE PROCEDURE [__mj].[spDeleteUserApplication]
+    @ID uniqueidentifier
+AS  
+BEGIN
+    SET NOCOUNT ON;
+
+    DELETE FROM 
+        [__mj].[UserApplication]
+    WHERE 
+        [ID] = @ID
+
+
+    SELECT @ID AS [ID] -- Return the primary key to indicate we successfully deleted the record
+END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
@@ -18052,39 +17583,6 @@ WHERE
 		  WHERE 
 			  ef.Name='__mj_CreatedAt' AND ef.Type='datetimeoffset' AND ef.EntityID = e.ID
 		  )
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[spUpdateEntityAction]'
-GO
-
-
-CREATE PROCEDURE [__mj].[spUpdateEntityAction]
-    @EntityID uniqueidentifier,
-    @ActionID uniqueidentifier,
-    @Status nvarchar(20),
-    @ID uniqueidentifier
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[EntityAction]
-    SET 
-        [EntityID] = @EntityID,
-        [ActionID] = @ActionID,
-        [Status] = @Status
-    WHERE
-        [ID] = @ID
-
-    -- return the updated record so the caller can see the updated values and any calculated fields
-    SELECT 
-                                        * 
-                                    FROM 
-                                        [__mj].[vwEntityActions] 
-                                    WHERE
-                                        [ID] = @ID
-                                    
-END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
@@ -18189,6 +17687,127 @@ WHERE
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
+PRINT N'Creating [__mj].[spUpdateCompanyIntegrationRecordMap]'
+GO
+
+
+CREATE PROCEDURE [__mj].[spUpdateCompanyIntegrationRecordMap]
+    @ID uniqueidentifier,
+    @CompanyIntegrationID uniqueidentifier,
+    @ExternalSystemRecordID nvarchar(750),
+    @EntityID uniqueidentifier,
+    @EntityRecordID nvarchar(750)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[CompanyIntegrationRecordMap]
+    SET 
+        [CompanyIntegrationID] = @CompanyIntegrationID,
+        [ExternalSystemRecordID] = @ExternalSystemRecordID,
+        [EntityID] = @EntityID,
+        [EntityRecordID] = @EntityRecordID
+    WHERE
+        [ID] = @ID
+
+    -- return the updated record so the caller can see the updated values and any calculated fields
+    SELECT 
+                                        * 
+                                    FROM 
+                                        [__mj].[vwCompanyIntegrationRecordMaps] 
+                                    WHERE
+                                        [ID] = @ID
+                                    
+END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[vwCompanyIntegrationRunAPILogs]'
+GO
+
+
+CREATE VIEW [__mj].[vwCompanyIntegrationRunAPILogs]
+AS
+SELECT 
+    c.*
+FROM
+    [__mj].[CompanyIntegrationRunAPILog] AS c
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[spDeleteEntityWithCoreDependencies]'
+GO
+
+CREATE PROC [__mj].[spDeleteEntityWithCoreDependencies]
+  @EntityID nvarchar(100)
+AS
+DELETE FROM __mj.EntityFieldValue WHERE EntityFieldID IN (SELECT ID FROM __mj.EntityField WHERE EntityID = @EntityID)
+DELETE FROM __mj.EntityField WHERE EntityID = @EntityID
+DELETE FROM __mj.EntityPermission WHERE EntityID = @EntityID
+DELETE FROM __mj.EntityRelationship WHERE EntityID = @EntityID OR RelatedEntityID = @EntityID
+DELETE FROM __mj.ApplicationEntity WHERE EntityID = @EntityID
+DELETE FROM __mj.Entity WHERE ID = @EntityID
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[spUpdateRecordMergeDeletionLog]'
+GO
+
+
+CREATE PROCEDURE [__mj].[spUpdateRecordMergeDeletionLog]
+    @ID uniqueidentifier,
+    @RecordMergeLogID uniqueidentifier,
+    @DeletedRecordID nvarchar(750),
+    @Status nvarchar(10),
+    @ProcessingLog nvarchar(MAX)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[RecordMergeDeletionLog]
+    SET 
+        [RecordMergeLogID] = @RecordMergeLogID,
+        [DeletedRecordID] = @DeletedRecordID,
+        [Status] = @Status,
+        [ProcessingLog] = @ProcessingLog
+    WHERE
+        [ID] = @ID
+
+    -- return the updated record so the caller can see the updated values and any calculated fields
+    SELECT 
+                                        * 
+                                    FROM 
+                                        [__mj].[vwRecordMergeDeletionLogs] 
+                                    WHERE
+                                        [ID] = @ID
+                                    
+END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[vwLists]'
+GO
+
+
+CREATE VIEW [__mj].[vwLists]
+AS
+SELECT 
+    l.*,
+    Entity_EntityID.[Name] AS [Entity],
+    User_UserID.[Name] AS [User]
+FROM
+    [__mj].[List] AS l
+INNER JOIN
+    [__mj].[Entity] AS Entity_EntityID
+  ON
+    [l].[EntityID] = Entity_EntityID.[ID]
+INNER JOIN
+    [__mj].[User] AS User_UserID
+  ON
+    [l].[UserID] = User_UserID.[ID]
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
 PRINT N'Creating [__mj].[spUpdateRecordMergeLog]'
 GO
 
@@ -18254,41 +17873,26 @@ INNER JOIN
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [__mj].[spDeleteEntityWithCoreDependencies]'
-GO
-
-CREATE PROC [__mj].[spDeleteEntityWithCoreDependencies]
-  @EntityID nvarchar(100)
-AS
-DELETE FROM __mj.EntityFieldValue WHERE EntityFieldID IN (SELECT ID FROM __mj.EntityField WHERE EntityID = @EntityID)
-DELETE FROM __mj.EntityField WHERE EntityID = @EntityID
-DELETE FROM __mj.EntityPermission WHERE EntityID = @EntityID
-DELETE FROM __mj.EntityRelationship WHERE EntityID = @EntityID OR RelatedEntityID = @EntityID
-DELETE FROM __mj.ApplicationEntity WHERE EntityID = @EntityID
-DELETE FROM __mj.Entity WHERE ID = @EntityID
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[spUpdateQueryCategory]'
+PRINT N'Creating [__mj].[spUpdateSchemaInfo]'
 GO
 
 
-CREATE PROCEDURE [__mj].[spUpdateQueryCategory]
+CREATE PROCEDURE [__mj].[spUpdateSchemaInfo]
     @ID uniqueidentifier,
-    @Name nvarchar(50),
-    @ParentID uniqueidentifier,
-    @Description nvarchar(MAX),
-    @UserID uniqueidentifier
+    @SchemaName nvarchar(50),
+    @EntityIDMin int,
+    @EntityIDMax int,
+    @Comments nvarchar(MAX)
 AS
 BEGIN
     SET NOCOUNT ON;
     UPDATE 
-        [__mj].[QueryCategory]
+        [__mj].[SchemaInfo]
     SET 
-        [Name] = @Name,
-        [ParentID] = @ParentID,
-        [Description] = @Description,
-        [UserID] = @UserID
+        [SchemaName] = @SchemaName,
+        [EntityIDMin] = @EntityIDMin,
+        [EntityIDMax] = @EntityIDMax,
+        [Comments] = @Comments
     WHERE
         [ID] = @ID
 
@@ -18296,7 +17900,7 @@ BEGIN
     SELECT 
                                         * 
                                     FROM 
-                                        [__mj].[vwQueryCategories] 
+                                        [__mj].[vwSchemaInfos] 
                                     WHERE
                                         [ID] = @ID
                                     
@@ -18333,155 +17937,23 @@ END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [__mj].[spUpdateRecordMergeDeletionLog]'
+PRINT N'Creating [__mj].[spDeleteEntityAction]'
 GO
 
 
-CREATE PROCEDURE [__mj].[spUpdateRecordMergeDeletionLog]
-    @ID uniqueidentifier,
-    @RecordMergeLogID uniqueidentifier,
-    @DeletedRecordID nvarchar(750),
-    @Status nvarchar(10),
-    @ProcessingLog nvarchar(MAX)
-AS
+CREATE PROCEDURE [__mj].[spDeleteEntityAction]
+    @ID uniqueidentifier
+AS  
 BEGIN
     SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[RecordMergeDeletionLog]
-    SET 
-        [RecordMergeLogID] = @RecordMergeLogID,
-        [DeletedRecordID] = @DeletedRecordID,
-        [Status] = @Status,
-        [ProcessingLog] = @ProcessingLog
-    WHERE
+
+    DELETE FROM 
+        [__mj].[EntityAction]
+    WHERE 
         [ID] = @ID
 
-    -- return the updated record so the caller can see the updated values and any calculated fields
-    SELECT 
-                                        * 
-                                    FROM 
-                                        [__mj].[vwRecordMergeDeletionLogs] 
-                                    WHERE
-                                        [ID] = @ID
-                                    
-END
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[spUpdateWorkflowRun]'
-GO
 
-
-CREATE PROCEDURE [__mj].[spUpdateWorkflowRun]
-    @ID uniqueidentifier,
-    @WorkflowID uniqueidentifier,
-    @ExternalSystemRecordID nvarchar(500),
-    @StartedAt datetime,
-    @EndedAt datetime,
-    @Status nchar(10),
-    @Results nvarchar(MAX)
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[WorkflowRun]
-    SET 
-        [WorkflowID] = @WorkflowID,
-        [ExternalSystemRecordID] = @ExternalSystemRecordID,
-        [StartedAt] = @StartedAt,
-        [EndedAt] = @EndedAt,
-        [Status] = @Status,
-        [Results] = @Results
-    WHERE
-        [ID] = @ID
-
-    -- return the updated record so the caller can see the updated values and any calculated fields
-    SELECT 
-                                        * 
-                                    FROM 
-                                        [__mj].[vwWorkflowRuns] 
-                                    WHERE
-                                        [ID] = @ID
-                                    
-END
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[spUpdateCompanyIntegrationRecordMap]'
-GO
-
-
-CREATE PROCEDURE [__mj].[spUpdateCompanyIntegrationRecordMap]
-    @ID uniqueidentifier,
-    @CompanyIntegrationID uniqueidentifier,
-    @ExternalSystemRecordID nvarchar(750),
-    @EntityID uniqueidentifier,
-    @EntityRecordID nvarchar(750)
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[CompanyIntegrationRecordMap]
-    SET 
-        [CompanyIntegrationID] = @CompanyIntegrationID,
-        [ExternalSystemRecordID] = @ExternalSystemRecordID,
-        [EntityID] = @EntityID,
-        [EntityRecordID] = @EntityRecordID
-    WHERE
-        [ID] = @ID
-
-    -- return the updated record so the caller can see the updated values and any calculated fields
-    SELECT 
-                                        * 
-                                    FROM 
-                                        [__mj].[vwCompanyIntegrationRecordMaps] 
-                                    WHERE
-                                        [ID] = @ID
-                                    
-END
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[spCreateList]'
-GO
-
-
-CREATE PROCEDURE [__mj].[spCreateList]
-    @Name nvarchar(100),
-    @Description nvarchar(MAX),
-    @EntityID uniqueidentifier,
-    @UserID uniqueidentifier,
-    @CategoryID uniqueidentifier,
-    @ExternalSystemRecordID nvarchar(100),
-    @CompanyIntegrationID uniqueidentifier
-AS
-BEGIN
-    SET NOCOUNT ON;
-    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
-    INSERT INTO 
-    [__mj].[List]
-        (
-            [Name],
-            [Description],
-            [EntityID],
-            [UserID],
-            [CategoryID],
-            [ExternalSystemRecordID],
-            [CompanyIntegrationID]
-        )
-    OUTPUT INSERTED.[ID] INTO @InsertedRow
-    VALUES
-        (
-            @Name,
-            @Description,
-            @EntityID,
-            @UserID,
-            @CategoryID,
-            @ExternalSystemRecordID,
-            @CompanyIntegrationID
-        )
-    -- return the new record from the base view, which might have some calculated fields
-    SELECT * FROM [__mj].[vwLists] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
+    SELECT @ID AS [ID] -- Return the primary key to indicate we successfully deleted the record
 END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
@@ -18569,79 +18041,6 @@ END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [__mj].[spDeleteEntityActionParam]'
-GO
-
-
-CREATE PROCEDURE [__mj].[spDeleteEntityActionParam]
-    @ID uniqueidentifier
-AS  
-BEGIN
-    SET NOCOUNT ON;
-
-    DELETE FROM 
-        [__mj].[EntityActionParam]
-    WHERE 
-        [ID] = @ID
-
-
-    SELECT @ID AS [ID] -- Return the primary key to indicate we successfully deleted the record
-END
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[spDeleteAction]'
-GO
-
-
-CREATE PROCEDURE [__mj].[spDeleteAction]
-    @ID uniqueidentifier
-AS  
-BEGIN
-    SET NOCOUNT ON;
-
-    DELETE FROM 
-        [__mj].[Action]
-    WHERE 
-        [ID] = @ID
-
-
-    SELECT @ID AS [ID] -- Return the primary key to indicate we successfully deleted the record
-END
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[spUpdateUserViewRunDetail]'
-GO
-
-
-CREATE PROCEDURE [__mj].[spUpdateUserViewRunDetail]
-    @ID uniqueidentifier,
-    @UserViewRunID uniqueidentifier,
-    @RecordID nvarchar(450)
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[UserViewRunDetail]
-    SET 
-        [UserViewRunID] = @UserViewRunID,
-        [RecordID] = @RecordID
-    WHERE
-        [ID] = @ID
-
-    -- return the updated record so the caller can see the updated values and any calculated fields
-    SELECT 
-                                        * 
-                                    FROM 
-                                        [__mj].[vwUserViewRunDetails] 
-                                    WHERE
-                                        [ID] = @ID
-                                    
-END
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
 PRINT N'Creating [__mj].[spDeleteEntityActionInvocationType]'
 GO
 
@@ -18663,18 +18062,57 @@ END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [__mj].[spDeleteEntityActionInvocation]'
+PRINT N'Creating [__mj].[spUpdateCompanyIntegrationRunAPILog]'
 GO
 
 
-CREATE PROCEDURE [__mj].[spDeleteEntityActionInvocation]
+CREATE PROCEDURE [__mj].[spUpdateCompanyIntegrationRunAPILog]
+    @ID uniqueidentifier,
+    @CompanyIntegrationRunID uniqueidentifier,
+    @ExecutedAt datetime,
+    @IsSuccess bit,
+    @RequestMethod nvarchar(12),
+    @URL nvarchar(MAX),
+    @Parameters nvarchar(MAX)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[CompanyIntegrationRunAPILog]
+    SET 
+        [CompanyIntegrationRunID] = @CompanyIntegrationRunID,
+        [ExecutedAt] = @ExecutedAt,
+        [IsSuccess] = @IsSuccess,
+        [RequestMethod] = @RequestMethod,
+        [URL] = @URL,
+        [Parameters] = @Parameters
+    WHERE
+        [ID] = @ID
+
+    -- return the updated record so the caller can see the updated values and any calculated fields
+    SELECT 
+                                        * 
+                                    FROM 
+                                        [__mj].[vwCompanyIntegrationRunAPILogs] 
+                                    WHERE
+                                        [ID] = @ID
+                                    
+END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[spDeleteActionCategory]'
+GO
+
+
+CREATE PROCEDURE [__mj].[spDeleteActionCategory]
     @ID uniqueidentifier
 AS  
 BEGIN
     SET NOCOUNT ON;
 
     DELETE FROM 
-        [__mj].[EntityActionInvocation]
+        [__mj].[ActionCategory]
     WHERE 
         [ID] = @ID
 
@@ -18737,6 +18175,133 @@ END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
+PRINT N'Creating [__mj].[spCreateList]'
+GO
+
+
+CREATE PROCEDURE [__mj].[spCreateList]
+    @Name nvarchar(100),
+    @Description nvarchar(MAX),
+    @EntityID uniqueidentifier,
+    @UserID uniqueidentifier,
+    @CategoryID uniqueidentifier,
+    @ExternalSystemRecordID nvarchar(100),
+    @CompanyIntegrationID uniqueidentifier
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
+    INSERT INTO 
+    [__mj].[List]
+        (
+            [Name],
+            [Description],
+            [EntityID],
+            [UserID],
+            [CategoryID],
+            [ExternalSystemRecordID],
+            [CompanyIntegrationID]
+        )
+    OUTPUT INSERTED.[ID] INTO @InsertedRow
+    VALUES
+        (
+            @Name,
+            @Description,
+            @EntityID,
+            @UserID,
+            @CategoryID,
+            @ExternalSystemRecordID,
+            @CompanyIntegrationID
+        )
+    -- return the new record from the base view, which might have some calculated fields
+    SELECT * FROM [__mj].[vwLists] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
+END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[spDeleteEntityActionInvocation]'
+GO
+
+
+CREATE PROCEDURE [__mj].[spDeleteEntityActionInvocation]
+    @ID uniqueidentifier
+AS  
+BEGIN
+    SET NOCOUNT ON;
+
+    DELETE FROM 
+        [__mj].[EntityActionInvocation]
+    WHERE 
+        [ID] = @ID
+
+
+    SELECT @ID AS [ID] -- Return the primary key to indicate we successfully deleted the record
+END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[spUpdateUserViewRunDetail]'
+GO
+
+
+CREATE PROCEDURE [__mj].[spUpdateUserViewRunDetail]
+    @ID uniqueidentifier,
+    @UserViewRunID uniqueidentifier,
+    @RecordID nvarchar(450)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[UserViewRunDetail]
+    SET 
+        [UserViewRunID] = @UserViewRunID,
+        [RecordID] = @RecordID
+    WHERE
+        [ID] = @ID
+
+    -- return the updated record so the caller can see the updated values and any calculated fields
+    SELECT 
+                                        * 
+                                    FROM 
+                                        [__mj].[vwUserViewRunDetails] 
+                                    WHERE
+                                        [ID] = @ID
+                                    
+END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[vwEntityActionParams]'
+GO
+
+
+CREATE VIEW [__mj].[vwEntityActionParams]
+AS
+SELECT 
+    e.*,
+    ActionParam_ActionParamID.[Name] AS [ActionParam]
+FROM
+    [__mj].[EntityActionParam] AS e
+INNER JOIN
+    [__mj].[ActionParam] AS ActionParam_ActionParamID
+  ON
+    [e].[ActionParamID] = ActionParam_ActionParamID.[ID]
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[vwActionFilters]'
+GO
+
+
+CREATE VIEW [__mj].[vwActionFilters]
+AS
+SELECT 
+    a.*
+FROM
+    [__mj].[ActionFilter] AS a
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
 PRINT N'Creating [__mj].[spUpdateUserViewRun]'
 GO
 
@@ -18770,24 +18335,144 @@ END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [__mj].[spDeleteEntityAction]'
+PRINT N'Creating [__mj].[vwActionResultCodes]'
 GO
 
 
-CREATE PROCEDURE [__mj].[spDeleteEntityAction]
-    @ID uniqueidentifier
-AS  
+CREATE VIEW [__mj].[vwActionResultCodes]
+AS
+SELECT 
+    a.*,
+    Action_ActionID.[Name] AS [Action]
+FROM
+    [__mj].[ActionResultCode] AS a
+INNER JOIN
+    [__mj].[Action] AS Action_ActionID
+  ON
+    [a].[ActionID] = Action_ActionID.[ID]
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[vwQueryCategories]'
+GO
+
+
+CREATE VIEW [__mj].[vwQueryCategories]
+AS
+SELECT 
+    q.*,
+    QueryCategory_ParentID.[Name] AS [Parent],
+    User_UserID.[Name] AS [User]
+FROM
+    [__mj].[QueryCategory] AS q
+LEFT OUTER JOIN
+    [__mj].[QueryCategory] AS QueryCategory_ParentID
+  ON
+    [q].[ParentID] = QueryCategory_ParentID.[ID]
+INNER JOIN
+    [__mj].[User] AS User_UserID
+  ON
+    [q].[UserID] = User_UserID.[ID]
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[vwActions]'
+GO
+
+
+CREATE VIEW [__mj].[vwActions]
+AS
+SELECT 
+    a.*,
+    ActionCategory_CategoryID.[Name] AS [Category],
+    User_CodeApprovedByUserID.[Name] AS [CodeApprovedByUser]
+FROM
+    [__mj].[Action] AS a
+LEFT OUTER JOIN
+    [__mj].[ActionCategory] AS ActionCategory_CategoryID
+  ON
+    [a].[CategoryID] = ActionCategory_CategoryID.[ID]
+LEFT OUTER JOIN
+    [__mj].[User] AS User_CodeApprovedByUserID
+  ON
+    [a].[CodeApprovedByUserID] = User_CodeApprovedByUserID.[ID]
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[vwQueryPermissions]'
+GO
+
+
+CREATE VIEW [__mj].[vwQueryPermissions]
+AS
+SELECT 
+    q.*
+FROM
+    [__mj].[QueryPermission] AS q
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[spUpdateListDetail]'
+GO
+
+
+CREATE PROCEDURE [__mj].[spUpdateListDetail]
+    @ID uniqueidentifier,
+    @ListID uniqueidentifier,
+    @RecordID nvarchar(445),
+    @Sequence int
+AS
 BEGIN
     SET NOCOUNT ON;
-
-    DELETE FROM 
-        [__mj].[EntityAction]
-    WHERE 
+    UPDATE 
+        [__mj].[ListDetail]
+    SET 
+        [ListID] = @ListID,
+        [RecordID] = @RecordID,
+        [Sequence] = @Sequence
+    WHERE
         [ID] = @ID
 
-
-    SELECT @ID AS [ID] -- Return the primary key to indicate we successfully deleted the record
+    -- return the updated record so the caller can see the updated values and any calculated fields
+    SELECT 
+                                        * 
+                                    FROM 
+                                        [__mj].[vwListDetails] 
+                                    WHERE
+                                        [ID] = @ID
+                                    
 END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[vwEntityActionFilters]'
+GO
+
+
+CREATE VIEW [__mj].[vwEntityActionFilters]
+AS
+SELECT 
+    e.*
+FROM
+    [__mj].[EntityActionFilter] AS e
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[vwQueries]'
+GO
+
+
+CREATE VIEW [__mj].[vwQueries]
+AS
+SELECT 
+    q.*,
+    QueryCategory_CategoryID.[Name] AS [Category]
+FROM
+    [__mj].[Query] AS q
+LEFT OUTER JOIN
+    [__mj].[QueryCategory] AS QueryCategory_CategoryID
+  ON
+    [q].[CategoryID] = QueryCategory_CategoryID.[ID]
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
@@ -18845,145 +18530,6 @@ FROM
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [__mj].[spDeleteQueryCategory]'
-GO
-
-
-CREATE PROCEDURE [__mj].[spDeleteQueryCategory]
-    @ID uniqueidentifier
-AS  
-BEGIN
-    SET NOCOUNT ON;
-
-    DELETE FROM 
-        [__mj].[QueryCategory]
-    WHERE 
-        [ID] = @ID
-
-
-    SELECT @ID AS [ID] -- Return the primary key to indicate we successfully deleted the record
-END
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[vwActionContexts]'
-GO
-
-
-CREATE VIEW [__mj].[vwActionContexts]
-AS
-SELECT 
-    a.*,
-    Action_ActionID.[Name] AS [Action],
-    ActionContextType_ContextTypeID.[Name] AS [ContextType]
-FROM
-    [__mj].[ActionContext] AS a
-INNER JOIN
-    [__mj].[Action] AS Action_ActionID
-  ON
-    [a].[ActionID] = Action_ActionID.[ID]
-LEFT OUTER JOIN
-    [__mj].[ActionContextType] AS ActionContextType_ContextTypeID
-  ON
-    [a].[ContextTypeID] = ActionContextType_ContextTypeID.[ID]
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[vwQueries]'
-GO
-
-
-CREATE VIEW [__mj].[vwQueries]
-AS
-SELECT 
-    q.*,
-    QueryCategory_CategoryID.[Name] AS [Category]
-FROM
-    [__mj].[Query] AS q
-LEFT OUTER JOIN
-    [__mj].[QueryCategory] AS QueryCategory_CategoryID
-  ON
-    [q].[CategoryID] = QueryCategory_CategoryID.[ID]
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[spUpdateListDetail]'
-GO
-
-
-CREATE PROCEDURE [__mj].[spUpdateListDetail]
-    @ID uniqueidentifier,
-    @ListID uniqueidentifier,
-    @RecordID nvarchar(445),
-    @Sequence int
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[ListDetail]
-    SET 
-        [ListID] = @ListID,
-        [RecordID] = @RecordID,
-        [Sequence] = @Sequence
-    WHERE
-        [ID] = @ID
-
-    -- return the updated record so the caller can see the updated values and any calculated fields
-    SELECT 
-                                        * 
-                                    FROM 
-                                        [__mj].[vwListDetails] 
-                                    WHERE
-                                        [ID] = @ID
-                                    
-END
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[vwEntityActionFilters]'
-GO
-
-
-CREATE VIEW [__mj].[vwEntityActionFilters]
-AS
-SELECT 
-    e.*
-FROM
-    [__mj].[EntityActionFilter] AS e
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[vwEntityDocumentRuns]'
-GO
-
-
-CREATE VIEW [__mj].[vwEntityDocumentRuns]
-AS
-SELECT 
-    e.*,
-    EntityDocument_EntityDocumentID.[Name] AS [EntityDocument]
-FROM
-    [__mj].[EntityDocumentRun] AS e
-INNER JOIN
-    [__mj].[EntityDocument] AS EntityDocument_EntityDocumentID
-  ON
-    [e].[EntityDocumentID] = EntityDocument_EntityDocumentID.[ID]
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[vwActionFilters]'
-GO
-
-
-CREATE VIEW [__mj].[vwActionFilters]
-AS
-SELECT 
-    a.*
-FROM
-    [__mj].[ActionFilter] AS a
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
 PRINT N'Creating [__mj].[vwEntityDocumentTypes]'
 GO
 
@@ -18997,62 +18543,79 @@ FROM
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [__mj].[vwActionResultCodes]'
+PRINT N'Creating [__mj].[spCreateEntityActionParam]'
 GO
 
 
-CREATE VIEW [__mj].[vwActionResultCodes]
-AS
-SELECT 
-    a.*,
-    Action_ActionID.[Name] AS [Action]
-FROM
-    [__mj].[ActionResultCode] AS a
-INNER JOIN
-    [__mj].[Action] AS Action_ActionID
-  ON
-    [a].[ActionID] = Action_ActionID.[ID]
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[vwQueryPermissions]'
-GO
-
-
-CREATE VIEW [__mj].[vwQueryPermissions]
-AS
-SELECT 
-    q.*
-FROM
-    [__mj].[QueryPermission] AS q
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[spCreateActionContextType]'
-GO
-
-
-CREATE PROCEDURE [__mj].[spCreateActionContextType]
-    @Name nvarchar(255),
-    @Description nvarchar(MAX)
+CREATE PROCEDURE [__mj].[spCreateEntityActionParam]
+    @EntityActionID uniqueidentifier,
+    @ActionParamID uniqueidentifier,
+    @ValueType nvarchar(20),
+    @Value nvarchar(MAX),
+    @Comments nvarchar(MAX)
 AS
 BEGIN
     SET NOCOUNT ON;
     DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
     INSERT INTO 
-    [__mj].[ActionContextType]
+    [__mj].[EntityActionParam]
         (
-            [Name],
-            [Description]
+            [EntityActionID],
+            [ActionParamID],
+            [ValueType],
+            [Value],
+            [Comments]
         )
     OUTPUT INSERTED.[ID] INTO @InsertedRow
     VALUES
         (
-            @Name,
-            @Description
+            @EntityActionID,
+            @ActionParamID,
+            @ValueType,
+            @Value,
+            @Comments
         )
     -- return the new record from the base view, which might have some calculated fields
-    SELECT * FROM [__mj].[vwActionContextTypes] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
+    SELECT * FROM [__mj].[vwEntityActionParams] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
+END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[spCreateActionFilter]'
+GO
+
+
+CREATE PROCEDURE [__mj].[spCreateActionFilter]
+    @UserDescription nvarchar(MAX),
+    @UserComments nvarchar(MAX),
+    @Code nvarchar(MAX),
+    @CodeExplanation nvarchar(MAX)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
+    INSERT INTO 
+    [__mj].[ActionFilter]
+        (
+            [UserDescription],
+            [UserComments],
+            [Code],
+            [CodeExplanation],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+        )
+    OUTPUT INSERTED.[ID] INTO @InsertedRow
+    VALUES
+        (
+            @UserDescription,
+            @UserComments,
+            @Code,
+            @CodeExplanation,
+            GETUTCDATE(),
+            GETUTCDATE()
+        )
+    -- return the new record from the base view, which might have some calculated fields
+    SELECT * FROM [__mj].[vwActionFilters] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
 END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
@@ -19080,55 +18643,211 @@ INNER JOIN
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [__mj].[spDeleteList]'
+PRINT N'Creating [__mj].[spCreateActionResultCode]'
 GO
 
 
-CREATE PROCEDURE [__mj].[spDeleteList]
-    @ID uniqueidentifier
-AS  
+CREATE PROCEDURE [__mj].[spCreateActionResultCode]
+    @ActionID uniqueidentifier,
+    @ResultCode nvarchar(255),
+    @IsSuccess bit,
+    @Description nvarchar(MAX)
+AS
 BEGIN
     SET NOCOUNT ON;
-
-    DELETE FROM 
-        [__mj].[List]
-    WHERE 
-        [ID] = @ID
-
-
-    SELECT @ID AS [ID] -- Return the primary key to indicate we successfully deleted the record
+    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
+    INSERT INTO 
+    [__mj].[ActionResultCode]
+        (
+            [ActionID],
+            [ResultCode],
+            [IsSuccess],
+            [Description]
+        )
+    OUTPUT INSERTED.[ID] INTO @InsertedRow
+    VALUES
+        (
+            @ActionID,
+            @ResultCode,
+            @IsSuccess,
+            @Description
+        )
+    -- return the new record from the base view, which might have some calculated fields
+    SELECT * FROM [__mj].[vwActionResultCodes] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
 END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [__mj].[spCreateActionContext]'
+PRINT N'Creating [__mj].[spCreateQueryCategory]'
 GO
 
 
-CREATE PROCEDURE [__mj].[spCreateActionContext]
-    @ActionID uniqueidentifier,
-    @ContextTypeID uniqueidentifier,
+CREATE PROCEDURE [__mj].[spCreateQueryCategory]
+    @Name nvarchar(50),
+    @ParentID uniqueidentifier,
+    @Description nvarchar(MAX),
+    @UserID uniqueidentifier
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
+    INSERT INTO 
+    [__mj].[QueryCategory]
+        (
+            [Name],
+            [ParentID],
+            [Description],
+            [UserID]
+        )
+    OUTPUT INSERTED.[ID] INTO @InsertedRow
+    VALUES
+        (
+            @Name,
+            @ParentID,
+            @Description,
+            @UserID
+        )
+    -- return the new record from the base view, which might have some calculated fields
+    SELECT * FROM [__mj].[vwQueryCategories] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
+END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[spCreateAction]'
+GO
+
+
+CREATE PROCEDURE [__mj].[spCreateAction]
+    @CategoryID uniqueidentifier,
+    @Name nvarchar(425),
+    @Description nvarchar(MAX),
+    @Type nvarchar(20),
+    @UserPrompt nvarchar(MAX),
+    @UserComments nvarchar(MAX),
+    @Code nvarchar(MAX),
+    @CodeComments nvarchar(MAX),
+    @CodeApprovalStatus nvarchar(20),
+    @CodeApprovalComments nvarchar(MAX),
+    @CodeApprovedByUserID uniqueidentifier,
+    @CodeApprovedAt datetime,
+    @CodeLocked bit,
+    @ForceCodeGeneration bit,
+    @RetentionPeriod int,
     @Status nvarchar(20)
 AS
 BEGIN
     SET NOCOUNT ON;
     DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
     INSERT INTO 
-    [__mj].[ActionContext]
+    [__mj].[Action]
         (
-            [ActionID],
-            [ContextTypeID],
+            [CategoryID],
+            [Name],
+            [Description],
+            [Type],
+            [UserPrompt],
+            [UserComments],
+            [Code],
+            [CodeComments],
+            [CodeApprovalStatus],
+            [CodeApprovalComments],
+            [CodeApprovedByUserID],
+            [CodeApprovedAt],
+            [CodeLocked],
+            [ForceCodeGeneration],
+            [RetentionPeriod],
+            [Status],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+        )
+    OUTPUT INSERTED.[ID] INTO @InsertedRow
+    VALUES
+        (
+            @CategoryID,
+            @Name,
+            @Description,
+            @Type,
+            @UserPrompt,
+            @UserComments,
+            @Code,
+            @CodeComments,
+            @CodeApprovalStatus,
+            @CodeApprovalComments,
+            @CodeApprovedByUserID,
+            @CodeApprovedAt,
+            @CodeLocked,
+            @ForceCodeGeneration,
+            @RetentionPeriod,
+            @Status,
+            GETUTCDATE(),
+            GETUTCDATE()
+        )
+    -- return the new record from the base view, which might have some calculated fields
+    SELECT * FROM [__mj].[vwActions] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
+END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[spCreateQueryPermission]'
+GO
+
+
+CREATE PROCEDURE [__mj].[spCreateQueryPermission]
+    @QueryID uniqueidentifier,
+    @RoleID uniqueidentifier
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
+    INSERT INTO 
+    [__mj].[QueryPermission]
+        (
+            [QueryID],
+            [RoleID]
+        )
+    OUTPUT INSERTED.[ID] INTO @InsertedRow
+    VALUES
+        (
+            @QueryID,
+            @RoleID
+        )
+    -- return the new record from the base view, which might have some calculated fields
+    SELECT * FROM [__mj].[vwQueryPermissions] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
+END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[spCreateEntityActionFilter]'
+GO
+
+
+CREATE PROCEDURE [__mj].[spCreateEntityActionFilter]
+    @EntityActionID uniqueidentifier,
+    @ActionFilterID uniqueidentifier,
+    @Sequence int,
+    @Status nvarchar(20)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
+    INSERT INTO 
+    [__mj].[EntityActionFilter]
+        (
+            [EntityActionID],
+            [ActionFilterID],
+            [Sequence],
             [Status]
         )
     OUTPUT INSERTED.[ID] INTO @InsertedRow
     VALUES
         (
-            @ActionID,
-            @ContextTypeID,
+            @EntityActionID,
+            @ActionFilterID,
+            @Sequence,
             @Status
         )
     -- return the new record from the base view, which might have some calculated fields
-    SELECT * FROM [__mj].[vwActionContexts] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
+    SELECT * FROM [__mj].[vwEntityActionFilters] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
 END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
@@ -19189,18 +18908,18 @@ END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [__mj].[spDeleteListDetail]'
+PRINT N'Creating [__mj].[spDeleteList]'
 GO
 
 
-CREATE PROCEDURE [__mj].[spDeleteListDetail]
+CREATE PROCEDURE [__mj].[spDeleteList]
     @ID uniqueidentifier
 AS  
 BEGIN
     SET NOCOUNT ON;
 
     DELETE FROM 
-        [__mj].[ListDetail]
+        [__mj].[List]
     WHERE 
         [ID] = @ID
 
@@ -19210,124 +18929,31 @@ END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [__mj].[spCreateEntityActionFilter]'
+PRINT N'Creating [__mj].[spCreateActionContextType]'
 GO
 
 
-CREATE PROCEDURE [__mj].[spCreateEntityActionFilter]
-    @EntityActionID uniqueidentifier,
-    @ActionFilterID uniqueidentifier,
-    @Sequence int,
-    @Status nvarchar(20)
+CREATE PROCEDURE [__mj].[spCreateActionContextType]
+    @Name nvarchar(255),
+    @Description nvarchar(MAX)
 AS
 BEGIN
     SET NOCOUNT ON;
     DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
     INSERT INTO 
-    [__mj].[EntityActionFilter]
+    [__mj].[ActionContextType]
         (
-            [EntityActionID],
-            [ActionFilterID],
-            [Sequence],
-            [Status]
+            [Name],
+            [Description]
         )
     OUTPUT INSERTED.[ID] INTO @InsertedRow
     VALUES
         (
-            @EntityActionID,
-            @ActionFilterID,
-            @Sequence,
-            @Status
+            @Name,
+            @Description
         )
     -- return the new record from the base view, which might have some calculated fields
-    SELECT * FROM [__mj].[vwEntityActionFilters] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
-END
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[spCreateEntityDocumentRun]'
-GO
-
-
-CREATE PROCEDURE [__mj].[spCreateEntityDocumentRun]
-    @EntityDocumentID uniqueidentifier,
-    @StartedAt datetime,
-    @EndedAt datetime,
-    @Status nvarchar(15)
-AS
-BEGIN
-    SET NOCOUNT ON;
-    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
-    INSERT INTO 
-    [__mj].[EntityDocumentRun]
-        (
-            [EntityDocumentID],
-            [StartedAt],
-            [EndedAt],
-            [Status]
-        )
-    OUTPUT INSERTED.[ID] INTO @InsertedRow
-    VALUES
-        (
-            @EntityDocumentID,
-            @StartedAt,
-            @EndedAt,
-            @Status
-        )
-    -- return the new record from the base view, which might have some calculated fields
-    SELECT * FROM [__mj].[vwEntityDocumentRuns] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
-END
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[vwWorkflowEngines]'
-GO
-
-
-CREATE VIEW [__mj].[vwWorkflowEngines]
-AS
-SELECT 
-    w.*
-FROM
-    [__mj].[WorkflowEngine] AS w
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[spCreateActionFilter]'
-GO
-
-
-CREATE PROCEDURE [__mj].[spCreateActionFilter]
-    @UserDescription nvarchar(MAX),
-    @UserComments nvarchar(MAX),
-    @Code nvarchar(MAX),
-    @CodeExplanation nvarchar(MAX)
-AS
-BEGIN
-    SET NOCOUNT ON;
-    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
-    INSERT INTO 
-    [__mj].[ActionFilter]
-        (
-            [UserDescription],
-            [UserComments],
-            [Code],
-            [CodeExplanation],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-        )
-    OUTPUT INSERTED.[ID] INTO @InsertedRow
-    VALUES
-        (
-            @UserDescription,
-            @UserComments,
-            @Code,
-            @CodeExplanation,
-            GETUTCDATE(),
-            GETUTCDATE()
-        )
-    -- return the new record from the base view, which might have some calculated fields
-    SELECT * FROM [__mj].[vwActionFilters] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
+    SELECT * FROM [__mj].[vwActionContextTypes] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
 END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
@@ -19361,34 +18987,70 @@ END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [__mj].[vwUserRoles]'
+PRINT N'Creating [__mj].[spDeleteListDetail]'
 GO
 
 
-CREATE VIEW [__mj].[vwUserRoles]
-AS
-SELECT 
-    u.*,
-    User_UserID.[Name] AS [User],
-    Role_RoleID.[Name] AS [Role]
-FROM
-    [__mj].[UserRole] AS u
-INNER JOIN
-    [__mj].[User] AS User_UserID
-  ON
-    [u].[UserID] = User_UserID.[ID]
-INNER JOIN
-    [__mj].[Role] AS Role_RoleID
-  ON
-    [u].[RoleID] = Role_RoleID.[ID]
+CREATE PROCEDURE [__mj].[spDeleteListDetail]
+    @ID uniqueidentifier
+AS  
+BEGIN
+    SET NOCOUNT ON;
+
+    DELETE FROM 
+        [__mj].[ListDetail]
+    WHERE 
+        [ID] = @ID
+
+
+    SELECT @ID AS [ID] -- Return the primary key to indicate we successfully deleted the record
+END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [__mj].[spCreateActionResultCode]'
+PRINT N'Creating [__mj].[spUpdateEntityActionParam]'
 GO
 
 
-CREATE PROCEDURE [__mj].[spCreateActionResultCode]
+CREATE PROCEDURE [__mj].[spUpdateEntityActionParam]
+    @ID uniqueidentifier,
+    @EntityActionID uniqueidentifier,
+    @ActionParamID uniqueidentifier,
+    @ValueType nvarchar(20),
+    @Value nvarchar(MAX),
+    @Comments nvarchar(MAX)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[EntityActionParam]
+    SET 
+        [EntityActionID] = @EntityActionID,
+        [ActionParamID] = @ActionParamID,
+        [ValueType] = @ValueType,
+        [Value] = @Value,
+        [Comments] = @Comments
+    WHERE
+        [ID] = @ID
+
+    -- return the updated record so the caller can see the updated values and any calculated fields
+    SELECT 
+                                        * 
+                                    FROM 
+                                        [__mj].[vwEntityActionParams] 
+                                    WHERE
+                                        [ID] = @ID
+                                    
+END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[spUpdateActionResultCode]'
+GO
+
+
+CREATE PROCEDURE [__mj].[spUpdateActionResultCode]
+    @ID uniqueidentifier,
     @ActionID uniqueidentifier,
     @ResultCode nvarchar(255),
     @IsSuccess bit,
@@ -19396,86 +19058,12 @@ CREATE PROCEDURE [__mj].[spCreateActionResultCode]
 AS
 BEGIN
     SET NOCOUNT ON;
-    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
-    INSERT INTO 
-    [__mj].[ActionResultCode]
-        (
-            [ActionID],
-            [ResultCode],
-            [IsSuccess],
-            [Description]
-        )
-    OUTPUT INSERTED.[ID] INTO @InsertedRow
-    VALUES
-        (
-            @ActionID,
-            @ResultCode,
-            @IsSuccess,
-            @Description
-        )
-    -- return the new record from the base view, which might have some calculated fields
-    SELECT * FROM [__mj].[vwActionResultCodes] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
-END
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[spCreateQueryPermission]'
-GO
-
-
-CREATE PROCEDURE [__mj].[spCreateQueryPermission]
-    @QueryID uniqueidentifier,
-    @RoleID uniqueidentifier
-AS
-BEGIN
-    SET NOCOUNT ON;
-    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
-    INSERT INTO 
-    [__mj].[QueryPermission]
-        (
-            [QueryID],
-            [RoleID]
-        )
-    OUTPUT INSERTED.[ID] INTO @InsertedRow
-    VALUES
-        (
-            @QueryID,
-            @RoleID
-        )
-    -- return the new record from the base view, which might have some calculated fields
-    SELECT * FROM [__mj].[vwQueryPermissions] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
-END
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[vwRowLevelSecurityFilters]'
-GO
-
-
-CREATE VIEW [__mj].[vwRowLevelSecurityFilters]
-AS
-SELECT 
-    r.*
-FROM
-    [__mj].[RowLevelSecurityFilter] AS r
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[spUpdateActionContextType]'
-GO
-
-
-CREATE PROCEDURE [__mj].[spUpdateActionContextType]
-    @ID uniqueidentifier,
-    @Name nvarchar(255),
-    @Description nvarchar(MAX)
-AS
-BEGIN
-    SET NOCOUNT ON;
     UPDATE 
-        [__mj].[ActionContextType]
+        [__mj].[ActionResultCode]
     SET 
-        [Name] = @Name,
+        [ActionID] = @ActionID,
+        [ResultCode] = @ResultCode,
+        [IsSuccess] = @IsSuccess,
         [Description] = @Description
     WHERE
         [ID] = @ID
@@ -19484,7 +19072,7 @@ BEGIN
     SELECT 
                                         * 
                                     FROM 
-                                        [__mj].[vwActionContextTypes] 
+                                        [__mj].[vwActionResultCodes] 
                                     WHERE
                                         [ID] = @ID
                                     
@@ -19527,23 +19115,176 @@ END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [__mj].[spUpdateActionContext]'
+PRINT N'Creating [__mj].[vwWorkflowEngines]'
 GO
 
 
-CREATE PROCEDURE [__mj].[spUpdateActionContext]
+CREATE VIEW [__mj].[vwWorkflowEngines]
+AS
+SELECT 
+    w.*
+FROM
+    [__mj].[WorkflowEngine] AS w
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[spUpdateActionFilter]'
+GO
+
+
+CREATE PROCEDURE [__mj].[spUpdateActionFilter]
     @ID uniqueidentifier,
-    @ActionID uniqueidentifier,
-    @ContextTypeID uniqueidentifier,
+    @UserDescription nvarchar(MAX),
+    @UserComments nvarchar(MAX),
+    @Code nvarchar(MAX),
+    @CodeExplanation nvarchar(MAX)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[ActionFilter]
+    SET 
+        [UserDescription] = @UserDescription,
+        [UserComments] = @UserComments,
+        [Code] = @Code,
+        [CodeExplanation] = @CodeExplanation
+    WHERE
+        [ID] = @ID
+
+    -- return the updated record so the caller can see the updated values and any calculated fields
+    SELECT 
+                                        * 
+                                    FROM 
+                                        [__mj].[vwActionFilters] 
+                                    WHERE
+                                        [ID] = @ID
+                                    
+END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[spUpdateQueryCategory]'
+GO
+
+
+CREATE PROCEDURE [__mj].[spUpdateQueryCategory]
+    @ID uniqueidentifier,
+    @Name nvarchar(50),
+    @ParentID uniqueidentifier,
+    @Description nvarchar(MAX),
+    @UserID uniqueidentifier
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[QueryCategory]
+    SET 
+        [Name] = @Name,
+        [ParentID] = @ParentID,
+        [Description] = @Description,
+        [UserID] = @UserID
+    WHERE
+        [ID] = @ID
+
+    -- return the updated record so the caller can see the updated values and any calculated fields
+    SELECT 
+                                        * 
+                                    FROM 
+                                        [__mj].[vwQueryCategories] 
+                                    WHERE
+                                        [ID] = @ID
+                                    
+END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[vwUserRoles]'
+GO
+
+
+CREATE VIEW [__mj].[vwUserRoles]
+AS
+SELECT 
+    u.*,
+    User_UserID.[Name] AS [User],
+    Role_RoleID.[Name] AS [Role]
+FROM
+    [__mj].[UserRole] AS u
+INNER JOIN
+    [__mj].[User] AS User_UserID
+  ON
+    [u].[UserID] = User_UserID.[ID]
+INNER JOIN
+    [__mj].[Role] AS Role_RoleID
+  ON
+    [u].[RoleID] = Role_RoleID.[ID]
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[spDeleteEntityActionParam]'
+GO
+
+
+CREATE PROCEDURE [__mj].[spDeleteEntityActionParam]
+    @ID uniqueidentifier
+AS  
+BEGIN
+    SET NOCOUNT ON;
+
+    DELETE FROM 
+        [__mj].[EntityActionParam]
+    WHERE 
+        [ID] = @ID
+
+
+    SELECT @ID AS [ID] -- Return the primary key to indicate we successfully deleted the record
+END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[spUpdateAction]'
+GO
+
+
+CREATE PROCEDURE [__mj].[spUpdateAction]
+    @ID uniqueidentifier,
+    @CategoryID uniqueidentifier,
+    @Name nvarchar(425),
+    @Description nvarchar(MAX),
+    @Type nvarchar(20),
+    @UserPrompt nvarchar(MAX),
+    @UserComments nvarchar(MAX),
+    @Code nvarchar(MAX),
+    @CodeComments nvarchar(MAX),
+    @CodeApprovalStatus nvarchar(20),
+    @CodeApprovalComments nvarchar(MAX),
+    @CodeApprovedByUserID uniqueidentifier,
+    @CodeApprovedAt datetime,
+    @CodeLocked bit,
+    @ForceCodeGeneration bit,
+    @RetentionPeriod int,
     @Status nvarchar(20)
 AS
 BEGIN
     SET NOCOUNT ON;
     UPDATE 
-        [__mj].[ActionContext]
+        [__mj].[Action]
     SET 
-        [ActionID] = @ActionID,
-        [ContextTypeID] = @ContextTypeID,
+        [CategoryID] = @CategoryID,
+        [Name] = @Name,
+        [Description] = @Description,
+        [Type] = @Type,
+        [UserPrompt] = @UserPrompt,
+        [UserComments] = @UserComments,
+        [Code] = @Code,
+        [CodeComments] = @CodeComments,
+        [CodeApprovalStatus] = @CodeApprovalStatus,
+        [CodeApprovalComments] = @CodeApprovalComments,
+        [CodeApprovedByUserID] = @CodeApprovedByUserID,
+        [CodeApprovedAt] = @CodeApprovedAt,
+        [CodeLocked] = @CodeLocked,
+        [ForceCodeGeneration] = @ForceCodeGeneration,
+        [RetentionPeriod] = @RetentionPeriod,
         [Status] = @Status
     WHERE
         [ID] = @ID
@@ -19552,7 +19293,73 @@ BEGIN
     SELECT 
                                         * 
                                     FROM 
-                                        [__mj].[vwActionContexts] 
+                                        [__mj].[vwActions] 
+                                    WHERE
+                                        [ID] = @ID
+                                    
+END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[spUpdateQueryPermission]'
+GO
+
+
+CREATE PROCEDURE [__mj].[spUpdateQueryPermission]
+    @ID uniqueidentifier,
+    @QueryID uniqueidentifier,
+    @RoleID uniqueidentifier
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[QueryPermission]
+    SET 
+        [QueryID] = @QueryID,
+        [RoleID] = @RoleID
+    WHERE
+        [ID] = @ID
+
+    -- return the updated record so the caller can see the updated values and any calculated fields
+    SELECT 
+                                        * 
+                                    FROM 
+                                        [__mj].[vwQueryPermissions] 
+                                    WHERE
+                                        [ID] = @ID
+                                    
+END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[spUpdateEntityActionFilter]'
+GO
+
+
+CREATE PROCEDURE [__mj].[spUpdateEntityActionFilter]
+    @ID uniqueidentifier,
+    @EntityActionID uniqueidentifier,
+    @ActionFilterID uniqueidentifier,
+    @Sequence int,
+    @Status nvarchar(20)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[EntityActionFilter]
+    SET 
+        [EntityActionID] = @EntityActionID,
+        [ActionFilterID] = @ActionFilterID,
+        [Sequence] = @Sequence,
+        [Status] = @Status
+    WHERE
+        [ID] = @ID
+
+    -- return the updated record so the caller can see the updated values and any calculated fields
+    SELECT 
+                                        * 
+                                    FROM 
+                                        [__mj].[vwEntityActionFilters] 
                                     WHERE
                                         [ID] = @ID
                                     
@@ -19609,6 +19416,107 @@ END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
+PRINT N'Creating [__mj].[spUpdateWorkflowRun]'
+GO
+
+
+CREATE PROCEDURE [__mj].[spUpdateWorkflowRun]
+    @ID uniqueidentifier,
+    @WorkflowID uniqueidentifier,
+    @ExternalSystemRecordID nvarchar(500),
+    @StartedAt datetime,
+    @EndedAt datetime,
+    @Status nchar(10),
+    @Results nvarchar(MAX)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[WorkflowRun]
+    SET 
+        [WorkflowID] = @WorkflowID,
+        [ExternalSystemRecordID] = @ExternalSystemRecordID,
+        [StartedAt] = @StartedAt,
+        [EndedAt] = @EndedAt,
+        [Status] = @Status,
+        [Results] = @Results
+    WHERE
+        [ID] = @ID
+
+    -- return the updated record so the caller can see the updated values and any calculated fields
+    SELECT 
+                                        * 
+                                    FROM 
+                                        [__mj].[vwWorkflowRuns] 
+                                    WHERE
+                                        [ID] = @ID
+                                    
+END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[spUpdateActionContextType]'
+GO
+
+
+CREATE PROCEDURE [__mj].[spUpdateActionContextType]
+    @ID uniqueidentifier,
+    @Name nvarchar(255),
+    @Description nvarchar(MAX)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[ActionContextType]
+    SET 
+        [Name] = @Name,
+        [Description] = @Description
+    WHERE
+        [ID] = @ID
+
+    -- return the updated record so the caller can see the updated values and any calculated fields
+    SELECT 
+                                        * 
+                                    FROM 
+                                        [__mj].[vwActionContextTypes] 
+                                    WHERE
+                                        [ID] = @ID
+                                    
+END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[spUpdateEntityDocumentType]'
+GO
+
+
+CREATE PROCEDURE [__mj].[spUpdateEntityDocumentType]
+    @ID uniqueidentifier,
+    @Name nvarchar(100),
+    @Description nvarchar(MAX)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[EntityDocumentType]
+    SET 
+        [Name] = @Name,
+        [Description] = @Description
+    WHERE
+        [ID] = @ID
+
+    -- return the updated record so the caller can see the updated values and any calculated fields
+    SELECT 
+                                        * 
+                                    FROM 
+                                        [__mj].[vwEntityDocumentTypes] 
+                                    WHERE
+                                        [ID] = @ID
+                                    
+END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
 PRINT N'Creating [__mj].[spUpdateWorkflow]'
 GO
 
@@ -19652,61 +19560,39 @@ END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [__mj].[spUpdateEntityActionFilter]'
+PRINT N'Creating [__mj].[vwflyway_schema_histories]'
 GO
 
 
-CREATE PROCEDURE [__mj].[spUpdateEntityActionFilter]
-    @ID uniqueidentifier,
-    @EntityActionID uniqueidentifier,
-    @ActionFilterID uniqueidentifier,
-    @Sequence int,
-    @Status nvarchar(20)
+CREATE VIEW [__mj].[vwflyway_schema_histories]
 AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[EntityActionFilter]
-    SET 
-        [EntityActionID] = @EntityActionID,
-        [ActionFilterID] = @ActionFilterID,
-        [Sequence] = @Sequence,
-        [Status] = @Status
-    WHERE
-        [ID] = @ID
-
-    -- return the updated record so the caller can see the updated values and any calculated fields
-    SELECT 
-                                        * 
-                                    FROM 
-                                        [__mj].[vwEntityActionFilters] 
-                                    WHERE
-                                        [ID] = @ID
-                                    
-END
+SELECT 
+    f.*
+FROM
+    [__mj].[flyway_schema_history] AS f
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [__mj].[spUpdateEntityDocumentRun]'
+PRINT N'Creating [__mj].[spUpdateVectorIndex]'
 GO
 
 
-CREATE PROCEDURE [__mj].[spUpdateEntityDocumentRun]
+CREATE PROCEDURE [__mj].[spUpdateVectorIndex]
     @ID uniqueidentifier,
-    @EntityDocumentID uniqueidentifier,
-    @StartedAt datetime,
-    @EndedAt datetime,
-    @Status nvarchar(15)
+    @Name nvarchar(255),
+    @Description nvarchar(MAX),
+    @VectorDatabaseID uniqueidentifier,
+    @EmbeddingModelID uniqueidentifier
 AS
 BEGIN
     SET NOCOUNT ON;
     UPDATE 
-        [__mj].[EntityDocumentRun]
+        [__mj].[VectorIndex]
     SET 
-        [EntityDocumentID] = @EntityDocumentID,
-        [StartedAt] = @StartedAt,
-        [EndedAt] = @EndedAt,
-        [Status] = @Status
+        [Name] = @Name,
+        [Description] = @Description,
+        [VectorDatabaseID] = @VectorDatabaseID,
+        [EmbeddingModelID] = @EmbeddingModelID
     WHERE
         [ID] = @ID
 
@@ -19714,7 +19600,7 @@ BEGIN
     SELECT 
                                         * 
                                     FROM 
-                                        [__mj].[vwEntityDocumentRuns] 
+                                        [__mj].[vwVectorIndexes] 
                                     WHERE
                                         [ID] = @ID
                                     
@@ -19757,72 +19643,6 @@ END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [__mj].[spUpdateActionFilter]'
-GO
-
-
-CREATE PROCEDURE [__mj].[spUpdateActionFilter]
-    @ID uniqueidentifier,
-    @UserDescription nvarchar(MAX),
-    @UserComments nvarchar(MAX),
-    @Code nvarchar(MAX),
-    @CodeExplanation nvarchar(MAX)
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[ActionFilter]
-    SET 
-        [UserDescription] = @UserDescription,
-        [UserComments] = @UserComments,
-        [Code] = @Code,
-        [CodeExplanation] = @CodeExplanation
-    WHERE
-        [ID] = @ID
-
-    -- return the updated record so the caller can see the updated values and any calculated fields
-    SELECT 
-                                        * 
-                                    FROM 
-                                        [__mj].[vwActionFilters] 
-                                    WHERE
-                                        [ID] = @ID
-                                    
-END
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[spUpdateEntityDocumentType]'
-GO
-
-
-CREATE PROCEDURE [__mj].[spUpdateEntityDocumentType]
-    @ID uniqueidentifier,
-    @Name nvarchar(100),
-    @Description nvarchar(MAX)
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[EntityDocumentType]
-    SET 
-        [Name] = @Name,
-        [Description] = @Description
-    WHERE
-        [ID] = @ID
-
-    -- return the updated record so the caller can see the updated values and any calculated fields
-    SELECT 
-                                        * 
-                                    FROM 
-                                        [__mj].[vwEntityDocumentTypes] 
-                                    WHERE
-                                        [ID] = @ID
-                                    
-END
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
 PRINT N'Creating [__mj].[spCreateUserRole]'
 GO
 
@@ -19848,72 +19668,6 @@ BEGIN
         )
     -- return the new record from the base view, which might have some calculated fields
     SELECT * FROM [__mj].[vwUserRoles] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
-END
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[spUpdateActionResultCode]'
-GO
-
-
-CREATE PROCEDURE [__mj].[spUpdateActionResultCode]
-    @ID uniqueidentifier,
-    @ActionID uniqueidentifier,
-    @ResultCode nvarchar(255),
-    @IsSuccess bit,
-    @Description nvarchar(MAX)
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[ActionResultCode]
-    SET 
-        [ActionID] = @ActionID,
-        [ResultCode] = @ResultCode,
-        [IsSuccess] = @IsSuccess,
-        [Description] = @Description
-    WHERE
-        [ID] = @ID
-
-    -- return the updated record so the caller can see the updated values and any calculated fields
-    SELECT 
-                                        * 
-                                    FROM 
-                                        [__mj].[vwActionResultCodes] 
-                                    WHERE
-                                        [ID] = @ID
-                                    
-END
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [__mj].[spUpdateQueryPermission]'
-GO
-
-
-CREATE PROCEDURE [__mj].[spUpdateQueryPermission]
-    @ID uniqueidentifier,
-    @QueryID uniqueidentifier,
-    @RoleID uniqueidentifier
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [__mj].[QueryPermission]
-    SET 
-        [QueryID] = @QueryID,
-        [RoleID] = @RoleID
-    WHERE
-        [ID] = @ID
-
-    -- return the updated record so the caller can see the updated values and any calculated fields
-    SELECT 
-                                        * 
-                                    FROM 
-                                        [__mj].[vwQueryPermissions] 
-                                    WHERE
-                                        [ID] = @ID
-                                    
 END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
@@ -19983,26 +19737,351 @@ END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [__mj].[spUpdateVectorIndex]'
+PRINT N'Creating [__mj].[spCreateScheduledAction]'
 GO
 
 
-CREATE PROCEDURE [__mj].[spUpdateVectorIndex]
-    @ID uniqueidentifier,
+CREATE PROCEDURE [__mj].[spCreateScheduledAction]
     @Name nvarchar(255),
     @Description nvarchar(MAX),
-    @VectorDatabaseID uniqueidentifier,
-    @EmbeddingModelID uniqueidentifier
+    @CreatedByUserID uniqueidentifier,
+    @ActionID uniqueidentifier,
+    @Type nvarchar(20),
+    @CronExpression nvarchar(100),
+    @Timezone nvarchar(100),
+    @Status nvarchar(20),
+    @IntervalDays int,
+    @DayOfWeek nvarchar(20),
+    @DayOfMonth int,
+    @Month nvarchar(20),
+    @CustomCronExpression nvarchar(255)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
+    INSERT INTO 
+    [__mj].[ScheduledAction]
+        (
+            [Name],
+            [Description],
+            [CreatedByUserID],
+            [ActionID],
+            [Type],
+            [CronExpression],
+            [Timezone],
+            [Status],
+            [IntervalDays],
+            [DayOfWeek],
+            [DayOfMonth],
+            [Month],
+            [CustomCronExpression]
+        )
+    OUTPUT INSERTED.[ID] INTO @InsertedRow
+    VALUES
+        (
+            @Name,
+            @Description,
+            @CreatedByUserID,
+            @ActionID,
+            @Type,
+            @CronExpression,
+            @Timezone,
+            @Status,
+            @IntervalDays,
+            @DayOfWeek,
+            @DayOfMonth,
+            @Month,
+            @CustomCronExpression
+        )
+    -- return the new record from the base view, which might have some calculated fields
+    SELECT * FROM [__mj].[vwScheduledActions] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
+END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[spCreateflyway_schema_history]'
+GO
+
+
+CREATE PROCEDURE [__mj].[spCreateflyway_schema_history]
+    @installed_rank int,
+    @version nvarchar(50),
+    @description nvarchar(200),
+    @type nvarchar(20),
+    @script nvarchar(1000),
+    @checksum int,
+    @installed_by nvarchar(100),
+    @installed_on datetime,
+    @execution_time int,
+    @success bit
+AS
+BEGIN
+    SET NOCOUNT ON;
+    
+    INSERT INTO 
+    [__mj].[flyway_schema_history]
+        (
+            [version],
+            [description],
+            [type],
+            [script],
+            [checksum],
+            [installed_by],
+            [installed_on],
+            [execution_time],
+            [success]
+        )
+    VALUES
+        (
+            @version,
+            @description,
+            @type,
+            @script,
+            @checksum,
+            @installed_by,
+            @installed_on,
+            @execution_time,
+            @success
+        )
+    -- return the new record from the base view, which might have some calculated fields
+    SELECT * FROM [__mj].[vwflyway_schema_histories] WHERE [installed_rank] = @installed_rank
+END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[spDeleteActionResultCode]'
+GO
+
+
+CREATE PROCEDURE [__mj].[spDeleteActionResultCode]
+    @ID uniqueidentifier
+AS  
+BEGIN
+    SET NOCOUNT ON;
+
+    DELETE FROM 
+        [__mj].[ActionResultCode]
+    WHERE 
+        [ID] = @ID
+
+
+    SELECT @ID AS [ID] -- Return the primary key to indicate we successfully deleted the record
+END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[spCreateScheduledActionParam]'
+GO
+
+
+CREATE PROCEDURE [__mj].[spCreateScheduledActionParam]
+    @ScheduledActionID uniqueidentifier,
+    @ActionParamID uniqueidentifier,
+    @ValueType nvarchar(20),
+    @Value nvarchar(MAX),
+    @Comments nvarchar(MAX)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
+    INSERT INTO 
+    [__mj].[ScheduledActionParam]
+        (
+            [ScheduledActionID],
+            [ActionParamID],
+            [ValueType],
+            [Value],
+            [Comments]
+        )
+    OUTPUT INSERTED.[ID] INTO @InsertedRow
+    VALUES
+        (
+            @ScheduledActionID,
+            @ActionParamID,
+            @ValueType,
+            @Value,
+            @Comments
+        )
+    -- return the new record from the base view, which might have some calculated fields
+    SELECT * FROM [__mj].[vwScheduledActionParams] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
+END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[spDeleteActionFilter]'
+GO
+
+
+CREATE PROCEDURE [__mj].[spDeleteActionFilter]
+    @ID uniqueidentifier
+AS  
+BEGIN
+    SET NOCOUNT ON;
+
+    DELETE FROM 
+        [__mj].[ActionFilter]
+    WHERE 
+        [ID] = @ID
+
+
+    SELECT @ID AS [ID] -- Return the primary key to indicate we successfully deleted the record
+END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[spDeleteQueryCategory]'
+GO
+
+
+CREATE PROCEDURE [__mj].[spDeleteQueryCategory]
+    @ID uniqueidentifier
+AS  
+BEGIN
+    SET NOCOUNT ON;
+
+    DELETE FROM 
+        [__mj].[QueryCategory]
+    WHERE 
+        [ID] = @ID
+
+
+    SELECT @ID AS [ID] -- Return the primary key to indicate we successfully deleted the record
+END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[spDeleteUserRole]'
+GO
+
+
+CREATE PROCEDURE [__mj].[spDeleteUserRole]
+    @ID uniqueidentifier
+AS  
+BEGIN
+    SET NOCOUNT ON;
+
+    DELETE FROM 
+        [__mj].[UserRole]
+    WHERE 
+        [ID] = @ID
+
+
+    SELECT @ID AS [ID] -- Return the primary key to indicate we successfully deleted the record
+END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[spCreateExplorerNavigationItem]'
+GO
+
+
+CREATE PROCEDURE [__mj].[spCreateExplorerNavigationItem]
+    @Sequence int,
+    @Name nvarchar(100),
+    @Route nvarchar(255),
+    @IsActive bit,
+    @ShowInHomeScreen bit,
+    @ShowInNavigationDrawer bit,
+    @IconCSSClass nvarchar(100),
+    @Description nvarchar(MAX),
+    @Comments nvarchar(MAX)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
+    INSERT INTO 
+    [__mj].[ExplorerNavigationItem]
+        (
+            [Sequence],
+            [Name],
+            [Route],
+            [IsActive],
+            [ShowInHomeScreen],
+            [ShowInNavigationDrawer],
+            [IconCSSClass],
+            [Description],
+            [Comments]
+        )
+    OUTPUT INSERTED.[ID] INTO @InsertedRow
+    VALUES
+        (
+            @Sequence,
+            @Name,
+            @Route,
+            @IsActive,
+            @ShowInHomeScreen,
+            @ShowInNavigationDrawer,
+            @IconCSSClass,
+            @Description,
+            @Comments
+        )
+    -- return the new record from the base view, which might have some calculated fields
+    SELECT * FROM [__mj].[vwExplorerNavigationItems] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
+END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[spDeleteAction]'
+GO
+
+
+CREATE PROCEDURE [__mj].[spDeleteAction]
+    @ID uniqueidentifier
+AS  
+BEGIN
+    SET NOCOUNT ON;
+
+    DELETE FROM 
+        [__mj].[Action]
+    WHERE 
+        [ID] = @ID
+
+
+    SELECT @ID AS [ID] -- Return the primary key to indicate we successfully deleted the record
+END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[spUpdateRecordChange]'
+GO
+
+
+CREATE PROCEDURE [__mj].[spUpdateRecordChange]
+    @ID uniqueidentifier,
+    @EntityID uniqueidentifier,
+    @RecordID nvarchar(750),
+    @UserID uniqueidentifier,
+    @Type nvarchar(20),
+    @Source nvarchar(20),
+    @ChangedAt datetimeoffset,
+    @ChangesJSON nvarchar(MAX),
+    @ChangesDescription nvarchar(MAX),
+    @FullRecordJSON nvarchar(MAX),
+    @Status nvarchar(50),
+    @ErrorLog nvarchar(MAX),
+    @ReplayRunID uniqueidentifier,
+    @IntegrationID uniqueidentifier,
+    @Comments nvarchar(MAX)
 AS
 BEGIN
     SET NOCOUNT ON;
     UPDATE 
-        [__mj].[VectorIndex]
+        [__mj].[RecordChange]
     SET 
-        [Name] = @Name,
-        [Description] = @Description,
-        [VectorDatabaseID] = @VectorDatabaseID,
-        [EmbeddingModelID] = @EmbeddingModelID
+        [EntityID] = @EntityID,
+        [RecordID] = @RecordID,
+        [UserID] = @UserID,
+        [Type] = @Type,
+        [Source] = @Source,
+        [ChangedAt] = @ChangedAt,
+        [ChangesJSON] = @ChangesJSON,
+        [ChangesDescription] = @ChangesDescription,
+        [FullRecordJSON] = @FullRecordJSON,
+        [Status] = @Status,
+        [ErrorLog] = @ErrorLog,
+        [ReplayRunID] = @ReplayRunID,
+        [IntegrationID] = @IntegrationID,
+        [Comments] = @Comments
     WHERE
         [ID] = @ID
 
@@ -20010,10 +20089,115 @@ BEGIN
     SELECT 
                                         * 
                                     FROM 
-                                        [__mj].[vwVectorIndexes] 
+                                        [__mj].[vwRecordChanges] 
                                     WHERE
                                         [ID] = @ID
                                     
+END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[spDeleteEntityActionFilter]'
+GO
+
+
+CREATE PROCEDURE [__mj].[spDeleteEntityActionFilter]
+    @ID uniqueidentifier
+AS  
+BEGIN
+    SET NOCOUNT ON;
+
+    DELETE FROM 
+        [__mj].[EntityActionFilter]
+    WHERE 
+        [ID] = @ID
+
+
+    SELECT @ID AS [ID] -- Return the primary key to indicate we successfully deleted the record
+END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[vwAuthorizations]'
+GO
+
+
+CREATE VIEW [__mj].[vwAuthorizations]
+AS
+SELECT 
+    a.*,
+    Authorization_ParentID.[Name] AS [Parent]
+FROM
+    [__mj].[Authorization] AS a
+LEFT OUTER JOIN
+    [__mj].[Authorization] AS Authorization_ParentID
+  ON
+    [a].[ParentID] = Authorization_ParentID.[ID]
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[spUpdateflyway_schema_history]'
+GO
+
+
+CREATE PROCEDURE [__mj].[spUpdateflyway_schema_history]
+    @installed_rank int,
+    @version nvarchar(50),
+    @description nvarchar(200),
+    @type nvarchar(20),
+    @script nvarchar(1000),
+    @checksum int,
+    @installed_by nvarchar(100),
+    @installed_on datetime,
+    @execution_time int,
+    @success bit
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[flyway_schema_history]
+    SET 
+        [version] = @version,
+        [description] = @description,
+        [type] = @type,
+        [script] = @script,
+        [checksum] = @checksum,
+        [installed_by] = @installed_by,
+        [installed_on] = @installed_on,
+        [execution_time] = @execution_time,
+        [success] = @success
+    WHERE
+        [installed_rank] = @installed_rank
+
+    -- return the updated record so the caller can see the updated values and any calculated fields
+    SELECT 
+                                        * 
+                                    FROM 
+                                        [__mj].[vwflyway_schema_histories] 
+                                    WHERE
+                                        [installed_rank] = @installed_rank
+                                    
+END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [__mj].[spDeleteActionContextType]'
+GO
+
+
+CREATE PROCEDURE [__mj].[spDeleteActionContextType]
+    @ID uniqueidentifier
+AS  
+BEGIN
+    SET NOCOUNT ON;
+
+    DELETE FROM 
+        [__mj].[ActionContextType]
+    WHERE 
+        [ID] = @ID
+
+
+    SELECT @ID AS [ID] -- Return the primary key to indicate we successfully deleted the record
 END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
@@ -25847,6 +26031,14 @@ GRANT EXECUTE ON  [__mj].[spCreateWorkspace] TO [cdp_UI]
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
+PRINT N'Altering permissions on  [__mj].[spCreateflyway_schema_history]'
+GO
+GRANT EXECUTE ON  [__mj].[spCreateflyway_schema_history] TO [cdp_Developer]
+GO
+GRANT EXECUTE ON  [__mj].[spCreateflyway_schema_history] TO [cdp_Integration]
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
 PRINT N'Altering permissions on  [__mj].[spDeleteAIAction]'
 GO
 GRANT EXECUTE ON  [__mj].[spDeleteAIAction] TO [cdp_Developer]
@@ -26286,6 +26478,12 @@ GO
 GRANT EXECUTE ON  [__mj].[spDeleteWorkspace] TO [cdp_Integration]
 GO
 GRANT EXECUTE ON  [__mj].[spDeleteWorkspace] TO [cdp_UI]
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Altering permissions on  [__mj].[spDeleteflyway_schema_history]'
+GO
+GRANT EXECUTE ON  [__mj].[spDeleteflyway_schema_history] TO [cdp_Integration]
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
@@ -27250,6 +27448,14 @@ GO
 GRANT EXECUTE ON  [__mj].[spUpdateWorkspace] TO [cdp_Integration]
 GO
 GRANT EXECUTE ON  [__mj].[spUpdateWorkspace] TO [cdp_UI]
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Altering permissions on  [__mj].[spUpdateflyway_schema_history]'
+GO
+GRANT EXECUTE ON  [__mj].[spUpdateflyway_schema_history] TO [cdp_Developer]
+GO
+GRANT EXECUTE ON  [__mj].[spUpdateflyway_schema_history] TO [cdp_Integration]
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
@@ -28560,6 +28766,16 @@ GO
 GRANT SELECT ON  [__mj].[vwWorkspaces] TO [cdp_Integration]
 GO
 GRANT SELECT ON  [__mj].[vwWorkspaces] TO [cdp_UI]
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Altering permissions on  [__mj].[vwflyway_schema_histories]'
+GO
+GRANT SELECT ON  [__mj].[vwflyway_schema_histories] TO [cdp_Developer]
+GO
+GRANT SELECT ON  [__mj].[vwflyway_schema_histories] TO [cdp_Integration]
+GO
+GRANT SELECT ON  [__mj].[vwflyway_schema_histories] TO [cdp_UI]
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
