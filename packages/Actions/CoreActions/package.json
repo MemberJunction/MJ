@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/core-actions",
-  "version": "1.8.1",
+  "version": "2.0.0",
   "description": "Library of generated and custom actions for the core MemberJunction framework. This library is maintained by MemberJunction and includes actions for use within the framework itself.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -19,12 +19,12 @@
     "typescript": "^5.4.5"
   },
   "dependencies": {
-    "@memberjunction/global": "1.8.1",
-    "@memberjunction/core": "1.8.1",
-    "@memberjunction/core-entities": "1.8.1",
-    "@memberjunction/actions": "1.8.1",
-    "@memberjunction/communication-engine": "1.8.1",
-    "@memberjunction/external-change-detection": "1.8.1",
-    "@memberjunction/ai-vector-sync": "1.8.1"
+    "@memberjunction/global": "2.0.0",
+    "@memberjunction/core": "2.0.0",
+    "@memberjunction/core-entities": "2.0.0",
+    "@memberjunction/actions": "2.0.0",
+    "@memberjunction/communication-engine": "2.0.0",
+    "@memberjunction/external-change-detection": "2.0.0",
+    "@memberjunction/ai-vector-sync": "2.0.0"
   }
 }
