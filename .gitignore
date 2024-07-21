@@ -11,6 +11,10 @@ node_modules/
 dist/
 dist-browser/
 
+# Temporary files
+
+tmp/
+
 # Compiled Java class files
 *.class
 
