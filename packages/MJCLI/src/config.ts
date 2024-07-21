@@ -8,6 +8,7 @@ const explorer = cosmiconfigSync('mj');
 const result = explorer.search(process.cwd());
 
 const mjConfigSchema = z.object({
+  dbHost: z.string().default('localhost'),
   dbDatabase: z.string(),
   dbPort: z.number({ coerce: true }).default(1433),
   codeGenLogin: z.string(),
@@ -22,7 +23,7 @@ const parsedConfig = mjConfigSchema.safeParse(result?.config);
 export const config = parsedConfig.success ? parsedConfig.data : undefined;
 
 export const createFlywayUrl = (mjConfig: MJConfig) => {
-  return `jdbc:sqlserver://localhost:${mjConfig.dbPort}; databaseName=${mjConfig.dbDatabase}${
+  return `jdbc:sqlserver://${mjConfig.dbHost}:${mjConfig.dbPort}; databaseName=${mjConfig.dbDatabase}${
     mjConfig.dbTrustServerCertificate === 'Y' ? '; trustServerCertificate=true' : ''
   }`;
 };
