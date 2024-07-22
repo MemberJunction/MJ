@@ -6,7 +6,15 @@ import { DataSource } from "typeorm";
 import { outputDir } from "../Config/config";
 import { ManageMetadataBase } from "../Database/manage-metadata";
 import { RegisterClass } from "@memberjunction/global";
+import { MSSQLConnection, sqlConfig } from "../Config/db-connection";
 
+import { exec } from 'child_process';
+import { promisify } from 'util';
+import * as crypto from 'crypto';
+import { mkdirSync } from "fs-extra";
+import { attemptDeleteFile } from "../Misc/util";
+
+const execAsync = promisify(exec);
 
 /**
  * Base class for SQL Utility functions, you can sub-class this class to create your own SQL Utility functions/override existing functionality.
@@ -80,8 +88,8 @@ public buildEntityLevelsTree(entities: EntityInfo[]): EntityInfo[][] {
       for (const [entityName, dependencies] of dependencyMap.entries()) {
         circularDeps.push(`${entityName} depends on ${Array.from(dependencies).join(', ')}`);
       }
-      console.warn(`    > Build Entity Levels Tree: Non-Fatal Error: Cyclical Dependency Detected, including remaining entities in final level. Details:`);
-      circularDeps.forEach(dep => console.warn(`    ${dep}`));
+      console.warn(`      > Cyclical Dependency Detected (non-fatal), including remaining entities in final level. Details:`);
+      circularDeps.forEach(dep => console.warn(`        * ${dep}`));
       
       for (const item of dependencyMap) {
         const entityName = item[0];
@@ -111,8 +119,6 @@ public buildEntityLevelsTree(entities: EntityInfo[]): EntityInfo[][] {
 public async recompileAllBaseViews(ds: DataSource, excludeSchemas: string[], applyPermissions: boolean): Promise<boolean> {
    let bSuccess: boolean = true; // start off true
    const md: Metadata = new Metadata();
-   const tasks: Promise<boolean>[] = [];
-   const concurrencyLimit = 3;
 
    // Build the dependency order tree, provide ALL entities for this process
    const entityLevelTree = this.buildEntityLevelsTree(md.Entities);
@@ -121,23 +127,21 @@ public async recompileAllBaseViews(ds: DataSource, excludeSchemas: string[], app
    for (const level of entityLevelTree) {
       // now filter out each LEVEL to only include entities that are not needed for recompilation
       const l = level.filter(e => 
-         !excludeSchemas.includes(e.SchemaName) && 
-         e.BaseViewGenerated && 
-         e.IncludeInAPI && 
-         !e.VirtualEntity && 
-         !ManageMetadataBase.newEntityList.includes(e.Name));
-     for (const entity of l) {
-       tasks.push(this.recompileSingleBaseView(ds, entity, applyPermissions));
-       if (tasks.length === concurrencyLimit) {
-         bSuccess = (await Promise.all(tasks)).every(result => result) && bSuccess;
-         tasks.length = 0; // clear the array
-       }
-     }
-     if (tasks.length > 0) {
-       bSuccess = (await Promise.all(tasks)).every(result => result) && bSuccess;
-       tasks.length = 0; // clear the array for the next level
-     }
-   }
+        !excludeSchemas.includes(e.SchemaName) && 
+        e.BaseViewGenerated && 
+        e.IncludeInAPI && 
+        !e.VirtualEntity && 
+        !ManageMetadataBase.newEntityList.includes(e.Name));
+
+      const levelFiles: string[] = [];
+      for (const entity of l) {
+        levelFiles.push(...this.getBaseViewFiles(entity));
+      }
+
+      // all files for this level are now in levelFiles, let's combine them and execute them
+      const combinedSQL = this.combineMultipleSQLFiles(levelFiles);
+      bSuccess = await this.executeBatchSQLScript(combinedSQL) && bSuccess;
+    }
 
    if (!bSuccess) {
      // temp thing for debug, let's dump the new entity list to see what's up
@@ -148,18 +152,47 @@ public async recompileAllBaseViews(ds: DataSource, excludeSchemas: string[], app
    return bSuccess;
  }
 
+
+ public getBaseViewFiles(entity: EntityInfo): string[] {
+    const files: string[] = [];
+    const baseViewFile = this.getDBObjectFileName('view', entity.SchemaName, entity.BaseView, false, entity.BaseViewGenerated);
+    const baseViewPermissionsFile = this.getDBObjectFileName('view', entity.SchemaName, entity.BaseView, true, entity.BaseViewGenerated);
+    const baseViewFilePath = path.join(outputDir('SQL', true), baseViewFile);
+    const baseViewPermissionsFilePath = path.join(outputDir('SQL', true), baseViewPermissionsFile);
+    if (fs.existsSync(baseViewFilePath)) {
+      files.push(baseViewFile);
+    }
+    if (fs.existsSync(baseViewPermissionsFilePath)) {
+      files.push(baseViewPermissionsFile);
+    }
+    return files;
+ }
+
+ public combineMultipleSQLFiles(files: string[]): string {
+    let combinedSQL: string = "";
+    for (const file of files) {
+      const filePath = path.join(outputDir('SQL', true), file);
+      if (fs.existsSync(filePath)) {
+        combinedSQL += (combinedSQL.length === 0 ? "" : "\n\nGO\n\n") + fs.readFileSync(filePath, 'utf-8');
+      }
+      else {
+        logError(`     Error Combining SQL Files: File ${filePath} does not exist`)
+      }
+    }
+    return combinedSQL;
+ }
  
  public async recompileSingleBaseView(ds: DataSource, entity: EntityInfo, applyPermissions: boolean): Promise<boolean> {
    const file = this.getDBObjectFileName('view', entity.SchemaName, entity.BaseView, false, entity.BaseViewGenerated);
    const filePath = path.join(outputDir('SQL', true), file);
    if (fs.existsSync(filePath)) {
-      const recompileResult = await this.executeSQLFile(ds, filePath, true)
+      const recompileResult = await this.executeSQLFile(filePath)
       if (applyPermissions) {
          // now apply permissions
          const permissionsFile = this.getDBObjectFileName('view', entity.SchemaName, entity.BaseView, true, entity.BaseViewGenerated);
          const permissionsFilePath = path.join(outputDir('SQL', true), permissionsFile);
          if (fs.existsSync(permissionsFilePath)) {
-            return await this.executeSQLFile(ds, permissionsFilePath, true) && recompileResult;
+            return await this.executeSQLFile(permissionsFilePath) && recompileResult;
          }
       }  
       else
@@ -171,34 +204,81 @@ public async recompileAllBaseViews(ds: DataSource, excludeSchemas: string[], app
    }
  }
  
- public async executeSQLFile(ds: DataSource, filePath: string, inChunks : boolean): Promise<boolean> {
-    const scriptSQL = fs.readFileSync(filePath, 'utf-8');
-    return this.executeSQLScript(ds, scriptSQL, inChunks);
+ public async executeSQLFiles(filePaths: string[], outputMessages: boolean): Promise<boolean> {
+    for (const filePath of filePaths) {
+       const startTime = Date.now();
+       if (!await this.executeSQLFile(filePath))
+          return false;
+       const endTime = Date.now();
+       if (outputMessages)
+          console.log(`      Executed ${filePath} in ${endTime - startTime}ms`);
+    }
+    return true;
  }
- 
+
+ private static _batchScriptCounter: number = 0;
+ public async executeSQLFile(filePath: string): Promise<boolean> {
+  try {
+    // Construct the sqlcmd command with optional port and instance
+    let command = `sqlcmd -S ${sqlConfig.server}`;
+    if (sqlConfig.port) {
+      command += `,${sqlConfig.port}`;
+    }
+    if (sqlConfig.options?.instanceName) {
+      command += `\\${sqlConfig.options.instanceName}`;
+    }
+
+    const cwd = path.resolve(process.cwd());
+    const absoluteFilePath = path.resolve(cwd, filePath);
+    command += ` -U ${sqlConfig.user} -P ${sqlConfig.password} -d ${sqlConfig.database} -i "${absoluteFilePath}"`;
+
+    // Execute the command
+    const { stdout, stderr } = await execAsync(command);
+
+    if (stderr) {
+      throw new Error(stderr);
+    }
+    return true;
+  }
+  catch (e) {
+    logError("Error executing batch SQL file: " + e.message);
+    return false;
+  }
+ }
+
+ public async executeBatchSQLScript(scriptText: string): Promise<boolean> {
+  try {
+    if (!scriptText || scriptText.length === 0) return true; // nothing to do
+
+    // Write the scriptText to a temporary file
+    const uniqueFileName = `temp_script_${SQLUtilityBase._batchScriptCounter++}_${Date.now()}_${crypto.randomBytes(6).toString('hex')}.sql`;
+    const tempDir = path.join(process.cwd(), 'temp_sql_scripts');
+    mkdirSync(tempDir, { recursive: true });
+    const scriptFilePath = path.join(tempDir, uniqueFileName);
+    fs.writeFileSync(scriptFilePath, scriptText);
+
+    await this.executeSQLFile(scriptFilePath);
+
+    // Remove the temporary file
+    attemptDeleteFile(scriptFilePath, 3, 2000); // don't await this, just fire and forget
+
+    return true;
+  } 
+  catch (error) {
+    console.error(error);
+    return false;
+  }
+}
+
+
+
+
  public async executeSQLScript(ds: DataSource, scriptText: string, inChunks : boolean): Promise<boolean> {
     try {
       if (!scriptText || scriptText.length == 0)
          return true; // nothing to do
 
-       let scriptChunks = [scriptText];
-       let bSuccess: boolean = true;
-
-       if (inChunks) 
-          scriptChunks = scriptText.split('GO');
- 
-       await ds.transaction(async () => {
-          for (let i = 0; i < scriptChunks.length; ++i) {
-            try {
-               await ds.query(scriptChunks[i]);// + '\n GO \n');
-            }
-            catch (innerE) {
-               logError(innerE);
-               bSuccess = false;
-            }
-          }
-       })
-       return bSuccess;
+      return this.executeBatchSQLScript(scriptText);
     }
     catch (e) {
        logError(e);

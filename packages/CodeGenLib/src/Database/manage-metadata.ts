@@ -70,7 +70,7 @@ export class ManageMetadataBase {
       logStatus(`    > Recompiled base views in ${(new Date().getTime() - start.getTime()) / 1000} seconds`);
       start = new Date();
       logStatus('   Managing entity fields...');
-      if (! await this.manageEntityFields(ds, excludeSchemas, false)) {
+      if (! await this.manageEntityFields(ds, excludeSchemas, false, false)) {
          logError('   Error managing entity fields');
          bSuccess = false;
       }
@@ -378,7 +378,7 @@ export class ManageMetadataBase {
     * @param excludeSchemas 
     * @returns 
     */
-   public async manageEntityFields(ds: DataSource, excludeSchemas: string[], skipCreatedAtUpdatedAtDeletedAtFieldValidation: boolean): Promise<boolean> {
+   public async manageEntityFields(ds: DataSource, excludeSchemas: string[], skipCreatedAtUpdatedAtDeletedAtFieldValidation: boolean, skipEntityFieldValues: boolean): Promise<boolean> {
       let bSuccess = true;
       const startTime: Date = new Date();
 
@@ -426,12 +426,15 @@ export class ManageMetadataBase {
       }
       logStatus(`      Updated entity field display name where null in ${(new Date().getTime() - step5StartTime.getTime()) / 1000} seconds`);
    
-      const step6StartTime: Date = new Date();
-      if (! await this.manageEntityFieldValues(ds, excludeSchemas)) {
-         logError('Error managing entity field values');
-         bSuccess = false;
+      if (!skipEntityFieldValues) {
+         const step6StartTime: Date = new Date();
+         logStatus(`      Starting to manage entity field values...`);   
+         if (! await this.manageEntityFieldValues(ds, excludeSchemas)) {
+            logError('Error managing entity field values');
+            bSuccess = false;
+         }
+         logStatus(`      Managed entity field values in ${(new Date().getTime() - step6StartTime.getTime()) / 1000} seconds`);   
       }
-      logStatus(`      Managed entity field values in ${(new Date().getTime() - step6StartTime.getTime()) / 1000} seconds`);
    
       logStatus(`      Total time to manage entity fields: ${(new Date().getTime() - startTime.getTime()) / 1000} seconds`);
    
@@ -1116,7 +1119,7 @@ export class ManageMetadataBase {
       // Note: Assuming fieldName does not contain regex special characters; otherwise, it needs to be escaped as well.
       const structureRegex = new RegExp(`^\\(\\[${fieldName}\\]='[^']+'(?: OR \\[${fieldName}\\]='[^']+?')+\\)$`);
       if (!structureRegex.test(constraintDefinition)) {
-         logWarning(`      [${entityName}].[${fieldName}] constraint does not match the simple OR condition pattern or field name does not match: ${constraintDefinition}`);
+         logWarning(`         Can't extract value list from [${entityName}].[${fieldName}]. The check constraint does not match the simple OR condition pattern or field name does not match:   ${constraintDefinition}`);
          return null;
       }
    

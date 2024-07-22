@@ -20,6 +20,16 @@
       "cwd": "${workspaceFolder}/packages/MJExplorer",
       "webRoot": "${workspaceFolder}/packages/MJExplorer",
       "sourceMaps": true
+    },
+    {
+      "type": "node",
+      "request": "launch",
+      "name": "CodeGen",
+      "envFile": "${workspaceFolder}/packages/CodeGen/.env",
+      "cwd": "${workspaceFolder}/packages/CodeGen",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["start"],
+      "skipFiles": ["${workspaceFolder}/node_modules/**/*.js", "<node_internals>/**"]
     }
   ]
 }
