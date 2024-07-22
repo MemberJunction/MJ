@@ -5,7 +5,7 @@ import { Router } from '@angular/router';
 import { MJAuthBase } from '@memberjunction/ng-auth-services';
 import { MJEventType, MJGlobal } from '@memberjunction/global';
 import { EventCodes, SharedService } from '@memberjunction/ng-shared';
-import { Metadata, RunView } from '@memberjunction/core';
+import { EntityInfo, Metadata, RunView } from '@memberjunction/core';
 import { DropDownListComponent } from '@progress/kendo-angular-dropdowns';
 import { MSFTUserImageService } from './MSFT_UserImageService';
 import { UserNotificationEntity } from '@memberjunction/core-entities';
@@ -110,18 +110,8 @@ export class HeaderComponent implements OnInit {
     }
 
     private async loadSearchableEntities() {
-        const rv = new RunView();
-        const result = await rv.RunView({
-            EntityName: 'Entities',
-            ExtraFilter: 'AllowUserSearchAPI = 1',
-            OrderBy: 'Name'
-        })
-        if (result && result.Success) {
-            this.searchableEntities = result.Results;
-            if (this.searchableEntities.length > 0) {
-                this.selectedEntity = this.searchableEntities[0];
-            }
-        }
+        const md = new Metadata();
+        this.searchableEntities = md.Entities.filter((e) => e.AllowUserSearchAPI).sort((a, b) => a.Name.localeCompare(b.Name));
     }
 
     private isMicrosoft(claims: any): boolean {

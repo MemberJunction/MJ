@@ -346,7 +346,7 @@ export class Metadata {
     }
 
     /**
-     * Gets a database by name, if required, and caches it in a format available to the client (e.g. IndexedDB, LocalStorage, File, etc). The cache method is Provider specific
+     * Gets a dataset by name, if required, and caches it in a format available to the client (e.g. IndexedDB, LocalStorage, File, etc). The cache method is Provider specific
      * If itemFilters are provided, the combination of datasetName and the filters are used to determine a match in the cache
      * @param datasetName 
      * @param itemFilters 

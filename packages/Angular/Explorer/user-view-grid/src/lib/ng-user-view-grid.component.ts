@@ -103,6 +103,7 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
   public skip: number = 0;
   public pageSize: number = 40;
   public isLoading: boolean = false;
+  public neverLoaded: boolean = true;
   public gridView: GridDataResult = { data: [], total: 0 };
   public gridHeight: number = 750;
 
@@ -671,6 +672,7 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
     if (params && (params.ViewEntity || params.ViewID || params.ViewName || (params.EntityName && params.ExtraFilter))) {
       const startTime = new Date().getTime();
       this.isLoading = true
+      this.neverLoaded = false;
 
       const md = new Metadata();
       const rv = new RunView();

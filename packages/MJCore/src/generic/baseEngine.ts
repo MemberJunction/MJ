@@ -3,10 +3,10 @@ import { BehaviorSubject, Observable, Subject } from "rxjs";
 import { debounceTime } from "rxjs/operators";
 
 import { UserInfo } from "./securityInfo";
-import { RunView } from "../views/runView";
+import { RunView, RunViewParams } from "../views/runView";
 import { LogError, LogStatus } from "./logging";
 import { Metadata } from "./metadata";
-import { DatasetItemFilterType, ProviderType } from "./interfaces";
+import { DatasetItemFilterType, ProviderType, RunViewResult } from "./interfaces";
 import { BaseInfo } from "./baseInfo"; 
 import { BaseEntity, BaseEntityEvent } from "./baseEntity";
 /**
@@ -287,7 +287,13 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> {
      */
     protected async LoadConfigs(configs: Partial<BaseEnginePropertyConfig>[], contextUser: UserInfo): Promise<void> {
         this._metadataConfigs = configs.map(c => this.UpgradeObjectToConfig(c));
-        await Promise.all(this._metadataConfigs.map(c => this.LoadSingleConfig(c, contextUser)));
+
+        // now, break up the configs into two chunks, datasets and views of entities so we can load all the views in a single network call via RunViews()
+        const entityConfigs = this._metadataConfigs.filter(c => c.Type === 'entity');
+        const datasetConfigs = this._metadataConfigs.filter(c => c.Type === 'dataset');
+
+        await Promise.all([...datasetConfigs.map(c => this.LoadSingleDatasetConfig(c, contextUser)),
+                           this.LoadMultipleEntityConfigs(entityConfigs, contextUser)]);
     }
 
     /**
@@ -316,6 +322,15 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> {
             OrderBy: config.OrderBy
         }, contextUser);
 
+        this.HandleSingleViewResult(config, result);
+    }
+
+    /**
+     * Handles the result of a single view load.
+     * @param config 
+     * @param result 
+     */
+    protected HandleSingleViewResult(config: BaseEnginePropertyConfig, result: RunViewResult) {
         if (result.Success) {
             if (config.AddToObject !== false) {
                 (this as any)[config.PropertyName] = result.Results;
@@ -325,6 +340,30 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> {
             if (config.Expiration) {
                 this.SetExpirationTimer(config.PropertyName, config.Expiration);
             }
+        }
+    }
+
+    /**
+     * Handles the process of loading multiple entity configs in a single network call via RunViews()
+     * @param configs 
+     * @param contextUser 
+     */
+    protected async LoadMultipleEntityConfigs(configs: BaseEnginePropertyConfig[], contextUser: UserInfo): Promise<void> {
+        if (configs && configs.length > 0) {
+            const rv = new RunView();
+            const viewConfigs = configs.map(c => {
+                return <RunViewParams>{
+                    EntityName: c.EntityName,
+                    ResultType: 'entity_object',
+                    ExtraFilter: c.Filter,
+                    OrderBy: c.OrderBy
+                };
+            });
+            const results = await rv.RunViews(viewConfigs, contextUser);
+            // now loop through the results and process them
+            for (let i = 0; i < configs.length; i++) {
+                this.HandleSingleViewResult(configs[i], results[i]);
+            }    
         }
     }
 
@@ -339,7 +378,11 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> {
         if (result.Success) {
             if (config.AddToObject !== false) {
                 if (config.DatasetResultHandling === 'single_property') {
-                    (this as any)[config.PropertyName] = result.Results;
+                    const singleObject = {};
+                    for (const item of result.Results) {
+                        singleObject[item.Code] = item.Results;
+                    }
+                    (this as any)[config.PropertyName] = singleObject;
                 }
                 else {
                     // explode out the items within the DS into individual properties

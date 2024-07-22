@@ -46,7 +46,7 @@ export class AppComponent implements OnInit {
         const end = Date.now();
         LogStatus(`GraphQL Client Setup took ${end - start}ms`);
 
-        await SharedService.RefreshData();
+        await SharedService.RefreshData(true);
 
         // Check to see if the user has access... 
         const md = new Metadata();

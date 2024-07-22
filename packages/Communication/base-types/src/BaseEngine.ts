@@ -1,5 +1,5 @@
-import { BaseEngine, Metadata, UserInfo } from "@memberjunction/core";
-import { CommunicationBaseMessageTypeEntity, CommunicationLogEntity, CommunicationProviderMessageTypeEntity, CommunicationRunEntity } from "@memberjunction/core-entities";
+import { BaseEngine, BaseEnginePropertyConfig, Metadata, UserInfo } from "@memberjunction/core";
+import { CommunicationBaseMessageTypeEntity, CommunicationLogEntity, CommunicationProviderMessageTypeEntity, CommunicationRunEntity, EntityCommunicationFieldEntity, EntityCommunicationMessageTypeEntity } from "@memberjunction/core-entities";
 import { CommunicationProviderEntityExtended, ProcessedMessage } from "./BaseProvider";
  
 
@@ -14,52 +14,53 @@ export class CommunicationEngineBase extends BaseEngine<CommunicationEngineBase>
     public static get Instance(): CommunicationEngineBase {
        return super.getInstance<CommunicationEngineBase>();
     }
-  
-     private _BaseMessageTypes: CommunicationBaseMessageTypeEntity[];
-     private _Providers: CommunicationProviderEntityExtended[];
-     private _ProviderMessageTypes: CommunicationProviderMessageTypeEntity[];
- 
-     /**
-      * This method is called to configure the engine. It loads the metadata and caches it in the GlobalObjectStore. You must call this method before doing anything else with the engine.
-      * If this method was previously run on the instance of the engine, it will return immediately without re-loading the metadata. If you want to force a reload of the metadata, you can pass true for the forceReload parameter.
-      * @param forceRefresh If true, the metadata will be loaded from the database even if it was previously loaded.
-      * @param contextUser If you are running on the server side you must pass this in, but it is not required in an environment where a user is authenticated directly, e.g. a browser or other client. 
-      */
+   
+    private _Metadata: {
+        BaseMessageTypes: CommunicationBaseMessageTypeEntity[],
+        Providers: CommunicationProviderEntityExtended[],
+        ProviderMessageTypes: CommunicationProviderMessageTypeEntity[],
+        EntityCommunicationMessageTypes: EntityCommunicationMessageTypeEntity[],
+        EntityCommunicationFields: EntityCommunicationFieldEntity[]
+    };
+
+    /**
+     * This method is called to configure the engine. It loads the metadata and caches it in the GlobalObjectStore. You must call this method before doing anything else with the engine.
+     * If this method was previously run on the instance of the engine, it will return immediately without re-loading the metadata. If you want to force a reload of the metadata, you can pass true for the forceReload parameter.
+     * @param forceRefresh If true, the metadata will be loaded from the database even if it was previously loaded.
+     * @param contextUser If you are running on the server side you must pass this in, but it is not required in an environment where a user is authenticated directly, e.g. a browser or other client. 
+     */
      public async Config(forceRefresh: boolean = false, contextUser?: UserInfo): Promise<void> {
-        const config = [
+        const config: Partial<BaseEnginePropertyConfig>[] = [
             {
-                EntityName: 'Communication Base Message Types',
-                PropertyName: '_BaseMessageTypes'
-            }, 
-            {
-                EntityName: 'Communication Providers',
-                PropertyName: '_Providers'
-            }, 
-            {
-                EntityName: 'Communication Provider Message Types',
-                PropertyName: '_ProviderMessageTypes'
-            }]
+                Type: 'dataset',
+                DatasetName: 'Communication_Metadata',
+                DatasetResultHandling: "single_property",
+                PropertyName: "_Metadata"
+            }
+        ]
 
         await this.Load(config, forceRefresh, contextUser); 
-
      }
 
      protected override async AdditionalLoading(contextUser?: UserInfo) {
         // a little post-processing done within the context of the base classes loading architecture...
-        this._Providers.forEach((provider) => {
-            provider.MessageTypes = this._ProviderMessageTypes.filter((pmt) => pmt.CommunicationProviderID === provider.ID);
+        this._Metadata.Providers.forEach((provider) => {
+            provider.MessageTypes = this._Metadata.ProviderMessageTypes.filter((pmt) => pmt.CommunicationProviderID === provider.ID);
         });
      }
  
      public get BaseMessageTypes(): CommunicationBaseMessageTypeEntity[] {
-        if (!this.Loaded)
-            throw new Error(`Metadata not loaded. Call Config() before accessing metadata.`);
-        return this._BaseMessageTypes;
+        return this._Metadata.BaseMessageTypes;
      }
      public get Providers(): CommunicationProviderEntityExtended[] {
-        if (!this.Loaded)
-            throw new Error(`Metadata not loaded. Call Config() before accessing metadata.`);
-        return this._Providers;
+        return this._Metadata.Providers;
+     }
+     public get ProviderMessageTypes(): CommunicationProviderMessageTypeEntity[] {
+        return this._Metadata.ProviderMessageTypes;
+     }
+
+     public get Metadata() {
+        return this._Metadata;
      }
  
 

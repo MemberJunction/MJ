@@ -481,16 +481,15 @@ export abstract class ProviderBase implements IMetadataProvider {
                         const localDataset = await this.GetCachedDataset(datasetName, itemFilters);
                         for (const eu of status.EntityUpdateDates) {
                             const localEntity = localDataset.Results.find(e => e.EntityID === eu.EntityID);
-                            if (localEntity && localEntity.Results.length === eu.RowCount) {
-                                return true;
-                            }
-                            else {
+                            if (!localEntity || localEntity.Results.length !== eu.RowCount) {
                                 // we either couldn't find the entity in the local cache or the row count is different, so we're out of date
                                 // the RowCount being different picks up on DELETED rows. The UpdatedAt check which is handled above would pick up 
                                 // on any new rows or updated rows. This approach makes sure we detect deleted rows and refresh the cache.
                                 return false;
                             }
                         }
+                        // if we get here that means that the row counts are the same for all entities and we're up to date
+                        return true;
                     }
                     else {
                         // our local cache timestamp is < the server timestamp, so we're out of date

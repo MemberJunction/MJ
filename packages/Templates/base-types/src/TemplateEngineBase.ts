@@ -13,29 +13,23 @@ export class TemplateEngineBase extends BaseEngine<TemplateEngineBase> {
        return super.getInstance<TemplateEngineBase>();
     }
 
+
+    private _Metadata: {
+        TemplateContentTypes: TemplateContentTypeEntity[],
+        TemplateCategories: TemplateCategoryEntity[],
+        Templates: TemplateEntityExtended[],
+        TemplateContents: TemplateContentEntity[],
+        TemplateParams: TemplateParamEntity[]
+    };
+
     public async Config(forceRefresh?: boolean, contextUser?: UserInfo) {
         const c: Partial<BaseEnginePropertyConfig>[] = [
             {
-                EntityName: 'Template Content Types',
-                PropertyName: '_TemplateContentTypes',
-            },
-            {
-                EntityName: 'Template Categories',
-                PropertyName: '_TemplateCategories'
-            },
-            {
-                EntityName: 'Templates',
-                PropertyName: '_Templates',
-            },
-            {
-                EntityName: 'Template Contents',
-                PropertyName: '_TemplateContents',
-            },
-            {
-                EntityName: 'Template Params',
-                PropertyName: '_TemplateParams',
-            },
-
+                Type: 'dataset',
+                DatasetName: 'Template_Metadata',
+                DatasetResultHandling: "single_property",
+                PropertyName: "_Metadata"
+            }
         ]
         await this.Load(c, forceRefresh, contextUser);
     }
@@ -48,28 +42,21 @@ export class TemplateEngineBase extends BaseEngine<TemplateEngineBase> {
         });
     }
 
-    private _Templates: TemplateEntityExtended[];
     public get Templates(): TemplateEntityExtended[] {
-        return this._Templates;
+        return this._Metadata.Templates;
     }
 
-    private _TemplateContentTypes: TemplateContentTypeEntity[];
     public get TemplateContentTypes(): TemplateContentTypeEntity[] {
-        return this._TemplateContentTypes;
+        return this._Metadata.TemplateContentTypes;
     }
-
-    private _TemplateCategories: TemplateCategoryEntity[];
     public get TemplateCategories(): TemplateCategoryEntity[] {
-        return this._TemplateCategories;
+        return this._Metadata.TemplateCategories;
     }
-    private _TemplateContents: TemplateContentEntity[];
     public get TemplateContents(): TemplateContentEntity[] {
-        return this._TemplateContents;
+        return this._Metadata.TemplateContents;
     }
-
-    private _TemplateParams: TemplateParamEntity[];
     public get TemplateParams(): TemplateParamEntity[] {
-        return this._TemplateParams;
+        return this._Metadata.TemplateParams;
     }
 
     /**
