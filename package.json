@@ -19,6 +19,7 @@
   "scripts": {
     "build": "npm run build:stream",
     "build:stream": "turbo --log-order=stream build --filter=\"@memberjunction*\"",
+    "build:generated": "turbo --log-order=stream build --filter=\"mj_generatedentities\" --filter=\"mj_generatedactions\"",
     "build:table": "turbo build --filter=\"@memberjunction*\"",
     "watch": "turbo watch --filter=\"@memberjunction*\"",
     "start": "turbo start --filter=mj_explorer --filter=mj_api",
