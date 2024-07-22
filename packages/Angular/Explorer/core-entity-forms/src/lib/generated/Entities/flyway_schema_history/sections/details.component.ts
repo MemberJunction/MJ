@@ -93,6 +93,13 @@ import { flyway_schema_historyEntity } from '@memberjunction/core-entities';
             Type="textbox"
             [EditMode]="EditMode"
         ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="_x_mj_CreatedAt"
+            Type="datepicker"
+            [EditMode]="EditMode"
+        ></mj-form-field>
 
     </div>
 </div>
