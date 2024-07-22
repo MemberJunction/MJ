@@ -12597,19 +12597,6 @@ export class flyway_schema_historyEntity extends BaseEntity {
     get __mj_UpdatedAt(): Date {  
         return this.Get('__mj_UpdatedAt');
     }
-
-    /**
-    * * Field Name: _x_mj_CreatedAt
-    * * Display Name: _x _mj _Created At
-    * * SQL Data Type: datetimeoffset
-    * * Default Value: getutcdate()
-    */
-    get _x_mj_CreatedAt(): Date {  
-        return this.Get('_x_mj_CreatedAt');
-    }
-    set _x_mj_CreatedAt(value: Date) {
-        this.Set('_x_mj_CreatedAt', value);
-    }
 }
 
             

@@ -2,7 +2,7 @@
 * ALL ENTITIES - TypeGraphQL Type Class Definition - AUTO GENERATED FILE
 * Generated Entities and Resolvers for Server
 *
-* GENERATED: 7/22/2024, 10:58:34 AM
+* GENERATED: 7/22/2024, 11:18:51 AM
 *
 *   >>> DO NOT MODIFY THIS FILE!!!!!!!!!!!!
 *   >>> YOUR CHANGES WILL BE OVERWRITTEN
@@ -690,10 +690,6 @@ export class flyway_schema_history_ {
     @MaxLength(10)
     _mj__UpdatedAt: Date;
         
-    @Field() 
-    @MaxLength(10)
-    _x_mj_CreatedAt: Date;
-        
 }
 
 //****************************************************************************
@@ -730,9 +726,6 @@ export class Createflyway_schema_historyInput {
 
     @Field(() => Boolean)
     success: boolean;
-
-    @Field()
-    _x_mj_CreatedAt: Date;
 }
     
 
@@ -770,9 +763,6 @@ export class Updateflyway_schema_historyInput {
 
     @Field(() => Boolean)
     success: boolean;
-
-    @Field()
-    _x_mj_CreatedAt: Date;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
