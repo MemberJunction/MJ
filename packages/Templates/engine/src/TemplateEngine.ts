@@ -1,4 +1,4 @@
-import { LogStatus, UserInfo, ValidationErrorInfo } from "@memberjunction/core";
+import { UserInfo, ValidationErrorInfo } from "@memberjunction/core";
 import { TemplateContentEntity } from "@memberjunction/core-entities";
 import * as nunjucks from 'nunjucks';
 import { MJGlobal } from "@memberjunction/global";

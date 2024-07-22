@@ -1802,7 +1802,9 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
         const sSQL = `SELECT 
                         di.*,
                         e.BaseView EntityBaseView,
-                        e.SchemaName EntitySchemaName
+                        e.SchemaName EntitySchemaName,
+                        di.__mj_UpdatedAt AS DatasetItemUpdatedAt,
+                        d.__mj_UpdatedAt AS DatasetUpdatedAt
                     FROM 
                         [${this.MJCoreSchemaName}].vwDatasets d 
                     INNER JOIN 
@@ -1829,6 +1831,10 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
                         filterSQL = (item.WhereClause ? ' AND ' : ' WHERE ') + '(' + filter.Filter + ')';
                 }
         
+                const itemUpdatedAt = new Date(item.DatasetItemUpdatedAt);
+                const datasetUpdatedAt = new Date(item.DatasetUpdatedAt);
+                const datasetMaxUpdatedAt = new Date(Math.max(itemUpdatedAt.getTime(), datasetUpdatedAt.getTime()));
+
                 const itemSQL = `SELECT * FROM [${item.EntitySchemaName}].[${item.EntityBaseView}] ${item.WhereClause ? 'WHERE ' + item.WhereClause : ''}${filterSQL}`;
                 const itemData = await this.ExecuteSQL(itemSQL);
 
@@ -1840,7 +1846,12 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
                             latestUpdateDate = new Date(data[item.DateFieldToCheck]);
                         }
                     });
-                }                
+                }
+                
+                // finally, compare the latestUpdatedDate to the dataset max date, and use the latter if it is more recent
+                if (datasetMaxUpdatedAt > latestUpdateDate) {
+                    latestUpdateDate = datasetMaxUpdatedAt;
+                }
 
                 return {
                     EntityID: item.EntityID, 
@@ -1892,7 +1903,9 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
             SELECT 
                 di.*,
                 e.BaseView EntityBaseView,
-                e.SchemaName EntitySchemaName 
+                e.SchemaName EntitySchemaName,
+                d.__mj_UpdatedAt AS DatasetUpdatedAt,
+                di.__mj_UpdatedAt AS DatasetItemUpdatedAt 
             FROM 
                 [${this.MJCoreSchemaName}].vwDatasets d 
             INNER JOIN 
@@ -1921,7 +1934,20 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
                     if (filter) 
                         filterSQL = ' WHERE ' + filter.Filter;
                 }
-                const itemSQL = `SELECT MAX(${item.DateFieldToCheck}) AS UpdateDate, COUNT(*) AS TheRowCount, '${item.EntityID}' AS EntityID, '${item.Entity}' AS EntityName FROM [${item.EntitySchemaName}].[${item.EntityBaseView}]${filterSQL}`;
+                const itemUpdatedAt = new Date(item.DatasetItemUpdatedAt);
+                const datasetUpdatedAt = new Date(item.DatasetUpdatedAt);
+                const datasetMaxUpdatedAt = new Date(Math.max(itemUpdatedAt.getTime(), datasetUpdatedAt.getTime())).toISOString();
+
+                const itemSQL = `SELECT 
+                                        CASE 
+                                            WHEN MAX(${item.DateFieldToCheck}) > '${datasetMaxUpdatedAt}' THEN MAX(${item.DateFieldToCheck}) 
+                                            ELSE '${datasetMaxUpdatedAt}' 
+                                        END AS UpdateDate,
+                                        COUNT(*) AS TheRowCount, 
+                                        '${item.EntityID}' AS EntityID, 
+                                        '${item.Entity}' AS EntityName 
+                                 FROM 
+                                    [${item.EntitySchemaName}].[${item.EntityBaseView}]${filterSQL}`;
                 combinedSQL += itemSQL;
                 if (index < items.length - 1) {
                     combinedSQL += ' UNION ALL ';

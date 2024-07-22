@@ -1,7 +1,7 @@
 import { BaseEngine, BaseEnginePropertyConfig, BaseEntity, RunViewParams, UserInfo } from "@memberjunction/core";
 import { EntityCommunicationFieldEntity, EntityCommunicationMessageTypeEntity } from "@memberjunction/core-entities";
 import { RegisterClass } from "@memberjunction/global";
-import { Message, ProcessedMessage } from '@memberjunction/communication-types';
+import { Message, ProcessedMessage, CommunicationEngineBase } from '@memberjunction/communication-types';
 
 @RegisterClass(BaseEntity, 'Entity Communication Message Types')
 export class EntityCommunicationMessageTypeExtended extends EntityCommunicationMessageTypeEntity {
@@ -30,34 +30,34 @@ export class EntityCommunicationResult {
 
 export abstract class EntityCommunicationsEngineBase extends BaseEngine<EntityCommunicationsEngineBase> {
     public async Config(forceRefresh?: boolean, contextUser?: UserInfo) {
-        const c: Partial<BaseEnginePropertyConfig>[] = [
-            {
-                EntityName: "Entity Communication Message Types",
-                PropertyName: "_EntityCommunicationMessageTypes"
-            },
-            {
-                EntityName: "Entity Communication Fields",
-                PropertyName: "_EntityCommunicationFields"
-            }            
-        ];
-        return await this.Load(c, forceRefresh, contextUser);
+        // just rely on the metadata from the base engine, can do extra loading here down the road as needed
+        // it is faster to use the base engine's metadata than to load it again here even though the metadata
+        // is cached we still have to check to see if the dataset is up to date and that takes time
+        await CommunicationEngineBase.Instance.Config(forceRefresh, contextUser);
+        await this.Load([], forceRefresh, contextUser); // even though we have NO configs, we need to call Load so that the lifecycle of this object is properly managed where the Loaded flag is set and AdditionalLoading is called
     }
+ 
 
     public static get Instance(): EntityCommunicationsEngineBase {
         return super.getInstance<EntityCommunicationsEngineBase>();
     }
 
-    private _EntityCommunicationMessageTypes: EntityCommunicationMessageTypeExtended[] = [];
-    private _EntityCommunicationFields: EntityCommunicationFieldEntity[] = [];
+    private _Metadata: {
+        EntityCommunicationMessageTypes: EntityCommunicationMessageTypeExtended[],
+        EntityCommunicationFields: EntityCommunicationFieldEntity[]
+    } = {EntityCommunicationMessageTypes: [], EntityCommunicationFields: []};
+
     public get EntityCommunicationMessageTypes(): EntityCommunicationMessageTypeExtended[] {
-        return this._EntityCommunicationMessageTypes;
+        return this._Metadata.EntityCommunicationMessageTypes;
     }
     public get EntityCommunicationFields(): EntityCommunicationFieldEntity[] {
-        return this._EntityCommunicationFields;
+        return this._Metadata.EntityCommunicationFields;
     }
 
     protected async AdditionalLoading(contextUser?: UserInfo): Promise<void> {
         // post-process the fields to be linked to the message types they're part of 
+        this._Metadata.EntityCommunicationFields = CommunicationEngineBase.Instance.Metadata.EntityCommunicationFields;
+        this._Metadata.EntityCommunicationMessageTypes = <EntityCommunicationMessageTypeExtended[]>CommunicationEngineBase.Instance.Metadata.EntityCommunicationMessageTypes;
         this.EntityCommunicationMessageTypes.forEach(m => {
             m.CommunicationFields = this.EntityCommunicationFields.filter(f => f.EntityCommunicationMessageTypeID === m.ID);
         });

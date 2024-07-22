@@ -9,6 +9,7 @@ export class FieldMapper {
   private _fieldMap: Record<string, string> = {
     __mj_CreatedAt: '_mj__CreatedAt',
     __mj_UpdatedAt: '_mj__UpdatedAt',
+    __mj_DeletedAt: '_mj__DeletedAt',
   };
 
   /**
