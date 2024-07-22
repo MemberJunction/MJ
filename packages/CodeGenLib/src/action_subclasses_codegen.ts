@@ -89,7 +89,7 @@ export function LoadGeneratedActions() {
      */
     public async generateSingleAction(action: ActionEntity, directory: string): Promise<string> {
         if (action.Status !== 'Active' || action.CodeApprovalStatus !=='Approved') {
-            logMessage(`    Skipping action ${action.Name} because Status <> Active and/or CodeApprovalStatus <> Approved --- Status: ${action.Status}, Code Approval Status: ${action.CodeApprovalStatus}`, SeverityType.Warning, false);
+            //logMessage(`    Skipping action ${action.Name} because Status <> Active and/or CodeApprovalStatus <> Approved --- Status: ${action.Status}, Code Approval Status: ${action.CodeApprovalStatus}`, SeverityType.Warning, false);
             return "";
         }
 

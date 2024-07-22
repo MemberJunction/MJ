@@ -2,7 +2,7 @@
 * ALL ENTITIES - TypeGraphQL Type Class Definition - AUTO GENERATED FILE
 * Generated Entities and Resolvers for Server
 *
-* GENERATED: 7/21/2024, 10:58:05 AM
+* GENERATED: 7/22/2024, 10:58:34 AM
 *
 *   >>> DO NOT MODIFY THIS FILE!!!!!!!!!!!!
 *   >>> YOUR CHANGES WILL BE OVERWRITTEN
@@ -690,6 +690,10 @@ export class flyway_schema_history_ {
     @MaxLength(10)
     _mj__UpdatedAt: Date;
         
+    @Field() 
+    @MaxLength(10)
+    _x_mj_CreatedAt: Date;
+        
 }
 
 //****************************************************************************
@@ -726,6 +730,9 @@ export class Createflyway_schema_historyInput {
 
     @Field(() => Boolean)
     success: boolean;
+
+    @Field()
+    _x_mj_CreatedAt: Date;
 }
     
 
@@ -763,6 +770,9 @@ export class Updateflyway_schema_historyInput {
 
     @Field(() => Boolean)
     success: boolean;
+
+    @Field()
+    _x_mj_CreatedAt: Date;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -9502,14 +9512,14 @@ export class AIModel_ {
     @Field(() => [EntityDocument_])
     EntityDocumentsArray: EntityDocument_[]; // Link to EntityDocuments
     
-    @Field(() => [EntityAIAction_])
-    EntityAIActionsArray: EntityAIAction_[]; // Link to EntityAIActions
-    
     @Field(() => [AIModelAction_])
     AIModelActionsArray: AIModelAction_[]; // Link to AIModelActions
     
     @Field(() => [VectorIndex_])
     VectorIndexesArray: VectorIndex_[]; // Link to VectorIndexes
+    
+    @Field(() => [EntityAIAction_])
+    EntityAIActionsArray: EntityAIAction_[]; // Link to EntityAIActions
     
 }
 
@@ -9662,14 +9672,6 @@ export class AIModelResolver extends ResolverBase {
         return result;
     }
         
-    @FieldResolver(() => [EntityAIAction_])
-    async EntityAIActionsArray(@Root() aimodel_: AIModel_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('Entity AI Actions', userPayload);
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityAIActions] WHERE [AIModelID]='${aimodel_.ID}' ` + this.getRowLevelSecurityWhereClause('Entity AI Actions', userPayload, EntityPermissionType.Read, 'AND');
-        const result = this.ArrayMapFieldNamesToCodeNames('Entity AI Actions', await dataSource.query(sSQL));
-        return result;
-    }
-        
     @FieldResolver(() => [AIModelAction_])
     async AIModelActionsArray(@Root() aimodel_: AIModel_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('AI Model Actions', userPayload);
@@ -9683,6 +9685,14 @@ export class AIModelResolver extends ResolverBase {
         this.CheckUserReadPermissions('Vector Indexes', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwVectorIndexes] WHERE [EmbeddingModelID]='${aimodel_.ID}' ` + this.getRowLevelSecurityWhereClause('Vector Indexes', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Vector Indexes', await dataSource.query(sSQL));
+        return result;
+    }
+        
+    @FieldResolver(() => [EntityAIAction_])
+    async EntityAIActionsArray(@Root() aimodel_: AIModel_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Entity AI Actions', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityAIActions] WHERE [AIModelID]='${aimodel_.ID}' ` + this.getRowLevelSecurityWhereClause('Entity AI Actions', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Entity AI Actions', await dataSource.query(sSQL));
         return result;
     }
         

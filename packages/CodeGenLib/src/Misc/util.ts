@@ -1,4 +1,5 @@
 import { logError } from "./logging";
+import { unlinkSync } from "fs-extra";
 
 const fs = require('fs');
 const fse = require('fs-extra');
@@ -34,6 +35,28 @@ export function copyDir(sourceDir: string, destDir: string) {
 
 }
 
+export async function attemptDeleteFile(filePath: string, maxRetries: number, repeatDelay: number): Promise<void> {
+    for (let i = 0; i < maxRetries; i++) {
+      try {
+        unlinkSync(filePath);
+        return; // if we get here without an exception, we're good, move on
+      } 
+      catch (err) {
+        if (err.code === 'ENOENT') {
+          // file doesn't exist, so just ignore this and move on
+          return;
+        }
+        else if ( err.code === 'EBUSY') {
+          await new Promise(resolve => setTimeout(resolve, repeatDelay));
+        } 
+        else {
+          console.warn(`    Failed to delete file ${filePath}: ${err.message}`);
+          return;
+        }
+      }
+    }
+  }
+
 export function combineFiles(directory: string, combinedFileName: string, pattern: string, overwriteExistingFile: boolean): void {
     const combinedFilePath = path.join(directory, combinedFileName);
 
@@ -67,5 +90,4 @@ export function combineFiles(directory: string, combinedFileName: string, patter
 
     // Write the combined content to the specified file
     fs.writeFileSync(combinedFilePath, combinedContent);
-    console.log(`      Combined file created at ${combinedFilePath}`);
 }

@@ -2,7 +2,7 @@ import { GraphQLServerGeneratorBase } from './graphql_server_codegen';
 import { SQLCodeGenBase } from './Database/sql_codegen';
 import { EntitySubClassGeneratorBase } from './entity_subclasses_codegen';
 import { UserCache, setupSQLServerClient } from '@memberjunction/sqlserver-dataprovider'
-import AppDataSource from "./Config/db-connection"
+import AppDataSource, { MSSQLConnection } from "./Config/db-connection"
 import { ManageMetadataBase } from './Database/manage-metadata';
 import { outputDir, commands, mj_core_schema, mjCoreSchema, configInfo, getSettingValue } from './Config/config';
 import { logError, logMessage, logStatus, logWarning } from './Misc/logging';
@@ -37,6 +37,9 @@ export class RunCodeGenBase {
         .catch((err) => {
             logError("Error during Data Source initialization", err);
         })
+
+        const pool = await MSSQLConnection(); // get the MSSQL connection pool
+
         const config = new SQLServerProviderConfigData(AppDataSource,'',  mj_core_schema(), 0 );
         await setupSQLServerClient(config);
     }
