@@ -59,13 +59,8 @@ Thumbs.db
 # Typescript cache
 *.tsbuildinfo
 
-# VSCode settings
-.vscode/*
-!.vscode/settings.json
-!.vscode/tasks.json
-!.vscode/launch.json
-!.vscode/extensions.json
-!.vscode/*.code-snippets
+# VSCode cache
+.vscode/chrome
 
 *.env
 mj server info.txt
@@ -103,4 +98,21 @@ packages/MJAPI/schema.graphql
 packages/MJAPI/.env-local
 packages/MJAPI/.env-remote
 
-.mj*
+.mjrc
+.mjrc.json
+.mjrc.yaml
+.mjrc.yml
+.mjrc.js
+.mjrc.ts
+.mjrc.mjs
+.mjrc.cjs
+.config/mjrc
+.config/mjrc.json
+.config/mjrc.yaml
+.config/mjrc.yml
+.config/mjrc.js
+.config/mjrc.ts
+.config/mjrc.cjs
+mj.config.js
+mj.config.ts
+mj.config.cjs
