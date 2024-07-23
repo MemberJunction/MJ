@@ -187,6 +187,7 @@ async function createMJDistribution() {
 
   // Define directories and output
   const directories = [
+    'migrations',
     'SQL Scripts',
     'packages/CodeGen',
     'packages/MJAPI',
