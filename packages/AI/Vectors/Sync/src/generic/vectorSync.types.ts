@@ -1,4 +1,10 @@
-export type VectorSyncRequest = {
+import { Embeddings, EmbedTextsResult } from "@memberjunction/ai";
+import { VectorDBBase } from "@memberjunction/ai-vectordb";
+import { BaseEntity } from "@memberjunction/core";
+import { TemplateContentEntity, EntityDocumentEntity } from "@memberjunction/core-entities";
+import { TemplateEntityExtended } from "@memberjunction/templates-base-types";
+
+export type VectorizeEntityParams = {
     entityID: string;
     entityDocumentID?: string;
     /**
@@ -9,7 +15,7 @@ export type VectorSyncRequest = {
     options?: any;
 }
 
-export type vectorSyncResponse = {
+export type VectorizeEntityResponse = {
     success: boolean;
     status: string;
     errorMessage: string;
@@ -27,3 +33,39 @@ export type EmbeddingData = {
     TemplateContent?: string;
     VectorIndexID?: unknown;
 };
+
+export type VectorEmeddingData = { 
+    embedding: Embeddings; 
+    vectorDB: VectorDBBase, 
+    vectorDBClassKey: string, 
+    vectorDBAPIKey: string, 
+    embeddingDriverClass: string, 
+    embeddingAPIKey: string 
+};
+
+export type AnnotateWorkerContext = {
+    executionId: number;
+    entity: BaseEntity;
+    entityDocument: Record<string, unknown>;
+    template: TemplateEntityExtended;
+    templateContent: TemplateContentEntity;
+    embeddingDriverClass: string;
+    embeddingAPIKey: string;
+    delayTimeMS: number;
+  };
+  
+  export type ArchiveWorkerContext = {
+    executionId: number;
+    entity: BaseEntity;
+    entityDocument: EntityDocumentEntity;
+    vectorDBClassKey: string;
+    vectorDBAPIKey: string;
+    templateContent: TemplateContentEntity;
+    embeddings: EmbedTextsResult;
+    delayTimeMS: number;
+  };
+  
+  export type TemplateParamData = {
+    ParamName: string;
+    Data: BaseEntity[];
+  };

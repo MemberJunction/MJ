@@ -26,7 +26,7 @@ export class VectorizeEntityAction extends BaseAction {
         }
 
         let vectorizer = new EntityVectorSyncer();
-        await vectorizer.Config(params.ContextUser);
+        await vectorizer.Config(false, params.ContextUser);
 
         const entityDocuments: EntityDocumentEntity[] = await vectorizer.GetActiveEntityDocuments(entityNames);
         let results: ActionResultSimple[] = await Promise.all(entityDocuments.map(async (entityDocument: EntityDocumentEntity) => {

@@ -1,13 +1,13 @@
-import { Embeddings, EmbedTextsResult, GetAIAPIKey } from '@memberjunction/ai';
-import { VectorDBBase, VectorRecord } from '@memberjunction/ai-vectordb';
-import { VectorBase } from '@memberjunction/ai-vectors';
+import { Embeddings, GetAIAPIKey } from '@memberjunction/ai';
+import { VectorDBBase } from '@memberjunction/ai-vectordb';
+import { PageRecordsParams, VectorBase } from '@memberjunction/ai-vectors';
 import { BaseEntity, EntityField, EntityInfo, LogError, LogStatus, Metadata, RunView, RunViewResult, UserInfo } from '@memberjunction/core';
 import { AIModelEntity, EntityDocumentEntity, EntityDocumentTypeEntity, EntityRecordDocumentEntity, TemplateContentEntity, 
   TemplateContentTypeEntity, TemplateEntity, TemplateParamEntity, VectorDatabaseEntity, VectorIndexEntity } from '@memberjunction/core-entities';
 import { MJGlobal } from '@memberjunction/global';
 import { pipeline } from 'node:stream/promises';
 import { RECORD_DUPLICATES_TYPE_ID } from '../constants';
-import { EmbeddingData, VectorSyncRequest } from '../generic/vectorSync.types';
+import { EmbeddingData, TemplateParamData, VectorEmeddingData, VectorizeEntityParams, VectorizeEntityResponse } from '../generic/vectorSync.types';
 import { BatchWorker } from './BatchWorker';
 import { EntityDocumentCache } from './EntityDocumentCache';
 import { PagedRecords } from './PagedRecords';
@@ -16,35 +16,10 @@ import { PassThrough, Transform } from 'node:stream';
 import { AIEngine } from '@memberjunction/aiengine';
 import { TemplateEngineServer } from '@memberjunction/templates';
 import { TemplateEntityExtended } from '@memberjunction/templates-base-types';
-import { EntityRecordDocumentWorker } from './EntityRecordDocumentWorker';
 
-export type AnnotateWorkerContext = {
-  executionId: number;
-  entity: BaseEntity;
-  entityDocument: Record<string, unknown>;
-  template: TemplateEntityExtended;
-  templateContent: TemplateContentEntity;
-  embeddingDriverClass: string;
-  embeddingAPIKey: string;
-  delayTimeMS: number;
-};
-
-export type ArchiveWorkerContext = {
-  executionId: number;
-  entity: BaseEntity;
-  entityDocument: EntityDocumentEntity;
-  vectorDBClassKey: string;
-  vectorDBAPIKey: string;
-  templateContent: TemplateContentEntity;
-  embeddings: EmbedTextsResult;
-  delayTimeMS: number;
-};
-
-export type TemplateParamData = {
-  ParamName: string;
-  Data: BaseEntity[];
-};
-
+/**
+ * Class that specializes in vectorizing entities using embedding models and upserting them into Vector Databases 
+ */
 export class EntityVectorSyncer extends VectorBase {
   _startTime: Date;
   _endTime: Date;
@@ -53,14 +28,19 @@ export class EntityVectorSyncer extends VectorBase {
     super();
   }
 
-  public async Config(contextUser?: UserInfo): Promise<void> {
+  /**
+   * Refreshes the EntityDocumentCache and configures the AIEngine and TemplateEngineServer
+   * @param forceRefresh If true, the cache and enginges will be refreshed even if it is already loaded
+   * @param contextUser The context user to use to refresh the cache and configure the engines
+   */
+  public async Config(forceRefresh: boolean, contextUser?: UserInfo): Promise<void> {
     super.CurrentUser = contextUser;
-    await EntityDocumentCache.Instance.Refresh(contextUser);
+    await EntityDocumentCache.Instance.Refresh(false, contextUser);
     await AIEngine.Instance.Config(false, contextUser);
     await TemplateEngineServer.Instance.Config(false, contextUser);
   }
 
-  public async VectorizeEntity(request: VectorSyncRequest, contextUser?: UserInfo): Promise<any> {
+  public async VectorizeEntity(params: VectorizeEntityParams, contextUser?: UserInfo): Promise<VectorizeEntityResponse> {
     if (!contextUser) {
       throw new Error('ContextUser is required to vectorize the entity');
     }
@@ -70,14 +50,14 @@ export class EntityVectorSyncer extends VectorBase {
     const startTime: number = new Date().getTime();
     super.CurrentUser = contextUser;
     await TemplateEngineServer.Instance.Config(false, contextUser);
-    //const parser = EntityDocumentTemplateParser.CreateInstance();
-    const entityDocument: EntityDocumentEntity = await this.GetEntityDocument(request.entityDocumentID);
+    
+    const entityDocument: EntityDocumentEntity = await this.GetEntityDocument(params.entityDocumentID);
     const vectorIndexEntity: VectorIndexEntity = await this.GetOrCreateVectorIndex(entityDocument);
-    const obj = await this.GetVectorDatabaseAndEmbeddingClassByEntityDocumentID(request.entityDocumentID);
+    const obj = await this.GetVectorDatabaseAndEmbeddingClassByEntityDocumentID(params.entityDocumentID);
 
     const md = new Metadata();
-    const entity = md.Entities.find((e) => e.ID === request.entityID);
-    if (!entity) throw new Error(`Entity with ID ${request.entityID} not found.`);
+    const entity = md.Entities.find((e) => e.ID === params.entityID);
+    if (!entity) throw new Error(`Entity with ID ${params.entityID} not found.`);
 
 
     const template: TemplateEntityExtended | undefined = TemplateEngineServer.Instance.Templates.find((t: TemplateEntityExtended) => t.ID === entityDocument.TemplateID);
@@ -93,13 +73,10 @@ export class EntityVectorSyncer extends VectorBase {
       throw new Error('Templates used by Entity Documents should only have one associated Template Content record.');
     }
 
+    //If this function doesnt throw an error, then the template is valid
     const validTemplate: boolean = this.ValidateTemplateContextParamAlignment(template);
 
-    // this gets all the records, but we want to paginate
-    // const allrecords: BaseEntity[] = await super.getRecordsByEntityID(request.entityID);
-
-    //small number in the hopes we dont hit embedding token limits
-    const pageSize: number = 15;
+    const pageSize: number = params.batchCount || 20;
     const dataStream = new PagedRecords();
     
     let templateObj: {} = {
@@ -146,7 +123,14 @@ export class EntityVectorSyncer extends VectorBase {
       let hasMore = true;
 
       while (hasMore) {
-        const recordsPage: BaseEntity[] = await super.pageRecordsByEntityID<BaseEntity>(request.entityID, pageNumber, pageSize);
+        let pageRecordRequest: PageRecordsParams = {
+          EntityID: params.entityID,
+          PageNumber: pageNumber,
+          PageSize: pageSize,
+          ResultType: 'entity_object'
+        };
+
+        const recordsPage: BaseEntity[] = await super.PageRecordsByEntityID<BaseEntity>(pageRecordRequest);
         const relatedData: TemplateParamData[] = await this.GetRelatedTemplateDataForBatch(entity, recordsPage, template);
         const items: {}[] = [];
         
@@ -294,27 +278,22 @@ export class EntityVectorSyncer extends VectorBase {
     }
   }
 
-  protected async GetVectorDatabaseAndEmbeddingClassByEntityDocumentID(
-    entityDocumentID: string,
-    createDocumentIfNotFound: boolean = false
-  ): Promise<{ embedding: Embeddings; vectorDB: VectorDBBase, vectorDBClassKey: string, vectorDBAPIKey: string, embeddingDriverClass: string, embeddingAPIKey: string }> {
-    let entityDocument: EntityDocumentEntity | null =
-      (await this.GetEntityDocument(entityDocumentID)) || (await this.GetFirstActiveEntityDocumentForEntity(entityDocumentID));
+  protected async GetVectorDatabaseAndEmbeddingClassByEntityDocumentID( entityDocumentID: string, createDocumentIfNotFound?: boolean ): Promise<VectorEmeddingData> {
+    let entityDocument: EntityDocumentEntity | null = EntityDocumentCache.Instance.GetDocument(entityDocumentID);
     if (!entityDocument) {
       if (createDocumentIfNotFound) {
-        if (!entityDocument) {
           LogStatus(`No active Entity Document found for entity ${entityDocumentID}, creating one`);
-          const defaultVectorDB: VectorDatabaseEntity = this.getVectorDatabase();
-          const defaultAIModel: AIModelEntity = this.getAIModel();
+          const defaultVectorDB: VectorDatabaseEntity = this.GetVectorDatabase();
+          const defaultAIModel: AIModelEntity = this.GetAIModel();
           entityDocument = await this.CreateDefaultEntityDocument(entityDocumentID, defaultVectorDB, defaultAIModel);
-        }
-      } else {
+      } 
+      else {
         throw new Error(`No Entity Document found for ID=${entityDocumentID}`);
       }
     }
 
-    const vectorDBEntity: VectorDatabaseEntity = this.getVectorDatabase(entityDocument.VectorDatabaseID);
-    const aiModelEntity: AIModelEntity = this.getAIModel(entityDocument.AIModelID);
+    const vectorDBEntity: VectorDatabaseEntity = this.GetVectorDatabase(entityDocument.VectorDatabaseID);
+    const aiModelEntity: AIModelEntity = this.GetAIModel(entityDocument.AIModelID);
 
     const embeddingAPIKey: string = GetAIAPIKey(aiModelEntity.DriverClass);
     const vectorDBAPIKey: string = GetAIAPIKey(vectorDBEntity.ClassKey);
@@ -341,7 +320,7 @@ export class EntityVectorSyncer extends VectorBase {
 
     LogStatus(`Using vector database ${vectorDBEntity.Name} and AI Model ${aiModelEntity.Name}`);
 
-    const obj = { 
+    const obj: VectorEmeddingData = { 
       embedding, 
       vectorDB, 
       vectorDBClassKey: vectorDBEntity.ClassKey, 
@@ -356,7 +335,7 @@ export class EntityVectorSyncer extends VectorBase {
   public async GetEntityDocument(EntityDocumentID: string): Promise<EntityDocumentEntity | null> {
     const cache = EntityDocumentCache.Instance;
     if (!cache.IsLoaded) {
-      await cache.Refresh(super.CurrentUser);
+      await cache.Refresh(false, super.CurrentUser);
     }
     return cache.GetDocument(EntityDocumentID);
   }
@@ -364,28 +343,9 @@ export class EntityVectorSyncer extends VectorBase {
   public async GetEntityDocumentByName(EntityDocumentName: string, ContextUser?: UserInfo): Promise<EntityDocumentEntity | null> {
     const cache = EntityDocumentCache.Instance;
     if (!cache.IsLoaded) {
-      await cache.Refresh(ContextUser);
+      await cache.Refresh(false, ContextUser);
     }
     return cache.GetDocumentByName(EntityDocumentName);
-  }
-
-  public async GetFirstActiveEntityDocumentForEntity(entityID: string): Promise<EntityDocumentEntity | null> {
-    const entityDocumentTypeID: EntityDocumentTypeEntity | undefined = AIEngine.EntityDocumentTypes.find((documentType: EntityDocumentTypeEntity) => documentType.Name === 'Record Duplicate');
-
-    if (!entityDocumentTypeID) {
-      throw new Error('Entity Document Type not found');
-    }
-
-    const entityDocument: EntityDocumentEntity = await this.runViewForSingleValue<EntityDocumentEntity>(
-      'Entity Documents',
-      `EntityID = '${entityID}' AND TypeID = '${entityDocumentTypeID.ID}' AND Status = 'Active'`
-    );
-    if (!entityDocument) {
-      LogError(`No active Entity Document with entityID=${entityID} found`);
-      return null;
-    }
-
-    return entityDocument;
   }
 
   /**
@@ -395,15 +355,14 @@ export class EntityVectorSyncer extends VectorBase {
    * @param entityIDs If provided, only Entity Documents for the specified entities will be returned.
    */
   public async GetActiveEntityDocuments(entityNames?: string[]): Promise<EntityDocumentEntity[]> {
-    await AIEngine.Instance.Config(false, super.CurrentUser);
-
-    const entityDocumentTypeID: EntityDocumentTypeEntity | undefined = AIEngine.EntityDocumentTypes.find((documentType: EntityDocumentTypeEntity) => documentType.Name === 'Record Duplicate');
-    if (!entityDocumentTypeID) {
+    await EntityDocumentCache.Instance.Refresh(false, super.CurrentUser);
+    const entityDocumentType: EntityDocumentTypeEntity | undefined = EntityDocumentCache.Instance.GetDocumentTypeByName('Record Duplicate');
+    if (!entityDocumentType) {
       throw new Error('Entity Document Type not found');
     }
 
-    let filter = `TypeID = '${entityDocumentTypeID}' AND Status = 'Active' `;
-    if (entityNames) {
+    let filter = `TypeID = '${entityDocumentType.ID}' AND Status = 'Active' `;
+    if (entityNames && entityNames.length > 0) {
       filter += ` AND Entity IN (${entityNames.map((entityName: string) => `'${entityName}'`).join(',')})`;
     }
 
@@ -434,10 +393,11 @@ export class EntityVectorSyncer extends VectorBase {
   }
 
   private async GetOrCreateVectorIndex(entityDocument: EntityDocumentEntity): Promise<VectorIndexEntity> {
-    let vectorIndexEntity: VectorIndexEntity = await super.runViewForSingleValue(
+    let vectorIndexEntity: VectorIndexEntity = await super.RunViewForSingleValue(
       'Vector Indexes',
       `VectorDatabaseID = '${entityDocument.VectorDatabaseID}' AND EmbeddingModelID = '${entityDocument.AIModelID}'`
     );
+
     if (vectorIndexEntity) {
       return vectorIndexEntity;
     }
@@ -560,34 +520,6 @@ export class EntityVectorSyncer extends VectorBase {
     return runViewResult.Results;
   }
 
-  private chunkArray(array: any[], chunkSize: number): BaseEntity[][] {
-    let arrayCopy = [...array];
-    let result: BaseEntity[][] = [];
-    while (arrayCopy.length) {
-      result.push(arrayCopy.splice(0, chunkSize));
-    }
-    return result;
-  }
-
-  private convertPrimaryKeysToList(primaryKeys: EntityField[]): any {
-    return primaryKeys.map((pk) => {
-      return `${pk.Name}=${pk.Value}`;
-    });
-  }
-
-  private ConvertEntityFieldsToString(entity: BaseEntity): string {
-    let obj = {};
-    for (const field of entity.Fields) {
-      obj[field.Name] = field.Value;
-    }
-
-    return JSON.stringify(obj);
-  }
-
-  private delay = (delayInms: number) => {
-    return new Promise((resolve) => setTimeout(resolve, delayInms));
-  };
-
   protected async GetTemplateData(entity: EntityInfo, record: BaseEntity, template: TemplateEntityExtended, relatedData: TemplateParamData[]): Promise<{ [key: string]: any }> {
     const templateData: { [key: string]: any } = {};
     for(const param of template.Params){
@@ -610,7 +542,7 @@ export class EntityVectorSyncer extends VectorBase {
           }
 
           // now filter down the data in d to just this record and set the value of the context data to the filtered data
-          const relatedDataForRecord = paramData.Data.filter((rdfr: BaseEntity) => rdfr.Get(param.LinkedParameterField) === record.Get(entity.FirstPrimaryKey.Name));
+          const relatedDataForRecord: BaseEntity[] = paramData.Data.filter((rdfr: BaseEntity) => rdfr.Get(param.LinkedParameterField) === record.Get(entity.FirstPrimaryKey.Name));
           templateData[param.Name] = relatedDataForRecord.map((rdfr: BaseEntity) => rdfr.GetAll());
           break;
           case "Array":
@@ -691,6 +623,7 @@ export class EntityVectorSyncer extends VectorBase {
   protected async UpsertEntityRecordDocumentRecords(embeddingData: EmbeddingData, contextUser: UserInfo): Promise<void> {
     let md: Metadata = super.Metadata;
     let rv: RunView = super.RunView;
+    let success: boolean = true;
 
     let vectorIndex: VectorIndexEntity = await md.GetEntityObject('Vector Indexes', contextUser);
     let loadResult = await vectorIndex.Load(embeddingData.VectorIndexID.toString());
@@ -702,8 +635,8 @@ export class EntityVectorSyncer extends VectorBase {
     let entityDocument: Record<string, unknown> = embeddingData.EntityDocument;
     let entityID: unknown = entityDocument.EntityID;
 
-    let existingRecords: EntityRecordDocumentEntity[] = [];
-    const runViewResult: RunViewResult<EntityRecordDocumentEntity> = await rv.RunView<EntityRecordDocumentEntity>({
+    let existingRecords: BaseEntity[] = [];
+    const runViewResult: RunViewResult<BaseEntity> = await rv.RunView<BaseEntity>({
       EntityName: 'Entity Record Documents',
       ExtraFilter: `EntityID = '${entityID}' AND EntityDocumentID = '${entityDocument.ID}' AND RecordID in (${embeddingData.__mj_recordID})`,
       ResultType: 'entity_object'
@@ -716,27 +649,34 @@ export class EntityVectorSyncer extends VectorBase {
       LogError(`Error getting existing Entity Record Documents`, undefined, runViewResult.ErrorMessage);
     }
 
-      let erdEntity: EntityRecordDocumentEntity | undefined = existingRecords.find((er: EntityRecordDocumentEntity) => er.RecordID.toString() === embeddingData.__mj_recordID.toString());
+      let erdEntity: BaseEntity | undefined = existingRecords.find((er: BaseEntity) => er.Get("RecordID").toString() === embeddingData.__mj_recordID.toString());
       if(!erdEntity){
-        erdEntity = await md.GetEntityObject('Entity Record Documents', contextUser);
+        erdEntity = await md.GetEntityObject<BaseEntity>('Entity Record Documents', contextUser);
         erdEntity.NewRecord();
       }
 
-      erdEntity.EntityID = entityID.toString();
-      erdEntity.RecordID = embeddingData.__mj_recordID.toString();
-      erdEntity.DocumentText = embeddingData.TemplateContent;
-      erdEntity.VectorID = embeddingData.VectorID.toString();
-      erdEntity.VectorJSON = JSON.stringify(embeddingData.Vector);
-      erdEntity.VectorIndexID = embeddingData.VectorIndexID.toString();
-      erdEntity.EntityRecordUpdatedAt = new Date();
-      erdEntity.EntityDocumentID = embeddingData.EntityDocument.ID.toString();
+      erdEntity.Set("EntityID", entityID.toString());
+      erdEntity.Set("RecordID", embeddingData.__mj_recordID.toString());
+      erdEntity.Set("DocumentText", embeddingData.TemplateContent);
+      erdEntity.Set("VectorID", embeddingData.VectorID.toString());
+      erdEntity.Set("VectorJSON", JSON.stringify(embeddingData.Vector));
+      erdEntity.Set("VectorIndexID", embeddingData.VectorIndexID.toString());
+      erdEntity.Set("EntityRecordUpdatedAt", new Date());
+      erdEntity.Set("EntityDocumentID", embeddingData.EntityDocument.ID.toString());
       erdEntity.ContextCurrentUser = contextUser;
+      
       let erdEntitySaveResult: boolean = await erdEntity.Save();
       if(!erdEntitySaveResult){
         LogError('Error saving Entity Record Document Entity', undefined, erdEntity.LatestResult);
+        success = false;
       }
 
-    LogStatus("Upserting Entity Record Documents: Complete");
+    if(success){
+      LogStatus("Upserting Entity Record Documents: Complete");
+    }
+    else{
+      LogError("Upserting Entity Record Documents: Fail");
+    }
   }
 
   /**
