@@ -554,7 +554,8 @@ export class ResolverBase {
       const entityInfo = entityObject.EntityInfo;
       const clientNewValues = {};
       Object.keys(input).forEach((key) => {
-        if (key !== 'OldValues___') clientNewValues[key] = input[key];
+        if (key !== 'OldValues___') 
+          clientNewValues[key] = input[key];
       }); // grab all the props except for the OldValues property
 
       if (entityInfo.TrackRecordChanges || !input.OldValues___) {
@@ -629,7 +630,8 @@ export class ResolverBase {
       // we need to do a quick transform on the values to make sure they match the TS Type for the given field because item.Value will always be a string
       const field = entityObject.EntityInfo.Fields.find((f) => f.CodeName === item.Key);
       let val = item.Value;
-      if ((val === null || val === undefined) && field.DefaultValue !== null && field.DefaultValue !== undefined) val = field.DefaultValue; // set default value as the field was never set
+      if ((val === null || val === undefined) && field.DefaultValue !== null && field.DefaultValue !== undefined && !field.AllowsNull) 
+        val = field.DefaultValue; // set default value as the field was never set and it does NOT allow nulls
 
       if (field) {
         switch (field.TSType) {

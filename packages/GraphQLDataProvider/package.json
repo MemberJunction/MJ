@@ -20,7 +20,8 @@
     "/dist"
   ],
   "scripts": {
-    "build": "tsc -noEmit && pkgroll --sourcemap --minify"
+    "build": "tsc -noEmit && pkgroll --sourcemap --minify",
+    "build-debug": "tsc && pkgroll --sourcemap"
   },
   "author": "MemberJunction.com",
   "license": "ISC",
