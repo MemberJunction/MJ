@@ -48,7 +48,7 @@ export class VectorBase {
 
         const rvResult: RunViewResult<T> = await this._runView.RunView<T>({
             EntityName: entity.Name,
-            ResultType: 'entity_object',
+            ResultType: params.ResultType,
             MaxRows: params.PageSize,
             StartRow: Math.max(0, (params.PageNumber - 1) * params.PageSize),
         }, this.CurrentUser);

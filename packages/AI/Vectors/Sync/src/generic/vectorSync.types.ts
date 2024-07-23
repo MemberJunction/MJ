@@ -67,5 +67,5 @@ export type AnnotateWorkerContext = {
   
   export type TemplateParamData = {
     ParamName: string;
-    Data: BaseEntity[];
+    Data: unknown[];
   };
