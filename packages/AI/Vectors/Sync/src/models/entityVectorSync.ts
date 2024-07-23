@@ -595,7 +595,7 @@ export class EntityVectorSyncer extends VectorBase {
 
       // construct a filter for the related field so that we constrain the results to just the set of records linked to our recipients
       const quotes = entity.FirstPrimaryKey.NeedsQuotes ? "'" : "";
-      const filter = `${relatedField} in (${records.map((record: BaseEntity) => `${quotes}${record[entity.FirstPrimaryKey.Name]}${quotes}`).join(',')})`;
+      const filter = `${relatedField} in (${records.map((record: BaseEntity) => `${quotes}${record.Get(entity.FirstPrimaryKey.Name)}${quotes}`).join(',')})`;
       const finalFilter = templateParam.ExtraFilter ? `(${filter}) AND (${templateParam.ExtraFilter})` : filter;
 
       const result = await super.RunView.RunView({
