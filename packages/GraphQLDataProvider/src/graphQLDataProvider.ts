@@ -730,14 +730,14 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 if (val && f.EntityFieldInfo.TSType === EntityFieldTSType.Boolean && typeof val !== 'boolean')
                     val = parseInt(val) === 0 ? false : true; // convert to boolean
 
-                if (val == null && f.EntityFieldInfo.AllowsNull == false) {
-                    if (f.EntityFieldInfo.DefaultValue != null) {
+                if (val === null && f.EntityFieldInfo.AllowsNull === false) {
+                    if (f.EntityFieldInfo.DefaultValue !== null) {
                         // no value, but there is a default value, so use that, since field does NOT allow NULL
                         val = f.EntityFieldInfo.DefaultValue;
                     }
                     else {
                         // no default value, null value and field doesn't allow nulls, so set to either 0 or empty string
-                        if (f.FieldType == EntityFieldTSType.Number || f.FieldType == EntityFieldTSType.Boolean)
+                        if (f.FieldType === EntityFieldTSType.Number || f.FieldType === EntityFieldTSType.Boolean)
                             val = 0;
                         else
                             val = '';
@@ -750,7 +750,13 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             if (type.trim().toLowerCase() === 'update') {
                 const ov = [];
                 entity.Fields.forEach(f => {
-                    const val = f.OldValue ? (typeof f.OldValue === 'string' ? f.OldValue : f.OldValue.toString()) : null;
+                    let val = null;
+                    if (f.OldValue !== null && f.OldValue !== undefined) {
+                        if (typeof f.OldValue !== 'string')
+                            val = f.OldValue.toString();
+                        else
+                            val = f.OldValue;
+                    }
                     ov.push({Key: f.CodeName, Value: val }); // pass ALL old values to server, slightly inefficient but we want full record
                 });
                 vars.input['OldValues___'] = ov; // add the OldValues prop to the input property that is part of the vars already
