@@ -12599,7 +12599,27 @@ export class flyway_schema_historyEntity extends BaseEntity {
     }
 }
 
-            
+
+export const IntegrationURLFormatEntitySchema = z.object({
+    ID: z.string().describe(`asdfa
+        asdf
+        asdf
+        asdf
+        asdf
+        `),
+    IntegrationID: z.string(),
+    EntityID: z.string(),
+    URLFormat: z.string(),
+    Comments: z.string().nullish(),
+    __mj_CreatedAt: z.date(),
+    __mj_UpdatedAt: z.date(),
+    Integration: z.string(),
+    NavigationBaseURL: z.string().nullable(),
+    FullURLFormat: z.string().nullable(),
+})
+
+export type IntegrationURLFormatEntityType = z.infer<typeof IntegrationURLFormatEntitySchema>;  
+
 /**
  * Integration URL Formats - strongly typed entity sub-class
  * * Schema: __mj
@@ -12612,7 +12632,7 @@ export class flyway_schema_historyEntity extends BaseEntity {
  * @public
  */
 @RegisterClass(BaseEntity, 'Integration URL Formats')
-export class IntegrationURLFormatEntity extends BaseEntity {
+export class IntegrationURLFormatEntity extends BaseEntity<IntegrationURLFormatEntityType> {
     /**
     * Loads the Integration URL Formats record from the database
     * @param ID: string - primary key value to load the Integration URL Formats record.
