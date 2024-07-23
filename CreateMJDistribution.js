@@ -147,7 +147,7 @@ async function handleSQLScriptsDirectory(dir, normalizedDir, archive) {
       ignore: [
         '_all_entities.sql', // Ignore this file
         '_all_entities.permissions.sql', // Ignore this file
-        'install/*.sql.old',
+        'install/**', // Deprecated folder, migrations are used instead
         'internal_only/**', // Ignore everything in 'internal_only'
         'generated/MJ_BASE/**', // INITIALLY ignore everything in 'MJ_BASE' to apply custom rules later
       ],
