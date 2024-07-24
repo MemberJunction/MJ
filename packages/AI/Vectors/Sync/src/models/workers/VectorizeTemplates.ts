@@ -1,23 +1,22 @@
 import { parentPort, threadId, workerData } from 'node:worker_threads';
-import type { AnnotateWorkerContext } from '../entityVectorSync';
 import type { WorkerData } from '../BatchWorker';
 import { TemplateEntityExtended, TemplateRenderResult } from '@memberjunction/templates-base-types';
 import { TemplateEngineServer } from '@memberjunction/templates';
 import { TemplateContentEntity } from '@memberjunction/core-entities';
-import { LogError, LogStatus, ValidationResult } from '@memberjunction/core';
+import { LogError, ValidationResult } from '@memberjunction/core';
 import { MJGlobal } from '@memberjunction/global';
 import { Embeddings, EmbedTextsResult } from '@memberjunction/ai';
 
 import { LoadOpenAILLM } from '@memberjunction/ai-openai';
 import { LoadMistralEmbedding } from '@memberjunction/ai-mistral';
-import { EmbeddingData } from '../../generic/vectorSync.types';
+import { AnnotateWorkerContext, EmbeddingData } from '../../generic/vectorSync.types';
 
 LoadOpenAILLM();
 LoadMistralEmbedding();
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-async function VectorizeEntity(): Promise<void> {
+export async function VectorizeEntity(): Promise<void> {
   const { batch, context } = workerData as WorkerData<AnnotateWorkerContext>;
 
   if(!batch){
