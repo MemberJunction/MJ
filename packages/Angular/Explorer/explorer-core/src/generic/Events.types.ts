@@ -207,3 +207,22 @@ export class AfterUpdateItemEvent extends BaseEvent {
         this.Item = item;
     }
 }
+
+export class DropdownOptionClickEvent {
+    /**
+     * The text of the dropdown option that was clicked.
+     */
+    public Text: string;
+
+    /**
+     * Signals to the source component that another component 
+     * has handled responding to this event, and that the source
+     * component should do nothing.
+     */
+    public Cancel: boolean;
+
+    constructor(text: string){
+        this.Text = text;
+        this.Cancel = false;
+    }
+}
