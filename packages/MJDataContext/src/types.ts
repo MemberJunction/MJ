@@ -569,7 +569,7 @@ export class DataContext {
                                 item.RecordName = v.Name;
                                 item.EntityID = v.ViewEntityInfo.ID; // if we get here, we overwrite whateer we had above because we have the actual view metadata.
                                 item.ViewEntity = v;
-                                item.SQL =  `SELECT * FROM ${v.ViewEntityInfo.SchemaName}.${v.ViewEntityInfo.BaseView}${v.WhereClause && v.WhereClause.length > 0 ? ' WHERE ' + v.WhereClause : ''}`;
+                                item.SQL =  `SELECT * FROM [${v.ViewEntityInfo.SchemaName}].[${v.ViewEntityInfo.BaseView}]${v.WhereClause && v.WhereClause.length > 0 ? ' WHERE ' + v.WhereClause : ''}`;
                             }
                             break;
                     }
@@ -618,12 +618,21 @@ export class DataContext {
                 throw new Error(`Data Context ID not set or invalid`);
 
             const md = new Metadata();
-            for (const item of this.Items) {
+            const tg = await md.CreateTransactionGroup();
+            const itemsArray = this.Items.map((item) => {return {
+                item: item,
+                dciEntity: null
+            }});
+            for (const itemEntry of itemsArray) {
+                const item = itemEntry.item;
                 const dciEntity = <DataContextItemEntity>await md.GetEntityObject('Data Context Items', contextUser);
                 if (item.DataContextItemID && item.DataContextItemID.length > 0) 
                   await dciEntity.Load(item.DataContextItemID);
                 else
                   dciEntity.NewRecord();
+
+                itemEntry.dciEntity = dciEntity; // saved for later 
+
                 dciEntity.DataContextID = this.ID;
                 dciEntity.Type = item.Type;
                 switch (item.Type) {
@@ -649,10 +658,19 @@ export class DataContext {
                 else
                     dciEntity.DataJSON = null; //JSON.stringify(item.Data); 
 
-                if (await dciEntity.Save()) {
-                    item.DataContextItemID = dciEntity.ID;
-                }
+                dciEntity.TransactionGroup = tg;
+                dciEntity.Save() // no await because we are part of a transaction group
             }          
+            const result = await tg.Submit();
+            if (result) {
+                // go through each item and update its DataContextItemID
+                for (const itemEntry of itemsArray) {
+                    itemEntry.item.DataContextItemID = itemEntry.dciEntity.ID;
+                }
+                return true;
+            }
+            else
+                return false;
         }   
         catch (e) {
             LogError(`Error in DataContext.SaveItems: ${e && e.message ? e.message : ''}`);
@@ -694,18 +712,11 @@ export class DataContext {
             if (!this.ID || this.ID.length === 0)
                 throw new Error(`Data Context ID not set or invalid`);
 
-            let bSuccess: boolean = true;
-            let promises: Promise<boolean>[] = this.Items.map(async (item) => {
-                return await item.LoadData(dataSource, forceRefresh, loadRelatedDataOnSingleRecords, maxRecordsPerRelationship, contextUser);
+            let promises = this.Items.map(async (item) => {
+                return item.LoadData(dataSource, forceRefresh, loadRelatedDataOnSingleRecords, maxRecordsPerRelationship, contextUser);
             });
             const results: boolean[] = await Promise.all(promises);
-            for(const result of results){
-                if (!result){
-                    bSuccess = false;
-                }
-            }
-
-            return bSuccess;
+            return results.every(r => r); // return true only if all items loaded successfully, otherwise return false
         }
         catch (e) {
             LogError(`Error in DataContext.LoadData: ${e && e.message ? e.message : ''}`);
@@ -725,7 +736,8 @@ export class DataContext {
      */
     public async Load(DataContextID: string, dataSource: any, forceRefresh: boolean = false, loadRelatedDataOnSingleRecords: boolean = false, maxRecordsPerRelationship: number = 0, contextUser?: UserInfo): Promise<boolean> {
         // load the metadata and THEN the data afterwards
-        return await this.LoadMetadata(DataContextID, contextUser) && await this.LoadData(dataSource, forceRefresh, loadRelatedDataOnSingleRecords, maxRecordsPerRelationship, contextUser);
+        return await this.LoadMetadata(DataContextID, contextUser) && 
+               await this.LoadData(dataSource, forceRefresh, loadRelatedDataOnSingleRecords, maxRecordsPerRelationship, contextUser);
     }
 
     /**
@@ -762,8 +774,10 @@ export class DataContext {
             const newContext = await md.GetEntityObject<DataContextEntity>('Data Contexts', contextUser);
             newContext.NewRecord();
             newContext.CopyFrom(currentContext, false);
+
             if (await newContext.Save()) {
                 // we've saved our new data context, now we need to save all of the items
+                const tg = await md.CreateTransactionGroup();
                 for (let item of context.Items) {
                     const currentItem = await md.GetEntityObject<DataContextItemEntity>('Data Context Items', contextUser);
                     await currentItem.Load(item.DataContextItemID);
@@ -776,10 +790,13 @@ export class DataContext {
                     if (!includeData)
                         newItem.DataJSON = null; // if we aren't including the data, we need to clear it out
 
-                    if (!await newItem.Save()) {
-                        throw new Error(`Error saving new data context item`);
-                    }
+                    newItem.TransactionGroup = tg;
+                    newItem.Save(); // no await because we are part of a transaction group
                 }
+                const result = await tg.Submit();
+                if (!result)
+                    throw new Error(`Error saving new data context items`);
+
                 // if we get here we've succeeded, so return the new data context
                 const newContextObject = new DataContext();
                 await newContextObject.LoadMetadata(newContext.ID, contextUser);
