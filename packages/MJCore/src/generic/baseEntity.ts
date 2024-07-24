@@ -326,7 +326,7 @@ export class BaseEntityEvent {
 /**
  * Base class used for all entity objects. This class is abstract and is sub-classes for each particular entity using the CodeGen tool. This class provides the basic functionality for loading, saving, and validating entity objects.
  */
-export abstract class BaseEntity {
+export abstract class BaseEntity<T = unknown> {
     private _EntityInfo: EntityInfo;
     private _Fields: EntityField[] = [];
     private _recordLoaded: boolean = false;
@@ -548,7 +548,7 @@ export abstract class BaseEntity {
      * @param ignoreNonExistentFields - if set to true, fields that don't exist on the entity object will be ignored, if false, an error will be thrown if a field doesn't exist
      * @param replaceOldValues - if set to true, the old values of the fields will be reset to the values provided in the object parameter, if false, they will be left alone
      */
-    public SetMany(object: any, ignoreNonExistentFields: boolean = false, replaceOldValues: boolean = false) {
+    public SetMany<T>(object: T, ignoreNonExistentFields: boolean = false, replaceOldValues: boolean = false) {
         if (!object)
             throw new Error('calling BaseEntity.SetMany(), object cannot be null or undefined');
 
@@ -589,7 +589,7 @@ export abstract class BaseEntity {
      * @param onlyDirtyFields When set to true, only the fields that are dirty will be returned.
      * @returns 
      */
-    public GetAll(oldValues: boolean = false, onlyDirtyFields: boolean = false): {} {
+    public GetAll(oldValues: boolean = false, onlyDirtyFields: boolean = false): T {
         let obj = {};
         for (let field of this.Fields) {
             if (!onlyDirtyFields || (onlyDirtyFields && field.Dirty)) {
@@ -599,7 +599,7 @@ export abstract class BaseEntity {
                 }    
             }
         }
-        return obj;
+        return obj as T;
     }
 
     /**

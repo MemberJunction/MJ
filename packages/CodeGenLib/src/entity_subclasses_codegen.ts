@@ -26,6 +26,7 @@ export class EntitySubClassGeneratorBase {
     public generateEntitySubClassFileHeader(): string {
         return `import { BaseEntity, EntitySaveOptions, CompositeKey } from "@memberjunction/core";
 import { RegisterClass } from "@memberjunction/global";
+import * as Types from "./entity_type_definitions";
     `
     }
     
@@ -137,7 +138,7 @@ import { RegisterClass } from "@memberjunction/global";
  * @public
  */
 ${subClassImportStatement}@RegisterClass(BaseEntity, '${entity.Name}')
-export class ${sClassName} extends ${sBaseClass} {${loadFunction ? '\n' + loadFunction : ''}${saveFunction ? '\n\n' + saveFunction : ''}${deleteFunction ? '\n\n' + deleteFunction : ''}
+export class ${sClassName} extends ${sBaseClass}<Types.${sClassName}Type> {${loadFunction ? '\n' + loadFunction : ''}${saveFunction ? '\n\n' + saveFunction : ''}${deleteFunction ? '\n\n' + deleteFunction : ''}
 
 ${fields}
 }

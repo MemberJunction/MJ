@@ -44,6 +44,13 @@ import { UserNotificationEntity } from '@memberjunction/core-entities';
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
+            FieldName="ResourceRecordID"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
             FieldName="ResourceConfiguration"
             Type="textarea"
             [EditMode]="EditMode"
@@ -73,13 +80,6 @@ import { UserNotificationEntity } from '@memberjunction/core-entities';
             [record]="record"
             [ShowLabel]="true"
             FieldName="__mj_UpdatedAt"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="ResourceRecordID"
             Type="textbox"
             [EditMode]="EditMode"
         ></mj-form-field>

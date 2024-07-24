@@ -1,5 +1,6 @@
 import { BaseEntity, EntitySaveOptions, CompositeKey } from "@memberjunction/core";
 import { RegisterClass } from "@memberjunction/global";
+import * as Types from "./entity_type_definitions";
     
             
 /**
@@ -13,7 +14,7 @@ import { RegisterClass } from "@memberjunction/global";
  * @public
  */
 @RegisterClass(BaseEntity, 'Accounts')
-export class AccountEntity extends BaseEntity {
+export class AccountEntity extends BaseEntity<Types.AccountEntityType> {
     /**
     * Loads the Accounts record from the database
     * @param ID: number - primary key value to load the Accounts record.
@@ -457,7 +458,7 @@ export class AccountEntity extends BaseEntity {
  * @public
  */
 @RegisterClass(BaseEntity, 'Accounts__client_crm')
-export class Account__client_crmEntity extends BaseEntity {
+export class Account__client_crmEntity extends BaseEntity<Types.Account__client_crmEntityType> {
     /**
     * Loads the Accounts__client_crm record from the database
     * @param AccountId: string - primary key value to load the Accounts__client_crm record.
@@ -4077,7 +4078,7 @@ export class Account__client_crmEntity extends BaseEntity {
  * @public
  */
 @RegisterClass(BaseEntity, 'Activities')
-export class ActivityEntity extends BaseEntity {
+export class ActivityEntity extends BaseEntity<Types.ActivityEntityType> {
     /**
     * Loads the Activities record from the database
     * @param ID: number - primary key value to load the Activities record.
@@ -4380,7 +4381,7 @@ export class ActivityEntity extends BaseEntity {
  * @public
  */
 @RegisterClass(BaseEntity, 'Activity Attachments')
-export class ActivityAttachmentEntity extends BaseEntity {
+export class ActivityAttachmentEntity extends BaseEntity<Types.ActivityAttachmentEntityType> {
     /**
     * Loads the Activity Attachments record from the database
     * @param ID: number - primary key value to load the Activity Attachments record.
@@ -4464,7 +4465,7 @@ export class ActivityAttachmentEntity extends BaseEntity {
  * @public
  */
 @RegisterClass(BaseEntity, 'client _memberships')
-export class client_membershipEntity extends BaseEntity {
+export class client_membershipEntity extends BaseEntity<Types.client_membershipEntityType> {
     /**
     * Loads the client _memberships record from the database
     * @param Acep_membershipId: string - primary key value to load the client _memberships record.
@@ -5323,7 +5324,7 @@ export class client_membershipEntity extends BaseEntity {
  * @public
  */
 @RegisterClass(BaseEntity, 'Contact Levels')
-export class ContactLevelEntity extends BaseEntity {
+export class ContactLevelEntity extends BaseEntity<Types.ContactLevelEntityType> {
     /**
     * Loads the Contact Levels record from the database
     * @param ID: number - primary key value to load the Contact Levels record.
@@ -5456,7 +5457,7 @@ export class ContactLevelEntity extends BaseEntity {
  * @public
  */
 @RegisterClass(BaseEntity, 'Contact Roles')
-export class ContactRoleEntity extends BaseEntity {
+export class ContactRoleEntity extends BaseEntity<Types.ContactRoleEntityType> {
     /**
     * Loads the Contact Roles record from the database
     * @param ID: number - primary key value to load the Contact Roles record.
@@ -5564,7 +5565,7 @@ export class ContactRoleEntity extends BaseEntity {
  * @public
  */
 @RegisterClass(BaseEntity, 'Contacts')
-export class ContactEntity extends BaseEntity {
+export class ContactEntity extends BaseEntity<Types.ContactEntityType> {
     /**
     * Loads the Contacts record from the database
     * @param ID: number - primary key value to load the Contacts record.
@@ -5986,7 +5987,7 @@ export class ContactEntity extends BaseEntity {
  * @public
  */
 @RegisterClass(BaseEntity, 'Contacts__client_crm')
-export class Contact__client_crmEntity extends BaseEntity {
+export class Contact__client_crmEntity extends BaseEntity<Types.Contact__client_crmEntityType> {
     /**
     * Loads the Contacts__client_crm record from the database
     * @param ContactId: string - primary key value to load the Contacts__client_crm record.
@@ -11877,300 +11878,6 @@ export class Contact__client_crmEntity extends BaseEntity {
 
             
 /**
- * Content Source Types - strongly typed entity sub-class
- * * Schema: dray
- * * Base Table: ContentSourceType
- * * Base View: vwContentSourceTypes
- * * Primary Key: ID
- * @extends {BaseEntity}
- * @class
- * @public
- */
-@RegisterClass(BaseEntity, 'Content Source Types')
-export class ContentSourceTypeEntity extends BaseEntity {
-    /**
-    * Loads the Content Source Types record from the database
-    * @param ID: number - primary key value to load the Content Source Types record.
-    * @param EntityRelationshipsToLoad - (optional) the relationships to load
-    * @returns {Promise<boolean>} - true if successful, false otherwise
-    * @public
-    * @async
-    * @memberof ContentSourceTypeEntity
-    * @method
-    * @override
-    */      
-    public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-        const compositeKey: CompositeKey = new CompositeKey();
-        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
-        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
-    }
-
-    /**
-    * * Field Name: ID
-    * * Display Name: ID
-    * * SQL Data Type: int
-    */
-    get ID(): number {  
-        return this.Get('ID');
-    }
-
-    /**
-    * * Field Name: Name
-    * * Display Name: Name
-    * * SQL Data Type: nvarchar(50)
-    */
-    get Name(): string {  
-        return this.Get('Name');
-    }
-    set Name(value: string) {
-        this.Set('Name', value);
-    }
-
-    /**
-    * * Field Name: Description
-    * * Display Name: Description
-    * * SQL Data Type: nvarchar(MAX)
-    */
-    get Description(): string | null {  
-        return this.Get('Description');
-    }
-    set Description(value: string | null) {
-        this.Set('Description', value);
-    }
-
-    /**
-    * * Field Name: __mj_CreatedAt
-    * * Display Name: Created At
-    * * SQL Data Type: datetimeoffset
-    * * Default Value: getutcdate()
-    */
-    get __mj_CreatedAt(): Date {  
-        return this.Get('__mj_CreatedAt');
-    }
-
-    /**
-    * * Field Name: __mj_UpdatedAt
-    * * Display Name: Updated At
-    * * SQL Data Type: datetimeoffset
-    * * Default Value: getutcdate()
-    */
-    get __mj_UpdatedAt(): Date {  
-        return this.Get('__mj_UpdatedAt');
-    }
-}
-
-            
-/**
- * Content Sources - strongly typed entity sub-class
- * * Schema: dray
- * * Base Table: ContentSource
- * * Base View: vwContentSources
- * * Primary Key: ID
- * @extends {BaseEntity}
- * @class
- * @public
- */
-@RegisterClass(BaseEntity, 'Content Sources')
-export class ContentSourceEntity extends BaseEntity {
-    /**
-    * Loads the Content Sources record from the database
-    * @param ID: number - primary key value to load the Content Sources record.
-    * @param EntityRelationshipsToLoad - (optional) the relationships to load
-    * @returns {Promise<boolean>} - true if successful, false otherwise
-    * @public
-    * @async
-    * @memberof ContentSourceEntity
-    * @method
-    * @override
-    */      
-    public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-        const compositeKey: CompositeKey = new CompositeKey();
-        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
-        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
-    }
-
-    /**
-    * * Field Name: ID
-    * * Display Name: ID
-    * * SQL Data Type: int
-    */
-    get ID(): number {  
-        return this.Get('ID');
-    }
-
-    /**
-    * * Field Name: OrganizationID
-    * * Display Name: Organization ID
-    * * SQL Data Type: int
-    */
-    get OrganizationID(): number {  
-        return this.Get('OrganizationID');
-    }
-    set OrganizationID(value: number) {
-        this.Set('OrganizationID', value);
-    }
-
-    /**
-    * * Field Name: TypeID
-    * * Display Name: Type ID
-    * * SQL Data Type: int
-    * * Related Entity/Foreign Key: Content Source Types (vwContentSourceTypes.ID)
-    */
-    get TypeID(): number {  
-        return this.Get('TypeID');
-    }
-    set TypeID(value: number) {
-        this.Set('TypeID', value);
-    }
-
-    /**
-    * * Field Name: Name
-    * * Display Name: Name
-    * * SQL Data Type: nvarchar(50)
-    */
-    get Name(): string {  
-        return this.Get('Name');
-    }
-    set Name(value: string) {
-        this.Set('Name', value);
-    }
-
-    /**
-    * * Field Name: Description
-    * * Display Name: Description
-    * * SQL Data Type: nvarchar(MAX)
-    */
-    get Description(): string | null {  
-        return this.Get('Description');
-    }
-    set Description(value: string | null) {
-        this.Set('Description', value);
-    }
-
-    /**
-    * * Field Name: Active
-    * * Display Name: Active
-    * * SQL Data Type: bit
-    * * Default Value: 1
-    */
-    get Active(): boolean {  
-        return this.Get('Active');
-    }
-    set Active(value: boolean) {
-        this.Set('Active', value);
-    }
-
-    /**
-    * * Field Name: ForceTraining
-    * * Display Name: Force Training
-    * * SQL Data Type: bit
-    * * Default Value: 0
-    */
-    get ForceTraining(): boolean {  
-        return this.Get('ForceTraining');
-    }
-    set ForceTraining(value: boolean) {
-        this.Set('ForceTraining', value);
-    }
-
-    /**
-    * * Field Name: AutomaticTraining
-    * * Display Name: Automatic Training
-    * * SQL Data Type: bit
-    * * Default Value: 0
-    */
-    get AutomaticTraining(): boolean {  
-        return this.Get('AutomaticTraining');
-    }
-    set AutomaticTraining(value: boolean) {
-        this.Set('AutomaticTraining', value);
-    }
-
-    /**
-    * * Field Name: FrequencyUnit
-    * * Display Name: Frequency Unit
-    * * SQL Data Type: nvarchar(50)
-    * * Default Value: DAY
-    */
-    get FrequencyUnit(): string {  
-        return this.Get('FrequencyUnit');
-    }
-    set FrequencyUnit(value: string) {
-        this.Set('FrequencyUnit', value);
-    }
-
-    /**
-    * * Field Name: FrequencyCount
-    * * Display Name: Frequency Count
-    * * SQL Data Type: int
-    * * Default Value: 0
-    */
-    get FrequencyCount(): number {  
-        return this.Get('FrequencyCount');
-    }
-    set FrequencyCount(value: number) {
-        this.Set('FrequencyCount', value);
-    }
-
-    /**
-    * * Field Name: LastTraining
-    * * Display Name: Last Training
-    * * SQL Data Type: datetime
-    * * Default Value: 1/1/1900
-    */
-    get LastTraining(): Date {  
-        return this.Get('LastTraining');
-    }
-    set LastTraining(value: Date) {
-        this.Set('LastTraining', value);
-    }
-
-    /**
-    * * Field Name: TestTraining
-    * * Display Name: Test Training
-    * * SQL Data Type: bit
-    * * Default Value: 0
-    */
-    get TestTraining(): boolean {  
-        return this.Get('TestTraining');
-    }
-    set TestTraining(value: boolean) {
-        this.Set('TestTraining', value);
-    }
-
-    /**
-    * * Field Name: __mj_CreatedAt
-    * * Display Name: Created At
-    * * SQL Data Type: datetimeoffset
-    * * Default Value: getutcdate()
-    */
-    get __mj_CreatedAt(): Date {  
-        return this.Get('__mj_CreatedAt');
-    }
-
-    /**
-    * * Field Name: __mj_UpdatedAt
-    * * Display Name: Updated At
-    * * SQL Data Type: datetimeoffset
-    * * Default Value: getutcdate()
-    */
-    get __mj_UpdatedAt(): Date {  
-        return this.Get('__mj_UpdatedAt');
-    }
-
-    /**
-    * * Field Name: Type
-    * * Display Name: Type
-    * * SQL Data Type: nvarchar(50)
-    * * Default Value: null
-    */
-    get Type(): string {  
-        return this.Get('Type');
-    }
-}
-
-            
-/**
  * Customer Address - strongly typed entity sub-class
  * * Schema: client_membership
  * * Base Table: CustomerAddress
@@ -12181,7 +11888,7 @@ export class ContentSourceEntity extends BaseEntity {
  * @public
  */
 @RegisterClass(BaseEntity, 'Customer Address')
-export class CustomerAddressEntity extends BaseEntity {
+export class CustomerAddressEntity extends BaseEntity<Types.CustomerAddressEntityType> {
     /**
     * Loads the Customer Address record from the database
     * @param Customer_Number: string - primary key value to load the Customer Address record.
@@ -13577,7 +13284,7 @@ export class CustomerAddressEntity extends BaseEntity {
  * @public
  */
 @RegisterClass(BaseEntity, 'Customer Address__client_finance')
-export class CustomerAddress__client_financeEntity extends BaseEntity {
+export class CustomerAddress__client_financeEntity extends BaseEntity<Types.CustomerAddress__client_financeEntityType> {
     /**
     * Loads the Customer Address__client_finance record from the database
     * @param Customer_Number: string - primary key value to load the Customer Address__client_finance record.
@@ -14973,7 +14680,7 @@ export class CustomerAddress__client_financeEntity extends BaseEntity {
  * @public
  */
 @RegisterClass(BaseEntity, 'Customers')
-export class CustomerEntity extends BaseEntity {
+export class CustomerEntity extends BaseEntity<Types.CustomerEntityType> {
     /**
     * Loads the Customers record from the database
     * @param Customer_Number: string - primary key value to load the Customers record.
@@ -17197,7 +16904,7 @@ export class CustomerEntity extends BaseEntity {
  * @public
  */
 @RegisterClass(BaseEntity, 'Customers__client_finance')
-export class Customer__client_financeEntity extends BaseEntity {
+export class Customer__client_financeEntity extends BaseEntity<Types.Customer__client_financeEntityType> {
     /**
     * Loads the Customers__client_finance record from the database
     * @param Customer_Number: string - primary key value to load the Customers__client_finance record.
@@ -19421,7 +19128,7 @@ export class Customer__client_financeEntity extends BaseEntity {
  * @public
  */
 @RegisterClass(BaseEntity, 'Deal Forecast Categories')
-export class DealForecastCategoryEntity extends BaseEntity {
+export class DealForecastCategoryEntity extends BaseEntity<Types.DealForecastCategoryEntityType> {
     /**
     * Loads the Deal Forecast Categories record from the database
     * @param ID: number - primary key value to load the Deal Forecast Categories record.
@@ -19517,7 +19224,7 @@ export class DealForecastCategoryEntity extends BaseEntity {
  * @public
  */
 @RegisterClass(BaseEntity, 'Deal Stages')
-export class DealStageEntity extends BaseEntity {
+export class DealStageEntity extends BaseEntity<Types.DealStageEntityType> {
     /**
     * Loads the Deal Stages record from the database
     * @param ID: number - primary key value to load the Deal Stages record.
@@ -19613,7 +19320,7 @@ export class DealStageEntity extends BaseEntity {
  * @public
  */
 @RegisterClass(BaseEntity, 'Deal Types')
-export class DealTypeEntity extends BaseEntity {
+export class DealTypeEntity extends BaseEntity<Types.DealTypeEntityType> {
     /**
     * Loads the Deal Types record from the database
     * @param ID: number - primary key value to load the Deal Types record.
@@ -19721,7 +19428,7 @@ export class DealTypeEntity extends BaseEntity {
  * @public
  */
 @RegisterClass(BaseEntity, 'Deals')
-export class DealEntity extends BaseEntity {
+export class DealEntity extends BaseEntity<Types.DealEntityType> {
     /**
     * Loads the Deals record from the database
     * @param ID: number - primary key value to load the Deals record.
@@ -20139,7 +19846,7 @@ export class DealEntity extends BaseEntity {
  * @public
  */
 @RegisterClass(BaseEntity, 'Industries')
-export class IndustryEntity extends BaseEntity {
+export class IndustryEntity extends BaseEntity<Types.IndustryEntityType> {
     /**
     * Loads the Industries record from the database
     * @param ID: number - primary key value to load the Industries record.
@@ -20247,7 +19954,7 @@ export class IndustryEntity extends BaseEntity {
  * @public
  */
 @RegisterClass(BaseEntity, 'Invoice Status Types')
-export class InvoiceStatusTypeEntity extends BaseEntity {
+export class InvoiceStatusTypeEntity extends BaseEntity<Types.InvoiceStatusTypeEntityType> {
     /**
     * Loads the Invoice Status Types record from the database
     * @param ID: number - primary key value to load the Invoice Status Types record.
@@ -20343,7 +20050,7 @@ export class InvoiceStatusTypeEntity extends BaseEntity {
  * @public
  */
 @RegisterClass(BaseEntity, 'Invoices')
-export class InvoiceEntity extends BaseEntity {
+export class InvoiceEntity extends BaseEntity<Types.InvoiceEntityType> {
     /**
     * Loads the Invoices record from the database
     * @param ID: number - primary key value to load the Invoices record.
@@ -20618,7 +20325,7 @@ export class InvoiceEntity extends BaseEntity {
  * @public
  */
 @RegisterClass(BaseEntity, 'Items')
-export class ItemEntity extends BaseEntity {
+export class ItemEntity extends BaseEntity<Types.ItemEntityType> {
     /**
     * Loads the Items record from the database
     * @param Item_Number: string - primary key value to load the Items record.
@@ -21882,7 +21589,7 @@ export class ItemEntity extends BaseEntity {
  * @public
  */
 @RegisterClass(BaseEntity, 'Items__client_finance')
-export class Item__client_financeEntity extends BaseEntity {
+export class Item__client_financeEntity extends BaseEntity<Types.Item__client_financeEntityType> {
     /**
     * Loads the Items__client_finance record from the database
     * @param Item_Number: string - primary key value to load the Items__client_finance record.
@@ -23147,7 +22854,7 @@ export class Item__client_financeEntity extends BaseEntity {
  * @public
  */
 @RegisterClass(BaseEntity, 'Organization Links')
-export class OrganizationLinkEntity extends BaseEntity {
+export class OrganizationLinkEntity extends BaseEntity<Types.OrganizationLinkEntityType> {
     /**
     * Loads the Organization Links record from the database
     * @param OrganizationLinkID: number - primary key value to load the Organization Links record.
@@ -23282,7 +22989,7 @@ export class OrganizationLinkEntity extends BaseEntity {
  * @public
  */
 @RegisterClass(BaseEntity, 'Payment Terms Types')
-export class PaymentTermsTypeEntity extends BaseEntity {
+export class PaymentTermsTypeEntity extends BaseEntity<Types.PaymentTermsTypeEntityType> {
     /**
     * Loads the Payment Terms Types record from the database
     * @param ID: number - primary key value to load the Payment Terms Types record.
@@ -23439,7 +23146,7 @@ export class PaymentTermsTypeEntity extends BaseEntity {
  * @public
  */
 @RegisterClass(BaseEntity, 'Person Links')
-export class PersonLinkEntity extends BaseEntity {
+export class PersonLinkEntity extends BaseEntity<Types.PersonLinkEntityType> {
     /**
     * Loads the Person Links record from the database
     * @param PersonLinkID: number - primary key value to load the Person Links record.
@@ -23599,7 +23306,7 @@ export class PersonLinkEntity extends BaseEntity {
  * @public
  */
 @RegisterClass(BaseEntity, 'Product Price Levels')
-export class ProductPriceLevelEntity extends BaseEntity {
+export class ProductPriceLevelEntity extends BaseEntity<Types.ProductPriceLevelEntityType> {
     /**
     * Loads the Product Price Levels record from the database
     * @param ProductPriceLevelId: string - primary key value to load the Product Price Levels record.
@@ -24181,7 +23888,7 @@ export class ProductPriceLevelEntity extends BaseEntity {
  * @public
  */
 @RegisterClass(BaseEntity, 'Products')
-export class ProductEntity extends BaseEntity {
+export class ProductEntity extends BaseEntity<Types.ProductEntityType> {
     /**
     * Loads the Products record from the database
     * @param ProductId: string - primary key value to load the Products record.
@@ -26265,7 +25972,7 @@ export class ProductEntity extends BaseEntity {
  * @public
  */
 @RegisterClass(BaseEntity, 'Quad Demos')
-export class QuadDemoEntity extends BaseEntity {
+export class QuadDemoEntity extends BaseEntity<Types.QuadDemoEntityType> {
     /**
     * Loads the Quad Demos record from the database
     * @param ID: number - primary key value to load the Quad Demos record.
@@ -26349,7 +26056,7 @@ export class QuadDemoEntity extends BaseEntity {
  * @public
  */
 @RegisterClass(BaseEntity, 'Sales Line Items')
-export class SalesLineItemEntity extends BaseEntity {
+export class SalesLineItemEntity extends BaseEntity<Types.SalesLineItemEntityType> {
     /**
     * Loads the Sales Line Items record from the database
     * @param ID: number - primary key value to load the Sales Line Items record.
@@ -33182,7 +32889,7 @@ export class SalesLineItemEntity extends BaseEntity {
  * @public
  */
 @RegisterClass(BaseEntity, 'Sales Line Items__client_membership')
-export class SalesLineItem__client_membershipEntity extends BaseEntity {
+export class SalesLineItem__client_membershipEntity extends BaseEntity<Types.SalesLineItem__client_membershipEntityType> {
     /**
     * Loads the Sales Line Items__client_membership record from the database
     * @param ID: number - primary key value to load the Sales Line Items__client_membership record.
@@ -40017,7 +39724,7 @@ export class SalesLineItem__client_membershipEntity extends BaseEntity {
  * @public
  */
 @RegisterClass(BaseEntity, 'Sales Order Details')
-export class SalesOrderDetailEntity extends BaseEntity {
+export class SalesOrderDetailEntity extends BaseEntity<Types.SalesOrderDetailEntityType> {
     /**
     * Loads the Sales Order Details record from the database
     * @param SalesOrderDetailId: string - primary key value to load the Sales Order Details record.
@@ -41141,7 +40848,7 @@ export class SalesOrderDetailEntity extends BaseEntity {
  * @public
  */
 @RegisterClass(BaseEntity, 'Sales Orders')
-export class SalesOrderEntity extends BaseEntity {
+export class SalesOrderEntity extends BaseEntity<Types.SalesOrderEntityType> {
     /**
     * Loads the Sales Orders record from the database
     * @param SalesOrderId: string - primary key value to load the Sales Orders record.
@@ -43706,7 +43413,7 @@ export class SalesOrderEntity extends BaseEntity {
  * @public
  */
 @RegisterClass(BaseEntity, 'Sales Transactions')
-export class SalesTransactionEntity extends BaseEntity {
+export class SalesTransactionEntity extends BaseEntity<Types.SalesTransactionEntityType> {
     /**
     * Loads the Sales Transactions record from the database
     * @param ID: number - primary key value to load the Sales Transactions record.
@@ -48150,7 +47857,7 @@ export class SalesTransactionEntity extends BaseEntity {
  * @public
  */
 @RegisterClass(BaseEntity, 'Sales Transactions__client_membership')
-export class SalesTransaction__client_membershipEntity extends BaseEntity {
+export class SalesTransaction__client_membershipEntity extends BaseEntity<Types.SalesTransaction__client_membershipEntityType> {
     /**
     * Loads the Sales Transactions__client_membership record from the database
     * @param ID: number - primary key value to load the Sales Transactions__client_membership record.
@@ -52594,7 +52301,7 @@ export class SalesTransaction__client_membershipEntity extends BaseEntity {
  * @public
  */
 @RegisterClass(BaseEntity, 'String Maps')
-export class StringMapEntity extends BaseEntity {
+export class StringMapEntity extends BaseEntity<Types.StringMapEntityType> {
     /**
     * Loads the String Maps record from the database
     * @param StringMapId: string - primary key value to load the String Maps record.
@@ -52742,7 +52449,7 @@ export class StringMapEntity extends BaseEntity {
  * @public
  */
 @RegisterClass(BaseEntity, 'Thread Details')
-export class ThreadDetailEntity extends BaseEntity {
+export class ThreadDetailEntity extends BaseEntity<Types.ThreadDetailEntityType> {
     /**
     * Loads the Thread Details record from the database
     * @param ID: number - primary key value to load the Thread Details record.
@@ -52903,7 +52610,7 @@ export class ThreadDetailEntity extends BaseEntity {
  * @public
  */
 @RegisterClass(BaseEntity, 'Threads')
-export class ThreadEntity extends BaseEntity {
+export class ThreadEntity extends BaseEntity<Types.ThreadEntityType> {
     /**
     * Loads the Threads record from the database
     * @param ID: number - primary key value to load the Threads record.
@@ -52967,7 +52674,7 @@ export class ThreadEntity extends BaseEntity {
  * @public
  */
 @RegisterClass(BaseEntity, 'Uo Ms')
-export class UoMEntity extends BaseEntity {
+export class UoMEntity extends BaseEntity<Types.UoMEntityType> {
     /**
     * Loads the Uo Ms record from the database
     * @param UoMId: string - primary key value to load the Uo Ms record.
