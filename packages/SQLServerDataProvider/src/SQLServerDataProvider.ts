@@ -300,7 +300,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
                 const orderBy: string = params.OrderBy ? params.OrderBy : (viewEntity ? viewEntity.OrderByClause : '');
 
                 // if we're saving the view results, we need to wrap the entire SQL statement
-                if (viewEntity?.ID && viewEntity?.ID > 0 && saveViewResults && user) {
+                if (viewEntity?.ID && viewEntity?.ID.length > 0 && saveViewResults && user) {
                     const {executeViewSQL, runID} = await this.executeSQLForUserViewRunLogging(viewEntity.ID, viewEntity.EntityBaseView, whereSQL, orderBy, user);
                     viewSQL = executeViewSQL;
                     userViewRunID = runID;

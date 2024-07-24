@@ -906,7 +906,7 @@ export class ManageMetadataBase {
          ${n.RelatedEntityFieldName && n.RelatedEntityFieldName.length > 0 ? `'${n.RelatedEntityFieldName}'` : 'NULL'},
          ${n.IsNameField !== null ? n.IsNameField : 0},
          ${n.FieldName === 'ID' || n.IsNameField ? 1 : 0},
-         ${n.RelatedEntityID && n.RelatedEntityID > 0 && n.Type.trim().toLowerCase() === 'int' ? 1 : 0},
+         ${n.RelatedEntityID && n.RelatedEntityID.length > 0 ? 1 : 0},
          ${bDefaultInView ? 1 : 0},
          ${n.IsPrimaryKey},
          ${n.IsUnique},
@@ -1374,7 +1374,7 @@ export class ManageMetadataBase {
    protected async applicationExists(ds: DataSource, applicationName: string): Promise<boolean>{
       const sSQL: string = `SELECT ID FROM [${mj_core_schema()}].Application WHERE Name = '${applicationName}'`;
       const result = await ds.query(sSQL);
-      return result && result.length > 0 ? result[0].ID > 0 : false;
+      return result && result.length > 0 ? result[0].ID.length > 0 : false;
    }
    
    protected async getApplicationIDForSchema(ds: DataSource, schemaName: string): Promise<number>{

@@ -320,8 +320,8 @@ export class GenericBrowserListComponent implements OnInit{
 
     //the only assumption we are making here is that the entityID
     //is a number
-    const entityID: number = this.TryGetID(genericEntity);
-    if (entityID && entityID > 0) {
+    const entityID = this.TryGetID(genericEntity);
+    if (entityID && entityID.length > 0) {
       
       const md = new Metadata();
       

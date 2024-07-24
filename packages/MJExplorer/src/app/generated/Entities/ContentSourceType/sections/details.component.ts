@@ -1,31 +1,27 @@
 import { Component, Input } from '@angular/core';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormSectionComponent } from '@memberjunction/ng-base-forms';
-import { QueryPermissionEntity } from '@memberjunction/core-entities';
+import { ContentSourceTypeEntity } from 'mj_generatedentities';
 
-@RegisterClass(BaseFormSectionComponent, 'Query Permissions.details') // Tell MemberJunction about this class 
+@RegisterClass(BaseFormSectionComponent, 'Content Source Types.details') // Tell MemberJunction about this class 
 @Component({
-    selector: 'gen-querypermission-form-details',
+    selector: 'gen-contentsourcetype-form-details',
     styleUrls: ['../../../../../shared/form-styles.css'],
     template: `<div *ngIf="this.record">
     <div class="record-form">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="QueryID"
+            FieldName="Name"
             Type="textbox"
             [EditMode]="EditMode"
-            LinkType="Record"
-            LinkComponentType="Search"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="RoleID"
-            Type="textbox"
+            FieldName="Description"
+            Type="textarea"
             [EditMode]="EditMode"
-            LinkType="Record"
-            LinkComponentType="Search"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -41,31 +37,17 @@ import { QueryPermissionEntity } from '@memberjunction/core-entities';
             Type="textbox"
             [EditMode]="EditMode"
         ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="Query"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="Role"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
 
     </div>
 </div>
     `
 })
-export class QueryPermissionDetailsComponent extends BaseFormSectionComponent {
-    @Input() override record!: QueryPermissionEntity;
+export class ContentSourceTypeDetailsComponent extends BaseFormSectionComponent {
+    @Input() override record!: ContentSourceTypeEntity;
     @Input() override EditMode: boolean = false;
 }
 
-export function LoadQueryPermissionDetailsComponent() {
+export function LoadContentSourceTypeDetailsComponent() {
     // does nothing, but called in order to prevent tree-shaking from eliminating this component from the build
 }
       

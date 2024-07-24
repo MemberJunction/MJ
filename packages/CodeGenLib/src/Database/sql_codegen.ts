@@ -709,41 +709,41 @@ ${whereClause}GO${permissions}
         let sOutput: string = '';
         let fieldCount: number = 0;
         const manageMD = MJGlobal.Instance.ClassFactory.CreateInstance<ManageMetadataBase>(ManageMetadataBase)
-        for (let i: number = 0; i < entityFields.length; i++) { 
-            const ef: EntityFieldInfo = entityFields[i];
-            if (ef.RelatedEntityID && ef.IncludeRelatedEntityNameFieldInBaseView) {
-                const {nameField, nameFieldIsVirtual} = this.getIsNameFieldForSingleEntity(ef.RelatedEntity);
-                if (nameField !== '') {
-                    // only add to the output, if we found a name field for the related entity.
-                    ef._RelatedEntityTableAlias = ef.RelatedEntityClassName + '_' + ef.Name;
-                    ef._RelatedEntityNameFieldIsVirtual = nameFieldIsVirtual;
-    
-                    // This next section generates a field name for the new virtual field and makes sure it doesn't collide with a field in the base table
-                    const candidateName = this.stripID(ef.Name);
-                    // check to make sure candidateName is not already a field name in the base table (other than a virtual field of course, as that is what we're creating) 
-                    // because if it is, we need to change it to something else
-                    const bFound = entityFields.find(f => f.IsVirtual === false && f.Name.trim().toLowerCase() === candidateName.trim().toLowerCase()) !== undefined;
-                    if (bFound)
-                        ef._RelatedEntityNameFieldMap = candidateName + '_Virtual';
-                    else
-                        ef._RelatedEntityNameFieldMap = candidateName;
-    
-                    // now we have a safe field name alias for the new virtual field in the _RelatedEntityNameFieldMap property, so use it...
-                    sOutput += `${fieldCount == 0 ? '' : ','}\n    ${ef._RelatedEntityTableAlias}.[${nameField}] AS [${ef._RelatedEntityNameFieldMap}]`;
-    
-                    // check to see if the database already knows about the RelatedEntityNameFieldMap or not
-                    if (ef.RelatedEntityNameFieldMap === null || 
-                        ef.RelatedEntityNameFieldMap === undefined || 
-                        ef.RelatedEntityNameFieldMap.trim().length === 0) {
-                        // the database doesn't yet know about this RelatedEntityNameFieldMap, so we need to update it
-                        // first update the actul field in the metadata object so it can be used from this point forward
-                        // and it also reflects what the DB will hold
-                        ef.RelatedEntityNameFieldMap = ef._RelatedEntityNameFieldMap;
-                        // then update the database itself
-                        await manageMD.updateEntityFieldRelatedEntityNameFieldMap(ds, ef.ID, ef.RelatedEntityNameFieldMap);
-                    }
-                    fieldCount++;
+
+        // next get the fields that are related entities and have the IncludeRelatedEntityNameFieldInBaseView flag set to true
+        const qualifyingFields = entityFields.filter(f => f.RelatedEntityID && f.IncludeRelatedEntityNameFieldInBaseView);
+        for (const ef of qualifyingFields) {
+            const {nameField, nameFieldIsVirtual} = this.getIsNameFieldForSingleEntity(ef.RelatedEntity);
+            if (nameField !== '') {
+                // only add to the output, if we found a name field for the related entity.
+                ef._RelatedEntityTableAlias = ef.RelatedEntityClassName + '_' + ef.Name;
+                ef._RelatedEntityNameFieldIsVirtual = nameFieldIsVirtual;
+
+                // This next section generates a field name for the new virtual field and makes sure it doesn't collide with a field in the base table
+                const candidateName = this.stripID(ef.Name);
+                // check to make sure candidateName is not already a field name in the base table (other than a virtual field of course, as that is what we're creating) 
+                // because if it is, we need to change it to something else
+                const bFound = entityFields.find(f => f.IsVirtual === false && f.Name.trim().toLowerCase() === candidateName.trim().toLowerCase()) !== undefined;
+                if (bFound)
+                    ef._RelatedEntityNameFieldMap = candidateName + '_Virtual';
+                else
+                    ef._RelatedEntityNameFieldMap = candidateName;
+
+                // now we have a safe field name alias for the new virtual field in the _RelatedEntityNameFieldMap property, so use it...
+                sOutput += `${fieldCount === 0 ? '' : ','}\n    ${ef._RelatedEntityTableAlias}.[${nameField}] AS [${ef._RelatedEntityNameFieldMap}]`;
+
+                // check to see if the database already knows about the RelatedEntityNameFieldMap or not
+                if (ef.RelatedEntityNameFieldMap === null || 
+                    ef.RelatedEntityNameFieldMap === undefined || 
+                    ef.RelatedEntityNameFieldMap.trim().length === 0) {
+                    // the database doesn't yet know about this RelatedEntityNameFieldMap, so we need to update it
+                    // first update the actul field in the metadata object so it can be used from this point forward
+                    // and it also reflects what the DB will hold
+                    ef.RelatedEntityNameFieldMap = ef._RelatedEntityNameFieldMap;
+                    // then update the database itself
+                    await manageMD.updateEntityFieldRelatedEntityNameFieldMap(ds, ef.ID, ef.RelatedEntityNameFieldMap);
                 }
+                fieldCount++;
             }
         }
         return sOutput;
