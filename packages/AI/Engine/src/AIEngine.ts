@@ -2,9 +2,9 @@ import { BaseLLM, BaseModel, BaseResult, ChatParams, GetAIAPIKey } from "@member
 import { SummarizeResult } from "@memberjunction/ai";
 import { ClassifyResult } from "@memberjunction/ai";
 import { ChatResult } from "@memberjunction/ai";
-import { BaseEngine, BaseEntity, Metadata, RunView, UserInfo } from "@memberjunction/core";
+import { BaseEngine, BaseEntity, Metadata, UserInfo } from "@memberjunction/core";
 import { MJGlobal } from "@memberjunction/global";
-import { AIActionEntity, AIModelActionEntity, AIModelEntityExtended, EntityAIActionEntity, EntityDocumentTypeEntity, VectorDatabaseEntity } from "@memberjunction/core-entities";
+import { AIActionEntity, AIModelActionEntity, AIModelEntityExtended, EntityAIActionEntity, EntityDocumentEntity, EntityDocumentTypeEntity, VectorDatabaseEntity } from "@memberjunction/core-entities";
 
 
 export class AIActionParams {
@@ -27,7 +27,6 @@ export class AIEngine extends BaseEngine<AIEngine> {
     private _actions: AIActionEntity[] = [];
     private _entityActions: EntityAIActionEntity[] = [];
     private _modelActions: AIModelActionEntity[] = [];
-    private _entityDocumentTypes: EntityDocumentTypeEntity[] = [];
 
     public async Config(forceRefresh?: boolean, contextUser?: UserInfo) {
         const params = [
@@ -50,10 +49,6 @@ export class AIEngine extends BaseEngine<AIEngine> {
             {
                 PropertyName: '_modelActions',
                 EntityName: 'AI Model Actions'
-            },
-            {
-                PropertyName: '_entityDocumentTypes',
-                EntityName: 'Entity Document Types'
             }
         ];
         return await this.Load(params, forceRefresh, contextUser);
@@ -68,41 +63,36 @@ export class AIEngine extends BaseEngine<AIEngine> {
      */
     public async GetHighestPowerModel(vendorName: string, modelType: string, contextUser?: UserInfo): Promise<AIModelEntityExtended> {
         await AIEngine.Instance.Config(false, contextUser); // most of the time this is already loaded, but just in case it isn't we will load it here
-        const models = AIEngine.Models.filter(m => m.AIModelType.trim().toLowerCase() === modelType.trim().toLowerCase() && 
+        const models = AIEngine.Instance.Models.filter(m => m.AIModelType.trim().toLowerCase() === modelType.trim().toLowerCase() && 
                                                    m.Vendor.trim().toLowerCase() === vendorName.trim().toLowerCase())  
         // next, sort the models by the PowerRank field so that the highest power rank model is the first array element
         models.sort((a, b) => b.PowerRank - a.PowerRank); // highest power rank first
         return models[0];
     }
 
-    public static get Models(): AIModelEntityExtended[] {
+    public get Models(): AIModelEntityExtended[] {
         AIEngine.checkMetadataLoaded();
         return AIEngine.Instance._models;
     }
 
-    public static get VectorDatabases(): VectorDatabaseEntity[] {
+    public get VectorDatabases(): VectorDatabaseEntity[] {
         AIEngine.checkMetadataLoaded();
         return AIEngine.Instance._vectorDatabases;
     }
 
-    public static get ModelActions(): AIModelActionEntity[] {
+    public get ModelActions(): AIModelActionEntity[] {
         AIEngine.checkMetadataLoaded();
         return AIEngine.Instance._modelActions;
     }
 
-    public static get Actions(): AIActionEntity[] {
+    public get Actions(): AIActionEntity[] {
         AIEngine.checkMetadataLoaded();
         return AIEngine.Instance._actions;
     }
 
-    public static get EntityAIActions(): EntityAIActionEntity[] {
+    public get EntityAIActions(): EntityAIActionEntity[] {
         AIEngine.checkMetadataLoaded();
         return AIEngine.Instance._entityActions;
-    }
-
-    public static get EntityDocumentTypes(): EntityDocumentTypeEntity[] {
-        AIEngine.checkMetadataLoaded();
-        return AIEngine.Instance._entityDocumentTypes;
     }
 
     public static get Instance(): AIEngine {
@@ -119,11 +109,11 @@ export class AIEngine extends BaseEngine<AIEngine> {
         try {
             // this method will execute the requested action but it will preprocess and post process based on the entity record provided and the
             // instructions within the entity AI Action record
-            const entityAction = AIEngine.EntityAIActions.find(ea => ea.ID === params.entityAIActionId);
+            const entityAction = AIEngine.Instance.EntityAIActions.find(ea => ea.ID === params.entityAIActionId);
             if (!entityAction)
                 throw new Error(`Entity AI Action ${params.entityAIActionId} not found.`);
 
-            const action = AIEngine.Actions.find(a => a.ID === entityAction.AIActionID);
+            const action = AIEngine.Instance.Actions.find(a => a.ID === entityAction.AIActionID);
             if (!action)
                 throw new Error(`Action ${entityAction.AIActionID} not found, from the EntityAIAction ${params.entityAIActionId}.`);
 
@@ -144,7 +134,7 @@ export class AIEngine extends BaseEngine<AIEngine> {
                                     // if the caller provided a custom user message, use that, otherwise do what we are doing with a markup here
 
             const modelId = entityAction.AIModelID || action.DefaultModelID; // use the provided model if specified, otherwise use the dfault model
-            const model = AIEngine.Models.find(m => m.ID === modelId);
+            const model = AIEngine.Instance.Models.find(m => m.ID === modelId);
 
             // now, before we execute the action, we need to build the params object that will be passed to the entity object for any pre-processing
             const entityParams = {
@@ -245,13 +235,13 @@ export class AIEngine extends BaseEngine<AIEngine> {
     }
 
     public async ExecuteAIAction(params: AIActionParams): Promise<BaseResult> {
-        const action = AIEngine.Actions.find(a => a.ID === params.actionId);
+        const action = AIEngine.Instance.Actions.find(a => a.ID === params.actionId);
         if (!action)
             throw new Error(`Action ${params.actionId} not found.`);
         if (action.IsActive === false)
             throw new Error(`Action ${params.actionId} is not active.`);
 
-        const model = AIEngine.Models.find(m => m.ID === params.modelId);
+        const model = AIEngine.Instance.Models.find(m => m.ID === params.modelId);
         if (!model)
             throw new Error(`Model ${params.modelId} not found.`);
         if (model.IsActive === false)

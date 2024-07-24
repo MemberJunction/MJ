@@ -45,16 +45,7 @@ let vectorizer = new EntityVectorSyncer();
 vectorizer.CurrentUser = systemUser;
 await AIEngine.Instance.Config(false, systemUser);
 
-let entityDocument = null;
-if (params.EntityDocumentID) {
-  entityDocument = await vectorizer.GetEntityDocument(params.EntityDocumentID);
-} else {
-  entityDocument = await vectorizer.GetFirstActiveEntityDocumentForEntity(params.EntityID);
-  if (!entityDocument) {
-    throw Error(`No active Entity Document found for entity ${params.EntityID}`);
-  }
-}
-
+let entityDocument = await vectorizer.GetEntityDocument(params.EntityDocumentID);
 if (!entityDocument) {
   throw new Error(`No active Entity Document found for entity ${params.EntityID}`);
 }
