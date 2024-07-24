@@ -1109,7 +1109,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
     }
 
     protected GetEntityAIActions(entityInfo: EntityInfo, before: boolean): EntityAIActionEntity[] {
-        return AIEngine.EntityAIActions.filter((a) => a.EntityID === entityInfo.ID && 
+        return AIEngine.Instance.EntityAIActions.filter((a) => a.EntityID === entityInfo.ID && 
                                                       a.TriggerEvent.toLowerCase().trim() === (before ? 'before save' : 'after save'));
     }
 

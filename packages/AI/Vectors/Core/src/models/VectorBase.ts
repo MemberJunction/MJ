@@ -1,6 +1,7 @@
 import { AIEngine } from "@memberjunction/aiengine";
-import { BaseEntity, LogError, Metadata, CompositeKey, RunView, UserInfo, EntityInfo, RunViewResult } from "@memberjunction/core";
+import { BaseEntity, Metadata, CompositeKey, RunView, UserInfo, EntityInfo, RunViewResult, LogError } from "@memberjunction/core";
 import { AIModelEntityExtended, VectorDatabaseEntity } from "@memberjunction/core-entities";
+import { PageRecordsParams } from "../generic/VectorCore.types";
 
 export class VectorBase {
     _runView: RunView;
@@ -18,7 +19,7 @@ export class VectorBase {
     public get CurrentUser(): UserInfo { return this._currentUser; }
     public set CurrentUser(user: UserInfo) { this._currentUser = user; }
 
-    protected async getRecordsByEntityID(entityID: string, recordIDs?: CompositeKey[]): Promise<BaseEntity[]> {
+    protected async GetRecordsByEntityID(entityID: string, recordIDs?: CompositeKey[]): Promise<BaseEntity[]> {
         const md = new Metadata();
         const entity = md.Entities.find(e => e.ID === entityID);
         if (!entity){
@@ -27,7 +28,7 @@ export class VectorBase {
 
         const rvResult = await this._runView.RunView<BaseEntity>({
             EntityName: entity.Name,
-            ExtraFilter: recordIDs ? this.buildExtraFilter(recordIDs): undefined,
+            ExtraFilter: recordIDs ? this.BuildExtraFilter(recordIDs): undefined,
             ResultType: 'entity_object',
             IgnoreMaxRows: true
         }, this.CurrentUser);
@@ -39,18 +40,17 @@ export class VectorBase {
         return rvResult.Results;
     }
 
-    protected async pageRecordsByEntityID<T>( entityID: string, pageNumber: number, pageSize: number): Promise<T[]> {
-        const md = new Metadata();
-        const entity: EntityInfo | undefined = md.Entities.find((e) => e.ID === entityID);
+    protected async PageRecordsByEntityID<T>(params: PageRecordsParams): Promise<T[]> {
+        const entity: EntityInfo | undefined = this.Metadata.Entities.find((e) => e.ID === params.EntityID);
         if (!entity) {
-          throw new Error(`Entity with ID ${entityID} not found.`);
+          throw new Error(`Entity with ID ${params.EntityID} not found.`);
         }
-    
+
         const rvResult: RunViewResult<T> = await this._runView.RunView<T>({
             EntityName: entity.Name,
-            ResultType: 'entity_object' as const,
-            MaxRows: pageSize,
-            StartRow: Math.max(0, (pageNumber - 1) * pageSize),
+            ResultType: params.ResultType,
+            MaxRows: params.PageSize,
+            StartRow: Math.max(0, (params.PageNumber - 1) * params.PageSize),
         }, this.CurrentUser);
     
         if (!rvResult.Success) {
@@ -60,7 +60,7 @@ export class VectorBase {
         return rvResult.Results;
     }
 
-    protected buildExtraFilter(CompositeKey: CompositeKey[]): string {
+    protected BuildExtraFilter(CompositeKey: CompositeKey[]): string {
         return CompositeKey.map((keyValue) => {
             return keyValue.KeyValuePairs.map((keys) => {
                 return `${keys.FieldName} = '${keys.Value}'`;
@@ -68,13 +68,13 @@ export class VectorBase {
         }).join("\n OR ");
     }
 
-    protected getAIModel(id?: string): AIModelEntityExtended {
+    protected GetAIModel(id?: string): AIModelEntityExtended {
         let model: AIModelEntityExtended;
         if(id){
-            model = AIEngine.Models.find(m => m.AIModelType === "Embeddings" && m.ID === id);
+            model = AIEngine.Instance.Models.find(m => m.AIModelType === "Embeddings" && m.ID === id);
         }
         else{
-            model = AIEngine.Models.find(m => m.AIModelType === "Embeddings");
+            model = AIEngine.Instance.Models.find(m => m.AIModelType === "Embeddings");
         }
 
         if(!model){
@@ -83,23 +83,23 @@ export class VectorBase {
         return model;
     }
 
-    protected getVectorDatabase(id?: string): VectorDatabaseEntity {
-        if(AIEngine.VectorDatabases.length > 0){
+    protected GetVectorDatabase(id?: string): VectorDatabaseEntity {
+        if(AIEngine.Instance.VectorDatabases.length > 0){
             if(id){
-                let vectorDB = AIEngine.VectorDatabases.find(vd => vd.ID === id);
+                let vectorDB = AIEngine.Instance.VectorDatabases.find(vd => vd.ID === id);
                 if(vectorDB){
                     return vectorDB;
                 }
             }
             else{
-                return AIEngine.VectorDatabases[0];
+                return AIEngine.Instance.VectorDatabases[0];
             }
         }
 
         throw new Error("No Vector Database Entity found");
     }
 
-    protected async runViewForSingleValue<T extends BaseEntity>(entityName: string, extraFilter: string): Promise<T | null> {
+    protected async RunViewForSingleValue<T extends BaseEntity>(entityName: string, extraFilter: string): Promise<T | null> {
         const rvResult = await this._runView.RunView({
             EntityName: entityName,
             ExtraFilter: extraFilter,

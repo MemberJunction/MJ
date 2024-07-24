@@ -102,7 +102,7 @@ export class AIPromptExtension extends TemplateExtensionBase {
      */
     protected async GetAIModel(vendorName: string, contextUser: UserInfo): Promise<AIModelEntityExtended> {
         await AIEngine.Instance.Config(false, contextUser); // most of the time this is already loaded, but just in case it isn't we will load it here
-        const models = AIEngine.Models.filter(m => m.AIModelType.trim().toLowerCase() === 'llm' && 
+        const models = AIEngine.Instance.Models.filter(m => m.AIModelType.trim().toLowerCase() === 'llm' && 
                                                     m.Vendor.trim().toLowerCase() === vendorName.trim().toLowerCase())  
         // next, sort the models by the PowerRank field so that the highest power rank model is the first array element
         models.sort((a, b) => b.PowerRank - a.PowerRank); // highest power rank first
