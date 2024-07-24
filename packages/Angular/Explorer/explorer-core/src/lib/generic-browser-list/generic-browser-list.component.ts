@@ -2,7 +2,7 @@ import { Component, EventEmitter, Input, OnInit, Output, ViewChild } from '@angu
 import { SharedService } from '@memberjunction/ng-shared';
 import { Folder, Item, ItemType  } from '../../generic/Item.types';
 import { BaseEntity, Metadata, KeyValuePair, RunView, CompositeKey, EntityInfo } from '@memberjunction/core';
-import { AfterAddFolderEvent, AfterAddItemEvent, AfterDeleteFolderEvent, AfterDeleteItemEvent, AfterUpdateFolderEvent, AfterUpdateItemEvent, BaseEvent, BeforeAddFolderEvent, BeforeAddItemEvent, BeforeDeleteFolderEvent, BeforeDeleteItemEvent, BeforeUpdateFolderEvent, BeforeUpdateItemEvent, EventTypes } from '../../generic/Events.types';
+import { AfterAddFolderEvent, AfterAddItemEvent, AfterDeleteFolderEvent, AfterDeleteItemEvent, AfterUpdateFolderEvent, AfterUpdateItemEvent, BaseEvent, BeforeAddFolderEvent, BeforeAddItemEvent, BeforeDeleteFolderEvent, BeforeDeleteItemEvent, BeforeUpdateFolderEvent, BeforeUpdateItemEvent, DropdownOptionClickEvent, EventTypes } from '../../generic/Events.types';
 import { Subject, debounceTime } from 'rxjs';
 import { CellClickEvent } from '@progress/kendo-angular-grid';
 import { ResourceTypeEntity } from '@memberjunction/core-entities';
@@ -43,6 +43,7 @@ export class GenericBrowserListComponent implements OnInit{
    * or as a grid of icons
    */
   @Input() public displayItemsAsList: boolean = false;
+  @Input() public extraDropdownOptions: { text: string }[] = [];
 
 
   //Before Evewnts
@@ -63,6 +64,7 @@ export class GenericBrowserListComponent implements OnInit{
   
   @Output() public itemClickEvent: EventEmitter<any> = new EventEmitter<any>();
   @Output() public backButtonClickEvent: EventEmitter<void> = new EventEmitter<void>();
+  @Output() public dropdownOptionClickEvent: EventEmitter<DropdownOptionClickEvent> = new EventEmitter<DropdownOptionClickEvent>();
   @Output() public viewModeChangeEvent: EventEmitter<'grid' | 'list'> = new EventEmitter<'grid' | 'list'>();
 
   private _resizeDebounceTime: number = 250;
@@ -81,10 +83,10 @@ export class GenericBrowserListComponent implements OnInit{
   public entityObjectName: string = "";
 
   /**
-   * Data for the create button dropdown
+   * Options for the create button dropdown
    */
-  @Input() public createButtonDropdownData = [
-    { text: "Folder" },
+  public dropdownOptions = [
+    { text: "Folder" }
   ];
 
   constructor(public sharedService: SharedService) {
@@ -94,20 +96,9 @@ export class GenericBrowserListComponent implements OnInit{
   }
 
   public async ngOnInit(): Promise<void> {
-    if(!this.disableAddButton){
-      this.createButtonDropdownData.unshift({ text: this.resourceName });
-    }
-
     const md: Metadata = new Metadata();
-
-    if(this.categoryEntityID){
-      let entity: EntityInfo | undefined = md.Entities.find(e => e.ID == this.categoryEntityID);
-      if(entity){
-        this.createNewRecordName = `${entity.DisplayName} Record`;
-        this.entityObjectName = entity.Name;
-      }
-
-      this.createButtonDropdownData.unshift({ text: this.createNewRecordName });
+    if(this.extraDropdownOptions && this.extraDropdownOptions.length > 0){
+      this.dropdownOptions.push(...this.extraDropdownOptions);
     }
 
     const view = new RunView();
@@ -469,6 +460,10 @@ export class GenericBrowserListComponent implements OnInit{
         this.entityFormDialogRef.Record = newRecord;
         this.entityFormDialogRef.ShowForm();
       }
+    }
+    else{
+      let event: DropdownOptionClickEvent = new DropdownOptionClickEvent(data.text);
+      this.dropdownOptionClickEvent.emit(event);
     }
   }
 
