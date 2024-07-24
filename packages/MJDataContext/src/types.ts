@@ -2,6 +2,9 @@ import { BaseEntity, DataObjectRelatedEntityParam, EntityInfo, LogError, Metadat
 import { DataContextEntity, DataContextItemEntity, UserViewEntityExtended } from "@memberjunction/core-entities";
 import { MJGlobal, RegisterClass } from "@memberjunction/global";
 
+/**
+ * Utility class for storing field info from within a DataContextItem object
+ */
 export class DataContextFieldInfo {
     Name!: string;
     Type!: string;
