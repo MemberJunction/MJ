@@ -244,7 +244,7 @@ export class SharedService {
    * @param resourceConfiguration Any object, it is converted to a string by JSON.stringify and stored in the database
    * @returns 
    */
-  public async CreateNotification(title: string, message: string, resourceTypeId: string | null, resourceRecordId: number | null, resourceConfiguration: any | null): Promise<UserNotificationEntity> {
+  public async CreateNotification(title: string, message: string, resourceTypeId: string | null, resourceRecordId: string | null, resourceConfiguration: any | null): Promise<UserNotificationEntity> {
     const md = new Metadata();
     const notification = <UserNotificationEntity>await md.GetEntityObject('User Notifications');
     notification.Title = title;

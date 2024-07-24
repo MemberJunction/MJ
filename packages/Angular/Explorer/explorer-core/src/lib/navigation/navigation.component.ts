@@ -795,7 +795,7 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
       let wsItem: WorkspaceItemEntity;
       if (!tab.workspaceItem) {
         wsItem = await md.GetEntityObject<WorkspaceItemEntity>('Workspace Items');
-        if (tab.data.ID && !isNaN(tab.data.ID) && tab.data.ID > 0)
+        if (tab.data.ID && tab.data.ID.length > 0)
           await wsItem.Load(tab.data.ID);
         else {
           wsItem.NewRecord();

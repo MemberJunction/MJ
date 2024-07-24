@@ -54,7 +54,7 @@ export class UserNotificationsComponent implements AfterViewInit {
   public notificationUrl(notification: UserNotificationEntity): {urlParts: string[], queryString: string} {
     let url: string[] = [];
     let queryString = '';
-    if (notification.ResourceRecordID && notification.ResourceRecordID > 0 && 
+    if (notification.ResourceRecordID && notification.ResourceRecordID.length > 0 && 
         notification.ResourceTypeID && notification.ResourceTypeID.length > 0) {
       // we have a resource here, like a Report, Dashboard, etc
       // we can generate a url to navigate to it
