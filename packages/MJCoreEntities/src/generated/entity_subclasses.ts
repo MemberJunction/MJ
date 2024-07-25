@@ -1,6 +1,5 @@
 import { BaseEntity, EntitySaveOptions, CompositeKey } from "@memberjunction/core";
 import { RegisterClass } from "@memberjunction/global";
-import * as Types from "./entity_type_definitions";
     
             
 /**
@@ -15,7 +14,7 @@ import * as Types from "./entity_type_definitions";
  * @public
  */
 @RegisterClass(BaseEntity, 'Action Authorizations')
-export class ActionAuthorizationEntity extends BaseEntity<Types.ActionAuthorizationEntityType> {
+export class ActionAuthorizationEntity extends BaseEntity {
     /**
     * Loads the Action Authorizations record from the database
     * @param ID: string - primary key value to load the Action Authorizations record.
@@ -109,6 +108,15 @@ export class ActionAuthorizationEntity extends BaseEntity<Types.ActionAuthorizat
     get Action(): string {  
         return this.Get('Action');
     }
+
+    /**
+    * * Field Name: Authorization
+    * * Display Name: Authorization
+    * * SQL Data Type: nvarchar(100)
+    */
+    get Authorization(): string {  
+        return this.Get('Authorization');
+    }
 }
 
             
@@ -124,7 +132,7 @@ export class ActionAuthorizationEntity extends BaseEntity<Types.ActionAuthorizat
  * @public
  */
 @RegisterClass(BaseEntity, 'Action Categories')
-export class ActionCategoryEntity extends BaseEntity<Types.ActionCategoryEntityType> {
+export class ActionCategoryEntity extends BaseEntity {
     /**
     * Loads the Action Categories record from the database
     * @param ID: string - primary key value to load the Action Categories record.
@@ -253,7 +261,7 @@ export class ActionCategoryEntity extends BaseEntity<Types.ActionCategoryEntityT
  * @public
  */
 @RegisterClass(BaseEntity, 'Action Context Types')
-export class ActionContextTypeEntity extends BaseEntity<Types.ActionContextTypeEntityType> {
+export class ActionContextTypeEntity extends BaseEntity {
     /**
     * Loads the Action Context Types record from the database
     * @param ID: string - primary key value to load the Action Context Types record.
@@ -341,7 +349,7 @@ export class ActionContextTypeEntity extends BaseEntity<Types.ActionContextTypeE
  * @public
  */
 @RegisterClass(BaseEntity, 'Action Contexts')
-export class ActionContextEntity extends BaseEntity<Types.ActionContextEntityType> {
+export class ActionContextEntity extends BaseEntity {
     /**
     * Loads the Action Contexts record from the database
     * @param ID: string - primary key value to load the Action Contexts record.
@@ -466,7 +474,7 @@ export class ActionContextEntity extends BaseEntity<Types.ActionContextEntityTyp
  * @public
  */
 @RegisterClass(BaseEntity, 'Action Execution Logs')
-export class ActionExecutionLogEntity extends BaseEntity<Types.ActionExecutionLogEntityType> {
+export class ActionExecutionLogEntity extends BaseEntity {
     /**
     * Loads the Action Execution Logs record from the database
     * @param ID: string - primary key value to load the Action Execution Logs record.
@@ -636,7 +644,7 @@ export class ActionExecutionLogEntity extends BaseEntity<Types.ActionExecutionLo
  * @public
  */
 @RegisterClass(BaseEntity, 'Action Filters')
-export class ActionFilterEntity extends BaseEntity<Types.ActionFilterEntityType> {
+export class ActionFilterEntity extends BaseEntity {
     /**
     * Loads the Action Filters record from the database
     * @param ID: string - primary key value to load the Action Filters record.
@@ -746,7 +754,7 @@ export class ActionFilterEntity extends BaseEntity<Types.ActionFilterEntityType>
  * @public
  */
 @RegisterClass(BaseEntity, 'Action Libraries')
-export class ActionLibraryEntity extends BaseEntity<Types.ActionLibraryEntityType> {
+export class ActionLibraryEntity extends BaseEntity {
     /**
     * Loads the Action Libraries record from the database
     * @param ID: string - primary key value to load the Action Libraries record.
@@ -865,7 +873,7 @@ export class ActionLibraryEntity extends BaseEntity<Types.ActionLibraryEntityTyp
  * @public
  */
 @RegisterClass(BaseEntity, 'Action Params')
-export class ActionParamEntity extends BaseEntity<Types.ActionParamEntityType> {
+export class ActionParamEntity extends BaseEntity {
     /**
     * Loads the Action Params record from the database
     * @param ID: string - primary key value to load the Action Params record.
@@ -1047,7 +1055,7 @@ export class ActionParamEntity extends BaseEntity<Types.ActionParamEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'Action Result Codes')
-export class ActionResultCodeEntity extends BaseEntity<Types.ActionResultCodeEntityType> {
+export class ActionResultCodeEntity extends BaseEntity {
     /**
     * Loads the Action Result Codes record from the database
     * @param ID: string - primary key value to load the Action Result Codes record.
@@ -1170,7 +1178,7 @@ export class ActionResultCodeEntity extends BaseEntity<Types.ActionResultCodeEnt
  * @public
  */
 @RegisterClass(BaseEntity, 'Actions')
-export class ActionEntity extends BaseEntity<Types.ActionEntityType> {
+export class ActionEntity extends BaseEntity {
     /**
     * Loads the Actions record from the database
     * @param ID: string - primary key value to load the Actions record.
@@ -1473,7 +1481,7 @@ export class ActionEntity extends BaseEntity<Types.ActionEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'AI Actions')
-export class AIActionEntity extends BaseEntity<Types.AIActionEntityType> {
+export class AIActionEntity extends BaseEntity {
     /**
     * Loads the AI Actions record from the database
     * @param ID: string - primary key value to load the AI Actions record.
@@ -1606,7 +1614,7 @@ export class AIActionEntity extends BaseEntity<Types.AIActionEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'AI Model Actions')
-export class AIModelActionEntity extends BaseEntity<Types.AIModelActionEntityType> {
+export class AIModelActionEntity extends BaseEntity {
     /**
     * Loads the AI Model Actions record from the database
     * @param ID: string - primary key value to load the AI Model Actions record.
@@ -1725,7 +1733,7 @@ export class AIModelActionEntity extends BaseEntity<Types.AIModelActionEntityTyp
  * @public
  */
 @RegisterClass(BaseEntity, 'AI Model Types')
-export class AIModelTypeEntity extends BaseEntity<Types.AIModelTypeEntityType> {
+export class AIModelTypeEntity extends BaseEntity {
     /**
     * Loads the AI Model Types record from the database
     * @param ID: string - primary key value to load the AI Model Types record.
@@ -1811,7 +1819,7 @@ export class AIModelTypeEntity extends BaseEntity<Types.AIModelTypeEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'AI Models')
-export class AIModelEntity extends BaseEntity<Types.AIModelEntityType> {
+export class AIModelEntity extends BaseEntity {
     /**
     * Loads the AI Models record from the database
     * @param ID: string - primary key value to load the AI Models record.
@@ -1994,7 +2002,7 @@ export class AIModelEntity extends BaseEntity<Types.AIModelEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'Application Entities')
-export class ApplicationEntityEntity extends BaseEntity<Types.ApplicationEntityEntityType> {
+export class ApplicationEntityEntity extends BaseEntity {
     /**
     * Loads the Application Entities record from the database
     * @param ID: string - primary key value to load the Application Entities record.
@@ -2157,7 +2165,7 @@ export class ApplicationEntityEntity extends BaseEntity<Types.ApplicationEntityE
  * @public
  */
 @RegisterClass(BaseEntity, 'Application Settings')
-export class ApplicationSettingEntity extends BaseEntity<Types.ApplicationSettingEntityType> {
+export class ApplicationSettingEntity extends BaseEntity {
     /**
     * Loads the Application Settings record from the database
     * @param ID: string - primary key value to load the Application Settings record.
@@ -2253,6 +2261,15 @@ export class ApplicationSettingEntity extends BaseEntity<Types.ApplicationSettin
     get __mj_UpdatedAt(): Date {  
         return this.Get('__mj_UpdatedAt');
     }
+
+    /**
+    * * Field Name: Application
+    * * Display Name: Application
+    * * SQL Data Type: nvarchar(100)
+    */
+    get Application(): string {  
+        return this.Get('Application');
+    }
 }
 
             
@@ -2268,7 +2285,7 @@ export class ApplicationSettingEntity extends BaseEntity<Types.ApplicationSettin
  * @public
  */
 @RegisterClass(BaseEntity, 'Applications')
-export class ApplicationEntity extends BaseEntity<Types.ApplicationEntityType> {
+export class ApplicationEntity extends BaseEntity {
     /**
     * Loads the Applications record from the database
     * @param ID: string - primary key value to load the Applications record.
@@ -2377,7 +2394,7 @@ export class ApplicationEntity extends BaseEntity<Types.ApplicationEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'Audit Log Types')
-export class AuditLogTypeEntity extends BaseEntity<Types.AuditLogTypeEntityType> {
+export class AuditLogTypeEntity extends BaseEntity {
     /**
     * Loads the Audit Log Types record from the database
     * @param ID: string - primary key value to load the Audit Log Types record.
@@ -2507,6 +2524,15 @@ export class AuditLogTypeEntity extends BaseEntity<Types.AuditLogTypeEntityType>
     get Parent(): string | null {  
         return this.Get('Parent');
     }
+
+    /**
+    * * Field Name: Authorization
+    * * Display Name: Authorization
+    * * SQL Data Type: nvarchar(100)
+    */
+    get Authorization(): string | null {  
+        return this.Get('Authorization');
+    }
 }
 
             
@@ -2521,7 +2547,7 @@ export class AuditLogTypeEntity extends BaseEntity<Types.AuditLogTypeEntityType>
  * @public
  */
 @RegisterClass(BaseEntity, 'Audit Logs')
-export class AuditLogEntity extends BaseEntity<Types.AuditLogEntityType> {
+export class AuditLogEntity extends BaseEntity {
     /**
     * Loads the Audit Logs record from the database
     * @param ID: string - primary key value to load the Audit Logs record.
@@ -2696,6 +2722,24 @@ export class AuditLogEntity extends BaseEntity<Types.AuditLogEntityType> {
     }
 
     /**
+    * * Field Name: AuditLogType
+    * * Display Name: Audit Log Type
+    * * SQL Data Type: nvarchar(50)
+    */
+    get AuditLogType(): string {  
+        return this.Get('AuditLogType');
+    }
+
+    /**
+    * * Field Name: Authorization
+    * * Display Name: Authorization
+    * * SQL Data Type: nvarchar(100)
+    */
+    get Authorization(): string | null {  
+        return this.Get('Authorization');
+    }
+
+    /**
     * * Field Name: Entity
     * * Display Name: Entity
     * * SQL Data Type: nvarchar(255)
@@ -2717,7 +2761,7 @@ export class AuditLogEntity extends BaseEntity<Types.AuditLogEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'Authorization Roles')
-export class AuthorizationRoleEntity extends BaseEntity<Types.AuthorizationRoleEntityType> {
+export class AuthorizationRoleEntity extends BaseEntity {
     /**
     * Loads the Authorization Roles record from the database
     * @param ID: string - primary key value to load the Authorization Roles record.
@@ -2831,6 +2875,24 @@ export class AuthorizationRoleEntity extends BaseEntity<Types.AuthorizationRoleE
     get __mj_UpdatedAt(): Date {  
         return this.Get('__mj_UpdatedAt');
     }
+
+    /**
+    * * Field Name: Authorization
+    * * Display Name: Authorization
+    * * SQL Data Type: nvarchar(100)
+    */
+    get Authorization(): string {  
+        return this.Get('Authorization');
+    }
+
+    /**
+    * * Field Name: Role
+    * * Display Name: Role
+    * * SQL Data Type: nvarchar(50)
+    */
+    get Role(): string {  
+        return this.Get('Role');
+    }
 }
 
             
@@ -2845,7 +2907,7 @@ export class AuthorizationRoleEntity extends BaseEntity<Types.AuthorizationRoleE
  * @public
  */
 @RegisterClass(BaseEntity, 'Authorizations')
-export class AuthorizationEntity extends BaseEntity<Types.AuthorizationEntityType> {
+export class AuthorizationEntity extends BaseEntity {
     /**
     * Loads the Authorizations record from the database
     * @param ID: string - primary key value to load the Authorizations record.
@@ -3004,7 +3066,7 @@ export class AuthorizationEntity extends BaseEntity<Types.AuthorizationEntityTyp
  * @public
  */
 @RegisterClass(BaseEntity, 'Communication Base Message Types')
-export class CommunicationBaseMessageTypeEntity extends BaseEntity<Types.CommunicationBaseMessageTypeEntityType> {
+export class CommunicationBaseMessageTypeEntity extends BaseEntity {
     /**
     * Loads the Communication Base Message Types record from the database
     * @param ID: string - primary key value to load the Communication Base Message Types record.
@@ -3145,7 +3207,7 @@ export class CommunicationBaseMessageTypeEntity extends BaseEntity<Types.Communi
  * @public
  */
 @RegisterClass(BaseEntity, 'Communication Logs')
-export class CommunicationLogEntity extends BaseEntity<Types.CommunicationLogEntityType> {
+export class CommunicationLogEntity extends BaseEntity {
     /**
     * Loads the Communication Logs record from the database
     * @param ID: string - primary key value to load the Communication Logs record.
@@ -3352,7 +3414,7 @@ export class CommunicationLogEntity extends BaseEntity<Types.CommunicationLogEnt
  * @public
  */
 @RegisterClass(BaseEntity, 'Communication Provider Message Types')
-export class CommunicationProviderMessageTypeEntity extends BaseEntity<Types.CommunicationProviderMessageTypeEntityType> {
+export class CommunicationProviderMessageTypeEntity extends BaseEntity {
     /**
     * Loads the Communication Provider Message Types record from the database
     * @param ID: string - primary key value to load the Communication Provider Message Types record.
@@ -3501,7 +3563,7 @@ export class CommunicationProviderMessageTypeEntity extends BaseEntity<Types.Com
  * @public
  */
 @RegisterClass(BaseEntity, 'Communication Providers')
-export class CommunicationProviderEntity extends BaseEntity<Types.CommunicationProviderEntityType> {
+export class CommunicationProviderEntity extends BaseEntity {
     /**
     * Loads the Communication Providers record from the database
     * @param ID: string - primary key value to load the Communication Providers record.
@@ -3645,7 +3707,7 @@ export class CommunicationProviderEntity extends BaseEntity<Types.CommunicationP
  * @public
  */
 @RegisterClass(BaseEntity, 'Communication Runs')
-export class CommunicationRunEntity extends BaseEntity<Types.CommunicationRunEntityType> {
+export class CommunicationRunEntity extends BaseEntity {
     /**
     * Loads the Communication Runs record from the database
     * @param ID: string - primary key value to load the Communication Runs record.
@@ -3826,7 +3888,7 @@ export class CommunicationRunEntity extends BaseEntity<Types.CommunicationRunEnt
  * @public
  */
 @RegisterClass(BaseEntity, 'Companies')
-export class CompanyEntity extends BaseEntity<Types.CompanyEntityType> {
+export class CompanyEntity extends BaseEntity {
     /**
     * Loads the Companies record from the database
     * @param ID: string - primary key value to load the Companies record.
@@ -3943,7 +4005,7 @@ export class CompanyEntity extends BaseEntity<Types.CompanyEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'Company Integration Record Maps')
-export class CompanyIntegrationRecordMapEntity extends BaseEntity<Types.CompanyIntegrationRecordMapEntityType> {
+export class CompanyIntegrationRecordMapEntity extends BaseEntity {
     /**
     * Loads the Company Integration Record Maps record from the database
     * @param ID: string - primary key value to load the Company Integration Record Maps record.
@@ -4075,7 +4137,7 @@ export class CompanyIntegrationRecordMapEntity extends BaseEntity<Types.CompanyI
  * @public
  */
 @RegisterClass(BaseEntity, 'Company Integration Run API Logs')
-export class CompanyIntegrationRunAPILogEntity extends BaseEntity<Types.CompanyIntegrationRunAPILogEntityType> {
+export class CompanyIntegrationRunAPILogEntity extends BaseEntity {
     /**
     * Loads the Company Integration Run API Logs record from the database
     * @param ID: string - primary key value to load the Company Integration Run API Logs record.
@@ -4229,7 +4291,7 @@ export class CompanyIntegrationRunAPILogEntity extends BaseEntity<Types.CompanyI
  * @public
  */
 @RegisterClass(BaseEntity, 'Company Integration Run Details')
-export class CompanyIntegrationRunDetailEntity extends BaseEntity<Types.CompanyIntegrationRunDetailEntityType> {
+export class CompanyIntegrationRunDetailEntity extends BaseEntity {
     /**
     * Loads the Company Integration Run Details record from the database
     * @param ID: string - primary key value to load the Company Integration Run Details record.
@@ -4402,7 +4464,7 @@ export class CompanyIntegrationRunDetailEntity extends BaseEntity<Types.CompanyI
  * @public
  */
 @RegisterClass(BaseEntity, 'Company Integration Runs')
-export class CompanyIntegrationRunEntity extends BaseEntity<Types.CompanyIntegrationRunEntityType> {
+export class CompanyIntegrationRunEntity extends BaseEntity {
     /**
     * Loads the Company Integration Runs record from the database
     * @param ID: string - primary key value to load the Company Integration Runs record.
@@ -4557,7 +4619,7 @@ export class CompanyIntegrationRunEntity extends BaseEntity<Types.CompanyIntegra
  * @public
  */
 @RegisterClass(BaseEntity, 'Company Integrations')
-export class CompanyIntegrationEntity extends BaseEntity<Types.CompanyIntegrationEntityType> {
+export class CompanyIntegrationEntity extends BaseEntity {
     /**
     * Loads the Company Integrations record from the database
     * @param ID: string - primary key value to load the Company Integrations record.
@@ -4836,7 +4898,7 @@ export class CompanyIntegrationEntity extends BaseEntity<Types.CompanyIntegratio
  * @public
  */
 @RegisterClass(BaseEntity, 'Conversation Details')
-export class ConversationDetailEntity extends BaseEntity<Types.ConversationDetailEntityType> {
+export class ConversationDetailEntity extends BaseEntity {
     /**
     * Loads the Conversation Details record from the database
     * @param ID: string - primary key value to load the Conversation Details record.
@@ -4986,7 +5048,7 @@ export class ConversationDetailEntity extends BaseEntity<Types.ConversationDetai
  * @public
  */
 @RegisterClass(BaseEntity, 'Conversations')
-export class ConversationEntity extends BaseEntity<Types.ConversationEntityType> {
+export class ConversationEntity extends BaseEntity {
     /**
     * Loads the Conversations record from the database
     * @param ID: string - primary key value to load the Conversations record.
@@ -5164,6 +5226,15 @@ export class ConversationEntity extends BaseEntity<Types.ConversationEntityType>
     get LinkedEntity(): string | null {  
         return this.Get('LinkedEntity');
     }
+
+    /**
+    * * Field Name: DataContext
+    * * Display Name: Data Context
+    * * SQL Data Type: nvarchar(255)
+    */
+    get DataContext(): string | null {  
+        return this.Get('DataContext');
+    }
 }
 
             
@@ -5178,7 +5249,7 @@ export class ConversationEntity extends BaseEntity<Types.ConversationEntityType>
  * @public
  */
 @RegisterClass(BaseEntity, 'Dashboard Categories')
-export class DashboardCategoryEntity extends BaseEntity<Types.DashboardCategoryEntityType> {
+export class DashboardCategoryEntity extends BaseEntity {
     /**
     * Loads the Dashboard Categories record from the database
     * @param ID: string - primary key value to load the Dashboard Categories record.
@@ -5308,7 +5379,7 @@ export class DashboardCategoryEntity extends BaseEntity<Types.DashboardCategoryE
  * @public
  */
 @RegisterClass(BaseEntity, 'Dashboards')
-export class DashboardEntity extends BaseEntity<Types.DashboardEntityType> {
+export class DashboardEntity extends BaseEntity {
     /**
     * Loads the Dashboards record from the database
     * @param ID: string - primary key value to load the Dashboards record.
@@ -5450,7 +5521,7 @@ export class DashboardEntity extends BaseEntity<Types.DashboardEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'Data Context Items')
-export class DataContextItemEntity extends BaseEntity<Types.DataContextItemEntityType> {
+export class DataContextItemEntity extends BaseEntity {
     /**
     * Loads the Data Context Items record from the database
     * @param ID: string - primary key value to load the Data Context Items record.
@@ -5672,7 +5743,7 @@ export class DataContextItemEntity extends BaseEntity<Types.DataContextItemEntit
  * @public
  */
 @RegisterClass(BaseEntity, 'Data Contexts')
-export class DataContextEntity extends BaseEntity<Types.DataContextEntityType> {
+export class DataContextEntity extends BaseEntity {
     /**
     * Loads the Data Contexts record from the database
     * @param ID: string - primary key value to load the Data Contexts record.
@@ -5792,7 +5863,7 @@ export class DataContextEntity extends BaseEntity<Types.DataContextEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'Dataset Items')
-export class DatasetItemEntity extends BaseEntity<Types.DatasetItemEntityType> {
+export class DatasetItemEntity extends BaseEntity {
     /**
     * Loads the Dataset Items record from the database
     * @param ID: string - primary key value to load the Dataset Items record.
@@ -5952,6 +6023,15 @@ export class DatasetItemEntity extends BaseEntity<Types.DatasetItemEntityType> {
     }
 
     /**
+    * * Field Name: Dataset
+    * * Display Name: Dataset
+    * * SQL Data Type: nvarchar(100)
+    */
+    get Dataset(): string {  
+        return this.Get('Dataset');
+    }
+
+    /**
     * * Field Name: Entity
     * * Display Name: Entity
     * * SQL Data Type: nvarchar(255)
@@ -5974,7 +6054,7 @@ export class DatasetItemEntity extends BaseEntity<Types.DatasetItemEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'Datasets')
-export class DatasetEntity extends BaseEntity<Types.DatasetEntityType> {
+export class DatasetEntity extends BaseEntity {
     /**
     * Loads the Datasets record from the database
     * @param ID: string - primary key value to load the Datasets record.
@@ -6083,7 +6163,7 @@ export class DatasetEntity extends BaseEntity<Types.DatasetEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'Duplicate Run Detail Matches')
-export class DuplicateRunDetailMatchEntity extends BaseEntity<Types.DuplicateRunDetailMatchEntityType> {
+export class DuplicateRunDetailMatchEntity extends BaseEntity {
     /**
     * Loads the Duplicate Run Detail Matches record from the database
     * @param ID: string - primary key value to load the Duplicate Run Detail Matches record.
@@ -6301,7 +6381,7 @@ export class DuplicateRunDetailMatchEntity extends BaseEntity<Types.DuplicateRun
  * @public
  */
 @RegisterClass(BaseEntity, 'Duplicate Run Details')
-export class DuplicateRunDetailEntity extends BaseEntity<Types.DuplicateRunDetailEntityType> {
+export class DuplicateRunDetailEntity extends BaseEntity {
     /**
     * Loads the Duplicate Run Details record from the database
     * @param ID: string - primary key value to load the Duplicate Run Details record.
@@ -6475,7 +6555,7 @@ export class DuplicateRunDetailEntity extends BaseEntity<Types.DuplicateRunDetai
  * @public
  */
 @RegisterClass(BaseEntity, 'Duplicate Runs')
-export class DuplicateRunEntity extends BaseEntity<Types.DuplicateRunEntityType> {
+export class DuplicateRunEntity extends BaseEntity {
     /**
     * Loads the Duplicate Runs record from the database
     * @param ID: string - primary key value to load the Duplicate Runs record.
@@ -6722,7 +6802,7 @@ export class DuplicateRunEntity extends BaseEntity<Types.DuplicateRunEntityType>
  * @public
  */
 @RegisterClass(BaseEntity, 'Employee Company Integrations')
-export class EmployeeCompanyIntegrationEntity extends BaseEntity<Types.EmployeeCompanyIntegrationEntityType> {
+export class EmployeeCompanyIntegrationEntity extends BaseEntity {
     /**
     * Loads the Employee Company Integrations record from the database
     * @param ID: string - primary key value to load the Employee Company Integrations record.
@@ -6845,7 +6925,7 @@ export class EmployeeCompanyIntegrationEntity extends BaseEntity<Types.EmployeeC
  * @public
  */
 @RegisterClass(BaseEntity, 'Employee Roles')
-export class EmployeeRoleEntity extends BaseEntity<Types.EmployeeRoleEntityType> {
+export class EmployeeRoleEntity extends BaseEntity {
     /**
     * Loads the Employee Roles record from the database
     * @param ID: string - primary key value to load the Employee Roles record.
@@ -6953,7 +7033,7 @@ export class EmployeeRoleEntity extends BaseEntity<Types.EmployeeRoleEntityType>
  * @public
  */
 @RegisterClass(BaseEntity, 'Employee Skills')
-export class EmployeeSkillEntity extends BaseEntity<Types.EmployeeSkillEntityType> {
+export class EmployeeSkillEntity extends BaseEntity {
     /**
     * Loads the Employee Skills record from the database
     * @param ID: string - primary key value to load the Employee Skills record.
@@ -7062,7 +7142,7 @@ export class EmployeeSkillEntity extends BaseEntity<Types.EmployeeSkillEntityTyp
  * @public
  */
 @RegisterClass(BaseEntity, 'Employees')
-export class EmployeeEntity extends BaseEntity<Types.EmployeeEntityType> {
+export class EmployeeEntity extends BaseEntity {
     /**
     * Loads the Employees record from the database
     * @param ID: string - primary key value to load the Employees record.
@@ -7273,7 +7353,7 @@ export class EmployeeEntity extends BaseEntity<Types.EmployeeEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'Entities')
-export class EntityEntity extends BaseEntity<Types.EntityEntityType> {
+export class EntityEntity extends BaseEntity {
     /**
     * Loads the Entities record from the database
     * @param ID: string - primary key value to load the Entities record.
@@ -7963,7 +8043,7 @@ export class EntityEntity extends BaseEntity<Types.EntityEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'Entity Action Filters')
-export class EntityActionFilterEntity extends BaseEntity<Types.EntityActionFilterEntityType> {
+export class EntityActionFilterEntity extends BaseEntity {
     /**
     * Loads the Entity Action Filters record from the database
     * @param ID: string - primary key value to load the Entity Action Filters record.
@@ -8083,7 +8163,7 @@ export class EntityActionFilterEntity extends BaseEntity<Types.EntityActionFilte
  * @public
  */
 @RegisterClass(BaseEntity, 'Entity Action Invocation Types')
-export class EntityActionInvocationTypeEntity extends BaseEntity<Types.EntityActionInvocationTypeEntityType> {
+export class EntityActionInvocationTypeEntity extends BaseEntity {
     /**
     * Loads the Entity Action Invocation Types record from the database
     * @param ID: string - primary key value to load the Entity Action Invocation Types record.
@@ -8184,7 +8264,7 @@ export class EntityActionInvocationTypeEntity extends BaseEntity<Types.EntityAct
  * @public
  */
 @RegisterClass(BaseEntity, 'Entity Action Invocations')
-export class EntityActionInvocationEntity extends BaseEntity<Types.EntityActionInvocationEntityType> {
+export class EntityActionInvocationEntity extends BaseEntity {
     /**
     * Loads the Entity Action Invocations record from the database
     * @param ID: string - primary key value to load the Entity Action Invocations record.
@@ -8300,7 +8380,7 @@ export class EntityActionInvocationEntity extends BaseEntity<Types.EntityActionI
  * @public
  */
 @RegisterClass(BaseEntity, 'Entity Action Params')
-export class EntityActionParamEntity extends BaseEntity<Types.EntityActionParamEntityType> {
+export class EntityActionParamEntity extends BaseEntity {
     /**
     * Loads the Entity Action Params record from the database
     * @param ID: string - primary key value to load the Entity Action Params record.
@@ -8442,7 +8522,7 @@ export class EntityActionParamEntity extends BaseEntity<Types.EntityActionParamE
  * @public
  */
 @RegisterClass(BaseEntity, 'Entity Actions')
-export class EntityActionEntity extends BaseEntity<Types.EntityActionEntityType> {
+export class EntityActionEntity extends BaseEntity {
     /**
     * Loads the Entity Actions record from the database
     * @param ID: string - primary key value to load the Entity Actions record.
@@ -8567,7 +8647,7 @@ export class EntityActionEntity extends BaseEntity<Types.EntityActionEntityType>
  * @public
  */
 @RegisterClass(BaseEntity, 'Entity AI Actions')
-export class EntityAIActionEntity extends BaseEntity<Types.EntityAIActionEntityType> {
+export class EntityAIActionEntity extends BaseEntity {
     /**
     * Loads the Entity AI Actions record from the database
     * @param ID: string - primary key value to load the Entity AI Actions record.
@@ -8824,7 +8904,7 @@ export class EntityAIActionEntity extends BaseEntity<Types.EntityAIActionEntityT
  * @public
  */
 @RegisterClass(BaseEntity, 'Entity Communication Fields')
-export class EntityCommunicationFieldEntity extends BaseEntity<Types.EntityCommunicationFieldEntityType> {
+export class EntityCommunicationFieldEntity extends BaseEntity {
     /**
     * Loads the Entity Communication Fields record from the database
     * @param ID: string - primary key value to load the Entity Communication Fields record.
@@ -8937,7 +9017,7 @@ export class EntityCommunicationFieldEntity extends BaseEntity<Types.EntityCommu
  * @public
  */
 @RegisterClass(BaseEntity, 'Entity Communication Message Types')
-export class EntityCommunicationMessageTypeEntity extends BaseEntity<Types.EntityCommunicationMessageTypeEntityType> {
+export class EntityCommunicationMessageTypeEntity extends BaseEntity {
     /**
     * Loads the Entity Communication Message Types record from the database
     * @param ID: string - primary key value to load the Entity Communication Message Types record.
@@ -9068,7 +9148,7 @@ export class EntityCommunicationMessageTypeEntity extends BaseEntity<Types.Entit
  * @public
  */
 @RegisterClass(BaseEntity, 'Entity Document Runs')
-export class EntityDocumentRunEntity extends BaseEntity<Types.EntityDocumentRunEntityType> {
+export class EntityDocumentRunEntity extends BaseEntity {
     /**
     * Loads the Entity Document Runs record from the database
     * @param ID: string - primary key value to load the Entity Document Runs record.
@@ -9206,7 +9286,7 @@ export class EntityDocumentRunEntity extends BaseEntity<Types.EntityDocumentRunE
  * @public
  */
 @RegisterClass(BaseEntity, 'Entity Document Settings')
-export class EntityDocumentSettingEntity extends BaseEntity<Types.EntityDocumentSettingEntityType> {
+export class EntityDocumentSettingEntity extends BaseEntity {
     /**
     * Loads the Entity Document Settings record from the database
     * @param ID: string - primary key value to load the Entity Document Settings record.
@@ -9337,7 +9417,7 @@ export class EntityDocumentSettingEntity extends BaseEntity<Types.EntityDocument
  * @public
  */
 @RegisterClass(BaseEntity, 'Entity Document Types')
-export class EntityDocumentTypeEntity extends BaseEntity<Types.EntityDocumentTypeEntityType> {
+export class EntityDocumentTypeEntity extends BaseEntity {
     /**
     * Loads the Entity Document Types record from the database
     * @param ID: string - primary key value to load the Entity Document Types record.
@@ -9434,7 +9514,7 @@ export class EntityDocumentTypeEntity extends BaseEntity<Types.EntityDocumentTyp
  * @public
  */
 @RegisterClass(BaseEntity, 'Entity Documents')
-export class EntityDocumentEntity extends BaseEntity<Types.EntityDocumentEntityType> {
+export class EntityDocumentEntity extends BaseEntity {
     /**
     * Loads the Entity Documents record from the database
     * @param ID: string - primary key value to load the Entity Documents record.
@@ -9633,6 +9713,33 @@ export class EntityDocumentEntity extends BaseEntity<Types.EntityDocumentEntityT
     get Entity(): string {  
         return this.Get('Entity');
     }
+
+    /**
+    * * Field Name: VectorDatabase
+    * * Display Name: Vector Database
+    * * SQL Data Type: nvarchar(100)
+    */
+    get VectorDatabase(): string {  
+        return this.Get('VectorDatabase');
+    }
+
+    /**
+    * * Field Name: Template
+    * * Display Name: Template
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Template(): string {  
+        return this.Get('Template');
+    }
+
+    /**
+    * * Field Name: AIModel
+    * * Display Name: AIModel
+    * * SQL Data Type: nvarchar(50)
+    */
+    get AIModel(): string {  
+        return this.Get('AIModel');
+    }
 }
 
             
@@ -9647,7 +9754,7 @@ export class EntityDocumentEntity extends BaseEntity<Types.EntityDocumentEntityT
  * @public
  */
 @RegisterClass(BaseEntity, 'Entity Field Values')
-export class EntityFieldValueEntity extends BaseEntity<Types.EntityFieldValueEntityType> {
+export class EntityFieldValueEntity extends BaseEntity {
     /**
     * Loads the Entity Field Values record from the database
     * @param ID: string - primary key value to load the Entity Field Values record.
@@ -9809,7 +9916,7 @@ export class EntityFieldValueEntity extends BaseEntity<Types.EntityFieldValueEnt
  * @public
  */
 @RegisterClass(BaseEntity, 'Entity Fields')
-export class EntityFieldEntity extends BaseEntity<Types.EntityFieldEntityType> {
+export class EntityFieldEntity extends BaseEntity {
     /**
     * Loads the Entity Fields record from the database
     * @param ID: string - primary key value to load the Entity Fields record.
@@ -10468,7 +10575,7 @@ export class EntityFieldEntity extends BaseEntity<Types.EntityFieldEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'Entity Permissions')
-export class EntityPermissionEntity extends BaseEntity<Types.EntityPermissionEntityType> {
+export class EntityPermissionEntity extends BaseEntity {
     /**
     * Loads the Entity Permissions record from the database
     * @param ID: string - primary key value to load the Entity Permissions record.
@@ -10721,7 +10828,7 @@ export class EntityPermissionEntity extends BaseEntity<Types.EntityPermissionEnt
  * @public
  */
 @RegisterClass(BaseEntity, 'Entity Record Documents')
-export class EntityRecordDocumentEntity extends BaseEntity<Types.EntityRecordDocumentEntityType> {
+export class EntityRecordDocumentEntity extends BaseEntity {
     /**
     * Loads the Entity Record Documents record from the database
     * @param ID: string - primary key value to load the Entity Record Documents record.
@@ -10879,6 +10986,33 @@ export class EntityRecordDocumentEntity extends BaseEntity<Types.EntityRecordDoc
     get __mj_UpdatedAt(): Date {  
         return this.Get('__mj_UpdatedAt');
     }
+
+    /**
+    * * Field Name: Entity
+    * * Display Name: Entity
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Entity(): string {  
+        return this.Get('Entity');
+    }
+
+    /**
+    * * Field Name: EntityDocument
+    * * Display Name: Entity Document
+    * * SQL Data Type: nvarchar(250)
+    */
+    get EntityDocument(): string {  
+        return this.Get('EntityDocument');
+    }
+
+    /**
+    * * Field Name: VectorIndex
+    * * Display Name: Vector Index
+    * * SQL Data Type: nvarchar(255)
+    */
+    get VectorIndex(): string {  
+        return this.Get('VectorIndex');
+    }
 }
 
             
@@ -10894,7 +11028,7 @@ export class EntityRecordDocumentEntity extends BaseEntity<Types.EntityRecordDoc
  * @public
  */
 @RegisterClass(BaseEntity, 'Entity Relationship Display Components')
-export class EntityRelationshipDisplayComponentEntity extends BaseEntity<Types.EntityRelationshipDisplayComponentEntityType> {
+export class EntityRelationshipDisplayComponentEntity extends BaseEntity {
     /**
     * Loads the Entity Relationship Display Components record from the database
     * @param ID: string - primary key value to load the Entity Relationship Display Components record.
@@ -11010,7 +11144,7 @@ export class EntityRelationshipDisplayComponentEntity extends BaseEntity<Types.E
  * @public
  */
 @RegisterClass(BaseEntity, 'Entity Relationships')
-export class EntityRelationshipEntity extends BaseEntity<Types.EntityRelationshipEntityType> {
+export class EntityRelationshipEntity extends BaseEntity {
     /**
     * Loads the Entity Relationships record from the database
     * @param ID: string - primary key value to load the Entity Relationships record.
@@ -11413,7 +11547,7 @@ export class EntityRelationshipEntity extends BaseEntity<Types.EntityRelationshi
  * @public
  */
 @RegisterClass(BaseEntity, 'Entity Settings')
-export class EntitySettingEntity extends BaseEntity<Types.EntitySettingEntityType> {
+export class EntitySettingEntity extends BaseEntity {
     /**
     * Loads the Entity Settings record from the database
     * @param ID: string - primary key value to load the Entity Settings record.
@@ -11544,7 +11678,7 @@ export class EntitySettingEntity extends BaseEntity<Types.EntitySettingEntityTyp
  * @public
  */
 @RegisterClass(BaseEntity, 'Error Logs')
-export class ErrorLogEntity extends BaseEntity<Types.ErrorLogEntityType> {
+export class ErrorLogEntity extends BaseEntity {
     /**
     * Loads the Error Logs record from the database
     * @param ID: string - primary key value to load the Error Logs record.
@@ -11711,7 +11845,7 @@ export class ErrorLogEntity extends BaseEntity<Types.ErrorLogEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'Explorer Navigation Items')
-export class ExplorerNavigationItemEntity extends BaseEntity<Types.ExplorerNavigationItemEntityType> {
+export class ExplorerNavigationItemEntity extends BaseEntity {
     /**
     * Loads the Explorer Navigation Items record from the database
     * @param ID: string - primary key value to load the Explorer Navigation Items record.
@@ -11893,7 +12027,7 @@ export class ExplorerNavigationItemEntity extends BaseEntity<Types.ExplorerNavig
  * @public
  */
 @RegisterClass(BaseEntity, 'File Categories')
-export class FileCategoryEntity extends BaseEntity<Types.FileCategoryEntityType> {
+export class FileCategoryEntity extends BaseEntity {
     /**
     * Loads the File Categories record from the database
     * @param ID: string - primary key value to load the File Categories record.
@@ -12000,7 +12134,7 @@ export class FileCategoryEntity extends BaseEntity<Types.FileCategoryEntityType>
  * @public
  */
 @RegisterClass(BaseEntity, 'File Entity Record Links')
-export class FileEntityRecordLinkEntity extends BaseEntity<Types.FileEntityRecordLinkEntityType> {
+export class FileEntityRecordLinkEntity extends BaseEntity {
     /**
     * Loads the File Entity Record Links record from the database
     * @param ID: string - primary key value to load the File Entity Record Links record.
@@ -12129,7 +12263,7 @@ export class FileEntityRecordLinkEntity extends BaseEntity<Types.FileEntityRecor
  * @public
  */
 @RegisterClass(BaseEntity, 'File Storage Providers')
-export class FileStorageProviderEntity extends BaseEntity<Types.FileStorageProviderEntityType> {
+export class FileStorageProviderEntity extends BaseEntity {
     /**
     * Loads the File Storage Providers record from the database
     * @param ID: string - primary key value to load the File Storage Providers record.
@@ -12276,7 +12410,7 @@ export class FileStorageProviderEntity extends BaseEntity<Types.FileStorageProvi
  * @public
  */
 @RegisterClass(BaseEntity, 'Files')
-export class FileEntity extends BaseEntity<Types.FileEntityType> {
+export class FileEntity extends BaseEntity {
     /**
     * Loads the Files record from the database
     * @param ID: string - primary key value to load the Files record.
@@ -12443,7 +12577,7 @@ export class FileEntity extends BaseEntity<Types.FileEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'flyway _schema _histories')
-export class flyway_schema_historyEntity extends BaseEntity<Types.flyway_schema_historyEntityType> {
+export class flyway_schema_historyEntity extends BaseEntity {
     /**
     * Loads the flyway _schema _histories record from the database
     * @param installed_rank: number - primary key value to load the flyway _schema _histories record.
@@ -12613,7 +12747,7 @@ export class flyway_schema_historyEntity extends BaseEntity<Types.flyway_schema_
  * @public
  */
 @RegisterClass(BaseEntity, 'Integration URL Formats')
-export class IntegrationURLFormatEntity extends BaseEntity<Types.IntegrationURLFormatEntityType> {
+export class IntegrationURLFormatEntity extends BaseEntity {
     /**
     * Loads the Integration URL Formats record from the database
     * @param ID: string - primary key value to load the Integration URL Formats record.
@@ -12763,7 +12897,7 @@ export class IntegrationURLFormatEntity extends BaseEntity<Types.IntegrationURLF
  * @public
  */
 @RegisterClass(BaseEntity, 'Integrations')
-export class IntegrationEntity extends BaseEntity<Types.IntegrationEntityType> {
+export class IntegrationEntity extends BaseEntity {
     /**
     * Loads the Integrations record from the database
     * @param ID: string - primary key value to load the Integrations record.
@@ -12920,7 +13054,7 @@ export class IntegrationEntity extends BaseEntity<Types.IntegrationEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'Libraries')
-export class LibraryEntity extends BaseEntity<Types.LibraryEntityType> {
+export class LibraryEntity extends BaseEntity {
     /**
     * Loads the Libraries record from the database
     * @param ID: string - primary key value to load the Libraries record.
@@ -13063,7 +13197,7 @@ export class LibraryEntity extends BaseEntity<Types.LibraryEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'Library Items')
-export class LibraryItemEntity extends BaseEntity<Types.LibraryItemEntityType> {
+export class LibraryItemEntity extends BaseEntity {
     /**
     * Loads the Library Items record from the database
     * @param ID: string - primary key value to load the Library Items record.
@@ -13191,7 +13325,7 @@ export class LibraryItemEntity extends BaseEntity<Types.LibraryItemEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'List Categories')
-export class ListCategoryEntity extends BaseEntity<Types.ListCategoryEntityType> {
+export class ListCategoryEntity extends BaseEntity {
     /**
     * Loads the List Categories record from the database
     * @param ID: string - primary key value to load the List Categories record.
@@ -13300,6 +13434,24 @@ export class ListCategoryEntity extends BaseEntity<Types.ListCategoryEntityType>
     get __mj_UpdatedAt(): Date {  
         return this.Get('__mj_UpdatedAt');
     }
+
+    /**
+    * * Field Name: Parent
+    * * Display Name: Parent
+    * * SQL Data Type: nvarchar(100)
+    */
+    get Parent(): string | null {  
+        return this.Get('Parent');
+    }
+
+    /**
+    * * Field Name: User
+    * * Display Name: User
+    * * SQL Data Type: nvarchar(100)
+    */
+    get User(): string {  
+        return this.Get('User');
+    }
 }
 
             
@@ -13315,7 +13467,7 @@ export class ListCategoryEntity extends BaseEntity<Types.ListCategoryEntityType>
  * @public
  */
 @RegisterClass(BaseEntity, 'List Details')
-export class ListDetailEntity extends BaseEntity<Types.ListDetailEntityType> {
+export class ListDetailEntity extends BaseEntity {
     /**
     * Loads the List Details record from the database
     * @param ID: string - primary key value to load the List Details record.
@@ -13422,7 +13574,7 @@ export class ListDetailEntity extends BaseEntity<Types.ListDetailEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'Lists')
-export class ListEntity extends BaseEntity<Types.ListEntityType> {
+export class ListEntity extends BaseEntity {
     /**
     * Loads the Lists record from the database
     * @param ID: string - primary key value to load the Lists record.
@@ -13572,6 +13724,15 @@ export class ListEntity extends BaseEntity<Types.ListEntityType> {
     get User(): string {  
         return this.Get('User');
     }
+
+    /**
+    * * Field Name: Category
+    * * Display Name: Category
+    * * SQL Data Type: nvarchar(100)
+    */
+    get Category(): string | null {  
+        return this.Get('Category');
+    }
 }
 
             
@@ -13586,7 +13747,7 @@ export class ListEntity extends BaseEntity<Types.ListEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'Output Delivery Types')
-export class OutputDeliveryTypeEntity extends BaseEntity<Types.OutputDeliveryTypeEntityType> {
+export class OutputDeliveryTypeEntity extends BaseEntity {
     /**
     * Loads the Output Delivery Types record from the database
     * @param ID: string - primary key value to load the Output Delivery Types record.
@@ -13695,7 +13856,7 @@ export class OutputDeliveryTypeEntity extends BaseEntity<Types.OutputDeliveryTyp
  * @public
  */
 @RegisterClass(BaseEntity, 'Output Format Types')
-export class OutputFormatTypeEntity extends BaseEntity<Types.OutputFormatTypeEntityType> {
+export class OutputFormatTypeEntity extends BaseEntity {
     /**
     * Loads the Output Format Types record from the database
     * @param ID: string - primary key value to load the Output Format Types record.
@@ -13816,7 +13977,7 @@ export class OutputFormatTypeEntity extends BaseEntity<Types.OutputFormatTypeEnt
  * @public
  */
 @RegisterClass(BaseEntity, 'Output Trigger Types')
-export class OutputTriggerTypeEntity extends BaseEntity<Types.OutputTriggerTypeEntityType> {
+export class OutputTriggerTypeEntity extends BaseEntity {
     /**
     * Loads the Output Trigger Types record from the database
     * @param ID: string - primary key value to load the Output Trigger Types record.
@@ -13926,7 +14087,7 @@ export class OutputTriggerTypeEntity extends BaseEntity<Types.OutputTriggerTypeE
  * @public
  */
 @RegisterClass(BaseEntity, 'Queries')
-export class QueryEntity extends BaseEntity<Types.QueryEntityType> {
+export class QueryEntity extends BaseEntity {
     /**
     * Loads the Queries record from the database
     * @param ID: string - primary key value to load the Queries record.
@@ -14151,7 +14312,7 @@ export class QueryEntity extends BaseEntity<Types.QueryEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'Query Categories')
-export class QueryCategoryEntity extends BaseEntity<Types.QueryCategoryEntityType> {
+export class QueryCategoryEntity extends BaseEntity {
     /**
     * Loads the Query Categories record from the database
     * @param ID: string - primary key value to load the Query Categories record.
@@ -14280,7 +14441,7 @@ export class QueryCategoryEntity extends BaseEntity<Types.QueryCategoryEntityTyp
  * @public
  */
 @RegisterClass(BaseEntity, 'Query Fields')
-export class QueryFieldEntity extends BaseEntity<Types.QueryFieldEntityType> {
+export class QueryFieldEntity extends BaseEntity {
     /**
     * Loads the Query Fields record from the database
     * @param ID: string - primary key value to load the Query Fields record.
@@ -14521,7 +14682,7 @@ export class QueryFieldEntity extends BaseEntity<Types.QueryFieldEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'Query Permissions')
-export class QueryPermissionEntity extends BaseEntity<Types.QueryPermissionEntityType> {
+export class QueryPermissionEntity extends BaseEntity {
     /**
     * Loads the Query Permissions record from the database
     * @param ID: string - primary key value to load the Query Permissions record.
@@ -14606,6 +14767,24 @@ export class QueryPermissionEntity extends BaseEntity<Types.QueryPermissionEntit
     get __mj_UpdatedAt(): Date {  
         return this.Get('__mj_UpdatedAt');
     }
+
+    /**
+    * * Field Name: Query
+    * * Display Name: Query
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Query(): string {  
+        return this.Get('Query');
+    }
+
+    /**
+    * * Field Name: Role
+    * * Display Name: Role
+    * * SQL Data Type: nvarchar(50)
+    */
+    get Role(): string {  
+        return this.Get('Role');
+    }
 }
 
             
@@ -14620,7 +14799,7 @@ export class QueryPermissionEntity extends BaseEntity<Types.QueryPermissionEntit
  * @public
  */
 @RegisterClass(BaseEntity, 'Queue Tasks')
-export class QueueTaskEntity extends BaseEntity<Types.QueueTaskEntityType> {
+export class QueueTaskEntity extends BaseEntity {
     /**
     * Loads the Queue Tasks record from the database
     * @param ID: string - primary key value to load the Queue Tasks record.
@@ -14817,7 +14996,7 @@ export class QueueTaskEntity extends BaseEntity<Types.QueueTaskEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'Queue Types')
-export class QueueTypeEntity extends BaseEntity<Types.QueueTypeEntityType> {
+export class QueueTypeEntity extends BaseEntity {
     /**
     * Loads the Queue Types record from the database
     * @param ID: string - primary key value to load the Queue Types record.
@@ -14964,7 +15143,7 @@ export class QueueTypeEntity extends BaseEntity<Types.QueueTypeEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'Queues')
-export class QueueEntity extends BaseEntity<Types.QueueEntityType> {
+export class QueueEntity extends BaseEntity {
     /**
     * Loads the Queues record from the database
     * @param ID: string - primary key value to load the Queues record.
@@ -15242,7 +15421,7 @@ export class QueueEntity extends BaseEntity<Types.QueueEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'Recommendation Items')
-export class RecommendationItemEntity extends BaseEntity<Types.RecommendationItemEntityType> {
+export class RecommendationItemEntity extends BaseEntity {
     /**
     * Loads the Recommendation Items record from the database
     * @param ID: string - primary key value to load the Recommendation Items record.
@@ -15377,7 +15556,7 @@ export class RecommendationItemEntity extends BaseEntity<Types.RecommendationIte
  * @public
  */
 @RegisterClass(BaseEntity, 'Recommendation Providers')
-export class RecommendationProviderEntity extends BaseEntity<Types.RecommendationProviderEntityType> {
+export class RecommendationProviderEntity extends BaseEntity {
     /**
     * Loads the Recommendation Providers record from the database
     * @param ID: string - primary key value to load the Recommendation Providers record.
@@ -15475,7 +15654,7 @@ export class RecommendationProviderEntity extends BaseEntity<Types.Recommendatio
  * @public
  */
 @RegisterClass(BaseEntity, 'Recommendation Runs')
-export class RecommendationRunEntity extends BaseEntity<Types.RecommendationRunEntityType> {
+export class RecommendationRunEntity extends BaseEntity {
     /**
     * Loads the Recommendation Runs record from the database
     * @param ID: string - primary key value to load the Recommendation Runs record.
@@ -15651,7 +15830,7 @@ export class RecommendationRunEntity extends BaseEntity<Types.RecommendationRunE
  * @public
  */
 @RegisterClass(BaseEntity, 'Recommendations')
-export class RecommendationEntity extends BaseEntity<Types.RecommendationEntityType> {
+export class RecommendationEntity extends BaseEntity {
     /**
     * Loads the Recommendations record from the database
     * @param ID: string - primary key value to load the Recommendations record.
@@ -15773,7 +15952,7 @@ export class RecommendationEntity extends BaseEntity<Types.RecommendationEntityT
  * @public
  */
 @RegisterClass(BaseEntity, 'Record Change Replay Runs')
-export class RecordChangeReplayRunEntity extends BaseEntity<Types.RecordChangeReplayRunEntityType> {
+export class RecordChangeReplayRunEntity extends BaseEntity {
     /**
     * Loads the Record Change Replay Runs record from the database
     * @param ID: string - primary key value to load the Record Change Replay Runs record.
@@ -15914,7 +16093,7 @@ export class RecordChangeReplayRunEntity extends BaseEntity<Types.RecordChangeRe
  * @public
  */
 @RegisterClass(BaseEntity, 'Record Changes')
-export class RecordChangeEntity extends BaseEntity<Types.RecordChangeEntityType> {
+export class RecordChangeEntity extends BaseEntity {
     /**
     * Loads the Record Changes record from the database
     * @param ID: string - primary key value to load the Record Changes record.
@@ -16208,7 +16387,7 @@ export class RecordChangeEntity extends BaseEntity<Types.RecordChangeEntityType>
  * @public
  */
 @RegisterClass(BaseEntity, 'Record Merge Deletion Logs')
-export class RecordMergeDeletionLogEntity extends BaseEntity<Types.RecordMergeDeletionLogEntityType> {
+export class RecordMergeDeletionLogEntity extends BaseEntity {
     /**
     * Loads the Record Merge Deletion Logs record from the database
     * @param ID: string - primary key value to load the Record Merge Deletion Logs record.
@@ -16336,7 +16515,7 @@ export class RecordMergeDeletionLogEntity extends BaseEntity<Types.RecordMergeDe
  * @public
  */
 @RegisterClass(BaseEntity, 'Record Merge Logs')
-export class RecordMergeLogEntity extends BaseEntity<Types.RecordMergeLogEntityType> {
+export class RecordMergeLogEntity extends BaseEntity {
     /**
     * Loads the Record Merge Logs record from the database
     * @param ID: string - primary key value to load the Record Merge Logs record.
@@ -16549,6 +16728,15 @@ export class RecordMergeLogEntity extends BaseEntity<Types.RecordMergeLogEntityT
     get InitiatedByUser(): string {  
         return this.Get('InitiatedByUser');
     }
+
+    /**
+    * * Field Name: ApprovedByUser
+    * * Display Name: Approved By User
+    * * SQL Data Type: nvarchar(100)
+    */
+    get ApprovedByUser(): string | null {  
+        return this.Get('ApprovedByUser');
+    }
 }
 
             
@@ -16563,7 +16751,7 @@ export class RecordMergeLogEntity extends BaseEntity<Types.RecordMergeLogEntityT
  * @public
  */
 @RegisterClass(BaseEntity, 'Report Categories')
-export class ReportCategoryEntity extends BaseEntity<Types.ReportCategoryEntityType> {
+export class ReportCategoryEntity extends BaseEntity {
     /**
     * Loads the Report Categories record from the database
     * @param ID: string - primary key value to load the Report Categories record.
@@ -16692,7 +16880,7 @@ export class ReportCategoryEntity extends BaseEntity<Types.ReportCategoryEntityT
  * @public
  */
 @RegisterClass(BaseEntity, 'Report Snapshots')
-export class ReportSnapshotEntity extends BaseEntity<Types.ReportSnapshotEntityType> {
+export class ReportSnapshotEntity extends BaseEntity {
     /**
     * Loads the Report Snapshots record from the database
     * @param ID: string - primary key value to load the Report Snapshots record.
@@ -16809,7 +16997,7 @@ export class ReportSnapshotEntity extends BaseEntity<Types.ReportSnapshotEntityT
  * @public
  */
 @RegisterClass(BaseEntity, 'Reports')
-export class ReportEntity extends BaseEntity<Types.ReportEntityType> {
+export class ReportEntity extends BaseEntity {
     /**
     * Loads the Reports record from the database
     * @param ID: string - primary key value to load the Reports record.
@@ -17137,7 +17325,7 @@ export class ReportEntity extends BaseEntity<Types.ReportEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'Resource Types')
-export class ResourceTypeEntity extends BaseEntity<Types.ResourceTypeEntityType> {
+export class ResourceTypeEntity extends BaseEntity {
     /**
     * Loads the Resource Types record from the database
     * @param ID: string - primary key value to load the Resource Types record.
@@ -17293,7 +17481,7 @@ export class ResourceTypeEntity extends BaseEntity<Types.ResourceTypeEntityType>
  * @public
  */
 @RegisterClass(BaseEntity, 'Roles')
-export class RoleEntity extends BaseEntity<Types.RoleEntityType> {
+export class RoleEntity extends BaseEntity {
     /**
     * Loads the Roles record from the database
     * @param ID: string - primary key value to load the Roles record.
@@ -17401,7 +17589,7 @@ export class RoleEntity extends BaseEntity<Types.RoleEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'Row Level Security Filters')
-export class RowLevelSecurityFilterEntity extends BaseEntity<Types.RowLevelSecurityFilterEntityType> {
+export class RowLevelSecurityFilterEntity extends BaseEntity {
     /**
     * Loads the Row Level Security Filters record from the database
     * @param ID: string - primary key value to load the Row Level Security Filters record.
@@ -17522,7 +17710,7 @@ export class RowLevelSecurityFilterEntity extends BaseEntity<Types.RowLevelSecur
  * @public
  */
 @RegisterClass(BaseEntity, 'Scheduled Action Params')
-export class ScheduledActionParamEntity extends BaseEntity<Types.ScheduledActionParamEntityType> {
+export class ScheduledActionParamEntity extends BaseEntity {
     /**
     * Loads the Scheduled Action Params record from the database
     * @param ID: string - primary key value to load the Scheduled Action Params record.
@@ -17635,6 +17823,24 @@ export class ScheduledActionParamEntity extends BaseEntity<Types.ScheduledAction
     get __mj_UpdatedAt(): Date {  
         return this.Get('__mj_UpdatedAt');
     }
+
+    /**
+    * * Field Name: ScheduledAction
+    * * Display Name: Scheduled Action
+    * * SQL Data Type: nvarchar(255)
+    */
+    get ScheduledAction(): string {  
+        return this.Get('ScheduledAction');
+    }
+
+    /**
+    * * Field Name: ActionParam
+    * * Display Name: Action Param
+    * * SQL Data Type: nvarchar(255)
+    */
+    get ActionParam(): string {  
+        return this.Get('ActionParam');
+    }
 }
 
             
@@ -17650,7 +17856,7 @@ export class ScheduledActionParamEntity extends BaseEntity<Types.ScheduledAction
  * @public
  */
 @RegisterClass(BaseEntity, 'Scheduled Actions')
-export class ScheduledActionEntity extends BaseEntity<Types.ScheduledActionEntityType> {
+export class ScheduledActionEntity extends BaseEntity {
     /**
     * Loads the Scheduled Actions record from the database
     * @param ID: string - primary key value to load the Scheduled Actions record.
@@ -17877,6 +18083,24 @@ export class ScheduledActionEntity extends BaseEntity<Types.ScheduledActionEntit
     get __mj_UpdatedAt(): Date {  
         return this.Get('__mj_UpdatedAt');
     }
+
+    /**
+    * * Field Name: CreatedByUser
+    * * Display Name: Created By User
+    * * SQL Data Type: nvarchar(100)
+    */
+    get CreatedByUser(): string {  
+        return this.Get('CreatedByUser');
+    }
+
+    /**
+    * * Field Name: Action
+    * * Display Name: Action
+    * * SQL Data Type: nvarchar(425)
+    */
+    get Action(): string {  
+        return this.Get('Action');
+    }
 }
 
             
@@ -17892,7 +18116,7 @@ export class ScheduledActionEntity extends BaseEntity<Types.ScheduledActionEntit
  * @public
  */
 @RegisterClass(BaseEntity, 'Schema Info')
-export class SchemaInfoEntity extends BaseEntity<Types.SchemaInfoEntityType> {
+export class SchemaInfoEntity extends BaseEntity {
     /**
     * Loads the Schema Info record from the database
     * @param ID: string - primary key value to load the Schema Info record.
@@ -18014,7 +18238,7 @@ export class SchemaInfoEntity extends BaseEntity<Types.SchemaInfoEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'Skills')
-export class SkillEntity extends BaseEntity<Types.SkillEntityType> {
+export class SkillEntity extends BaseEntity {
     /**
     * Loads the Skills record from the database
     * @param ID: string - primary key value to load the Skills record.
@@ -18132,7 +18356,7 @@ export class SkillEntity extends BaseEntity<Types.SkillEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'Tagged Items')
-export class TaggedItemEntity extends BaseEntity<Types.TaggedItemEntityType> {
+export class TaggedItemEntity extends BaseEntity {
     /**
     * Loads the Tagged Items record from the database
     * @param ID: string - primary key value to load the Tagged Items record.
@@ -18262,7 +18486,7 @@ export class TaggedItemEntity extends BaseEntity<Types.TaggedItemEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'Tags')
-export class TagEntity extends BaseEntity<Types.TagEntityType> {
+export class TagEntity extends BaseEntity {
     /**
     * Loads the Tags record from the database
     * @param ID: string - primary key value to load the Tags record.
@@ -18406,7 +18630,7 @@ export class TagEntity extends BaseEntity<Types.TagEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'Template Categories')
-export class TemplateCategoryEntity extends BaseEntity<Types.TemplateCategoryEntityType> {
+export class TemplateCategoryEntity extends BaseEntity {
     /**
     * Loads the Template Categories record from the database
     * @param ID: string - primary key value to load the Template Categories record.
@@ -18550,7 +18774,7 @@ export class TemplateCategoryEntity extends BaseEntity<Types.TemplateCategoryEnt
  * @public
  */
 @RegisterClass(BaseEntity, 'Template Content Types')
-export class TemplateContentTypeEntity extends BaseEntity<Types.TemplateContentTypeEntityType> {
+export class TemplateContentTypeEntity extends BaseEntity {
     /**
     * Loads the Template Content Types record from the database
     * @param ID: string - primary key value to load the Template Content Types record.
@@ -18673,7 +18897,7 @@ export class TemplateContentTypeEntity extends BaseEntity<Types.TemplateContentT
  * @public
  */
 @RegisterClass(BaseEntity, 'Template Contents')
-export class TemplateContentEntity extends BaseEntity<Types.TemplateContentEntityType> {
+export class TemplateContentEntity extends BaseEntity {
     /**
     * Loads the Template Contents record from the database
     * @param ID: string - primary key value to load the Template Contents record.
@@ -18831,7 +19055,7 @@ export class TemplateContentEntity extends BaseEntity<Types.TemplateContentEntit
  * @public
  */
 @RegisterClass(BaseEntity, 'Template Params')
-export class TemplateParamEntity extends BaseEntity<Types.TemplateParamEntityType> {
+export class TemplateParamEntity extends BaseEntity {
     /**
     * Loads the Template Params record from the database
     * @param ID: string - primary key value to load the Template Params record.
@@ -19074,7 +19298,7 @@ export class TemplateParamEntity extends BaseEntity<Types.TemplateParamEntityTyp
  * @public
  */
 @RegisterClass(BaseEntity, 'Templates')
-export class TemplateEntity extends BaseEntity<Types.TemplateEntityType> {
+export class TemplateEntity extends BaseEntity {
     /**
     * Loads the Templates record from the database
     * @param ID: string - primary key value to load the Templates record.
@@ -19270,7 +19494,7 @@ export class TemplateEntity extends BaseEntity<Types.TemplateEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'User Application Entities')
-export class UserApplicationEntityEntity extends BaseEntity<Types.UserApplicationEntityEntityType> {
+export class UserApplicationEntityEntity extends BaseEntity {
     /**
     * Loads the User Application Entities record from the database
     * @param ID: string - primary key value to load the User Application Entities record.
@@ -19395,7 +19619,7 @@ export class UserApplicationEntityEntity extends BaseEntity<Types.UserApplicatio
  * @public
  */
 @RegisterClass(BaseEntity, 'User Applications')
-export class UserApplicationEntity extends BaseEntity<Types.UserApplicationEntityType> {
+export class UserApplicationEntity extends BaseEntity {
     /**
     * Loads the User Applications record from the database
     * @param ID: string - primary key value to load the User Applications record.
@@ -19525,7 +19749,7 @@ export class UserApplicationEntity extends BaseEntity<Types.UserApplicationEntit
  * @public
  */
 @RegisterClass(BaseEntity, 'User Favorites')
-export class UserFavoriteEntity extends BaseEntity<Types.UserFavoriteEntityType> {
+export class UserFavoriteEntity extends BaseEntity {
     /**
     * Loads the User Favorites record from the database
     * @param ID: string - primary key value to load the User Favorites record.
@@ -19649,7 +19873,7 @@ export class UserFavoriteEntity extends BaseEntity<Types.UserFavoriteEntityType>
  * @public
  */
 @RegisterClass(BaseEntity, 'User Notifications')
-export class UserNotificationEntity extends BaseEntity<Types.UserNotificationEntityType> {
+export class UserNotificationEntity extends BaseEntity {
     /**
     * Loads the User Notifications record from the database
     * @param ID: string - primary key value to load the User Notifications record.
@@ -19728,18 +19952,6 @@ export class UserNotificationEntity extends BaseEntity<Types.UserNotificationEnt
     }
 
     /**
-    * * Field Name: ResourceRecordID
-    * * Display Name: Resource Record ID
-    * * SQL Data Type: int
-    */
-    get ResourceRecordID(): number | null {  
-        return this.Get('ResourceRecordID');
-    }
-    set ResourceRecordID(value: number | null) {
-        this.Set('ResourceRecordID', value);
-    }
-
-    /**
     * * Field Name: ResourceConfiguration
     * * Display Name: Resource Configuration
     * * SQL Data Type: nvarchar(MAX)
@@ -19797,6 +20009,18 @@ export class UserNotificationEntity extends BaseEntity<Types.UserNotificationEnt
     }
 
     /**
+    * * Field Name: ResourceRecordID
+    * * Display Name: Resource Record ID
+    * * SQL Data Type: uniqueidentifier
+    */
+    get ResourceRecordID(): string | null {  
+        return this.Get('ResourceRecordID');
+    }
+    set ResourceRecordID(value: string | null) {
+        this.Set('ResourceRecordID', value);
+    }
+
+    /**
     * * Field Name: User
     * * Display Name: User
     * * SQL Data Type: nvarchar(100)
@@ -19827,7 +20051,7 @@ export class UserNotificationEntity extends BaseEntity<Types.UserNotificationEnt
  * @public
  */
 @RegisterClass(BaseEntity, 'User Record Logs')
-export class UserRecordLogEntity extends BaseEntity<Types.UserRecordLogEntityType> {
+export class UserRecordLogEntity extends BaseEntity {
     /**
     * Loads the User Record Logs record from the database
     * @param ID: string - primary key value to load the User Record Logs record.
@@ -20030,7 +20254,7 @@ export class UserRecordLogEntity extends BaseEntity<Types.UserRecordLogEntityTyp
  * @public
  */
 @RegisterClass(BaseEntity, 'User Roles')
-export class UserRoleEntity extends BaseEntity<Types.UserRoleEntityType> {
+export class UserRoleEntity extends BaseEntity {
     /**
     * Loads the User Roles record from the database
     * @param ID: string - primary key value to load the User Roles record.
@@ -20135,7 +20359,7 @@ export class UserRoleEntity extends BaseEntity<Types.UserRoleEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'User View Categories')
-export class UserViewCategoryEntity extends BaseEntity<Types.UserViewCategoryEntityType> {
+export class UserViewCategoryEntity extends BaseEntity {
     /**
     * Loads the User View Categories record from the database
     * @param ID: string - primary key value to load the User View Categories record.
@@ -20256,6 +20480,15 @@ export class UserViewCategoryEntity extends BaseEntity<Types.UserViewCategoryEnt
     }
 
     /**
+    * * Field Name: Entity
+    * * Display Name: Entity
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Entity(): string {  
+        return this.Get('Entity');
+    }
+
+    /**
     * * Field Name: User
     * * Display Name: User
     * * SQL Data Type: nvarchar(100)
@@ -20278,7 +20511,7 @@ export class UserViewCategoryEntity extends BaseEntity<Types.UserViewCategoryEnt
  * @public
  */
 @RegisterClass(BaseEntity, 'User View Run Details')
-export class UserViewRunDetailEntity extends BaseEntity<Types.UserViewRunDetailEntityType> {
+export class UserViewRunDetailEntity extends BaseEntity {
     /**
     * Loads the User View Run Details record from the database
     * @param ID: string - primary key value to load the User View Run Details record.
@@ -20394,7 +20627,7 @@ export class UserViewRunDetailEntity extends BaseEntity<Types.UserViewRunDetailE
  * @public
  */
 @RegisterClass(BaseEntity, 'User View Runs')
-export class UserViewRunEntity extends BaseEntity<Types.UserViewRunEntityType> {
+export class UserViewRunEntity extends BaseEntity {
     /**
     * Loads the User View Runs record from the database
     * @param ID: string - primary key value to load the User View Runs record.
@@ -20523,7 +20756,7 @@ export class UserViewRunEntity extends BaseEntity<Types.UserViewRunEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'User Views')
-export class UserViewEntity extends BaseEntity<Types.UserViewEntityType> {
+export class UserViewEntity extends BaseEntity {
     /**
     * Loads the User Views record from the database
     * @param ID: string - primary key value to load the User Views record.
@@ -20848,7 +21081,7 @@ export class UserViewEntity extends BaseEntity<Types.UserViewEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'Users')
-export class UserEntity extends BaseEntity<Types.UserEntityType> {
+export class UserEntity extends BaseEntity {
     /**
     * Loads the Users record from the database
     * @param ID: string - primary key value to load the Users record.
@@ -21099,7 +21332,7 @@ export class UserEntity extends BaseEntity<Types.UserEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'Vector Databases')
-export class VectorDatabaseEntity extends BaseEntity<Types.VectorDatabaseEntityType> {
+export class VectorDatabaseEntity extends BaseEntity {
     /**
     * Loads the Vector Databases record from the database
     * @param ID: string - primary key value to load the Vector Databases record.
@@ -21220,7 +21453,7 @@ export class VectorDatabaseEntity extends BaseEntity<Types.VectorDatabaseEntityT
  * @public
  */
 @RegisterClass(BaseEntity, 'Vector Indexes')
-export class VectorIndexEntity extends BaseEntity<Types.VectorIndexEntityType> {
+export class VectorIndexEntity extends BaseEntity {
     /**
     * Loads the Vector Indexes record from the database
     * @param ID: string - primary key value to load the Vector Indexes record.
@@ -21361,7 +21594,7 @@ export class VectorIndexEntity extends BaseEntity<Types.VectorIndexEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'Version Installations')
-export class VersionInstallationEntity extends BaseEntity<Types.VersionInstallationEntityType> {
+export class VersionInstallationEntity extends BaseEntity {
     /**
     * Loads the Version Installations record from the database
     * @param ID: string - primary key value to load the Version Installations record.
@@ -21555,7 +21788,7 @@ export class VersionInstallationEntity extends BaseEntity<Types.VersionInstallat
  * @public
  */
 @RegisterClass(BaseEntity, 'Workflow Engines')
-export class WorkflowEngineEntity extends BaseEntity<Types.WorkflowEngineEntityType> {
+export class WorkflowEngineEntity extends BaseEntity {
     /**
     * Loads the Workflow Engines record from the database
     * @param ID: string - primary key value to load the Workflow Engines record.
@@ -21673,7 +21906,7 @@ export class WorkflowEngineEntity extends BaseEntity<Types.WorkflowEngineEntityT
  * @public
  */
 @RegisterClass(BaseEntity, 'Workflow Runs')
-export class WorkflowRunEntity extends BaseEntity<Types.WorkflowRunEntityType> {
+export class WorkflowRunEntity extends BaseEntity {
     /**
     * Loads the Workflow Runs record from the database
     * @param ID: string - primary key value to load the Workflow Runs record.
@@ -21841,7 +22074,7 @@ export class WorkflowRunEntity extends BaseEntity<Types.WorkflowRunEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'Workflows')
-export class WorkflowEntity extends BaseEntity<Types.WorkflowEntityType> {
+export class WorkflowEntity extends BaseEntity {
     /**
     * Loads the Workflows record from the database
     * @param ID: string - primary key value to load the Workflows record.
@@ -22031,7 +22264,7 @@ export class WorkflowEntity extends BaseEntity<Types.WorkflowEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'Workspace Items')
-export class WorkspaceItemEntity extends BaseEntity<Types.WorkspaceItemEntityType> {
+export class WorkspaceItemEntity extends BaseEntity {
     /**
     * Loads the Workspace Items record from the database
     * @param ID: string - primary key value to load the Workspace Items record.
@@ -22197,7 +22430,7 @@ export class WorkspaceItemEntity extends BaseEntity<Types.WorkspaceItemEntityTyp
  * @public
  */
 @RegisterClass(BaseEntity, 'Workspaces')
-export class WorkspaceEntity extends BaseEntity<Types.WorkspaceEntityType> {
+export class WorkspaceEntity extends BaseEntity {
     /**
     * Loads the Workspaces record from the database
     * @param ID: string - primary key value to load the Workspaces record.

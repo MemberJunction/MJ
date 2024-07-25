@@ -80,7 +80,7 @@ export class EntityVectorSyncer extends VectorBase {
     const dataStream = new PagedRecords();
     
     let templateObj: {} = {
-      ...template.To(),
+      ...template.GetAll(),
       Params: template.Params.map((p) => p.To())
     }; 
 
