@@ -26,7 +26,7 @@ export class EntitySubClassGeneratorBase {
     public generateEntitySubClassFileHeader(): string {
         return `import { BaseEntity, EntitySaveOptions, CompositeKey } from "@memberjunction/core";
 import { RegisterClass } from "@memberjunction/global";
-import * as Types from "./entity_type_definitions";
+import * as Types from "./entity_schemas_and_types";
     `
     }
     

@@ -6,17 +6,16 @@ import { RegisterClass } from '@memberjunction/global';
 import { logStatus } from './Misc/logging';
 
 /**
- * Base class for generating type definitions for entity sub-classes, you can sub-class this class to modify/extend your own entity sub-class generator logic
+ * Base class for generating schemas and type definitions for entity sub-classes, you can sub-class this class to modify/extend your own entity sub-class generator logic
  */
 @RegisterClass(EntityTypeGeneratorBase)
 export class EntityTypeGeneratorBase {
-    public generateAllEntityTypeDefinitions(entities: EntityInfo[], directory: string): boolean {
+    public GenerateAllEntitySchemasAndTypes(entities: EntityInfo[], directory: string): boolean {
         try {   
             const sortedEntities: EntityInfo[] = entities.sort((a, b) => a.Name.localeCompare(b.Name));
-            const sContent: string = this.generateTypeDefinitionHeader() + sortedEntities.map((entity: EntityInfo) => this.generateEntitySubClass(entity)).join('');
-            logStatus(`Generating entity sub-class types file in ${directory}`);
+            const sContent: string = this.generateTypeDefinitionHeader() + sortedEntities.map((entity: EntityInfo) => this.GenerateSchemaAndType(entity)).join('');
             makeDir(directory);
-            fs.writeFileSync(path.join(directory, 'entity_type_definitions.ts'), sContent);
+            fs.writeFileSync(path.join(directory, 'entity_schemas_and_types.ts'), sContent);
     
             return true;
         } catch (err) {
@@ -41,7 +40,7 @@ import { z } from "zod";
      * @param entity 
      * @param includeFileHeader 
      */
-    public generateEntitySubClass(entity: EntityInfo) : string { 
+    public GenerateSchemaAndType(entity: EntityInfo) : string { 
         let content: string = "";
         if (entity.PrimaryKeys.length === 0) {
             logStatus(`Entity ${entity.Name} has no primary keys.  Skipping.`);

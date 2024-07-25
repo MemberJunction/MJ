@@ -987,7 +987,6 @@ export abstract class BaseEntity<T = unknown> {
     }
 
     /**
-     * @deprecated Use the {@link From} method instead
      * 
      * This method is meant to be used only in situations where you are sure that the data you are loading is current in the database. MAKE SURE YOU ARE PASSING IN ALL FIELDS.
      * The Dirty flags and other internal state will assume what is loading from the data parameter you pass in is equivalent to what is in the database. Generally speaking, you should use Load() instead of this method. The main use case(s) where this makes sense are:
@@ -999,7 +998,6 @@ export abstract class BaseEntity<T = unknown> {
      * @returns 
      */
     public LoadFromData(data: any, replaceOldValues: boolean = false) : boolean {
-        console.warn('BaseEntity.LoadFromData() is deprecated, use the From() method instead');
         this.SetMany(data, true);
         return true; 
     }

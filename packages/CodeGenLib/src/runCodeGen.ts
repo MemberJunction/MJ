@@ -169,8 +169,15 @@ export class RunCodeGenBase {
                 // generate the entity subclass code
                 logStatus('Generating CORE Entity Subclass Code...')
                 const entitySubClassGeneratorObject = MJGlobal.Instance.ClassFactory.CreateInstance<EntitySubClassGeneratorBase>(EntitySubClassGeneratorBase)!;
-                if (! entitySubClassGeneratorObject.generateAllEntitySubClasses(coreEntities, coreEntitySubClassOutputDir))
+                if (! entitySubClassGeneratorObject.generateAllEntitySubClasses(coreEntities, coreEntitySubClassOutputDir)){
                     logError('Error generating entity subclass code');
+                }
+                
+                logStatus('Generating CORE Entity Type Definitions Code...')
+                const entityTypeGeneratorObject = MJGlobal.Instance.ClassFactory.CreateInstance<EntityTypeGeneratorBase>(EntityTypeGeneratorBase)!;
+                if (! entityTypeGeneratorObject.GenerateAllEntitySchemasAndTypes(coreEntities, coreEntitySubClassOutputDir)){
+                    logError('Error generating core entity type definitions');
+                }
             }
     
             /****************************************************************************************
@@ -181,37 +188,18 @@ export class RunCodeGenBase {
                 // generate the entity subclass code
                 logStatus('Generating Entity Subclass Code...')
                 const entitySubClassGeneratorObject = MJGlobal.Instance.ClassFactory.CreateInstance<EntitySubClassGeneratorBase>(EntitySubClassGeneratorBase)!;
-                if (! entitySubClassGeneratorObject.generateAllEntitySubClasses(nonCoreEntities, entitySubClassOutputDir))
+                if (! entitySubClassGeneratorObject.generateAllEntitySubClasses(nonCoreEntities, entitySubClassOutputDir)){
                     logError('Error generating entity subclass code');
-            }
-            else
-                logStatus('Entity subclass output directory NOT found in config file, skipping...');
-    
-            
-            /****************************************************************************************
-            // STEP 4.2 - Core Entity Type Definition Code Gen
-            ****************************************************************************************/
-            const coreEntityTypeDefinitionsOutputDir = outputDir('CoreEntityTypeDefintions', false);
-            if (coreEntityTypeDefinitionsOutputDir && coreEntityTypeDefinitionsOutputDir.length > 0) {
-                // generate the entity subclass code
-                logStatus('Generating CORE Entity Type Definitions Code...')
-                const entitySubClassGeneratorObject = MJGlobal.Instance.ClassFactory.CreateInstance<EntityTypeGeneratorBase>(EntityTypeGeneratorBase)!;
-                if (! entitySubClassGeneratorObject.generateAllEntityTypeDefinitions(coreEntities, coreEntitySubClassOutputDir)){
+                }
+
+                logStatus('Generating Entity Type Definitions Code...')
+                const entityTypeGeneratorObject = MJGlobal.Instance.ClassFactory.CreateInstance<EntityTypeGeneratorBase>(EntityTypeGeneratorBase)!;
+                if (! entityTypeGeneratorObject.GenerateAllEntitySchemasAndTypes(nonCoreEntities, entitySubClassOutputDir)){
                     logError('Error generating core entity type definitions');
                 }
             }
-
-            /****************************************************************************************
-            // STEP 4.3 - Entity Type Definition Code Gen
-            ****************************************************************************************/
-            const entityTypeDefinitionsOutputDir = outputDir('EntityTypeDefinitions', false);
-            if (entityTypeDefinitionsOutputDir && entityTypeDefinitionsOutputDir.length > 0) {
-                // generate the entity subclass code
-                logStatus('Generating Entity Type Definitions Code...')
-                const entitySubClassGeneratorObject = MJGlobal.Instance.ClassFactory.CreateInstance<EntityTypeGeneratorBase>(EntityTypeGeneratorBase)!;
-                if (! entitySubClassGeneratorObject.generateAllEntityTypeDefinitions(nonCoreEntities, entitySubClassOutputDir)){
-                    logError('Error generating entity type definitions');
-                }
+            else{
+                logStatus('Entity subclass output directory NOT found in config file, skipping...');
             }
 
             /****************************************************************************************
