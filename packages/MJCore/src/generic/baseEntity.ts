@@ -5,7 +5,7 @@ import { Metadata } from './metadata';
 import { RunView } from '../views/runView';
 import { UserInfo } from './securityInfo';
 import { TransactionGroupBase } from './transactionGroup';
-import { LogError } from './logging';
+import { LogError, LogStatus } from './logging';
 import { CompositeKey, FieldValueCollection } from './compositeKey';
 import { Subject, Subscription } from 'rxjs';
 
@@ -334,6 +334,7 @@ export abstract class BaseEntity<T = unknown> {
     private _transactionGroup: TransactionGroupBase = null;
     private _eventSubject: Subject<BaseEntityEvent>;
     private _resultHistory: BaseEntityResult[] = [];
+    private _baseType: T | null = null;
 
     constructor(Entity: EntityInfo) {
         this._eventSubject = new Subject<BaseEntityEvent>();
@@ -463,6 +464,15 @@ export abstract class BaseEntity<T = unknown> {
     }
 
     /**
+     * Returns the zod generated base type for the entity object.
+     * Note that this will return null unless 
+     */
+    get BaseType(): T | null {
+        return this._baseType;
+    }
+
+
+    /**
      * Convenience method to access a field by name. This method is case-insensitive and will return null if the field is not found. You can do the same thing with more fine tune controlled by accessing the Fields property directly.
      * @param fieldName 
      * @returns 
@@ -543,12 +553,14 @@ export abstract class BaseEntity<T = unknown> {
     }
 
     /**
+     * NOTE: Do not call this method directly. Use the {@link From} method instead
+     * 
      * Sets any number of values on the entity object from the object passed in. The properties of the object being passed in must either match the field name (in most cases) or the CodeName (which is only different from field name if field name has spaces in it)
      * @param object  
      * @param ignoreNonExistentFields - if set to true, fields that don't exist on the entity object will be ignored, if false, an error will be thrown if a field doesn't exist
      * @param replaceOldValues - if set to true, the old values of the fields will be reset to the values provided in the object parameter, if false, they will be left alone
      */
-    public SetMany<T>(object: T, ignoreNonExistentFields: boolean = false, replaceOldValues: boolean = false) {
+    public SetMany(object: any, ignoreNonExistentFields: boolean = false, replaceOldValues: boolean = false) {
         if (!object)
             throw new Error('calling BaseEntity.SetMany(), object cannot be null or undefined');
 
@@ -583,13 +595,15 @@ export abstract class BaseEntity<T = unknown> {
     }
 
     /**
+     * NOTE: Do not call this method directly. Use the {@link To} method instead
+     * 
      * Utility method to create an object and return it with properties in the newly created and returned object for each field in the entity object. This is useful for scenarios where you need to be able to persist the data
      * in a format to send to a network call, save to a file or database, etc. This method will return an object with properties that match the field names of the entity object.  
      * @param oldValues When set to true, the old values of the fields will be returned instead of the current values.  
      * @param onlyDirtyFields When set to true, only the fields that are dirty will be returned.
      * @returns 
      */
-    public GetAll(oldValues: boolean = false, onlyDirtyFields: boolean = false): T {
+    public GetAll(oldValues: boolean = false, onlyDirtyFields: boolean = false): any {
         let obj = {};
         for (let field of this.Fields) {
             if (!onlyDirtyFields || (onlyDirtyFields && field.Dirty)) {
@@ -599,7 +613,7 @@ export abstract class BaseEntity<T = unknown> {
                 }    
             }
         }
-        return obj as T;
+        return obj;
     }
 
     /**
@@ -973,6 +987,8 @@ export abstract class BaseEntity<T = unknown> {
     }
 
     /**
+     * @deprecated Use the {@link From} method instead
+     * 
      * This method is meant to be used only in situations where you are sure that the data you are loading is current in the database. MAKE SURE YOU ARE PASSING IN ALL FIELDS.
      * The Dirty flags and other internal state will assume what is loading from the data parameter you pass in is equivalent to what is in the database. Generally speaking, you should use Load() instead of this method. The main use case(s) where this makes sense are:
      *  (1) On the server if you are pulling data you know is fresh from say the result of another DB operation
@@ -983,6 +999,7 @@ export abstract class BaseEntity<T = unknown> {
      * @returns 
      */
     public LoadFromData(data: any, replaceOldValues: boolean = false) : boolean {
+        console.warn('BaseEntity.LoadFromData() is deprecated, use the From() method instead');
         this.SetMany(data, true);
         return true; 
     }
@@ -1117,5 +1134,20 @@ export abstract class BaseEntity<T = unknown> {
             else
                 return [];
         }
-    } 
+    }
+
+    /**
+     * Strongy-typed wrapper for the {@link SetMany} method
+     */
+    public From(baseType: T, replaceOldValues?: boolean): void {
+        this.init();
+        this.SetMany(baseType, false, replaceOldValues);
+    }
+
+    /**
+     * Strongly-typed wrapper for the {@link GetAll} method
+     */
+    public To(): T {
+        return this.GetAll() as T;
+    }
 }

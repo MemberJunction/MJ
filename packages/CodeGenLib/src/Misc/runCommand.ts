@@ -28,21 +28,21 @@ export class RunCommandsBase {
         }
         catch (e) {
           // LOG but do not throw because we want to continue running the other commands
-          logError(e);
+          logError(e as string);
         }
       }
   
       return results  
     }
     catch (e) {
-      logError(e)
+      logError(e as string)
       throw e;
     }
   }
   
   
   public async runCommand(command: CommandInfo ): Promise<CommandExecutionResult> {
-    let cp: ChildProcess;
+    let cp: ChildProcess = null!;
     try {
       let output = '';
       let startTime = new Date();
@@ -59,11 +59,11 @@ export class RunCommandsBase {
           shell: true,
         });
     
-        cp.stdout.on('data', (data) => {
+        cp.stdout?.on('data', (data) => {
           output += data.toString();
         });
     
-        cp.stderr.on('data', (data) => {
+        cp.stderr?.on('data', (data) => {
           const elapsedTime = new Date().getTime() - startTime.getTime();
           const message: string = data.toString();
           output += message
@@ -77,7 +77,7 @@ export class RunCommandsBase {
           const elapsedTime = new Date().getTime() - startTime.getTime();
           logError(`COMMAND: "${command.command}" FAILED: ${elapsedTime/1000} seconds`);
           if (!cp.killed)
-            treeKill(cp.pid);
+            treeKill(cp.pid!);
           reject(error);
         });
     
@@ -86,7 +86,7 @@ export class RunCommandsBase {
             const elapsedTime = new Date().getTime() - startTime.getTime();
             logStatus(`COMMAND: "${command.command}" COMPLETED SUCCESSFULLY: ${elapsedTime/1000} seconds`);
             resolve({ output: output, 
-                      error: null, 
+                      error: null!, 
                       success: !bErrors,
                       elapsedTime: elapsedTime
                     });
@@ -101,14 +101,14 @@ export class RunCommandsBase {
           setTimeout(() => {
             const elapsedTime = new Date().getTime() - startTime.getTime();
             if (!cp.killed) {
-              treeKill(cp.pid);
+              treeKill(cp.pid!);
               logStatus(`COMMAND: "${command.command}" COMPLETED ${bErrors ? ' - FAILED' : ' - SUCCESS'} IN ${elapsedTime/1000} seconds`);
               output += `Process killed after ${command.timeout} ms`
             }
   
             resolve({
               output: output, 
-              error: null, 
+              error: null!, 
               success: !bErrors,
               elapsedTime: elapsedTime
              });
@@ -124,13 +124,13 @@ export class RunCommandsBase {
         return commandExecution
     }
     catch (e) {
-      logError(e)
+      logError(e as string)
       try {
         if (cp && !cp.killed)
-          treeKill(cp.pid);
+          treeKill(cp.pid!);
       }
       catch (e) {
-        logError(e)
+        logError(e as string)
       }
       throw e;
     }

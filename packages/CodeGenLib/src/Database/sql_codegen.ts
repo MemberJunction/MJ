@@ -30,7 +30,7 @@ export type SPType = typeof SPType[keyof typeof SPType];
  */
 @RegisterClass(SQLCodeGenBase)
 export class SQLCodeGenBase {
-    protected _sqlUtilityObject: SQLUtilityBase = MJGlobal.Instance.ClassFactory.CreateInstance<SQLUtilityBase>(SQLUtilityBase);
+    protected _sqlUtilityObject: SQLUtilityBase = MJGlobal.Instance.ClassFactory.CreateInstance<SQLUtilityBase>(SQLUtilityBase)!;
     public get SQLUtilityObject(): SQLUtilityBase {
         return this._sqlUtilityObject;
     }
@@ -81,7 +81,7 @@ export class SQLCodeGenBase {
             const step2eEndTime: Date = new Date();
             logStatus(`   Time to Execute Combined Entity SQL: ${(step2eEndTime.getTime() - step2eStartTime.getTime())/1000} seconds`);
                     
-            const manageMD = MJGlobal.Instance.ClassFactory.CreateInstance<ManageMetadataBase>(ManageMetadataBase)
+            const manageMD = MJGlobal.Instance.ClassFactory.CreateInstance<ManageMetadataBase>(ManageMetadataBase)!;
             // STEP 3 - re-run the process to manage entity fields since the Step 1 and 2 above might have resulted in differences in base view columns compared to what we had at first
             // we CAN skip the entity field values part because that wouldn't change from the first time we ran it
             if (! await manageMD.manageEntityFields(ds, configInfo.excludeSchemas, true, true)) {
@@ -105,7 +105,7 @@ export class SQLCodeGenBase {
             return true;
         }
         catch (err) {
-            logError(err);
+            logError(err as string);
             return false;
         }
     }
@@ -128,7 +128,7 @@ export class SQLCodeGenBase {
             return bSuccess;
         }
         catch (e) {
-            logError(e);
+            logError(e as string);
             return false;
         }
     }
@@ -169,7 +169,7 @@ export class SQLCodeGenBase {
             return bSuccess;
         }
         catch (err) {
-            logError(err);
+            logError(err as string);
             return false;
         }
     }
@@ -210,7 +210,7 @@ export class SQLCodeGenBase {
             return {Success: !bFail, Files: files};
         }
         catch (err) {
-            logError(err);
+            logError(err as string);
             return {Success: false, Files: files};
         }
     }
@@ -233,7 +233,7 @@ export class SQLCodeGenBase {
             }
         }
         catch (e) {
-            logError(e);            
+            logError(e as string);            
         }
     }
 
@@ -269,7 +269,7 @@ export class SQLCodeGenBase {
                 return {Success: true, Files: files};
         }
         catch (err) {
-            logError(err);
+            logError(err as string);
             return {Success: false, Files: []};
         }
     }
@@ -431,8 +431,8 @@ export class SQLCodeGenBase {
             return {sql: sRet, permissionsSQL: permissionsSQL, files: files};
         }
         catch (err) {
-            logError(err)
-            return null
+            logError(err as string)
+            return null!;
         }
     }
     
@@ -708,7 +708,7 @@ ${whereClause}GO${permissions}
     async generateBaseViewRelatedFieldsString(ds: DataSource, entityFields: EntityFieldInfo[]): Promise<string> {
         let sOutput: string = '';
         let fieldCount: number = 0;
-        const manageMD = MJGlobal.Instance.ClassFactory.CreateInstance<ManageMetadataBase>(ManageMetadataBase)
+        const manageMD = MJGlobal.Instance.ClassFactory.CreateInstance<ManageMetadataBase>(ManageMetadataBase)!;
 
         // next get the fields that are related entities and have the IncludeRelatedEntityNameFieldInBaseView flag set to true
         const qualifyingFields = entityFields.filter(f => f.RelatedEntityID && f.IncludeRelatedEntityNameFieldInBaseView);
@@ -751,9 +751,9 @@ ${whereClause}GO${permissions}
     
     protected getIsNameFieldForSingleEntity(entityName: string): {nameField: string, nameFieldIsVirtual: boolean} {
         const md: Metadata = new Metadata(); // use the full metadata entity list, not the filtered version that we receive
-        const e: EntityInfo = md.Entities.find(e => e.Name === entityName);
+        const e: EntityInfo = md.Entities.find(e => e.Name === entityName)!;
         if (e) {
-            const ef: EntityFieldInfo = e.NameField;
+            const ef: EntityFieldInfo = e.NameField!;
             if (e.NameField) 
                 return {nameField: ef.Name, nameFieldIsVirtual: ef.IsVirtual};   
         }
@@ -799,7 +799,8 @@ ${whereClause}GO${permissions}
     protected generateSPCreate(entity: EntityInfo): string {
         const spName: string = entity.spCreate ? entity.spCreate : `spCreate${entity.ClassName}`;
         const firstKey = entity.FirstPrimaryKey;
-        const primaryKeyAutomatic: boolean = firstKey.AutoIncrement || (firstKey.Type.toLowerCase().trim() === 'uniqueidentifier' && firstKey.DefaultValue && firstKey.DefaultValue.trim().length > 0);
+        const IsPrimaryKey = (firstKey.Type.toLowerCase().trim() === 'uniqueidentifier') && (firstKey.DefaultValue && firstKey.DefaultValue.trim().length > 0);
+        const primaryKeyAutomatic: boolean = firstKey.AutoIncrement || IsPrimaryKey as boolean;
         const efString: string = this.createEntityFieldsParamString(entity.Fields, !primaryKeyAutomatic);
         const permissions: string = this.generateSPPermissions(entity, spName, SPType.Create);
     

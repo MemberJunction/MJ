@@ -26,6 +26,12 @@ export class TimelineConfigInfo extends ComponentConfigBase {
      * Optional, determines if the timeline will be displayed horizontally or vertically, defaults to vertical if not provided
      */
     DisplayOrientation? : 'horizontal' | 'vertical' = 'vertical';
+
+    constructor() {
+        super();
+        this.DateField = "";
+        this.TitleField = "";
+    }
 }
 
 /**
@@ -51,15 +57,15 @@ export class TimelineRelatedEntityGenerator extends RelatedEntityDisplayComponen
  
 
     public async Generate(input: GenerationInput): Promise<GenerationResult> {
-        const config = SafeJSONParse<TimelineConfigInfo>(input.RelationshipInfo.DisplayComponentConfiguration);
+        const config = SafeJSONParse<TimelineConfigInfo>(input.RelationshipInfo!.DisplayComponentConfiguration);
         if (!config)
-            throw new Error("Invalid configuration for component for relationship " + input.RelationshipInfo.ID);
+            throw new Error("Invalid configuration for component for relationship " + input.RelationshipInfo!.ID);
 
-        const fk = this.GetForeignKey(input.RelationshipInfo.RelatedEntity, input.Entity.Name);
-        const filter = `'${fk.Name}=' + record.${input.Entity.FirstPrimaryKey.Name}`;
+        const fk = this.GetForeignKey(input.RelationshipInfo!.RelatedEntity, input.Entity!.Name);
+        const filter = `'${fk.Name}=' + record.${input.Entity!.FirstPrimaryKey.Name}`;
         const template = `<mj-timeline
     DisplayOrientation="${config.DisplayOrientation}"
-    [Groups]="[{EntityName: '${input.RelationshipInfo.RelatedEntity}', DataSourceType: 'entity', Filter: ${filter}, TitleFieldName: '${config.TitleField}', DateFieldName: '${config.DateField}'}]">
+    [Groups]="[{EntityName: '${input.RelationshipInfo!.RelatedEntity}', DataSourceType: 'entity', Filter: ${filter}, TitleFieldName: '${config.TitleField}', DateFieldName: '${config.DateField}'}]">
 </mj-timeline>`
 
 
@@ -67,7 +73,7 @@ export class TimelineRelatedEntityGenerator extends RelatedEntityDisplayComponen
         return {
             Success: true,
             TemplateOutput: template,
-            CodeOutput: null,
+            CodeOutput: "",
             Component: this
         }
     }

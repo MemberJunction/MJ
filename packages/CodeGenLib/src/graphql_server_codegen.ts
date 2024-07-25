@@ -31,7 +31,7 @@ export class GraphQLServerGeneratorBase {
 
       return true;
     } catch (err) {
-      logError(err);
+      logError(err as string);
       return false;
     }
   }
@@ -73,7 +73,7 @@ export class GraphQLServerGeneratorBase {
 
       for (let j: number = 0; j < entity.RelatedEntities.length; ++j) {
         const r = entity.RelatedEntities[j];
-        const re = md.Entities.find((e) => e.Name.toLowerCase() === r.RelatedEntity.toLowerCase());
+        const re = md.Entities.find((e) => e.Name.toLowerCase() === r.RelatedEntity.toLowerCase())!;
         // only include the relationship if we are IncludeInAPI for the related entity
         if (re.IncludeInAPI) {
           if (!excludeRelatedEntitiesExternalToSchema || re.SchemaName === entity.SchemaName) {
@@ -96,7 +96,7 @@ export class GraphQLServerGeneratorBase {
         isInternal
       );
     } catch (err) {
-      logError(err);
+      logError(err as string);
     } finally {
       return sEntityOutput;
     }
@@ -155,7 +155,7 @@ import { ${`${entity.ClassName}Entity`} } from '${importLibrary}';
     `;
     for (let i: number = 0; i < entity.RelatedEntities.length; ++i) {
       const r = entity.RelatedEntities[i];
-      const re = md.Entities.find((e) => e.Name.toLowerCase() == r.RelatedEntity.toLowerCase());
+      const re = md.Entities.find((e) => e.Name.toLowerCase() == r.RelatedEntity.toLowerCase())!;
       if (!excludeRelatedEntitiesExternalToSchema || re.SchemaName === entity.SchemaName) {
         // we only include entities that are in the same schema as the current entity
         // OR if we are not excluding related entities external to the schema
@@ -234,7 +234,7 @@ export class ${serverGraphQLTypeName} {`;
   }
 
   protected generateServerRelationship(md: Metadata, r: EntityRelationshipInfo, isInternal: boolean): string {
-    const re = md.Entities.find((e) => e.Name.toLowerCase() === r.RelatedEntity.toLowerCase());
+    const re = md.Entities.find((e) => e.Name.toLowerCase() === r.RelatedEntity.toLowerCase())!;
     const classPackagePrefix: string = re.SchemaName === mjCoreSchema && !isInternal ? 'mj_core_schema_server_object_types.' : '';
     const relatedClassName = classPackagePrefix + r.RelatedEntityBaseTableCodeName;
 
@@ -352,7 +352,7 @@ export class ${entity.BaseTableCodeName}Resolver${entity.CustomResolverAPI ? 'Ba
       // now, generate the FieldResolvers for each of the one-to-many relationships
       for (let i = 0; i < entity.RelatedEntities.length; i++) {
         const r = entity.RelatedEntities[i];
-        const re = md.Entities.find((e) => e.Name.toLowerCase() === r.RelatedEntity.toLowerCase());
+        const re = md.Entities.find((e) => e.Name.toLowerCase() === r.RelatedEntity.toLowerCase())!;
 
         // only include the relationship if we are IncludeInAPI for the related entity
         if (re.IncludeInAPI) {
@@ -503,14 +503,14 @@ export class ${classPrefix}${entity.BaseTableCodeName}Input {`;
 
   protected generateOneToManyFieldResolver(entity: EntityInfo, r: EntityRelationshipInfo, isInternal: boolean): string {
     const md = new Metadata();
-    const re = md.Entities.find((e) => e.Name.toLowerCase() == r.RelatedEntity.toLowerCase());
+    const re = md.Entities.find((e) => e.Name.toLowerCase() == r.RelatedEntity.toLowerCase())!;
     const instanceName = entity.BaseTableCodeName.toLowerCase() + this.GraphQLTypeSuffix;
 
     let filterFieldName: string = '';
     if (!r.EntityKeyField) {
       filterFieldName = entity.FirstPrimaryKey.CodeName;
     } else {
-      const field: EntityFieldInfo = entity.Fields.find((f) => f.Name.trim().toLowerCase() === r.EntityKeyField.trim().toLowerCase());
+      const field: EntityFieldInfo = entity.Fields.find((f) => f.Name.trim().toLowerCase() === r.EntityKeyField.trim().toLowerCase())!;
       if (field) {
         filterFieldName = field.CodeName;
       } else {
@@ -545,13 +545,13 @@ export class ${classPrefix}${entity.BaseTableCodeName}Input {`;
 
   protected generateManyToManyFieldResolver(entity: EntityInfo, r: EntityRelationshipInfo): string {
     const md = new Metadata();
-    const re = md.Entities.find((e) => e.Name.toLowerCase() == r.RelatedEntity.toLowerCase());
+    const re = md.Entities.find((e) => e.Name.toLowerCase() == r.RelatedEntity.toLowerCase())!;
     const instanceName = entity.BaseTableCodeName.toLowerCase() + this.GraphQLTypeSuffix;
     let filterFieldName: string = '';
     if (!r.EntityKeyField) {
       filterFieldName = entity.FirstPrimaryKey.CodeName;
     } else {
-      const field: EntityFieldInfo = entity.Fields.find((f) => f.Name.trim().toLowerCase() === r.EntityKeyField.trim().toLowerCase());
+      const field: EntityFieldInfo = entity.Fields.find((f) => f.Name.trim().toLowerCase() === r.EntityKeyField.trim().toLowerCase())!;
       if (field) {
         filterFieldName = field.CodeName;
       } else {

@@ -7,18 +7,18 @@ import { RegisterClass } from '@memberjunction/global';
 import { GenerationResult, RelatedEntityDisplayComponentGeneratorBase } from './related-entity-components';
 
 export class AngularFormSectionInfo {
-    Type: GeneratedFormSectionType
-    Name: string
-    TabCode: string
-    ClassName?: string
-    FileName?: string
-    ComponentCode?: string
-    Fields?: EntityFieldInfo[]
-    FileNameWithoutExtension?: string
-    EntityClassName?: string
-    IsRelatedEntity?: boolean = false
+    Type!: GeneratedFormSectionType;
+    Name!: string;
+    TabCode!: string;
+    ClassName?: string;
+    FileName?: string;
+    ComponentCode?: string;
+    Fields?: EntityFieldInfo[];
+    FileNameWithoutExtension?: string;
+    EntityClassName?: string;
+    IsRelatedEntity?: boolean = false;
     RelatedEntityDisplayLocation?: 'Before Field Tabs' | 'After Field Tabs' = 'After Field Tabs'
-    GeneratedOutput?: GenerationResult
+    GeneratedOutput?: GenerationResult;
 }
 
 /**
@@ -61,7 +61,7 @@ export class AngularClientGeneratorBase {
                           fs.mkdirSync(sectionPath, { recursive: true }); // create the directory if it doesn't exist
       
                       for (let j:number = 0; j < additionalSections.length; ++j) {
-                          fs.writeFileSync(path.join(sectionPath, `${additionalSections[j].FileName}`), additionalSections[j].ComponentCode);
+                          fs.writeFileSync(path.join(sectionPath, `${additionalSections[j].FileName}`), additionalSections[j].ComponentCode!);
                           sections.push(additionalSections[j]); // add the entity's secitons one by one to the master/global list of sections
                       }
                   }
@@ -69,7 +69,7 @@ export class AngularClientGeneratorBase {
                   const componentName: string = `${entity.ClassName}FormComponent`;
                   componentImports.push (`import { ${componentName}, Load${componentName} } from "./Entities/${entity.ClassName}/${entity.ClassName.toLowerCase()}.form.component";`);
                   const currentComponentDistinctRelatedEntityClassNames: {itemClassName: string, moduleClassName: string}[] = [];
-                  relatedEntitySections.forEach(s => s.GeneratedOutput.Component.ImportItems.forEach(i => {
+                  relatedEntitySections.forEach(s => s.GeneratedOutput!.Component!.ImportItems.forEach(i => {
                     if (!currentComponentDistinctRelatedEntityClassNames.find(ii => ii.itemClassName === i.ClassName))
                         currentComponentDistinctRelatedEntityClassNames.push({itemClassName: i.ClassName, moduleClassName: i.ModuleName});
                   }))
@@ -81,12 +81,12 @@ export class AngularClientGeneratorBase {
 
                   // go through all related entities used by this component and add them to the relatedEntityModuleImports array, but distinct for the library and the module names within the library
                   relatedEntitySections.forEach(s => {
-                    let match = relatedEntityModuleImports.find(m => m.library === s.GeneratedOutput.Component.ImportPath)
+                    let match = relatedEntityModuleImports.find(m => m.library === s.GeneratedOutput!.Component!.ImportPath)
                       if (!match) {
-                        match = {library: s.GeneratedOutput.Component.ImportPath, modules: []};
+                        match = {library: s.GeneratedOutput!.Component!.ImportPath, modules: []};
                         relatedEntityModuleImports.push(match);
                       }
-                      s.GeneratedOutput.Component.ImportItems.forEach(i => {
+                      s.GeneratedOutput!.Component!.ImportItems.forEach(i => {
                         if (!match.modules.includes(i.ModuleName))
                             match.modules.push(i.ModuleName);
                       });
@@ -107,7 +107,7 @@ export class AngularClientGeneratorBase {
           return true;
         } 
         catch (err) {
-          logError(err);
+          logError(err as string);
           return false;
         }
       }
@@ -186,7 +186,7 @@ export function Load${modulePrefix}GeneratedForms() {
           
           // iterate through the componentNames first, then after we've exhausted those, then iterate through the sections
           const simpleComponentNames = componentNames.map(c => c.componentName);
-          const combinedArray: string[] = simpleComponentNames.concat(sections.map(s => s.ClassName));
+          const combinedArray: string[] = simpleComponentNames.concat(sections.map(s => s.ClassName!));
           const subModules: string[] = [];
           let currentComponentCount: number = 0;
           const subModuleStarter: string =   `
@@ -279,7 +279,7 @@ export class ${this.SubModuleBaseName}${moduleNumber} { }
         const libs: {lib: string, items: string[]}[] = relatedEntitySections.length > 0 ? relatedEntitySections.filter(s => s.GeneratedOutput && s.GeneratedOutput.Component && s.GeneratedOutput.Component.ImportPath)
                                                                                                                   .map(s => {
                                                                                                                                 return {
-                                                                                                                                    lib: s.GeneratedOutput.Component.ImportPath, 
+                                                                                                                                    lib: s.GeneratedOutput!.Component!.ImportPath, 
                                                                                                                                     items: []
                                                                                                                                 }
                                                                                                                             }
@@ -292,9 +292,9 @@ export class ${this.SubModuleBaseName}${moduleNumber} { }
         // now we have a list of distinct libraries, next we go through all the ITEMS and add them to the appropriate library but make sure to keep those items distinct too
         relatedEntitySections.filter(s => s.GeneratedOutput && s.GeneratedOutput.Component && s.GeneratedOutput.Component.ImportItems)
                             .forEach(s => {
-                                const lib = distinctLibs.find(l => l.lib === s.GeneratedOutput.Component.ImportPath);
+                                const lib = distinctLibs.find(l => l.lib === s.GeneratedOutput!.Component!.ImportPath);
                                 if (lib) {
-                                    s.GeneratedOutput.Component.ImportItems.forEach(i => {
+                                    s.GeneratedOutput!.Component!.ImportItems.forEach(i => {
                                         if (!lib.items.includes(i.ClassName))
                                             lib.items.push(i.ClassName);
                                     });
@@ -304,8 +304,8 @@ export class ${this.SubModuleBaseName}${moduleNumber} { }
         // nowe our libs array is good to go, we can generate the import statements for the libraries and the items within the libraries
         const generationImports: string = distinctLibs.map(l => `import { ${l.items.join(", ")} } from "${l.lib}"`).join('\n');
         const generationInjectedCode: string = relatedEntitySections.length > 0 ? 
-                                                        relatedEntitySections.filter(s => s.GeneratedOutput && s.GeneratedOutput.CodeOutput?.length > 0)
-                                                                                .map(s => s.GeneratedOutput.CodeOutput.split("\n").map(l => `    ${l}`).join("\n")).join('\n') : '';
+                                                        relatedEntitySections.filter(s => s.GeneratedOutput && s.GeneratedOutput!.CodeOutput!.length > 0)
+                                                                                .map(s => s.GeneratedOutput!.CodeOutput!.split("\n").map(l => `    ${l}`).join("\n")).join('\n') : '';
 
         return `import { Component } from '@angular/core';
 import { ${entityObjectClass}Entity } from '${entity.SchemaName === mjCoreSchema ? '@memberjunction/core-entities' : 'mj_generatedentities'}';
@@ -538,7 +538,7 @@ export function Load${entity.ClassName}${this.stripWhiteSpace(section.Name)}Comp
                         icon = `<span class="${relatedEntity.DisplayIcon} tab-header-icon"></span>`;
                     break;
                 case 'Related Entity Icon':
-                    const re: EntityInfo = md.Entities.find(e => e.ID === relatedEntity.RelatedEntityID)
+                    const re: EntityInfo | undefined = md.Entities.find(e => e.ID === relatedEntity.RelatedEntityID)
                     if (re && re.Icon && re.Icon.length > 0)
                         icon = `<span class="${re.Icon} tab-header-icon"></span>`;
                     break;
@@ -597,7 +597,7 @@ ${componentCodeWithTabs}
       }
       
       
-      protected generateSingleEntityHTMLWithSplitterForAngular(topArea, additionalSections: AngularFormSectionInfo[], relatedEntitySections: AngularFormSectionInfo[]): string {
+      protected generateSingleEntityHTMLWithSplitterForAngular(topArea: string, additionalSections: AngularFormSectionInfo[], relatedEntitySections: AngularFormSectionInfo[]): string {
           const htmlCode: string =  `<div class="record-form-container" mjFillContainer [bottomMargin]="20" [rightMargin]="5">
     <form *ngIf="record" class="record-form"  #form="ngForm" mjFillContainer>
         <mj-form-toolbar [form]="this"></mj-form-toolbar>
@@ -636,7 +636,7 @@ ${this.innerTabStripHTML(additionalSections, relatedEntitySections)}
                 </mj-tabstrip>`
       }
       
-      protected generateSingleEntityHTMLWithOUTSplitterForAngular(topArea, additionalSections: AngularFormSectionInfo[], relatedEntitySections: AngularFormSectionInfo[]): string {
+      protected generateSingleEntityHTMLWithOUTSplitterForAngular(topArea: string, additionalSections: AngularFormSectionInfo[], relatedEntitySections: AngularFormSectionInfo[]): string {
           const htmlCode: string =  `<div class="record-form-container" mjFillContainer [bottomMargin]="20" [rightMargin]="5">
     <form *ngIf="record" class="record-form"  #form="ngForm" mjFillContainer>
         <mj-form-toolbar [form]="this"></mj-form-toolbar>

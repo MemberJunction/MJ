@@ -37,7 +37,8 @@ import * as Types from "./entity_type_definitions";
      */
     public generateEntitySubClass(entity: EntityInfo, includeFileHeader: boolean = false ) : string { 
         if (entity.PrimaryKeys.length === 0) {
-            console.warn(`Entity ${entity.Name} has no primary keys.  Skipping.`)
+            console.warn(`Entity ${entity.Name} has no primary keys.  Skipping.`);
+            return "";
         }
         else {
             const fields: string = entity.Fields.map(e => {

@@ -12,7 +12,7 @@ import { RegisterClass } from "@memberjunction/global";
 export class CreateNewUserBase {
     public async createNewUser(newUserSetup: NewUserSetup): Promise<{Success: boolean, Message: string, Severity: 'warning' | 'error' | undefined}> {
         try {   
-            const matches: UserInfo = UserCache.Users.find(u => u?.Type?.trim().toLowerCase() ==='owner');
+            const matches: UserInfo = UserCache.Users.find(u => u?.Type?.trim().toLowerCase() ==='owner')!;
             const currentUser = matches ? matches : UserCache.Users[0]; // if we don't find an Owner, use the first user in the cache
     
             if (!currentUser) {
@@ -40,7 +40,7 @@ export class CreateNewUserBase {
                             // save was successful, so we can create the User Roles
                             for (let i = 0; i < newUserSetup.Roles.length; i++) {
                                 const roleName = newUserSetup.Roles[i];
-                                const roleID = md.Roles.find(r => r.Name === roleName)?.ID;
+                                const roleID = md.Roles.find(r => r.Name === roleName)?.ID!;
                                 const userRole = <UserRoleEntity>await md.GetEntityObject('User Roles', currentUser);
                                 userRole.NewRecord();
                                 userRole.UserID = user.ID;

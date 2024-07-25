@@ -58,7 +58,7 @@ export class RunCodeGenBase {
             await this.setupDataSource();
 
             await UserCache.Instance.Refresh(AppDataSource);
-            const userMatch: MJ.UserInfo = UserCache.Users.find(u => u?.Type?.trim().toLowerCase() ==='owner');
+            const userMatch: MJ.UserInfo = UserCache.Users.find(u => u?.Type?.trim().toLowerCase() ==='owner')!;
             const currentUser = userMatch ? userMatch : UserCache.Users[0]; // if we don't find an Owner, use the first user in the cache
 
             // get the entity metadata
@@ -68,8 +68,8 @@ export class RunCodeGenBase {
                 process.exit(1);
             }
 
-            const runCommandsObject = MJGlobal.Instance.ClassFactory.CreateInstance<RunCommandsBase>(RunCommandsBase);
-            const sqlCodeGenObject = MJGlobal.Instance.ClassFactory.CreateInstance<SQLCodeGenBase>(SQLCodeGenBase);
+            const runCommandsObject = MJGlobal.Instance.ClassFactory.CreateInstance<RunCommandsBase>(RunCommandsBase)!;
+            const sqlCodeGenObject = MJGlobal.Instance.ClassFactory.CreateInstance<SQLCodeGenBase>(SQLCodeGenBase)!;
     
             // check to see if the user wants to skip database generation via the config settings
             const skipDB = skipDatabaseGeneration || getSettingValue('skip_database_generation', false);
@@ -96,7 +96,7 @@ export class RunCodeGenBase {
                 ****************************************************************************************/
                 const newUserSetup = configInfo.newUserSetup;
                 if (newUserSetup) {
-                    const newUserObject = MJGlobal.Instance.ClassFactory.CreateInstance<CreateNewUserBase>(CreateNewUserBase);
+                    const newUserObject = MJGlobal.Instance.ClassFactory.CreateInstance<CreateNewUserBase>(CreateNewUserBase)!;
                     const result = await newUserObject.createNewUser(newUserSetup);
                     if (!result.Success) {
                         if (result.Severity === 'error') {
@@ -113,7 +113,7 @@ export class RunCodeGenBase {
                 /****************************************************************************************
                 // STEP 1 - Manage Metadata - including generating new metadata as required
                 ****************************************************************************************/
-                const manageMD = MJGlobal.Instance.ClassFactory.CreateInstance<ManageMetadataBase>(ManageMetadataBase);
+                const manageMD = MJGlobal.Instance.ClassFactory.CreateInstance<ManageMetadataBase>(ManageMetadataBase)!;
                 logStatus('Managing Metadata...')
                 if (! await manageMD.manageMetadata(AppDataSource))
                     logError('ERROR managing metadata');
@@ -144,7 +144,7 @@ export class RunCodeGenBase {
             if (graphQLCoreResolversOutputDir) {
                 // generate the GraphQL server code
                 logStatus('Generating CORE Entity GraphQL Resolver Code...')
-                const graphQLGenerator = MJGlobal.Instance.ClassFactory.CreateInstance<GraphQLServerGeneratorBase>(GraphQLServerGeneratorBase);
+                const graphQLGenerator = MJGlobal.Instance.ClassFactory.CreateInstance<GraphQLServerGeneratorBase>(GraphQLServerGeneratorBase)!;
                 if (! graphQLGenerator.generateGraphQLServerCode(coreEntities, graphQLCoreResolversOutputDir, '@memberjunction/core-entities', true))
                     logError('Error generating GraphQL server code');
             }
@@ -153,7 +153,7 @@ export class RunCodeGenBase {
             if (graphqlOutputDir) {
                 // generate the GraphQL server code
                 logStatus('Generating GraphQL Resolver Code...')
-                const graphQLGenerator = MJGlobal.Instance.ClassFactory.CreateInstance<GraphQLServerGeneratorBase>(GraphQLServerGeneratorBase);
+                const graphQLGenerator = MJGlobal.Instance.ClassFactory.CreateInstance<GraphQLServerGeneratorBase>(GraphQLServerGeneratorBase)!;
                 if (! graphQLGenerator.generateGraphQLServerCode(nonCoreEntities, graphqlOutputDir, 'mj_generatedentities', false))
                     logError('Error generating GraphQL Resolver code');
             }
@@ -164,11 +164,11 @@ export class RunCodeGenBase {
             /****************************************************************************************
             // STEP 4 - Core Entity Subclass Code Gen
             ****************************************************************************************/
-            const coreEntitySubClassOutputDir = outputDir('CoreEntitySubClasses', false);
+            const coreEntitySubClassOutputDir = outputDir('CoreEntitySubClasses', false)!;
             if (coreEntitySubClassOutputDir && coreEntitySubClassOutputDir.length > 0) {
                 // generate the entity subclass code
                 logStatus('Generating CORE Entity Subclass Code...')
-                const entitySubClassGeneratorObject = MJGlobal.Instance.ClassFactory.CreateInstance<EntitySubClassGeneratorBase>(EntitySubClassGeneratorBase);
+                const entitySubClassGeneratorObject = MJGlobal.Instance.ClassFactory.CreateInstance<EntitySubClassGeneratorBase>(EntitySubClassGeneratorBase)!;
                 if (! entitySubClassGeneratorObject.generateAllEntitySubClasses(coreEntities, coreEntitySubClassOutputDir))
                     logError('Error generating entity subclass code');
             }
@@ -176,11 +176,11 @@ export class RunCodeGenBase {
             /****************************************************************************************
             // STEP 4.1 - Entity Subclass Code Gen
             ****************************************************************************************/
-            const entitySubClassOutputDir = outputDir('EntitySubClasses', true);
+            const entitySubClassOutputDir = outputDir('EntitySubClasses', true)!;
             if (entitySubClassOutputDir) {
                 // generate the entity subclass code
                 logStatus('Generating Entity Subclass Code...')
-                const entitySubClassGeneratorObject = MJGlobal.Instance.ClassFactory.CreateInstance<EntitySubClassGeneratorBase>(EntitySubClassGeneratorBase);
+                const entitySubClassGeneratorObject = MJGlobal.Instance.ClassFactory.CreateInstance<EntitySubClassGeneratorBase>(EntitySubClassGeneratorBase)!;
                 if (! entitySubClassGeneratorObject.generateAllEntitySubClasses(nonCoreEntities, entitySubClassOutputDir))
                     logError('Error generating entity subclass code');
             }
@@ -195,7 +195,7 @@ export class RunCodeGenBase {
             if (coreEntityTypeDefinitionsOutputDir && coreEntityTypeDefinitionsOutputDir.length > 0) {
                 // generate the entity subclass code
                 logStatus('Generating CORE Entity Type Definitions Code...')
-                const entitySubClassGeneratorObject = MJGlobal.Instance.ClassFactory.CreateInstance<EntityTypeGeneratorBase>(EntityTypeGeneratorBase);
+                const entitySubClassGeneratorObject = MJGlobal.Instance.ClassFactory.CreateInstance<EntityTypeGeneratorBase>(EntityTypeGeneratorBase)!;
                 if (! entitySubClassGeneratorObject.generateAllEntityTypeDefinitions(coreEntities, coreEntitySubClassOutputDir)){
                     logError('Error generating core entity type definitions');
                 }
@@ -208,7 +208,7 @@ export class RunCodeGenBase {
             if (entityTypeDefinitionsOutputDir && entityTypeDefinitionsOutputDir.length > 0) {
                 // generate the entity subclass code
                 logStatus('Generating Entity Type Definitions Code...')
-                const entitySubClassGeneratorObject = MJGlobal.Instance.ClassFactory.CreateInstance<EntityTypeGeneratorBase>(EntityTypeGeneratorBase);
+                const entitySubClassGeneratorObject = MJGlobal.Instance.ClassFactory.CreateInstance<EntityTypeGeneratorBase>(EntityTypeGeneratorBase)!;
                 if (! entitySubClassGeneratorObject.generateAllEntityTypeDefinitions(nonCoreEntities, entitySubClassOutputDir)){
                     logError('Error generating entity type definitions');
                 }
@@ -221,7 +221,7 @@ export class RunCodeGenBase {
             if (angularCoreEntitiesOutputDir) {
                 // generate the Angular client code
                 logStatus('Generating Angular CORE Entities Code...')
-                const angularGenerator = MJGlobal.Instance.ClassFactory.CreateInstance<AngularClientGeneratorBase>(AngularClientGeneratorBase);
+                const angularGenerator = MJGlobal.Instance.ClassFactory.CreateInstance<AngularClientGeneratorBase>(AngularClientGeneratorBase)!;
                 if (! await angularGenerator.generateAngularCode(coreEntities, angularCoreEntitiesOutputDir, 'Core', currentUser))  
                     logError('Error generating Angular CORE Entities code');
             }
@@ -230,7 +230,7 @@ export class RunCodeGenBase {
             if (angularOutputDir) {
                 // generate the Angular client code
                 logStatus('Generating Angular Code...')
-                const angularGenerator = MJGlobal.Instance.ClassFactory.CreateInstance<AngularClientGeneratorBase>(AngularClientGeneratorBase);
+                const angularGenerator = MJGlobal.Instance.ClassFactory.CreateInstance<AngularClientGeneratorBase>(AngularClientGeneratorBase)!;
                 if (! await angularGenerator.generateAngularCode(nonCoreEntities, angularOutputDir, '', currentUser))
                     logError('Error generating Angular code');
             }
@@ -244,7 +244,7 @@ export class RunCodeGenBase {
             if (dbSchemaOutputDir) {
                 // generate the GraphQL client code
                 logStatus('Generating Database Schema JSON Output...')
-                const schemaGeneratorObject = MJGlobal.Instance.ClassFactory.CreateInstance<DBSchemaGeneratorBase>(DBSchemaGeneratorBase);
+                const schemaGeneratorObject = MJGlobal.Instance.ClassFactory.CreateInstance<DBSchemaGeneratorBase>(DBSchemaGeneratorBase)!;
                 if (! schemaGeneratorObject.generateDBSchemaJSONOutput(md.Entities, dbSchemaOutputDir))
                     logError('Error generating Database Schema JSON Output');
             }
@@ -259,7 +259,7 @@ export class RunCodeGenBase {
             await ActionEngine.Instance.Config(false, currentUser)
             if (coreActionsOutputDir) {
                 logStatus('Generating CORE Actions Code...')
-                const actionsGenerator = MJGlobal.Instance.ClassFactory.CreateInstance<ActionSubClassGeneratorBase>(ActionSubClassGeneratorBase);
+                const actionsGenerator = MJGlobal.Instance.ClassFactory.CreateInstance<ActionSubClassGeneratorBase>(ActionSubClassGeneratorBase)!;
                 if (! await actionsGenerator.generateActions(ActionEngine.Instance.CoreActions, coreActionsOutputDir))  
                     logError('Error generating CORE Actions code');
             }
@@ -267,7 +267,7 @@ export class RunCodeGenBase {
             const actionsOutputDir = outputDir('ActionSubclasses', false);
             if (actionsOutputDir) {
                 logStatus('Generating Actions Code...')
-                const actionsGenerator = MJGlobal.Instance.ClassFactory.CreateInstance<ActionSubClassGeneratorBase>(ActionSubClassGeneratorBase);
+                const actionsGenerator = MJGlobal.Instance.ClassFactory.CreateInstance<ActionSubClassGeneratorBase>(ActionSubClassGeneratorBase)!;
                 if (! await actionsGenerator.generateActions(ActionEngine.Instance.NonCoreActions, actionsOutputDir))
                     logError('Error generating Actions code');
             }
@@ -302,13 +302,13 @@ export class RunCodeGenBase {
             process.exit(0); // wrap it up, 0 means success 
         }
         catch (e) {
-            logError(e);
+            logError(e as string);
             process.exit(1); // error code
         }  
     }
 }
 
 export async function runMemberJunctionCodeGeneration(skipDatabaseGeneration: boolean = false) {
-    const runObject = MJGlobal.Instance.ClassFactory.CreateInstance<RunCodeGenBase>(RunCodeGenBase);
+    const runObject = MJGlobal.Instance.ClassFactory.CreateInstance<RunCodeGenBase>(RunCodeGenBase)!;
     return await runObject.Run(skipDatabaseGeneration);
 }

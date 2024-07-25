@@ -80,16 +80,16 @@ export class EntityVectorSyncer extends VectorBase {
     const dataStream = new PagedRecords();
     
     let templateObj: {} = {
-      ...template.GetAll(),
-      Params: template.Params.map((p) => p.GetAll())
+      ...template.To(),
+      Params: template.Params.map((p) => p.To())
     }; 
 
     const workerContext = { 
       executionId: Date.now(), 
       entity, 
-      entityDocument: entityDocument.GetAll(),
+      entityDocument: entityDocument.To(),
       template: templateObj,
-      templateContent: template.Content[0].GetAll(),
+      templateContent: template.Content[0].To(),
       vectorDBClassKey: obj.vectorDBClassKey,
       vectorDBAPIKey: obj.vectorDBAPIKey,
       embeddingDriverClass: obj.embeddingDriverClass,
@@ -557,11 +557,6 @@ export class EntityVectorSyncer extends VectorBase {
 
   protected async GetRelatedTemplateDataForBatch(entity: EntityInfo, records: unknown[], template: TemplateEntityExtended): Promise<TemplateParamData[]> {
     const relatedData: TemplateParamData[] = [];
-
-    records.forEach((record: unknown) => {
-      console.log(JSON.stringify(record, null, 4));
-      console.log(record[entity.FirstPrimaryKey.Name]);
-    });
 
     for(const templateParam of template.Params){
       if(templateParam.Type !== 'Entity'){

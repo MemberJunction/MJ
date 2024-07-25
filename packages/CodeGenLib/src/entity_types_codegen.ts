@@ -60,11 +60,12 @@ import { z } from "zod";
                 if (e.ValueListTypeEnum !== EntityFieldValueListType.None && e.EntityFieldValues && e.EntityFieldValues.length > 0) {
                     // construct a typeString that is a union of the possible values
                     const quotes = e.NeedsQuotes ? "'" : '';
-                    typeString = e.EntityFieldValues.map(v => `${quotes}${v.Value}${quotes}`).join(' | ');
+                    typeString = `union([${e.EntityFieldValues.map(v => `z.literal(${quotes}${v.Value}${quotes})`).join(', ')}])`;
                     if (e.ValueListTypeEnum === EntityFieldValueListType.ListOrUserEntry) {
                         // special case becuase a user can enter whatever they want
                         typeString += `.or(z.${TypeScriptTypeFromSQLType(e.Type)}()) `;
                     }
+
                     // finally, add the null type if it allows null
                     if (e.AllowsNull) {
                         typeString += '.nullish()';
