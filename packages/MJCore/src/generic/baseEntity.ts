@@ -334,7 +334,6 @@ export abstract class BaseEntity<T = unknown> {
     private _transactionGroup: TransactionGroupBase = null;
     private _eventSubject: Subject<BaseEntityEvent>;
     private _resultHistory: BaseEntityResult[] = [];
-    private _baseType: T | null = null;
 
     constructor(Entity: EntityInfo) {
         this._eventSubject = new Subject<BaseEntityEvent>();
@@ -462,15 +461,6 @@ export abstract class BaseEntity<T = unknown> {
     get Fields(): EntityField[] {
         return this._Fields;
     }
-
-    /**
-     * Returns the zod generated base type for the entity object.
-     * Note that this will return null unless 
-     */
-    get BaseType(): T | null {
-        return this._baseType;
-    }
-
 
     /**
      * Convenience method to access a field by name. This method is case-insensitive and will return null if the field is not found. You can do the same thing with more fine tune controlled by accessing the Fields property directly.
@@ -1135,7 +1125,7 @@ export abstract class BaseEntity<T = unknown> {
     }
 
     /**
-     * Strongy-typed wrapper for the {@link SetMany} method
+     * Strongy-typed wrapper for the {@link SetMany} method.
      */
     public From(baseType: T, replaceOldValues?: boolean): void {
         this.init();
