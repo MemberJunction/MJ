@@ -1,14 +1,14 @@
 -- Step 1: Drop the ResourceRecordID column
-ALTER TABLE __mj.UserNotification
+ALTER TABLE ${flyway:defaultSchema}.UserNotification
 DROP COLUMN ResourceRecordID;
 GO
 
 -- Step 2: Add the ResourceRecordID column with the new data type
-ALTER TABLE __mj.UserNotification
+ALTER TABLE ${flyway:defaultSchema}.UserNotification
 ADD ResourceRecordID uniqueidentifier NULL;
 GO
 
-UPDATE __mj.EntityField SET IncludeRelatedEntityNameFieldInBaseView = 1
+UPDATE ${flyway:defaultSchema}.EntityField SET IncludeRelatedEntityNameFieldInBaseView = 1
 WHERE
-  EntityID IN (SELECT ID FROM __mj.Entity WHERE SchemaName='__mj')
+  EntityID IN (SELECT ID FROM ${flyway:defaultSchema}.Entity WHERE SchemaName='${flyway:defaultSchema}')
   AND IncludeRelatedEntityNameFieldInBaseView = 0 AND RelatedEntityID IS NOT NULL
