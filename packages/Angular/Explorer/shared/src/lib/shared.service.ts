@@ -252,7 +252,7 @@ export class SharedService {
     if (resourceTypeId)
       notification.ResourceTypeID = resourceTypeId;
     if (resourceRecordId)
-      notification.ResourceRecordID = resourceRecordId;
+      notification.ResourceRecordID = resourceRecordId as any; //TODO - fix the ResourceRecordID type and remove this
     if (resourceConfiguration)
       notification.ResourceConfiguration = JSON.stringify(resourceConfiguration);
   
