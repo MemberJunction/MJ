@@ -19,11 +19,11 @@
     "typescript": "^5.4.5"
   },
   "dependencies": {
-    "@memberjunction/global": "2.0.0",
-    "@memberjunction/core": "2.0.0",
-    "@memberjunction/core-entities": "2.0.0",
-    "@memberjunction/ai": "2.0.0",
-    "@memberjunction/aiengine": "2.0.0",
-    "@memberjunction/doc-utils": "2.0.0"
+    "@memberjunction/global": "2.1.0",
+    "@memberjunction/core": "2.1.0",
+    "@memberjunction/core-entities": "2.1.0",
+    "@memberjunction/ai": "2.1.0",
+    "@memberjunction/aiengine": "2.1.0",
+    "@memberjunction/doc-utils": "2.1.0"
   }
 }

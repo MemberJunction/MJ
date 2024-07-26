@@ -19,7 +19,7 @@
     "typescript": "^5.4.5"
   },
   "dependencies": {
-    "@memberjunction/core-entities": "2.0.0",
-    "@memberjunction/data-context": "2.0.0"
+    "@memberjunction/core-entities": "2.1.0",
+    "@memberjunction/data-context": "2.1.0"
   }
 }

@@ -20,7 +20,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "0.22.0",
-    "@memberjunction/ai": "2.0.0",
-    "@memberjunction/global": "2.0.0"
+    "@memberjunction/ai": "2.1.0",
+    "@memberjunction/global": "2.1.0"
   }
 }
