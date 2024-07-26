@@ -521,7 +521,12 @@ export abstract class BaseEntity {
     public Set(FieldName: string, Value: any) {
         let field = this.Fields.find(f => f.Name.trim().toLowerCase() === FieldName.trim().toLowerCase());
         if (field != null) {
-            field.Value = Value;
+            if (field.EntityFieldInfo.TSType === EntityFieldTSType.Date && (typeof Value === 'string' || typeof Value === 'number') ) {
+                field.Value = new Date(field.Value);
+            }
+            else {
+                field.Value = Value;                
+            }
         }
     }
 
@@ -534,7 +539,7 @@ export abstract class BaseEntity {
         let field = this.Fields.find(f => f.Name.trim().toLowerCase() === FieldName.trim().toLowerCase());
         if (field != null) {
             // if the field is a date and the value is a string, convert it to a date
-            if (field.EntityFieldInfo.TSType == EntityFieldTSType.Date && (typeof field.Value === 'string' || typeof field.Value === 'number') ) {
+            if (field.EntityFieldInfo.TSType === EntityFieldTSType.Date && (typeof field.Value === 'string' || typeof field.Value === 'number') ) {
                 field.Value = new Date(field.Value);
             }
             return field.Value;
