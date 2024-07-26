@@ -468,7 +468,8 @@ export abstract class BaseEntity<T = unknown> {
      * @returns 
      */
     public GetFieldByName(fieldName: string): EntityField {
-        return this.Fields.find(f => f.Name.trim().toLowerCase() == fieldName.trim().toLowerCase());
+        const lcase = fieldName.trim().toLowerCase(); // do this once as we will use it multiple times
+        return this.Fields.find(f => f.Name.trim().toLowerCase() === lcase);
     }
     
     /**
@@ -519,9 +520,14 @@ export abstract class BaseEntity<T = unknown> {
      * @param Value 
      */
     public Set(FieldName: string, Value: any) {
-        let field = this.Fields.find(f => f.Name.trim().toLowerCase() === FieldName.trim().toLowerCase());
+        const field = this.GetFieldByName(FieldName); 
         if (field != null) {
-            field.Value = Value;
+            if (field.EntityFieldInfo.TSType === EntityFieldTSType.Date && (typeof Value === 'string' || typeof Value === 'number') ) {
+                field.Value = new Date(Value);
+            }
+            else {
+                field.Value = Value;                
+            }
         }
     }
 
@@ -531,10 +537,10 @@ export abstract class BaseEntity<T = unknown> {
      * @returns 
      */
     public Get(FieldName: string): any {
-        let field = this.Fields.find(f => f.Name.trim().toLowerCase() === FieldName.trim().toLowerCase());
+        const field = this.GetFieldByName(FieldName); 
         if (field != null) {
             // if the field is a date and the value is a string, convert it to a date
-            if (field.EntityFieldInfo.TSType == EntityFieldTSType.Date && (typeof field.Value === 'string' || typeof field.Value === 'number') ) {
+            if (field.EntityFieldInfo.TSType === EntityFieldTSType.Date && (typeof field.Value === 'string' || typeof field.Value === 'number') ) {
                 field.Value = new Date(field.Value);
             }
             return field.Value;
@@ -555,7 +561,7 @@ export abstract class BaseEntity<T = unknown> {
             throw new Error('calling BaseEntity.SetMany(), object cannot be null or undefined');
 
         for (let key in object) {
-            const field = this.Fields.find(f => f.Name.trim().toLowerCase() == key.trim().toLowerCase());
+            const field = this.GetFieldByName(key); 
             if (field) {
                 // check to see if key matches a field name, if so, set it
                 this.Set(key, object[key]);
