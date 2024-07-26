@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/entity-communications-server",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "MemberJunction: Library that connects the MJ entities framework to the communication framework",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
