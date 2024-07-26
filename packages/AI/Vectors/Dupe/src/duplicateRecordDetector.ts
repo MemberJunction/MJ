@@ -5,7 +5,7 @@ import { BaseResponse, VectorDBBase } from "@memberjunction/ai-vectordb";
 import { MJGlobal } from "@memberjunction/global";
 import { AIModelEntity, DuplicateRunDetailEntity, DuplicateRunDetailMatchEntity, DuplicateRunEntity, EntityDocumentEntity, ListDetailEntity, ListEntity, VectorDatabaseEntity } from "@memberjunction/core-entities";
 import { VectorBase } from "@memberjunction/ai-vectors";
-import { EntityDocumentTemplateParser, EntityVectorSyncer, VectorSyncRequest } from "@memberjunction/ai-vector-sync";
+import { EntityDocumentTemplateParser, EntityVectorSyncer, VectorizeEntityParams } from "@memberjunction/ai-vector-sync";
 
 export class DuplicateRecordDetector extends VectorBase {
 
@@ -27,21 +27,15 @@ export class DuplicateRecordDetector extends VectorBase {
         let vectorizer = new EntityVectorSyncer();
         vectorizer.CurrentUser = super.CurrentUser;
 
-        let entityDocument: EntityDocumentEntity | null = null;
-        if(params.EntityDocumentID){
-            entityDocument = await vectorizer.GetEntityDocument(params.EntityDocumentID);
-        }
-        else {
-            entityDocument = await vectorizer.GetFirstActiveEntityDocumentForEntity(params.EntityID);
-            if(!entityDocument){
-                throw Error(`No active Entity Document found for entity ${params.EntityID}`);
-                //Update: No longer creating an entity docuement if one is not found
-                //If an entitiy document is not found, that is our indicator that the
-                //underlying entity's records have not been vectorized yet
-                //const defaultVectorDB: VectorDatabaseEntity = super.getVectorDatabase();
-                //const defaultAIModel: AIModelEntity = super.getAIModel();
-                //entityDocument = await this.createEntityDocumentForEntity(params.EntityID, defaultVectorDB, defaultAIModel);
-            }
+        let entityDocument: EntityDocumentEntity | null = await vectorizer.GetEntityDocument(params.EntityDocumentID);
+        if(!entityDocument){
+            throw Error(`No Entity Document found with ID ${params.EntityDocumentID}`);
+            //Update: No longer creating an entity docuement if one is not found
+            //If an entitiy document is not found, that is our indicator that the
+            //underlying entity's records have not been vectorized yet
+            //const defaultVectorDB: VectorDatabaseEntity = super.getVectorDatabase();
+            //const defaultAIModel: AIModelEntity = super.getAIModel();
+            //entityDocument = await this.createEntityDocumentForEntity(params.EntityID, defaultVectorDB, defaultAIModel);
         }
 
         let response: PotentialDuplicateResponse = new PotentialDuplicateResponse();
@@ -54,7 +48,7 @@ export class DuplicateRecordDetector extends VectorBase {
         }
 
         //for testing
-        const request: VectorSyncRequest = {
+        const request: VectorizeEntityParams = {
             entityID: entityDocument.EntityID,
             entityDocumentID: entityDocument.ID,
             batchCount: 20,
@@ -73,8 +67,8 @@ export class DuplicateRecordDetector extends VectorBase {
 
         LogStatus(`Using vector database ${entityDocument.VectorDatabaseID} and AI Model ${entityDocument.AIModelID}`);
 
-        const vectorDB: VectorDatabaseEntity = this.getVectorDatabase(entityDocument.VectorDatabaseID);
-        const aiModel: AIModelEntity = this.getAIModel(entityDocument.AIModelID);
+        const vectorDB: VectorDatabaseEntity = super.GetVectorDatabase(entityDocument.VectorDatabaseID);
+        const aiModel: AIModelEntity = super.GetAIModel(entityDocument.AIModelID);
 
         LogStatus(`AIModel driver class: ${aiModel.DriverClass}`);
         LogStatus(`VectorDB class key: ${vectorDB.ClassKey}`);
@@ -293,7 +287,7 @@ export class DuplicateRecordDetector extends VectorBase {
     }
 
     private async getDuplicateRunEntityByListID(listID: string): Promise<DuplicateRunEntity> {
-        const entity = await super.runViewForSingleValue<DuplicateRunEntity>('Duplicate Runs', `SourceListID = '${listID}'`);
+        const entity = await super.RunViewForSingleValue<DuplicateRunEntity>('Duplicate Runs', `SourceListID = '${listID}'`);
         if(!entity){
             throw new Error(`Failed to load Duplicate Run record for List ${listID}`);
         }

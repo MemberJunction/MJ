@@ -2,6 +2,7 @@ import { ActionParam, ActionResultSimple, BaseAction, RunActionParams } from "@m
 import { RegisterClass } from "@memberjunction/global";
 import { EntityVectorSyncer } from "@memberjunction/ai-vector-sync";
 import { EntityDocumentEntity } from "@memberjunction/core-entities";
+import { LogStatus } from "@memberjunction/core";
 
 /**
  * This class provides a simple wrapper of the most basic feature in the MJ Communication Framework, sending a single message. 
@@ -21,12 +22,18 @@ export class VectorizeEntityAction extends BaseAction {
 
         const entityNamesParam: ActionParam | undefined = params.Params.find(p => p.Name === 'EntityNames');
         let entityNames: string[] = [];
-        if(entityNamesParam && entityNamesParam.Value && entityNamesParam.Value.includes(',')){
-            entityNames = entityNamesParam.Value.split(',');
+        if(entityNamesParam && entityNamesParam.Value){
+            if(entityNamesParam.Value.includes(',')){
+                entityNames = entityNamesParam.Value.split(',');
+            }
+            else{
+                entityNames = entityNamesParam.Value;
+            }
         }
 
+        LogStatus(`VectorizeEntityAction: Entities to vectorize: ${entityNames.join(', ')}`);
         let vectorizer = new EntityVectorSyncer();
-        await vectorizer.Config(params.ContextUser);
+        await vectorizer.Config(false, params.ContextUser);
 
         const entityDocuments: EntityDocumentEntity[] = await vectorizer.GetActiveEntityDocuments(entityNames);
         let results: ActionResultSimple[] = await Promise.all(entityDocuments.map(async (entityDocument: EntityDocumentEntity) => {

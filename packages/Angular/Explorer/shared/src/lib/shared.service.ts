@@ -3,7 +3,8 @@ import { BaseEntity, EntityInfo, LogError, Metadata, RunView } from '@memberjunc
 import { ResourceTypeEntity, UserNotificationEntity, ViewColumnInfo } from '@memberjunction/core-entities';
 import { MJEventType, MJGlobal, DisplaySimpleNotificationRequestData } from '@memberjunction/global';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
-import { Subject, Observable } from 'rxjs';
+import { Subject, Observable, BehaviorSubject, firstValueFrom } from 'rxjs';
+import { first, tap } from 'rxjs/operators';
 import { NotificationService, NotificationSettings } from "@progress/kendo-angular-notification";
 
 @Injectable({
@@ -13,6 +14,7 @@ export class SharedService {
   private static _instance: SharedService;
   private static _loaded: boolean = false;
   private static _resourceTypes: ResourceTypeEntity[] = [];
+  private static isLoading$ = new BehaviorSubject<boolean>(false);
   private tabChange = new Subject();
   tabChange$ = this.tabChange.asObservable();
 
@@ -39,7 +41,7 @@ export class SharedService {
           break;
         case MJEventType.LoggedIn:
           if (SharedService._loaded === false) 
-            SharedService.RefreshData();
+            SharedService.RefreshData(true);
 
           // got the login, now subscribe to push status updates here so we can then raise them as events in MJ Global locally
           this.PushStatusUpdates().subscribe( (status: any) => {
@@ -108,44 +110,51 @@ export class SharedService {
     return SharedService._resourceTypes.find(rt => rt.Name.trim().toLowerCase() === name.trim().toLowerCase());
   }
 
-  public static async RefreshData() {
-    // if we have a provider, then we can load the data, otherwise load isn't done yet
+  /**
+   * Refreshes the data for the service. If OnlyIfNeeded is true, then the data is only refreshed if it hasn't been loaded yet.
+   */
+  public static async RefreshData(OnlyIfNeeded: boolean = false) {
+    if (OnlyIfNeeded && SharedService._loaded) {
+      return;
+    }
+
+    const canProceed$ = SharedService.isLoading$.pipe(
+      first(isLoading => !isLoading),
+      tap(() => SharedService.isLoading$.next(true))
+    );
+
+    await firstValueFrom(canProceed$);
+
+    try {
+      // After waiting for the current loading operation to complete, check again
+      // if _loaded is true and OnlyIfNeeded is true, return early
+      if (OnlyIfNeeded && SharedService._loaded) {
+        return;
+      }
+
+      await SharedService.handleDataLoading();
+
+      // Mark as loaded
+      SharedService._loaded = true;
+    } finally {
+      // Ensure we always reset the loading flag
+      SharedService.isLoading$.next(false);
+    }
+  }
+
+  private static async handleDataLoading() {
     const md = new Metadata();
+
     const rtResult = await md.GetAndCacheDatasetByName('ResourceTypes');
     if (rtResult && rtResult.Success) {
       const data = rtResult.Results.find(r => r.EntityName === 'Resource Types');
       if (data) {
-        SharedService._resourceTypes = <ResourceTypeEntity[]>data.Results
-        SharedService._loaded = true;
+        SharedService._resourceTypes = <ResourceTypeEntity[]>data.Results;
       }
     }
 
-    SharedService.RefreshUserNotifications(); // also call this initially when refreshing the dataset...
-  }
-
-  /*
-  public static GenerateKeyValuePairString(pkVals: KeyValuePair[]): string {
-    return pkVals.map(pk => pk.FieldName + '|' + pk.Value).join('||');
-  }
-  */
-
-  /*
-  public static ParsePrimaryKeys(entity: EntityInfo, routeSegment: string): KeyValuePair[] {
-    if (!routeSegment.includes('|')) {
-      // If not, return a single element array with a default field name
-      return [{ FieldName: entity.PrimaryKey.Name, Value: routeSegment }];
-    }
-    else {
-      const parts = routeSegment.split('||');
-      const pkVals: KeyValuePair[] = [];
-      for (let p of parts) {
-        const kv = p.split('|');
-        pkVals.push({ FieldName: kv[0], Value: kv[1] });
-      }
-      return pkVals;
-    }
-  }
-  */
+    await SharedService.RefreshUserNotifications();  
+  }  
 
   FormatColumnValue(col: ViewColumnInfo, value: any, maxLength: number = 0, trailingChars: string = "...") {
     if (value === null || value === undefined)
@@ -235,7 +244,7 @@ export class SharedService {
    * @param resourceConfiguration Any object, it is converted to a string by JSON.stringify and stored in the database
    * @returns 
    */
-  public async CreateNotification(title: string, message: string, resourceTypeId: string | null, resourceRecordId: number | null, resourceConfiguration: any | null): Promise<UserNotificationEntity> {
+  public async CreateNotification(title: string, message: string, resourceTypeId: string | null, resourceRecordId: string | null, resourceConfiguration: any | null): Promise<UserNotificationEntity> {
     const md = new Metadata();
     const notification = <UserNotificationEntity>await md.GetEntityObject('User Notifications');
     notification.Title = title;

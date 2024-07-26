@@ -4,7 +4,11 @@ import { NunjucksCallback, TemplateExtensionBase } from "./TemplateExtensionBase
 import { AIEngine } from "@memberjunction/aiengine";
 import { BaseLLM, GetAIAPIKey } from "@memberjunction/ai";
 import { AIModelEntityExtended } from "@memberjunction/core-entities";
-import { Parser, Nodes, Lexer, Context } from 'nunjucks'; // Assuming these types exist in the Nunjucks TypeScript definitions
+// TODO: Add type defs based on nunjucks classes used for extensions
+type Parser = any;
+type Nodes = any;
+type Lexer = any;
+type Context = any;
 
 /**
  * This class is an extension for the Nunjucks template engine that allows for the use of an AI prompt in a template.
@@ -102,7 +106,7 @@ export class AIPromptExtension extends TemplateExtensionBase {
      */
     protected async GetAIModel(vendorName: string, contextUser: UserInfo): Promise<AIModelEntityExtended> {
         await AIEngine.Instance.Config(false, contextUser); // most of the time this is already loaded, but just in case it isn't we will load it here
-        const models = AIEngine.Models.filter(m => m.AIModelType.trim().toLowerCase() === 'llm' && 
+        const models = AIEngine.Instance.Models.filter(m => m.AIModelType.trim().toLowerCase() === 'llm' && 
                                                     m.Vendor.trim().toLowerCase() === vendorName.trim().toLowerCase())  
         // next, sort the models by the PowerRank field so that the highest power rank model is the first array element
         models.sort((a, b) => b.PowerRank - a.PowerRank); // highest power rank first

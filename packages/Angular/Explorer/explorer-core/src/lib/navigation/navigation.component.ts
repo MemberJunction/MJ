@@ -413,16 +413,18 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
       if (!this.workSpace)
         throw new Error('Error loading workspace');
 
-      const workspaceItemParams: RunViewParams = {
-        EntityName: "Workspace Items",
-        ExtraFilter: `WorkspaceID='${this.workSpace.ID}'`,
-        OrderBy: "Sequence ASC", // get them in order
-        ResultType: "entity_object" /*we want entity objects back so that we can modify them as needed*/
-      }
-      const workspaceItems = await rv.RunView(workspaceItemParams);
-      if (workspaceItems.Success) {
-        this.workSpaceItems = workspaceItems.Results;
-        await this.LoadWorkspaceItems();
+      if (this.workSpace.IsSaved) {
+        const workspaceItemParams: RunViewParams = {
+          EntityName: "Workspace Items",
+          ExtraFilter: `WorkspaceID='${this.workSpace.ID}'`,
+          OrderBy: "Sequence ASC", // get them in order
+          ResultType: "entity_object" /*we want entity objects back so that we can modify them as needed*/
+        }
+        const workspaceItems = await rv.RunView(workspaceItemParams);
+        if (workspaceItems.Success) {
+          this.workSpaceItems = workspaceItems.Results;
+          await this.LoadWorkspaceItems();
+        }  
       }
     }
     else
@@ -793,7 +795,7 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
       let wsItem: WorkspaceItemEntity;
       if (!tab.workspaceItem) {
         wsItem = await md.GetEntityObject<WorkspaceItemEntity>('Workspace Items');
-        if (tab.data.ID && !isNaN(tab.data.ID) && tab.data.ID > 0)
+        if (tab.data.ID && tab.data.ID.length > 0)
           await wsItem.Load(tab.data.ID);
         else {
           wsItem.NewRecord();
@@ -1003,7 +1005,7 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
     const md = new Metadata();
 
     //make sure SharedService_resourceTypes is populated first
-    await SharedService.RefreshData();
+    await SharedService.RefreshData(true);
 
     this.drawerItems.length = 0; // clear the array
 

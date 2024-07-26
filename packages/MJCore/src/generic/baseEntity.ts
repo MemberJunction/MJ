@@ -468,7 +468,8 @@ export abstract class BaseEntity {
      * @returns 
      */
     public GetFieldByName(fieldName: string): EntityField {
-        return this.Fields.find(f => f.Name.trim().toLowerCase() == fieldName.trim().toLowerCase());
+        const lcase = fieldName.trim().toLowerCase(); // do this once as we will use it multiple times
+        return this.Fields.find(f => f.Name.trim().toLowerCase() === lcase);
     }
     
     /**
@@ -519,9 +520,14 @@ export abstract class BaseEntity {
      * @param Value 
      */
     public Set(FieldName: string, Value: any) {
-        let field = this.Fields.find(f => f.Name.trim().toLowerCase() === FieldName.trim().toLowerCase());
+        const field = this.GetFieldByName(FieldName); 
         if (field != null) {
-            field.Value = Value;
+            if (field.EntityFieldInfo.TSType === EntityFieldTSType.Date && (typeof Value === 'string' || typeof Value === 'number') ) {
+                field.Value = new Date(Value);
+            }
+            else {
+                field.Value = Value;                
+            }
         }
     }
 
@@ -531,10 +537,10 @@ export abstract class BaseEntity {
      * @returns 
      */
     public Get(FieldName: string): any {
-        let field = this.Fields.find(f => f.Name.trim().toLowerCase() === FieldName.trim().toLowerCase());
+        const field = this.GetFieldByName(FieldName); 
         if (field != null) {
             // if the field is a date and the value is a string, convert it to a date
-            if (field.EntityFieldInfo.TSType == EntityFieldTSType.Date && (typeof field.Value === 'string' || typeof field.Value === 'number') ) {
+            if (field.EntityFieldInfo.TSType === EntityFieldTSType.Date && (typeof field.Value === 'string' || typeof field.Value === 'number') ) {
                 field.Value = new Date(field.Value);
             }
             return field.Value;
@@ -545,16 +551,21 @@ export abstract class BaseEntity {
     /**
      * Sets any number of values on the entity object from the object passed in. The properties of the object being passed in must either match the field name (in most cases) or the CodeName (which is only different from field name if field name has spaces in it)
      * @param object  
-     * @param ignoreNonExistentFields 
+     * @param ignoreNonExistentFields - if set to true, fields that don't exist on the entity object will be ignored, if false, an error will be thrown if a field doesn't exist
+     * @param replaceOldValues - if set to true, the old values of the fields will be reset to the values provided in the object parameter, if false, they will be left alone
      */
-    public SetMany(object: any, ignoreNonExistentFields: boolean = false) {
+    public SetMany(object: any, ignoreNonExistentFields: boolean = false, replaceOldValues: boolean = false) {
         if (!object)
             throw new Error('calling BaseEntity.SetMany(), object cannot be null or undefined');
 
         for (let key in object) {
-            if (this.Fields.some(f => f.Name.trim().toLowerCase() == key.trim().toLowerCase())) {
+            const field = this.GetFieldByName(key); 
+            if (field) {
                 // check to see if key matches a field name, if so, set it
                 this.Set(key, object[key]);
+                if (replaceOldValues) {
+                    field.ResetOldValue();
+                }
             }
             else {
                 // if we don't find a match for the field name, check to see if we have a match for the code name
@@ -562,6 +573,9 @@ export abstract class BaseEntity {
                 const field = this.Fields.find(f => f.CodeName.trim().toLowerCase() == key.trim().toLowerCase());
                 if (field) {
                     this.Set(field.Name, object[key]);
+                    if (replaceOldValues) {
+                        field.ResetOldValue();
+                    }
                 }
                 else {
                     // if we get here, we have a field that doesn't match either the field name or the code name, so throw an error
@@ -686,19 +700,21 @@ export abstract class BaseEntity {
         this._resultHistory = [];
         this._recordLoaded = false;
         this._Fields = [];
-        if (this.EntityInfo)
+        if (this.EntityInfo) {
             for (let field of this.EntityInfo.Fields) {
                 this.Fields.push(new EntityField(field));
             }
+        }
     }
 
     /**
      * This method will copy the values from the other entity object into the current one. This is useful for things like cloning a record.
      * This method will ONLY copy values for fields that exist in the current entity object. If the other object has fields that don't exist in the current object, they will be ignored.
-     * @param other
+     * @param other - the other entity object to copy values from
      * @param includePrimaryKeys - if true, the primary keys will be copied as well, if false, they will be ignored, defaults to false and generally you want to leave it that way 
+     * @param replaceOldValues - if true, the old values of the fields will be reset to the values provided in the other parameter, if false, they will be left alone, defaults to false and generally you want to leave it that way
      */
-    public CopyFrom(other: BaseEntity, includePrimaryKeys: boolean = false): boolean {
+    public CopyFrom(other: BaseEntity, includePrimaryKeys: boolean = false, replaceOldValues: boolean = false): boolean {
         try {
             // iterate through all of OUR fields and set them to the value of the other object, if they exist in the other object
             for (let field of this.Fields) {
@@ -706,6 +722,9 @@ export abstract class BaseEntity {
                     const otherField = other.GetFieldByName(field.Name);
                     if (otherField) {
                         this.Set(field.Name, otherField.Value);
+                        if (replaceOldValues) {
+                            field.ResetOldValue();
+                        }
                     }
                 }
             }
@@ -780,7 +799,7 @@ export abstract class BaseEntity {
                         const data = await BaseEntity.Provider.Save(this, this.ActiveUser, _options)
                         if (data) {
                             this.init(); // wipe out the current data to flush out the DIRTY flags, load the ID as part of this too
-                            this.SetMany(data);
+                            this.SetMany(data, false, true); // set the new values from the data returned from the save, this will also reset the old values
                             const result = this.LatestResult;
                             if (result)
                                 result.NewValues = this.Fields.map(f => { return {FieldName: f.CodeName, Value: f.Value} }); // set the latest values here
@@ -943,7 +962,7 @@ export abstract class BaseEntity {
                 return false; // no data loaded, return false
             }
 
-            this.SetMany(data);
+            this.SetMany(data, false, true); // don't ignore non-existent fields, but DO replace old values
             if (EntityRelationshipsToLoad) {
                 for (let relationship of EntityRelationshipsToLoad) {
                     if (data[relationship]) {
@@ -965,10 +984,11 @@ export abstract class BaseEntity {
      *  (1) On the server if you are pulling data you know is fresh from say the result of another DB operation
      *  (2) If on any tier you run a fresh RunView result, that gives you data from the database, you can then instantiate objects via Metadata.GetEntityObject() and then use this with the result from the RunView call
      *  *** Note: for the #2 use case, when you call the RunView Object RunView() method with the ResultType='entity_object', you'll get an array of BaseEntity-derived objects instead of simple objects, that functionality utilizes this method
-     * @param data 
+     * @param data - a simple object that has properties that match the field names of the entity object
+     * @param replaceOldValues - if true, the old values of the fields will be set to the values provided in the data parameter, if false, they will be left alone
      * @returns 
      */
-    public LoadFromData(data: any) : boolean {
+    public LoadFromData(data: any, replaceOldValues: boolean = false) : boolean {
         this.SetMany(data, true);
         return true; 
     }

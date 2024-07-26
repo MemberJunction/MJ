@@ -2,7 +2,7 @@ import { GraphQLServerGeneratorBase } from './graphql_server_codegen';
 import { SQLCodeGenBase } from './Database/sql_codegen';
 import { EntitySubClassGeneratorBase } from './entity_subclasses_codegen';
 import { UserCache, setupSQLServerClient } from '@memberjunction/sqlserver-dataprovider'
-import AppDataSource from "./Config/db-connection"
+import AppDataSource, { MSSQLConnection } from "./Config/db-connection"
 import { ManageMetadataBase } from './Database/manage-metadata';
 import { outputDir, commands, mj_core_schema, mjCoreSchema, configInfo, getSettingValue } from './Config/config';
 import { logError, logMessage, logStatus, logWarning } from './Misc/logging';
@@ -15,6 +15,7 @@ import { CreateNewUserBase } from './Misc/createNewUser';
 import { MJGlobal, RegisterClass } from '@memberjunction/global';
 import { ActionSubClassGeneratorBase } from './action_subclasses_codegen';
 import { ActionEngine } from '@memberjunction/actions';
+import { EntityTypeGeneratorBase } from './entity_types_codegen';
 
 /**
  * This class is the main entry point for running the code generation process. It will handle all the steps required to generate the code for the MemberJunction system. You can sub-class this class
@@ -37,6 +38,9 @@ export class RunCodeGenBase {
         .catch((err) => {
             logError("Error during Data Source initialization", err);
         })
+
+        const pool = await MSSQLConnection(); // get the MSSQL connection pool
+
         const config = new SQLServerProviderConfigData(AppDataSource,'',  mj_core_schema(), 0 );
         await setupSQLServerClient(config);
     }
@@ -183,7 +187,33 @@ export class RunCodeGenBase {
             else
                 logStatus('Entity subclass output directory NOT found in config file, skipping...');
     
-    
+            
+            /****************************************************************************************
+            // STEP 4.2 - Core Entity Type Definition Code Gen
+            ****************************************************************************************/
+            const coreEntityTypeDefinitionsOutputDir = outputDir('CoreEntityTypeDefintions', false);
+            if (coreEntityTypeDefinitionsOutputDir && coreEntityTypeDefinitionsOutputDir.length > 0) {
+                // generate the entity subclass code
+                logStatus('Generating CORE Entity Type Definitions Code...')
+                const entitySubClassGeneratorObject = MJGlobal.Instance.ClassFactory.CreateInstance<EntityTypeGeneratorBase>(EntityTypeGeneratorBase);
+                if (! entitySubClassGeneratorObject.generateAllEntityTypeDefinitions(coreEntities, coreEntitySubClassOutputDir)){
+                    logError('Error generating core entity type definitions');
+                }
+            }
+
+            /****************************************************************************************
+            // STEP 4.3 - Entity Type Definition Code Gen
+            ****************************************************************************************/
+            const entityTypeDefinitionsOutputDir = outputDir('EntityTypeDefinitions', false);
+            if (entityTypeDefinitionsOutputDir && entityTypeDefinitionsOutputDir.length > 0) {
+                // generate the entity subclass code
+                logStatus('Generating Entity Type Definitions Code...')
+                const entitySubClassGeneratorObject = MJGlobal.Instance.ClassFactory.CreateInstance<EntityTypeGeneratorBase>(EntityTypeGeneratorBase);
+                if (! entitySubClassGeneratorObject.generateAllEntityTypeDefinitions(nonCoreEntities, entitySubClassOutputDir)){
+                    logError('Error generating entity type definitions');
+                }
+            }
+
             /****************************************************************************************
             // STEP 5 - Angular Code Gen
             ****************************************************************************************/

@@ -108,6 +108,16 @@ export class ActionAuthorizationEntity extends BaseEntity {
     get Action(): string {  
         return this.Get('Action');
     }
+
+    /**
+    * * Field Name: Authorization
+    * * Display Name: Authorization
+    * * SQL Data Type: nvarchar(100)
+    * * Default Value: null
+    */
+    get Authorization(): string {  
+        return this.Get('Authorization');
+    }
 }
 
             
@@ -1803,7 +1813,7 @@ export class AIModelTypeEntity extends BaseEntity {
  * * Schema: __mj
  * * Base Table: AIModel
  * * Base View: vwAIModels
- * * @description Catalog of all AI Models configured in the system
+ * * @description Catalog of all AI Models configured in the system.
  * * Primary Key: ID
  * @extends {BaseEntity}
  * @class
@@ -2252,6 +2262,16 @@ export class ApplicationSettingEntity extends BaseEntity {
     get __mj_UpdatedAt(): Date {  
         return this.Get('__mj_UpdatedAt');
     }
+
+    /**
+    * * Field Name: Application
+    * * Display Name: Application
+    * * SQL Data Type: nvarchar(100)
+    * * Default Value: null
+    */
+    get Application(): string {  
+        return this.Get('Application');
+    }
 }
 
             
@@ -2506,6 +2526,16 @@ export class AuditLogTypeEntity extends BaseEntity {
     get Parent(): string | null {  
         return this.Get('Parent');
     }
+
+    /**
+    * * Field Name: Authorization
+    * * Display Name: Authorization
+    * * SQL Data Type: nvarchar(100)
+    * * Default Value: null
+    */
+    get Authorization(): string | null {  
+        return this.Get('Authorization');
+    }
 }
 
             
@@ -2695,6 +2725,26 @@ export class AuditLogEntity extends BaseEntity {
     }
 
     /**
+    * * Field Name: AuditLogType
+    * * Display Name: Audit Log Type
+    * * SQL Data Type: nvarchar(50)
+    * * Default Value: null
+    */
+    get AuditLogType(): string {  
+        return this.Get('AuditLogType');
+    }
+
+    /**
+    * * Field Name: Authorization
+    * * Display Name: Authorization
+    * * SQL Data Type: nvarchar(100)
+    * * Default Value: null
+    */
+    get Authorization(): string | null {  
+        return this.Get('Authorization');
+    }
+
+    /**
     * * Field Name: Entity
     * * Display Name: Entity
     * * SQL Data Type: nvarchar(255)
@@ -2829,6 +2879,26 @@ export class AuthorizationRoleEntity extends BaseEntity {
     */
     get __mj_UpdatedAt(): Date {  
         return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Authorization
+    * * Display Name: Authorization
+    * * SQL Data Type: nvarchar(100)
+    * * Default Value: null
+    */
+    get Authorization(): string {  
+        return this.Get('Authorization');
+    }
+
+    /**
+    * * Field Name: Role
+    * * Display Name: Role
+    * * SQL Data Type: nvarchar(50)
+    * * Default Value: null
+    */
+    get Role(): string {  
+        return this.Get('Role');
     }
 }
 
@@ -4537,6 +4607,7 @@ export class CompanyIntegrationRunEntity extends BaseEntity {
     * * Field Name: RunByUser
     * * Display Name: Run By User
     * * SQL Data Type: nvarchar(100)
+    * * Default Value: null
     */
     get RunByUser(): string {  
         return this.Get('RunByUser');
@@ -5162,6 +5233,16 @@ export class ConversationEntity extends BaseEntity {
     */
     get LinkedEntity(): string | null {  
         return this.Get('LinkedEntity');
+    }
+
+    /**
+    * * Field Name: DataContext
+    * * Display Name: Data Context
+    * * SQL Data Type: nvarchar(255)
+    * * Default Value: null
+    */
+    get DataContext(): string | null {  
+        return this.Get('DataContext');
     }
 }
 
@@ -5948,6 +6029,16 @@ export class DatasetItemEntity extends BaseEntity {
     */
     get __mj_UpdatedAt(): Date {  
         return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Dataset
+    * * Display Name: Dataset
+    * * SQL Data Type: nvarchar(100)
+    * * Default Value: null
+    */
+    get Dataset(): string {  
+        return this.Get('Dataset');
     }
 
     /**
@@ -9632,6 +9723,36 @@ export class EntityDocumentEntity extends BaseEntity {
     get Entity(): string {  
         return this.Get('Entity');
     }
+
+    /**
+    * * Field Name: VectorDatabase
+    * * Display Name: Vector Database
+    * * SQL Data Type: nvarchar(100)
+    * * Default Value: null
+    */
+    get VectorDatabase(): string {  
+        return this.Get('VectorDatabase');
+    }
+
+    /**
+    * * Field Name: Template
+    * * Display Name: Template
+    * * SQL Data Type: nvarchar(255)
+    * * Default Value: null
+    */
+    get Template(): string {  
+        return this.Get('Template');
+    }
+
+    /**
+    * * Field Name: AIModel
+    * * Display Name: AIModel
+    * * SQL Data Type: nvarchar(50)
+    * * Default Value: null
+    */
+    get AIModel(): string {  
+        return this.Get('AIModel');
+    }
 }
 
             
@@ -10877,6 +10998,36 @@ export class EntityRecordDocumentEntity extends BaseEntity {
     */
     get __mj_UpdatedAt(): Date {  
         return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Entity
+    * * Display Name: Entity
+    * * SQL Data Type: nvarchar(255)
+    * * Default Value: null
+    */
+    get Entity(): string {  
+        return this.Get('Entity');
+    }
+
+    /**
+    * * Field Name: EntityDocument
+    * * Display Name: Entity Document
+    * * SQL Data Type: nvarchar(250)
+    * * Default Value: null
+    */
+    get EntityDocument(): string {  
+        return this.Get('EntityDocument');
+    }
+
+    /**
+    * * Field Name: VectorIndex
+    * * Display Name: Vector Index
+    * * SQL Data Type: nvarchar(255)
+    * * Default Value: null
+    */
+    get VectorIndex(): string {  
+        return this.Get('VectorIndex');
     }
 }
 
@@ -13299,6 +13450,26 @@ export class ListCategoryEntity extends BaseEntity {
     get __mj_UpdatedAt(): Date {  
         return this.Get('__mj_UpdatedAt');
     }
+
+    /**
+    * * Field Name: Parent
+    * * Display Name: Parent
+    * * SQL Data Type: nvarchar(100)
+    * * Default Value: null
+    */
+    get Parent(): string | null {  
+        return this.Get('Parent');
+    }
+
+    /**
+    * * Field Name: User
+    * * Display Name: User
+    * * SQL Data Type: nvarchar(100)
+    * * Default Value: null
+    */
+    get User(): string {  
+        return this.Get('User');
+    }
 }
 
             
@@ -13570,6 +13741,16 @@ export class ListEntity extends BaseEntity {
     */
     get User(): string {  
         return this.Get('User');
+    }
+
+    /**
+    * * Field Name: Category
+    * * Display Name: Category
+    * * SQL Data Type: nvarchar(100)
+    * * Default Value: null
+    */
+    get Category(): string | null {  
+        return this.Get('Category');
     }
 }
 
@@ -14604,6 +14785,26 @@ export class QueryPermissionEntity extends BaseEntity {
     */
     get __mj_UpdatedAt(): Date {  
         return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Query
+    * * Display Name: Query
+    * * SQL Data Type: nvarchar(255)
+    * * Default Value: null
+    */
+    get Query(): string {  
+        return this.Get('Query');
+    }
+
+    /**
+    * * Field Name: Role
+    * * Display Name: Role
+    * * SQL Data Type: nvarchar(50)
+    * * Default Value: null
+    */
+    get Role(): string {  
+        return this.Get('Role');
     }
 }
 
@@ -16548,6 +16749,16 @@ export class RecordMergeLogEntity extends BaseEntity {
     get InitiatedByUser(): string {  
         return this.Get('InitiatedByUser');
     }
+
+    /**
+    * * Field Name: ApprovedByUser
+    * * Display Name: Approved By User
+    * * SQL Data Type: nvarchar(100)
+    * * Default Value: null
+    */
+    get ApprovedByUser(): string | null {  
+        return this.Get('ApprovedByUser');
+    }
 }
 
             
@@ -17634,6 +17845,26 @@ export class ScheduledActionParamEntity extends BaseEntity {
     get __mj_UpdatedAt(): Date {  
         return this.Get('__mj_UpdatedAt');
     }
+
+    /**
+    * * Field Name: ScheduledAction
+    * * Display Name: Scheduled Action
+    * * SQL Data Type: nvarchar(255)
+    * * Default Value: null
+    */
+    get ScheduledAction(): string {  
+        return this.Get('ScheduledAction');
+    }
+
+    /**
+    * * Field Name: ActionParam
+    * * Display Name: Action Param
+    * * SQL Data Type: nvarchar(255)
+    * * Default Value: null
+    */
+    get ActionParam(): string {  
+        return this.Get('ActionParam');
+    }
 }
 
             
@@ -17875,6 +18106,26 @@ export class ScheduledActionEntity extends BaseEntity {
     */
     get __mj_UpdatedAt(): Date {  
         return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: CreatedByUser
+    * * Display Name: Created By User
+    * * SQL Data Type: nvarchar(100)
+    * * Default Value: null
+    */
+    get CreatedByUser(): string {  
+        return this.Get('CreatedByUser');
+    }
+
+    /**
+    * * Field Name: Action
+    * * Display Name: Action
+    * * SQL Data Type: nvarchar(425)
+    * * Default Value: null
+    */
+    get Action(): string {  
+        return this.Get('Action');
     }
 }
 
@@ -19727,18 +19978,6 @@ export class UserNotificationEntity extends BaseEntity {
     }
 
     /**
-    * * Field Name: ResourceRecordID
-    * * Display Name: Resource Record ID
-    * * SQL Data Type: int
-    */
-    get ResourceRecordID(): number | null {  
-        return this.Get('ResourceRecordID');
-    }
-    set ResourceRecordID(value: number | null) {
-        this.Set('ResourceRecordID', value);
-    }
-
-    /**
     * * Field Name: ResourceConfiguration
     * * Display Name: Resource Configuration
     * * SQL Data Type: nvarchar(MAX)
@@ -19793,6 +20032,18 @@ export class UserNotificationEntity extends BaseEntity {
     */
     get __mj_UpdatedAt(): Date {  
         return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: ResourceRecordID
+    * * Display Name: Resource Record ID
+    * * SQL Data Type: uniqueidentifier
+    */
+    get ResourceRecordID(): string | null {  
+        return this.Get('ResourceRecordID');
+    }
+    set ResourceRecordID(value: string | null) {
+        this.Set('ResourceRecordID', value);
     }
 
     /**
@@ -20252,6 +20503,16 @@ export class UserViewCategoryEntity extends BaseEntity {
     */
     get Parent(): string | null {  
         return this.Get('Parent');
+    }
+
+    /**
+    * * Field Name: Entity
+    * * Display Name: Entity
+    * * SQL Data Type: nvarchar(255)
+    * * Default Value: null
+    */
+    get Entity(): string {  
+        return this.Get('Entity');
     }
 
     /**

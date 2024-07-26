@@ -225,8 +225,14 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
    * @returns 
    */
   public IsCurrentTab(tabName: string): boolean {
-    const tab = this.tabComponent?.GetTabByName(tabName);
-    return tab?.index === this.tabComponent?.SelectedTabIndex;
+    if (this.tabComponent) {
+      const tab = this.tabComponent.GetTabByName(tabName);
+      if (tab) {
+        return tab.index === this.tabComponent.SelectedTabIndex;
+      }
+    }
+    // if we get here we are not in a state where we can determine the current tab, so return false
+    return false;
   }
 
   public BuildRelationshipViewParams(item: EntityRelationshipInfo): RunViewParams {

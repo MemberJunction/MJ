@@ -31,7 +31,7 @@ export class RecordChangesComponent implements OnInit, AfterViewInit, OnDestroy 
   ngOnInit(): void {
     if(this.record){
       this.showloader = true;
-      this.LoadRecordChanges(this.record.PrimaryKey.ToString(), '', this.record.EntityInfo.Name);
+      this.LoadRecordChanges(this.record.PrimaryKey.ToConcatenatedString(), '', this.record.EntityInfo.Name);
       this.prepareColumns();
     }
   }

@@ -51,38 +51,43 @@ export class SQLCodeGenBase {
             const includedEntities = baselineEntities.filter(e => configInfo.excludeSchemas.find(s => s.toLowerCase() === e.SchemaName.toLowerCase()) === undefined); //only include entities that are NOT in the excludeSchemas list
             const excludedEntities = baselineEntities.filter(e => configInfo.excludeSchemas.find(s => s.toLowerCase() === e.SchemaName.toLowerCase()) !== undefined); //only include entities that ARE in the excludeSchemas list in this array
     
-            // STEP 2(a) - generate all the SQL files and execute them
+            // STEP 2(a) - clean out all *.generated.sql and *.permissions.generated.sql files from the directory
+            this.deleteGeneratedEntityFiles(directory, baselineEntities);
+
+            // STEP 2(b) - generate all the SQL files and execute them
             const step2StartTime: Date = new Date();
-            if (! await this.generateAndExecuteEntitySQLToSeparateFiles(ds, includedEntities, directory, false)) {  
-                logError('Error generating and executing all entities SQL to separate files');
+            const genResult = await this.generateAndExecuteEntitySQLToSeparateFiles(ds, includedEntities, directory, false, true);
+            if (!genResult.Success) {  
+                logError('Error generating all entities SQL to separate files');
                 return false;
             }
     
-            // STEP 2(b) - for the excludedEntities, while we don't want to generate SQL, we do want to generate the permissions files for them
-            if (! await this.generateAndExecuteEntitySQLToSeparateFiles(ds, excludedEntities, directory, true)) {
-                logError('Error generating and executing permissions SQL for excluded entities to separate files');
+            // STEP 2(c) - for the excludedEntities, while we don't want to generate SQL, we do want to generate the permissions files for them
+            const genResult2 = await this.generateAndExecuteEntitySQLToSeparateFiles(ds, excludedEntities, directory, true, true);
+            if (!genResult2.Success) {
+                logError('Error generating permissions SQL for excluded entities to separate files');
                 return false;
             }
-            logStatus(`   Time to Generate/Execute Entity SQL: ${(new Date().getTime() - step2StartTime.getTime())/1000} seconds`);
+            logStatus(`   Time to generate entity SQL: ${(new Date().getTime() - step2StartTime.getTime())/1000} seconds`);
     
-            // now that we've generated the SQL, let's create a combined file in each schema sub-directory for convenience for a DBA
-            this.createCombinedEntitySQLFiles(directory, baselineEntities);
+            // STEP 2(d) now that we've generated the SQL, let's create a combined file in each schema sub-directory for convenience for a DBA
+            const allEntityFiles = this.createCombinedEntitySQLFiles(directory, baselineEntities);
+            // STEP 2(e) ---- FINALLY, we now execute all the combined files by schema;
+            const step2eStartTime: Date = new Date();
+            if (! await this.SQLUtilityObject.executeSQLFiles(allEntityFiles, true)) {
+                logError('Error executing combined entity SQL files');
+                return false;
+            }
+            const step2eEndTime: Date = new Date();
+            logStatus(`   Time to Execute Combined Entity SQL: ${(step2eEndTime.getTime() - step2eStartTime.getTime())/1000} seconds`);
                     
             const manageMD = MJGlobal.Instance.ClassFactory.CreateInstance<ManageMetadataBase>(ManageMetadataBase)
             // STEP 3 - re-run the process to manage entity fields since the Step 1 and 2 above might have resulted in differences in base view columns compared to what we had at first
-            if (! await manageMD.manageEntityFields(ds, configInfo.excludeSchemas, true)) {
+            // we CAN skip the entity field values part because that wouldn't change from the first time we ran it
+            if (! await manageMD.manageEntityFields(ds, configInfo.excludeSchemas, true, true)) {
                 logError('Error managing entity fields');
                 return false;
             }
-            // no logStatus/timer for this because manageEntityFields() has its own internal logging for this including the total, so it is redundant to log it here
-    
-            // STEP 4- Apply permissions, executing all .permissions files
-            const step4StartTime: Date = new Date();
-            if (! await this.applyPermissions(ds, directory, baselineEntities)) {
-                logError('Error applying permissions');
-                return false;
-            }
-            logStatus(`   Time to Apply Permissions: ${(new Date().getTime() - step4StartTime.getTime())/1000} seconds`);
     
             // STEP 5 - execute any custom SQL scripts that should run afterwards
             const step5StartTime: Date = new Date();
@@ -113,7 +118,7 @@ export class SQLCodeGenBase {
             if (scripts) {
                 for (let i = 0; i < scripts.length; ++i) {
                     const s = scripts[i];
-                    if (! await this.SQLUtilityObject.executeSQLFile(ds, s.scriptFile, true)) {
+                    if (! await this.SQLUtilityObject.executeSQLFile(s.scriptFile)) {
                         logError(`Error executing custom '${when}' SQL script ${s.scriptFile}`);
                         bSuccess = false; // keep going if we have more scripts, but make sure we return false
                     }
@@ -142,7 +147,7 @@ export class SQLCodeGenBase {
                     for (const f of files) {
                         const fullPath = path.join(directory, f);
                         if (fs.existsSync(fullPath)) {
-                            if (!await this.SQLUtilityObject.executeSQLFile(ds, fullPath, true))
+                            if (!await this.SQLUtilityObject.executeSQLFile(fullPath))
                                 innerSuccess = false; // we keep going, just note that something failed
                         }
                         else {
@@ -177,7 +182,8 @@ export class SQLCodeGenBase {
      * @param directory The directory to save the generated SQL files to
      * @param onlyPermissions If true, only the permissions files will be generated and executed, not the actual SQL files. Use this if you are simply setting permission changes but no actual changes to the entities have occured.
      */
-    public async generateAndExecuteEntitySQLToSeparateFiles(ds: DataSource, entities: EntityInfo[], directory: string, onlyPermissions: boolean, writeFiles: boolean = true, batchSize: number = 5): Promise<boolean> {
+    public async generateAndExecuteEntitySQLToSeparateFiles(ds: DataSource, entities: EntityInfo[], directory: string, onlyPermissions: boolean, skipExecution: boolean = false, writeFiles: boolean = true, batchSize: number = 5): Promise<{Success: boolean, Files: string[]}> {
+        const files: string[] = [];
         try {
             let bFail: boolean = false;
             const totalEntities = entities.length;
@@ -188,53 +194,88 @@ export class SQLCodeGenBase {
                     const pkeyField = e.Fields.find(f => f.IsPrimaryKey)
                     if (!pkeyField) {
                         logError(`SKIPPING ENTITY: Entity ${e.Name}, because it does not have a primary key field defined. A table must have a primary key defined to quality to be a MemberJunction entity`);
-                        return false;
+                        return {Success: false, Files: []};
                     }
-                    return this.generateAndExecuteSingleEntitySQLToSeparateFiles(ds, e, directory, onlyPermissions, writeFiles);
+                    return this.generateAndExecuteSingleEntitySQLToSeparateFiles(ds, e, directory, onlyPermissions, skipExecution, writeFiles);
                 });
     
                 const results = await Promise.all(promises);
-                if (results.includes(false)) {
-                    bFail = true; // keep going, but will return false at the end
-                }
+                results.forEach(r => {
+                    if (!r.Success)
+                        bFail = true; // keep going, but will return false at the end
+                    files.push(...r.Files); // add the files to the main files array
+                });
             }
     
-            return !bFail;
+            return {Success: !bFail, Files: files};
         }
         catch (err) {
             logError(err);
-            return false;
+            return {Success: false, Files: files};
         }
     }
     
-    public async createCombinedEntitySQLFiles(directory: string, entities: EntityInfo[]) {
+    public deleteGeneratedEntityFiles(directory: string, entities: EntityInfo[]) {
+        try {
+            // for the schemas associated with the specified entities, clean out all the generated files
+            const schemaNames = entities.map(e => e.SchemaName).filter((value, index, self) => self.indexOf(value) === index);
+            for (const s of schemaNames) {
+                const fullPath = path.join(directory, s);
+                // now, within each schema directory, clean out all the generated files
+                // the generated files map this pattern: *.generated.sql or *.permissions.generated.sql
+                if (fs.statSync(fullPath).isDirectory()) {
+                    const files = fs.readdirSync(fullPath).filter(f => f.endsWith('.generated.sql') || f.endsWith('.permissions.generated.sql'));
+                    for (const f of files) {
+                        const filePath = path.join(fullPath, f);
+                        fs.unlinkSync(filePath);
+                    }
+                }
+            }
+        }
+        catch (e) {
+            logError(e);            
+        }
+    }
+
+    public createCombinedEntitySQLFiles(directory: string, entities: EntityInfo[]): string[] {
         // first, get a disinct list of schemanames from the entities
+        const files: string[] = [];
         const schemaNames = entities.map(e => e.SchemaName).filter((value, index, self) => self.indexOf(value) === index);
         for (const s of schemaNames) {
             // generate the all-entities.sql file and all-entities.permissions.sql file in each schema folder
             const fullPath = path.join(directory, s);
             if (fs.statSync(fullPath).isDirectory()) {
                 combineFiles(fullPath, '_all_entities.sql', '*.generated.sql', true);
+                files.push(path.join(fullPath, '_all_entities.sql'));
                 combineFiles(fullPath, '_all_entities.permissions.sql', '*.permissions.generated.sql', true);
+                files.push(path.join(fullPath, '_all_entities.permissions.sql'));
             }
         }
+        return files;
     }
     
     
     
-    public async generateAndExecuteSingleEntitySQLToSeparateFiles(ds: DataSource, entity: EntityInfo, directory: string, onlyPermissions: boolean, writeFiles: boolean = true): Promise<boolean> {
+    public async generateAndExecuteSingleEntitySQLToSeparateFiles(ds: DataSource, entity: EntityInfo, directory: string, onlyPermissions: boolean, skipExecution: boolean = false, writeFiles: boolean = true): Promise<{Success: boolean, Files: string[]}> {
         try {
-            const {sql, permissionsSQL} = await this.generateSingleEntitySQLToSeparateFiles(ds, entity, directory, onlyPermissions, writeFiles); // this creates the files and returns a single string with all the SQL we can then execute
-            return await this.SQLUtilityObject.executeSQLScript(ds, sql, true) && 
-                   await this.SQLUtilityObject.executeSQLScript(ds, permissionsSQL, true);
+            const {sql, permissionsSQL, files} = await this.generateSingleEntitySQLToSeparateFiles(ds, entity, directory, onlyPermissions, skipExecution, writeFiles); // this creates the files and returns a single string with all the SQL we can then execute
+            if (!skipExecution) {
+                return {
+                    Success: await this.SQLUtilityObject.executeSQLScript(ds, sql + "\n\nGO\n\n" + permissionsSQL, true), // combine the SQL and permissions and execute it,
+                    Files: files
+                }
+            }
+            else 
+                return {Success: true, Files: files};
         }
         catch (err) {
             logError(err);
-            return false;
+            return {Success: false, Files: []};
         }
     }
     
-    public async generateSingleEntitySQLToSeparateFiles(ds: DataSource, entity: EntityInfo, directory: string, onlyPermissions: boolean, writeFiles: boolean = true): Promise<{sql: string, permissionsSQL: string}> {
+    public async generateSingleEntitySQLToSeparateFiles(ds: DataSource, entity: EntityInfo, directory: string, onlyPermissions: boolean, skipExecution: boolean = false, writeFiles: boolean = true): Promise<{sql: string, permissionsSQL: string, files: string[]}> {
+        const files: string[] = [];
         try {
             // create the directory if it doesn't exist
             if (writeFiles && !fs.existsSync(directory))
@@ -252,16 +293,21 @@ export class SQLCodeGenBase {
                 // generate the base view
                 const s = this.generateSingleEntitySQLFileHeader(entity,entity.BaseView) + await this.generateBaseView(ds, entity)
                 const filePath = path.join(directory, this.SQLUtilityObject.getDBObjectFileName('view', entity.SchemaName, entity.BaseView, false, true));
-                if (writeFiles)
+                if (writeFiles) {
                     fs.writeFileSync(filePath, s)
+                    files.push(filePath);
+                }
                 sRet += s + '\nGO\n';
             }
             // always generate permissions for the base view
             const s = this.generateSingleEntitySQLFileHeader(entity, 'Permissions for ' + entity.BaseView) + this.generateViewPermissions(entity)
             if (s.length > 0) 
                 permissionsSQL += s + '\nGO\n'; 
-            if (writeFiles)
-                fs.writeFileSync(path.join(directory, this.SQLUtilityObject.getDBObjectFileName('view', entity.SchemaName, entity.BaseView, true, true)), s)
+            if (writeFiles) {
+                const filePath = path.join(directory, this.SQLUtilityObject.getDBObjectFileName('view', entity.SchemaName, entity.BaseView, true, true));
+                fs.writeFileSync(filePath, s)
+                files.push(filePath);
+            }
     
             // now, append the permissions to the return string IF we did NOT generate the base view - because if we generated the base view, that
             // means we already generated the permissions for it above and it is part of sRet already, but we always save it to a file, (per above line)
@@ -274,15 +320,21 @@ export class SQLCodeGenBase {
                 if (!onlyPermissions && entity.spCreateGenerated) {
                     // generate the create SP
                     const s = this.generateSingleEntitySQLFileHeader(entity, spName) + this.generateSPCreate(entity)
-                    if (writeFiles)
-                        fs.writeFileSync(path.join(directory, this.SQLUtilityObject.getDBObjectFileName('sp', entity.SchemaName, spName, false, true)), s)
+                    if (writeFiles) {
+                        const filePath = path.join(directory, this.SQLUtilityObject.getDBObjectFileName('sp', entity.SchemaName, spName, false, true))
+                        fs.writeFileSync(filePath, s);
+                        files.push(filePath);
+                    }
                     sRet += s + '\nGO\n';
                 }
                 const s = this.generateSPPermissions(entity, spName, SPType.Create) + '\n\n';           
                 if (s.length > 0) 
                     permissionsSQL += s + '\nGO\n'; 
-                if (writeFiles)
-                    fs.writeFileSync(path.join(directory, this.SQLUtilityObject.getDBObjectFileName('sp', entity.SchemaName, spName, true, true)), s)
+                if (writeFiles) {
+                    const filePath = path.join(directory, this.SQLUtilityObject.getDBObjectFileName('sp', entity.SchemaName, spName, true, true))
+                    fs.writeFileSync(filePath, s);
+                    files.push(filePath);
+                }
     
                 // now, append the permissions to the return string IF we did NOT generate the proc - because if we generated the proc, that
                 // means we already generated the permissions for it above and it is part of sRet already, but we always save it to a file, (per above line)
@@ -296,15 +348,21 @@ export class SQLCodeGenBase {
                 if (!onlyPermissions && entity.spUpdateGenerated) {
                     // generate the update SP
                     const s = this.generateSingleEntitySQLFileHeader(entity, spName) + this.generateSPUpdate(entity)
-                    if (writeFiles)
-                        fs.writeFileSync(path.join(directory, this.SQLUtilityObject.getDBObjectFileName('sp', entity.SchemaName, spName, false, true)), s)    
+                    if (writeFiles) {
+                        const filePath = path.join(directory, this.SQLUtilityObject.getDBObjectFileName('sp', entity.SchemaName, spName, false, true))
+                        fs.writeFileSync(filePath, s);
+                        files.push(filePath);    
+                    }
                     sRet += s + '\nGO\n';
                 }
                 const s = this.generateSPPermissions(entity, spName, SPType.Update) + '\n\n';
                 if (s.length > 0) 
                     permissionsSQL += s + '\nGO\n';     
-                if (writeFiles)
-                    fs.writeFileSync(path.join(directory, this.SQLUtilityObject.getDBObjectFileName('sp', entity.SchemaName, spName, true, true)), s)
+                if (writeFiles) {
+                    const filePath = path.join(directory, this.SQLUtilityObject.getDBObjectFileName('sp', entity.SchemaName, spName, true, true));
+                    fs.writeFileSync(filePath, s);
+                    files.push(filePath);
+                }
     
                 // now, append the permissions to the return string IF we did NOT generate the proc - because if we generated the proc, that
                 // means we already generated the permissions for it above and it is part of sRet already, but we always save it to a file, (per above line)
@@ -318,15 +376,21 @@ export class SQLCodeGenBase {
                 if (!onlyPermissions && entity.spDeleteGenerated) {
                     // generate the delete SP
                     const s = this.generateSingleEntitySQLFileHeader(entity, spName) + this.generateSPDelete(entity)
-                    if (writeFiles)
-                        fs.writeFileSync(path.join(directory, this.SQLUtilityObject.getDBObjectFileName('sp', entity.SchemaName, spName, false, true)), s)
+                    if (writeFiles) {
+                        const filePath = path.join(directory, this.SQLUtilityObject.getDBObjectFileName('sp', entity.SchemaName, spName, false, true))
+                        fs.writeFileSync(filePath, s);
+                        files.push(filePath);
+                    }
                     sRet += s + '\nGO\n';
                 }
                 const s = this.generateSPPermissions(entity, spName, SPType.Delete) + '\n\n';
                 if (s.length > 0) 
                     permissionsSQL += s + '\nGO\n';     
-                if (writeFiles)
-                    fs.writeFileSync(path.join(directory, this.SQLUtilityObject.getDBObjectFileName('sp', entity.SchemaName, spName, true, true)), s)
+                if (writeFiles) {
+                    const filePath = path.join(directory, this.SQLUtilityObject.getDBObjectFileName('sp', entity.SchemaName, spName, true, true));
+                    fs.writeFileSync(filePath, s);
+                    files.push(filePath);
+                }
     
                 // now, append the permissions to the return string IF we did NOT generate the proc - because if we generated the proc, that
                 // means we already generated the permissions for it above and it is part of sRet already, but we always save it to a file, (per above line)
@@ -341,8 +405,10 @@ export class SQLCodeGenBase {
                 if (!onlyPermissions) {
                     // only write the actual sql out if we're not only generating permissions
                     const filePath = path.join(directory, this.SQLUtilityObject.getDBObjectFileName('full_text_search_function', entity.SchemaName, entity.BaseTable, false, true));
-                    if (writeFiles)
+                    if (writeFiles) {
                         fs.writeFileSync(filePath, ft.sql)
+                        files.push(filePath);
+                    }
                     sRet += ft.sql + '\nGO\n';
                 }
     
@@ -351,8 +417,10 @@ export class SQLCodeGenBase {
                     permissionsSQL += sP + '\nGO\n'; 
     
                 const filePath = path.join(directory, this.SQLUtilityObject.getDBObjectFileName('full_text_search_function', entity.SchemaName, entity.BaseTable, true, true));
-                if (writeFiles)
+                if (writeFiles) {
                     fs.writeFileSync(filePath, sP)
+                    files.push(filePath);
+                }
                 
                 // now, append the permissions to the return string IF we did NOT generate the function - because if we generated the function, that
                 // means we already generated the permissions for it above and it is part of sRet already, but we always save it to a file, (per above line)
@@ -360,7 +428,7 @@ export class SQLCodeGenBase {
                     sRet += sP + '\nGO\n';
             }
     
-            return {sql: sRet, permissionsSQL: permissionsSQL};
+            return {sql: sRet, permissionsSQL: permissionsSQL, files: files};
         }
         catch (err) {
             logError(err)
@@ -641,41 +709,41 @@ ${whereClause}GO${permissions}
         let sOutput: string = '';
         let fieldCount: number = 0;
         const manageMD = MJGlobal.Instance.ClassFactory.CreateInstance<ManageMetadataBase>(ManageMetadataBase)
-        for (let i: number = 0; i < entityFields.length; i++) { 
-            const ef: EntityFieldInfo = entityFields[i];
-            if (ef.RelatedEntityID && ef.IncludeRelatedEntityNameFieldInBaseView) {
-                const {nameField, nameFieldIsVirtual} = this.getIsNameFieldForSingleEntity(ef.RelatedEntity);
-                if (nameField !== '') {
-                    // only add to the output, if we found a name field for the related entity.
-                    ef._RelatedEntityTableAlias = ef.RelatedEntityClassName + '_' + ef.Name;
-                    ef._RelatedEntityNameFieldIsVirtual = nameFieldIsVirtual;
-    
-                    // This next section generates a field name for the new virtual field and makes sure it doesn't collide with a field in the base table
-                    const candidateName = this.stripID(ef.Name);
-                    // check to make sure candidateName is not already a field name in the base table (other than a virtual field of course, as that is what we're creating) 
-                    // because if it is, we need to change it to something else
-                    const bFound = entityFields.find(f => f.IsVirtual === false && f.Name.trim().toLowerCase() === candidateName.trim().toLowerCase()) !== undefined;
-                    if (bFound)
-                        ef._RelatedEntityNameFieldMap = candidateName + '_Virtual';
-                    else
-                        ef._RelatedEntityNameFieldMap = candidateName;
-    
-                    // now we have a safe field name alias for the new virtual field in the _RelatedEntityNameFieldMap property, so use it...
-                    sOutput += `${fieldCount == 0 ? '' : ','}\n    ${ef._RelatedEntityTableAlias}.[${nameField}] AS [${ef._RelatedEntityNameFieldMap}]`;
-    
-                    // check to see if the database already knows about the RelatedEntityNameFieldMap or not
-                    if (ef.RelatedEntityNameFieldMap === null || 
-                        ef.RelatedEntityNameFieldMap === undefined || 
-                        ef.RelatedEntityNameFieldMap.trim().length === 0) {
-                        // the database doesn't yet know about this RelatedEntityNameFieldMap, so we need to update it
-                        // first update the actul field in the metadata object so it can be used from this point forward
-                        // and it also reflects what the DB will hold
-                        ef.RelatedEntityNameFieldMap = ef._RelatedEntityNameFieldMap;
-                        // then update the database itself
-                        await manageMD.updateEntityFieldRelatedEntityNameFieldMap(ds, ef.ID, ef.RelatedEntityNameFieldMap);
-                    }
-                    fieldCount++;
+
+        // next get the fields that are related entities and have the IncludeRelatedEntityNameFieldInBaseView flag set to true
+        const qualifyingFields = entityFields.filter(f => f.RelatedEntityID && f.IncludeRelatedEntityNameFieldInBaseView);
+        for (const ef of qualifyingFields) {
+            const {nameField, nameFieldIsVirtual} = this.getIsNameFieldForSingleEntity(ef.RelatedEntity);
+            if (nameField !== '') {
+                // only add to the output, if we found a name field for the related entity.
+                ef._RelatedEntityTableAlias = ef.RelatedEntityClassName + '_' + ef.Name;
+                ef._RelatedEntityNameFieldIsVirtual = nameFieldIsVirtual;
+
+                // This next section generates a field name for the new virtual field and makes sure it doesn't collide with a field in the base table
+                const candidateName = this.stripID(ef.Name);
+                // check to make sure candidateName is not already a field name in the base table (other than a virtual field of course, as that is what we're creating) 
+                // because if it is, we need to change it to something else
+                const bFound = entityFields.find(f => f.IsVirtual === false && f.Name.trim().toLowerCase() === candidateName.trim().toLowerCase()) !== undefined;
+                if (bFound)
+                    ef._RelatedEntityNameFieldMap = candidateName + '_Virtual';
+                else
+                    ef._RelatedEntityNameFieldMap = candidateName;
+
+                // now we have a safe field name alias for the new virtual field in the _RelatedEntityNameFieldMap property, so use it...
+                sOutput += `${fieldCount === 0 ? '' : ','}\n    ${ef._RelatedEntityTableAlias}.[${nameField}] AS [${ef._RelatedEntityNameFieldMap}]`;
+
+                // check to see if the database already knows about the RelatedEntityNameFieldMap or not
+                if (ef.RelatedEntityNameFieldMap === null || 
+                    ef.RelatedEntityNameFieldMap === undefined || 
+                    ef.RelatedEntityNameFieldMap.trim().length === 0) {
+                    // the database doesn't yet know about this RelatedEntityNameFieldMap, so we need to update it
+                    // first update the actul field in the metadata object so it can be used from this point forward
+                    // and it also reflects what the DB will hold
+                    ef.RelatedEntityNameFieldMap = ef._RelatedEntityNameFieldMap;
+                    // then update the database itself
+                    await manageMD.updateEntityFieldRelatedEntityNameFieldMap(ds, ef.ID, ef.RelatedEntityNameFieldMap);
                 }
+                fieldCount++;
             }
         }
         return sOutput;

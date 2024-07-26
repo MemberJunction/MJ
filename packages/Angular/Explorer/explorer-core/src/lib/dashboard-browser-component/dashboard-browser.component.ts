@@ -14,6 +14,9 @@ import { RegisterClass } from '@memberjunction/global';
 })
 @RegisterClass(BaseNavigationComponent, 'Dashboards')
 export class DashboardBrowserComponent extends BaseBrowserComponent {
+  public extraDropdownOptions:  {text: string}[] = [
+    {text: 'View'}
+  ];
 
   constructor(private router: Router, private route: ActivatedRoute, private sharedService: SharedService) {
     super();

@@ -17,7 +17,7 @@ export class SingleSearchResultComponent implements AfterViewInit {
   public get params(): RunViewParams {
     const p: RunViewParams = {
       EntityName: this.entity,
-      ExtraFilter: "ID > 0", // temporary hack as ExtraFilter is required for dynamic views
+      ExtraFilter: "ID IS NOT NULL", // temporary hack as ExtraFilter is required for dynamic views
       UserSearchString: this.searchInput,
     }
     return p;
