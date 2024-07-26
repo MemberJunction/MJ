@@ -2,6 +2,57 @@
   "name": "@memberjunction/templates",
   "entries": [
     {
+      "date": "Fri, 26 Jul 2024 17:54:29 GMT",
+      "version": "2.1.1",
+      "tag": "@memberjunction/templates_v2.1.1",
+      "comments": {
+        "patch": [
+          {
+            "author": "beachball",
+            "package": "@memberjunction/templates",
+            "comment": "Bump @memberjunction/core to v2.1.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/templates",
+            "comment": "Bump @memberjunction/templates-base-types to v2.1.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/templates",
+            "comment": "Bump @memberjunction/ai to v2.1.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/templates",
+            "comment": "Bump @memberjunction/aiengine to v2.1.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/templates",
+            "comment": "Bump @memberjunction/ai-groq to v2.1.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/templates",
+            "comment": "Bump @memberjunction/core-entities to v2.1.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/templates",
+            "comment": "Bump @memberjunction/global to v2.1.1",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
       "date": "Fri, 21 Jun 2024 13:15:28 GMT",
       "version": "1.8.1",
       "tag": "@memberjunction/templates_v1.8.1",

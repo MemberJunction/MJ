@@ -2,6 +2,33 @@
   "name": "@memberjunction/ng-base-types",
   "entries": [
     {
+      "date": "Fri, 26 Jul 2024 17:54:29 GMT",
+      "version": "2.1.1",
+      "tag": "@memberjunction/ng-base-types_v2.1.1",
+      "comments": {
+        "patch": [
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-base-types",
+            "comment": "Bump @memberjunction/core-entities to v2.1.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-base-types",
+            "comment": "Bump @memberjunction/global to v2.1.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-base-types",
+            "comment": "Bump @memberjunction/core to v2.1.1",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
       "date": "Fri, 21 Jun 2024 13:15:28 GMT",
       "version": "1.8.1",
       "tag": "@memberjunction/ng-base-types_v1.8.1",
