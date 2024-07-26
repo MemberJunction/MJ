@@ -12,7 +12,7 @@ $ npm install -g @memberjunction/cli
 $ mj COMMAND
 running command...
 $ mj (--version)
-@memberjunction/cli/2.0.0 darwin-arm64 node-v20.15.1
+@memberjunction/cli/2.1.0 darwin-arm64 node-v20.15.1
 $ mj --help [COMMAND]
 USAGE
   $ mj COMMAND
@@ -22,11 +22,9 @@ USAGE
 # Commands
 <!-- commands -->
 * [`mj clean`](#mj-clean)
-* [`mj codegen`](#mj-codegen)
 * [`mj help [COMMAND]`](#mj-help-command)
 * [`mj install`](#mj-install)
 * [`mj migrate`](#mj-migrate)
-* [`mj test`](#mj-test)
 * [`mj version`](#mj-version)
 
 ## `mj clean`
@@ -47,27 +45,7 @@ EXAMPLES
   $ mj clean
 ```
 
-_See code: [src/commands/clean/index.ts](https://github.com/MemberJunction/MJ/blob/v2.0.0/src/commands/clean/index.ts)_
-
-## `mj codegen`
-
-Runs the MemberJunction code generation
-
-```
-USAGE
-  $ mj codegen [--skipdb]
-
-FLAGS
-  --skipdb  Enable additional logging
-
-DESCRIPTION
-  Runs the MemberJunction code generation
-
-EXAMPLES
-  $ mj codegen
-```
-
-_See code: [src/commands/codegen/index.ts](https://github.com/MemberJunction/MJ/blob/v2.0.0/src/commands/codegen/index.ts)_
+_See code: [src/commands/clean/index.ts](https://github.com/MemberJunction/MJ/blob/v2.1.0/src/commands/clean/index.ts)_
 
 ## `mj help [COMMAND]`
 
@@ -107,7 +85,7 @@ EXAMPLES
   $ mj install
 ```
 
-_See code: [src/commands/install/index.ts](https://github.com/MemberJunction/MJ/blob/v2.0.0/src/commands/install/index.ts)_
+_See code: [src/commands/install/index.ts](https://github.com/MemberJunction/MJ/blob/v2.1.0/src/commands/install/index.ts)_
 
 ## `mj migrate`
 
@@ -127,27 +105,7 @@ EXAMPLES
   $ mj migrate
 ```
 
-_See code: [src/commands/migrate/index.ts](https://github.com/MemberJunction/MJ/blob/v2.0.0/src/commands/migrate/index.ts)_
-
-## `mj test`
-
-An empty commad to test CLI debugging
-
-```
-USAGE
-  $ mj test [-v]
-
-FLAGS
-  -v, --verbose  Enable additional logging
-
-DESCRIPTION
-  An empty commad to test CLI debugging
-
-EXAMPLES
-  $ mj test
-```
-
-_See code: [src/commands/test/index.ts](https://github.com/MemberJunction/MJ/blob/v2.0.0/src/commands/test/index.ts)_
+_See code: [src/commands/migrate/index.ts](https://github.com/MemberJunction/MJ/blob/v2.1.0/src/commands/migrate/index.ts)_
 
 ## `mj version`
 
