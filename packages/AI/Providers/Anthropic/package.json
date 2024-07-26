@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ai-anthropic",
-  "version": "2.1.0",
+  "version": "2.1.1",
   "description": "MemberJunction Wrapper for Anthropic AI Models",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -20,7 +20,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "0.22.0",
-    "@memberjunction/ai": "2.1.0",
-    "@memberjunction/global": "2.1.0"
+    "@memberjunction/ai": "2.1.1",
+    "@memberjunction/global": "2.1.1"
   }
 }
