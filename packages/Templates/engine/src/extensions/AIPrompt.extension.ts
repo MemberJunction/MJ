@@ -4,7 +4,11 @@ import { NunjucksCallback, TemplateExtensionBase } from "./TemplateExtensionBase
 import { AIEngine } from "@memberjunction/aiengine";
 import { BaseLLM, GetAIAPIKey } from "@memberjunction/ai";
 import { AIModelEntityExtended } from "@memberjunction/core-entities";
-import { Parser, Nodes, Lexer, Context } from 'nunjucks'; // Assuming these types exist in the Nunjucks TypeScript definitions
+// TODO: Add type defs based on nunjucks classes used for extensions
+type Parser = any;
+type Nodes = any;
+type Lexer = any;
+type Context = any;
 
 /**
  * This class is an extension for the Nunjucks template engine that allows for the use of an AI prompt in a template.

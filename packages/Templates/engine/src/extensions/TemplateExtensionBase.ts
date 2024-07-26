@@ -1,5 +1,10 @@
 import { UserInfo } from "@memberjunction/core";
-import { Parser, Nodes, Lexer, Context } from 'nunjucks'; // Assuming these types exist in the Nunjucks TypeScript definitions
+// TODO: Add type defs based on nunjucks classes used for extensions
+type Parser = any;
+type Nodes = any;
+type Lexer = any;
+type Context = any;
+
 
 // Define the type for the callback function
 export type NunjucksCallback = (err: Error | null, result?: any) => void;
