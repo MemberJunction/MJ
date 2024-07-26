@@ -23,4 +23,8 @@ const resolverPaths = [
   'generated/generated.{js,ts}',
 ];
 
-serve(resolverPaths.map(localPath));
+serve(resolverPaths.map(localPath)).then(() => {}).catch((e: unknown) => {
+  const errorString: string = JSON.stringify(e, null, 4);
+  console.error('Error starting MJAPI server:');
+  console.error(errorString);
+});
