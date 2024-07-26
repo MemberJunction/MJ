@@ -3,6 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import { makeDir } from './Misc/util';
 import { RegisterClass } from '@memberjunction/global';
+import { logStatus } from './Misc/logging';
 
 /**
  * Base class for generating entity sub-classes, you can sub-class this class to modify/extend your own entity sub-class generator logic
@@ -12,9 +13,13 @@ export class EntitySubClassGeneratorBase {
     public generateAllEntitySubClasses(entities: EntityInfo[], directory: string): boolean {
         try {   
             const sortedEntities = entities.sort((a, b) => a.Name.localeCompare(b.Name));
-            const sContent = this.generateEntitySubClassFileHeader() + sortedEntities.map(e => this.generateEntitySubClass(e, false)).join('')
+            
+            const zodContent: string = sortedEntities.map((entity: EntityInfo) => this.GenerateSchemaAndType(entity)).join('');
+            const sContent = sortedEntities.map(e => this.generateEntitySubClass(e, false)).join('');
+            const allContent = `${this.generateEntitySubClassFileHeader()} \n ${zodContent} \n ${sContent}`;
+
             makeDir(directory);
-            fs.writeFileSync(path.join(directory, 'entity_subclasses.ts'), sContent);
+            fs.writeFileSync(path.join(directory, 'entity_subclasses.ts'), allContent);
     
             return true;
         } catch (err) {
@@ -26,7 +31,7 @@ export class EntitySubClassGeneratorBase {
     public generateEntitySubClassFileHeader(): string {
         return `import { BaseEntity, EntitySaveOptions, CompositeKey } from "@memberjunction/core";
 import { RegisterClass } from "@memberjunction/global";
-import * as Types from "./entity_schemas_and_types";
+import { z } from "zod";
     `
     }
     
@@ -139,7 +144,7 @@ import * as Types from "./entity_schemas_and_types";
  * @public
  */
 ${subClassImportStatement}@RegisterClass(BaseEntity, '${entity.Name}')
-export class ${sClassName} extends ${sBaseClass}<Types.${sClassName}Type> {${loadFunction ? '\n' + loadFunction : ''}${saveFunction ? '\n\n' + saveFunction : ''}${deleteFunction ? '\n\n' + deleteFunction : ''}
+export class ${sClassName} extends ${sBaseClass}<${sClassName}Type> {${loadFunction ? '\n' + loadFunction : ''}${saveFunction ? '\n\n' + saveFunction : ''}${deleteFunction ? '\n\n' + deleteFunction : ''}
 
 ${fields}
 }
@@ -149,6 +154,56 @@ ${fields}
             
             return sRet
         }
+    }
+    
+    public GenerateSchemaAndType(entity: EntityInfo) : string { 
+        let content: string = "";
+        if (entity.PrimaryKeys.length === 0) {
+            logStatus(`Entity ${entity.Name} has no primary keys.  Skipping.`);
+        }
+        else {
+            const fields: string = entity.Fields.map(e => {
+                let values: string = '';
+                let valueList: string = '';
+                if (e.ValueListType && 
+                    e.ValueListType.length > 0 && 
+                    e.ValueListType.trim().toLowerCase() !== 'none') {
+                    values = e.EntityFieldValues.map(v => `\n    *   * ${v.Value}${v.Description && v.Description.length > 0 ? ' - ' + v.Description : ''}`).join('');
+                    valueList = `\n    * * Value List Type: ${e.ValueListType}\n    * * Possible Values `+ values  
+                }
+                let typeString: string = `${TypeScriptTypeFromSQLType(e.Type).toLowerCase()}()` + (e.AllowsNull ? '.nullish()' : '');
+                if (e.ValueListTypeEnum !== EntityFieldValueListType.None && e.EntityFieldValues && e.EntityFieldValues.length > 0) {
+                    // construct a typeString that is a union of the possible values
+                    const quotes = e.NeedsQuotes ? "'" : '';
+                    typeString = `union([${e.EntityFieldValues.map(v => `z.literal(${quotes}${v.Value}${quotes})`).join(', ')}])`;
+                    if (e.ValueListTypeEnum === EntityFieldValueListType.ListOrUserEntry) {
+                        // special case becuase a user can enter whatever they want
+                        typeString += `.or(z.${TypeScriptTypeFromSQLType(e.Type)}()) `;
+                    }
+
+                    // finally, add the null type if it allows null
+                    if (e.AllowsNull) {
+                        typeString += '.nullish()';
+                    }
+                }
+                let sRet: string = `${e.CodeName}: z.${typeString},`;
+                return sRet;
+            }).join('\n');
+    
+            const schemaName: string = `${entity.ClassName}Schema`;
+            content = `       
+/**
+ * zod schema definition for the entity ${entity.Name}
+ */
+export const ${schemaName} = z.object({
+${fields}
+});
+
+export type ${entity.ClassName}EntityType = z.infer<typeof ${schemaName}>;
+`;
+        }
+
+        return content;
     }
 }
 

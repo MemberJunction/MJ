@@ -9,7 +9,8 @@
     "start": "node --experimental-specifier-resolution=node --import ./register.js -r dotenv/config ./src/index.ts",
     "test": "echo \"Error: no test specified\" && exit 1",
     "check-types": "tsc -noEmit",
-    "zip": "zip -qr deploy.zip ./node_modules ./dist ./package.json ./config.json"
+    "zip": "zip -qr deploy.zip ./node_modules ./dist ./package.json ./config.json",
+    "build": "tsc"
   },
   "keywords": [],
   "author": "",

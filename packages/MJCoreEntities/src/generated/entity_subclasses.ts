@@ -1,7 +1,2583 @@
 import { BaseEntity, EntitySaveOptions, CompositeKey } from "@memberjunction/core";
 import { RegisterClass } from "@memberjunction/global";
-import * as Types from "./entity_schemas_and_types";
-    
+import { z } from "zod";
+     
+        
+/**
+ * zod schema definition for the entity Action Authorizations
+ */
+export const ActionAuthorizationSchema = z.object({
+ID: z.string(),
+ActionID: z.string(),
+AuthorizationID: z.string(),
+Comments: z.string().nullish(),
+__mj_CreatedAt: z.date(),
+__mj_UpdatedAt: z.date(),
+Action: z.string(),
+Authorization: z.string(),
+});
+
+export type ActionAuthorizationEntityType = z.infer<typeof ActionAuthorizationSchema>;
+       
+/**
+ * zod schema definition for the entity Action Categories
+ */
+export const ActionCategorySchema = z.object({
+ID: z.string(),
+Name: z.string(),
+Description: z.string().nullish(),
+ParentID: z.string().nullish(),
+Status: z.union([z.literal('Disabled'), z.literal('Active'), z.literal('Pending')]),
+__mj_CreatedAt: z.date(),
+__mj_UpdatedAt: z.date(),
+Parent: z.string().nullish(),
+});
+
+export type ActionCategoryEntityType = z.infer<typeof ActionCategorySchema>;
+       
+/**
+ * zod schema definition for the entity Action Context Types
+ */
+export const ActionContextTypeSchema = z.object({
+ID: z.string(),
+Name: z.string(),
+Description: z.string().nullish(),
+__mj_CreatedAt: z.date(),
+__mj_UpdatedAt: z.date(),
+});
+
+export type ActionContextTypeEntityType = z.infer<typeof ActionContextTypeSchema>;
+       
+/**
+ * zod schema definition for the entity Action Contexts
+ */
+export const ActionContextSchema = z.object({
+ID: z.string(),
+ActionID: z.string(),
+ContextTypeID: z.string().nullish(),
+Status: z.union([z.literal('Disabled'), z.literal('Active'), z.literal('Pending')]),
+__mj_CreatedAt: z.date(),
+__mj_UpdatedAt: z.date(),
+Action: z.string(),
+ContextType: z.string().nullish(),
+});
+
+export type ActionContextEntityType = z.infer<typeof ActionContextSchema>;
+       
+/**
+ * zod schema definition for the entity Action Execution Logs
+ */
+export const ActionExecutionLogSchema = z.object({
+ID: z.string(),
+ActionID: z.string(),
+StartedAt: z.date(),
+EndedAt: z.date().nullish(),
+Params: z.string().nullish(),
+ResultCode: z.string().nullish(),
+UserID: z.string(),
+RetentionPeriod: z.number().nullish(),
+__mj_CreatedAt: z.date(),
+__mj_UpdatedAt: z.date(),
+Action: z.string(),
+User: z.string(),
+});
+
+export type ActionExecutionLogEntityType = z.infer<typeof ActionExecutionLogSchema>;
+       
+/**
+ * zod schema definition for the entity Action Filters
+ */
+export const ActionFilterSchema = z.object({
+ID: z.string(),
+UserDescription: z.string(),
+UserComments: z.string().nullish(),
+Code: z.string(),
+CodeExplanation: z.string().nullish(),
+__mj_CreatedAt: z.date(),
+__mj_UpdatedAt: z.date(),
+});
+
+export type ActionFilterEntityType = z.infer<typeof ActionFilterSchema>;
+       
+/**
+ * zod schema definition for the entity Action Libraries
+ */
+export const ActionLibrarySchema = z.object({
+ID: z.string(),
+ActionID: z.string(),
+LibraryID: z.string(),
+ItemsUsed: z.string().nullish(),
+__mj_CreatedAt: z.date(),
+__mj_UpdatedAt: z.date(),
+Action: z.string(),
+Library: z.string(),
+});
+
+export type ActionLibraryEntityType = z.infer<typeof ActionLibrarySchema>;
+       
+/**
+ * zod schema definition for the entity Action Params
+ */
+export const ActionParamSchema = z.object({
+ID: z.string(),
+ActionID: z.string(),
+Name: z.string(),
+DefaultValue: z.string().nullish(),
+Type: z.union([z.literal('Input'), z.literal('Output'), z.literal('Both')]),
+ValueType: z.union([z.literal('Scalar'), z.literal('Simple Object'), z.literal('BaseEntity Sub-Class'), z.literal('Other')]),
+IsArray: z.boolean(),
+Description: z.string().nullish(),
+IsRequired: z.boolean(),
+__mj_CreatedAt: z.date(),
+__mj_UpdatedAt: z.date(),
+Action: z.string(),
+});
+
+export type ActionParamEntityType = z.infer<typeof ActionParamSchema>;
+       
+/**
+ * zod schema definition for the entity Action Result Codes
+ */
+export const ActionResultCodeSchema = z.object({
+ID: z.string(),
+ActionID: z.string(),
+ResultCode: z.string(),
+IsSuccess: z.boolean(),
+Description: z.string().nullish(),
+__mj_CreatedAt: z.date(),
+__mj_UpdatedAt: z.date(),
+Action: z.string(),
+});
+
+export type ActionResultCodeEntityType = z.infer<typeof ActionResultCodeSchema>;
+       
+/**
+ * zod schema definition for the entity Actions
+ */
+export const ActionSchema = z.object({
+ID: z.string(),
+CategoryID: z.string().nullish(),
+Name: z.string(),
+Description: z.string().nullish(),
+Type: z.union([z.literal('Generated'), z.literal('Custom')]),
+UserPrompt: z.string().nullish(),
+UserComments: z.string().nullish(),
+Code: z.string().nullish(),
+CodeComments: z.string().nullish(),
+CodeApprovalStatus: z.union([z.literal('Rejected'), z.literal('Approved'), z.literal('Pending')]),
+CodeApprovalComments: z.string().nullish(),
+CodeApprovedByUserID: z.string().nullish(),
+CodeApprovedAt: z.date().nullish(),
+CodeLocked: z.boolean(),
+ForceCodeGeneration: z.boolean(),
+RetentionPeriod: z.number().nullish(),
+Status: z.union([z.literal('Disabled'), z.literal('Active'), z.literal('Pending')]),
+__mj_CreatedAt: z.date(),
+__mj_UpdatedAt: z.date(),
+Category: z.string().nullish(),
+CodeApprovedByUser: z.string().nullish(),
+});
+
+export type ActionEntityType = z.infer<typeof ActionSchema>;
+       
+/**
+ * zod schema definition for the entity AI Actions
+ */
+export const AIActionSchema = z.object({
+ID: z.string(),
+Name: z.string(),
+Description: z.string().nullish(),
+DefaultPrompt: z.string().nullish(),
+DefaultModelID: z.string().nullish(),
+IsActive: z.boolean(),
+__mj_CreatedAt: z.date(),
+__mj_UpdatedAt: z.date(),
+DefaultModel: z.string().nullish(),
+});
+
+export type AIActionEntityType = z.infer<typeof AIActionSchema>;
+       
+/**
+ * zod schema definition for the entity AI Model Actions
+ */
+export const AIModelActionSchema = z.object({
+ID: z.string(),
+AIModelID: z.string(),
+AIActionID: z.string(),
+IsActive: z.boolean(),
+__mj_CreatedAt: z.date(),
+__mj_UpdatedAt: z.date(),
+AIModel: z.string(),
+AIAction: z.string(),
+});
+
+export type AIModelActionEntityType = z.infer<typeof AIModelActionSchema>;
+       
+/**
+ * zod schema definition for the entity AI Model Types
+ */
+export const AIModelTypeSchema = z.object({
+ID: z.string(),
+Name: z.string(),
+Description: z.string().nullish(),
+__mj_CreatedAt: z.date(),
+__mj_UpdatedAt: z.date(),
+});
+
+export type AIModelTypeEntityType = z.infer<typeof AIModelTypeSchema>;
+       
+/**
+ * zod schema definition for the entity AI Models
+ */
+export const AIModelSchema = z.object({
+ID: z.string(),
+Name: z.string(),
+Description: z.string().nullish(),
+Vendor: z.string().nullish(),
+AIModelTypeID: z.string(),
+PowerRank: z.number().nullish(),
+IsActive: z.boolean(),
+DriverClass: z.string().nullish(),
+DriverImportPath: z.string().nullish(),
+APIName: z.string().nullish(),
+__mj_CreatedAt: z.date(),
+__mj_UpdatedAt: z.date(),
+AIModelType: z.string(),
+});
+
+export type AIModelEntityType = z.infer<typeof AIModelSchema>;
+       
+/**
+ * zod schema definition for the entity Application Entities
+ */
+export const ApplicationEntitySchema = z.object({
+ID: z.string(),
+ApplicationID: z.string(),
+EntityID: z.string(),
+Sequence: z.number(),
+DefaultForNewUser: z.boolean(),
+__mj_CreatedAt: z.date(),
+__mj_UpdatedAt: z.date(),
+Application: z.string(),
+Entity: z.string(),
+EntityBaseTable: z.string(),
+EntityCodeName: z.string().nullish(),
+EntityClassName: z.string().nullish(),
+EntityBaseTableCodeName: z.string().nullish(),
+});
+
+export type ApplicationEntityEntityType = z.infer<typeof ApplicationEntitySchema>;
+       
+/**
+ * zod schema definition for the entity Application Settings
+ */
+export const ApplicationSettingSchema = z.object({
+ID: z.string(),
+ApplicationID: z.string(),
+Name: z.string(),
+Value: z.string(),
+Comments: z.string().nullish(),
+__mj_CreatedAt: z.date(),
+__mj_UpdatedAt: z.date(),
+Application: z.string(),
+});
+
+export type ApplicationSettingEntityType = z.infer<typeof ApplicationSettingSchema>;
+       
+/**
+ * zod schema definition for the entity Applications
+ */
+export const ApplicationSchema = z.object({
+ID: z.string(),
+Name: z.string(),
+Description: z.string().nullish(),
+Icon: z.string().nullish(),
+DefaultForNewUser: z.boolean(),
+__mj_CreatedAt: z.date(),
+__mj_UpdatedAt: z.date(),
+});
+
+export type ApplicationEntityType = z.infer<typeof ApplicationSchema>;
+       
+/**
+ * zod schema definition for the entity Audit Log Types
+ */
+export const AuditLogTypeSchema = z.object({
+ID: z.string(),
+Name: z.string(),
+Description: z.string().nullish(),
+ParentID: z.string().nullish(),
+AuthorizationID: z.string().nullish(),
+__mj_CreatedAt: z.date(),
+__mj_UpdatedAt: z.date(),
+Parent: z.string().nullish(),
+Authorization: z.string().nullish(),
+});
+
+export type AuditLogTypeEntityType = z.infer<typeof AuditLogTypeSchema>;
+       
+/**
+ * zod schema definition for the entity Audit Logs
+ */
+export const AuditLogSchema = z.object({
+ID: z.string(),
+UserID: z.string(),
+AuditLogTypeID: z.string(),
+AuthorizationID: z.string().nullish(),
+Status: z.union([z.literal('Success'), z.literal('Failed')]),
+Description: z.string().nullish(),
+Details: z.string().nullish(),
+EntityID: z.string().nullish(),
+RecordID: z.string().nullish(),
+__mj_CreatedAt: z.date(),
+__mj_UpdatedAt: z.date(),
+User: z.string(),
+AuditLogType: z.string(),
+Authorization: z.string().nullish(),
+Entity: z.string().nullish(),
+});
+
+export type AuditLogEntityType = z.infer<typeof AuditLogSchema>;
+       
+/**
+ * zod schema definition for the entity Authorization Roles
+ */
+export const AuthorizationRoleSchema = z.object({
+ID: z.string(),
+AuthorizationID: z.string(),
+RoleID: z.string(),
+Type: z.union([z.literal('Allow'), z.literal('Deny')]),
+__mj_CreatedAt: z.date(),
+__mj_UpdatedAt: z.date(),
+Authorization: z.string(),
+Role: z.string(),
+});
+
+export type AuthorizationRoleEntityType = z.infer<typeof AuthorizationRoleSchema>;
+       
+/**
+ * zod schema definition for the entity Authorizations
+ */
+export const AuthorizationSchema = z.object({
+ID: z.string(),
+ParentID: z.string().nullish(),
+Name: z.string(),
+IsActive: z.boolean(),
+UseAuditLog: z.boolean(),
+Description: z.string().nullish(),
+__mj_CreatedAt: z.date(),
+__mj_UpdatedAt: z.date(),
+Parent: z.string().nullish(),
+});
+
+export type AuthorizationEntityType = z.infer<typeof AuthorizationSchema>;
+       
+/**
+ * zod schema definition for the entity Communication Base Message Types
+ */
+export const CommunicationBaseMessageTypeSchema = z.object({
+ID: z.string(),
+Type: z.string(),
+SupportsAttachments: z.boolean(),
+SupportsSubjectLine: z.boolean(),
+SupportsHtml: z.boolean(),
+MaxBytes: z.number().nullish(),
+__mj_CreatedAt: z.date(),
+__mj_UpdatedAt: z.date(),
+});
+
+export type CommunicationBaseMessageTypeEntityType = z.infer<typeof CommunicationBaseMessageTypeSchema>;
+       
+/**
+ * zod schema definition for the entity Communication Logs
+ */
+export const CommunicationLogSchema = z.object({
+ID: z.string(),
+CommunicationProviderID: z.string(),
+CommunicationProviderMessageTypeID: z.string(),
+CommunicationRunID: z.string().nullish(),
+Direction: z.union([z.literal('Sending'), z.literal('Receiving')]),
+MessageDate: z.date(),
+Status: z.union([z.literal('Pending'), z.literal('In-Progress'), z.literal('Complete'), z.literal('Failed')]),
+MessageContent: z.string().nullish(),
+ErrorMessage: z.string().nullish(),
+__mj_CreatedAt: z.date(),
+__mj_UpdatedAt: z.date(),
+CommunicationProvider: z.string(),
+CommunicationProviderMessageType: z.string(),
+});
+
+export type CommunicationLogEntityType = z.infer<typeof CommunicationLogSchema>;
+       
+/**
+ * zod schema definition for the entity Communication Provider Message Types
+ */
+export const CommunicationProviderMessageTypeSchema = z.object({
+ID: z.string(),
+CommunicationProviderID: z.string(),
+CommunicationBaseMessageTypeID: z.string(),
+Name: z.string(),
+Status: z.union([z.literal('Disabled'), z.literal('Active')]),
+AdditionalAttributes: z.string().nullish(),
+__mj_CreatedAt: z.date(),
+__mj_UpdatedAt: z.date(),
+CommunicationProvider: z.string(),
+CommunicationBaseMessageType: z.string(),
+});
+
+export type CommunicationProviderMessageTypeEntityType = z.infer<typeof CommunicationProviderMessageTypeSchema>;
+       
+/**
+ * zod schema definition for the entity Communication Providers
+ */
+export const CommunicationProviderSchema = z.object({
+ID: z.string(),
+Name: z.string(),
+Description: z.string().nullish(),
+Status: z.union([z.literal('Disabled'), z.literal('Active')]),
+SupportsSending: z.boolean(),
+SupportsReceiving: z.boolean(),
+__mj_CreatedAt: z.date(),
+__mj_UpdatedAt: z.date(),
+});
+
+export type CommunicationProviderEntityType = z.infer<typeof CommunicationProviderSchema>;
+       
+/**
+ * zod schema definition for the entity Communication Runs
+ */
+export const CommunicationRunSchema = z.object({
+ID: z.string(),
+UserID: z.string(),
+Direction: z.union([z.literal('Sending'), z.literal('Receiving')]),
+Status: z.union([z.literal('Pending'), z.literal('In-Progress'), z.literal('Complete'), z.literal('Failed')]),
+StartedAt: z.date().nullish(),
+EndedAt: z.date().nullish(),
+Comments: z.string().nullish(),
+ErrorMessage: z.string().nullish(),
+__mj_CreatedAt: z.date(),
+__mj_UpdatedAt: z.date(),
+User: z.string(),
+});
+
+export type CommunicationRunEntityType = z.infer<typeof CommunicationRunSchema>;
+       
+/**
+ * zod schema definition for the entity Companies
+ */
+export const CompanySchema = z.object({
+ID: z.string(),
+Name: z.string(),
+Description: z.string(),
+Website: z.string().nullish(),
+LogoURL: z.string().nullish(),
+Domain: z.string().nullish(),
+__mj_CreatedAt: z.date(),
+__mj_UpdatedAt: z.date(),
+});
+
+export type CompanyEntityType = z.infer<typeof CompanySchema>;
+       
+/**
+ * zod schema definition for the entity Company Integration Record Maps
+ */
+export const CompanyIntegrationRecordMapSchema = z.object({
+ID: z.string(),
+CompanyIntegrationID: z.string(),
+ExternalSystemRecordID: z.string(),
+EntityID: z.string(),
+EntityRecordID: z.string(),
+__mj_CreatedAt: z.date(),
+__mj_UpdatedAt: z.date(),
+Entity: z.string(),
+});
+
+export type CompanyIntegrationRecordMapEntityType = z.infer<typeof CompanyIntegrationRecordMapSchema>;
+       
+/**
+ * zod schema definition for the entity Company Integration Run API Logs
+ */
+export const CompanyIntegrationRunAPILogSchema = z.object({
+ID: z.string(),
+CompanyIntegrationRunID: z.string(),
+ExecutedAt: z.date(),
+IsSuccess: z.boolean(),
+RequestMethod: z.union([z.literal('GET'), z.literal('POST'), z.literal('PUT'), z.literal('DELETE'), z.literal('PATCH'), z.literal('HEAD'), z.literal('OPTIONS')]).nullish(),
+URL: z.string().nullish(),
+Parameters: z.string().nullish(),
+__mj_CreatedAt: z.date(),
+__mj_UpdatedAt: z.date(),
+});
+
+export type CompanyIntegrationRunAPILogEntityType = z.infer<typeof CompanyIntegrationRunAPILogSchema>;
+       
+/**
+ * zod schema definition for the entity Company Integration Run Details
+ */
+export const CompanyIntegrationRunDetailSchema = z.object({
+ID: z.string(),
+CompanyIntegrationRunID: z.string(),
+EntityID: z.string(),
+RecordID: z.string(),
+Action: z.string(),
+ExecutedAt: z.date(),
+IsSuccess: z.boolean(),
+__mj_CreatedAt: z.date(),
+__mj_UpdatedAt: z.date(),
+Entity: z.string(),
+RunStartedAt: z.date().nullish(),
+RunEndedAt: z.date().nullish(),
+});
+
+export type CompanyIntegrationRunDetailEntityType = z.infer<typeof CompanyIntegrationRunDetailSchema>;
+       
+/**
+ * zod schema definition for the entity Company Integration Runs
+ */
+export const CompanyIntegrationRunSchema = z.object({
+ID: z.string(),
+CompanyIntegrationID: z.string(),
+RunByUserID: z.string(),
+StartedAt: z.date().nullish(),
+EndedAt: z.date().nullish(),
+TotalRecords: z.number(),
+Comments: z.string().nullish(),
+__mj_CreatedAt: z.date(),
+__mj_UpdatedAt: z.date(),
+RunByUser: z.string(),
+});
+
+export type CompanyIntegrationRunEntityType = z.infer<typeof CompanyIntegrationRunSchema>;
+       
+/**
+ * zod schema definition for the entity Company Integrations
+ */
+export const CompanyIntegrationSchema = z.object({
+ID: z.string(),
+CompanyID: z.string(),
+IntegrationID: z.string(),
+IsActive: z.boolean().nullish(),
+AccessToken: z.string().nullish(),
+RefreshToken: z.string().nullish(),
+TokenExpirationDate: z.date().nullish(),
+APIKey: z.string().nullish(),
+ExternalSystemID: z.string().nullish(),
+IsExternalSystemReadOnly: z.boolean(),
+ClientID: z.string().nullish(),
+ClientSecret: z.string().nullish(),
+CustomAttribute1: z.string().nullish(),
+__mj_CreatedAt: z.date(),
+__mj_UpdatedAt: z.date(),
+Company: z.string(),
+Integration: z.string(),
+DriverClassName: z.string().nullish(),
+DriverImportPath: z.string().nullish(),
+LastRunID: z.string().nullish(),
+LastRunStartedAt: z.date().nullish(),
+LastRunEndedAt: z.date().nullish(),
+});
+
+export type CompanyIntegrationEntityType = z.infer<typeof CompanyIntegrationSchema>;
+       
+/**
+ * zod schema definition for the entity Conversation Details
+ */
+export const ConversationDetailSchema = z.object({
+ID: z.string(),
+ConversationID: z.string(),
+ExternalID: z.string().nullish(),
+Role: z.union([z.literal('User'), z.literal('AI'), z.literal('Error')]),
+Message: z.string(),
+Error: z.string().nullish(),
+HiddenToUser: z.boolean(),
+__mj_CreatedAt: z.date(),
+__mj_UpdatedAt: z.date(),
+Conversation: z.string().nullish(),
+});
+
+export type ConversationDetailEntityType = z.infer<typeof ConversationDetailSchema>;
+       
+/**
+ * zod schema definition for the entity Conversations
+ */
+export const ConversationSchema = z.object({
+ID: z.string(),
+UserID: z.string(),
+ExternalID: z.string().nullish(),
+Name: z.string().nullish(),
+Description: z.string().nullish(),
+Type: z.string(),
+IsArchived: z.boolean(),
+LinkedEntityID: z.string().nullish(),
+LinkedRecordID: z.string().nullish(),
+DataContextID: z.string().nullish(),
+__mj_CreatedAt: z.date(),
+__mj_UpdatedAt: z.date(),
+User: z.string(),
+LinkedEntity: z.string().nullish(),
+DataContext: z.string().nullish(),
+});
+
+export type ConversationEntityType = z.infer<typeof ConversationSchema>;
+       
+/**
+ * zod schema definition for the entity Dashboard Categories
+ */
+export const DashboardCategorySchema = z.object({
+ID: z.string(),
+Name: z.string(),
+Description: z.string().nullish(),
+ParentID: z.string().nullish(),
+UserID: z.string(),
+__mj_CreatedAt: z.date(),
+__mj_UpdatedAt: z.date(),
+Parent: z.string().nullish(),
+User: z.string(),
+});
+
+export type DashboardCategoryEntityType = z.infer<typeof DashboardCategorySchema>;
+       
+/**
+ * zod schema definition for the entity Dashboards
+ */
+export const DashboardSchema = z.object({
+ID: z.string(),
+Name: z.string(),
+Description: z.string().nullish(),
+UserID: z.string(),
+CategoryID: z.string().nullish(),
+UIConfigDetails: z.string(),
+__mj_CreatedAt: z.date(),
+__mj_UpdatedAt: z.date(),
+User: z.string(),
+Category: z.string().nullish(),
+});
+
+export type DashboardEntityType = z.infer<typeof DashboardSchema>;
+       
+/**
+ * zod schema definition for the entity Data Context Items
+ */
+export const DataContextItemSchema = z.object({
+ID: z.string(),
+DataContextID: z.string(),
+Type: z.union([z.literal('view'), z.literal('sql'), z.literal('query'), z.literal('single_record'), z.literal('full_entity')]),
+ViewID: z.string().nullish(),
+QueryID: z.string().nullish(),
+EntityID: z.string().nullish(),
+RecordID: z.string().nullish(),
+SQL: z.string().nullish(),
+DataJSON: z.string().nullish(),
+LastRefreshedAt: z.date().nullish(),
+__mj_CreatedAt: z.date(),
+__mj_UpdatedAt: z.date(),
+DataContext: z.string(),
+View: z.string().nullish(),
+Query: z.string().nullish(),
+Entity: z.string().nullish(),
+});
+
+export type DataContextItemEntityType = z.infer<typeof DataContextItemSchema>;
+       
+/**
+ * zod schema definition for the entity Data Contexts
+ */
+export const DataContextSchema = z.object({
+ID: z.string(),
+Name: z.string(),
+Description: z.string().nullish(),
+UserID: z.string(),
+LastRefreshedAt: z.date().nullish(),
+__mj_CreatedAt: z.date(),
+__mj_UpdatedAt: z.date(),
+User: z.string(),
+});
+
+export type DataContextEntityType = z.infer<typeof DataContextSchema>;
+       
+/**
+ * zod schema definition for the entity Dataset Items
+ */
+export const DatasetItemSchema = z.object({
+ID: z.string(),
+Code: z.string(),
+DatasetID: z.string(),
+Sequence: z.number(),
+EntityID: z.string(),
+WhereClause: z.string().nullish(),
+DateFieldToCheck: z.string(),
+Description: z.string().nullish(),
+__mj_CreatedAt: z.date(),
+__mj_UpdatedAt: z.date(),
+Dataset: z.string(),
+Entity: z.string(),
+});
+
+export type DatasetItemEntityType = z.infer<typeof DatasetItemSchema>;
+       
+/**
+ * zod schema definition for the entity Datasets
+ */
+export const DatasetSchema = z.object({
+ID: z.string(),
+Name: z.string(),
+Description: z.string().nullish(),
+__mj_CreatedAt: z.date(),
+__mj_UpdatedAt: z.date(),
+});
+
+export type DatasetEntityType = z.infer<typeof DatasetSchema>;
+       
+/**
+ * zod schema definition for the entity Duplicate Run Detail Matches
+ */
+export const DuplicateRunDetailMatchSchema = z.object({
+ID: z.string(),
+DuplicateRunDetailID: z.string(),
+MatchSource: z.union([z.literal('SP'), z.literal('Vector')]),
+MatchRecordID: z.string(),
+MatchProbability: z.number(),
+MatchedAt: z.date(),
+Action: z.string(),
+ApprovalStatus: z.union([z.literal('Rejected'), z.literal('Approved'), z.literal('Pending')]),
+RecordMergeLogID: z.string().nullish(),
+MergeStatus: z.union([z.literal('Error'), z.literal('Complete'), z.literal('Pending')]),
+MergedAt: z.date(),
+__mj_CreatedAt: z.date(),
+__mj_UpdatedAt: z.date(),
+});
+
+export type DuplicateRunDetailMatchEntityType = z.infer<typeof DuplicateRunDetailMatchSchema>;
+       
+/**
+ * zod schema definition for the entity Duplicate Run Details
+ */
+export const DuplicateRunDetailSchema = z.object({
+ID: z.string(),
+DuplicateRunID: z.string(),
+RecordID: z.string(),
+MatchStatus: z.union([z.literal('Error'), z.literal('Skipped'), z.literal('Complete'), z.literal('Pending')]),
+SkippedReason: z.string().nullish(),
+MatchErrorMessage: z.string().nullish(),
+MergeStatus: z.union([z.literal('Error'), z.literal('Complete'), z.literal('Pending'), z.literal('Not Applicable')]),
+MergeErrorMessage: z.string().nullish(),
+__mj_CreatedAt: z.date(),
+__mj_UpdatedAt: z.date(),
+});
+
+export type DuplicateRunDetailEntityType = z.infer<typeof DuplicateRunDetailSchema>;
+       
+/**
+ * zod schema definition for the entity Duplicate Runs
+ */
+export const DuplicateRunSchema = z.object({
+ID: z.string(),
+EntityID: z.string(),
+StartedByUserID: z.string(),
+SourceListID: z.string(),
+StartedAt: z.date(),
+EndedAt: z.date().nullish(),
+ApprovalStatus: z.union([z.literal('Rejected'), z.literal('Approved'), z.literal('Pending')]),
+ApprovalComments: z.string().nullish(),
+ApprovedByUserID: z.string().nullish(),
+ProcessingStatus: z.union([z.literal('Failed'), z.literal('Complete'), z.literal('In Progress'), z.literal('Pending')]),
+ProcessingErrorMessage: z.string().nullish(),
+__mj_CreatedAt: z.date(),
+__mj_UpdatedAt: z.date(),
+Entity: z.string(),
+StartedByUser: z.string(),
+SourceList: z.string(),
+ApprovedByUser: z.string().nullish(),
+});
+
+export type DuplicateRunEntityType = z.infer<typeof DuplicateRunSchema>;
+       
+/**
+ * zod schema definition for the entity Employee Company Integrations
+ */
+export const EmployeeCompanyIntegrationSchema = z.object({
+ID: z.string(),
+EmployeeID: z.string(),
+CompanyIntegrationID: z.string(),
+ExternalSystemRecordID: z.string(),
+IsActive: z.boolean(),
+__mj_CreatedAt: z.date(),
+__mj_UpdatedAt: z.date(),
+});
+
+export type EmployeeCompanyIntegrationEntityType = z.infer<typeof EmployeeCompanyIntegrationSchema>;
+       
+/**
+ * zod schema definition for the entity Employee Roles
+ */
+export const EmployeeRoleSchema = z.object({
+ID: z.string(),
+EmployeeID: z.string(),
+RoleID: z.string(),
+__mj_CreatedAt: z.date(),
+__mj_UpdatedAt: z.date(),
+Role: z.string(),
+});
+
+export type EmployeeRoleEntityType = z.infer<typeof EmployeeRoleSchema>;
+       
+/**
+ * zod schema definition for the entity Employee Skills
+ */
+export const EmployeeSkillSchema = z.object({
+ID: z.string(),
+EmployeeID: z.string(),
+SkillID: z.string(),
+__mj_CreatedAt: z.date(),
+__mj_UpdatedAt: z.date(),
+Skill: z.string(),
+});
+
+export type EmployeeSkillEntityType = z.infer<typeof EmployeeSkillSchema>;
+       
+/**
+ * zod schema definition for the entity Employees
+ */
+export const EmployeeSchema = z.object({
+ID: z.string(),
+BCMID: z.string(),
+FirstName: z.string(),
+LastName: z.string(),
+CompanyID: z.string(),
+SupervisorID: z.string().nullish(),
+Title: z.string().nullish(),
+Email: z.string(),
+Phone: z.string().nullish(),
+Active: z.boolean(),
+__mj_CreatedAt: z.date(),
+__mj_UpdatedAt: z.date(),
+FirstLast: z.string().nullish(),
+Supervisor: z.string().nullish(),
+SupervisorFirstName: z.string().nullish(),
+SupervisorLastName: z.string().nullish(),
+SupervisorEmail: z.string().nullish(),
+});
+
+export type EmployeeEntityType = z.infer<typeof EmployeeSchema>;
+       
+/**
+ * zod schema definition for the entity Entities
+ */
+export const EntitySchema = z.object({
+ID: z.string(),
+ParentID: z.string().nullish(),
+Name: z.string(),
+NameSuffix: z.string().nullish(),
+Description: z.string().nullish(),
+AutoUpdateDescription: z.boolean(),
+BaseTable: z.string(),
+BaseView: z.string(),
+BaseViewGenerated: z.boolean(),
+SchemaName: z.string(),
+VirtualEntity: z.boolean(),
+TrackRecordChanges: z.boolean(),
+AuditRecordAccess: z.boolean(),
+AuditViewRuns: z.boolean(),
+IncludeInAPI: z.boolean(),
+AllowAllRowsAPI: z.boolean(),
+AllowUpdateAPI: z.boolean(),
+AllowCreateAPI: z.boolean(),
+AllowDeleteAPI: z.boolean(),
+CustomResolverAPI: z.boolean(),
+AllowUserSearchAPI: z.boolean(),
+FullTextSearchEnabled: z.boolean(),
+FullTextCatalog: z.string().nullish(),
+FullTextCatalogGenerated: z.boolean(),
+FullTextIndex: z.string().nullish(),
+FullTextIndexGenerated: z.boolean(),
+FullTextSearchFunction: z.string().nullish(),
+FullTextSearchFunctionGenerated: z.boolean(),
+UserViewMaxRows: z.number().nullish(),
+spCreate: z.string().nullish(),
+spUpdate: z.string().nullish(),
+spDelete: z.string().nullish(),
+spCreateGenerated: z.boolean(),
+spUpdateGenerated: z.boolean(),
+spDeleteGenerated: z.boolean(),
+CascadeDeletes: z.boolean(),
+DeleteType: z.union([z.literal('Hard'), z.literal('Soft')]),
+AllowRecordMerge: z.boolean(),
+spMatch: z.string().nullish(),
+RelationshipDefaultDisplayType: z.union([z.literal('Search'), z.literal('Dropdown')]),
+UserFormGenerated: z.boolean(),
+EntityObjectSubclassName: z.string().nullish(),
+EntityObjectSubclassImport: z.string().nullish(),
+PreferredCommunicationField: z.string().nullish(),
+Icon: z.string().nullish(),
+__mj_CreatedAt: z.date(),
+__mj_UpdatedAt: z.date(),
+CodeName: z.string().nullish(),
+ClassName: z.string().nullish(),
+BaseTableCodeName: z.string().nullish(),
+ParentEntity: z.string().nullish(),
+ParentBaseTable: z.string().nullish(),
+ParentBaseView: z.string().nullish(),
+});
+
+export type EntityEntityType = z.infer<typeof EntitySchema>;
+       
+/**
+ * zod schema definition for the entity Entity Action Filters
+ */
+export const EntityActionFilterSchema = z.object({
+ID: z.string(),
+EntityActionID: z.string(),
+ActionFilterID: z.string(),
+Sequence: z.number(),
+Status: z.union([z.literal('Disabled'), z.literal('Active'), z.literal('Pending')]),
+__mj_CreatedAt: z.date(),
+__mj_UpdatedAt: z.date(),
+});
+
+export type EntityActionFilterEntityType = z.infer<typeof EntityActionFilterSchema>;
+       
+/**
+ * zod schema definition for the entity Entity Action Invocation Types
+ */
+export const EntityActionInvocationTypeSchema = z.object({
+ID: z.string(),
+Name: z.string(),
+Description: z.string().nullish(),
+DisplaySequence: z.number(),
+__mj_CreatedAt: z.date(),
+__mj_UpdatedAt: z.date(),
+});
+
+export type EntityActionInvocationTypeEntityType = z.infer<typeof EntityActionInvocationTypeSchema>;
+       
+/**
+ * zod schema definition for the entity Entity Action Invocations
+ */
+export const EntityActionInvocationSchema = z.object({
+ID: z.string(),
+EntityActionID: z.string(),
+InvocationTypeID: z.string(),
+Status: z.union([z.literal('Disabled'), z.literal('Active'), z.literal('Pending')]),
+__mj_CreatedAt: z.date(),
+__mj_UpdatedAt: z.date(),
+InvocationType: z.string(),
+});
+
+export type EntityActionInvocationEntityType = z.infer<typeof EntityActionInvocationSchema>;
+       
+/**
+ * zod schema definition for the entity Entity Action Params
+ */
+export const EntityActionParamSchema = z.object({
+ID: z.string(),
+EntityActionID: z.string(),
+ActionParamID: z.string(),
+ValueType: z.union([z.literal('Static'), z.literal('Entity Object'), z.literal('Script'), z.literal('Entity Field')]),
+Value: z.string().nullish(),
+Comments: z.string().nullish(),
+__mj_CreatedAt: z.date(),
+__mj_UpdatedAt: z.date(),
+ActionParam: z.string(),
+});
+
+export type EntityActionParamEntityType = z.infer<typeof EntityActionParamSchema>;
+       
+/**
+ * zod schema definition for the entity Entity Actions
+ */
+export const EntityActionSchema = z.object({
+EntityID: z.string(),
+ActionID: z.string(),
+Status: z.union([z.literal('Disabled'), z.literal('Active'), z.literal('Pending')]),
+__mj_CreatedAt: z.date(),
+__mj_UpdatedAt: z.date(),
+ID: z.string(),
+Entity: z.string(),
+Action: z.string(),
+});
+
+export type EntityActionEntityType = z.infer<typeof EntityActionSchema>;
+       
+/**
+ * zod schema definition for the entity Entity AI Actions
+ */
+export const EntityAIActionSchema = z.object({
+ID: z.string(),
+EntityID: z.string(),
+AIModelID: z.string(),
+AIActionID: z.string(),
+Name: z.string(),
+Prompt: z.string().nullish(),
+TriggerEvent: z.union([z.literal('after save'), z.literal('before save')]),
+UserMessage: z.string(),
+OutputType: z.union([z.literal('entity'), z.literal('field')]),
+OutputField: z.string().nullish(),
+SkipIfOutputFieldNotEmpty: z.boolean(),
+OutputEntityID: z.string().nullish(),
+Comments: z.string().nullish(),
+__mj_CreatedAt: z.date(),
+__mj_UpdatedAt: z.date(),
+Entity: z.string(),
+AIModel: z.string(),
+AIAction: z.string(),
+OutputEntity: z.string().nullish(),
+});
+
+export type EntityAIActionEntityType = z.infer<typeof EntityAIActionSchema>;
+       
+/**
+ * zod schema definition for the entity Entity Communication Fields
+ */
+export const EntityCommunicationFieldSchema = z.object({
+ID: z.string(),
+EntityCommunicationMessageTypeID: z.string(),
+FieldName: z.string(),
+Priority: z.number(),
+__mj_CreatedAt: z.date(),
+__mj_UpdatedAt: z.date(),
+});
+
+export type EntityCommunicationFieldEntityType = z.infer<typeof EntityCommunicationFieldSchema>;
+       
+/**
+ * zod schema definition for the entity Entity Communication Message Types
+ */
+export const EntityCommunicationMessageTypeSchema = z.object({
+ID: z.string(),
+EntityID: z.string(),
+BaseMessageTypeID: z.string(),
+IsActive: z.boolean(),
+__mj_CreatedAt: z.date(),
+__mj_UpdatedAt: z.date(),
+Entity: z.string(),
+BaseMessageType: z.string(),
+});
+
+export type EntityCommunicationMessageTypeEntityType = z.infer<typeof EntityCommunicationMessageTypeSchema>;
+       
+/**
+ * zod schema definition for the entity Entity Document Runs
+ */
+export const EntityDocumentRunSchema = z.object({
+ID: z.string(),
+EntityDocumentID: z.string(),
+StartedAt: z.date().nullish(),
+EndedAt: z.date().nullish(),
+Status: z.union([z.literal('Pending'), z.literal('Complete'), z.literal('Failed')]),
+__mj_CreatedAt: z.date(),
+__mj_UpdatedAt: z.date(),
+EntityDocument: z.string(),
+});
+
+export type EntityDocumentRunEntityType = z.infer<typeof EntityDocumentRunSchema>;
+       
+/**
+ * zod schema definition for the entity Entity Document Settings
+ */
+export const EntityDocumentSettingSchema = z.object({
+ID: z.string(),
+EntityDocumentID: z.string(),
+Name: z.string(),
+Value: z.string(),
+Comments: z.string().nullish(),
+__mj_CreatedAt: z.date(),
+__mj_UpdatedAt: z.date(),
+EntityDocument: z.string(),
+});
+
+export type EntityDocumentSettingEntityType = z.infer<typeof EntityDocumentSettingSchema>;
+       
+/**
+ * zod schema definition for the entity Entity Document Types
+ */
+export const EntityDocumentTypeSchema = z.object({
+ID: z.string(),
+Name: z.string(),
+Description: z.string().nullish(),
+__mj_CreatedAt: z.date(),
+__mj_UpdatedAt: z.date(),
+});
+
+export type EntityDocumentTypeEntityType = z.infer<typeof EntityDocumentTypeSchema>;
+       
+/**
+ * zod schema definition for the entity Entity Documents
+ */
+export const EntityDocumentSchema = z.object({
+ID: z.string(),
+Name: z.string(),
+TypeID: z.string(),
+EntityID: z.string(),
+VectorDatabaseID: z.string(),
+Status: z.union([z.literal('Active'), z.literal('Inactive')]),
+TemplateID: z.string(),
+AIModelID: z.string(),
+PotentialMatchThreshold: z.number(),
+AbsoluteMatchThreshold: z.number(),
+__mj_CreatedAt: z.date(),
+__mj_UpdatedAt: z.date(),
+Type: z.string(),
+Entity: z.string(),
+VectorDatabase: z.string(),
+Template: z.string(),
+AIModel: z.string(),
+});
+
+export type EntityDocumentEntityType = z.infer<typeof EntityDocumentSchema>;
+       
+/**
+ * zod schema definition for the entity Entity Field Values
+ */
+export const EntityFieldValueSchema = z.object({
+ID: z.string(),
+EntityFieldID: z.string(),
+Sequence: z.number(),
+Value: z.string(),
+Code: z.string().nullish(),
+Description: z.string().nullish(),
+__mj_CreatedAt: z.date(),
+__mj_UpdatedAt: z.date(),
+EntityField: z.string(),
+Entity: z.string(),
+EntityID: z.string(),
+});
+
+export type EntityFieldValueEntityType = z.infer<typeof EntityFieldValueSchema>;
+       
+/**
+ * zod schema definition for the entity Entity Fields
+ */
+export const EntityFieldSchema = z.object({
+ID: z.string(),
+EntityID: z.string(),
+Sequence: z.number(),
+Name: z.string(),
+DisplayName: z.string().nullish(),
+Description: z.string().nullish(),
+AutoUpdateDescription: z.boolean(),
+IsPrimaryKey: z.boolean(),
+IsUnique: z.boolean(),
+Category: z.string().nullish(),
+Type: z.string(),
+Length: z.number().nullish(),
+Precision: z.number().nullish(),
+Scale: z.number().nullish(),
+AllowsNull: z.boolean(),
+DefaultValue: z.string().nullish(),
+AutoIncrement: z.boolean(),
+ValueListType: z.union([z.literal('None'), z.literal('List'), z.literal('ListOrUserEntry')]),
+ExtendedType: z.union([z.literal('Email'), z.literal('URL'), z.literal('Tel'), z.literal('SMS'), z.literal('Geo'), z.literal('WhatsApp'), z.literal('FaceTime'), z.literal('Skype'), z.literal('SIP'), z.literal('MSTeams'), z.literal('ZoomMtg'), z.literal('Other'), z.literal('Code')]).nullish(),
+CodeType: z.union([z.literal('TypeScript'), z.literal('SQL'), z.literal('HTML'), z.literal('CSS'), z.literal('JavaScript'), z.literal('Other')]).nullish(),
+DefaultInView: z.boolean(),
+ViewCellTemplate: z.string().nullish(),
+DefaultColumnWidth: z.number().nullish(),
+AllowUpdateAPI: z.boolean(),
+AllowUpdateInView: z.boolean(),
+IncludeInUserSearchAPI: z.boolean(),
+FullTextSearchEnabled: z.boolean(),
+UserSearchParamFormatAPI: z.string().nullish(),
+IncludeInGeneratedForm: z.boolean(),
+GeneratedFormSection: z.union([z.literal('Top'), z.literal('Category'), z.literal('Details')]),
+IsVirtual: z.boolean(),
+IsNameField: z.boolean(),
+RelatedEntityID: z.string().nullish(),
+RelatedEntityFieldName: z.string().nullish(),
+IncludeRelatedEntityNameFieldInBaseView: z.boolean(),
+RelatedEntityNameFieldMap: z.string().nullish(),
+RelatedEntityDisplayType: z.string(),
+EntityIDFieldName: z.string().nullish(),
+__mj_CreatedAt: z.date(),
+__mj_UpdatedAt: z.date(),
+Entity: z.string(),
+SchemaName: z.string(),
+BaseTable: z.string(),
+BaseView: z.string(),
+EntityCodeName: z.string().nullish(),
+EntityClassName: z.string().nullish(),
+RelatedEntity: z.string().nullish(),
+RelatedEntitySchemaName: z.string().nullish(),
+RelatedEntityBaseTable: z.string().nullish(),
+RelatedEntityBaseView: z.string().nullish(),
+RelatedEntityCodeName: z.string().nullish(),
+RelatedEntityClassName: z.string().nullish(),
+});
+
+export type EntityFieldEntityType = z.infer<typeof EntityFieldSchema>;
+       
+/**
+ * zod schema definition for the entity Entity Permissions
+ */
+export const EntityPermissionSchema = z.object({
+ID: z.string(),
+EntityID: z.string(),
+RoleID: z.string(),
+CanCreate: z.boolean(),
+CanRead: z.boolean(),
+CanUpdate: z.boolean(),
+CanDelete: z.boolean(),
+ReadRLSFilterID: z.string().nullish(),
+CreateRLSFilterID: z.string().nullish(),
+UpdateRLSFilterID: z.string().nullish(),
+DeleteRLSFilterID: z.string().nullish(),
+__mj_CreatedAt: z.date(),
+__mj_UpdatedAt: z.date(),
+Entity: z.string(),
+RoleName: z.string(),
+RoleSQLName: z.string().nullish(),
+CreateRLSFilter: z.string().nullish(),
+ReadRLSFilter: z.string().nullish(),
+UpdateRLSFilter: z.string().nullish(),
+DeleteRLSFilter: z.string().nullish(),
+});
+
+export type EntityPermissionEntityType = z.infer<typeof EntityPermissionSchema>;
+       
+/**
+ * zod schema definition for the entity Entity Record Documents
+ */
+export const EntityRecordDocumentSchema = z.object({
+ID: z.string(),
+EntityID: z.string(),
+RecordID: z.string(),
+EntityDocumentID: z.string(),
+DocumentText: z.string().nullish(),
+VectorIndexID: z.string(),
+VectorID: z.string().nullish(),
+VectorJSON: z.string().nullish(),
+EntityRecordUpdatedAt: z.date(),
+__mj_CreatedAt: z.date(),
+__mj_UpdatedAt: z.date(),
+Entity: z.string(),
+EntityDocument: z.string(),
+VectorIndex: z.string(),
+});
+
+export type EntityRecordDocumentEntityType = z.infer<typeof EntityRecordDocumentSchema>;
+       
+/**
+ * zod schema definition for the entity Entity Relationship Display Components
+ */
+export const EntityRelationshipDisplayComponentSchema = z.object({
+ID: z.string(),
+Name: z.string(),
+Description: z.string().nullish(),
+RelationshipType: z.union([z.literal('One to Many'), z.literal('Many to Many'), z.literal('Both')]),
+__mj_CreatedAt: z.date(),
+__mj_UpdatedAt: z.date(),
+});
+
+export type EntityRelationshipDisplayComponentEntityType = z.infer<typeof EntityRelationshipDisplayComponentSchema>;
+       
+/**
+ * zod schema definition for the entity Entity Relationships
+ */
+export const EntityRelationshipSchema = z.object({
+ID: z.string(),
+EntityID: z.string(),
+Sequence: z.number(),
+RelatedEntityID: z.string(),
+BundleInAPI: z.boolean(),
+IncludeInParentAllQuery: z.boolean(),
+Type: z.union([z.literal('One To Many'), z.literal('Many To Many')]),
+EntityKeyField: z.string().nullish(),
+RelatedEntityJoinField: z.string(),
+JoinView: z.string().nullish(),
+JoinEntityJoinField: z.string().nullish(),
+JoinEntityInverseJoinField: z.string().nullish(),
+DisplayInForm: z.boolean(),
+DisplayLocation: z.union([z.literal('After Field Tabs'), z.literal('Before Field Tabs')]),
+DisplayName: z.string().nullish(),
+DisplayIconType: z.union([z.literal('Related Entity Icon'), z.literal('Custom'), z.literal('None')]),
+DisplayIcon: z.string().nullish(),
+DisplayUserViewID: z.string().nullish(),
+DisplayComponentID: z.string().nullish(),
+DisplayComponentConfiguration: z.string().nullish(),
+__mj_CreatedAt: z.date(),
+__mj_UpdatedAt: z.date(),
+Entity: z.string(),
+EntityBaseTable: z.string(),
+EntityBaseView: z.string(),
+RelatedEntity: z.string(),
+RelatedEntityBaseTable: z.string(),
+RelatedEntityBaseView: z.string(),
+RelatedEntityClassName: z.string().nullish(),
+RelatedEntityCodeName: z.string().nullish(),
+RelatedEntityBaseTableCodeName: z.string().nullish(),
+DisplayUserViewName: z.string().nullish(),
+});
+
+export type EntityRelationshipEntityType = z.infer<typeof EntityRelationshipSchema>;
+       
+/**
+ * zod schema definition for the entity Entity Settings
+ */
+export const EntitySettingSchema = z.object({
+ID: z.string(),
+EntityID: z.string(),
+Name: z.string(),
+Value: z.string(),
+Comments: z.string().nullish(),
+__mj_CreatedAt: z.date(),
+__mj_UpdatedAt: z.date(),
+Entity: z.string(),
+});
+
+export type EntitySettingEntityType = z.infer<typeof EntitySettingSchema>;
+       
+/**
+ * zod schema definition for the entity Error Logs
+ */
+export const ErrorLogSchema = z.object({
+ID: z.string(),
+CompanyIntegrationRunID: z.string().nullish(),
+CompanyIntegrationRunDetailID: z.string().nullish(),
+Code: z.string().nullish(),
+Message: z.string().nullish(),
+CreatedBy: z.string().nullish(),
+Status: z.string().nullish(),
+Category: z.string().nullish(),
+Details: z.string().nullish(),
+__mj_CreatedAt: z.date(),
+__mj_UpdatedAt: z.date(),
+});
+
+export type ErrorLogEntityType = z.infer<typeof ErrorLogSchema>;
+       
+/**
+ * zod schema definition for the entity Explorer Navigation Items
+ */
+export const ExplorerNavigationItemSchema = z.object({
+ID: z.string(),
+Sequence: z.number(),
+Name: z.string(),
+Route: z.string(),
+IsActive: z.boolean(),
+ShowInHomeScreen: z.boolean(),
+ShowInNavigationDrawer: z.boolean(),
+IconCSSClass: z.string().nullish(),
+Description: z.string().nullish(),
+Comments: z.string().nullish(),
+__mj_CreatedAt: z.date(),
+__mj_UpdatedAt: z.date(),
+});
+
+export type ExplorerNavigationItemEntityType = z.infer<typeof ExplorerNavigationItemSchema>;
+       
+/**
+ * zod schema definition for the entity File Categories
+ */
+export const FileCategorySchema = z.object({
+ID: z.string(),
+Name: z.string(),
+ParentID: z.string().nullish(),
+Description: z.string().nullish(),
+__mj_CreatedAt: z.date(),
+__mj_UpdatedAt: z.date(),
+Parent: z.string().nullish(),
+});
+
+export type FileCategoryEntityType = z.infer<typeof FileCategorySchema>;
+       
+/**
+ * zod schema definition for the entity File Entity Record Links
+ */
+export const FileEntityRecordLinkSchema = z.object({
+ID: z.string(),
+FileID: z.string(),
+EntityID: z.string(),
+RecordID: z.string(),
+__mj_CreatedAt: z.date(),
+__mj_UpdatedAt: z.date(),
+File: z.string(),
+Entity: z.string(),
+});
+
+export type FileEntityRecordLinkEntityType = z.infer<typeof FileEntityRecordLinkSchema>;
+       
+/**
+ * zod schema definition for the entity File Storage Providers
+ */
+export const FileStorageProviderSchema = z.object({
+ID: z.string(),
+Name: z.string(),
+Description: z.string().nullish(),
+ServerDriverKey: z.string(),
+ClientDriverKey: z.string(),
+Priority: z.number(),
+IsActive: z.boolean(),
+__mj_CreatedAt: z.date(),
+__mj_UpdatedAt: z.date(),
+});
+
+export type FileStorageProviderEntityType = z.infer<typeof FileStorageProviderSchema>;
+       
+/**
+ * zod schema definition for the entity Files
+ */
+export const FileSchema = z.object({
+ID: z.string(),
+Name: z.string(),
+Description: z.string().nullish(),
+CategoryID: z.string().nullish(),
+ProviderID: z.string(),
+ContentType: z.string().nullish(),
+ProviderKey: z.string().nullish(),
+Status: z.string(),
+__mj_CreatedAt: z.date(),
+__mj_UpdatedAt: z.date(),
+Category: z.string().nullish(),
+Provider: z.string(),
+});
+
+export type FileEntityType = z.infer<typeof FileSchema>;
+       
+/**
+ * zod schema definition for the entity flyway _schema _histories
+ */
+export const flyway_schema_historySchema = z.object({
+installed_rank: z.number(),
+version: z.string().nullish(),
+description: z.string().nullish(),
+type: z.string(),
+script: z.string(),
+checksum: z.number().nullish(),
+installed_by: z.string(),
+installed_on: z.date(),
+execution_time: z.number(),
+success: z.boolean(),
+__mj_CreatedAt: z.date(),
+__mj_UpdatedAt: z.date(),
+});
+
+export type flyway_schema_historyEntityType = z.infer<typeof flyway_schema_historySchema>;
+       
+/**
+ * zod schema definition for the entity Integration URL Formats
+ */
+export const IntegrationURLFormatSchema = z.object({
+ID: z.string(),
+IntegrationID: z.string(),
+EntityID: z.string(),
+URLFormat: z.string(),
+Comments: z.string().nullish(),
+__mj_CreatedAt: z.date(),
+__mj_UpdatedAt: z.date(),
+Integration: z.string(),
+NavigationBaseURL: z.string().nullish(),
+FullURLFormat: z.string().nullish(),
+});
+
+export type IntegrationURLFormatEntityType = z.infer<typeof IntegrationURLFormatSchema>;
+       
+/**
+ * zod schema definition for the entity Integrations
+ */
+export const IntegrationSchema = z.object({
+Name: z.string(),
+Description: z.string().nullish(),
+NavigationBaseURL: z.string().nullish(),
+ClassName: z.string().nullish(),
+ImportPath: z.string().nullish(),
+BatchMaxRequestCount: z.number(),
+BatchRequestWaitTime: z.number(),
+__mj_CreatedAt: z.date(),
+__mj_UpdatedAt: z.date(),
+ID: z.string(),
+});
+
+export type IntegrationEntityType = z.infer<typeof IntegrationSchema>;
+       
+/**
+ * zod schema definition for the entity Libraries
+ */
+export const LibrarySchema = z.object({
+ID: z.string(),
+Name: z.string(),
+Description: z.string().nullish(),
+Status: z.union([z.literal('Pending'), z.literal('Active'), z.literal('Disabled')]),
+TypeDefinitions: z.string().nullish(),
+SampleCode: z.string().nullish(),
+__mj_CreatedAt: z.date(),
+__mj_UpdatedAt: z.date(),
+});
+
+export type LibraryEntityType = z.infer<typeof LibrarySchema>;
+       
+/**
+ * zod schema definition for the entity Library Items
+ */
+export const LibraryItemSchema = z.object({
+ID: z.string(),
+Name: z.string(),
+LibraryID: z.string(),
+Type: z.union([z.literal('Class'), z.literal('Interface'), z.literal('Variable'), z.literal('Type'), z.literal('Module'), z.literal('Function')]),
+__mj_CreatedAt: z.date(),
+__mj_UpdatedAt: z.date(),
+Library: z.string(),
+});
+
+export type LibraryItemEntityType = z.infer<typeof LibraryItemSchema>;
+       
+/**
+ * zod schema definition for the entity List Categories
+ */
+export const ListCategorySchema = z.object({
+ID: z.string(),
+Name: z.string(),
+Description: z.string().nullish(),
+ParentID: z.string().nullish(),
+UserID: z.string(),
+__mj_CreatedAt: z.date(),
+__mj_UpdatedAt: z.date(),
+Parent: z.string().nullish(),
+User: z.string(),
+});
+
+export type ListCategoryEntityType = z.infer<typeof ListCategorySchema>;
+       
+/**
+ * zod schema definition for the entity List Details
+ */
+export const ListDetailSchema = z.object({
+ID: z.string(),
+ListID: z.string(),
+RecordID: z.string(),
+Sequence: z.number(),
+__mj_CreatedAt: z.date(),
+__mj_UpdatedAt: z.date(),
+List: z.string(),
+});
+
+export type ListDetailEntityType = z.infer<typeof ListDetailSchema>;
+       
+/**
+ * zod schema definition for the entity Lists
+ */
+export const ListSchema = z.object({
+ID: z.string(),
+Name: z.string(),
+Description: z.string().nullish(),
+EntityID: z.string(),
+UserID: z.string(),
+CategoryID: z.string().nullish(),
+ExternalSystemRecordID: z.string().nullish(),
+CompanyIntegrationID: z.string().nullish(),
+__mj_CreatedAt: z.date(),
+__mj_UpdatedAt: z.date(),
+Entity: z.string(),
+User: z.string(),
+Category: z.string().nullish(),
+});
+
+export type ListEntityType = z.infer<typeof ListSchema>;
+       
+/**
+ * zod schema definition for the entity Output Delivery Types
+ */
+export const OutputDeliveryTypeSchema = z.object({
+ID: z.string(),
+Name: z.string(),
+Description: z.string().nullish(),
+__mj_CreatedAt: z.date(),
+__mj_UpdatedAt: z.date(),
+});
+
+export type OutputDeliveryTypeEntityType = z.infer<typeof OutputDeliveryTypeSchema>;
+       
+/**
+ * zod schema definition for the entity Output Format Types
+ */
+export const OutputFormatTypeSchema = z.object({
+ID: z.string(),
+Name: z.string(),
+Description: z.string().nullish(),
+DisplayFormat: z.string().nullish(),
+__mj_CreatedAt: z.date(),
+__mj_UpdatedAt: z.date(),
+});
+
+export type OutputFormatTypeEntityType = z.infer<typeof OutputFormatTypeSchema>;
+       
+/**
+ * zod schema definition for the entity Output Trigger Types
+ */
+export const OutputTriggerTypeSchema = z.object({
+ID: z.string(),
+Name: z.string(),
+Description: z.string().nullish(),
+__mj_CreatedAt: z.date(),
+__mj_UpdatedAt: z.date(),
+});
+
+export type OutputTriggerTypeEntityType = z.infer<typeof OutputTriggerTypeSchema>;
+       
+/**
+ * zod schema definition for the entity Queries
+ */
+export const QuerySchema = z.object({
+ID: z.string(),
+Name: z.string(),
+CategoryID: z.string().nullish(),
+UserQuestion: z.string().nullish(),
+Description: z.string().nullish(),
+SQL: z.string().nullish(),
+TechnicalDescription: z.string().nullish(),
+OriginalSQL: z.string().nullish(),
+Feedback: z.string().nullish(),
+Status: z.union([z.literal('Pending'), z.literal('Approved'), z.literal('Rejected'), z.literal('Expired')]),
+QualityRank: z.number().nullish(),
+ExecutionCostRank: z.number().nullish(),
+__mj_CreatedAt: z.date(),
+__mj_UpdatedAt: z.date(),
+Category: z.string().nullish(),
+});
+
+export type QueryEntityType = z.infer<typeof QuerySchema>;
+       
+/**
+ * zod schema definition for the entity Query Categories
+ */
+export const QueryCategorySchema = z.object({
+ID: z.string(),
+Name: z.string(),
+ParentID: z.string().nullish(),
+Description: z.string().nullish(),
+UserID: z.string(),
+__mj_CreatedAt: z.date(),
+__mj_UpdatedAt: z.date(),
+Parent: z.string().nullish(),
+User: z.string(),
+});
+
+export type QueryCategoryEntityType = z.infer<typeof QueryCategorySchema>;
+       
+/**
+ * zod schema definition for the entity Query Fields
+ */
+export const QueryFieldSchema = z.object({
+ID: z.string(),
+QueryID: z.string(),
+Name: z.string(),
+Description: z.string().nullish(),
+Sequence: z.number(),
+SQLBaseType: z.string(),
+SQLFullType: z.string(),
+SourceEntityID: z.string().nullish(),
+SourceFieldName: z.string().nullish(),
+IsComputed: z.boolean(),
+ComputationDescription: z.string().nullish(),
+IsSummary: z.boolean(),
+SummaryDescription: z.string().nullish(),
+__mj_CreatedAt: z.date(),
+__mj_UpdatedAt: z.date(),
+Query: z.string(),
+SourceEntity: z.string().nullish(),
+});
+
+export type QueryFieldEntityType = z.infer<typeof QueryFieldSchema>;
+       
+/**
+ * zod schema definition for the entity Query Permissions
+ */
+export const QueryPermissionSchema = z.object({
+ID: z.string(),
+QueryID: z.string(),
+RoleID: z.string(),
+__mj_CreatedAt: z.date(),
+__mj_UpdatedAt: z.date(),
+Query: z.string(),
+Role: z.string(),
+});
+
+export type QueryPermissionEntityType = z.infer<typeof QueryPermissionSchema>;
+       
+/**
+ * zod schema definition for the entity Queue Tasks
+ */
+export const QueueTaskSchema = z.object({
+ID: z.string(),
+QueueID: z.string(),
+Status: z.union([z.literal('In Progress'), z.literal('Completed'), z.literal('Failed')]),
+StartedAt: z.date().nullish(),
+EndedAt: z.date().nullish(),
+Data: z.string().nullish(),
+Options: z.string().nullish(),
+Output: z.string().nullish(),
+ErrorMessage: z.string().nullish(),
+Comments: z.string().nullish(),
+__mj_CreatedAt: z.date(),
+__mj_UpdatedAt: z.date(),
+Queue: z.string(),
+});
+
+export type QueueTaskEntityType = z.infer<typeof QueueTaskSchema>;
+       
+/**
+ * zod schema definition for the entity Queue Types
+ */
+export const QueueTypeSchema = z.object({
+ID: z.string(),
+Name: z.string(),
+Description: z.string().nullish(),
+DriverClass: z.string(),
+DriverImportPath: z.string().nullish(),
+IsActive: z.boolean(),
+__mj_CreatedAt: z.date(),
+__mj_UpdatedAt: z.date(),
+});
+
+export type QueueTypeEntityType = z.infer<typeof QueueTypeSchema>;
+       
+/**
+ * zod schema definition for the entity Queues
+ */
+export const QueueSchema = z.object({
+ID: z.string(),
+Name: z.string(),
+Description: z.string().nullish(),
+QueueTypeID: z.string(),
+IsActive: z.boolean(),
+ProcessPID: z.number().nullish(),
+ProcessPlatform: z.string().nullish(),
+ProcessVersion: z.string().nullish(),
+ProcessCwd: z.string().nullish(),
+ProcessIPAddress: z.string().nullish(),
+ProcessMacAddress: z.string().nullish(),
+ProcessOSName: z.string().nullish(),
+ProcessOSVersion: z.string().nullish(),
+ProcessHostName: z.string().nullish(),
+ProcessUserID: z.string().nullish(),
+ProcessUserName: z.string().nullish(),
+LastHeartbeat: z.date(),
+__mj_CreatedAt: z.date(),
+__mj_UpdatedAt: z.date(),
+QueueType: z.string(),
+});
+
+export type QueueEntityType = z.infer<typeof QueueSchema>;
+       
+/**
+ * zod schema definition for the entity Recommendation Items
+ */
+export const RecommendationItemSchema = z.object({
+ID: z.string(),
+RecommendationID: z.string(),
+DestinationEntityID: z.string(),
+DestinationEntityRecordID: z.string(),
+MatchProbability: z.number().nullish(),
+__mj_CreatedAt: z.date(),
+__mj_UpdatedAt: z.date(),
+DestinationEntity: z.string(),
+});
+
+export type RecommendationItemEntityType = z.infer<typeof RecommendationItemSchema>;
+       
+/**
+ * zod schema definition for the entity Recommendation Providers
+ */
+export const RecommendationProviderSchema = z.object({
+ID: z.string(),
+Name: z.string(),
+Description: z.string().nullish(),
+__mj_CreatedAt: z.date(),
+__mj_UpdatedAt: z.date(),
+});
+
+export type RecommendationProviderEntityType = z.infer<typeof RecommendationProviderSchema>;
+       
+/**
+ * zod schema definition for the entity Recommendation Runs
+ */
+export const RecommendationRunSchema = z.object({
+ID: z.string(),
+RecommendationProviderID: z.string(),
+StartDate: z.date(),
+EndDate: z.date().nullish(),
+Status: z.union([z.literal('Pending'), z.literal('In Progress'), z.literal('Completed'), z.literal('Canceled'), z.literal('Error')]),
+Description: z.string().nullish(),
+RunByUserID: z.string(),
+__mj_CreatedAt: z.date(),
+__mj_UpdatedAt: z.date(),
+RecommendationProvider: z.string(),
+RunByUser: z.string(),
+});
+
+export type RecommendationRunEntityType = z.infer<typeof RecommendationRunSchema>;
+       
+/**
+ * zod schema definition for the entity Recommendations
+ */
+export const RecommendationSchema = z.object({
+ID: z.string(),
+RecommendationRunID: z.string(),
+SourceEntityID: z.string(),
+SourceEntityRecordID: z.string(),
+__mj_CreatedAt: z.date(),
+__mj_UpdatedAt: z.date(),
+SourceEntity: z.string(),
+});
+
+export type RecommendationEntityType = z.infer<typeof RecommendationSchema>;
+       
+/**
+ * zod schema definition for the entity Record Change Replay Runs
+ */
+export const RecordChangeReplayRunSchema = z.object({
+ID: z.string(),
+StartedAt: z.date(),
+EndedAt: z.date().nullish(),
+Status: z.union([z.literal('Pending'), z.literal('In Progress'), z.literal('Complete'), z.literal('Error')]),
+UserID: z.string(),
+__mj_CreatedAt: z.date(),
+__mj_UpdatedAt: z.date(),
+User: z.string(),
+});
+
+export type RecordChangeReplayRunEntityType = z.infer<typeof RecordChangeReplayRunSchema>;
+       
+/**
+ * zod schema definition for the entity Record Changes
+ */
+export const RecordChangeSchema = z.object({
+ID: z.string(),
+EntityID: z.string(),
+RecordID: z.string(),
+UserID: z.string(),
+Type: z.union([z.literal('Create'), z.literal('Update'), z.literal('Delete')]),
+Source: z.union([z.literal('Internal'), z.literal('External')]),
+ChangedAt: z.date(),
+ChangesJSON: z.string(),
+ChangesDescription: z.string(),
+FullRecordJSON: z.string(),
+Status: z.union([z.literal('Pending'), z.literal('Complete'), z.literal('Error')]),
+ErrorLog: z.string().nullish(),
+ReplayRunID: z.string().nullish(),
+IntegrationID: z.string().nullish(),
+Comments: z.string().nullish(),
+CreatedAt: z.date(),
+UpdatedAt: z.date(),
+Entity: z.string(),
+User: z.string(),
+Integration: z.string().nullish(),
+});
+
+export type RecordChangeEntityType = z.infer<typeof RecordChangeSchema>;
+       
+/**
+ * zod schema definition for the entity Record Merge Deletion Logs
+ */
+export const RecordMergeDeletionLogSchema = z.object({
+ID: z.string(),
+RecordMergeLogID: z.string(),
+DeletedRecordID: z.string(),
+Status: z.union([z.literal('Pending'), z.literal('Complete'), z.literal('Error')]),
+ProcessingLog: z.string().nullish(),
+__mj_CreatedAt: z.date(),
+__mj_UpdatedAt: z.date(),
+});
+
+export type RecordMergeDeletionLogEntityType = z.infer<typeof RecordMergeDeletionLogSchema>;
+       
+/**
+ * zod schema definition for the entity Record Merge Logs
+ */
+export const RecordMergeLogSchema = z.object({
+ID: z.string(),
+EntityID: z.string(),
+SurvivingRecordID: z.string(),
+InitiatedByUserID: z.string(),
+ApprovalStatus: z.union([z.literal('Pending'), z.literal('Approved'), z.literal('Rejected')]),
+ApprovedByUserID: z.string().nullish(),
+ProcessingStatus: z.union([z.literal('Started'), z.literal('Complete'), z.literal('Error')]),
+ProcessingStartedAt: z.date(),
+ProcessingEndedAt: z.date().nullish(),
+ProcessingLog: z.string().nullish(),
+Comments: z.string().nullish(),
+__mj_CreatedAt: z.date(),
+__mj_UpdatedAt: z.date(),
+Entity: z.string(),
+InitiatedByUser: z.string(),
+ApprovedByUser: z.string().nullish(),
+});
+
+export type RecordMergeLogEntityType = z.infer<typeof RecordMergeLogSchema>;
+       
+/**
+ * zod schema definition for the entity Report Categories
+ */
+export const ReportCategorySchema = z.object({
+ID: z.string(),
+Name: z.string(),
+Description: z.string().nullish(),
+ParentID: z.string().nullish(),
+UserID: z.string(),
+__mj_CreatedAt: z.date(),
+__mj_UpdatedAt: z.date(),
+Parent: z.string().nullish(),
+User: z.string(),
+});
+
+export type ReportCategoryEntityType = z.infer<typeof ReportCategorySchema>;
+       
+/**
+ * zod schema definition for the entity Report Snapshots
+ */
+export const ReportSnapshotSchema = z.object({
+ID: z.string(),
+ReportID: z.string(),
+ResultSet: z.string(),
+UserID: z.string(),
+__mj_CreatedAt: z.date(),
+__mj_UpdatedAt: z.date(),
+Report: z.string(),
+User: z.string(),
+});
+
+export type ReportSnapshotEntityType = z.infer<typeof ReportSnapshotSchema>;
+       
+/**
+ * zod schema definition for the entity Reports
+ */
+export const ReportSchema = z.object({
+ID: z.string(),
+Name: z.string(),
+Description: z.string().nullish(),
+CategoryID: z.string().nullish(),
+UserID: z.string(),
+SharingScope: z.union([z.literal('None'), z.literal('Specific'), z.literal('Everyone')]),
+ConversationID: z.string().nullish(),
+ConversationDetailID: z.string().nullish(),
+DataContextID: z.string().nullish(),
+Configuration: z.string().nullish(),
+OutputTriggerTypeID: z.string().nullish(),
+OutputFormatTypeID: z.string().nullish(),
+OutputDeliveryTypeID: z.string().nullish(),
+OutputFrequency: z.string().nullish(),
+OutputTargetEmail: z.string().nullish(),
+OutputWorkflowID: z.string().nullish(),
+__mj_CreatedAt: z.date(),
+__mj_UpdatedAt: z.date(),
+Category: z.string().nullish(),
+User: z.string(),
+Conversation: z.string().nullish(),
+DataContext: z.string().nullish(),
+OutputTriggerType: z.string().nullish(),
+OutputFormatType: z.string().nullish(),
+OutputDeliveryType: z.string().nullish(),
+OutputWorkflow: z.string().nullish(),
+});
+
+export type ReportEntityType = z.infer<typeof ReportSchema>;
+       
+/**
+ * zod schema definition for the entity Resource Types
+ */
+export const ResourceTypeSchema = z.object({
+ID: z.string(),
+Name: z.string(),
+DisplayName: z.string(),
+Description: z.string().nullish(),
+Icon: z.string().nullish(),
+EntityID: z.string().nullish(),
+__mj_CreatedAt: z.date(),
+__mj_UpdatedAt: z.date(),
+Entity: z.string().nullish(),
+});
+
+export type ResourceTypeEntityType = z.infer<typeof ResourceTypeSchema>;
+       
+/**
+ * zod schema definition for the entity Roles
+ */
+export const RoleSchema = z.object({
+ID: z.string(),
+Name: z.string(),
+Description: z.string().nullish(),
+DirectoryID: z.string().nullish(),
+SQLName: z.string().nullish(),
+__mj_CreatedAt: z.date(),
+__mj_UpdatedAt: z.date(),
+});
+
+export type RoleEntityType = z.infer<typeof RoleSchema>;
+       
+/**
+ * zod schema definition for the entity Row Level Security Filters
+ */
+export const RowLevelSecurityFilterSchema = z.object({
+ID: z.string(),
+Name: z.string(),
+Description: z.string().nullish(),
+FilterText: z.string().nullish(),
+__mj_CreatedAt: z.date(),
+__mj_UpdatedAt: z.date(),
+});
+
+export type RowLevelSecurityFilterEntityType = z.infer<typeof RowLevelSecurityFilterSchema>;
+       
+/**
+ * zod schema definition for the entity Scheduled Action Params
+ */
+export const ScheduledActionParamSchema = z.object({
+ID: z.string(),
+ScheduledActionID: z.string(),
+ActionParamID: z.string(),
+ValueType: z.union([z.literal('Static'), z.literal('SQL Statement')]),
+Value: z.string().nullish(),
+Comments: z.string().nullish(),
+__mj_CreatedAt: z.date(),
+__mj_UpdatedAt: z.date(),
+ScheduledAction: z.string(),
+ActionParam: z.string(),
+});
+
+export type ScheduledActionParamEntityType = z.infer<typeof ScheduledActionParamSchema>;
+       
+/**
+ * zod schema definition for the entity Scheduled Actions
+ */
+export const ScheduledActionSchema = z.object({
+ID: z.string(),
+Name: z.string(),
+Description: z.string().nullish(),
+CreatedByUserID: z.string(),
+ActionID: z.string(),
+Type: z.union([z.literal('Daily'), z.literal('Weekly'), z.literal('Monthly'), z.literal('Yearly'), z.literal('Custom')]),
+CronExpression: z.string().nullish(),
+Timezone: z.string(),
+Status: z.union([z.literal('Pending'), z.literal('Active'), z.literal('Disabled'), z.literal('Expired')]),
+IntervalDays: z.number().nullish(),
+DayOfWeek: z.string().nullish(),
+DayOfMonth: z.number().nullish(),
+Month: z.string().nullish(),
+CustomCronExpression: z.string().nullish(),
+__mj_CreatedAt: z.date(),
+__mj_UpdatedAt: z.date(),
+CreatedByUser: z.string(),
+Action: z.string(),
+});
+
+export type ScheduledActionEntityType = z.infer<typeof ScheduledActionSchema>;
+       
+/**
+ * zod schema definition for the entity Schema Info
+ */
+export const SchemaInfoSchema = z.object({
+ID: z.string(),
+SchemaName: z.string(),
+EntityIDMin: z.number(),
+EntityIDMax: z.number(),
+Comments: z.string().nullish(),
+__mj_CreatedAt: z.date(),
+__mj_UpdatedAt: z.date(),
+});
+
+export type SchemaInfoEntityType = z.infer<typeof SchemaInfoSchema>;
+       
+/**
+ * zod schema definition for the entity Skills
+ */
+export const SkillSchema = z.object({
+ID: z.string(),
+Name: z.string(),
+ParentID: z.string().nullish(),
+__mj_CreatedAt: z.date(),
+__mj_UpdatedAt: z.date(),
+Parent: z.string().nullish(),
+});
+
+export type SkillEntityType = z.infer<typeof SkillSchema>;
+       
+/**
+ * zod schema definition for the entity Tagged Items
+ */
+export const TaggedItemSchema = z.object({
+ID: z.string(),
+TagID: z.string(),
+EntityID: z.string(),
+RecordID: z.string(),
+__mj_CreatedAt: z.date(),
+__mj_UpdatedAt: z.date(),
+Tag: z.string(),
+Entity: z.string(),
+});
+
+export type TaggedItemEntityType = z.infer<typeof TaggedItemSchema>;
+       
+/**
+ * zod schema definition for the entity Tags
+ */
+export const TagSchema = z.object({
+ID: z.string(),
+Name: z.string(),
+ParentID: z.string().nullish(),
+DisplayName: z.string(),
+Description: z.string().nullish(),
+__mj_CreatedAt: z.date(),
+__mj_UpdatedAt: z.date(),
+Parent: z.string().nullish(),
+});
+
+export type TagEntityType = z.infer<typeof TagSchema>;
+       
+/**
+ * zod schema definition for the entity Template Categories
+ */
+export const TemplateCategorySchema = z.object({
+ID: z.string(),
+Name: z.string(),
+Description: z.string().nullish(),
+ParentID: z.string().nullish(),
+UserID: z.string(),
+__mj_CreatedAt: z.date(),
+__mj_UpdatedAt: z.date(),
+Parent: z.string().nullish(),
+User: z.string(),
+});
+
+export type TemplateCategoryEntityType = z.infer<typeof TemplateCategorySchema>;
+       
+/**
+ * zod schema definition for the entity Template Content Types
+ */
+export const TemplateContentTypeSchema = z.object({
+ID: z.string(),
+Name: z.string(),
+Description: z.string().nullish(),
+CodeType: z.union([z.literal('TypeScript'), z.literal('SQL'), z.literal('HTML'), z.literal('CSS'), z.literal('JavaScript'), z.literal('JSON'), z.literal('Other')]),
+__mj_CreatedAt: z.date(),
+__mj_UpdatedAt: z.date(),
+});
+
+export type TemplateContentTypeEntityType = z.infer<typeof TemplateContentTypeSchema>;
+       
+/**
+ * zod schema definition for the entity Template Contents
+ */
+export const TemplateContentSchema = z.object({
+ID: z.string(),
+TemplateID: z.string(),
+TypeID: z.string(),
+TemplateText: z.string().nullish(),
+Priority: z.number(),
+IsActive: z.boolean(),
+__mj_CreatedAt: z.date(),
+__mj_UpdatedAt: z.date(),
+Template: z.string(),
+Type: z.string(),
+});
+
+export type TemplateContentEntityType = z.infer<typeof TemplateContentSchema>;
+       
+/**
+ * zod schema definition for the entity Template Params
+ */
+export const TemplateParamSchema = z.object({
+ID: z.string(),
+TemplateID: z.string(),
+Name: z.string(),
+Description: z.string().nullish(),
+Type: z.union([z.literal('Scalar'), z.literal('Array'), z.literal('Object'), z.literal('Record'), z.literal('Entity')]),
+DefaultValue: z.string().nullish(),
+IsRequired: z.boolean(),
+LinkedParameterName: z.string().nullish(),
+LinkedParameterField: z.string().nullish(),
+ExtraFilter: z.string().nullish(),
+EntityID: z.string().nullish(),
+RecordID: z.string().nullish(),
+__mj_CreatedAt: z.date(),
+__mj_UpdatedAt: z.date(),
+Template: z.string(),
+Entity: z.string().nullish(),
+});
+
+export type TemplateParamEntityType = z.infer<typeof TemplateParamSchema>;
+       
+/**
+ * zod schema definition for the entity Templates
+ */
+export const TemplateSchema = z.object({
+ID: z.string(),
+Name: z.string(),
+Description: z.string().nullish(),
+CategoryID: z.string().nullish(),
+UserPrompt: z.string().nullish(),
+UserID: z.string(),
+ActiveAt: z.date().nullish(),
+DisabledAt: z.date().nullish(),
+IsActive: z.boolean(),
+__mj_CreatedAt: z.date(),
+__mj_UpdatedAt: z.date(),
+Category: z.string().nullish(),
+User: z.string(),
+});
+
+export type TemplateEntityType = z.infer<typeof TemplateSchema>;
+       
+/**
+ * zod schema definition for the entity User Application Entities
+ */
+export const UserApplicationEntitySchema = z.object({
+ID: z.string(),
+UserApplicationID: z.string(),
+EntityID: z.string(),
+Sequence: z.number(),
+__mj_CreatedAt: z.date(),
+__mj_UpdatedAt: z.date(),
+Application: z.string(),
+User: z.string(),
+Entity: z.string(),
+});
+
+export type UserApplicationEntityEntityType = z.infer<typeof UserApplicationEntitySchema>;
+       
+/**
+ * zod schema definition for the entity User Applications
+ */
+export const UserApplicationSchema = z.object({
+ID: z.string(),
+UserID: z.string(),
+ApplicationID: z.string(),
+Sequence: z.number(),
+IsActive: z.boolean(),
+__mj_CreatedAt: z.date(),
+__mj_UpdatedAt: z.date(),
+User: z.string(),
+Application: z.string(),
+});
+
+export type UserApplicationEntityType = z.infer<typeof UserApplicationSchema>;
+       
+/**
+ * zod schema definition for the entity User Favorites
+ */
+export const UserFavoriteSchema = z.object({
+ID: z.string(),
+UserID: z.string(),
+EntityID: z.string(),
+RecordID: z.string(),
+__mj_CreatedAt: z.date(),
+__mj_UpdatedAt: z.date(),
+Entity: z.string(),
+EntityBaseTable: z.string(),
+EntityBaseView: z.string(),
+});
+
+export type UserFavoriteEntityType = z.infer<typeof UserFavoriteSchema>;
+       
+/**
+ * zod schema definition for the entity User Notifications
+ */
+export const UserNotificationSchema = z.object({
+ID: z.string(),
+UserID: z.string(),
+Title: z.string().nullish(),
+Message: z.string().nullish(),
+ResourceTypeID: z.string().nullish(),
+ResourceConfiguration: z.string().nullish(),
+Unread: z.boolean(),
+ReadAt: z.date().nullish(),
+__mj_CreatedAt: z.date(),
+__mj_UpdatedAt: z.date(),
+ResourceRecordID: z.string().nullish(),
+User: z.string(),
+ResourceType: z.string().nullish(),
+});
+
+export type UserNotificationEntityType = z.infer<typeof UserNotificationSchema>;
+       
+/**
+ * zod schema definition for the entity User Record Logs
+ */
+export const UserRecordLogSchema = z.object({
+ID: z.string(),
+UserID: z.string(),
+EntityID: z.string(),
+RecordID: z.string(),
+EarliestAt: z.date(),
+LatestAt: z.date(),
+TotalCount: z.number(),
+__mj_CreatedAt: z.date(),
+__mj_UpdatedAt: z.date(),
+Entity: z.string(),
+UserName: z.string(),
+UserFirstLast: z.string().nullish(),
+UserEmail: z.string(),
+UserSupervisor: z.string().nullish(),
+UserSupervisorEmail: z.string().nullish(),
+});
+
+export type UserRecordLogEntityType = z.infer<typeof UserRecordLogSchema>;
+       
+/**
+ * zod schema definition for the entity User Roles
+ */
+export const UserRoleSchema = z.object({
+ID: z.string(),
+UserID: z.string(),
+RoleID: z.string(),
+__mj_CreatedAt: z.date(),
+__mj_UpdatedAt: z.date(),
+User: z.string(),
+Role: z.string(),
+});
+
+export type UserRoleEntityType = z.infer<typeof UserRoleSchema>;
+       
+/**
+ * zod schema definition for the entity User View Categories
+ */
+export const UserViewCategorySchema = z.object({
+ID: z.string(),
+Name: z.string(),
+Description: z.string().nullish(),
+ParentID: z.string().nullish(),
+EntityID: z.string(),
+UserID: z.string(),
+__mj_CreatedAt: z.date(),
+__mj_UpdatedAt: z.date(),
+Parent: z.string().nullish(),
+Entity: z.string(),
+User: z.string(),
+});
+
+export type UserViewCategoryEntityType = z.infer<typeof UserViewCategorySchema>;
+       
+/**
+ * zod schema definition for the entity User View Run Details
+ */
+export const UserViewRunDetailSchema = z.object({
+ID: z.string(),
+UserViewRunID: z.string(),
+RecordID: z.string(),
+__mj_CreatedAt: z.date(),
+__mj_UpdatedAt: z.date(),
+UserViewID: z.string(),
+EntityID: z.string(),
+});
+
+export type UserViewRunDetailEntityType = z.infer<typeof UserViewRunDetailSchema>;
+       
+/**
+ * zod schema definition for the entity User View Runs
+ */
+export const UserViewRunSchema = z.object({
+ID: z.string(),
+UserViewID: z.string(),
+RunAt: z.date(),
+RunByUserID: z.string(),
+__mj_CreatedAt: z.date(),
+__mj_UpdatedAt: z.date(),
+UserView: z.string(),
+RunByUser: z.string(),
+});
+
+export type UserViewRunEntityType = z.infer<typeof UserViewRunSchema>;
+       
+/**
+ * zod schema definition for the entity User Views
+ */
+export const UserViewSchema = z.object({
+ID: z.string(),
+UserID: z.string(),
+EntityID: z.string(),
+Name: z.string(),
+Description: z.string().nullish(),
+CategoryID: z.string().nullish(),
+IsShared: z.boolean(),
+IsDefault: z.boolean(),
+GridState: z.string().nullish(),
+FilterState: z.string().nullish(),
+CustomFilterState: z.boolean(),
+SmartFilterEnabled: z.boolean(),
+SmartFilterPrompt: z.string().nullish(),
+SmartFilterWhereClause: z.string().nullish(),
+SmartFilterExplanation: z.string().nullish(),
+WhereClause: z.string().nullish(),
+CustomWhereClause: z.boolean(),
+SortState: z.string().nullish(),
+__mj_CreatedAt: z.date(),
+__mj_UpdatedAt: z.date(),
+UserName: z.string(),
+UserFirstLast: z.string().nullish(),
+UserEmail: z.string(),
+UserType: z.string(),
+Entity: z.string(),
+EntityBaseView: z.string(),
+});
+
+export type UserViewEntityType = z.infer<typeof UserViewSchema>;
+       
+/**
+ * zod schema definition for the entity Users
+ */
+export const UserSchema = z.object({
+ID: z.string(),
+Name: z.string(),
+FirstName: z.string().nullish(),
+LastName: z.string().nullish(),
+Title: z.string().nullish(),
+Email: z.string(),
+Type: z.union([z.literal('User'), z.literal('Owner')]),
+IsActive: z.boolean(),
+LinkedRecordType: z.string(),
+LinkedEntityID: z.string().nullish(),
+LinkedEntityRecordID: z.string().nullish(),
+EmployeeID: z.string().nullish(),
+__mj_CreatedAt: z.date(),
+__mj_UpdatedAt: z.date(),
+FirstLast: z.string().nullish(),
+EmployeeFirstLast: z.string().nullish(),
+EmployeeEmail: z.string().nullish(),
+EmployeeTitle: z.string().nullish(),
+EmployeeSupervisor: z.string().nullish(),
+EmployeeSupervisorEmail: z.string().nullish(),
+});
+
+export type UserEntityType = z.infer<typeof UserSchema>;
+       
+/**
+ * zod schema definition for the entity Vector Databases
+ */
+export const VectorDatabaseSchema = z.object({
+ID: z.string(),
+Name: z.string(),
+Description: z.string().nullish(),
+DefaultURL: z.string().nullish(),
+ClassKey: z.string().nullish(),
+__mj_CreatedAt: z.date(),
+__mj_UpdatedAt: z.date(),
+});
+
+export type VectorDatabaseEntityType = z.infer<typeof VectorDatabaseSchema>;
+       
+/**
+ * zod schema definition for the entity Vector Indexes
+ */
+export const VectorIndexSchema = z.object({
+ID: z.string(),
+Name: z.string(),
+Description: z.string().nullish(),
+VectorDatabaseID: z.string(),
+EmbeddingModelID: z.string(),
+__mj_CreatedAt: z.date(),
+__mj_UpdatedAt: z.date(),
+VectorDatabase: z.string(),
+EmbeddingModel: z.string(),
+});
+
+export type VectorIndexEntityType = z.infer<typeof VectorIndexSchema>;
+       
+/**
+ * zod schema definition for the entity Version Installations
+ */
+export const VersionInstallationSchema = z.object({
+ID: z.string(),
+MajorVersion: z.number(),
+MinorVersion: z.number(),
+PatchVersion: z.number(),
+Type: z.union([z.literal('New'), z.literal('Upgrade')]).nullish(),
+InstalledAt: z.date(),
+Status: z.union([z.literal('Pending'), z.literal('In Progress'), z.literal('Complete'), z.literal('Failed')]),
+InstallLog: z.string().nullish(),
+Comments: z.string().nullish(),
+__mj_CreatedAt: z.date(),
+__mj_UpdatedAt: z.date(),
+CompleteVersion: z.string().nullish(),
+});
+
+export type VersionInstallationEntityType = z.infer<typeof VersionInstallationSchema>;
+       
+/**
+ * zod schema definition for the entity Workflow Engines
+ */
+export const WorkflowEngineSchema = z.object({
+ID: z.string(),
+Name: z.string(),
+Description: z.string().nullish(),
+DriverPath: z.string(),
+DriverClass: z.string(),
+__mj_CreatedAt: z.date(),
+__mj_UpdatedAt: z.date(),
+});
+
+export type WorkflowEngineEntityType = z.infer<typeof WorkflowEngineSchema>;
+       
+/**
+ * zod schema definition for the entity Workflow Runs
+ */
+export const WorkflowRunSchema = z.object({
+ID: z.string(),
+WorkflowID: z.string(),
+ExternalSystemRecordID: z.string(),
+StartedAt: z.date(),
+EndedAt: z.date().nullish(),
+Status: z.union([z.literal('Pending'), z.literal('In Progress'), z.literal('Complete'), z.literal('Failed')]),
+Results: z.string().nullish(),
+__mj_CreatedAt: z.date(),
+__mj_UpdatedAt: z.date(),
+Workflow: z.string(),
+WorkflowEngineName: z.string(),
+});
+
+export type WorkflowRunEntityType = z.infer<typeof WorkflowRunSchema>;
+       
+/**
+ * zod schema definition for the entity Workflows
+ */
+export const WorkflowSchema = z.object({
+ID: z.string(),
+Name: z.string(),
+Description: z.string().nullish(),
+WorkflowEngineID: z.string(),
+ExternalSystemRecordID: z.string(),
+AutoRunEnabled: z.boolean(),
+AutoRunIntervalUnits: z.union([z.literal('Years'), z.literal('Months'), z.literal('Weeks'), z.literal('Days'), z.literal('Hours'), z.literal('Minutes')]).nullish(),
+AutoRunInterval: z.number().nullish(),
+SubclassName: z.string().nullish(),
+__mj_CreatedAt: z.date(),
+__mj_UpdatedAt: z.date(),
+AutoRunIntervalMinutes: z.number().nullish(),
+});
+
+export type WorkflowEntityType = z.infer<typeof WorkflowSchema>;
+       
+/**
+ * zod schema definition for the entity Workspace Items
+ */
+export const WorkspaceItemSchema = z.object({
+ID: z.string(),
+Name: z.string(),
+Description: z.string().nullish(),
+WorkspaceID: z.string(),
+ResourceTypeID: z.string(),
+ResourceRecordID: z.string().nullish(),
+Sequence: z.number(),
+Configuration: z.string().nullish(),
+__mj_CreatedAt: z.date(),
+__mj_UpdatedAt: z.date(),
+Workspace: z.string(),
+ResourceType: z.string(),
+});
+
+export type WorkspaceItemEntityType = z.infer<typeof WorkspaceItemSchema>;
+       
+/**
+ * zod schema definition for the entity Workspaces
+ */
+export const WorkspaceSchema = z.object({
+ID: z.string(),
+Name: z.string(),
+Description: z.string().nullish(),
+UserID: z.string(),
+__mj_CreatedAt: z.date(),
+__mj_UpdatedAt: z.date(),
+User: z.string(),
+});
+
+export type WorkspaceEntityType = z.infer<typeof WorkspaceSchema>;
+ 
+ 
             
 /**
  * Action Authorizations - strongly typed entity sub-class
@@ -15,7 +2591,7 @@ import * as Types from "./entity_schemas_and_types";
  * @public
  */
 @RegisterClass(BaseEntity, 'Action Authorizations')
-export class ActionAuthorizationEntity extends BaseEntity<Types.ActionAuthorizationEntityType> {
+export class ActionAuthorizationEntity extends BaseEntity<ActionAuthorizationEntityType> {
     /**
     * Loads the Action Authorizations record from the database
     * @param ID: string - primary key value to load the Action Authorizations record.
@@ -133,7 +2709,7 @@ export class ActionAuthorizationEntity extends BaseEntity<Types.ActionAuthorizat
  * @public
  */
 @RegisterClass(BaseEntity, 'Action Categories')
-export class ActionCategoryEntity extends BaseEntity<Types.ActionCategoryEntityType> {
+export class ActionCategoryEntity extends BaseEntity<ActionCategoryEntityType> {
     /**
     * Loads the Action Categories record from the database
     * @param ID: string - primary key value to load the Action Categories record.
@@ -262,7 +2838,7 @@ export class ActionCategoryEntity extends BaseEntity<Types.ActionCategoryEntityT
  * @public
  */
 @RegisterClass(BaseEntity, 'Action Context Types')
-export class ActionContextTypeEntity extends BaseEntity<Types.ActionContextTypeEntityType> {
+export class ActionContextTypeEntity extends BaseEntity<ActionContextTypeEntityType> {
     /**
     * Loads the Action Context Types record from the database
     * @param ID: string - primary key value to load the Action Context Types record.
@@ -350,7 +2926,7 @@ export class ActionContextTypeEntity extends BaseEntity<Types.ActionContextTypeE
  * @public
  */
 @RegisterClass(BaseEntity, 'Action Contexts')
-export class ActionContextEntity extends BaseEntity<Types.ActionContextEntityType> {
+export class ActionContextEntity extends BaseEntity<ActionContextEntityType> {
     /**
     * Loads the Action Contexts record from the database
     * @param ID: string - primary key value to load the Action Contexts record.
@@ -475,7 +3051,7 @@ export class ActionContextEntity extends BaseEntity<Types.ActionContextEntityTyp
  * @public
  */
 @RegisterClass(BaseEntity, 'Action Execution Logs')
-export class ActionExecutionLogEntity extends BaseEntity<Types.ActionExecutionLogEntityType> {
+export class ActionExecutionLogEntity extends BaseEntity<ActionExecutionLogEntityType> {
     /**
     * Loads the Action Execution Logs record from the database
     * @param ID: string - primary key value to load the Action Execution Logs record.
@@ -645,7 +3221,7 @@ export class ActionExecutionLogEntity extends BaseEntity<Types.ActionExecutionLo
  * @public
  */
 @RegisterClass(BaseEntity, 'Action Filters')
-export class ActionFilterEntity extends BaseEntity<Types.ActionFilterEntityType> {
+export class ActionFilterEntity extends BaseEntity<ActionFilterEntityType> {
     /**
     * Loads the Action Filters record from the database
     * @param ID: string - primary key value to load the Action Filters record.
@@ -755,7 +3331,7 @@ export class ActionFilterEntity extends BaseEntity<Types.ActionFilterEntityType>
  * @public
  */
 @RegisterClass(BaseEntity, 'Action Libraries')
-export class ActionLibraryEntity extends BaseEntity<Types.ActionLibraryEntityType> {
+export class ActionLibraryEntity extends BaseEntity<ActionLibraryEntityType> {
     /**
     * Loads the Action Libraries record from the database
     * @param ID: string - primary key value to load the Action Libraries record.
@@ -874,7 +3450,7 @@ export class ActionLibraryEntity extends BaseEntity<Types.ActionLibraryEntityTyp
  * @public
  */
 @RegisterClass(BaseEntity, 'Action Params')
-export class ActionParamEntity extends BaseEntity<Types.ActionParamEntityType> {
+export class ActionParamEntity extends BaseEntity<ActionParamEntityType> {
     /**
     * Loads the Action Params record from the database
     * @param ID: string - primary key value to load the Action Params record.
@@ -1056,7 +3632,7 @@ export class ActionParamEntity extends BaseEntity<Types.ActionParamEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'Action Result Codes')
-export class ActionResultCodeEntity extends BaseEntity<Types.ActionResultCodeEntityType> {
+export class ActionResultCodeEntity extends BaseEntity<ActionResultCodeEntityType> {
     /**
     * Loads the Action Result Codes record from the database
     * @param ID: string - primary key value to load the Action Result Codes record.
@@ -1179,7 +3755,7 @@ export class ActionResultCodeEntity extends BaseEntity<Types.ActionResultCodeEnt
  * @public
  */
 @RegisterClass(BaseEntity, 'Actions')
-export class ActionEntity extends BaseEntity<Types.ActionEntityType> {
+export class ActionEntity extends BaseEntity<ActionEntityType> {
     /**
     * Loads the Actions record from the database
     * @param ID: string - primary key value to load the Actions record.
@@ -1482,7 +4058,7 @@ export class ActionEntity extends BaseEntity<Types.ActionEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'AI Actions')
-export class AIActionEntity extends BaseEntity<Types.AIActionEntityType> {
+export class AIActionEntity extends BaseEntity<AIActionEntityType> {
     /**
     * Loads the AI Actions record from the database
     * @param ID: string - primary key value to load the AI Actions record.
@@ -1615,7 +4191,7 @@ export class AIActionEntity extends BaseEntity<Types.AIActionEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'AI Model Actions')
-export class AIModelActionEntity extends BaseEntity<Types.AIModelActionEntityType> {
+export class AIModelActionEntity extends BaseEntity<AIModelActionEntityType> {
     /**
     * Loads the AI Model Actions record from the database
     * @param ID: string - primary key value to load the AI Model Actions record.
@@ -1734,7 +4310,7 @@ export class AIModelActionEntity extends BaseEntity<Types.AIModelActionEntityTyp
  * @public
  */
 @RegisterClass(BaseEntity, 'AI Model Types')
-export class AIModelTypeEntity extends BaseEntity<Types.AIModelTypeEntityType> {
+export class AIModelTypeEntity extends BaseEntity<AIModelTypeEntityType> {
     /**
     * Loads the AI Model Types record from the database
     * @param ID: string - primary key value to load the AI Model Types record.
@@ -1820,7 +4396,7 @@ export class AIModelTypeEntity extends BaseEntity<Types.AIModelTypeEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'AI Models')
-export class AIModelEntity extends BaseEntity<Types.AIModelEntityType> {
+export class AIModelEntity extends BaseEntity<AIModelEntityType> {
     /**
     * Loads the AI Models record from the database
     * @param ID: string - primary key value to load the AI Models record.
@@ -2003,7 +4579,7 @@ export class AIModelEntity extends BaseEntity<Types.AIModelEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'Application Entities')
-export class ApplicationEntityEntity extends BaseEntity<Types.ApplicationEntityEntityType> {
+export class ApplicationEntityEntity extends BaseEntity<ApplicationEntityEntityType> {
     /**
     * Loads the Application Entities record from the database
     * @param ID: string - primary key value to load the Application Entities record.
@@ -2166,7 +4742,7 @@ export class ApplicationEntityEntity extends BaseEntity<Types.ApplicationEntityE
  * @public
  */
 @RegisterClass(BaseEntity, 'Application Settings')
-export class ApplicationSettingEntity extends BaseEntity<Types.ApplicationSettingEntityType> {
+export class ApplicationSettingEntity extends BaseEntity<ApplicationSettingEntityType> {
     /**
     * Loads the Application Settings record from the database
     * @param ID: string - primary key value to load the Application Settings record.
@@ -2286,7 +4862,7 @@ export class ApplicationSettingEntity extends BaseEntity<Types.ApplicationSettin
  * @public
  */
 @RegisterClass(BaseEntity, 'Applications')
-export class ApplicationEntity extends BaseEntity<Types.ApplicationEntityType> {
+export class ApplicationEntity extends BaseEntity<ApplicationEntityType> {
     /**
     * Loads the Applications record from the database
     * @param ID: string - primary key value to load the Applications record.
@@ -2395,7 +4971,7 @@ export class ApplicationEntity extends BaseEntity<Types.ApplicationEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'Audit Log Types')
-export class AuditLogTypeEntity extends BaseEntity<Types.AuditLogTypeEntityType> {
+export class AuditLogTypeEntity extends BaseEntity<AuditLogTypeEntityType> {
     /**
     * Loads the Audit Log Types record from the database
     * @param ID: string - primary key value to load the Audit Log Types record.
@@ -2548,7 +5124,7 @@ export class AuditLogTypeEntity extends BaseEntity<Types.AuditLogTypeEntityType>
  * @public
  */
 @RegisterClass(BaseEntity, 'Audit Logs')
-export class AuditLogEntity extends BaseEntity<Types.AuditLogEntityType> {
+export class AuditLogEntity extends BaseEntity<AuditLogEntityType> {
     /**
     * Loads the Audit Logs record from the database
     * @param ID: string - primary key value to load the Audit Logs record.
@@ -2762,7 +5338,7 @@ export class AuditLogEntity extends BaseEntity<Types.AuditLogEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'Authorization Roles')
-export class AuthorizationRoleEntity extends BaseEntity<Types.AuthorizationRoleEntityType> {
+export class AuthorizationRoleEntity extends BaseEntity<AuthorizationRoleEntityType> {
     /**
     * Loads the Authorization Roles record from the database
     * @param ID: string - primary key value to load the Authorization Roles record.
@@ -2908,7 +5484,7 @@ export class AuthorizationRoleEntity extends BaseEntity<Types.AuthorizationRoleE
  * @public
  */
 @RegisterClass(BaseEntity, 'Authorizations')
-export class AuthorizationEntity extends BaseEntity<Types.AuthorizationEntityType> {
+export class AuthorizationEntity extends BaseEntity<AuthorizationEntityType> {
     /**
     * Loads the Authorizations record from the database
     * @param ID: string - primary key value to load the Authorizations record.
@@ -3067,7 +5643,7 @@ export class AuthorizationEntity extends BaseEntity<Types.AuthorizationEntityTyp
  * @public
  */
 @RegisterClass(BaseEntity, 'Communication Base Message Types')
-export class CommunicationBaseMessageTypeEntity extends BaseEntity<Types.CommunicationBaseMessageTypeEntityType> {
+export class CommunicationBaseMessageTypeEntity extends BaseEntity<CommunicationBaseMessageTypeEntityType> {
     /**
     * Loads the Communication Base Message Types record from the database
     * @param ID: string - primary key value to load the Communication Base Message Types record.
@@ -3208,7 +5784,7 @@ export class CommunicationBaseMessageTypeEntity extends BaseEntity<Types.Communi
  * @public
  */
 @RegisterClass(BaseEntity, 'Communication Logs')
-export class CommunicationLogEntity extends BaseEntity<Types.CommunicationLogEntityType> {
+export class CommunicationLogEntity extends BaseEntity<CommunicationLogEntityType> {
     /**
     * Loads the Communication Logs record from the database
     * @param ID: string - primary key value to load the Communication Logs record.
@@ -3415,7 +5991,7 @@ export class CommunicationLogEntity extends BaseEntity<Types.CommunicationLogEnt
  * @public
  */
 @RegisterClass(BaseEntity, 'Communication Provider Message Types')
-export class CommunicationProviderMessageTypeEntity extends BaseEntity<Types.CommunicationProviderMessageTypeEntityType> {
+export class CommunicationProviderMessageTypeEntity extends BaseEntity<CommunicationProviderMessageTypeEntityType> {
     /**
     * Loads the Communication Provider Message Types record from the database
     * @param ID: string - primary key value to load the Communication Provider Message Types record.
@@ -3564,7 +6140,7 @@ export class CommunicationProviderMessageTypeEntity extends BaseEntity<Types.Com
  * @public
  */
 @RegisterClass(BaseEntity, 'Communication Providers')
-export class CommunicationProviderEntity extends BaseEntity<Types.CommunicationProviderEntityType> {
+export class CommunicationProviderEntity extends BaseEntity<CommunicationProviderEntityType> {
     /**
     * Loads the Communication Providers record from the database
     * @param ID: string - primary key value to load the Communication Providers record.
@@ -3708,7 +6284,7 @@ export class CommunicationProviderEntity extends BaseEntity<Types.CommunicationP
  * @public
  */
 @RegisterClass(BaseEntity, 'Communication Runs')
-export class CommunicationRunEntity extends BaseEntity<Types.CommunicationRunEntityType> {
+export class CommunicationRunEntity extends BaseEntity<CommunicationRunEntityType> {
     /**
     * Loads the Communication Runs record from the database
     * @param ID: string - primary key value to load the Communication Runs record.
@@ -3889,7 +6465,7 @@ export class CommunicationRunEntity extends BaseEntity<Types.CommunicationRunEnt
  * @public
  */
 @RegisterClass(BaseEntity, 'Companies')
-export class CompanyEntity extends BaseEntity<Types.CompanyEntityType> {
+export class CompanyEntity extends BaseEntity<CompanyEntityType> {
     /**
     * Loads the Companies record from the database
     * @param ID: string - primary key value to load the Companies record.
@@ -4006,7 +6582,7 @@ export class CompanyEntity extends BaseEntity<Types.CompanyEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'Company Integration Record Maps')
-export class CompanyIntegrationRecordMapEntity extends BaseEntity<Types.CompanyIntegrationRecordMapEntityType> {
+export class CompanyIntegrationRecordMapEntity extends BaseEntity<CompanyIntegrationRecordMapEntityType> {
     /**
     * Loads the Company Integration Record Maps record from the database
     * @param ID: string - primary key value to load the Company Integration Record Maps record.
@@ -4138,7 +6714,7 @@ export class CompanyIntegrationRecordMapEntity extends BaseEntity<Types.CompanyI
  * @public
  */
 @RegisterClass(BaseEntity, 'Company Integration Run API Logs')
-export class CompanyIntegrationRunAPILogEntity extends BaseEntity<Types.CompanyIntegrationRunAPILogEntityType> {
+export class CompanyIntegrationRunAPILogEntity extends BaseEntity<CompanyIntegrationRunAPILogEntityType> {
     /**
     * Loads the Company Integration Run API Logs record from the database
     * @param ID: string - primary key value to load the Company Integration Run API Logs record.
@@ -4292,7 +6868,7 @@ export class CompanyIntegrationRunAPILogEntity extends BaseEntity<Types.CompanyI
  * @public
  */
 @RegisterClass(BaseEntity, 'Company Integration Run Details')
-export class CompanyIntegrationRunDetailEntity extends BaseEntity<Types.CompanyIntegrationRunDetailEntityType> {
+export class CompanyIntegrationRunDetailEntity extends BaseEntity<CompanyIntegrationRunDetailEntityType> {
     /**
     * Loads the Company Integration Run Details record from the database
     * @param ID: string - primary key value to load the Company Integration Run Details record.
@@ -4465,7 +7041,7 @@ export class CompanyIntegrationRunDetailEntity extends BaseEntity<Types.CompanyI
  * @public
  */
 @RegisterClass(BaseEntity, 'Company Integration Runs')
-export class CompanyIntegrationRunEntity extends BaseEntity<Types.CompanyIntegrationRunEntityType> {
+export class CompanyIntegrationRunEntity extends BaseEntity<CompanyIntegrationRunEntityType> {
     /**
     * Loads the Company Integration Runs record from the database
     * @param ID: string - primary key value to load the Company Integration Runs record.
@@ -4620,7 +7196,7 @@ export class CompanyIntegrationRunEntity extends BaseEntity<Types.CompanyIntegra
  * @public
  */
 @RegisterClass(BaseEntity, 'Company Integrations')
-export class CompanyIntegrationEntity extends BaseEntity<Types.CompanyIntegrationEntityType> {
+export class CompanyIntegrationEntity extends BaseEntity<CompanyIntegrationEntityType> {
     /**
     * Loads the Company Integrations record from the database
     * @param ID: string - primary key value to load the Company Integrations record.
@@ -4899,7 +7475,7 @@ export class CompanyIntegrationEntity extends BaseEntity<Types.CompanyIntegratio
  * @public
  */
 @RegisterClass(BaseEntity, 'Conversation Details')
-export class ConversationDetailEntity extends BaseEntity<Types.ConversationDetailEntityType> {
+export class ConversationDetailEntity extends BaseEntity<ConversationDetailEntityType> {
     /**
     * Loads the Conversation Details record from the database
     * @param ID: string - primary key value to load the Conversation Details record.
@@ -5049,7 +7625,7 @@ export class ConversationDetailEntity extends BaseEntity<Types.ConversationDetai
  * @public
  */
 @RegisterClass(BaseEntity, 'Conversations')
-export class ConversationEntity extends BaseEntity<Types.ConversationEntityType> {
+export class ConversationEntity extends BaseEntity<ConversationEntityType> {
     /**
     * Loads the Conversations record from the database
     * @param ID: string - primary key value to load the Conversations record.
@@ -5250,7 +7826,7 @@ export class ConversationEntity extends BaseEntity<Types.ConversationEntityType>
  * @public
  */
 @RegisterClass(BaseEntity, 'Dashboard Categories')
-export class DashboardCategoryEntity extends BaseEntity<Types.DashboardCategoryEntityType> {
+export class DashboardCategoryEntity extends BaseEntity<DashboardCategoryEntityType> {
     /**
     * Loads the Dashboard Categories record from the database
     * @param ID: string - primary key value to load the Dashboard Categories record.
@@ -5380,7 +7956,7 @@ export class DashboardCategoryEntity extends BaseEntity<Types.DashboardCategoryE
  * @public
  */
 @RegisterClass(BaseEntity, 'Dashboards')
-export class DashboardEntity extends BaseEntity<Types.DashboardEntityType> {
+export class DashboardEntity extends BaseEntity<DashboardEntityType> {
     /**
     * Loads the Dashboards record from the database
     * @param ID: string - primary key value to load the Dashboards record.
@@ -5522,7 +8098,7 @@ export class DashboardEntity extends BaseEntity<Types.DashboardEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'Data Context Items')
-export class DataContextItemEntity extends BaseEntity<Types.DataContextItemEntityType> {
+export class DataContextItemEntity extends BaseEntity<DataContextItemEntityType> {
     /**
     * Loads the Data Context Items record from the database
     * @param ID: string - primary key value to load the Data Context Items record.
@@ -5744,7 +8320,7 @@ export class DataContextItemEntity extends BaseEntity<Types.DataContextItemEntit
  * @public
  */
 @RegisterClass(BaseEntity, 'Data Contexts')
-export class DataContextEntity extends BaseEntity<Types.DataContextEntityType> {
+export class DataContextEntity extends BaseEntity<DataContextEntityType> {
     /**
     * Loads the Data Contexts record from the database
     * @param ID: string - primary key value to load the Data Contexts record.
@@ -5864,7 +8440,7 @@ export class DataContextEntity extends BaseEntity<Types.DataContextEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'Dataset Items')
-export class DatasetItemEntity extends BaseEntity<Types.DatasetItemEntityType> {
+export class DatasetItemEntity extends BaseEntity<DatasetItemEntityType> {
     /**
     * Loads the Dataset Items record from the database
     * @param ID: string - primary key value to load the Dataset Items record.
@@ -6055,7 +8631,7 @@ export class DatasetItemEntity extends BaseEntity<Types.DatasetItemEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'Datasets')
-export class DatasetEntity extends BaseEntity<Types.DatasetEntityType> {
+export class DatasetEntity extends BaseEntity<DatasetEntityType> {
     /**
     * Loads the Datasets record from the database
     * @param ID: string - primary key value to load the Datasets record.
@@ -6164,7 +8740,7 @@ export class DatasetEntity extends BaseEntity<Types.DatasetEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'Duplicate Run Detail Matches')
-export class DuplicateRunDetailMatchEntity extends BaseEntity<Types.DuplicateRunDetailMatchEntityType> {
+export class DuplicateRunDetailMatchEntity extends BaseEntity<DuplicateRunDetailMatchEntityType> {
     /**
     * Loads the Duplicate Run Detail Matches record from the database
     * @param ID: string - primary key value to load the Duplicate Run Detail Matches record.
@@ -6382,7 +8958,7 @@ export class DuplicateRunDetailMatchEntity extends BaseEntity<Types.DuplicateRun
  * @public
  */
 @RegisterClass(BaseEntity, 'Duplicate Run Details')
-export class DuplicateRunDetailEntity extends BaseEntity<Types.DuplicateRunDetailEntityType> {
+export class DuplicateRunDetailEntity extends BaseEntity<DuplicateRunDetailEntityType> {
     /**
     * Loads the Duplicate Run Details record from the database
     * @param ID: string - primary key value to load the Duplicate Run Details record.
@@ -6556,7 +9132,7 @@ export class DuplicateRunDetailEntity extends BaseEntity<Types.DuplicateRunDetai
  * @public
  */
 @RegisterClass(BaseEntity, 'Duplicate Runs')
-export class DuplicateRunEntity extends BaseEntity<Types.DuplicateRunEntityType> {
+export class DuplicateRunEntity extends BaseEntity<DuplicateRunEntityType> {
     /**
     * Loads the Duplicate Runs record from the database
     * @param ID: string - primary key value to load the Duplicate Runs record.
@@ -6803,7 +9379,7 @@ export class DuplicateRunEntity extends BaseEntity<Types.DuplicateRunEntityType>
  * @public
  */
 @RegisterClass(BaseEntity, 'Employee Company Integrations')
-export class EmployeeCompanyIntegrationEntity extends BaseEntity<Types.EmployeeCompanyIntegrationEntityType> {
+export class EmployeeCompanyIntegrationEntity extends BaseEntity<EmployeeCompanyIntegrationEntityType> {
     /**
     * Loads the Employee Company Integrations record from the database
     * @param ID: string - primary key value to load the Employee Company Integrations record.
@@ -6926,7 +9502,7 @@ export class EmployeeCompanyIntegrationEntity extends BaseEntity<Types.EmployeeC
  * @public
  */
 @RegisterClass(BaseEntity, 'Employee Roles')
-export class EmployeeRoleEntity extends BaseEntity<Types.EmployeeRoleEntityType> {
+export class EmployeeRoleEntity extends BaseEntity<EmployeeRoleEntityType> {
     /**
     * Loads the Employee Roles record from the database
     * @param ID: string - primary key value to load the Employee Roles record.
@@ -7034,7 +9610,7 @@ export class EmployeeRoleEntity extends BaseEntity<Types.EmployeeRoleEntityType>
  * @public
  */
 @RegisterClass(BaseEntity, 'Employee Skills')
-export class EmployeeSkillEntity extends BaseEntity<Types.EmployeeSkillEntityType> {
+export class EmployeeSkillEntity extends BaseEntity<EmployeeSkillEntityType> {
     /**
     * Loads the Employee Skills record from the database
     * @param ID: string - primary key value to load the Employee Skills record.
@@ -7143,7 +9719,7 @@ export class EmployeeSkillEntity extends BaseEntity<Types.EmployeeSkillEntityTyp
  * @public
  */
 @RegisterClass(BaseEntity, 'Employees')
-export class EmployeeEntity extends BaseEntity<Types.EmployeeEntityType> {
+export class EmployeeEntity extends BaseEntity<EmployeeEntityType> {
     /**
     * Loads the Employees record from the database
     * @param ID: string - primary key value to load the Employees record.
@@ -7354,7 +9930,7 @@ export class EmployeeEntity extends BaseEntity<Types.EmployeeEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'Entities')
-export class EntityEntity extends BaseEntity<Types.EntityEntityType> {
+export class EntityEntity extends BaseEntity<EntityEntityType> {
     /**
     * Loads the Entities record from the database
     * @param ID: string - primary key value to load the Entities record.
@@ -8044,7 +10620,7 @@ export class EntityEntity extends BaseEntity<Types.EntityEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'Entity Action Filters')
-export class EntityActionFilterEntity extends BaseEntity<Types.EntityActionFilterEntityType> {
+export class EntityActionFilterEntity extends BaseEntity<EntityActionFilterEntityType> {
     /**
     * Loads the Entity Action Filters record from the database
     * @param ID: string - primary key value to load the Entity Action Filters record.
@@ -8164,7 +10740,7 @@ export class EntityActionFilterEntity extends BaseEntity<Types.EntityActionFilte
  * @public
  */
 @RegisterClass(BaseEntity, 'Entity Action Invocation Types')
-export class EntityActionInvocationTypeEntity extends BaseEntity<Types.EntityActionInvocationTypeEntityType> {
+export class EntityActionInvocationTypeEntity extends BaseEntity<EntityActionInvocationTypeEntityType> {
     /**
     * Loads the Entity Action Invocation Types record from the database
     * @param ID: string - primary key value to load the Entity Action Invocation Types record.
@@ -8265,7 +10841,7 @@ export class EntityActionInvocationTypeEntity extends BaseEntity<Types.EntityAct
  * @public
  */
 @RegisterClass(BaseEntity, 'Entity Action Invocations')
-export class EntityActionInvocationEntity extends BaseEntity<Types.EntityActionInvocationEntityType> {
+export class EntityActionInvocationEntity extends BaseEntity<EntityActionInvocationEntityType> {
     /**
     * Loads the Entity Action Invocations record from the database
     * @param ID: string - primary key value to load the Entity Action Invocations record.
@@ -8381,7 +10957,7 @@ export class EntityActionInvocationEntity extends BaseEntity<Types.EntityActionI
  * @public
  */
 @RegisterClass(BaseEntity, 'Entity Action Params')
-export class EntityActionParamEntity extends BaseEntity<Types.EntityActionParamEntityType> {
+export class EntityActionParamEntity extends BaseEntity<EntityActionParamEntityType> {
     /**
     * Loads the Entity Action Params record from the database
     * @param ID: string - primary key value to load the Entity Action Params record.
@@ -8523,7 +11099,7 @@ export class EntityActionParamEntity extends BaseEntity<Types.EntityActionParamE
  * @public
  */
 @RegisterClass(BaseEntity, 'Entity Actions')
-export class EntityActionEntity extends BaseEntity<Types.EntityActionEntityType> {
+export class EntityActionEntity extends BaseEntity<EntityActionEntityType> {
     /**
     * Loads the Entity Actions record from the database
     * @param ID: string - primary key value to load the Entity Actions record.
@@ -8648,7 +11224,7 @@ export class EntityActionEntity extends BaseEntity<Types.EntityActionEntityType>
  * @public
  */
 @RegisterClass(BaseEntity, 'Entity AI Actions')
-export class EntityAIActionEntity extends BaseEntity<Types.EntityAIActionEntityType> {
+export class EntityAIActionEntity extends BaseEntity<EntityAIActionEntityType> {
     /**
     * Loads the Entity AI Actions record from the database
     * @param ID: string - primary key value to load the Entity AI Actions record.
@@ -8905,7 +11481,7 @@ export class EntityAIActionEntity extends BaseEntity<Types.EntityAIActionEntityT
  * @public
  */
 @RegisterClass(BaseEntity, 'Entity Communication Fields')
-export class EntityCommunicationFieldEntity extends BaseEntity<Types.EntityCommunicationFieldEntityType> {
+export class EntityCommunicationFieldEntity extends BaseEntity<EntityCommunicationFieldEntityType> {
     /**
     * Loads the Entity Communication Fields record from the database
     * @param ID: string - primary key value to load the Entity Communication Fields record.
@@ -9018,7 +11594,7 @@ export class EntityCommunicationFieldEntity extends BaseEntity<Types.EntityCommu
  * @public
  */
 @RegisterClass(BaseEntity, 'Entity Communication Message Types')
-export class EntityCommunicationMessageTypeEntity extends BaseEntity<Types.EntityCommunicationMessageTypeEntityType> {
+export class EntityCommunicationMessageTypeEntity extends BaseEntity<EntityCommunicationMessageTypeEntityType> {
     /**
     * Loads the Entity Communication Message Types record from the database
     * @param ID: string - primary key value to load the Entity Communication Message Types record.
@@ -9149,7 +11725,7 @@ export class EntityCommunicationMessageTypeEntity extends BaseEntity<Types.Entit
  * @public
  */
 @RegisterClass(BaseEntity, 'Entity Document Runs')
-export class EntityDocumentRunEntity extends BaseEntity<Types.EntityDocumentRunEntityType> {
+export class EntityDocumentRunEntity extends BaseEntity<EntityDocumentRunEntityType> {
     /**
     * Loads the Entity Document Runs record from the database
     * @param ID: string - primary key value to load the Entity Document Runs record.
@@ -9287,7 +11863,7 @@ export class EntityDocumentRunEntity extends BaseEntity<Types.EntityDocumentRunE
  * @public
  */
 @RegisterClass(BaseEntity, 'Entity Document Settings')
-export class EntityDocumentSettingEntity extends BaseEntity<Types.EntityDocumentSettingEntityType> {
+export class EntityDocumentSettingEntity extends BaseEntity<EntityDocumentSettingEntityType> {
     /**
     * Loads the Entity Document Settings record from the database
     * @param ID: string - primary key value to load the Entity Document Settings record.
@@ -9418,7 +11994,7 @@ export class EntityDocumentSettingEntity extends BaseEntity<Types.EntityDocument
  * @public
  */
 @RegisterClass(BaseEntity, 'Entity Document Types')
-export class EntityDocumentTypeEntity extends BaseEntity<Types.EntityDocumentTypeEntityType> {
+export class EntityDocumentTypeEntity extends BaseEntity<EntityDocumentTypeEntityType> {
     /**
     * Loads the Entity Document Types record from the database
     * @param ID: string - primary key value to load the Entity Document Types record.
@@ -9515,7 +12091,7 @@ export class EntityDocumentTypeEntity extends BaseEntity<Types.EntityDocumentTyp
  * @public
  */
 @RegisterClass(BaseEntity, 'Entity Documents')
-export class EntityDocumentEntity extends BaseEntity<Types.EntityDocumentEntityType> {
+export class EntityDocumentEntity extends BaseEntity<EntityDocumentEntityType> {
     /**
     * Loads the Entity Documents record from the database
     * @param ID: string - primary key value to load the Entity Documents record.
@@ -9755,7 +12331,7 @@ export class EntityDocumentEntity extends BaseEntity<Types.EntityDocumentEntityT
  * @public
  */
 @RegisterClass(BaseEntity, 'Entity Field Values')
-export class EntityFieldValueEntity extends BaseEntity<Types.EntityFieldValueEntityType> {
+export class EntityFieldValueEntity extends BaseEntity<EntityFieldValueEntityType> {
     /**
     * Loads the Entity Field Values record from the database
     * @param ID: string - primary key value to load the Entity Field Values record.
@@ -9917,7 +12493,7 @@ export class EntityFieldValueEntity extends BaseEntity<Types.EntityFieldValueEnt
  * @public
  */
 @RegisterClass(BaseEntity, 'Entity Fields')
-export class EntityFieldEntity extends BaseEntity<Types.EntityFieldEntityType> {
+export class EntityFieldEntity extends BaseEntity<EntityFieldEntityType> {
     /**
     * Loads the Entity Fields record from the database
     * @param ID: string - primary key value to load the Entity Fields record.
@@ -10576,7 +13152,7 @@ export class EntityFieldEntity extends BaseEntity<Types.EntityFieldEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'Entity Permissions')
-export class EntityPermissionEntity extends BaseEntity<Types.EntityPermissionEntityType> {
+export class EntityPermissionEntity extends BaseEntity<EntityPermissionEntityType> {
     /**
     * Loads the Entity Permissions record from the database
     * @param ID: string - primary key value to load the Entity Permissions record.
@@ -10829,7 +13405,7 @@ export class EntityPermissionEntity extends BaseEntity<Types.EntityPermissionEnt
  * @public
  */
 @RegisterClass(BaseEntity, 'Entity Record Documents')
-export class EntityRecordDocumentEntity extends BaseEntity<Types.EntityRecordDocumentEntityType> {
+export class EntityRecordDocumentEntity extends BaseEntity<EntityRecordDocumentEntityType> {
     /**
     * Loads the Entity Record Documents record from the database
     * @param ID: string - primary key value to load the Entity Record Documents record.
@@ -11029,7 +13605,7 @@ export class EntityRecordDocumentEntity extends BaseEntity<Types.EntityRecordDoc
  * @public
  */
 @RegisterClass(BaseEntity, 'Entity Relationship Display Components')
-export class EntityRelationshipDisplayComponentEntity extends BaseEntity<Types.EntityRelationshipDisplayComponentEntityType> {
+export class EntityRelationshipDisplayComponentEntity extends BaseEntity<EntityRelationshipDisplayComponentEntityType> {
     /**
     * Loads the Entity Relationship Display Components record from the database
     * @param ID: string - primary key value to load the Entity Relationship Display Components record.
@@ -11145,7 +13721,7 @@ export class EntityRelationshipDisplayComponentEntity extends BaseEntity<Types.E
  * @public
  */
 @RegisterClass(BaseEntity, 'Entity Relationships')
-export class EntityRelationshipEntity extends BaseEntity<Types.EntityRelationshipEntityType> {
+export class EntityRelationshipEntity extends BaseEntity<EntityRelationshipEntityType> {
     /**
     * Loads the Entity Relationships record from the database
     * @param ID: string - primary key value to load the Entity Relationships record.
@@ -11548,7 +14124,7 @@ export class EntityRelationshipEntity extends BaseEntity<Types.EntityRelationshi
  * @public
  */
 @RegisterClass(BaseEntity, 'Entity Settings')
-export class EntitySettingEntity extends BaseEntity<Types.EntitySettingEntityType> {
+export class EntitySettingEntity extends BaseEntity<EntitySettingEntityType> {
     /**
     * Loads the Entity Settings record from the database
     * @param ID: string - primary key value to load the Entity Settings record.
@@ -11679,7 +14255,7 @@ export class EntitySettingEntity extends BaseEntity<Types.EntitySettingEntityTyp
  * @public
  */
 @RegisterClass(BaseEntity, 'Error Logs')
-export class ErrorLogEntity extends BaseEntity<Types.ErrorLogEntityType> {
+export class ErrorLogEntity extends BaseEntity<ErrorLogEntityType> {
     /**
     * Loads the Error Logs record from the database
     * @param ID: string - primary key value to load the Error Logs record.
@@ -11846,7 +14422,7 @@ export class ErrorLogEntity extends BaseEntity<Types.ErrorLogEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'Explorer Navigation Items')
-export class ExplorerNavigationItemEntity extends BaseEntity<Types.ExplorerNavigationItemEntityType> {
+export class ExplorerNavigationItemEntity extends BaseEntity<ExplorerNavigationItemEntityType> {
     /**
     * Loads the Explorer Navigation Items record from the database
     * @param ID: string - primary key value to load the Explorer Navigation Items record.
@@ -12028,7 +14604,7 @@ export class ExplorerNavigationItemEntity extends BaseEntity<Types.ExplorerNavig
  * @public
  */
 @RegisterClass(BaseEntity, 'File Categories')
-export class FileCategoryEntity extends BaseEntity<Types.FileCategoryEntityType> {
+export class FileCategoryEntity extends BaseEntity<FileCategoryEntityType> {
     /**
     * Loads the File Categories record from the database
     * @param ID: string - primary key value to load the File Categories record.
@@ -12135,7 +14711,7 @@ export class FileCategoryEntity extends BaseEntity<Types.FileCategoryEntityType>
  * @public
  */
 @RegisterClass(BaseEntity, 'File Entity Record Links')
-export class FileEntityRecordLinkEntity extends BaseEntity<Types.FileEntityRecordLinkEntityType> {
+export class FileEntityRecordLinkEntity extends BaseEntity<FileEntityRecordLinkEntityType> {
     /**
     * Loads the File Entity Record Links record from the database
     * @param ID: string - primary key value to load the File Entity Record Links record.
@@ -12264,7 +14840,7 @@ export class FileEntityRecordLinkEntity extends BaseEntity<Types.FileEntityRecor
  * @public
  */
 @RegisterClass(BaseEntity, 'File Storage Providers')
-export class FileStorageProviderEntity extends BaseEntity<Types.FileStorageProviderEntityType> {
+export class FileStorageProviderEntity extends BaseEntity<FileStorageProviderEntityType> {
     /**
     * Loads the File Storage Providers record from the database
     * @param ID: string - primary key value to load the File Storage Providers record.
@@ -12411,7 +14987,7 @@ export class FileStorageProviderEntity extends BaseEntity<Types.FileStorageProvi
  * @public
  */
 @RegisterClass(BaseEntity, 'Files')
-export class FileEntity extends BaseEntity<Types.FileEntityType> {
+export class FileEntity extends BaseEntity<FileEntityType> {
     /**
     * Loads the Files record from the database
     * @param ID: string - primary key value to load the Files record.
@@ -12578,7 +15154,7 @@ export class FileEntity extends BaseEntity<Types.FileEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'flyway _schema _histories')
-export class flyway_schema_historyEntity extends BaseEntity<Types.flyway_schema_historyEntityType> {
+export class flyway_schema_historyEntity extends BaseEntity<flyway_schema_historyEntityType> {
     /**
     * Loads the flyway _schema _histories record from the database
     * @param installed_rank: number - primary key value to load the flyway _schema _histories record.
@@ -12748,7 +15324,7 @@ export class flyway_schema_historyEntity extends BaseEntity<Types.flyway_schema_
  * @public
  */
 @RegisterClass(BaseEntity, 'Integration URL Formats')
-export class IntegrationURLFormatEntity extends BaseEntity<Types.IntegrationURLFormatEntityType> {
+export class IntegrationURLFormatEntity extends BaseEntity<IntegrationURLFormatEntityType> {
     /**
     * Loads the Integration URL Formats record from the database
     * @param ID: string - primary key value to load the Integration URL Formats record.
@@ -12898,7 +15474,7 @@ export class IntegrationURLFormatEntity extends BaseEntity<Types.IntegrationURLF
  * @public
  */
 @RegisterClass(BaseEntity, 'Integrations')
-export class IntegrationEntity extends BaseEntity<Types.IntegrationEntityType> {
+export class IntegrationEntity extends BaseEntity<IntegrationEntityType> {
     /**
     * Loads the Integrations record from the database
     * @param ID: string - primary key value to load the Integrations record.
@@ -13055,7 +15631,7 @@ export class IntegrationEntity extends BaseEntity<Types.IntegrationEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'Libraries')
-export class LibraryEntity extends BaseEntity<Types.LibraryEntityType> {
+export class LibraryEntity extends BaseEntity<LibraryEntityType> {
     /**
     * Loads the Libraries record from the database
     * @param ID: string - primary key value to load the Libraries record.
@@ -13198,7 +15774,7 @@ export class LibraryEntity extends BaseEntity<Types.LibraryEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'Library Items')
-export class LibraryItemEntity extends BaseEntity<Types.LibraryItemEntityType> {
+export class LibraryItemEntity extends BaseEntity<LibraryItemEntityType> {
     /**
     * Loads the Library Items record from the database
     * @param ID: string - primary key value to load the Library Items record.
@@ -13326,7 +15902,7 @@ export class LibraryItemEntity extends BaseEntity<Types.LibraryItemEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'List Categories')
-export class ListCategoryEntity extends BaseEntity<Types.ListCategoryEntityType> {
+export class ListCategoryEntity extends BaseEntity<ListCategoryEntityType> {
     /**
     * Loads the List Categories record from the database
     * @param ID: string - primary key value to load the List Categories record.
@@ -13468,7 +16044,7 @@ export class ListCategoryEntity extends BaseEntity<Types.ListCategoryEntityType>
  * @public
  */
 @RegisterClass(BaseEntity, 'List Details')
-export class ListDetailEntity extends BaseEntity<Types.ListDetailEntityType> {
+export class ListDetailEntity extends BaseEntity<ListDetailEntityType> {
     /**
     * Loads the List Details record from the database
     * @param ID: string - primary key value to load the List Details record.
@@ -13575,7 +16151,7 @@ export class ListDetailEntity extends BaseEntity<Types.ListDetailEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'Lists')
-export class ListEntity extends BaseEntity<Types.ListEntityType> {
+export class ListEntity extends BaseEntity<ListEntityType> {
     /**
     * Loads the Lists record from the database
     * @param ID: string - primary key value to load the Lists record.
@@ -13748,7 +16324,7 @@ export class ListEntity extends BaseEntity<Types.ListEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'Output Delivery Types')
-export class OutputDeliveryTypeEntity extends BaseEntity<Types.OutputDeliveryTypeEntityType> {
+export class OutputDeliveryTypeEntity extends BaseEntity<OutputDeliveryTypeEntityType> {
     /**
     * Loads the Output Delivery Types record from the database
     * @param ID: string - primary key value to load the Output Delivery Types record.
@@ -13857,7 +16433,7 @@ export class OutputDeliveryTypeEntity extends BaseEntity<Types.OutputDeliveryTyp
  * @public
  */
 @RegisterClass(BaseEntity, 'Output Format Types')
-export class OutputFormatTypeEntity extends BaseEntity<Types.OutputFormatTypeEntityType> {
+export class OutputFormatTypeEntity extends BaseEntity<OutputFormatTypeEntityType> {
     /**
     * Loads the Output Format Types record from the database
     * @param ID: string - primary key value to load the Output Format Types record.
@@ -13978,7 +16554,7 @@ export class OutputFormatTypeEntity extends BaseEntity<Types.OutputFormatTypeEnt
  * @public
  */
 @RegisterClass(BaseEntity, 'Output Trigger Types')
-export class OutputTriggerTypeEntity extends BaseEntity<Types.OutputTriggerTypeEntityType> {
+export class OutputTriggerTypeEntity extends BaseEntity<OutputTriggerTypeEntityType> {
     /**
     * Loads the Output Trigger Types record from the database
     * @param ID: string - primary key value to load the Output Trigger Types record.
@@ -14088,7 +16664,7 @@ export class OutputTriggerTypeEntity extends BaseEntity<Types.OutputTriggerTypeE
  * @public
  */
 @RegisterClass(BaseEntity, 'Queries')
-export class QueryEntity extends BaseEntity<Types.QueryEntityType> {
+export class QueryEntity extends BaseEntity<QueryEntityType> {
     /**
     * Loads the Queries record from the database
     * @param ID: string - primary key value to load the Queries record.
@@ -14313,7 +16889,7 @@ export class QueryEntity extends BaseEntity<Types.QueryEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'Query Categories')
-export class QueryCategoryEntity extends BaseEntity<Types.QueryCategoryEntityType> {
+export class QueryCategoryEntity extends BaseEntity<QueryCategoryEntityType> {
     /**
     * Loads the Query Categories record from the database
     * @param ID: string - primary key value to load the Query Categories record.
@@ -14442,7 +17018,7 @@ export class QueryCategoryEntity extends BaseEntity<Types.QueryCategoryEntityTyp
  * @public
  */
 @RegisterClass(BaseEntity, 'Query Fields')
-export class QueryFieldEntity extends BaseEntity<Types.QueryFieldEntityType> {
+export class QueryFieldEntity extends BaseEntity<QueryFieldEntityType> {
     /**
     * Loads the Query Fields record from the database
     * @param ID: string - primary key value to load the Query Fields record.
@@ -14683,7 +17259,7 @@ export class QueryFieldEntity extends BaseEntity<Types.QueryFieldEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'Query Permissions')
-export class QueryPermissionEntity extends BaseEntity<Types.QueryPermissionEntityType> {
+export class QueryPermissionEntity extends BaseEntity<QueryPermissionEntityType> {
     /**
     * Loads the Query Permissions record from the database
     * @param ID: string - primary key value to load the Query Permissions record.
@@ -14800,7 +17376,7 @@ export class QueryPermissionEntity extends BaseEntity<Types.QueryPermissionEntit
  * @public
  */
 @RegisterClass(BaseEntity, 'Queue Tasks')
-export class QueueTaskEntity extends BaseEntity<Types.QueueTaskEntityType> {
+export class QueueTaskEntity extends BaseEntity<QueueTaskEntityType> {
     /**
     * Loads the Queue Tasks record from the database
     * @param ID: string - primary key value to load the Queue Tasks record.
@@ -14997,7 +17573,7 @@ export class QueueTaskEntity extends BaseEntity<Types.QueueTaskEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'Queue Types')
-export class QueueTypeEntity extends BaseEntity<Types.QueueTypeEntityType> {
+export class QueueTypeEntity extends BaseEntity<QueueTypeEntityType> {
     /**
     * Loads the Queue Types record from the database
     * @param ID: string - primary key value to load the Queue Types record.
@@ -15144,7 +17720,7 @@ export class QueueTypeEntity extends BaseEntity<Types.QueueTypeEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'Queues')
-export class QueueEntity extends BaseEntity<Types.QueueEntityType> {
+export class QueueEntity extends BaseEntity<QueueEntityType> {
     /**
     * Loads the Queues record from the database
     * @param ID: string - primary key value to load the Queues record.
@@ -15422,7 +17998,7 @@ export class QueueEntity extends BaseEntity<Types.QueueEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'Recommendation Items')
-export class RecommendationItemEntity extends BaseEntity<Types.RecommendationItemEntityType> {
+export class RecommendationItemEntity extends BaseEntity<RecommendationItemEntityType> {
     /**
     * Loads the Recommendation Items record from the database
     * @param ID: string - primary key value to load the Recommendation Items record.
@@ -15557,7 +18133,7 @@ export class RecommendationItemEntity extends BaseEntity<Types.RecommendationIte
  * @public
  */
 @RegisterClass(BaseEntity, 'Recommendation Providers')
-export class RecommendationProviderEntity extends BaseEntity<Types.RecommendationProviderEntityType> {
+export class RecommendationProviderEntity extends BaseEntity<RecommendationProviderEntityType> {
     /**
     * Loads the Recommendation Providers record from the database
     * @param ID: string - primary key value to load the Recommendation Providers record.
@@ -15655,7 +18231,7 @@ export class RecommendationProviderEntity extends BaseEntity<Types.Recommendatio
  * @public
  */
 @RegisterClass(BaseEntity, 'Recommendation Runs')
-export class RecommendationRunEntity extends BaseEntity<Types.RecommendationRunEntityType> {
+export class RecommendationRunEntity extends BaseEntity<RecommendationRunEntityType> {
     /**
     * Loads the Recommendation Runs record from the database
     * @param ID: string - primary key value to load the Recommendation Runs record.
@@ -15831,7 +18407,7 @@ export class RecommendationRunEntity extends BaseEntity<Types.RecommendationRunE
  * @public
  */
 @RegisterClass(BaseEntity, 'Recommendations')
-export class RecommendationEntity extends BaseEntity<Types.RecommendationEntityType> {
+export class RecommendationEntity extends BaseEntity<RecommendationEntityType> {
     /**
     * Loads the Recommendations record from the database
     * @param ID: string - primary key value to load the Recommendations record.
@@ -15953,7 +18529,7 @@ export class RecommendationEntity extends BaseEntity<Types.RecommendationEntityT
  * @public
  */
 @RegisterClass(BaseEntity, 'Record Change Replay Runs')
-export class RecordChangeReplayRunEntity extends BaseEntity<Types.RecordChangeReplayRunEntityType> {
+export class RecordChangeReplayRunEntity extends BaseEntity<RecordChangeReplayRunEntityType> {
     /**
     * Loads the Record Change Replay Runs record from the database
     * @param ID: string - primary key value to load the Record Change Replay Runs record.
@@ -16094,7 +18670,7 @@ export class RecordChangeReplayRunEntity extends BaseEntity<Types.RecordChangeRe
  * @public
  */
 @RegisterClass(BaseEntity, 'Record Changes')
-export class RecordChangeEntity extends BaseEntity<Types.RecordChangeEntityType> {
+export class RecordChangeEntity extends BaseEntity<RecordChangeEntityType> {
     /**
     * Loads the Record Changes record from the database
     * @param ID: string - primary key value to load the Record Changes record.
@@ -16388,7 +18964,7 @@ export class RecordChangeEntity extends BaseEntity<Types.RecordChangeEntityType>
  * @public
  */
 @RegisterClass(BaseEntity, 'Record Merge Deletion Logs')
-export class RecordMergeDeletionLogEntity extends BaseEntity<Types.RecordMergeDeletionLogEntityType> {
+export class RecordMergeDeletionLogEntity extends BaseEntity<RecordMergeDeletionLogEntityType> {
     /**
     * Loads the Record Merge Deletion Logs record from the database
     * @param ID: string - primary key value to load the Record Merge Deletion Logs record.
@@ -16516,7 +19092,7 @@ export class RecordMergeDeletionLogEntity extends BaseEntity<Types.RecordMergeDe
  * @public
  */
 @RegisterClass(BaseEntity, 'Record Merge Logs')
-export class RecordMergeLogEntity extends BaseEntity<Types.RecordMergeLogEntityType> {
+export class RecordMergeLogEntity extends BaseEntity<RecordMergeLogEntityType> {
     /**
     * Loads the Record Merge Logs record from the database
     * @param ID: string - primary key value to load the Record Merge Logs record.
@@ -16752,7 +19328,7 @@ export class RecordMergeLogEntity extends BaseEntity<Types.RecordMergeLogEntityT
  * @public
  */
 @RegisterClass(BaseEntity, 'Report Categories')
-export class ReportCategoryEntity extends BaseEntity<Types.ReportCategoryEntityType> {
+export class ReportCategoryEntity extends BaseEntity<ReportCategoryEntityType> {
     /**
     * Loads the Report Categories record from the database
     * @param ID: string - primary key value to load the Report Categories record.
@@ -16881,7 +19457,7 @@ export class ReportCategoryEntity extends BaseEntity<Types.ReportCategoryEntityT
  * @public
  */
 @RegisterClass(BaseEntity, 'Report Snapshots')
-export class ReportSnapshotEntity extends BaseEntity<Types.ReportSnapshotEntityType> {
+export class ReportSnapshotEntity extends BaseEntity<ReportSnapshotEntityType> {
     /**
     * Loads the Report Snapshots record from the database
     * @param ID: string - primary key value to load the Report Snapshots record.
@@ -16998,7 +19574,7 @@ export class ReportSnapshotEntity extends BaseEntity<Types.ReportSnapshotEntityT
  * @public
  */
 @RegisterClass(BaseEntity, 'Reports')
-export class ReportEntity extends BaseEntity<Types.ReportEntityType> {
+export class ReportEntity extends BaseEntity<ReportEntityType> {
     /**
     * Loads the Reports record from the database
     * @param ID: string - primary key value to load the Reports record.
@@ -17326,7 +19902,7 @@ export class ReportEntity extends BaseEntity<Types.ReportEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'Resource Types')
-export class ResourceTypeEntity extends BaseEntity<Types.ResourceTypeEntityType> {
+export class ResourceTypeEntity extends BaseEntity<ResourceTypeEntityType> {
     /**
     * Loads the Resource Types record from the database
     * @param ID: string - primary key value to load the Resource Types record.
@@ -17482,7 +20058,7 @@ export class ResourceTypeEntity extends BaseEntity<Types.ResourceTypeEntityType>
  * @public
  */
 @RegisterClass(BaseEntity, 'Roles')
-export class RoleEntity extends BaseEntity<Types.RoleEntityType> {
+export class RoleEntity extends BaseEntity<RoleEntityType> {
     /**
     * Loads the Roles record from the database
     * @param ID: string - primary key value to load the Roles record.
@@ -17590,7 +20166,7 @@ export class RoleEntity extends BaseEntity<Types.RoleEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'Row Level Security Filters')
-export class RowLevelSecurityFilterEntity extends BaseEntity<Types.RowLevelSecurityFilterEntityType> {
+export class RowLevelSecurityFilterEntity extends BaseEntity<RowLevelSecurityFilterEntityType> {
     /**
     * Loads the Row Level Security Filters record from the database
     * @param ID: string - primary key value to load the Row Level Security Filters record.
@@ -17711,7 +20287,7 @@ export class RowLevelSecurityFilterEntity extends BaseEntity<Types.RowLevelSecur
  * @public
  */
 @RegisterClass(BaseEntity, 'Scheduled Action Params')
-export class ScheduledActionParamEntity extends BaseEntity<Types.ScheduledActionParamEntityType> {
+export class ScheduledActionParamEntity extends BaseEntity<ScheduledActionParamEntityType> {
     /**
     * Loads the Scheduled Action Params record from the database
     * @param ID: string - primary key value to load the Scheduled Action Params record.
@@ -17857,7 +20433,7 @@ export class ScheduledActionParamEntity extends BaseEntity<Types.ScheduledAction
  * @public
  */
 @RegisterClass(BaseEntity, 'Scheduled Actions')
-export class ScheduledActionEntity extends BaseEntity<Types.ScheduledActionEntityType> {
+export class ScheduledActionEntity extends BaseEntity<ScheduledActionEntityType> {
     /**
     * Loads the Scheduled Actions record from the database
     * @param ID: string - primary key value to load the Scheduled Actions record.
@@ -18117,7 +20693,7 @@ export class ScheduledActionEntity extends BaseEntity<Types.ScheduledActionEntit
  * @public
  */
 @RegisterClass(BaseEntity, 'Schema Info')
-export class SchemaInfoEntity extends BaseEntity<Types.SchemaInfoEntityType> {
+export class SchemaInfoEntity extends BaseEntity<SchemaInfoEntityType> {
     /**
     * Loads the Schema Info record from the database
     * @param ID: string - primary key value to load the Schema Info record.
@@ -18239,7 +20815,7 @@ export class SchemaInfoEntity extends BaseEntity<Types.SchemaInfoEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'Skills')
-export class SkillEntity extends BaseEntity<Types.SkillEntityType> {
+export class SkillEntity extends BaseEntity<SkillEntityType> {
     /**
     * Loads the Skills record from the database
     * @param ID: string - primary key value to load the Skills record.
@@ -18357,7 +20933,7 @@ export class SkillEntity extends BaseEntity<Types.SkillEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'Tagged Items')
-export class TaggedItemEntity extends BaseEntity<Types.TaggedItemEntityType> {
+export class TaggedItemEntity extends BaseEntity<TaggedItemEntityType> {
     /**
     * Loads the Tagged Items record from the database
     * @param ID: string - primary key value to load the Tagged Items record.
@@ -18487,7 +21063,7 @@ export class TaggedItemEntity extends BaseEntity<Types.TaggedItemEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'Tags')
-export class TagEntity extends BaseEntity<Types.TagEntityType> {
+export class TagEntity extends BaseEntity<TagEntityType> {
     /**
     * Loads the Tags record from the database
     * @param ID: string - primary key value to load the Tags record.
@@ -18631,7 +21207,7 @@ export class TagEntity extends BaseEntity<Types.TagEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'Template Categories')
-export class TemplateCategoryEntity extends BaseEntity<Types.TemplateCategoryEntityType> {
+export class TemplateCategoryEntity extends BaseEntity<TemplateCategoryEntityType> {
     /**
     * Loads the Template Categories record from the database
     * @param ID: string - primary key value to load the Template Categories record.
@@ -18775,7 +21351,7 @@ export class TemplateCategoryEntity extends BaseEntity<Types.TemplateCategoryEnt
  * @public
  */
 @RegisterClass(BaseEntity, 'Template Content Types')
-export class TemplateContentTypeEntity extends BaseEntity<Types.TemplateContentTypeEntityType> {
+export class TemplateContentTypeEntity extends BaseEntity<TemplateContentTypeEntityType> {
     /**
     * Loads the Template Content Types record from the database
     * @param ID: string - primary key value to load the Template Content Types record.
@@ -18898,7 +21474,7 @@ export class TemplateContentTypeEntity extends BaseEntity<Types.TemplateContentT
  * @public
  */
 @RegisterClass(BaseEntity, 'Template Contents')
-export class TemplateContentEntity extends BaseEntity<Types.TemplateContentEntityType> {
+export class TemplateContentEntity extends BaseEntity<TemplateContentEntityType> {
     /**
     * Loads the Template Contents record from the database
     * @param ID: string - primary key value to load the Template Contents record.
@@ -19056,7 +21632,7 @@ export class TemplateContentEntity extends BaseEntity<Types.TemplateContentEntit
  * @public
  */
 @RegisterClass(BaseEntity, 'Template Params')
-export class TemplateParamEntity extends BaseEntity<Types.TemplateParamEntityType> {
+export class TemplateParamEntity extends BaseEntity<TemplateParamEntityType> {
     /**
     * Loads the Template Params record from the database
     * @param ID: string - primary key value to load the Template Params record.
@@ -19299,7 +21875,7 @@ export class TemplateParamEntity extends BaseEntity<Types.TemplateParamEntityTyp
  * @public
  */
 @RegisterClass(BaseEntity, 'Templates')
-export class TemplateEntity extends BaseEntity<Types.TemplateEntityType> {
+export class TemplateEntity extends BaseEntity<TemplateEntityType> {
     /**
     * Loads the Templates record from the database
     * @param ID: string - primary key value to load the Templates record.
@@ -19495,7 +22071,7 @@ export class TemplateEntity extends BaseEntity<Types.TemplateEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'User Application Entities')
-export class UserApplicationEntityEntity extends BaseEntity<Types.UserApplicationEntityEntityType> {
+export class UserApplicationEntityEntity extends BaseEntity<UserApplicationEntityEntityType> {
     /**
     * Loads the User Application Entities record from the database
     * @param ID: string - primary key value to load the User Application Entities record.
@@ -19620,7 +22196,7 @@ export class UserApplicationEntityEntity extends BaseEntity<Types.UserApplicatio
  * @public
  */
 @RegisterClass(BaseEntity, 'User Applications')
-export class UserApplicationEntity extends BaseEntity<Types.UserApplicationEntityType> {
+export class UserApplicationEntity extends BaseEntity<UserApplicationEntityType> {
     /**
     * Loads the User Applications record from the database
     * @param ID: string - primary key value to load the User Applications record.
@@ -19750,7 +22326,7 @@ export class UserApplicationEntity extends BaseEntity<Types.UserApplicationEntit
  * @public
  */
 @RegisterClass(BaseEntity, 'User Favorites')
-export class UserFavoriteEntity extends BaseEntity<Types.UserFavoriteEntityType> {
+export class UserFavoriteEntity extends BaseEntity<UserFavoriteEntityType> {
     /**
     * Loads the User Favorites record from the database
     * @param ID: string - primary key value to load the User Favorites record.
@@ -19874,7 +22450,7 @@ export class UserFavoriteEntity extends BaseEntity<Types.UserFavoriteEntityType>
  * @public
  */
 @RegisterClass(BaseEntity, 'User Notifications')
-export class UserNotificationEntity extends BaseEntity<Types.UserNotificationEntityType> {
+export class UserNotificationEntity extends BaseEntity<UserNotificationEntityType> {
     /**
     * Loads the User Notifications record from the database
     * @param ID: string - primary key value to load the User Notifications record.
@@ -20052,7 +22628,7 @@ export class UserNotificationEntity extends BaseEntity<Types.UserNotificationEnt
  * @public
  */
 @RegisterClass(BaseEntity, 'User Record Logs')
-export class UserRecordLogEntity extends BaseEntity<Types.UserRecordLogEntityType> {
+export class UserRecordLogEntity extends BaseEntity<UserRecordLogEntityType> {
     /**
     * Loads the User Record Logs record from the database
     * @param ID: string - primary key value to load the User Record Logs record.
@@ -20255,7 +22831,7 @@ export class UserRecordLogEntity extends BaseEntity<Types.UserRecordLogEntityTyp
  * @public
  */
 @RegisterClass(BaseEntity, 'User Roles')
-export class UserRoleEntity extends BaseEntity<Types.UserRoleEntityType> {
+export class UserRoleEntity extends BaseEntity<UserRoleEntityType> {
     /**
     * Loads the User Roles record from the database
     * @param ID: string - primary key value to load the User Roles record.
@@ -20360,7 +22936,7 @@ export class UserRoleEntity extends BaseEntity<Types.UserRoleEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'User View Categories')
-export class UserViewCategoryEntity extends BaseEntity<Types.UserViewCategoryEntityType> {
+export class UserViewCategoryEntity extends BaseEntity<UserViewCategoryEntityType> {
     /**
     * Loads the User View Categories record from the database
     * @param ID: string - primary key value to load the User View Categories record.
@@ -20512,7 +23088,7 @@ export class UserViewCategoryEntity extends BaseEntity<Types.UserViewCategoryEnt
  * @public
  */
 @RegisterClass(BaseEntity, 'User View Run Details')
-export class UserViewRunDetailEntity extends BaseEntity<Types.UserViewRunDetailEntityType> {
+export class UserViewRunDetailEntity extends BaseEntity<UserViewRunDetailEntityType> {
     /**
     * Loads the User View Run Details record from the database
     * @param ID: string - primary key value to load the User View Run Details record.
@@ -20628,7 +23204,7 @@ export class UserViewRunDetailEntity extends BaseEntity<Types.UserViewRunDetailE
  * @public
  */
 @RegisterClass(BaseEntity, 'User View Runs')
-export class UserViewRunEntity extends BaseEntity<Types.UserViewRunEntityType> {
+export class UserViewRunEntity extends BaseEntity<UserViewRunEntityType> {
     /**
     * Loads the User View Runs record from the database
     * @param ID: string - primary key value to load the User View Runs record.
@@ -20757,7 +23333,7 @@ export class UserViewRunEntity extends BaseEntity<Types.UserViewRunEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'User Views')
-export class UserViewEntity extends BaseEntity<Types.UserViewEntityType> {
+export class UserViewEntity extends BaseEntity<UserViewEntityType> {
     /**
     * Loads the User Views record from the database
     * @param ID: string - primary key value to load the User Views record.
@@ -21082,7 +23658,7 @@ export class UserViewEntity extends BaseEntity<Types.UserViewEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'Users')
-export class UserEntity extends BaseEntity<Types.UserEntityType> {
+export class UserEntity extends BaseEntity<UserEntityType> {
     /**
     * Loads the Users record from the database
     * @param ID: string - primary key value to load the Users record.
@@ -21333,7 +23909,7 @@ export class UserEntity extends BaseEntity<Types.UserEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'Vector Databases')
-export class VectorDatabaseEntity extends BaseEntity<Types.VectorDatabaseEntityType> {
+export class VectorDatabaseEntity extends BaseEntity<VectorDatabaseEntityType> {
     /**
     * Loads the Vector Databases record from the database
     * @param ID: string - primary key value to load the Vector Databases record.
@@ -21454,7 +24030,7 @@ export class VectorDatabaseEntity extends BaseEntity<Types.VectorDatabaseEntityT
  * @public
  */
 @RegisterClass(BaseEntity, 'Vector Indexes')
-export class VectorIndexEntity extends BaseEntity<Types.VectorIndexEntityType> {
+export class VectorIndexEntity extends BaseEntity<VectorIndexEntityType> {
     /**
     * Loads the Vector Indexes record from the database
     * @param ID: string - primary key value to load the Vector Indexes record.
@@ -21595,7 +24171,7 @@ export class VectorIndexEntity extends BaseEntity<Types.VectorIndexEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'Version Installations')
-export class VersionInstallationEntity extends BaseEntity<Types.VersionInstallationEntityType> {
+export class VersionInstallationEntity extends BaseEntity<VersionInstallationEntityType> {
     /**
     * Loads the Version Installations record from the database
     * @param ID: string - primary key value to load the Version Installations record.
@@ -21789,7 +24365,7 @@ export class VersionInstallationEntity extends BaseEntity<Types.VersionInstallat
  * @public
  */
 @RegisterClass(BaseEntity, 'Workflow Engines')
-export class WorkflowEngineEntity extends BaseEntity<Types.WorkflowEngineEntityType> {
+export class WorkflowEngineEntity extends BaseEntity<WorkflowEngineEntityType> {
     /**
     * Loads the Workflow Engines record from the database
     * @param ID: string - primary key value to load the Workflow Engines record.
@@ -21907,7 +24483,7 @@ export class WorkflowEngineEntity extends BaseEntity<Types.WorkflowEngineEntityT
  * @public
  */
 @RegisterClass(BaseEntity, 'Workflow Runs')
-export class WorkflowRunEntity extends BaseEntity<Types.WorkflowRunEntityType> {
+export class WorkflowRunEntity extends BaseEntity<WorkflowRunEntityType> {
     /**
     * Loads the Workflow Runs record from the database
     * @param ID: string - primary key value to load the Workflow Runs record.
@@ -22075,7 +24651,7 @@ export class WorkflowRunEntity extends BaseEntity<Types.WorkflowRunEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'Workflows')
-export class WorkflowEntity extends BaseEntity<Types.WorkflowEntityType> {
+export class WorkflowEntity extends BaseEntity<WorkflowEntityType> {
     /**
     * Loads the Workflows record from the database
     * @param ID: string - primary key value to load the Workflows record.
@@ -22265,7 +24841,7 @@ export class WorkflowEntity extends BaseEntity<Types.WorkflowEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'Workspace Items')
-export class WorkspaceItemEntity extends BaseEntity<Types.WorkspaceItemEntityType> {
+export class WorkspaceItemEntity extends BaseEntity<WorkspaceItemEntityType> {
     /**
     * Loads the Workspace Items record from the database
     * @param ID: string - primary key value to load the Workspace Items record.
@@ -22431,7 +25007,7 @@ export class WorkspaceItemEntity extends BaseEntity<Types.WorkspaceItemEntityTyp
  * @public
  */
 @RegisterClass(BaseEntity, 'Workspaces')
-export class WorkspaceEntity extends BaseEntity<Types.WorkspaceEntityType> {
+export class WorkspaceEntity extends BaseEntity<WorkspaceEntityType> {
     /**
     * Loads the Workspaces record from the database
     * @param ID: string - primary key value to load the Workspaces record.

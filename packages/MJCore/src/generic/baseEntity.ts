@@ -8,6 +8,7 @@ import { TransactionGroupBase } from './transactionGroup';
 import { LogError, LogStatus } from './logging';
 import { CompositeKey, FieldValueCollection } from './compositeKey';
 import { Subject, Subscription } from 'rxjs';
+import { z } from 'zod';
 
 /**
  * Represents a field in an instance of the BaseEntity class. This class is used to store the value of the field, dirty state, as well as other run-time information about the field. The class encapsulates the underlying field metadata and exposes some of the more commonly
@@ -1131,17 +1132,46 @@ export abstract class BaseEntity<T = unknown> {
     }
 
     /**
-     * Strongy-typed wrapper for the {@link SetMany} method.
+     * Strongly-typed wrapper for the {@link SetMany} method.
+     * @oaram data - the data to set on the entity object
+     * @param schema - the zod schema to validate the data against
      */
-    public From(baseType: T, replaceOldValues?: boolean): void {
+    public From<K extends z.AnyZodObject>(data: unknown, schema?: z.infer<K>): boolean {
         this.init();
-        this.SetMany(baseType, false, replaceOldValues);
+        if(schema){
+            const parseResult = schema.safeParse(data);
+            if(parseResult.success){
+                this.SetMany(parseResult.data);
+                return true;
+            }
+            else{
+                LogError(parseResult.error.flatten());
+                return false;
+            }
+        }
+        else{
+            this.SetMany(data);
+            return true;
+        }
     }
 
     /**
      * Strongly-typed wrapper for the {@link GetAll} method
+     * @param schema - the zod schema to validate the data against
      */
-    public To(): T {
-        return this.GetAll() as T;
+    public To<K extends z.AnyZodObject>(schema?: K): z.infer<K> | null {
+        if(schema){
+            const data = this.GetAll();
+            const parseResult = schema.safeParse(data);
+            if(parseResult.success){
+                parseResult.data as K;
+            }
+            else{
+                LogError(parseResult.error.flatten());
+                return null;
+            }
+        }
+
+        return this.GetAll() as K;
     }
 }

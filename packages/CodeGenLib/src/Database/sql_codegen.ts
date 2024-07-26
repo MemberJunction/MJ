@@ -799,8 +799,9 @@ ${whereClause}GO${permissions}
     protected generateSPCreate(entity: EntityInfo): string {
         const spName: string = entity.spCreate ? entity.spCreate : `spCreate${entity.ClassName}`;
         const firstKey = entity.FirstPrimaryKey;
-        const IsPrimaryKey = (firstKey.Type.toLowerCase().trim() === 'uniqueidentifier') && (firstKey.DefaultValue && firstKey.DefaultValue.trim().length > 0);
-        const primaryKeyAutomatic: boolean = firstKey.AutoIncrement || IsPrimaryKey as boolean;
+        
+        //double exclamations used on the firstKey.DefaultValue property otherwise the type of this variable is 'number | ""';
+        const primaryKeyAutomatic: boolean = firstKey.AutoIncrement || (firstKey.Type.toLowerCase().trim() === 'uniqueidentifier') && (!!firstKey.DefaultValue && firstKey.DefaultValue.trim().length > 0);
         const efString: string = this.createEntityFieldsParamString(entity.Fields, !primaryKeyAutomatic);
         const permissions: string = this.generateSPPermissions(entity, spName, SPType.Create);
     

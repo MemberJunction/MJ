@@ -15,7 +15,6 @@ import { CreateNewUserBase } from './Misc/createNewUser';
 import { MJGlobal, RegisterClass } from '@memberjunction/global';
 import { ActionSubClassGeneratorBase } from './action_subclasses_codegen';
 import { ActionEngine } from '@memberjunction/actions';
-import { EntityTypeGeneratorBase } from './entity_types_codegen';
 
 /**
  * This class is the main entry point for running the code generation process. It will handle all the steps required to generate the code for the MemberJunction system. You can sub-class this class
@@ -172,12 +171,6 @@ export class RunCodeGenBase {
                 if (! entitySubClassGeneratorObject.generateAllEntitySubClasses(coreEntities, coreEntitySubClassOutputDir)){
                     logError('Error generating entity subclass code');
                 }
-                
-                logStatus('Generating CORE Entity Type Definitions Code...')
-                const entityTypeGeneratorObject = MJGlobal.Instance.ClassFactory.CreateInstance<EntityTypeGeneratorBase>(EntityTypeGeneratorBase)!;
-                if (! entityTypeGeneratorObject.GenerateAllEntitySchemasAndTypes(coreEntities, coreEntitySubClassOutputDir)){
-                    logError('Error generating core entity type definitions');
-                }
             }
     
             /****************************************************************************************
@@ -190,12 +183,6 @@ export class RunCodeGenBase {
                 const entitySubClassGeneratorObject = MJGlobal.Instance.ClassFactory.CreateInstance<EntitySubClassGeneratorBase>(EntitySubClassGeneratorBase)!;
                 if (! entitySubClassGeneratorObject.generateAllEntitySubClasses(nonCoreEntities, entitySubClassOutputDir)){
                     logError('Error generating entity subclass code');
-                }
-
-                logStatus('Generating Entity Type Definitions Code...')
-                const entityTypeGeneratorObject = MJGlobal.Instance.ClassFactory.CreateInstance<EntityTypeGeneratorBase>(EntityTypeGeneratorBase)!;
-                if (! entityTypeGeneratorObject.GenerateAllEntitySchemasAndTypes(nonCoreEntities, entitySubClassOutputDir)){
-                    logError('Error generating core entity type definitions');
                 }
             }
             else{
