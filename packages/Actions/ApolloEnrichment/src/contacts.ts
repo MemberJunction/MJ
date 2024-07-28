@@ -2,7 +2,7 @@ import { ActionResultSimple, BaseAction, RunActionParams } from "@memberjunction
 import { RegisterClass } from "@memberjunction/global";
 
 @RegisterClass(BaseAction, "Apollo Enrichment - Contacts")
-export class ApolloContactsEnrichment extends BaseAction {
+export class ApolloContactsEnrichmentAction extends BaseAction {
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
         return {
             Success: true,
@@ -10,4 +10,7 @@ export class ApolloContactsEnrichment extends BaseAction {
             ResultCode: "SUCCESS"
         };
     }
+}
+
+export function LoadApolloContactsEnrichmentAction() {
 }

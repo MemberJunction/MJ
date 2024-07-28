@@ -1,6 +1,6 @@
 import express from 'express';
 
-import { LogError, LogStatus } from "@memberjunction/core";
+import { LogError, LogStatus, Metadata } from "@memberjunction/core";
 import { UserCache } from "@memberjunction/sqlserver-dataprovider";
 import { currentUserEmail, serverPort } from "./config";
 import { handleServerInit } from './util';
@@ -8,10 +8,15 @@ import { ScheduledActionEngine } from '@memberjunction/scheduled-actions';
 import {LoadMistralEmbedding} from '@memberjunction/ai-mistral';
 import {LoadOpenAIEmbedding} from '@memberjunction/ai-openai';
 import {LoadPineconeVectorDB} from '@memberjunction/ai-vectors-pinecone';
+import { ActionEngine, ActionEntityServerEntity, BaseAction } from '@memberjunction/actions';
+import { MJGlobal } from '@memberjunction/global';
+import { LoadApolloAccountsEnrichmentAction, LoadApolloContactsEnrichmentAction } from '@memberjunction/actions-apollo';
 
 LoadMistralEmbedding();
 LoadOpenAIEmbedding();
 LoadPineconeVectorDB();
+LoadApolloAccountsEnrichmentAction();
+LoadApolloContactsEnrichmentAction();
 
 const app = express();
 
@@ -44,7 +49,20 @@ const runOptions: runOption[] = [
         description: "Run all scheduled actions",
         run: runScheduledActions,
         maxConcurrency: 1,
+    },
+    {
+        name: "enrichaccounts",
+        description: "Run Apollo Enrichment for Accounts",
+        run: enrichAccounts,
+        maxConcurrency: 1
+    },
+    {
+        name: "enrichcontacts",
+        description: "Run Apollo Enrichment for Contacts",
+        run: enrichContacts,
+        maxConcurrency: 1
     }
+    
 ];
 
 app.get('/', async (req: any, res: any) => {
@@ -54,6 +72,10 @@ app.get('/', async (req: any, res: any) => {
     } = req.query;
 
     LogStatus(`Server Request Received: options === ${options}`);
+
+    const md: Metadata = new Metadata();
+    const action = MJGlobal.Instance.ClassFactory.CreateInstance<BaseAction>(BaseAction, "Apollo Enrichment - Accounts");
+
     let typedOptions: string = options;    
     const optionsToRun: string[] = typedOptions.includes(',') ? typedOptions.split(',') : [typedOptions];
     if (await runWithOptions(optionsToRun)) {
@@ -149,6 +171,32 @@ export async function runScheduledActions(): Promise<boolean> {
         ScheduledActionEngine.Instance.Config(false, user);
         const actionResults = await ScheduledActionEngine.Instance.ExecuteScheduledActions(user);
         return actionResults.some(r => !r.Success) ? false : true;
+    }
+    catch (error) {
+        LogError("An error occurred:", undefined, error);
+        return false;
+    }
+}
+
+export async function enrichAccounts(): Promise<boolean> {
+    return await runScheduledAction("Apollo Enrichment - Accounts");
+}
+
+export async function enrichContacts(): Promise<boolean> {
+    return await runScheduledAction("Apollo Enrichment - Contacts");
+}
+
+export async function runScheduledAction(actionName: string): Promise<boolean> {
+    try {
+        await handleServerInit(false); // init server here once 
+        const user = UserCache.Instance.Users.find(u => u.Email === currentUserEmail)
+        if (!user){
+            throw new Error(`User ${currentUserEmail} not found in cache`);
+        }
+
+        ScheduledActionEngine.Instance.Config(false, user);
+        const actionResults = await ScheduledActionEngine.Instance.ExecuteScheduledAction(actionName, user);
+        return actionResults.Success;
     }
     catch (error) {
         LogError("An error occurred:", undefined, error);

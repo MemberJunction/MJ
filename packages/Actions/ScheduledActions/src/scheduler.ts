@@ -75,6 +75,33 @@ export class ScheduledActionEngine extends BaseEngine<ScheduledActionEngine> {
         return results;
     }
 
+     /** 
+     * This method executes all scheduled actions that are due to be executed based on their CronExpressions and returns
+     * an array of zero to many ActionResult objects.
+     */
+     public async ExecuteScheduledAction(actionName: string, contextUser: UserInfo): Promise<ActionResult> {
+        await ActionEngine.Instance.Config(false, contextUser);
+        await this.Config(false, contextUser);
+
+        const scheduledAction = this.ScheduledActions.find(sa => sa.Name === actionName);
+        if(!scheduledAction) {
+            throw new Error(`Scheduled action ${actionName} not found`);
+        }
+
+        const now = new Date();
+        if (ScheduledActionEngine.IsActionDue(scheduledAction, now)) {
+            const action: ActionEntityServerEntity = ActionEngine.Instance.Actions.find(a => a.ID === scheduledAction.ActionID);
+            const params: ActionParam[] = await this.MapScheduledActionParamsToActionParams(scheduledAction);
+            const result = await ActionEngine.Instance.RunAction({
+                Action: action,
+                ContextUser: contextUser,
+                Filters: [],
+                Params: params
+            });
+            return result;
+        }
+    }
+
     protected async MapScheduledActionParamsToActionParams(scheduledAction: ScheduledActionEntityExtended): Promise<ActionParam[]> {
         const returnValues: ActionParam[] = [];
         const allParams = ActionEngine.Instance.ActionParams;
