@@ -112,8 +112,49 @@ export type ApollowBulkPeopleResponse = {
     matches: Record<string, any>[];
 };
 
-export type ProcessSingleDomainParams = {
-    Record: Record<string, any>;
+export type ContactEntityFieldNames = {
+    EntityName: string;
+    EmailFieldName: string;
+    AccountIDFieldName: string;
+    FirstNameFieldName: string;
+    ActivityCountFieldName: string;
+    EmailSourceFieldName: string;
+    LastNameFieldName: string;
+    TitleFieldName: string;
+    FacebookFieldName: string;
+    LinkedInFieldName: string;
+    TwitterFieldName: string;
+    PhotoFieldName: string;
+    LastEnrichedAtFieldName: string;
+};
+
+export type ContactEducationHistoryEntityFieldNames = {
+    EntityName: string;
+    ContactIDFieldName: string;
+    InstitutionFieldName: string;
+    DegreeFieldName: string;
+    GradeLevelFieldName: string;
+    StartDateFieldName: string;
+    EndDateFieldName: string;
+    IsCurrentFieldName: string;
+};
+
+export type TechnologyCategoryEntityFieldNames = {
+    EntityName: string;
+    NameFieldName: string;
+    IDFieldName: string;
+};
+
+export type AccountTechnologyEntityFieldNames = {
+    EntityName: string;
+    AccountIDFieldName: string;
+    TechnologyIDFieldName: string;
+    MatchFoundFieldName: string;
+    MatchConfidenceFieldName: string;
+    EndedUseAtFieldName: string;
+};
+
+export type AccountEntityFieldNames = {
     EntityName: string;
     DomainParamName: string;
     AccountIDName: string;
@@ -129,29 +170,16 @@ export type ProcessSingleDomainParams = {
     FacebookFieldName?: string;
     TwitterFieldName?: string;
     AddressFieldName?: string;
+    ExtraFilter?: string;
+}
 
-    ContactEntityName: string;
-    ContactEntityEmailFieldName: string;
-    ContactEntityAccountIDFieldName: string;
-    ContactEntityFirstNameFieldName: string;
-    ContactEntityActivityCountFieldName: string;
-    ContactEntityEmailSourceFieldName: string;
-    ContactEntityLastNameFieldName: string;
-    ContactEntityTitleFieldName: string;
-    ContactEntityFacebookFieldName: string;
-    ContactEntityLinkedInFieldName: string;
-    ContactEntityTwitterFieldName: string;
-    ContactEntityPhotoFieldName: string;
-    ContactEntityLastEnrichedAtFieldName: string;
-
-    ContactEducationHistoryEntityName: string;
-    ContactEducationHistoryEntityContactIDFieldName: string;
-    ContactEducationHistoryEntityInstitutionFieldName: string;
-    ContactEducationHistoryEntityDegreeFieldName: string;
-    ContactEducationHistoryEntityGradeLevelFieldName: string;
-    ContactEducationHistoryEntityStartDateFieldName: string;
-    ContactEducationHistoryEntityEndDateFieldName: string;
-    ContactEducationHistoryEntityIsCurrentFieldName: string;
+export type ProcessSingleDomainParams = {
+    Record: Record<string, any>;
+    AccountEntity: AccountEntityFieldNames;
+    AccountTechnologyEntity: AccountTechnologyEntityFieldNames | null;
+    TechnologyCategoryEntity: TechnologyCategoryEntityFieldNames | null;
+    ContactEntity: ContactEntityFieldNames | null;
+    ContactEducationHistoryEntity: ContactEducationHistoryEntityFieldNames | null;
 };
 
 export type OrganizationEnrichmentRequest = {

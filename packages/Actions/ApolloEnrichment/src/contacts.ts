@@ -20,6 +20,9 @@ import { ApollowBulkPeopleRequest, ApollowBulkPeopleResponse, ProcessPersonRecor
 @RegisterClass(BaseAction, "Apollo Enrichment - Contacts")
 export class ApolloContactsEnrichmentAction extends BaseAction {
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
+        if(!Config.ApolloAPIKey){
+            throw new Error('Apollo.io API key not found');
+        }
 
         const entityNameParam: ActionParam | undefined = params.Params.find(p => p.Name === 'EntityName');
         const emailFieldParam: ActionParam | undefined = params.Params.find(p => p.Name === 'EmailField');
@@ -130,14 +133,10 @@ export class ApolloContactsEnrichmentAction extends BaseAction {
 
     protected async ProcessPersonRecordGroup(params: ProcessPersonRecordGroupParams): Promise<boolean> {
         try {
-            if(!process.env.APOLLO_API_KEY){
-                throw new Error('Apollo.io API key not found');
-            }
-
             const md: Metadata = params.Md;
 
             const ApolloParams: ApollowBulkPeopleRequest = {
-                api_key: process.env.APOLLO_API_KEY,
+                api_key: Config.ApolloAPIKey,
                 reveal_personal_emails: true,
                 details: params.Records.splice(params.Startrow, params.GroupLength).map((record: any) => {
                     const first_name: string = record[params.FirstNameField];
