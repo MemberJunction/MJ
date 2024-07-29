@@ -50,17 +50,17 @@ export class LoggerBase {
    protected logToConsole(message: string, isError: boolean, ...args: any[]) {
       if (configInfo.logging.console) {
          if (isError){
-            LogError(message, null, ...args);
+            LogError(message, null!, ...args);
          }
          else{
-            LogStatus(message, null, ...args);
+            LogStatus(message, null!, ...args);
          }
       }
    }
-   protected logToFile(message, isError: boolean, ...args: any[]) {
+   protected logToFile(message: string, isError: boolean, ...args: any[]) {
       if (configInfo.logging.log) {
          if (configInfo.logging.logFile === null || configInfo.logging.logFile === undefined || configInfo.logging.logFile === '') {
-            LogError('ERROR: No log file specified in config.json', null, ...args);
+            LogError('ERROR: No log file specified in config.json', null!, ...args);
          }
          else  {
             const file: string = path.join(currentWorkingDirectory, configInfo.logging.logFile);
@@ -76,7 +76,7 @@ export class LoggerBase {
 }
 
 // use the classes below so that it is easier for external code to sub-class the logger if desired
-const _logger: LoggerBase = MJGlobal.Instance.ClassFactory.CreateInstance<LoggerBase>(LoggerBase);
+const _logger: LoggerBase = MJGlobal.Instance.ClassFactory.CreateInstance<LoggerBase>(LoggerBase)!;
 
 /**
  * Wrapper for the LoggerBase.logError method

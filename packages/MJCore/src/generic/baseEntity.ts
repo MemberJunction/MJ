@@ -5,9 +5,10 @@ import { Metadata } from './metadata';
 import { RunView } from '../views/runView';
 import { UserInfo } from './securityInfo';
 import { TransactionGroupBase } from './transactionGroup';
-import { LogError } from './logging';
+import { LogError, LogStatus } from './logging';
 import { CompositeKey, FieldValueCollection } from './compositeKey';
 import { Subject, Subscription } from 'rxjs';
+import { z } from 'zod';
 
 /**
  * Represents a field in an instance of the BaseEntity class. This class is used to store the value of the field, dirty state, as well as other run-time information about the field. The class encapsulates the underlying field metadata and exposes some of the more commonly
@@ -326,7 +327,7 @@ export class BaseEntityEvent {
 /**
  * Base class used for all entity objects. This class is abstract and is sub-classes for each particular entity using the CodeGen tool. This class provides the basic functionality for loading, saving, and validating entity objects.
  */
-export abstract class BaseEntity {
+export abstract class BaseEntity<T = unknown> {
     private _EntityInfo: EntityInfo;
     private _Fields: EntityField[] = [];
     private _recordLoaded: boolean = false;
@@ -549,6 +550,8 @@ export abstract class BaseEntity {
     }
 
     /**
+     * NOTE: Do not call this method directly. Use the {@link From} method instead
+     * 
      * Sets any number of values on the entity object from the object passed in. The properties of the object being passed in must either match the field name (in most cases) or the CodeName (which is only different from field name if field name has spaces in it)
      * @param object  
      * @param ignoreNonExistentFields - if set to true, fields that don't exist on the entity object will be ignored, if false, an error will be thrown if a field doesn't exist
@@ -589,13 +592,15 @@ export abstract class BaseEntity {
     }
 
     /**
+     * NOTE: Do not call this method directly. Use the {@link To} method instead
+     * 
      * Utility method to create an object and return it with properties in the newly created and returned object for each field in the entity object. This is useful for scenarios where you need to be able to persist the data
      * in a format to send to a network call, save to a file or database, etc. This method will return an object with properties that match the field names of the entity object.  
      * @param oldValues When set to true, the old values of the fields will be returned instead of the current values.  
      * @param onlyDirtyFields When set to true, only the fields that are dirty will be returned.
      * @returns 
      */
-    public GetAll(oldValues: boolean = false, onlyDirtyFields: boolean = false): {} {
+    public GetAll(oldValues: boolean = false, onlyDirtyFields: boolean = false): any {
         let obj = {};
         for (let field of this.Fields) {
             if (!onlyDirtyFields || (onlyDirtyFields && field.Dirty)) {
@@ -979,6 +984,7 @@ export abstract class BaseEntity {
     }
 
     /**
+     * 
      * This method is meant to be used only in situations where you are sure that the data you are loading is current in the database. MAKE SURE YOU ARE PASSING IN ALL FIELDS.
      * The Dirty flags and other internal state will assume what is loading from the data parameter you pass in is equivalent to what is in the database. Generally speaking, you should use Load() instead of this method. The main use case(s) where this makes sense are:
      *  (1) On the server if you are pulling data you know is fresh from say the result of another DB operation
@@ -1123,5 +1129,49 @@ export abstract class BaseEntity {
             else
                 return [];
         }
-    } 
+    }
+
+    /**
+     * Strongly-typed wrapper for the {@link SetMany} method.
+     * @oaram data - the data to set on the entity object
+     * @param schema - the zod schema to validate the data against
+     */
+    public From<K extends z.AnyZodObject>(data: unknown, schema?: z.infer<K>): boolean {
+        this.init();
+        if(schema){
+            const parseResult = schema.safeParse(data);
+            if(parseResult.success){
+                this.SetMany(parseResult.data);
+                return true;
+            }
+            else{
+                LogError(parseResult.error.flatten());
+                return false;
+            }
+        }
+        else{
+            this.SetMany(data);
+            return true;
+        }
+    }
+
+    /**
+     * Strongly-typed wrapper for the {@link GetAll} method
+     * @param schema - the zod schema to validate the data against
+     */
+    public To<K extends z.AnyZodObject>(schema?: K): z.infer<K> | null {
+        if(schema){
+            const data = this.GetAll();
+            const parseResult = schema.safeParse(data);
+            if(parseResult.success){
+                parseResult.data as K;
+            }
+            else{
+                LogError(parseResult.error.flatten());
+                return null;
+            }
+        }
+
+        return this.GetAll() as K;
+    }
 }
