@@ -2,7 +2,7 @@
 * ALL ENTITIES - TypeGraphQL Type Class Definition - AUTO GENERATED FILE
 * Generated Entities and Resolvers for Server
 *
-* GENERATED: 7/26/2024, 2:29:11 PM
+* GENERATED: 7/29/2024, 11:19:40 AM
 *
 *   >>> DO NOT MODIFY THIS FILE!!!!!!!!!!!!
 *   >>> YOUR CHANGES WILL BE OVERWRITTEN
@@ -88,14 +88,6 @@ export class ScheduledAction_ {
     @Field() 
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-        
-    @Field() 
-    @MaxLength(200)
-    CreatedByUser: string;
-        
-    @Field() 
-    @MaxLength(850)
-    Action: string;
         
     @Field(() => [ScheduledActionParam_])
     ScheduledActionParamsArray: ScheduledActionParam_[]; // Link to ScheduledActionParams
@@ -319,14 +311,6 @@ export class ScheduledActionParam_ {
     @Field() 
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-        
-    @Field() 
-    @MaxLength(510)
-    ScheduledAction: string;
-        
-    @Field() 
-    @MaxLength(510)
-    ActionParam: string;
         
 }
 
@@ -7208,10 +7192,6 @@ export class List_ {
     @MaxLength(200)
     User: string;
         
-    @Field({nullable: true}) 
-    @MaxLength(200)
-    Category?: string;
-        
     @Field(() => [ListDetail_])
     ListDetailsArray: ListDetail_[]; // Link to ListDetails
     
@@ -8801,14 +8781,6 @@ export class AuditLog_ {
     @MaxLength(200)
     User: string;
         
-    @Field() 
-    @MaxLength(100)
-    AuditLogType: string;
-        
-    @Field({nullable: true}) 
-    @MaxLength(200)
-    Authorization?: string;
-        
     @Field({nullable: true}) 
     @MaxLength(510)
     Entity?: string;
@@ -9139,14 +9111,6 @@ export class AuthorizationRole_ {
     @MaxLength(10)
     _mj__UpdatedAt: Date;
         
-    @Field() 
-    @MaxLength(200)
-    Authorization: string;
-        
-    @Field() 
-    @MaxLength(100)
-    Role: string;
-        
 }
 //****************************************************************************
 // RESOLVER for Authorization Roles
@@ -9245,10 +9209,6 @@ export class AuditLogType_ {
     @Field({nullable: true}) 
     @MaxLength(100)
     Parent?: string;
-        
-    @Field({nullable: true}) 
-    @MaxLength(200)
-    Authorization?: string;
         
     @Field(() => [AuditLogType_])
     AuditLogTypesArray: AuditLogType_[]; // Link to AuditLogTypes
@@ -9542,14 +9502,14 @@ export class AIModel_ {
     @Field(() => [EntityDocument_])
     EntityDocumentsArray: EntityDocument_[]; // Link to EntityDocuments
     
-    @Field(() => [EntityAIAction_])
-    EntityAIActionsArray: EntityAIAction_[]; // Link to EntityAIActions
-    
     @Field(() => [AIModelAction_])
     AIModelActionsArray: AIModelAction_[]; // Link to AIModelActions
     
     @Field(() => [VectorIndex_])
     VectorIndexesArray: VectorIndex_[]; // Link to VectorIndexes
+    
+    @Field(() => [EntityAIAction_])
+    EntityAIActionsArray: EntityAIAction_[]; // Link to EntityAIActions
     
 }
 
@@ -9702,14 +9662,6 @@ export class AIModelResolver extends ResolverBase {
         return result;
     }
         
-    @FieldResolver(() => [EntityAIAction_])
-    async EntityAIActionsArray(@Root() aimodel_: AIModel_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('Entity AI Actions', userPayload);
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityAIActions] WHERE [AIModelID]='${aimodel_.ID}' ` + this.getRowLevelSecurityWhereClause('Entity AI Actions', userPayload, EntityPermissionType.Read, 'AND');
-        const result = this.ArrayMapFieldNamesToCodeNames('Entity AI Actions', await dataSource.query(sSQL));
-        return result;
-    }
-        
     @FieldResolver(() => [AIModelAction_])
     async AIModelActionsArray(@Root() aimodel_: AIModel_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('AI Model Actions', userPayload);
@@ -9723,6 +9675,14 @@ export class AIModelResolver extends ResolverBase {
         this.CheckUserReadPermissions('Vector Indexes', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwVectorIndexes] WHERE [EmbeddingModelID]='${aimodel_.ID}' ` + this.getRowLevelSecurityWhereClause('Vector Indexes', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Vector Indexes', await dataSource.query(sSQL));
+        return result;
+    }
+        
+    @FieldResolver(() => [EntityAIAction_])
+    async EntityAIActionsArray(@Root() aimodel_: AIModel_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Entity AI Actions', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityAIActions] WHERE [AIModelID]='${aimodel_.ID}' ` + this.getRowLevelSecurityWhereClause('Entity AI Actions', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Entity AI Actions', await dataSource.query(sSQL));
         return result;
     }
         
@@ -12813,10 +12773,6 @@ export class DatasetItem_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
-    @MaxLength(200)
-    Dataset: string;
-        
-    @Field() 
     @MaxLength(510)
     Entity: string;
         
@@ -13122,10 +13078,6 @@ export class Conversation_ {
     @MaxLength(510)
     LinkedEntity?: string;
         
-    @Field({nullable: true}) 
-    @MaxLength(510)
-    DataContext?: string;
-        
     @Field(() => [ConversationDetail_])
     ConversationDetailsArray: ConversationDetail_[]; // Link to ConversationDetails
     
@@ -13325,6 +13277,9 @@ export class UserNotification_ {
     @MaxLength(16)
     ResourceTypeID?: string;
         
+    @Field(() => Int, {nullable: true}) 
+    ResourceRecordID?: number;
+        
     @Field({nullable: true}) 
     ResourceConfiguration?: string;
         
@@ -13342,10 +13297,6 @@ export class UserNotification_ {
     @Field() 
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-        
-    @Field({nullable: true}) 
-    @MaxLength(16)
-    ResourceRecordID?: string;
         
     @Field() 
     @MaxLength(200)
@@ -13374,6 +13325,9 @@ export class CreateUserNotificationInput {
     @Field({ nullable: true })
     ResourceTypeID?: string;
 
+    @Field(() => Int, { nullable: true })
+    ResourceRecordID?: number;
+
     @Field({ nullable: true })
     ResourceConfiguration?: string;
 
@@ -13382,9 +13336,6 @@ export class CreateUserNotificationInput {
 
     @Field({ nullable: true })
     ReadAt?: Date;
-
-    @Field({ nullable: true })
-    ResourceRecordID?: string;
 }
     
 
@@ -13408,6 +13359,9 @@ export class UpdateUserNotificationInput {
     @Field({ nullable: true })
     ResourceTypeID?: string;
 
+    @Field(() => Int, { nullable: true })
+    ResourceRecordID?: number;
+
     @Field({ nullable: true })
     ResourceConfiguration?: string;
 
@@ -13416,9 +13370,6 @@ export class UpdateUserNotificationInput {
 
     @Field({ nullable: true })
     ReadAt?: Date;
-
-    @Field({ nullable: true })
-    ResourceRecordID?: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -13865,10 +13816,6 @@ export class RecordMergeLog_ {
     @Field() 
     @MaxLength(200)
     InitiatedByUser: string;
-        
-    @Field({nullable: true}) 
-    @MaxLength(200)
-    ApprovedByUser?: string;
         
     @Field(() => [RecordMergeDeletionLog_])
     RecordMergeDeletionLogsArray: RecordMergeDeletionLog_[]; // Link to RecordMergeDeletionLogs
@@ -14885,14 +14832,6 @@ export class QueryPermission_ {
     @MaxLength(10)
     _mj__UpdatedAt: Date;
         
-    @Field() 
-    @MaxLength(510)
-    Query: string;
-        
-    @Field() 
-    @MaxLength(100)
-    Role: string;
-        
 }
 
 //****************************************************************************
@@ -15678,18 +15617,6 @@ export class EntityRecordDocument_ {
     @MaxLength(10)
     _mj__UpdatedAt: Date;
         
-    @Field() 
-    @MaxLength(510)
-    Entity: string;
-        
-    @Field() 
-    @MaxLength(500)
-    EntityDocument: string;
-        
-    @Field() 
-    @MaxLength(510)
-    VectorIndex: string;
-        
 }
 
 //****************************************************************************
@@ -15889,18 +15816,6 @@ export class EntityDocument_ {
     @Field() 
     @MaxLength(510)
     Entity: string;
-        
-    @Field() 
-    @MaxLength(200)
-    VectorDatabase: string;
-        
-    @Field() 
-    @MaxLength(510)
-    Template: string;
-        
-    @Field() 
-    @MaxLength(100)
-    AIModel: string;
         
     @Field(() => [EntityDocumentSetting_])
     EntityDocumentSettingsArray: EntityDocumentSetting_[]; // Link to EntityDocumentSettings
@@ -16533,10 +16448,6 @@ export class UserViewCategory_ {
     @Field({nullable: true}) 
     @MaxLength(200)
     Parent?: string;
-        
-    @Field() 
-    @MaxLength(510)
-    Entity: string;
         
     @Field() 
     @MaxLength(200)
@@ -18920,10 +18831,6 @@ export class ApplicationSetting_ {
     @MaxLength(10)
     _mj__UpdatedAt: Date;
         
-    @Field() 
-    @MaxLength(200)
-    Application: string;
-        
 }
 
 //****************************************************************************
@@ -19596,10 +19503,6 @@ export class ActionAuthorization_ {
     @Field() 
     @MaxLength(850)
     Action: string;
-        
-    @Field() 
-    @MaxLength(200)
-    Authorization: string;
         
 }
 
@@ -21785,14 +21688,6 @@ export class ListCategory_ {
     @Field() 
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-        
-    @Field({nullable: true}) 
-    @MaxLength(200)
-    Parent?: string;
-        
-    @Field() 
-    @MaxLength(200)
-    User: string;
         
     @Field(() => [ListCategory_])
     ListCategoriesArray: ListCategory_[]; // Link to ListCategories

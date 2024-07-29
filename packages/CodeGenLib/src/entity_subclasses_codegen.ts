@@ -1,4 +1,4 @@
-import { EntityFieldValueListType, EntityInfo, TypeScriptTypeFromSQLType } from '@memberjunction/core';
+import { EntityFieldInfo, EntityFieldValueListType, EntityInfo, TypeScriptTypeFromSQLType } from '@memberjunction/core';
 import fs from 'fs';
 import path from 'path';
 import { makeDir } from './Misc/util';
@@ -186,7 +186,7 @@ ${fields}
                         typeString += '.nullish()';
                     }
                 }
-                let sRet: string = `${e.CodeName}: z.${typeString},`;
+                let sRet: string = `    ${e.CodeName}: z.${typeString}.describe(\`\n${this.GenetateZodDescription(e)}\`),`;
                 return sRet;
             }).join('\n');
     
@@ -204,6 +204,22 @@ export type ${entity.ClassName}EntityType = z.infer<typeof ${schemaName}>;
         }
 
         return content;
+    }
+
+    public GenetateZodDescription(entityField: EntityFieldInfo) : string {
+        let result: string = "";
+
+        let valueList: string = '';
+        if (entityField.ValueListType && 
+            entityField.ValueListType.length > 0 && 
+            entityField.ValueListType.trim().toLowerCase() !== 'none') {
+            let values = entityField.EntityFieldValues.map(v => `\n    *   * ${v.Value}${v.Description && v.Description.length > 0 ? ' - ' + v.Description : ''}`).join('');
+            valueList = `\n    * * Value List Type: ${entityField.ValueListType}\n    * * Possible Values `+ values  
+        }
+
+        result += `        * * Field Name: ${entityField.Name}${entityField.DisplayName && entityField.DisplayName.length > 0 ? '\n        * * Display Name: ' + entityField.DisplayName : ''}\n`;
+        result += `        * * SQL Data Type: ${entityField.SQLFullType}${entityField.RelatedEntity ? '\n        * * Related Entity/Foreign Key: ' +  entityField.RelatedEntity + ' (' + entityField.RelatedEntityBaseView + '.' + entityField.RelatedEntityFieldName + ')' : ''}${entityField.DefaultValue && entityField.DefaultValue.length > 0 ? '\n        * * Default Value: ' + entityField.DefaultValue : ''}${valueList}${entityField.Description && entityField.Description.length > 0 ? '\n    * * Description: ' + entityField.Description : ''}`;
+        return result;
     }
 }
 
