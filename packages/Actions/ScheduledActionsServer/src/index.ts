@@ -8,8 +8,6 @@ import { ScheduledActionEngine } from '@memberjunction/scheduled-actions';
 import {LoadMistralEmbedding} from '@memberjunction/ai-mistral';
 import {LoadOpenAIEmbedding} from '@memberjunction/ai-openai';
 import {LoadPineconeVectorDB} from '@memberjunction/ai-vectors-pinecone';
-import { ActionEngine, ActionEntityServerEntity, BaseAction } from '@memberjunction/actions';
-import { MJGlobal } from '@memberjunction/global';
 import { LoadApolloAccountsEnrichmentAction, LoadApolloContactsEnrichmentAction } from '@memberjunction/actions-apollo';
 
 LoadMistralEmbedding();
@@ -72,10 +70,6 @@ app.get('/', async (req: any, res: any) => {
     } = req.query;
 
     LogStatus(`Server Request Received: options === ${options}`);
-
-    const md: Metadata = new Metadata();
-    const action = MJGlobal.Instance.ClassFactory.CreateInstance<BaseAction>(BaseAction, "Apollo Enrichment - Accounts");
-
     let typedOptions: string = options;    
     const optionsToRun: string[] = typedOptions.includes(',') ? typedOptions.split(',') : [typedOptions];
     if (await runWithOptions(optionsToRun)) {
@@ -99,7 +93,7 @@ async function runWithOptions(options: string[]): Promise<boolean> {
         }
     
         // next loop through the runOptions and run any that are included in the args, if we get here that means we don't have the all flag
-        await handleServerInit(false); // init server here once 
+        await handleServerInit(false); // init server here once
         let bSuccess = true;
         for (const requestedOption of options) {
             // loop through the requested options from the caller and run each one
