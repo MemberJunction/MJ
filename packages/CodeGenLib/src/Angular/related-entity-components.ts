@@ -18,6 +18,12 @@ export class AngularComponentInfo {
      * The Angular selector name for the component
      */
     public AngularSelectorName: string;
+
+    public constructor() {
+        this.ClassName = "";
+        this.ModuleName = "";
+        this.AngularSelectorName = "";
+    }
 }
 
 /**
@@ -43,7 +49,13 @@ export class GenerationResult {
     /**
      * A reference to the component that generated the output. Useful for accessing the properties of the component later on for imports/etc
      */
-    Component: RelatedEntityDisplayComponentGeneratorBase;
+    Component: RelatedEntityDisplayComponentGeneratorBase | null;
+
+    public constructor() {
+        this.Success = false;
+        this.TemplateOutput = "";
+        this.Component = null;
+    }
 }
 
 /**
@@ -53,16 +65,22 @@ export class GenerationInput {
     /**
      * The entity that is the primary entity
      */
-    Entity: EntityInfo;
+    Entity: EntityInfo | null;
     /**
      * Relationship Information for this component
      */
-    RelationshipInfo: EntityRelationshipInfo;
+    RelationshipInfo: EntityRelationshipInfo | null;
     /**
      * The name of the tab on a multi-tabbed interface, this is often provided but not mandatory. Use it if it makes sense for your component and 
      * it is most commonly used to defer loading by using the IsCurrentTab() method from the BaseFormComponent that all of the generated components inherit from
      */
     TabName: string;
+
+    public constructor() {
+        this.Entity = null;
+        this.RelationshipInfo = null;
+        this.TabName = "";
+    }
 }
 
 
@@ -158,14 +176,20 @@ export abstract class RelatedEntityDisplayComponentGeneratorBase {
         }
 
         // check to see if we have an existing entry in our component instance map, if so use that, otherwise create a new component, add to map, and return
-        if (RelatedEntityDisplayComponentGeneratorBase._componentInstanceMap.has(key)) {
-            return RelatedEntityDisplayComponentGeneratorBase._componentInstanceMap.get(key);
+        let instance = RelatedEntityDisplayComponentGeneratorBase._componentInstanceMap.get(key);
+        if(instance){
+            return instance;
         }
         else {
             // if we get here that means we have the key we need to use so get the component built
             const component = MJGlobal.Instance.ClassFactory.CreateInstance<RelatedEntityDisplayComponentGeneratorBase>(RelatedEntityDisplayComponentGeneratorBase, key, params);
-            RelatedEntityDisplayComponentGeneratorBase._componentInstanceMap.set(key, component);
-            return component;
+            if(component){
+                RelatedEntityDisplayComponentGeneratorBase._componentInstanceMap.set(key, component);
+                return component;
+            }
+            else{
+                throw new Error(`Could not create the component with key ${key}`);
+            }
         }
     }
 

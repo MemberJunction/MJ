@@ -189,15 +189,7 @@
             "directory": "../MJCoreEntities/src/generated"
         },
         {
-            "type": "CoreEntityTypeDefintions",
-            "directory": "../MJCoreEntities/src/generated"
-        },
-        {
             "type": "EntitySubclasses",
-            "directory": "../GeneratedEntities/src/generated"
-        },
-        {
-            "type": "EntityTypeDefinitions",
             "directory": "../GeneratedEntities/src/generated"
         },
         {

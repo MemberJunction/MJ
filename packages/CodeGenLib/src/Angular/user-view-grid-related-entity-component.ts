@@ -20,8 +20,8 @@ export class UserViewGridRelatedEntityGenerator extends RelatedEntityDisplayComp
     }
     public async Generate(input: GenerationInput): Promise<GenerationResult> {
         const template = `<mj-user-view-grid 
-    [Params]="BuildRelationshipViewParamsByEntityName('${input.RelationshipInfo.RelatedEntity}')"  
-    [NewRecordValues]="NewRecordValues('${input.RelationshipInfo.RelatedEntity}')"
+    [Params]="BuildRelationshipViewParamsByEntityName('${input.RelationshipInfo!.RelatedEntity}')"  
+    [NewRecordValues]="NewRecordValues('${input.RelationshipInfo!.RelatedEntity}')"
     [AllowLoad]="IsCurrentTab('${input.TabName}')"  
     [EditMode]="GridEditMode()"  
     [BottomMargin]="GridBottomMargin">
@@ -29,12 +29,12 @@ export class UserViewGridRelatedEntityGenerator extends RelatedEntityDisplayComp
         return {
             Success: true,
             TemplateOutput: template,
-            CodeOutput: null,
+            CodeOutput: "",
             Component: this
         }
     }
 
     public get ConfigType(): typeof ComponentConfigBase {
-        return null;
+        return null!;
     }
 }

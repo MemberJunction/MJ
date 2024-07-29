@@ -152,7 +152,7 @@ export type NewEntityRelationshipDefaults = {
 }
 
 export let configInfo: ConfigInfo;
-export let currentWorkingDirectory
+export let currentWorkingDirectory: string;
 
 export function initializeConfig(workingDirectory: string): ConfigInfo {
     currentWorkingDirectory = workingDirectory;
@@ -183,7 +183,7 @@ export function saveConfigFileFromMemory(): boolean {
 
 }
 
-export function outputDir(type: string, useLocalDirectoryIfMissing: boolean): string {
+export function outputDir(type: string, useLocalDirectoryIfMissing: boolean): string | null {
     const outputInfo = configInfo.output.find(o => o.type.trim().toUpperCase() === type.trim().toUpperCase());
     if (outputInfo) {
         if (outputInfo.appendOutputCode && outputInfo.appendOutputCode === true && 
@@ -202,10 +202,10 @@ export function outputDir(type: string, useLocalDirectoryIfMissing: boolean): st
     }
 }
 
-export function outputOptions(type: string): OutputOptionInfo[] {
+export function outputOptions(type: string): OutputOptionInfo[] | null {
     const outputInfo = configInfo.output.find(o => o.type.trim().toUpperCase() === type.trim().toUpperCase());
     if (outputInfo) {
-        return outputInfo.options;
+        return outputInfo.options!;
     }
     else {
         return null;
@@ -234,7 +234,7 @@ export function customSqlScripts(when: string): CustomSQLScript[] {
 }
 
 export function getSetting(settingName: string): SettingInfo {
-    return configInfo.settings.find(s => s.name.trim().toUpperCase() === settingName.trim().toUpperCase());
+    return configInfo.settings.find(s => s.name.trim().toUpperCase() === settingName.trim().toUpperCase())!;
 }
 
 export function getSettingValue(settingName: string, defaultValue?: any): any {

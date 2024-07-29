@@ -30,7 +30,7 @@ export function copyDir(sourceDir: string, destDir: string) {
     try {
       fse.copySync(sourceDir, destDir, { overwrite: true })
     } catch (err) {
-      logError(err)
+      logError(err as string)
     }
 
 }
@@ -42,15 +42,15 @@ export async function attemptDeleteFile(filePath: string, maxRetries: number, re
         return; // if we get here without an exception, we're good, move on
       } 
       catch (err) {
-        if (err.code === 'ENOENT') {
+        if ((err as any).code === 'ENOENT') {
           // file doesn't exist, so just ignore this and move on
           return;
         }
-        else if ( err.code === 'EBUSY') {
+        else if ((err as any).code === 'EBUSY') {
           await new Promise(resolve => setTimeout(resolve, repeatDelay));
         } 
         else {
-          console.warn(`    Failed to delete file ${filePath}: ${err.message}`);
+          console.warn(`    Failed to delete file ${filePath}: ${(err as any).message}`);
           return;
         }
       }
@@ -67,10 +67,10 @@ export function combineFiles(directory: string, combinedFileName: string, patter
     }
 
     // Use glob.sync to find files that match the pattern synchronously, excluding the combinedFileName
-    const files = glob.sync(pattern, { cwd: directory }).filter(file => file !== combinedFileName);
+    const files = glob.sync(pattern, { cwd: directory }).filter((file: string) => file !== combinedFileName);
 
     // Sort the files so that files ending with '.generated.sql' come before '.permissions.generated.sql'
-    files.sort((a, b) => {
+    files.sort((a: string, b: string) => {
         const isAPermissions = a.includes('.permissions.generated.sql');
         const isBPermissions = b.includes('.permissions.generated.sql');
         if (isAPermissions && !isBPermissions) {
@@ -83,7 +83,7 @@ export function combineFiles(directory: string, combinedFileName: string, patter
     });
 
     let combinedContent = '';
-    files.forEach(file => {
+    files.forEach((file: string) => {
         const filePath = path.join(directory, file);
         combinedContent += fs.readFileSync(filePath, 'utf8') + '\n\n\n';
     });
