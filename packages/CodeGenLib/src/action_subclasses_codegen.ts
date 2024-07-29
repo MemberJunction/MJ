@@ -30,12 +30,16 @@ export class ActionSubClassGeneratorBase {
                     // lib already in array, make sure the ItemsUsed for this paritcular Action are merged in to the ItemsUsed array in the entry
                     // in the allActionLibraries array element
                     const existingLib = allActionLibraries.find(l => l.LibraryID === lib.LibraryID);
-                    const itemsUsed = lib.ItemsUsed.split(',').map(item => item.trim());
-                    itemsUsed.forEach(item => {
-                        if (!existingLib.ItemsUsedArray.includes(item)) {
-                            existingLib.ItemsUsedArray.push(item);
+                    if(existingLib && lib.ItemsUsed && lib.ItemsUsed.length > 0) {
+                        const itemsUsed = lib.ItemsUsed.split(',').map(item => item.trim());
+                        if(itemsUsed.length > 0) {
+                            itemsUsed.forEach(item => {
+                                if (!existingLib.ItemsUsedArray.includes(item)) {
+                                    existingLib.ItemsUsedArray.push(item);
+                                }
+                            });
                         }
-                    });
+                    }
                 }
             });
         });

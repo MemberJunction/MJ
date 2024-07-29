@@ -44,13 +44,13 @@ export class AdvancedGeneration {
         },
     ];
 
-    private static _cachedLLM: BaseLLM = null;
+    private static _cachedLLM: BaseLLM = null!;
 
     public get AIModel(): string {
-        return configInfo.advancedGeneration?.AIModel;
+        return configInfo.advancedGeneration!.AIModel;
     }
     public get AIVendor(): string {
-        return configInfo.advancedGeneration?.AIVendor;
+        return configInfo.advancedGeneration!.AIVendor;
     }
     public get enabled(): boolean {
         return false; // temporarily disabled because advanced generation isn't at the moment yielding good results from LLMs. Keeping the infrastructure in place as we expect the capabilties to improve rapidly.
@@ -59,7 +59,7 @@ export class AdvancedGeneration {
 
     public getPrompt(feature: string): PromptDefinition {
         const defaultPrompt = AdvancedGeneration._prompts.find(p => p.feature.trim().toLowerCase() === feature.trim().toLowerCase());
-        const result: PromptDefinition = {...defaultPrompt};
+        const result: PromptDefinition = {...defaultPrompt} as any;
         const featureInfo = this.getFeature(feature);
         if (featureInfo && featureInfo.systemPrompt) {
             result.systemPrompt = featureInfo.systemPrompt;
@@ -74,12 +74,13 @@ export class AdvancedGeneration {
         if (AdvancedGeneration._cachedLLM) {
             return AdvancedGeneration._cachedLLM;
         }
-        else if (configInfo.advancedGeneration.AIVendor && configInfo.advancedGeneration.AIVendor.length > 0) {
-            AdvancedGeneration._cachedLLM = MJGlobal.Instance.ClassFactory.CreateInstance(BaseLLM, configInfo.advancedGeneration.AIVendor, GetAIAPIKey(configInfo.advancedGeneration.AIVendor))
+        else if (configInfo.advancedGeneration!.AIVendor && configInfo.advancedGeneration!.AIVendor.length > 0) {
+            AdvancedGeneration._cachedLLM = MJGlobal.Instance.ClassFactory.CreateInstance(BaseLLM, configInfo.advancedGeneration!.AIVendor, GetAIAPIKey(configInfo.advancedGeneration!.AIVendor))!;
             return AdvancedGeneration._cachedLLM;    
         }
         else {
             LogError("AdvancedGeneration", "No AI vendor specified in Configuration Settings under 'advancedGeneration.AIVendor'");
+            return null!;
         }
     }
 
@@ -87,12 +88,12 @@ export class AdvancedGeneration {
         return template.replace(/\${(.*?)}/g, (_, g) => variables[g]);
     }
 
-    public features(): AdvancedGenerationFeature[] {
+    public features(): AdvancedGenerationFeature[] | undefined {
         return configInfo.advancedGeneration?.features;
     }
 
     public getFeature(featureName: string): AdvancedGenerationFeature {
-        return this.features().find(f => f.name === featureName);
+        return this.features()!.find(f => f.name === featureName)!;
     }
 
     public featureEnabled(featureName: string): boolean {

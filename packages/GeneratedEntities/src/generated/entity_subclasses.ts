@@ -1,6 +1,17629 @@
 import { BaseEntity, EntitySaveOptions, CompositeKey } from "@memberjunction/core";
 import { RegisterClass } from "@memberjunction/global";
-    
+import { z } from "zod";
+     
+        
+/**
+ * zod schema definition for the entity Accounts
+ */
+export const AccountSchema = z.object({
+    ID: z.number().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: int`),
+    BCMID: z.string().describe(`
+        * * Field Name: BCMID
+        * * Display Name: BCMID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newid()`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(255)`),
+    TaxID: z.string().nullish().describe(`
+        * * Field Name: TaxID
+        * * Display Name: Tax ID
+        * * SQL Data Type: nvarchar(50)`),
+    Acronym: z.string().nullish().describe(`
+        * * Field Name: Acronym
+        * * Display Name: Acronym
+        * * SQL Data Type: nvarchar(20)`),
+    OperatingName: z.string().nullish().describe(`
+        * * Field Name: OperatingName
+        * * Display Name: Operating Name
+        * * SQL Data Type: nvarchar(255)`),
+    DisplayName: z.string().nullish().describe(`
+        * * Field Name: DisplayName
+        * * Display Name: Display Name
+        * * SQL Data Type: nvarchar(250)`),
+    Description: z.string().nullish().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)`),
+    AddressLine1: z.string().nullish().describe(`
+        * * Field Name: AddressLine1
+        * * Display Name: Address Line 1
+        * * SQL Data Type: nvarchar(100)`),
+    AddressLine2: z.string().nullish().describe(`
+        * * Field Name: AddressLine2
+        * * Display Name: Address Line 2
+        * * SQL Data Type: nvarchar(100)`),
+    AddressLine3: z.string().nullish().describe(`
+        * * Field Name: AddressLine3
+        * * Display Name: Address Line 3
+        * * SQL Data Type: nvarchar(100)`),
+    City: z.string().nullish().describe(`
+        * * Field Name: City
+        * * Display Name: City
+        * * SQL Data Type: nvarchar(100)`),
+    StateProvince: z.string().nullish().describe(`
+        * * Field Name: StateProvince
+        * * Display Name: State Province
+        * * SQL Data Type: nvarchar(50)`),
+    PostalCode: z.string().nullish().describe(`
+        * * Field Name: PostalCode
+        * * Display Name: Postal Code
+        * * SQL Data Type: nvarchar(20)`),
+    Country: z.string().nullish().describe(`
+        * * Field Name: Country
+        * * Display Name: Country
+        * * SQL Data Type: nvarchar(100)`),
+    ISOCountryCode: z.string().nullish().describe(`
+        * * Field Name: ISOCountryCode
+        * * Display Name: ISOCountry Code
+        * * SQL Data Type: nvarchar(5)`),
+    Domain: z.string().nullish().describe(`
+        * * Field Name: Domain
+        * * Display Name: Domain
+        * * SQL Data Type: nvarchar(255)`),
+    Website: z.string().nullish().describe(`
+        * * Field Name: Website
+        * * Display Name: Website
+        * * SQL Data Type: nvarchar(255)`),
+    EmailPattern: z.string().nullish().describe(`
+        * * Field Name: EmailPattern
+        * * Display Name: Email Pattern
+        * * SQL Data Type: nvarchar(255)`),
+    LogoURL: z.string().nullish().describe(`
+        * * Field Name: LogoURL
+        * * Display Name: Logo URL
+        * * SQL Data Type: nvarchar(500)`),
+    LeadershipPageURL: z.string().nullish().describe(`
+        * * Field Name: LeadershipPageURL
+        * * Display Name: Leadership Page URL
+        * * SQL Data Type: nvarchar(255)`),
+    PhoneNumber: z.string().nullish().describe(`
+        * * Field Name: PhoneNumber
+        * * Display Name: Phone Number
+        * * SQL Data Type: nvarchar(50)`),
+    LinkedIn: z.string().nullish().describe(`
+        * * Field Name: LinkedIn
+        * * Display Name: Linked In
+        * * SQL Data Type: nvarchar(255)`),
+    Facebook: z.string().nullish().describe(`
+        * * Field Name: Facebook
+        * * Display Name: Facebook
+        * * SQL Data Type: nvarchar(255)`),
+    Logo: z.string().nullish().describe(`
+        * * Field Name: Logo
+        * * Display Name: Logo
+        * * SQL Data Type: nvarchar(255)`),
+    IndustryID: z.number().nullish().describe(`
+        * * Field Name: IndustryID
+        * * Display Name: Industry ID
+        * * SQL Data Type: int
+        * * Related Entity/Foreign Key: Industries (vwIndustries.ID)`),
+    LastReviewedDate: z.date().nullish().describe(`
+        * * Field Name: LastReviewedDate
+        * * Display Name: Last Reviewed Date
+        * * SQL Data Type: datetime`),
+    ActivityCount: z.number().describe(`
+        * * Field Name: ActivityCount
+        * * Display Name: Activity Count
+        * * SQL Data Type: int
+        * * Default Value: 0`),
+    LatestActivityDate: z.date().nullish().describe(`
+        * * Field Name: LatestActivityDate
+        * * Display Name: Latest Activity Date
+        * * SQL Data Type: datetime`),
+    EarliestActivityDate: z.date().nullish().describe(`
+        * * Field Name: EarliestActivityDate
+        * * Display Name: Earliest Activity Date
+        * * SQL Data Type: datetime`),
+    RecordSource: z.string().nullish().describe(`
+        * * Field Name: RecordSource
+        * * Display Name: Record Source
+        * * SQL Data Type: nvarchar(50)`),
+    CreatedAt: z.date().describe(`
+        * * Field Name: CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()`),
+    UpdatedAt: z.date().describe(`
+        * * Field Name: UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()`),
+    LastEnrichedAt: z.date().nullish().describe(`
+        * * Field Name: LastEnrichedAt
+        * * Display Name: Last Enriched At
+        * * SQL Data Type: datetime`),
+    __mj_DeletedAt: z.date().nullish().describe(`
+        * * Field Name: __mj_DeletedAt
+        * * Display Name: __mj _Deleted At
+        * * SQL Data Type: datetimeoffset`),
+});
+
+export type AccountEntityType = z.infer<typeof AccountSchema>;
+       
+/**
+ * zod schema definition for the entity Accounts__client_crm
+ */
+export const Account__client_crmSchema = z.object({
+    SLAInvokedIdName: z.string().nullish().describe(`
+        * * Field Name: SLAInvokedIdName
+        * * Display Name: SLAInvoked Id Name
+        * * SQL Data Type: nvarchar(160)`),
+    eone_customerclassidName: z.string().nullish().describe(`
+        * * Field Name: eone_customerclassidName
+        * * Display Name: eone _customerclassid Name
+        * * SQL Data Type: nvarchar(100)`),
+    acep_HospitalName: z.string().nullish().describe(`
+        * * Field Name: acep_HospitalName
+        * * Display Name: acep _Hospital Name
+        * * SQL Data Type: nvarchar(100)`),
+    Acep_DirectAccessIdName: z.string().nullish().describe(`
+        * * Field Name: Acep_DirectAccessIdName
+        * * Display Name: Acep _Direct Access Id Name
+        * * SQL Data Type: nvarchar(100)`),
+    PreferredEquipmentIdName: z.string().nullish().describe(`
+        * * Field Name: PreferredEquipmentIdName
+        * * Display Name: Preferred Equipment Id Name
+        * * SQL Data Type: nvarchar(160)`),
+    acep_CEDRName: z.string().nullish().describe(`
+        * * Field Name: acep_CEDRName
+        * * Display Name: acep _CEDRName
+        * * SQL Data Type: nvarchar(100)`),
+    PreferredServiceIdName: z.string().nullish().describe(`
+        * * Field Name: PreferredServiceIdName
+        * * Display Name: Preferred Service Id Name
+        * * SQL Data Type: nvarchar(160)`),
+    acep_ChapterName: z.string().nullish().describe(`
+        * * Field Name: acep_ChapterName
+        * * Display Name: acep _Chapter Name
+        * * SQL Data Type: nvarchar(160)`),
+    acep_productidName: z.string().nullish().describe(`
+        * * Field Name: acep_productidName
+        * * Display Name: acep _productid Name
+        * * SQL Data Type: nvarchar(200)`),
+    acep_ClerkshipName: z.string().nullish().describe(`
+        * * Field Name: acep_ClerkshipName
+        * * Display Name: acep _Clerkship Name
+        * * SQL Data Type: nvarchar(100)`),
+    acep_countryidName: z.string().nullish().describe(`
+        * * Field Name: acep_countryidName
+        * * Display Name: acep _countryid Name
+        * * SQL Data Type: nvarchar(100)`),
+    CreatedByYomiName: z.string().nullish().describe(`
+        * * Field Name: CreatedByYomiName
+        * * Display Name: Created By Yomi Name
+        * * SQL Data Type: nvarchar(200)`),
+    CreatedByName: z.string().nullish().describe(`
+        * * Field Name: CreatedByName
+        * * Display Name: Created By Name
+        * * SQL Data Type: nvarchar(200)`),
+    eone_paymenttermsidName: z.string().nullish().describe(`
+        * * Field Name: eone_paymenttermsidName
+        * * Display Name: eone _paymenttermsid Name
+        * * SQL Data Type: nvarchar(100)`),
+    acep_categoryidName: z.string().nullish().describe(`
+        * * Field Name: acep_categoryidName
+        * * Display Name: acep _categoryid Name
+        * * SQL Data Type: nvarchar(100)`),
+    CreatedByExternalPartyYomiName: z.string().nullish().describe(`
+        * * Field Name: CreatedByExternalPartyYomiName
+        * * Display Name: Created By External Party Yomi Name
+        * * SQL Data Type: nvarchar(450)`),
+    CreatedByExternalPartyName: z.string().nullish().describe(`
+        * * Field Name: CreatedByExternalPartyName
+        * * Display Name: Created By External Party Name
+        * * SQL Data Type: nvarchar(300)`),
+    EntityImage_Timestamp: z.number().nullish().describe(`
+        * * Field Name: EntityImage_Timestamp
+        * * Display Name: Entity Image _Timestamp
+        * * SQL Data Type: bigint`),
+    EntityImage_URL: z.string().nullish().describe(`
+        * * Field Name: EntityImage_URL
+        * * Display Name: Entity Image _URL
+        * * SQL Data Type: nvarchar(200)`),
+    EntityImage: z.number().nullish().describe(`
+        * * Field Name: EntityImage
+        * * Display Name: Entity Image
+        * * SQL Data Type: image`),
+    acep_GroupName: z.string().nullish().describe(`
+        * * Field Name: acep_GroupName
+        * * Display Name: acep _Group Name
+        * * SQL Data Type: nvarchar(160)`),
+    PrimaryContactIdName: z.string().nullish().describe(`
+        * * Field Name: PrimaryContactIdName
+        * * Display Name: Primary Contact Id Name
+        * * SQL Data Type: nvarchar(160)`),
+    PrimaryContactIdYomiName: z.string().nullish().describe(`
+        * * Field Name: PrimaryContactIdYomiName
+        * * Display Name: Primary Contact Id Yomi Name
+        * * SQL Data Type: nvarchar(450)`),
+    acep_SectionName: z.string().nullish().describe(`
+        * * Field Name: acep_SectionName
+        * * Display Name: acep _Section Name
+        * * SQL Data Type: nvarchar(160)`),
+    acep_MedicalSchoolName: z.string().nullish().describe(`
+        * * Field Name: acep_MedicalSchoolName
+        * * Display Name: acep _Medical School Name
+        * * SQL Data Type: nvarchar(100)`),
+    TransactionCurrencyIdName: z.string().nullish().describe(`
+        * * Field Name: TransactionCurrencyIdName
+        * * Display Name: Transaction Currency Id Name
+        * * SQL Data Type: nvarchar(100)`),
+    ModifiedByExternalPartyName: z.string().nullish().describe(`
+        * * Field Name: ModifiedByExternalPartyName
+        * * Display Name: Modified By External Party Name
+        * * SQL Data Type: nvarchar(300)`),
+    ModifiedByExternalPartyYomiName: z.string().nullish().describe(`
+        * * Field Name: ModifiedByExternalPartyYomiName
+        * * Display Name: Modified By External Party Yomi Name
+        * * SQL Data Type: nvarchar(450)`),
+    acep_HealthSystemYomiName: z.string().nullish().describe(`
+        * * Field Name: acep_HealthSystemYomiName
+        * * Display Name: acep _Health System Yomi Name
+        * * SQL Data Type: nvarchar(160)`),
+    acep_HealthSystemName: z.string().nullish().describe(`
+        * * Field Name: acep_HealthSystemName
+        * * Display Name: acep _Health System Name
+        * * SQL Data Type: nvarchar(160)`),
+    acep_VenueName: z.string().nullish().describe(`
+        * * Field Name: acep_VenueName
+        * * Display Name: acep _Venue Name
+        * * SQL Data Type: nvarchar(100)`),
+    acep_onlinetransactioncredentialidName: z.string().nullish().describe(`
+        * * Field Name: acep_onlinetransactioncredentialidName
+        * * Display Name: acep _onlinetransactioncredentialid Name
+        * * SQL Data Type: nvarchar(100)`),
+    TerritoryIdName: z.string().nullish().describe(`
+        * * Field Name: TerritoryIdName
+        * * Display Name: Territory Id Name
+        * * SQL Data Type: nvarchar(200)`),
+    DefaultPriceLevelIdName: z.string().nullish().describe(`
+        * * Field Name: DefaultPriceLevelIdName
+        * * Display Name: Default Price Level Id Name
+        * * SQL Data Type: nvarchar(100)`),
+    msa_managingpartneridName: z.string().nullish().describe(`
+        * * Field Name: msa_managingpartneridName
+        * * Display Name: msa _managingpartnerid Name
+        * * SQL Data Type: nvarchar(160)`),
+    msa_managingpartneridYomiName: z.string().nullish().describe(`
+        * * Field Name: msa_managingpartneridYomiName
+        * * Display Name: msa _managingpartnerid Yomi Name
+        * * SQL Data Type: nvarchar(160)`),
+    ModifiedOnBehalfByYomiName: z.string().nullish().describe(`
+        * * Field Name: ModifiedOnBehalfByYomiName
+        * * Display Name: Modified On Behalf By Yomi Name
+        * * SQL Data Type: nvarchar(200)`),
+    ModifiedOnBehalfByName: z.string().nullish().describe(`
+        * * Field Name: ModifiedOnBehalfByName
+        * * Display Name: Modified On Behalf By Name
+        * * SQL Data Type: nvarchar(200)`),
+    eone_shippingmethodidName: z.string().nullish().describe(`
+        * * Field Name: eone_shippingmethodidName
+        * * Display Name: eone _shippingmethodid Name
+        * * SQL Data Type: nvarchar(100)`),
+    PreferredSystemUserIdYomiName: z.string().nullish().describe(`
+        * * Field Name: PreferredSystemUserIdYomiName
+        * * Display Name: Preferred System User Id Yomi Name
+        * * SQL Data Type: nvarchar(200)`),
+    PreferredSystemUserIdName: z.string().nullish().describe(`
+        * * Field Name: PreferredSystemUserIdName
+        * * Display Name: Preferred System User Id Name
+        * * SQL Data Type: nvarchar(200)`),
+    acep_CertificationBoardName: z.string().nullish().describe(`
+        * * Field Name: acep_CertificationBoardName
+        * * Display Name: acep _Certification Board Name
+        * * SQL Data Type: nvarchar(100)`),
+    acep_EMRARegionName: z.string().nullish().describe(`
+        * * Field Name: acep_EMRARegionName
+        * * Display Name: acep _EMRARegion Name
+        * * SQL Data Type: nvarchar(160)`),
+    MasterAccountIdYomiName: z.string().nullish().describe(`
+        * * Field Name: MasterAccountIdYomiName
+        * * Display Name: Master Account Id Yomi Name
+        * * SQL Data Type: nvarchar(160)`),
+    MasterAccountIdName: z.string().nullish().describe(`
+        * * Field Name: MasterAccountIdName
+        * * Display Name: Master Account Id Name
+        * * SQL Data Type: nvarchar(160)`),
+    SLAName: z.string().nullish().describe(`
+        * * Field Name: SLAName
+        * * Display Name: SLAName
+        * * SQL Data Type: nvarchar(160)`),
+    OriginatingLeadIdYomiName: z.string().nullish().describe(`
+        * * Field Name: OriginatingLeadIdYomiName
+        * * Display Name: Originating Lead Id Yomi Name
+        * * SQL Data Type: nvarchar(450)`),
+    OriginatingLeadIdName: z.string().nullish().describe(`
+        * * Field Name: OriginatingLeadIdName
+        * * Display Name: Originating Lead Id Name
+        * * SQL Data Type: nvarchar(160)`),
+    acep_stateorprovinceidName: z.string().nullish().describe(`
+        * * Field Name: acep_stateorprovinceidName
+        * * Display Name: acep _stateorprovinceid Name
+        * * SQL Data Type: nvarchar(100)`),
+    acep_FellowshipName: z.string().nullish().describe(`
+        * * Field Name: acep_FellowshipName
+        * * Display Name: acep _Fellowship Name
+        * * SQL Data Type: nvarchar(200)`),
+    acep_ResidencyName: z.string().nullish().describe(`
+        * * Field Name: acep_ResidencyName
+        * * Display Name: acep _Residency Name
+        * * SQL Data Type: nvarchar(160)`),
+    ParentAccountIdName: z.string().nullish().describe(`
+        * * Field Name: ParentAccountIdName
+        * * Display Name: Parent Account Id Name
+        * * SQL Data Type: nvarchar(160)`),
+    ParentAccountIdYomiName: z.string().nullish().describe(`
+        * * Field Name: ParentAccountIdYomiName
+        * * Display Name: Parent Account Id Yomi Name
+        * * SQL Data Type: nvarchar(160)`),
+    CreatedOnBehalfByName: z.string().nullish().describe(`
+        * * Field Name: CreatedOnBehalfByName
+        * * Display Name: Created On Behalf By Name
+        * * SQL Data Type: nvarchar(200)`),
+    CreatedOnBehalfByYomiName: z.string().nullish().describe(`
+        * * Field Name: CreatedOnBehalfByYomiName
+        * * Display Name: Created On Behalf By Yomi Name
+        * * SQL Data Type: nvarchar(200)`),
+    ModifiedByName: z.string().nullish().describe(`
+        * * Field Name: ModifiedByName
+        * * Display Name: Modified By Name
+        * * SQL Data Type: nvarchar(200)`),
+    ModifiedByYomiName: z.string().nullish().describe(`
+        * * Field Name: ModifiedByYomiName
+        * * Display Name: Modified By Yomi Name
+        * * SQL Data Type: nvarchar(200)`),
+    Address1_AddressTypeCode: z.number().nullish().describe(`
+        * * Field Name: Address1_AddressTypeCode
+        * * Display Name: Address 1_Address Type Code
+        * * SQL Data Type: int`),
+    Address1_City: z.string().nullish().describe(`
+        * * Field Name: Address1_City
+        * * Display Name: Address 1_City
+        * * SQL Data Type: nvarchar(4000)`),
+    Address1_Composite: z.string().nullish().describe(`
+        * * Field Name: Address1_Composite
+        * * Display Name: Address 1_Composite
+        * * SQL Data Type: nvarchar(MAX)`),
+    Address1_Country: z.string().nullish().describe(`
+        * * Field Name: Address1_Country
+        * * Display Name: Address 1_Country
+        * * SQL Data Type: nvarchar(4000)`),
+    Address1_County: z.string().nullish().describe(`
+        * * Field Name: Address1_County
+        * * Display Name: Address 1_County
+        * * SQL Data Type: nvarchar(4000)`),
+    Address1_AddressId: z.string().nullish().describe(`
+        * * Field Name: Address1_AddressId
+        * * Display Name: Address 1_Address Id
+        * * SQL Data Type: uniqueidentifier`),
+    Address1_Fax: z.string().nullish().describe(`
+        * * Field Name: Address1_Fax
+        * * Display Name: Address 1_Fax
+        * * SQL Data Type: nvarchar(50)`),
+    Address1_FreightTermsCode: z.number().nullish().describe(`
+        * * Field Name: Address1_FreightTermsCode
+        * * Display Name: Address 1_Freight Terms Code
+        * * SQL Data Type: int`),
+    Address1_Latitude: z.number().nullish().describe(`
+        * * Field Name: Address1_Latitude
+        * * Display Name: Address 1_Latitude
+        * * SQL Data Type: float(53)`),
+    Address1_Line1: z.string().nullish().describe(`
+        * * Field Name: Address1_Line1
+        * * Display Name: Address 1_Line 1
+        * * SQL Data Type: nvarchar(4000)`),
+    Address1_Line2: z.string().nullish().describe(`
+        * * Field Name: Address1_Line2
+        * * Display Name: Address 1_Line 2
+        * * SQL Data Type: nvarchar(4000)`),
+    Address1_Line3: z.string().nullish().describe(`
+        * * Field Name: Address1_Line3
+        * * Display Name: Address 1_Line 3
+        * * SQL Data Type: nvarchar(4000)`),
+    Address1_Longitude: z.number().nullish().describe(`
+        * * Field Name: Address1_Longitude
+        * * Display Name: Address 1_Longitude
+        * * SQL Data Type: float(53)`),
+    Address1_Name: z.string().nullish().describe(`
+        * * Field Name: Address1_Name
+        * * Display Name: Address 1_Name
+        * * SQL Data Type: nvarchar(200)`),
+    Address1_PostalCode: z.string().nullish().describe(`
+        * * Field Name: Address1_PostalCode
+        * * Display Name: Address 1_Postal Code
+        * * SQL Data Type: nvarchar(50)`),
+    Address1_PostOfficeBox: z.string().nullish().describe(`
+        * * Field Name: Address1_PostOfficeBox
+        * * Display Name: Address 1_Post Office Box
+        * * SQL Data Type: nvarchar(50)`),
+    Address1_PrimaryContactName: z.string().nullish().describe(`
+        * * Field Name: Address1_PrimaryContactName
+        * * Display Name: Address 1_Primary Contact Name
+        * * SQL Data Type: nvarchar(150)`),
+    Address1_ShippingMethodCode: z.number().nullish().describe(`
+        * * Field Name: Address1_ShippingMethodCode
+        * * Display Name: Address 1_Shipping Method Code
+        * * SQL Data Type: int`),
+    Address1_StateOrProvince: z.string().nullish().describe(`
+        * * Field Name: Address1_StateOrProvince
+        * * Display Name: Address 1_State Or Province
+        * * SQL Data Type: nvarchar(4000)`),
+    Address1_Telephone1: z.string().nullish().describe(`
+        * * Field Name: Address1_Telephone1
+        * * Display Name: Address 1_Telephone 1
+        * * SQL Data Type: nvarchar(50)`),
+    Address1_Telephone2: z.string().nullish().describe(`
+        * * Field Name: Address1_Telephone2
+        * * Display Name: Address 1_Telephone 2
+        * * SQL Data Type: nvarchar(50)`),
+    Address1_Telephone3: z.string().nullish().describe(`
+        * * Field Name: Address1_Telephone3
+        * * Display Name: Address 1_Telephone 3
+        * * SQL Data Type: nvarchar(50)`),
+    Address1_UPSZone: z.string().nullish().describe(`
+        * * Field Name: Address1_UPSZone
+        * * Display Name: Address 1_UPSZone
+        * * SQL Data Type: nvarchar(4)`),
+    Address1_UTCOffset: z.number().nullish().describe(`
+        * * Field Name: Address1_UTCOffset
+        * * Display Name: Address 1_UTCOffset
+        * * SQL Data Type: int`),
+    Address2_AddressTypeCode: z.number().nullish().describe(`
+        * * Field Name: Address2_AddressTypeCode
+        * * Display Name: Address 2_Address Type Code
+        * * SQL Data Type: int`),
+    Address2_City: z.string().nullish().describe(`
+        * * Field Name: Address2_City
+        * * Display Name: Address 2_City
+        * * SQL Data Type: nvarchar(4000)`),
+    Address2_Composite: z.string().nullish().describe(`
+        * * Field Name: Address2_Composite
+        * * Display Name: Address 2_Composite
+        * * SQL Data Type: nvarchar(MAX)`),
+    Address2_Country: z.string().nullish().describe(`
+        * * Field Name: Address2_Country
+        * * Display Name: Address 2_Country
+        * * SQL Data Type: nvarchar(4000)`),
+    Address2_County: z.string().nullish().describe(`
+        * * Field Name: Address2_County
+        * * Display Name: Address 2_County
+        * * SQL Data Type: nvarchar(4000)`),
+    Address2_AddressId: z.string().nullish().describe(`
+        * * Field Name: Address2_AddressId
+        * * Display Name: Address 2_Address Id
+        * * SQL Data Type: uniqueidentifier`),
+    Address2_Fax: z.string().nullish().describe(`
+        * * Field Name: Address2_Fax
+        * * Display Name: Address 2_Fax
+        * * SQL Data Type: nvarchar(50)`),
+    Address2_FreightTermsCode: z.number().nullish().describe(`
+        * * Field Name: Address2_FreightTermsCode
+        * * Display Name: Address 2_Freight Terms Code
+        * * SQL Data Type: int`),
+    Address2_Latitude: z.number().nullish().describe(`
+        * * Field Name: Address2_Latitude
+        * * Display Name: Address 2_Latitude
+        * * SQL Data Type: float(53)`),
+    Address2_Line1: z.string().nullish().describe(`
+        * * Field Name: Address2_Line1
+        * * Display Name: Address 2_Line 1
+        * * SQL Data Type: nvarchar(4000)`),
+    Address2_Line2: z.string().nullish().describe(`
+        * * Field Name: Address2_Line2
+        * * Display Name: Address 2_Line 2
+        * * SQL Data Type: nvarchar(4000)`),
+    Address2_Line3: z.string().nullish().describe(`
+        * * Field Name: Address2_Line3
+        * * Display Name: Address 2_Line 3
+        * * SQL Data Type: nvarchar(4000)`),
+    Address2_Longitude: z.number().nullish().describe(`
+        * * Field Name: Address2_Longitude
+        * * Display Name: Address 2_Longitude
+        * * SQL Data Type: float(53)`),
+    Address2_Name: z.string().nullish().describe(`
+        * * Field Name: Address2_Name
+        * * Display Name: Address 2_Name
+        * * SQL Data Type: nvarchar(200)`),
+    Address2_PostalCode: z.string().nullish().describe(`
+        * * Field Name: Address2_PostalCode
+        * * Display Name: Address 2_Postal Code
+        * * SQL Data Type: nvarchar(50)`),
+    Address2_PostOfficeBox: z.string().nullish().describe(`
+        * * Field Name: Address2_PostOfficeBox
+        * * Display Name: Address 2_Post Office Box
+        * * SQL Data Type: nvarchar(50)`),
+    Address2_PrimaryContactName: z.string().nullish().describe(`
+        * * Field Name: Address2_PrimaryContactName
+        * * Display Name: Address 2_Primary Contact Name
+        * * SQL Data Type: nvarchar(150)`),
+    Address2_ShippingMethodCode: z.number().nullish().describe(`
+        * * Field Name: Address2_ShippingMethodCode
+        * * Display Name: Address 2_Shipping Method Code
+        * * SQL Data Type: int`),
+    Address2_StateOrProvince: z.string().nullish().describe(`
+        * * Field Name: Address2_StateOrProvince
+        * * Display Name: Address 2_State Or Province
+        * * SQL Data Type: nvarchar(4000)`),
+    Address2_Telephone1: z.string().nullish().describe(`
+        * * Field Name: Address2_Telephone1
+        * * Display Name: Address 2_Telephone 1
+        * * SQL Data Type: nvarchar(50)`),
+    Address2_Telephone2: z.string().nullish().describe(`
+        * * Field Name: Address2_Telephone2
+        * * Display Name: Address 2_Telephone 2
+        * * SQL Data Type: nvarchar(50)`),
+    Address2_Telephone3: z.string().nullish().describe(`
+        * * Field Name: Address2_Telephone3
+        * * Display Name: Address 2_Telephone 3
+        * * SQL Data Type: nvarchar(50)`),
+    Address2_UPSZone: z.string().nullish().describe(`
+        * * Field Name: Address2_UPSZone
+        * * Display Name: Address 2_UPSZone
+        * * SQL Data Type: nvarchar(4)`),
+    Address2_UTCOffset: z.number().nullish().describe(`
+        * * Field Name: Address2_UTCOffset
+        * * Display Name: Address 2_UTCOffset
+        * * SQL Data Type: int`),
+    OwnerId: z.string().nullish().describe(`
+        * * Field Name: OwnerId
+        * * Display Name: Owner Id
+        * * SQL Data Type: uniqueidentifier`),
+    OwnerIdName: z.string().nullish().describe(`
+        * * Field Name: OwnerIdName
+        * * Display Name: Owner Id Name
+        * * SQL Data Type: nvarchar(160)`),
+    OwnerIdYomiName: z.string().nullish().describe(`
+        * * Field Name: OwnerIdYomiName
+        * * Display Name: Owner Id Yomi Name
+        * * SQL Data Type: nvarchar(160)`),
+    OwnerIdDsc: z.number().nullish().describe(`
+        * * Field Name: OwnerIdDsc
+        * * Display Name: Owner Id Dsc
+        * * SQL Data Type: int`),
+    OwnerIdType: z.number().nullish().describe(`
+        * * Field Name: OwnerIdType
+        * * Display Name: Owner Id Type
+        * * SQL Data Type: int`),
+    OwningUser: z.string().nullish().describe(`
+        * * Field Name: OwningUser
+        * * Display Name: Owning User
+        * * SQL Data Type: uniqueidentifier`),
+    OwningTeam: z.string().nullish().describe(`
+        * * Field Name: OwningTeam
+        * * Display Name: Owning Team
+        * * SQL Data Type: uniqueidentifier`),
+    AccountId: z.string().describe(`
+        * * Field Name: AccountId
+        * * Display Name: Account Id
+        * * SQL Data Type: uniqueidentifier`),
+    AccountCategoryCode: z.number().nullish().describe(`
+        * * Field Name: AccountCategoryCode
+        * * Display Name: Account Category Code
+        * * SQL Data Type: int`),
+    TerritoryId: z.string().nullish().describe(`
+        * * Field Name: TerritoryId
+        * * Display Name: Territory Id
+        * * SQL Data Type: uniqueidentifier`),
+    DefaultPriceLevelId: z.string().nullish().describe(`
+        * * Field Name: DefaultPriceLevelId
+        * * Display Name: Default Price Level Id
+        * * SQL Data Type: uniqueidentifier`),
+    CustomerSizeCode: z.number().nullish().describe(`
+        * * Field Name: CustomerSizeCode
+        * * Display Name: Customer Size Code
+        * * SQL Data Type: int`),
+    PreferredContactMethodCode: z.number().nullish().describe(`
+        * * Field Name: PreferredContactMethodCode
+        * * Display Name: Preferred Contact Method Code
+        * * SQL Data Type: int`),
+    CustomerTypeCode: z.number().nullish().describe(`
+        * * Field Name: CustomerTypeCode
+        * * Display Name: Customer Type Code
+        * * SQL Data Type: int`),
+    AccountRatingCode: z.number().nullish().describe(`
+        * * Field Name: AccountRatingCode
+        * * Display Name: Account Rating Code
+        * * SQL Data Type: int`),
+    IndustryCode: z.number().nullish().describe(`
+        * * Field Name: IndustryCode
+        * * Display Name: Industry Code
+        * * SQL Data Type: int`),
+    TerritoryCode: z.number().nullish().describe(`
+        * * Field Name: TerritoryCode
+        * * Display Name: Territory Code
+        * * SQL Data Type: int`),
+    AccountClassificationCode: z.number().nullish().describe(`
+        * * Field Name: AccountClassificationCode
+        * * Display Name: Account Classification Code
+        * * SQL Data Type: int`),
+    BusinessTypeCode: z.number().nullish().describe(`
+        * * Field Name: BusinessTypeCode
+        * * Display Name: Business Type Code
+        * * SQL Data Type: int`),
+    OwningBusinessUnit: z.string().nullish().describe(`
+        * * Field Name: OwningBusinessUnit
+        * * Display Name: Owning Business Unit
+        * * SQL Data Type: uniqueidentifier`),
+    TraversedPath: z.string().nullish().describe(`
+        * * Field Name: TraversedPath
+        * * Display Name: Traversed Path
+        * * SQL Data Type: nvarchar(1250)`),
+    OriginatingLeadId: z.string().nullish().describe(`
+        * * Field Name: OriginatingLeadId
+        * * Display Name: Originating Lead Id
+        * * SQL Data Type: uniqueidentifier`),
+    PaymentTermsCode: z.number().nullish().describe(`
+        * * Field Name: PaymentTermsCode
+        * * Display Name: Payment Terms Code
+        * * SQL Data Type: int`),
+    ShippingMethodCode: z.number().nullish().describe(`
+        * * Field Name: ShippingMethodCode
+        * * Display Name: Shipping Method Code
+        * * SQL Data Type: int`),
+    PrimaryContactId: z.string().nullish().describe(`
+        * * Field Name: PrimaryContactId
+        * * Display Name: Primary Contact Id
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Contacts__client_crm (vwContacts__client_crm.ContactId)`),
+    ParticipatesInWorkflow: z.boolean().nullish().describe(`
+        * * Field Name: ParticipatesInWorkflow
+        * * Display Name: Participates In Workflow
+        * * SQL Data Type: bit`),
+    Name: z.string().nullish().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(160)`),
+    AccountNumber: z.string().nullish().describe(`
+        * * Field Name: AccountNumber
+        * * Display Name: Account Number
+        * * SQL Data Type: nvarchar(20)`),
+    Revenue: z.number().nullish().describe(`
+        * * Field Name: Revenue
+        * * Display Name: Revenue
+        * * SQL Data Type: money`),
+    NumberOfEmployees: z.number().nullish().describe(`
+        * * Field Name: NumberOfEmployees
+        * * Display Name: Number Of Employees
+        * * SQL Data Type: int`),
+    Description: z.string().nullish().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)`),
+    SIC: z.string().nullish().describe(`
+        * * Field Name: SIC
+        * * Display Name: SIC
+        * * SQL Data Type: nvarchar(20)`),
+    OwnershipCode: z.number().nullish().describe(`
+        * * Field Name: OwnershipCode
+        * * Display Name: Ownership Code
+        * * SQL Data Type: int`),
+    MarketCap: z.number().nullish().describe(`
+        * * Field Name: MarketCap
+        * * Display Name: Market Cap
+        * * SQL Data Type: money`),
+    SharesOutstanding: z.number().nullish().describe(`
+        * * Field Name: SharesOutstanding
+        * * Display Name: Shares Outstanding
+        * * SQL Data Type: int`),
+    TickerSymbol: z.string().nullish().describe(`
+        * * Field Name: TickerSymbol
+        * * Display Name: Ticker Symbol
+        * * SQL Data Type: nvarchar(10)`),
+    StockExchange: z.string().nullish().describe(`
+        * * Field Name: StockExchange
+        * * Display Name: Stock Exchange
+        * * SQL Data Type: nvarchar(20)`),
+    WebSiteURL: z.string().nullish().describe(`
+        * * Field Name: WebSiteURL
+        * * Display Name: Web Site URL
+        * * SQL Data Type: nvarchar(200)`),
+    FtpSiteURL: z.string().nullish().describe(`
+        * * Field Name: FtpSiteURL
+        * * Display Name: Ftp Site URL
+        * * SQL Data Type: nvarchar(200)`),
+    EMailAddress1: z.string().nullish().describe(`
+        * * Field Name: EMailAddress1
+        * * Display Name: EMail Address 1
+        * * SQL Data Type: nvarchar(100)`),
+    EMailAddress2: z.string().nullish().describe(`
+        * * Field Name: EMailAddress2
+        * * Display Name: EMail Address 2
+        * * SQL Data Type: nvarchar(100)`),
+    EMailAddress3: z.string().nullish().describe(`
+        * * Field Name: EMailAddress3
+        * * Display Name: EMail Address 3
+        * * SQL Data Type: nvarchar(100)`),
+    DoNotPhone: z.boolean().nullish().describe(`
+        * * Field Name: DoNotPhone
+        * * Display Name: Do Not Phone
+        * * SQL Data Type: bit`),
+    DoNotFax: z.boolean().nullish().describe(`
+        * * Field Name: DoNotFax
+        * * Display Name: Do Not Fax
+        * * SQL Data Type: bit`),
+    Telephone1: z.string().nullish().describe(`
+        * * Field Name: Telephone1
+        * * Display Name: Telephone 1
+        * * SQL Data Type: nvarchar(50)`),
+    DoNotEMail: z.boolean().nullish().describe(`
+        * * Field Name: DoNotEMail
+        * * Display Name: Do Not EMail
+        * * SQL Data Type: bit`),
+    Telephone2: z.string().nullish().describe(`
+        * * Field Name: Telephone2
+        * * Display Name: Telephone 2
+        * * SQL Data Type: nvarchar(50)`),
+    Fax: z.string().nullish().describe(`
+        * * Field Name: Fax
+        * * Display Name: Fax
+        * * SQL Data Type: nvarchar(50)`),
+    Telephone3: z.string().nullish().describe(`
+        * * Field Name: Telephone3
+        * * Display Name: Telephone 3
+        * * SQL Data Type: nvarchar(50)`),
+    DoNotPostalMail: z.boolean().nullish().describe(`
+        * * Field Name: DoNotPostalMail
+        * * Display Name: Do Not Postal Mail
+        * * SQL Data Type: bit`),
+    DoNotBulkEMail: z.boolean().nullish().describe(`
+        * * Field Name: DoNotBulkEMail
+        * * Display Name: Do Not Bulk EMail
+        * * SQL Data Type: bit`),
+    DoNotBulkPostalMail: z.boolean().nullish().describe(`
+        * * Field Name: DoNotBulkPostalMail
+        * * Display Name: Do Not Bulk Postal Mail
+        * * SQL Data Type: bit`),
+    CreditLimit: z.number().nullish().describe(`
+        * * Field Name: CreditLimit
+        * * Display Name: Credit Limit
+        * * SQL Data Type: money`),
+    CreditOnHold: z.boolean().nullish().describe(`
+        * * Field Name: CreditOnHold
+        * * Display Name: Credit On Hold
+        * * SQL Data Type: bit`),
+    IsPrivate: z.boolean().nullish().describe(`
+        * * Field Name: IsPrivate
+        * * Display Name: Is Private
+        * * SQL Data Type: bit`),
+    CreatedOn: z.date().nullish().describe(`
+        * * Field Name: CreatedOn
+        * * Display Name: Created On
+        * * SQL Data Type: datetime`),
+    CreatedBy: z.string().nullish().describe(`
+        * * Field Name: CreatedBy
+        * * Display Name: Created By
+        * * SQL Data Type: uniqueidentifier`),
+    ModifiedOn: z.date().nullish().describe(`
+        * * Field Name: ModifiedOn
+        * * Display Name: Modified On
+        * * SQL Data Type: datetime`),
+    ModifiedBy: z.string().nullish().describe(`
+        * * Field Name: ModifiedBy
+        * * Display Name: Modified By
+        * * SQL Data Type: uniqueidentifier`),
+    VersionNumber: z.number().describe(`
+        * * Field Name: VersionNumber
+        * * Display Name: Version Number
+        * * SQL Data Type: timestamp`),
+    ParentAccountId: z.string().nullish().describe(`
+        * * Field Name: ParentAccountId
+        * * Display Name: Parent Account Id
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Accounts__client_crm (vwAccounts__client_crm.AccountId)`),
+    Aging30: z.number().nullish().describe(`
+        * * Field Name: Aging30
+        * * Display Name: Aging 30
+        * * SQL Data Type: money`),
+    StateCode: z.number().nullish().describe(`
+        * * Field Name: StateCode
+        * * Display Name: State Code
+        * * SQL Data Type: int`),
+    Aging60: z.number().nullish().describe(`
+        * * Field Name: Aging60
+        * * Display Name: Aging 60
+        * * SQL Data Type: money`),
+    StatusCode: z.number().nullish().describe(`
+        * * Field Name: StatusCode
+        * * Display Name: Status Code
+        * * SQL Data Type: int`),
+    Aging90: z.number().nullish().describe(`
+        * * Field Name: Aging90
+        * * Display Name: Aging 90
+        * * SQL Data Type: money`),
+    PreferredAppointmentDayCode: z.number().nullish().describe(`
+        * * Field Name: PreferredAppointmentDayCode
+        * * Display Name: Preferred Appointment Day Code
+        * * SQL Data Type: int`),
+    PreferredSystemUserId: z.string().nullish().describe(`
+        * * Field Name: PreferredSystemUserId
+        * * Display Name: Preferred System User Id
+        * * SQL Data Type: uniqueidentifier`),
+    PreferredAppointmentTimeCode: z.number().nullish().describe(`
+        * * Field Name: PreferredAppointmentTimeCode
+        * * Display Name: Preferred Appointment Time Code
+        * * SQL Data Type: int`),
+    Merged: z.boolean().nullish().describe(`
+        * * Field Name: Merged
+        * * Display Name: Merged
+        * * SQL Data Type: bit`),
+    DoNotSendMM: z.boolean().nullish().describe(`
+        * * Field Name: DoNotSendMM
+        * * Display Name: Do Not Send MM
+        * * SQL Data Type: bit`),
+    MasterId: z.string().nullish().describe(`
+        * * Field Name: MasterId
+        * * Display Name: Master Id
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Accounts__client_crm (vwAccounts__client_crm.AccountId)`),
+    LastUsedInCampaign: z.date().nullish().describe(`
+        * * Field Name: LastUsedInCampaign
+        * * Display Name: Last Used In Campaign
+        * * SQL Data Type: datetime`),
+    PreferredServiceId: z.string().nullish().describe(`
+        * * Field Name: PreferredServiceId
+        * * Display Name: Preferred Service Id
+        * * SQL Data Type: uniqueidentifier`),
+    PreferredEquipmentId: z.string().nullish().describe(`
+        * * Field Name: PreferredEquipmentId
+        * * Display Name: Preferred Equipment Id
+        * * SQL Data Type: uniqueidentifier`),
+    ExchangeRate: z.number().nullish().describe(`
+        * * Field Name: ExchangeRate
+        * * Display Name: Exchange Rate
+        * * SQL Data Type: decimal(23, 10)`),
+    UTCConversionTimeZoneCode: z.number().nullish().describe(`
+        * * Field Name: UTCConversionTimeZoneCode
+        * * Display Name: UTCConversion Time Zone Code
+        * * SQL Data Type: int`),
+    OverriddenCreatedOn: z.date().nullish().describe(`
+        * * Field Name: OverriddenCreatedOn
+        * * Display Name: Overridden Created On
+        * * SQL Data Type: datetime`),
+    TimeZoneRuleVersionNumber: z.number().nullish().describe(`
+        * * Field Name: TimeZoneRuleVersionNumber
+        * * Display Name: Time Zone Rule Version Number
+        * * SQL Data Type: int`),
+    ImportSequenceNumber: z.number().nullish().describe(`
+        * * Field Name: ImportSequenceNumber
+        * * Display Name: Import Sequence Number
+        * * SQL Data Type: int`),
+    TransactionCurrencyId: z.string().nullish().describe(`
+        * * Field Name: TransactionCurrencyId
+        * * Display Name: Transaction Currency Id
+        * * SQL Data Type: uniqueidentifier`),
+    CreditLimit_Base: z.number().nullish().describe(`
+        * * Field Name: CreditLimit_Base
+        * * Display Name: Credit Limit _Base
+        * * SQL Data Type: money`),
+    Aging30_Base: z.number().nullish().describe(`
+        * * Field Name: Aging30_Base
+        * * Display Name: Aging 30_Base
+        * * SQL Data Type: money`),
+    Revenue_Base: z.number().nullish().describe(`
+        * * Field Name: Revenue_Base
+        * * Display Name: Revenue _Base
+        * * SQL Data Type: money`),
+    Aging90_Base: z.number().nullish().describe(`
+        * * Field Name: Aging90_Base
+        * * Display Name: Aging 90_Base
+        * * SQL Data Type: money`),
+    MarketCap_Base: z.number().nullish().describe(`
+        * * Field Name: MarketCap_Base
+        * * Display Name: Market Cap _Base
+        * * SQL Data Type: money`),
+    Aging60_Base: z.number().nullish().describe(`
+        * * Field Name: Aging60_Base
+        * * Display Name: Aging 60_Base
+        * * SQL Data Type: money`),
+    YomiName: z.string().nullish().describe(`
+        * * Field Name: YomiName
+        * * Display Name: Yomi Name
+        * * SQL Data Type: nvarchar(160)`),
+    CreatedOnBehalfBy: z.string().nullish().describe(`
+        * * Field Name: CreatedOnBehalfBy
+        * * Display Name: Created On Behalf By
+        * * SQL Data Type: uniqueidentifier`),
+    ModifiedOnBehalfBy: z.string().nullish().describe(`
+        * * Field Name: ModifiedOnBehalfBy
+        * * Display Name: Modified On Behalf By
+        * * SQL Data Type: uniqueidentifier`),
+    StageId: z.string().nullish().describe(`
+        * * Field Name: StageId
+        * * Display Name: Stage Id
+        * * SQL Data Type: uniqueidentifier`),
+    ProcessId: z.string().nullish().describe(`
+        * * Field Name: ProcessId
+        * * Display Name: Process Id
+        * * SQL Data Type: uniqueidentifier`),
+    EntityImageId: z.string().nullish().describe(`
+        * * Field Name: EntityImageId
+        * * Display Name: Entity Image Id
+        * * SQL Data Type: uniqueidentifier`),
+    OpenDeals: z.number().nullish().describe(`
+        * * Field Name: OpenDeals
+        * * Display Name: Open Deals
+        * * SQL Data Type: int`),
+    OpenDeals_Date: z.date().nullish().describe(`
+        * * Field Name: OpenDeals_Date
+        * * Display Name: Open Deals _Date
+        * * SQL Data Type: datetime`),
+    OpenDeals_State: z.number().nullish().describe(`
+        * * Field Name: OpenDeals_State
+        * * Display Name: Open Deals _State
+        * * SQL Data Type: int`),
+    TimeSpentByMeOnEmailAndMeetings: z.string().nullish().describe(`
+        * * Field Name: TimeSpentByMeOnEmailAndMeetings
+        * * Display Name: Time Spent By Me On Email And Meetings
+        * * SQL Data Type: nvarchar(1250)`),
+    OpenRevenue: z.number().nullish().describe(`
+        * * Field Name: OpenRevenue
+        * * Display Name: Open Revenue
+        * * SQL Data Type: money`),
+    OpenRevenue_Base: z.number().nullish().describe(`
+        * * Field Name: OpenRevenue_Base
+        * * Display Name: Open Revenue _Base
+        * * SQL Data Type: money`),
+    OpenRevenue_Date: z.date().nullish().describe(`
+        * * Field Name: OpenRevenue_Date
+        * * Display Name: Open Revenue _Date
+        * * SQL Data Type: datetime`),
+    OpenRevenue_State: z.number().nullish().describe(`
+        * * Field Name: OpenRevenue_State
+        * * Display Name: Open Revenue _State
+        * * SQL Data Type: int`),
+    CreatedByExternalParty: z.string().nullish().describe(`
+        * * Field Name: CreatedByExternalParty
+        * * Display Name: Created By External Party
+        * * SQL Data Type: uniqueidentifier`),
+    ModifiedByExternalParty: z.string().nullish().describe(`
+        * * Field Name: ModifiedByExternalParty
+        * * Display Name: Modified By External Party
+        * * SQL Data Type: uniqueidentifier`),
+    PrimarySatoriId: z.string().nullish().describe(`
+        * * Field Name: PrimarySatoriId
+        * * Display Name: Primary Satori Id
+        * * SQL Data Type: nvarchar(200)`),
+    PrimaryTwitterId: z.string().nullish().describe(`
+        * * Field Name: PrimaryTwitterId
+        * * Display Name: Primary Twitter Id
+        * * SQL Data Type: nvarchar(20)`),
+    SLAId: z.string().nullish().describe(`
+        * * Field Name: SLAId
+        * * Display Name: SLAId
+        * * SQL Data Type: uniqueidentifier`),
+    SLAInvokedId: z.string().nullish().describe(`
+        * * Field Name: SLAInvokedId
+        * * Display Name: SLAInvoked Id
+        * * SQL Data Type: uniqueidentifier`),
+    OnHoldTime: z.number().nullish().describe(`
+        * * Field Name: OnHoldTime
+        * * Display Name: On Hold Time
+        * * SQL Data Type: int`),
+    LastOnHoldTime: z.date().nullish().describe(`
+        * * Field Name: LastOnHoldTime
+        * * Display Name: Last On Hold Time
+        * * SQL Data Type: datetime`),
+    FollowEmail: z.boolean().nullish().describe(`
+        * * Field Name: FollowEmail
+        * * Display Name: Follow Email
+        * * SQL Data Type: bit`),
+    MarketingOnly: z.boolean().nullish().describe(`
+        * * Field Name: MarketingOnly
+        * * Display Name: Marketing Only
+        * * SQL Data Type: bit`),
+    Acep_MembershipEligible: z.boolean().nullish().describe(`
+        * * Field Name: Acep_MembershipEligible
+        * * Display Name: Acep _Membership Eligible
+        * * SQL Data Type: bit`),
+    Acep_EktronGroupIDs: z.string().nullish().describe(`
+        * * Field Name: Acep_EktronGroupIDs
+        * * Display Name: Acep _Ektron Group IDs
+        * * SQL Data Type: nvarchar(100)`),
+    Et_lastbouncetype: z.string().nullish().describe(`
+        * * Field Name: Et_lastbouncetype
+        * * Display Name: Et _lastbouncetype
+        * * SQL Data Type: nvarchar(100)`),
+    Et_lastbouncesendid: z.string().nullish().describe(`
+        * * Field Name: Et_lastbouncesendid
+        * * Display Name: Et _lastbouncesendid
+        * * SQL Data Type: nvarchar(100)`),
+    Et_lastbouncedate: z.string().nullish().describe(`
+        * * Field Name: Et_lastbouncedate
+        * * Display Name: Et _lastbouncedate
+        * * SQL Data Type: nvarchar(100)`),
+    cdi_allowtextmessages: z.boolean().nullish().describe(`
+        * * Field Name: cdi_allowtextmessages
+        * * Display Name: cdi _allowtextmessages
+        * * SQL Data Type: bit`),
+    Acep_LobbyPercentage: z.number().nullish().describe(`
+        * * Field Name: Acep_LobbyPercentage
+        * * Display Name: Acep _Lobby Percentage
+        * * SQL Data Type: decimal(23, 10)`),
+    Eone_AgingBucketDescription3: z.string().nullish().describe(`
+        * * Field Name: Eone_AgingBucketDescription3
+        * * Display Name: Eone _Aging Bucket Description 3
+        * * SQL Data Type: nvarchar(100)`),
+    Adx_ModifiedByUsername: z.string().nullish().describe(`
+        * * Field Name: Adx_ModifiedByUsername
+        * * Display Name: Adx _Modified By Username
+        * * SQL Data Type: nvarchar(100)`),
+    Acep_BookstoreCustomerType: z.number().nullish().describe(`
+        * * Field Name: Acep_BookstoreCustomerType
+        * * Display Name: Acep _Bookstore Customer Type
+        * * SQL Data Type: int`),
+    Eone_AgingBucketDescription1: z.string().nullish().describe(`
+        * * Field Name: Eone_AgingBucketDescription1
+        * * Display Name: Eone _Aging Bucket Description 1
+        * * SQL Data Type: nvarchar(100)`),
+    eone_shippingmethodid: z.string().nullish().describe(`
+        * * Field Name: eone_shippingmethodid
+        * * Display Name: eone _shippingmethodid
+        * * SQL Data Type: uniqueidentifier`),
+    eone_customerclassid: z.string().nullish().describe(`
+        * * Field Name: eone_customerclassid
+        * * Display Name: eone _customerclassid
+        * * SQL Data Type: uniqueidentifier`),
+    Eone_CreditLimitAmount: z.number().nullish().describe(`
+        * * Field Name: Eone_CreditLimitAmount
+        * * Display Name: Eone _Credit Limit Amount
+        * * SQL Data Type: decimal(23, 10)`),
+    Acep_Inactive: z.boolean().nullish().describe(`
+        * * Field Name: Acep_Inactive
+        * * Display Name: Acep _Inactive
+        * * SQL Data Type: bit`),
+    Acep_ExhibitorPoints: z.number().nullish().describe(`
+        * * Field Name: Acep_ExhibitorPoints
+        * * Display Name: Acep _Exhibitor Points
+        * * SQL Data Type: int`),
+    acep_stateorprovinceid: z.string().nullish().describe(`
+        * * Field Name: acep_stateorprovinceid
+        * * Display Name: acep _stateorprovinceid
+        * * SQL Data Type: uniqueidentifier`),
+    Acep_GPPriceLevel: z.number().nullish().describe(`
+        * * Field Name: Acep_GPPriceLevel
+        * * Display Name: Acep _GPPrice Level
+        * * SQL Data Type: int`),
+    Acep_ShortName: z.string().nullish().describe(`
+        * * Field Name: Acep_ShortName
+        * * Display Name: Acep _Short Name
+        * * SQL Data Type: nvarchar(100)`),
+    Acep_OrganizationManaged: z.boolean().nullish().describe(`
+        * * Field Name: Acep_OrganizationManaged
+        * * Display Name: Acep _Organization Managed
+        * * SQL Data Type: bit`),
+    acep_countryid: z.string().nullish().describe(`
+        * * Field Name: acep_countryid
+        * * Display Name: acep _countryid
+        * * SQL Data Type: uniqueidentifier`),
+    Acep_LongName: z.string().nullish().describe(`
+        * * Field Name: Acep_LongName
+        * * Display Name: Acep _Long Name
+        * * SQL Data Type: nvarchar(250)`),
+    Acep_PrimaryPhone: z.string().nullish().describe(`
+        * * Field Name: Acep_PrimaryPhone
+        * * Display Name: Acep _Primary Phone
+        * * SQL Data Type: nvarchar(100)`),
+    Eone_AgingBucketDescription5: z.string().nullish().describe(`
+        * * Field Name: Eone_AgingBucketDescription5
+        * * Display Name: Eone _Aging Bucket Description 5
+        * * SQL Data Type: nvarchar(100)`),
+    Eone_AgingBucketDescription7: z.string().nullish().describe(`
+        * * Field Name: Eone_AgingBucketDescription7
+        * * Display Name: Eone _Aging Bucket Description 7
+        * * SQL Data Type: nvarchar(100)`),
+    Eone_AgingBucketDescription4: z.string().nullish().describe(`
+        * * Field Name: Eone_AgingBucketDescription4
+        * * Display Name: Eone _Aging Bucket Description 4
+        * * SQL Data Type: nvarchar(100)`),
+    New_scribe_stripcompany: z.boolean().nullish().describe(`
+        * * Field Name: New_scribe_stripcompany
+        * * Display Name: New _scribe _stripcompany
+        * * SQL Data Type: bit`),
+    Eone_AgingBucketDescription2: z.string().nullish().describe(`
+        * * Field Name: Eone_AgingBucketDescription2
+        * * Display Name: Eone _Aging Bucket Description 2
+        * * SQL Data Type: nvarchar(100)`),
+    eone_paymenttermsid: z.string().nullish().describe(`
+        * * Field Name: eone_paymenttermsid
+        * * Display Name: eone _paymenttermsid
+        * * SQL Data Type: uniqueidentifier`),
+    Eone_AgingBucketValue4: z.number().nullish().describe(`
+        * * Field Name: Eone_AgingBucketValue4
+        * * Display Name: Eone _Aging Bucket Value 4
+        * * SQL Data Type: decimal(23, 10)`),
+    Acep_Code: z.string().nullish().describe(`
+        * * Field Name: Acep_Code
+        * * Display Name: Acep _Code
+        * * SQL Data Type: nvarchar(100)`),
+    Eone_AgingBucketValue7: z.number().nullish().describe(`
+        * * Field Name: Eone_AgingBucketValue7
+        * * Display Name: Eone _Aging Bucket Value 7
+        * * SQL Data Type: decimal(23, 10)`),
+    acep_categoryid: z.string().nullish().describe(`
+        * * Field Name: acep_categoryid
+        * * Display Name: acep _categoryid
+        * * SQL Data Type: uniqueidentifier`),
+    Eone_AgingBucketValue2: z.number().nullish().describe(`
+        * * Field Name: Eone_AgingBucketValue2
+        * * Display Name: Eone _Aging Bucket Value 2
+        * * SQL Data Type: decimal(23, 10)`),
+    Acep_GPCompanyId: z.string().nullish().describe(`
+        * * Field Name: Acep_GPCompanyId
+        * * Display Name: Acep _GPCompany Id
+        * * SQL Data Type: nvarchar(100)`),
+    Acep_newmemberchapterpaid: z.boolean().nullish().describe(`
+        * * Field Name: Acep_newmemberchapterpaid
+        * * Display Name: Acep _newmemberchapterpaid
+        * * SQL Data Type: bit`),
+    Eone_AgingBucketValue5: z.number().nullish().describe(`
+        * * Field Name: Eone_AgingBucketValue5
+        * * Display Name: Eone _Aging Bucket Value 5
+        * * SQL Data Type: decimal(23, 10)`),
+    Adx_CreatedByIPAddress: z.string().nullish().describe(`
+        * * Field Name: Adx_CreatedByIPAddress
+        * * Display Name: Adx _Created By IPAddress
+        * * SQL Data Type: nvarchar(100)`),
+    acep_onlinetransactioncredentialid: z.string().nullish().describe(`
+        * * Field Name: acep_onlinetransactioncredentialid
+        * * Display Name: acep _onlinetransactioncredentialid
+        * * SQL Data Type: uniqueidentifier`),
+    Eone_AgingBucketDescription6: z.string().nullish().describe(`
+        * * Field Name: Eone_AgingBucketDescription6
+        * * Display Name: Eone _Aging Bucket Description 6
+        * * SQL Data Type: nvarchar(100)`),
+    Acep_InactiveDate: z.date().nullish().describe(`
+        * * Field Name: Acep_InactiveDate
+        * * Display Name: Acep _Inactive Date
+        * * SQL Data Type: datetime`),
+    Eone_CrefitLimitType: z.number().nullish().describe(`
+        * * Field Name: Eone_CrefitLimitType
+        * * Display Name: Eone _Crefit Limit Type
+        * * SQL Data Type: int`),
+    Acep_formattedaddresses: z.string().nullish().describe(`
+        * * Field Name: Acep_formattedaddresses
+        * * Display Name: Acep _formattedaddresses
+        * * SQL Data Type: nvarchar(MAX)`),
+    new_c360sisiteurl: z.string().nullish().describe(`
+        * * Field Name: new_c360sisiteurl
+        * * Display Name: new _c 360sisiteurl
+        * * SQL Data Type: nvarchar(4000)`),
+    Eone_AgingBucketValue6: z.number().nullish().describe(`
+        * * Field Name: Eone_AgingBucketValue6
+        * * Display Name: Eone _Aging Bucket Value 6
+        * * SQL Data Type: decimal(23, 10)`),
+    Adx_ModifiedByIPAddress: z.string().nullish().describe(`
+        * * Field Name: Adx_ModifiedByIPAddress
+        * * Display Name: Adx _Modified By IPAddress
+        * * SQL Data Type: nvarchar(100)`),
+    msa_managingpartnerid: z.string().nullish().describe(`
+        * * Field Name: msa_managingpartnerid
+        * * Display Name: msa _managingpartnerid
+        * * SQL Data Type: uniqueidentifier`),
+    Eone_AgingBucketValue1: z.number().nullish().describe(`
+        * * Field Name: Eone_AgingBucketValue1
+        * * Display Name: Eone _Aging Bucket Value 1
+        * * SQL Data Type: decimal(23, 10)`),
+    Adx_CreatedByUsername: z.string().nullish().describe(`
+        * * Field Name: Adx_CreatedByUsername
+        * * Display Name: Adx _Created By Username
+        * * SQL Data Type: nvarchar(100)`),
+    Acep_DirectAccessId: z.string().nullish().describe(`
+        * * Field Name: Acep_DirectAccessId
+        * * Display Name: Acep _Direct Access Id
+        * * SQL Data Type: uniqueidentifier`),
+    acep_productid: z.string().nullish().describe(`
+        * * Field Name: acep_productid
+        * * Display Name: acep _productid
+        * * SQL Data Type: uniqueidentifier`),
+    Acep_DeactivatedDate: z.date().nullish().describe(`
+        * * Field Name: Acep_DeactivatedDate
+        * * Display Name: Acep _Deactivated Date
+        * * SQL Data Type: datetime`),
+    Eone_AgingBucketValue3: z.number().nullish().describe(`
+        * * Field Name: Eone_AgingBucketValue3
+        * * Display Name: Eone _Aging Bucket Value 3
+        * * SQL Data Type: decimal(23, 10)`),
+    acep_Country: z.number().nullish().describe(`
+        * * Field Name: acep_Country
+        * * Display Name: acep _Country
+        * * SQL Data Type: int`),
+    acep_State: z.number().nullish().describe(`
+        * * Field Name: acep_State
+        * * Display Name: acep _State
+        * * SQL Data Type: int`),
+    acep_CertificationBoard: z.string().nullish().describe(`
+        * * Field Name: acep_CertificationBoard
+        * * Display Name: acep _Certification Board
+        * * SQL Data Type: uniqueidentifier`),
+    acep_Chapter: z.string().nullish().describe(`
+        * * Field Name: acep_Chapter
+        * * Display Name: acep _Chapter
+        * * SQL Data Type: uniqueidentifier`),
+    acep_EMRARegion: z.string().nullish().describe(`
+        * * Field Name: acep_EMRARegion
+        * * Display Name: acep _EMRARegion
+        * * SQL Data Type: uniqueidentifier`),
+    acep_Group: z.string().nullish().describe(`
+        * * Field Name: acep_Group
+        * * Display Name: acep _Group
+        * * SQL Data Type: uniqueidentifier`),
+    acep_Hospital: z.string().nullish().describe(`
+        * * Field Name: acep_Hospital
+        * * Display Name: acep _Hospital
+        * * SQL Data Type: uniqueidentifier`),
+    acep_MedicalSchool: z.string().nullish().describe(`
+        * * Field Name: acep_MedicalSchool
+        * * Display Name: acep _Medical School
+        * * SQL Data Type: uniqueidentifier`),
+    acep_Residency: z.string().nullish().describe(`
+        * * Field Name: acep_Residency
+        * * Display Name: acep _Residency
+        * * SQL Data Type: uniqueidentifier`),
+    acep_Section: z.string().nullish().describe(`
+        * * Field Name: acep_Section
+        * * Display Name: acep _Section
+        * * SQL Data Type: uniqueidentifier`),
+    acep_Venue: z.string().nullish().describe(`
+        * * Field Name: acep_Venue
+        * * Display Name: acep _Venue
+        * * SQL Data Type: uniqueidentifier`),
+    acep_FacebookAddress: z.string().nullish().describe(`
+        * * Field Name: acep_FacebookAddress
+        * * Display Name: acep _Facebook Address
+        * * SQL Data Type: nvarchar(100)`),
+    acep_twitterusername: z.string().nullish().describe(`
+        * * Field Name: acep_twitterusername
+        * * Display Name: acep _twitterusername
+        * * SQL Data Type: nvarchar(100)`),
+    acep_Fellowship: z.string().nullish().describe(`
+        * * Field Name: acep_Fellowship
+        * * Display Name: acep _Fellowship
+        * * SQL Data Type: uniqueidentifier`),
+    acep_Clerkship: z.string().nullish().describe(`
+        * * Field Name: acep_Clerkship
+        * * Display Name: acep _Clerkship
+        * * SQL Data Type: uniqueidentifier`),
+    acep_GPTaxScheduleIDcode: z.number().nullish().describe(`
+        * * Field Name: acep_GPTaxScheduleIDcode
+        * * Display Name: acep _GPTax Schedule IDcode
+        * * SQL Data Type: int`),
+    acep_TermsApproved: z.boolean().nullish().describe(`
+        * * Field Name: acep_TermsApproved
+        * * Display Name: acep _Terms Approved
+        * * SQL Data Type: bit`),
+    cdi_accountscore: z.number().nullish().describe(`
+        * * Field Name: cdi_accountscore
+        * * Display Name: cdi _accountscore
+        * * SQL Data Type: int`),
+    acep_Instagram: z.string().nullish().describe(`
+        * * Field Name: acep_Instagram
+        * * Display Name: acep _Instagram
+        * * SQL Data Type: nvarchar(100)`),
+    acep_MultimediaLink: z.string().nullish().describe(`
+        * * Field Name: acep_MultimediaLink
+        * * Display Name: acep _Multimedia Link
+        * * SQL Data Type: nvarchar(500)`),
+    acep_MultimediaLink2: z.string().nullish().describe(`
+        * * Field Name: acep_MultimediaLink2
+        * * Display Name: acep _Multimedia Link 2
+        * * SQL Data Type: nvarchar(500)`),
+    acep_MultimediaLink3: z.string().nullish().describe(`
+        * * Field Name: acep_MultimediaLink3
+        * * Display Name: acep _Multimedia Link 3
+        * * SQL Data Type: nvarchar(500)`),
+    acep_VimeoLink: z.string().nullish().describe(`
+        * * Field Name: acep_VimeoLink
+        * * Display Name: acep _Vimeo Link
+        * * SQL Data Type: nvarchar(500)`),
+    acep_YouTubeLink: z.string().nullish().describe(`
+        * * Field Name: acep_YouTubeLink
+        * * Display Name: acep _You Tube Link
+        * * SQL Data Type: nvarchar(500)`),
+    acep_CEDR: z.string().nullish().describe(`
+        * * Field Name: acep_CEDR
+        * * Display Name: acep _CEDR
+        * * SQL Data Type: uniqueidentifier`),
+    acep_DummyFieldToRemove: z.string().nullish().describe(`
+        * * Field Name: acep_DummyFieldToRemove
+        * * Display Name: acep _Dummy Field To Remove
+        * * SQL Data Type: nvarchar(100)`),
+    acep_CommunityType: z.number().nullish().describe(`
+        * * Field Name: acep_CommunityType
+        * * Display Name: acep _Community Type
+        * * SQL Data Type: int`),
+    acep_HealthSystem: z.string().nullish().describe(`
+        * * Field Name: acep_HealthSystem
+        * * Display Name: acep _Health System
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Accounts__client_crm (vwAccounts__client_crm.AccountId)`),
+    acep_pdinterviewlink: z.string().nullish().describe(`
+        * * Field Name: acep_pdinterviewlink
+        * * Display Name: acep _pdinterviewlink
+        * * SQL Data Type: nvarchar(500)`),
+});
+
+export type Account__client_crmEntityType = z.infer<typeof Account__client_crmSchema>;
+       
+/**
+ * zod schema definition for the entity Activities
+ */
+export const ActivitySchema = z.object({
+    ID: z.number().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: int`),
+    BCMID: z.string().describe(`
+        * * Field Name: BCMID
+        * * Display Name: BCMID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newid()`),
+    EmployeeID: z.number().nullish().describe(`
+        * * Field Name: EmployeeID
+        * * Display Name: Employee ID
+        * * SQL Data Type: int`),
+    ContactID: z.number().nullish().describe(`
+        * * Field Name: ContactID
+        * * Display Name: Contact ID
+        * * SQL Data Type: int
+        * * Related Entity/Foreign Key: Contacts (vwContacts.ID)`),
+    AccountID: z.number().nullish().describe(`
+        * * Field Name: AccountID
+        * * Display Name: Account ID
+        * * SQL Data Type: int
+        * * Related Entity/Foreign Key: Accounts (vwAccounts.ID)`),
+    DealID: z.number().nullish().describe(`
+        * * Field Name: DealID
+        * * Display Name: Deal ID
+        * * SQL Data Type: int
+        * * Related Entity/Foreign Key: Deals (vwDeals.ID)`),
+    ActivityDate: z.date().nullish().describe(`
+        * * Field Name: ActivityDate
+        * * Display Name: Activity Date
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()`),
+    IsActive: z.boolean().nullish().describe(`
+        * * Field Name: IsActive
+        * * Display Name: Is Active
+        * * SQL Data Type: bit`),
+    Description: z.string().nullish().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)`),
+    Type: z.string().nullish().describe(`
+        * * Field Name: Type
+        * * Display Name: Type
+        * * SQL Data Type: nvarchar(30)`),
+    Attachment: z.string().nullish().describe(`
+        * * Field Name: Attachment
+        * * Display Name: Attachment
+        * * SQL Data Type: nvarchar(255)`),
+    CompanyIntegrationID: z.number().describe(`
+        * * Field Name: CompanyIntegrationID
+        * * Display Name: Company Integration ID
+        * * SQL Data Type: int`),
+    ExternalSystemRecordID: z.string().nullish().describe(`
+        * * Field Name: ExternalSystemRecordID
+        * * Display Name: External System Record ID
+        * * SQL Data Type: nvarchar(100)`),
+    CreatedAt: z.date().describe(`
+        * * Field Name: CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()`),
+    UpdatedAt: z.date().describe(`
+        * * Field Name: UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()`),
+    AttachmentID: z.number().nullish().describe(`
+        * * Field Name: AttachmentID
+        * * Display Name: Attachment ID
+        * * SQL Data Type: int
+        * * Related Entity/Foreign Key: Activity Attachments (vwActivityAttachments.ID)`),
+    Title: z.string().nullish().describe(`
+        * * Field Name: Title
+        * * Display Name: Title
+        * * SQL Data Type: nvarchar(255)`),
+    IsOpened: z.boolean().nullish().describe(`
+        * * Field Name: IsOpened
+        * * Display Name: Is Opened
+        * * SQL Data Type: bit`),
+    IsBounced: z.boolean().nullish().describe(`
+        * * Field Name: IsBounced
+        * * Display Name: Is Bounced
+        * * SQL Data Type: bit`),
+    IsReplied: z.boolean().nullish().describe(`
+        * * Field Name: IsReplied
+        * * Display Name: Is Replied
+        * * SQL Data Type: bit`),
+    Summary: z.string().nullish().describe(`
+        * * Field Name: Summary
+        * * Display Name: Summary
+        * * SQL Data Type: nvarchar(MAX)`),
+    Account: z.string().nullish().describe(`
+        * * Field Name: Account
+        * * Display Name: Account
+        * * SQL Data Type: nvarchar(255)`),
+});
+
+export type ActivityEntityType = z.infer<typeof ActivitySchema>;
+       
+/**
+ * zod schema definition for the entity Activity Attachments
+ */
+export const ActivityAttachmentSchema = z.object({
+    ID: z.number().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: int`),
+    Attachments: z.string().nullish().describe(`
+        * * Field Name: Attachments
+        * * Display Name: Attachments
+        * * SQL Data Type: nvarchar(255)`),
+    CreatedAt: z.date().describe(`
+        * * Field Name: CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()`),
+    UpdatedAt: z.date().describe(`
+        * * Field Name: UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()`),
+});
+
+export type ActivityAttachmentEntityType = z.infer<typeof ActivityAttachmentSchema>;
+       
+/**
+ * zod schema definition for the entity client _memberships
+ */
+export const client_membershipSchema = z.object({
+    createdbyyominame: z.string().nullish().describe(`
+        * * Field Name: createdbyyominame
+        * * Display Name: createdbyyominame
+        * * SQL Data Type: nvarchar(200)`),
+    CreatedByName: z.string().nullish().describe(`
+        * * Field Name: CreatedByName
+        * * Display Name: Created By Name
+        * * SQL Data Type: nvarchar(200)`),
+    modifiedbyyominame: z.string().nullish().describe(`
+        * * Field Name: modifiedbyyominame
+        * * Display Name: modifiedbyyominame
+        * * SQL Data Type: nvarchar(200)`),
+    ModifiedByName: z.string().nullish().describe(`
+        * * Field Name: ModifiedByName
+        * * Display Name: Modified By Name
+        * * SQL Data Type: nvarchar(200)`),
+    Acep_BillingOptionIdName: z.string().nullish().describe(`
+        * * Field Name: Acep_BillingOptionIdName
+        * * Display Name: Acep _Billing Option Id Name
+        * * SQL Data Type: nvarchar(100)`),
+    acep_contactidName: z.string().nullish().describe(`
+        * * Field Name: acep_contactidName
+        * * Display Name: acep _contactid Name
+        * * SQL Data Type: nvarchar(160)`),
+    acep_contactidYomiName: z.string().nullish().describe(`
+        * * Field Name: acep_contactidYomiName
+        * * Display Name: acep _contactid Yomi Name
+        * * SQL Data Type: nvarchar(450)`),
+    createdonbehalfbyyominame: z.string().nullish().describe(`
+        * * Field Name: createdonbehalfbyyominame
+        * * Display Name: createdonbehalfbyyominame
+        * * SQL Data Type: nvarchar(200)`),
+    CreatedOnBehalfByName: z.string().nullish().describe(`
+        * * Field Name: CreatedOnBehalfByName
+        * * Display Name: Created On Behalf By Name
+        * * SQL Data Type: nvarchar(200)`),
+    modifiedonbehalfbyyominame: z.string().nullish().describe(`
+        * * Field Name: modifiedonbehalfbyyominame
+        * * Display Name: modifiedonbehalfbyyominame
+        * * SQL Data Type: nvarchar(200)`),
+    ModifiedOnBehalfByName: z.string().nullish().describe(`
+        * * Field Name: ModifiedOnBehalfByName
+        * * Display Name: Modified On Behalf By Name
+        * * SQL Data Type: nvarchar(200)`),
+    Acep_futureCRMOrderIdName: z.string().nullish().describe(`
+        * * Field Name: Acep_futureCRMOrderIdName
+        * * Display Name: Acep _future CRMOrder Id Name
+        * * SQL Data Type: nvarchar(300)`),
+    Acep_CurrentCRMOrderIdName: z.string().nullish().describe(`
+        * * Field Name: Acep_CurrentCRMOrderIdName
+        * * Display Name: Acep _Current CRMOrder Id Name
+        * * SQL Data Type: nvarchar(300)`),
+    acep_FutureBillingOptionIdName: z.string().nullish().describe(`
+        * * Field Name: acep_FutureBillingOptionIdName
+        * * Display Name: acep _Future Billing Option Id Name
+        * * SQL Data Type: nvarchar(100)`),
+    OwnerId: z.string().nullish().describe(`
+        * * Field Name: OwnerId
+        * * Display Name: Owner Id
+        * * SQL Data Type: uniqueidentifier`),
+    OwnerIdName: z.string().nullish().describe(`
+        * * Field Name: OwnerIdName
+        * * Display Name: Owner Id Name
+        * * SQL Data Type: nvarchar(160)`),
+    OwnerIdYomiName: z.string().nullish().describe(`
+        * * Field Name: OwnerIdYomiName
+        * * Display Name: Owner Id Yomi Name
+        * * SQL Data Type: nvarchar(160)`),
+    OwnerIdDsc: z.number().nullish().describe(`
+        * * Field Name: OwnerIdDsc
+        * * Display Name: Owner Id Dsc
+        * * SQL Data Type: int`),
+    OwnerIdType: z.number().nullish().describe(`
+        * * Field Name: OwnerIdType
+        * * Display Name: Owner Id Type
+        * * SQL Data Type: int`),
+    OwningUser: z.string().nullish().describe(`
+        * * Field Name: OwningUser
+        * * Display Name: Owning User
+        * * SQL Data Type: uniqueidentifier`),
+    OwningTeam: z.string().nullish().describe(`
+        * * Field Name: OwningTeam
+        * * Display Name: Owning Team
+        * * SQL Data Type: uniqueidentifier`),
+    Acep_AcquisitionPromoCode: z.string().nullish().describe(`
+        * * Field Name: Acep_AcquisitionPromoCode
+        * * Display Name: Acep _Acquisition Promo Code
+        * * SQL Data Type: nvarchar(100)`),
+    Acep_CancellationDate: z.date().nullish().describe(`
+        * * Field Name: Acep_CancellationDate
+        * * Display Name: Acep _Cancellation Date
+        * * SQL Data Type: datetime`),
+    Acep_CurrentMemberRateCode: z.number().nullish().describe(`
+        * * Field Name: Acep_CurrentMemberRateCode
+        * * Display Name: Acep _Current Member Rate Code
+        * * SQL Data Type: int`),
+    Acep_CurrentMemberTypeCode: z.number().nullish().describe(`
+        * * Field Name: Acep_CurrentMemberTypeCode
+        * * Display Name: Acep _Current Member Type Code
+        * * SQL Data Type: int`),
+    Acep_CycleStartDate: z.date().nullish().describe(`
+        * * Field Name: Acep_CycleStartDate
+        * * Display Name: Acep _Cycle Start Date
+        * * SQL Data Type: datetime`),
+    Acep_ExpirationDate: z.date().nullish().describe(`
+        * * Field Name: Acep_ExpirationDate
+        * * Display Name: Acep _Expiration Date
+        * * SQL Data Type: datetime`),
+    Acep_FutureCycleStartDate: z.date().nullish().describe(`
+        * * Field Name: Acep_FutureCycleStartDate
+        * * Display Name: Acep _Future Cycle Start Date
+        * * SQL Data Type: datetime`),
+    Acep_FutureDuesPaid: z.boolean().nullish().describe(`
+        * * Field Name: Acep_FutureDuesPaid
+        * * Display Name: Acep _Future Dues Paid
+        * * SQL Data Type: bit`),
+    Acep_FutureExpirationDate: z.date().nullish().describe(`
+        * * Field Name: Acep_FutureExpirationDate
+        * * Display Name: Acep _Future Expiration Date
+        * * SQL Data Type: datetime`),
+    Acep_FutureLastPaidDate: z.date().nullish().describe(`
+        * * Field Name: Acep_FutureLastPaidDate
+        * * Display Name: Acep _Future Last Paid Date
+        * * SQL Data Type: datetime`),
+    Acep_FutureMemberRateCode: z.number().nullish().describe(`
+        * * Field Name: Acep_FutureMemberRateCode
+        * * Display Name: Acep _Future Member Rate Code
+        * * SQL Data Type: int`),
+    Acep_FutureMemberTypeCode: z.number().nullish().describe(`
+        * * Field Name: Acep_FutureMemberTypeCode
+        * * Display Name: Acep _Future Member Type Code
+        * * SQL Data Type: int`),
+    Acep_FuturePaidThroughDate: z.date().nullish().describe(`
+        * * Field Name: Acep_FuturePaidThroughDate
+        * * Display Name: Acep _Future Paid Through Date
+        * * SQL Data Type: datetime`),
+    Acep_FutureStatusCode: z.number().nullish().describe(`
+        * * Field Name: Acep_FutureStatusCode
+        * * Display Name: Acep _Future Status Code
+        * * SQL Data Type: int`),
+    Acep_FutureStatusReasonCode: z.number().nullish().describe(`
+        * * Field Name: Acep_FutureStatusReasonCode
+        * * Display Name: Acep _Future Status Reason Code
+        * * SQL Data Type: int`),
+    Acep_JoinDate: z.date().nullish().describe(`
+        * * Field Name: Acep_JoinDate
+        * * Display Name: Acep _Join Date
+        * * SQL Data Type: datetime`),
+    Acep_LastPayDate: z.date().nullish().describe(`
+        * * Field Name: Acep_LastPayDate
+        * * Display Name: Acep _Last Pay Date
+        * * SQL Data Type: datetime`),
+    Acep_membershipId: z.string().describe(`
+        * * Field Name: Acep_membershipId
+        * * Display Name: Acep _membership Id
+        * * SQL Data Type: uniqueidentifier`),
+    Acep_name: z.string().nullish().describe(`
+        * * Field Name: Acep_name
+        * * Display Name: Acep _name
+        * * SQL Data Type: nvarchar(185)`),
+    Acep_OrganizationCode: z.number().nullish().describe(`
+        * * Field Name: Acep_OrganizationCode
+        * * Display Name: Acep _Organization Code
+        * * SQL Data Type: int`),
+    Acep_OriginalJoinDate: z.date().nullish().describe(`
+        * * Field Name: Acep_OriginalJoinDate
+        * * Display Name: Acep _Original Join Date
+        * * SQL Data Type: datetime`),
+    Acep_PaidThroughDate: z.date().nullish().describe(`
+        * * Field Name: Acep_PaidThroughDate
+        * * Display Name: Acep _Paid Through Date
+        * * SQL Data Type: datetime`),
+    Acep_ProgressionInfo: z.string().nullish().describe(`
+        * * Field Name: Acep_ProgressionInfo
+        * * Display Name: Acep _Progression Info
+        * * SQL Data Type: nvarchar(MAX)`),
+    Acep_StatusCode: z.number().nullish().describe(`
+        * * Field Name: Acep_StatusCode
+        * * Display Name: Acep _Status Code
+        * * SQL Data Type: int`),
+    Acep_StatusReasonCode: z.number().nullish().describe(`
+        * * Field Name: Acep_StatusReasonCode
+        * * Display Name: Acep _Status Reason Code
+        * * SQL Data Type: int`),
+    CreatedBy: z.string().nullish().describe(`
+        * * Field Name: CreatedBy
+        * * Display Name: Created By
+        * * SQL Data Type: uniqueidentifier`),
+    CreatedOn: z.date().nullish().describe(`
+        * * Field Name: CreatedOn
+        * * Display Name: Created On
+        * * SQL Data Type: datetime`),
+    ImportSequenceNumber: z.number().nullish().describe(`
+        * * Field Name: ImportSequenceNumber
+        * * Display Name: Import Sequence Number
+        * * SQL Data Type: int`),
+    ModifiedBy: z.string().nullish().describe(`
+        * * Field Name: ModifiedBy
+        * * Display Name: Modified By
+        * * SQL Data Type: uniqueidentifier`),
+    ModifiedOn: z.date().nullish().describe(`
+        * * Field Name: ModifiedOn
+        * * Display Name: Modified On
+        * * SQL Data Type: datetime`),
+    OverriddenCreatedOn: z.date().nullish().describe(`
+        * * Field Name: OverriddenCreatedOn
+        * * Display Name: Overridden Created On
+        * * SQL Data Type: datetime`),
+    OwningBusinessUnit: z.string().nullish().describe(`
+        * * Field Name: OwningBusinessUnit
+        * * Display Name: Owning Business Unit
+        * * SQL Data Type: uniqueidentifier`),
+    statecode: z.number().nullish().describe(`
+        * * Field Name: statecode
+        * * Display Name: statecode
+        * * SQL Data Type: int`),
+    statuscode: z.number().nullish().describe(`
+        * * Field Name: statuscode
+        * * Display Name: statuscode
+        * * SQL Data Type: int`),
+    TimeZoneRuleVersionNumber: z.number().nullish().describe(`
+        * * Field Name: TimeZoneRuleVersionNumber
+        * * Display Name: Time Zone Rule Version Number
+        * * SQL Data Type: int`),
+    UTCConversionTimeZoneCode: z.number().nullish().describe(`
+        * * Field Name: UTCConversionTimeZoneCode
+        * * Display Name: UTCConversion Time Zone Code
+        * * SQL Data Type: int`),
+    VersionNumber: z.number().describe(`
+        * * Field Name: VersionNumber
+        * * Display Name: Version Number
+        * * SQL Data Type: timestamp`),
+    acep_contactid: z.string().nullish().describe(`
+        * * Field Name: acep_contactid
+        * * Display Name: acep _contactid
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Contacts__client_crm (vwContacts__client_crm.ContactId)`),
+    Acep_CurrentCRMOrderId: z.string().nullish().describe(`
+        * * Field Name: Acep_CurrentCRMOrderId
+        * * Display Name: Acep _Current CRMOrder Id
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Sales Orders (vwSalesOrders.SalesOrderId)`),
+    Acep_futureCRMOrderId: z.string().nullish().describe(`
+        * * Field Name: Acep_futureCRMOrderId
+        * * Display Name: Acep _future CRMOrder Id
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Sales Orders (vwSalesOrders.SalesOrderId)`),
+    Acep_BillingOptionId: z.string().nullish().describe(`
+        * * Field Name: Acep_BillingOptionId
+        * * Display Name: Acep _Billing Option Id
+        * * SQL Data Type: uniqueidentifier`),
+    CreatedOnBehalfBy: z.string().nullish().describe(`
+        * * Field Name: CreatedOnBehalfBy
+        * * Display Name: Created On Behalf By
+        * * SQL Data Type: uniqueidentifier`),
+    ModifiedOnBehalfBy: z.string().nullish().describe(`
+        * * Field Name: ModifiedOnBehalfBy
+        * * Display Name: Modified On Behalf By
+        * * SQL Data Type: uniqueidentifier`),
+    acep_FutureBillingOptionId: z.string().nullish().describe(`
+        * * Field Name: acep_FutureBillingOptionId
+        * * Display Name: acep _Future Billing Option Id
+        * * SQL Data Type: uniqueidentifier`),
+    acep_LastRateChangeDate: z.date().nullish().describe(`
+        * * Field Name: acep_LastRateChangeDate
+        * * Display Name: acep _Last Rate Change Date
+        * * SQL Data Type: datetime`),
+    acep_currentlastreneweddate: z.date().nullish().describe(`
+        * * Field Name: acep_currentlastreneweddate
+        * * Display Name: acep _currentlastreneweddate
+        * * SQL Data Type: datetime`),
+    acep_futurelastreneweddate: z.date().nullish().describe(`
+        * * Field Name: acep_futurelastreneweddate
+        * * Display Name: acep _futurelastreneweddate
+        * * SQL Data Type: datetime`),
+});
+
+export type client_membershipEntityType = z.infer<typeof client_membershipSchema>;
+       
+/**
+ * zod schema definition for the entity Contact Levels
+ */
+export const ContactLevelSchema = z.object({
+    ID: z.number().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: int`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(50)`),
+    Description: z.string().nullish().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)`),
+    Rank: z.number().describe(`
+        * * Field Name: Rank
+        * * Display Name: Rank
+        * * SQL Data Type: int
+        * * Default Value: 100`),
+    Keywords: z.string().nullish().describe(`
+        * * Field Name: Keywords
+        * * Display Name: Keywords
+        * * SQL Data Type: nvarchar(MAX)`),
+    ExcludeKeywords: z.string().nullish().describe(`
+        * * Field Name: ExcludeKeywords
+        * * Display Name: Exclude Keywords
+        * * SQL Data Type: nvarchar(MAX)`),
+    CreatedAt: z.date().describe(`
+        * * Field Name: CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()`),
+    UpdatedAt: z.date().describe(`
+        * * Field Name: UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()`),
+});
+
+export type ContactLevelEntityType = z.infer<typeof ContactLevelSchema>;
+       
+/**
+ * zod schema definition for the entity Contact Roles
+ */
+export const ContactRoleSchema = z.object({
+    ID: z.number().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: int`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(50)`),
+    Description: z.string().nullish().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)`),
+    Keywords: z.string().nullish().describe(`
+        * * Field Name: Keywords
+        * * Display Name: Keywords
+        * * SQL Data Type: nvarchar(MAX)`),
+    CreatedAt: z.date().describe(`
+        * * Field Name: CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()`),
+    UpdatedAt: z.date().describe(`
+        * * Field Name: UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()`),
+});
+
+export type ContactRoleEntityType = z.infer<typeof ContactRoleSchema>;
+       
+/**
+ * zod schema definition for the entity Contacts
+ */
+export const ContactSchema = z.object({
+    ID: z.number().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: int`),
+    BCMID: z.string().describe(`
+        * * Field Name: BCMID
+        * * Display Name: BCMID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newid()`),
+    FirstName: z.string().describe(`
+        * * Field Name: FirstName
+        * * Display Name: First Name
+        * * SQL Data Type: nvarchar(100)`),
+    NickName: z.string().nullish().describe(`
+        * * Field Name: NickName
+        * * Display Name: Nick Name
+        * * SQL Data Type: nvarchar(50)`),
+    LastName: z.string().describe(`
+        * * Field Name: LastName
+        * * Display Name: Last Name
+        * * SQL Data Type: nvarchar(100)`),
+    AccountID: z.number().nullish().describe(`
+        * * Field Name: AccountID
+        * * Display Name: Account ID
+        * * SQL Data Type: int
+        * * Related Entity/Foreign Key: Accounts (vwAccounts.ID)`),
+    LastReviewedDate: z.date().nullish().describe(`
+        * * Field Name: LastReviewedDate
+        * * Display Name: Last Reviewed Date
+        * * SQL Data Type: datetime`),
+    Title: z.string().nullish().describe(`
+        * * Field Name: Title
+        * * Display Name: Title
+        * * SQL Data Type: nvarchar(200)`),
+    Email1: z.string().nullish().describe(`
+        * * Field Name: Email1
+        * * Display Name: Email 1
+        * * SQL Data Type: nvarchar(100)`),
+    Email2: z.string().nullish().describe(`
+        * * Field Name: Email2
+        * * Display Name: Email 2
+        * * SQL Data Type: nvarchar(100)`),
+    EmailSource: z.string().nullish().describe(`
+        * * Field Name: EmailSource
+        * * Display Name: Email Source
+        * * SQL Data Type: nvarchar(50)`),
+    PhoneNumber: z.string().nullish().describe(`
+        * * Field Name: PhoneNumber
+        * * Display Name: Phone Number
+        * * SQL Data Type: nvarchar(50)`),
+    ProfilePictureURL: z.string().nullish().describe(`
+        * * Field Name: ProfilePictureURL
+        * * Display Name: Profile Picture URL
+        * * SQL Data Type: nvarchar(500)`),
+    Twitter: z.string().nullish().describe(`
+        * * Field Name: Twitter
+        * * Display Name: Twitter
+        * * SQL Data Type: nvarchar(255)`),
+    Instagram: z.string().nullish().describe(`
+        * * Field Name: Instagram
+        * * Display Name: Instagram
+        * * SQL Data Type: nvarchar(255)`),
+    LinkedIn: z.string().nullish().describe(`
+        * * Field Name: LinkedIn
+        * * Display Name: Linked In
+        * * SQL Data Type: nvarchar(500)`),
+    Facebook: z.string().nullish().describe(`
+        * * Field Name: Facebook
+        * * Display Name: Facebook
+        * * SQL Data Type: nvarchar(255)`),
+    EmailStatus: z.string().nullish().describe(`
+        * * Field Name: EmailStatus
+        * * Display Name: Email Status
+        * * SQL Data Type: nvarchar(255)`),
+    RoleID: z.number().nullish().describe(`
+        * * Field Name: RoleID
+        * * Display Name: Role ID
+        * * SQL Data Type: int
+        * * Related Entity/Foreign Key: Contact Roles (vwContactRoles.ID)`),
+    LevelID: z.number().nullish().describe(`
+        * * Field Name: LevelID
+        * * Display Name: Level ID
+        * * SQL Data Type: int
+        * * Related Entity/Foreign Key: Contact Levels (vwContactLevels.ID)`),
+    Prefix: z.string().nullish().describe(`
+        * * Field Name: Prefix
+        * * Display Name: Prefix
+        * * SQL Data Type: nvarchar(20)`),
+    Suffix: z.string().nullish().describe(`
+        * * Field Name: Suffix
+        * * Display Name: Suffix
+        * * SQL Data Type: nvarchar(250)`),
+    Tags: z.string().nullish().describe(`
+        * * Field Name: Tags
+        * * Display Name: Tags
+        * * SQL Data Type: nvarchar(MAX)`),
+    Status: z.string().nullish().describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)`),
+    ActivityCount: z.number().describe(`
+        * * Field Name: ActivityCount
+        * * Display Name: Activity Count
+        * * SQL Data Type: int
+        * * Default Value: 0`),
+    LatestActivityDate: z.date().nullish().describe(`
+        * * Field Name: LatestActivityDate
+        * * Display Name: Latest Activity Date
+        * * SQL Data Type: datetime`),
+    EarliestActivityDate: z.date().nullish().describe(`
+        * * Field Name: EarliestActivityDate
+        * * Display Name: Earliest Activity Date
+        * * SQL Data Type: datetime`),
+    RecordSource: z.string().nullish().describe(`
+        * * Field Name: RecordSource
+        * * Display Name: Record Source
+        * * SQL Data Type: nvarchar(50)`),
+    CreatedAt: z.date().describe(`
+        * * Field Name: CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()`),
+    UpdatedAt: z.date().describe(`
+        * * Field Name: UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()`),
+    LastEnrichedAt: z.date().nullish().describe(`
+        * * Field Name: LastEnrichedAt
+        * * Display Name: Last Enriched At
+        * * SQL Data Type: datetime`),
+    Account: z.string().nullish().describe(`
+        * * Field Name: Account
+        * * Display Name: Account
+        * * SQL Data Type: nvarchar(255)`),
+});
+
+export type ContactEntityType = z.infer<typeof ContactSchema>;
+       
+/**
+ * zod schema definition for the entity Contacts__client_crm
+ */
+export const Contact__client_crmSchema = z.object({
+    Acep_EMRAMembershipIdName: z.string().nullish().describe(`
+        * * Field Name: Acep_EMRAMembershipIdName
+        * * Display Name: Acep _EMRAMembership Id Name
+        * * SQL Data Type: nvarchar(185)`),
+    msa_managingpartneridYomiName: z.string().nullish().describe(`
+        * * Field Name: msa_managingpartneridYomiName
+        * * Display Name: msa _managingpartnerid Yomi Name
+        * * SQL Data Type: nvarchar(160)`),
+    msa_managingpartneridName: z.string().nullish().describe(`
+        * * Field Name: msa_managingpartneridName
+        * * Display Name: msa _managingpartnerid Name
+        * * SQL Data Type: nvarchar(160)`),
+    ModifiedByExternalPartyYomiName: z.string().nullish().describe(`
+        * * Field Name: ModifiedByExternalPartyYomiName
+        * * Display Name: Modified By External Party Yomi Name
+        * * SQL Data Type: nvarchar(450)`),
+    ModifiedByExternalPartyName: z.string().nullish().describe(`
+        * * Field Name: ModifiedByExternalPartyName
+        * * Display Name: Modified By External Party Name
+        * * SQL Data Type: nvarchar(300)`),
+    acep_emcareercountryidName: z.string().nullish().describe(`
+        * * Field Name: acep_emcareercountryidName
+        * * Display Name: acep _emcareercountryid Name
+        * * SQL Data Type: nvarchar(100)`),
+    adx_systemuseridName: z.string().nullish().describe(`
+        * * Field Name: adx_systemuseridName
+        * * Display Name: adx _systemuserid Name
+        * * SQL Data Type: nvarchar(200)`),
+    adx_systemuseridYomiName: z.string().nullish().describe(`
+        * * Field Name: adx_systemuseridYomiName
+        * * Display Name: adx _systemuserid Yomi Name
+        * * SQL Data Type: nvarchar(200)`),
+    PreferredSystemUserIdName: z.string().nullish().describe(`
+        * * Field Name: PreferredSystemUserIdName
+        * * Display Name: Preferred System User Id Name
+        * * SQL Data Type: nvarchar(200)`),
+    PreferredSystemUserIdYomiName: z.string().nullish().describe(`
+        * * Field Name: PreferredSystemUserIdYomiName
+        * * Display Name: Preferred System User Id Yomi Name
+        * * SQL Data Type: nvarchar(200)`),
+    CreatedByYomiName: z.string().nullish().describe(`
+        * * Field Name: CreatedByYomiName
+        * * Display Name: Created By Yomi Name
+        * * SQL Data Type: nvarchar(200)`),
+    CreatedByName: z.string().nullish().describe(`
+        * * Field Name: CreatedByName
+        * * Display Name: Created By Name
+        * * SQL Data Type: nvarchar(200)`),
+    TransactionCurrencyIdName: z.string().nullish().describe(`
+        * * Field Name: TransactionCurrencyIdName
+        * * Display Name: Transaction Currency Id Name
+        * * SQL Data Type: nvarchar(100)`),
+    CreatedByExternalPartyYomiName: z.string().nullish().describe(`
+        * * Field Name: CreatedByExternalPartyYomiName
+        * * Display Name: Created By External Party Yomi Name
+        * * SQL Data Type: nvarchar(450)`),
+    CreatedByExternalPartyName: z.string().nullish().describe(`
+        * * Field Name: CreatedByExternalPartyName
+        * * Display Name: Created By External Party Name
+        * * SQL Data Type: nvarchar(300)`),
+    OriginatingLeadIdYomiName: z.string().nullish().describe(`
+        * * Field Name: OriginatingLeadIdYomiName
+        * * Display Name: Originating Lead Id Yomi Name
+        * * SQL Data Type: nvarchar(450)`),
+    OriginatingLeadIdName: z.string().nullish().describe(`
+        * * Field Name: OriginatingLeadIdName
+        * * Display Name: Originating Lead Id Name
+        * * SQL Data Type: nvarchar(160)`),
+    acep_emcareerstateorprovinceidName: z.string().nullish().describe(`
+        * * Field Name: acep_emcareerstateorprovinceidName
+        * * Display Name: acep _emcareerstateorprovinceid Name
+        * * SQL Data Type: nvarchar(100)`),
+    acep_MarketingDataIndividualName: z.string().nullish().describe(`
+        * * Field Name: acep_MarketingDataIndividualName
+        * * Display Name: acep _Marketing Data Individual Name
+        * * SQL Data Type: nvarchar(100)`),
+    acep_countryofcitizenshipidName: z.string().nullish().describe(`
+        * * Field Name: acep_countryofcitizenshipidName
+        * * Display Name: acep _countryofcitizenshipid Name
+        * * SQL Data Type: nvarchar(100)`),
+    ModifiedByName: z.string().nullish().describe(`
+        * * Field Name: ModifiedByName
+        * * Display Name: Modified By Name
+        * * SQL Data Type: nvarchar(200)`),
+    ModifiedByYomiName: z.string().nullish().describe(`
+        * * Field Name: ModifiedByYomiName
+        * * Display Name: Modified By Yomi Name
+        * * SQL Data Type: nvarchar(200)`),
+    ModifiedOnBehalfByName: z.string().nullish().describe(`
+        * * Field Name: ModifiedOnBehalfByName
+        * * Display Name: Modified On Behalf By Name
+        * * SQL Data Type: nvarchar(200)`),
+    ModifiedOnBehalfByYomiName: z.string().nullish().describe(`
+        * * Field Name: ModifiedOnBehalfByYomiName
+        * * Display Name: Modified On Behalf By Yomi Name
+        * * SQL Data Type: nvarchar(200)`),
+    MasterContactIdYomiName: z.string().nullish().describe(`
+        * * Field Name: MasterContactIdYomiName
+        * * Display Name: Master Contact Id Yomi Name
+        * * SQL Data Type: nvarchar(450)`),
+    MasterContactIdName: z.string().nullish().describe(`
+        * * Field Name: MasterContactIdName
+        * * Display Name: Master Contact Id Name
+        * * SQL Data Type: nvarchar(160)`),
+    CreatedOnBehalfByName: z.string().nullish().describe(`
+        * * Field Name: CreatedOnBehalfByName
+        * * Display Name: Created On Behalf By Name
+        * * SQL Data Type: nvarchar(200)`),
+    CreatedOnBehalfByYomiName: z.string().nullish().describe(`
+        * * Field Name: CreatedOnBehalfByYomiName
+        * * Display Name: Created On Behalf By Yomi Name
+        * * SQL Data Type: nvarchar(200)`),
+    Acep_ACEPMembershipIdName: z.string().nullish().describe(`
+        * * Field Name: Acep_ACEPMembershipIdName
+        * * Display Name: Acep _ACEPMembership Id Name
+        * * SQL Data Type: nvarchar(185)`),
+    Acep_SEMPAMembershipIdName: z.string().nullish().describe(`
+        * * Field Name: Acep_SEMPAMembershipIdName
+        * * Display Name: Acep _SEMPAMembership Id Name
+        * * SQL Data Type: nvarchar(185)`),
+    PreferredServiceIdName: z.string().nullish().describe(`
+        * * Field Name: PreferredServiceIdName
+        * * Display Name: Preferred Service Id Name
+        * * SQL Data Type: nvarchar(160)`),
+    acep_plannersidName: z.string().nullish().describe(`
+        * * Field Name: acep_plannersidName
+        * * Display Name: acep _plannersid Name
+        * * SQL Data Type: nvarchar(100)`),
+    PreferredEquipmentIdName: z.string().nullish().describe(`
+        * * Field Name: PreferredEquipmentIdName
+        * * Display Name: Preferred Equipment Id Name
+        * * SQL Data Type: nvarchar(160)`),
+    SLAInvokedIdName: z.string().nullish().describe(`
+        * * Field Name: SLAInvokedIdName
+        * * Display Name: SLAInvoked Id Name
+        * * SQL Data Type: nvarchar(160)`),
+    EntityImage_URL: z.string().nullish().describe(`
+        * * Field Name: EntityImage_URL
+        * * Display Name: Entity Image _URL
+        * * SQL Data Type: nvarchar(200)`),
+    EntityImage_Timestamp: z.number().nullish().describe(`
+        * * Field Name: EntityImage_Timestamp
+        * * Display Name: Entity Image _Timestamp
+        * * SQL Data Type: bigint`),
+    EntityImage: z.number().nullish().describe(`
+        * * Field Name: EntityImage
+        * * Display Name: Entity Image
+        * * SQL Data Type: image`),
+    acep_stateorprovinceidName: z.string().nullish().describe(`
+        * * Field Name: acep_stateorprovinceidName
+        * * Display Name: acep _stateorprovinceid Name
+        * * SQL Data Type: nvarchar(100)`),
+    DefaultPriceLevelIdName: z.string().nullish().describe(`
+        * * Field Name: DefaultPriceLevelIdName
+        * * Display Name: Default Price Level Id Name
+        * * SQL Data Type: nvarchar(100)`),
+    acep_countryidName: z.string().nullish().describe(`
+        * * Field Name: acep_countryidName
+        * * Display Name: acep _countryid Name
+        * * SQL Data Type: nvarchar(100)`),
+    SLAName: z.string().nullish().describe(`
+        * * Field Name: SLAName
+        * * Display Name: SLAName
+        * * SQL Data Type: nvarchar(160)`),
+    Address1_AddressTypeCode: z.number().nullish().describe(`
+        * * Field Name: Address1_AddressTypeCode
+        * * Display Name: Address 1_Address Type Code
+        * * SQL Data Type: int`),
+    Address1_City: z.string().nullish().describe(`
+        * * Field Name: Address1_City
+        * * Display Name: Address 1_City
+        * * SQL Data Type: nvarchar(4000)`),
+    Address1_Composite: z.string().nullish().describe(`
+        * * Field Name: Address1_Composite
+        * * Display Name: Address 1_Composite
+        * * SQL Data Type: nvarchar(MAX)`),
+    Address1_Country: z.string().nullish().describe(`
+        * * Field Name: Address1_Country
+        * * Display Name: Address 1_Country
+        * * SQL Data Type: nvarchar(4000)`),
+    Address1_County: z.string().nullish().describe(`
+        * * Field Name: Address1_County
+        * * Display Name: Address 1_County
+        * * SQL Data Type: nvarchar(4000)`),
+    Address1_AddressId: z.string().nullish().describe(`
+        * * Field Name: Address1_AddressId
+        * * Display Name: Address 1_Address Id
+        * * SQL Data Type: uniqueidentifier`),
+    Address1_Fax: z.string().nullish().describe(`
+        * * Field Name: Address1_Fax
+        * * Display Name: Address 1_Fax
+        * * SQL Data Type: nvarchar(50)`),
+    Address1_FreightTermsCode: z.number().nullish().describe(`
+        * * Field Name: Address1_FreightTermsCode
+        * * Display Name: Address 1_Freight Terms Code
+        * * SQL Data Type: int`),
+    Address1_Latitude: z.number().nullish().describe(`
+        * * Field Name: Address1_Latitude
+        * * Display Name: Address 1_Latitude
+        * * SQL Data Type: float(53)`),
+    Address1_Line1: z.string().nullish().describe(`
+        * * Field Name: Address1_Line1
+        * * Display Name: Address 1_Line 1
+        * * SQL Data Type: nvarchar(4000)`),
+    Address1_Line2: z.string().nullish().describe(`
+        * * Field Name: Address1_Line2
+        * * Display Name: Address 1_Line 2
+        * * SQL Data Type: nvarchar(4000)`),
+    Address1_Line3: z.string().nullish().describe(`
+        * * Field Name: Address1_Line3
+        * * Display Name: Address 1_Line 3
+        * * SQL Data Type: nvarchar(4000)`),
+    Address1_Longitude: z.number().nullish().describe(`
+        * * Field Name: Address1_Longitude
+        * * Display Name: Address 1_Longitude
+        * * SQL Data Type: float(53)`),
+    Address1_Name: z.string().nullish().describe(`
+        * * Field Name: Address1_Name
+        * * Display Name: Address 1_Name
+        * * SQL Data Type: nvarchar(200)`),
+    Address1_PostalCode: z.string().nullish().describe(`
+        * * Field Name: Address1_PostalCode
+        * * Display Name: Address 1_Postal Code
+        * * SQL Data Type: nvarchar(50)`),
+    Address1_PostOfficeBox: z.string().nullish().describe(`
+        * * Field Name: Address1_PostOfficeBox
+        * * Display Name: Address 1_Post Office Box
+        * * SQL Data Type: nvarchar(50)`),
+    Address1_PrimaryContactName: z.string().nullish().describe(`
+        * * Field Name: Address1_PrimaryContactName
+        * * Display Name: Address 1_Primary Contact Name
+        * * SQL Data Type: nvarchar(150)`),
+    Address1_ShippingMethodCode: z.number().nullish().describe(`
+        * * Field Name: Address1_ShippingMethodCode
+        * * Display Name: Address 1_Shipping Method Code
+        * * SQL Data Type: int`),
+    Address1_StateOrProvince: z.string().nullish().describe(`
+        * * Field Name: Address1_StateOrProvince
+        * * Display Name: Address 1_State Or Province
+        * * SQL Data Type: nvarchar(4000)`),
+    Address1_Telephone1: z.string().nullish().describe(`
+        * * Field Name: Address1_Telephone1
+        * * Display Name: Address 1_Telephone 1
+        * * SQL Data Type: nvarchar(50)`),
+    Address1_Telephone2: z.string().nullish().describe(`
+        * * Field Name: Address1_Telephone2
+        * * Display Name: Address 1_Telephone 2
+        * * SQL Data Type: nvarchar(50)`),
+    Address1_Telephone3: z.string().nullish().describe(`
+        * * Field Name: Address1_Telephone3
+        * * Display Name: Address 1_Telephone 3
+        * * SQL Data Type: nvarchar(50)`),
+    Address1_UPSZone: z.string().nullish().describe(`
+        * * Field Name: Address1_UPSZone
+        * * Display Name: Address 1_UPSZone
+        * * SQL Data Type: nvarchar(4)`),
+    Address1_UTCOffset: z.number().nullish().describe(`
+        * * Field Name: Address1_UTCOffset
+        * * Display Name: Address 1_UTCOffset
+        * * SQL Data Type: int`),
+    Address2_AddressTypeCode: z.number().nullish().describe(`
+        * * Field Name: Address2_AddressTypeCode
+        * * Display Name: Address 2_Address Type Code
+        * * SQL Data Type: int`),
+    Address2_City: z.string().nullish().describe(`
+        * * Field Name: Address2_City
+        * * Display Name: Address 2_City
+        * * SQL Data Type: nvarchar(4000)`),
+    Address2_Composite: z.string().nullish().describe(`
+        * * Field Name: Address2_Composite
+        * * Display Name: Address 2_Composite
+        * * SQL Data Type: nvarchar(MAX)`),
+    Address2_Country: z.string().nullish().describe(`
+        * * Field Name: Address2_Country
+        * * Display Name: Address 2_Country
+        * * SQL Data Type: nvarchar(4000)`),
+    Address2_County: z.string().nullish().describe(`
+        * * Field Name: Address2_County
+        * * Display Name: Address 2_County
+        * * SQL Data Type: nvarchar(4000)`),
+    Address2_AddressId: z.string().nullish().describe(`
+        * * Field Name: Address2_AddressId
+        * * Display Name: Address 2_Address Id
+        * * SQL Data Type: uniqueidentifier`),
+    Address2_Fax: z.string().nullish().describe(`
+        * * Field Name: Address2_Fax
+        * * Display Name: Address 2_Fax
+        * * SQL Data Type: nvarchar(50)`),
+    Address2_FreightTermsCode: z.number().nullish().describe(`
+        * * Field Name: Address2_FreightTermsCode
+        * * Display Name: Address 2_Freight Terms Code
+        * * SQL Data Type: int`),
+    Address2_Latitude: z.number().nullish().describe(`
+        * * Field Name: Address2_Latitude
+        * * Display Name: Address 2_Latitude
+        * * SQL Data Type: float(53)`),
+    Address2_Line1: z.string().nullish().describe(`
+        * * Field Name: Address2_Line1
+        * * Display Name: Address 2_Line 1
+        * * SQL Data Type: nvarchar(4000)`),
+    Address2_Line2: z.string().nullish().describe(`
+        * * Field Name: Address2_Line2
+        * * Display Name: Address 2_Line 2
+        * * SQL Data Type: nvarchar(4000)`),
+    Address2_Line3: z.string().nullish().describe(`
+        * * Field Name: Address2_Line3
+        * * Display Name: Address 2_Line 3
+        * * SQL Data Type: nvarchar(4000)`),
+    Address2_Longitude: z.number().nullish().describe(`
+        * * Field Name: Address2_Longitude
+        * * Display Name: Address 2_Longitude
+        * * SQL Data Type: float(53)`),
+    Address2_Name: z.string().nullish().describe(`
+        * * Field Name: Address2_Name
+        * * Display Name: Address 2_Name
+        * * SQL Data Type: nvarchar(200)`),
+    Address2_PostalCode: z.string().nullish().describe(`
+        * * Field Name: Address2_PostalCode
+        * * Display Name: Address 2_Postal Code
+        * * SQL Data Type: nvarchar(50)`),
+    Address2_PostOfficeBox: z.string().nullish().describe(`
+        * * Field Name: Address2_PostOfficeBox
+        * * Display Name: Address 2_Post Office Box
+        * * SQL Data Type: nvarchar(50)`),
+    Address2_PrimaryContactName: z.string().nullish().describe(`
+        * * Field Name: Address2_PrimaryContactName
+        * * Display Name: Address 2_Primary Contact Name
+        * * SQL Data Type: nvarchar(150)`),
+    Address2_ShippingMethodCode: z.number().nullish().describe(`
+        * * Field Name: Address2_ShippingMethodCode
+        * * Display Name: Address 2_Shipping Method Code
+        * * SQL Data Type: int`),
+    Address2_StateOrProvince: z.string().nullish().describe(`
+        * * Field Name: Address2_StateOrProvince
+        * * Display Name: Address 2_State Or Province
+        * * SQL Data Type: nvarchar(4000)`),
+    Address2_Telephone1: z.string().nullish().describe(`
+        * * Field Name: Address2_Telephone1
+        * * Display Name: Address 2_Telephone 1
+        * * SQL Data Type: nvarchar(50)`),
+    Address2_Telephone2: z.string().nullish().describe(`
+        * * Field Name: Address2_Telephone2
+        * * Display Name: Address 2_Telephone 2
+        * * SQL Data Type: nvarchar(50)`),
+    Address2_Telephone3: z.string().nullish().describe(`
+        * * Field Name: Address2_Telephone3
+        * * Display Name: Address 2_Telephone 3
+        * * SQL Data Type: nvarchar(50)`),
+    Address2_UPSZone: z.string().nullish().describe(`
+        * * Field Name: Address2_UPSZone
+        * * Display Name: Address 2_UPSZone
+        * * SQL Data Type: nvarchar(4)`),
+    Address2_UTCOffset: z.number().nullish().describe(`
+        * * Field Name: Address2_UTCOffset
+        * * Display Name: Address 2_UTCOffset
+        * * SQL Data Type: int`),
+    Address3_AddressTypeCode: z.number().nullish().describe(`
+        * * Field Name: Address3_AddressTypeCode
+        * * Display Name: Address 3_Address Type Code
+        * * SQL Data Type: int`),
+    Address3_City: z.string().nullish().describe(`
+        * * Field Name: Address3_City
+        * * Display Name: Address 3_City
+        * * SQL Data Type: nvarchar(4000)`),
+    Address3_Composite: z.string().nullish().describe(`
+        * * Field Name: Address3_Composite
+        * * Display Name: Address 3_Composite
+        * * SQL Data Type: nvarchar(MAX)`),
+    Address3_Country: z.string().nullish().describe(`
+        * * Field Name: Address3_Country
+        * * Display Name: Address 3_Country
+        * * SQL Data Type: nvarchar(4000)`),
+    Address3_County: z.string().nullish().describe(`
+        * * Field Name: Address3_County
+        * * Display Name: Address 3_County
+        * * SQL Data Type: nvarchar(4000)`),
+    Address3_AddressId: z.string().nullish().describe(`
+        * * Field Name: Address3_AddressId
+        * * Display Name: Address 3_Address Id
+        * * SQL Data Type: uniqueidentifier`),
+    Address3_Fax: z.string().nullish().describe(`
+        * * Field Name: Address3_Fax
+        * * Display Name: Address 3_Fax
+        * * SQL Data Type: nvarchar(50)`),
+    Address3_FreightTermsCode: z.number().nullish().describe(`
+        * * Field Name: Address3_FreightTermsCode
+        * * Display Name: Address 3_Freight Terms Code
+        * * SQL Data Type: int`),
+    Address3_Latitude: z.number().nullish().describe(`
+        * * Field Name: Address3_Latitude
+        * * Display Name: Address 3_Latitude
+        * * SQL Data Type: float(53)`),
+    Address3_Line1: z.string().nullish().describe(`
+        * * Field Name: Address3_Line1
+        * * Display Name: Address 3_Line 1
+        * * SQL Data Type: nvarchar(4000)`),
+    Address3_Line2: z.string().nullish().describe(`
+        * * Field Name: Address3_Line2
+        * * Display Name: Address 3_Line 2
+        * * SQL Data Type: nvarchar(4000)`),
+    Address3_Line3: z.string().nullish().describe(`
+        * * Field Name: Address3_Line3
+        * * Display Name: Address 3_Line 3
+        * * SQL Data Type: nvarchar(4000)`),
+    Address3_Longitude: z.number().nullish().describe(`
+        * * Field Name: Address3_Longitude
+        * * Display Name: Address 3_Longitude
+        * * SQL Data Type: float(53)`),
+    Address3_Name: z.string().nullish().describe(`
+        * * Field Name: Address3_Name
+        * * Display Name: Address 3_Name
+        * * SQL Data Type: nvarchar(200)`),
+    Address3_PostalCode: z.string().nullish().describe(`
+        * * Field Name: Address3_PostalCode
+        * * Display Name: Address 3_Postal Code
+        * * SQL Data Type: nvarchar(50)`),
+    Address3_PostOfficeBox: z.string().nullish().describe(`
+        * * Field Name: Address3_PostOfficeBox
+        * * Display Name: Address 3_Post Office Box
+        * * SQL Data Type: nvarchar(50)`),
+    Address3_PrimaryContactName: z.string().nullish().describe(`
+        * * Field Name: Address3_PrimaryContactName
+        * * Display Name: Address 3_Primary Contact Name
+        * * SQL Data Type: nvarchar(150)`),
+    Address3_ShippingMethodCode: z.number().nullish().describe(`
+        * * Field Name: Address3_ShippingMethodCode
+        * * Display Name: Address 3_Shipping Method Code
+        * * SQL Data Type: int`),
+    Address3_StateOrProvince: z.string().nullish().describe(`
+        * * Field Name: Address3_StateOrProvince
+        * * Display Name: Address 3_State Or Province
+        * * SQL Data Type: nvarchar(4000)`),
+    Address3_Telephone1: z.string().nullish().describe(`
+        * * Field Name: Address3_Telephone1
+        * * Display Name: Address 3_Telephone 1
+        * * SQL Data Type: nvarchar(50)`),
+    Address3_Telephone2: z.string().nullish().describe(`
+        * * Field Name: Address3_Telephone2
+        * * Display Name: Address 3_Telephone 2
+        * * SQL Data Type: nvarchar(50)`),
+    Address3_Telephone3: z.string().nullish().describe(`
+        * * Field Name: Address3_Telephone3
+        * * Display Name: Address 3_Telephone 3
+        * * SQL Data Type: nvarchar(50)`),
+    Address3_UPSZone: z.string().nullish().describe(`
+        * * Field Name: Address3_UPSZone
+        * * Display Name: Address 3_UPSZone
+        * * SQL Data Type: nvarchar(4)`),
+    Address3_UTCOffset: z.number().nullish().describe(`
+        * * Field Name: Address3_UTCOffset
+        * * Display Name: Address 3_UTCOffset
+        * * SQL Data Type: int`),
+    OwnerId: z.string().nullish().describe(`
+        * * Field Name: OwnerId
+        * * Display Name: Owner Id
+        * * SQL Data Type: uniqueidentifier`),
+    OwnerIdName: z.string().nullish().describe(`
+        * * Field Name: OwnerIdName
+        * * Display Name: Owner Id Name
+        * * SQL Data Type: nvarchar(160)`),
+    OwnerIdYomiName: z.string().nullish().describe(`
+        * * Field Name: OwnerIdYomiName
+        * * Display Name: Owner Id Yomi Name
+        * * SQL Data Type: nvarchar(160)`),
+    OwnerIdDsc: z.number().nullish().describe(`
+        * * Field Name: OwnerIdDsc
+        * * Display Name: Owner Id Dsc
+        * * SQL Data Type: int`),
+    OwnerIdType: z.number().nullish().describe(`
+        * * Field Name: OwnerIdType
+        * * Display Name: Owner Id Type
+        * * SQL Data Type: int`),
+    OwningUser: z.string().nullish().describe(`
+        * * Field Name: OwningUser
+        * * Display Name: Owning User
+        * * SQL Data Type: uniqueidentifier`),
+    OwningTeam: z.string().nullish().describe(`
+        * * Field Name: OwningTeam
+        * * Display Name: Owning Team
+        * * SQL Data Type: uniqueidentifier`),
+    AccountId: z.string().nullish().describe(`
+        * * Field Name: AccountId
+        * * Display Name: Account Id
+        * * SQL Data Type: uniqueidentifier`),
+    AccountIdName: z.string().nullish().describe(`
+        * * Field Name: AccountIdName
+        * * Display Name: Account Id Name
+        * * SQL Data Type: nvarchar(4000)`),
+    AccountIdYomiName: z.string().nullish().describe(`
+        * * Field Name: AccountIdYomiName
+        * * Display Name: Account Id Yomi Name
+        * * SQL Data Type: nvarchar(4000)`),
+    ParentContactId: z.string().nullish().describe(`
+        * * Field Name: ParentContactId
+        * * Display Name: Parent Contact Id
+        * * SQL Data Type: uniqueidentifier`),
+    ParentContactIdName: z.string().nullish().describe(`
+        * * Field Name: ParentContactIdName
+        * * Display Name: Parent Contact Id Name
+        * * SQL Data Type: nvarchar(4000)`),
+    ParentContactIdYomiName: z.string().nullish().describe(`
+        * * Field Name: ParentContactIdYomiName
+        * * Display Name: Parent Contact Id Yomi Name
+        * * SQL Data Type: nvarchar(4000)`),
+    ContactId: z.string().describe(`
+        * * Field Name: ContactId
+        * * Display Name: Contact Id
+        * * SQL Data Type: uniqueidentifier`),
+    DefaultPriceLevelId: z.string().nullish().describe(`
+        * * Field Name: DefaultPriceLevelId
+        * * Display Name: Default Price Level Id
+        * * SQL Data Type: uniqueidentifier`),
+    CustomerSizeCode: z.number().nullish().describe(`
+        * * Field Name: CustomerSizeCode
+        * * Display Name: Customer Size Code
+        * * SQL Data Type: int`),
+    CustomerTypeCode: z.number().nullish().describe(`
+        * * Field Name: CustomerTypeCode
+        * * Display Name: Customer Type Code
+        * * SQL Data Type: int`),
+    PreferredContactMethodCode: z.number().nullish().describe(`
+        * * Field Name: PreferredContactMethodCode
+        * * Display Name: Preferred Contact Method Code
+        * * SQL Data Type: int`),
+    LeadSourceCode: z.number().nullish().describe(`
+        * * Field Name: LeadSourceCode
+        * * Display Name: Lead Source Code
+        * * SQL Data Type: int`),
+    OriginatingLeadId: z.string().nullish().describe(`
+        * * Field Name: OriginatingLeadId
+        * * Display Name: Originating Lead Id
+        * * SQL Data Type: uniqueidentifier`),
+    OwningBusinessUnit: z.string().nullish().describe(`
+        * * Field Name: OwningBusinessUnit
+        * * Display Name: Owning Business Unit
+        * * SQL Data Type: uniqueidentifier`),
+    PaymentTermsCode: z.number().nullish().describe(`
+        * * Field Name: PaymentTermsCode
+        * * Display Name: Payment Terms Code
+        * * SQL Data Type: int`),
+    ShippingMethodCode: z.number().nullish().describe(`
+        * * Field Name: ShippingMethodCode
+        * * Display Name: Shipping Method Code
+        * * SQL Data Type: int`),
+    ParticipatesInWorkflow: z.boolean().nullish().describe(`
+        * * Field Name: ParticipatesInWorkflow
+        * * Display Name: Participates In Workflow
+        * * SQL Data Type: bit`),
+    IsBackofficeCustomer: z.boolean().nullish().describe(`
+        * * Field Name: IsBackofficeCustomer
+        * * Display Name: Is Backoffice Customer
+        * * SQL Data Type: bit`),
+    Salutation: z.string().nullish().describe(`
+        * * Field Name: Salutation
+        * * Display Name: Salutation
+        * * SQL Data Type: nvarchar(100)`),
+    JobTitle: z.string().nullish().describe(`
+        * * Field Name: JobTitle
+        * * Display Name: Job Title
+        * * SQL Data Type: nvarchar(100)`),
+    FirstName: z.string().nullish().describe(`
+        * * Field Name: FirstName
+        * * Display Name: First Name
+        * * SQL Data Type: nvarchar(50)`),
+    Department: z.string().nullish().describe(`
+        * * Field Name: Department
+        * * Display Name: Department
+        * * SQL Data Type: nvarchar(100)`),
+    NickName: z.string().nullish().describe(`
+        * * Field Name: NickName
+        * * Display Name: Nick Name
+        * * SQL Data Type: nvarchar(50)`),
+    MiddleName: z.string().nullish().describe(`
+        * * Field Name: MiddleName
+        * * Display Name: Middle Name
+        * * SQL Data Type: nvarchar(50)`),
+    LastName: z.string().nullish().describe(`
+        * * Field Name: LastName
+        * * Display Name: Last Name
+        * * SQL Data Type: nvarchar(50)`),
+    Suffix: z.string().nullish().describe(`
+        * * Field Name: Suffix
+        * * Display Name: Suffix
+        * * SQL Data Type: nvarchar(10)`),
+    YomiFirstName: z.string().nullish().describe(`
+        * * Field Name: YomiFirstName
+        * * Display Name: Yomi First Name
+        * * SQL Data Type: nvarchar(150)`),
+    FullName: z.string().nullish().describe(`
+        * * Field Name: FullName
+        * * Display Name: Full Name
+        * * SQL Data Type: nvarchar(160)`),
+    YomiMiddleName: z.string().nullish().describe(`
+        * * Field Name: YomiMiddleName
+        * * Display Name: Yomi Middle Name
+        * * SQL Data Type: nvarchar(150)`),
+    YomiLastName: z.string().nullish().describe(`
+        * * Field Name: YomiLastName
+        * * Display Name: Yomi Last Name
+        * * SQL Data Type: nvarchar(150)`),
+    Anniversary: z.date().nullish().describe(`
+        * * Field Name: Anniversary
+        * * Display Name: Anniversary
+        * * SQL Data Type: datetime`),
+    BirthDate: z.date().nullish().describe(`
+        * * Field Name: BirthDate
+        * * Display Name: Birth Date
+        * * SQL Data Type: datetime`),
+    GovernmentId: z.string().nullish().describe(`
+        * * Field Name: GovernmentId
+        * * Display Name: Government Id
+        * * SQL Data Type: nvarchar(50)`),
+    YomiFullName: z.string().nullish().describe(`
+        * * Field Name: YomiFullName
+        * * Display Name: Yomi Full Name
+        * * SQL Data Type: nvarchar(450)`),
+    Description: z.string().nullish().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)`),
+    EmployeeId: z.string().nullish().describe(`
+        * * Field Name: EmployeeId
+        * * Display Name: Employee Id
+        * * SQL Data Type: nvarchar(50)`),
+    GenderCode: z.number().nullish().describe(`
+        * * Field Name: GenderCode
+        * * Display Name: Gender Code
+        * * SQL Data Type: int`),
+    AnnualIncome: z.number().nullish().describe(`
+        * * Field Name: AnnualIncome
+        * * Display Name: Annual Income
+        * * SQL Data Type: money`),
+    HasChildrenCode: z.number().nullish().describe(`
+        * * Field Name: HasChildrenCode
+        * * Display Name: Has Children Code
+        * * SQL Data Type: int`),
+    EducationCode: z.number().nullish().describe(`
+        * * Field Name: EducationCode
+        * * Display Name: Education Code
+        * * SQL Data Type: int`),
+    WebSiteUrl: z.string().nullish().describe(`
+        * * Field Name: WebSiteUrl
+        * * Display Name: Web Site Url
+        * * SQL Data Type: nvarchar(200)`),
+    FamilyStatusCode: z.number().nullish().describe(`
+        * * Field Name: FamilyStatusCode
+        * * Display Name: Family Status Code
+        * * SQL Data Type: int`),
+    FtpSiteUrl: z.string().nullish().describe(`
+        * * Field Name: FtpSiteUrl
+        * * Display Name: Ftp Site Url
+        * * SQL Data Type: nvarchar(200)`),
+    EMailAddress1: z.string().nullish().describe(`
+        * * Field Name: EMailAddress1
+        * * Display Name: EMail Address 1
+        * * SQL Data Type: nvarchar(100)`),
+    SpousesName: z.string().nullish().describe(`
+        * * Field Name: SpousesName
+        * * Display Name: Spouses Name
+        * * SQL Data Type: nvarchar(100)`),
+    AssistantName: z.string().nullish().describe(`
+        * * Field Name: AssistantName
+        * * Display Name: Assistant Name
+        * * SQL Data Type: nvarchar(100)`),
+    EMailAddress2: z.string().nullish().describe(`
+        * * Field Name: EMailAddress2
+        * * Display Name: EMail Address 2
+        * * SQL Data Type: nvarchar(100)`),
+    AssistantPhone: z.string().nullish().describe(`
+        * * Field Name: AssistantPhone
+        * * Display Name: Assistant Phone
+        * * SQL Data Type: nvarchar(50)`),
+    EMailAddress3: z.string().nullish().describe(`
+        * * Field Name: EMailAddress3
+        * * Display Name: EMail Address 3
+        * * SQL Data Type: nvarchar(100)`),
+    DoNotPhone: z.boolean().nullish().describe(`
+        * * Field Name: DoNotPhone
+        * * Display Name: Do Not Phone
+        * * SQL Data Type: bit`),
+    ManagerName: z.string().nullish().describe(`
+        * * Field Name: ManagerName
+        * * Display Name: Manager Name
+        * * SQL Data Type: nvarchar(100)`),
+    ManagerPhone: z.string().nullish().describe(`
+        * * Field Name: ManagerPhone
+        * * Display Name: Manager Phone
+        * * SQL Data Type: nvarchar(50)`),
+    DoNotFax: z.boolean().nullish().describe(`
+        * * Field Name: DoNotFax
+        * * Display Name: Do Not Fax
+        * * SQL Data Type: bit`),
+    DoNotEMail: z.boolean().nullish().describe(`
+        * * Field Name: DoNotEMail
+        * * Display Name: Do Not EMail
+        * * SQL Data Type: bit`),
+    DoNotPostalMail: z.boolean().nullish().describe(`
+        * * Field Name: DoNotPostalMail
+        * * Display Name: Do Not Postal Mail
+        * * SQL Data Type: bit`),
+    DoNotBulkEMail: z.boolean().nullish().describe(`
+        * * Field Name: DoNotBulkEMail
+        * * Display Name: Do Not Bulk EMail
+        * * SQL Data Type: bit`),
+    DoNotBulkPostalMail: z.boolean().nullish().describe(`
+        * * Field Name: DoNotBulkPostalMail
+        * * Display Name: Do Not Bulk Postal Mail
+        * * SQL Data Type: bit`),
+    AccountRoleCode: z.number().nullish().describe(`
+        * * Field Name: AccountRoleCode
+        * * Display Name: Account Role Code
+        * * SQL Data Type: int`),
+    TerritoryCode: z.number().nullish().describe(`
+        * * Field Name: TerritoryCode
+        * * Display Name: Territory Code
+        * * SQL Data Type: int`),
+    IsPrivate: z.boolean().nullish().describe(`
+        * * Field Name: IsPrivate
+        * * Display Name: Is Private
+        * * SQL Data Type: bit`),
+    CreditLimit: z.number().nullish().describe(`
+        * * Field Name: CreditLimit
+        * * Display Name: Credit Limit
+        * * SQL Data Type: money`),
+    CreatedOn: z.date().nullish().describe(`
+        * * Field Name: CreatedOn
+        * * Display Name: Created On
+        * * SQL Data Type: datetime`),
+    CreditOnHold: z.boolean().nullish().describe(`
+        * * Field Name: CreditOnHold
+        * * Display Name: Credit On Hold
+        * * SQL Data Type: bit`),
+    CreatedBy: z.string().nullish().describe(`
+        * * Field Name: CreatedBy
+        * * Display Name: Created By
+        * * SQL Data Type: uniqueidentifier`),
+    ModifiedOn: z.date().nullish().describe(`
+        * * Field Name: ModifiedOn
+        * * Display Name: Modified On
+        * * SQL Data Type: datetime`),
+    ModifiedBy: z.string().nullish().describe(`
+        * * Field Name: ModifiedBy
+        * * Display Name: Modified By
+        * * SQL Data Type: uniqueidentifier`),
+    NumberOfChildren: z.number().nullish().describe(`
+        * * Field Name: NumberOfChildren
+        * * Display Name: Number Of Children
+        * * SQL Data Type: int`),
+    ChildrensNames: z.string().nullish().describe(`
+        * * Field Name: ChildrensNames
+        * * Display Name: Childrens Names
+        * * SQL Data Type: nvarchar(255)`),
+    VersionNumber: z.number().describe(`
+        * * Field Name: VersionNumber
+        * * Display Name: Version Number
+        * * SQL Data Type: timestamp`),
+    MobilePhone: z.string().nullish().describe(`
+        * * Field Name: MobilePhone
+        * * Display Name: Mobile Phone
+        * * SQL Data Type: nvarchar(50)`),
+    Pager: z.string().nullish().describe(`
+        * * Field Name: Pager
+        * * Display Name: Pager
+        * * SQL Data Type: nvarchar(50)`),
+    Telephone1: z.string().nullish().describe(`
+        * * Field Name: Telephone1
+        * * Display Name: Telephone 1
+        * * SQL Data Type: nvarchar(50)`),
+    Telephone2: z.string().nullish().describe(`
+        * * Field Name: Telephone2
+        * * Display Name: Telephone 2
+        * * SQL Data Type: nvarchar(50)`),
+    Telephone3: z.string().nullish().describe(`
+        * * Field Name: Telephone3
+        * * Display Name: Telephone 3
+        * * SQL Data Type: nvarchar(50)`),
+    Fax: z.string().nullish().describe(`
+        * * Field Name: Fax
+        * * Display Name: Fax
+        * * SQL Data Type: nvarchar(50)`),
+    Aging30: z.number().nullish().describe(`
+        * * Field Name: Aging30
+        * * Display Name: Aging 30
+        * * SQL Data Type: money`),
+    StateCode: z.number().nullish().describe(`
+        * * Field Name: StateCode
+        * * Display Name: State Code
+        * * SQL Data Type: int`),
+    Aging60: z.number().nullish().describe(`
+        * * Field Name: Aging60
+        * * Display Name: Aging 60
+        * * SQL Data Type: money`),
+    StatusCode: z.number().nullish().describe(`
+        * * Field Name: StatusCode
+        * * Display Name: Status Code
+        * * SQL Data Type: int`),
+    Aging90: z.number().nullish().describe(`
+        * * Field Name: Aging90
+        * * Display Name: Aging 90
+        * * SQL Data Type: money`),
+    PreferredSystemUserId: z.string().nullish().describe(`
+        * * Field Name: PreferredSystemUserId
+        * * Display Name: Preferred System User Id
+        * * SQL Data Type: uniqueidentifier`),
+    PreferredServiceId: z.string().nullish().describe(`
+        * * Field Name: PreferredServiceId
+        * * Display Name: Preferred Service Id
+        * * SQL Data Type: uniqueidentifier`),
+    MasterId: z.string().nullish().describe(`
+        * * Field Name: MasterId
+        * * Display Name: Master Id
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Contacts__client_crm (vwContacts__client_crm.ContactId)`),
+    PreferredAppointmentDayCode: z.number().nullish().describe(`
+        * * Field Name: PreferredAppointmentDayCode
+        * * Display Name: Preferred Appointment Day Code
+        * * SQL Data Type: int`),
+    PreferredAppointmentTimeCode: z.number().nullish().describe(`
+        * * Field Name: PreferredAppointmentTimeCode
+        * * Display Name: Preferred Appointment Time Code
+        * * SQL Data Type: int`),
+    DoNotSendMM: z.boolean().nullish().describe(`
+        * * Field Name: DoNotSendMM
+        * * Display Name: Do Not Send MM
+        * * SQL Data Type: bit`),
+    ParentCustomerId: z.string().nullish().describe(`
+        * * Field Name: ParentCustomerId
+        * * Display Name: Parent Customer Id
+        * * SQL Data Type: uniqueidentifier`),
+    Merged: z.boolean().nullish().describe(`
+        * * Field Name: Merged
+        * * Display Name: Merged
+        * * SQL Data Type: bit`),
+    ExternalUserIdentifier: z.string().nullish().describe(`
+        * * Field Name: ExternalUserIdentifier
+        * * Display Name: External User Identifier
+        * * SQL Data Type: nvarchar(50)`),
+    SubscriptionId: z.string().nullish().describe(`
+        * * Field Name: SubscriptionId
+        * * Display Name: Subscription Id
+        * * SQL Data Type: uniqueidentifier`),
+    PreferredEquipmentId: z.string().nullish().describe(`
+        * * Field Name: PreferredEquipmentId
+        * * Display Name: Preferred Equipment Id
+        * * SQL Data Type: uniqueidentifier`),
+    LastUsedInCampaign: z.date().nullish().describe(`
+        * * Field Name: LastUsedInCampaign
+        * * Display Name: Last Used In Campaign
+        * * SQL Data Type: datetime`),
+    ParentCustomerIdName: z.string().nullish().describe(`
+        * * Field Name: ParentCustomerIdName
+        * * Display Name: Parent Customer Id Name
+        * * SQL Data Type: nvarchar(4000)`),
+    ParentCustomerIdType: z.number().nullish().describe(`
+        * * Field Name: ParentCustomerIdType
+        * * Display Name: Parent Customer Id Type
+        * * SQL Data Type: int`),
+    TransactionCurrencyId: z.string().nullish().describe(`
+        * * Field Name: TransactionCurrencyId
+        * * Display Name: Transaction Currency Id
+        * * SQL Data Type: uniqueidentifier`),
+    OverriddenCreatedOn: z.date().nullish().describe(`
+        * * Field Name: OverriddenCreatedOn
+        * * Display Name: Overridden Created On
+        * * SQL Data Type: datetime`),
+    ExchangeRate: z.number().nullish().describe(`
+        * * Field Name: ExchangeRate
+        * * Display Name: Exchange Rate
+        * * SQL Data Type: decimal(23, 10)`),
+    ImportSequenceNumber: z.number().nullish().describe(`
+        * * Field Name: ImportSequenceNumber
+        * * Display Name: Import Sequence Number
+        * * SQL Data Type: int`),
+    TimeZoneRuleVersionNumber: z.number().nullish().describe(`
+        * * Field Name: TimeZoneRuleVersionNumber
+        * * Display Name: Time Zone Rule Version Number
+        * * SQL Data Type: int`),
+    UTCConversionTimeZoneCode: z.number().nullish().describe(`
+        * * Field Name: UTCConversionTimeZoneCode
+        * * Display Name: UTCConversion Time Zone Code
+        * * SQL Data Type: int`),
+    AnnualIncome_Base: z.number().nullish().describe(`
+        * * Field Name: AnnualIncome_Base
+        * * Display Name: Annual Income _Base
+        * * SQL Data Type: money`),
+    CreditLimit_Base: z.number().nullish().describe(`
+        * * Field Name: CreditLimit_Base
+        * * Display Name: Credit Limit _Base
+        * * SQL Data Type: money`),
+    Aging60_Base: z.number().nullish().describe(`
+        * * Field Name: Aging60_Base
+        * * Display Name: Aging 60_Base
+        * * SQL Data Type: money`),
+    Aging90_Base: z.number().nullish().describe(`
+        * * Field Name: Aging90_Base
+        * * Display Name: Aging 90_Base
+        * * SQL Data Type: money`),
+    Aging30_Base: z.number().nullish().describe(`
+        * * Field Name: Aging30_Base
+        * * Display Name: Aging 30_Base
+        * * SQL Data Type: money`),
+    ParentCustomerIdYomiName: z.string().nullish().describe(`
+        * * Field Name: ParentCustomerIdYomiName
+        * * Display Name: Parent Customer Id Yomi Name
+        * * SQL Data Type: nvarchar(4000)`),
+    CreatedOnBehalfBy: z.string().nullish().describe(`
+        * * Field Name: CreatedOnBehalfBy
+        * * Display Name: Created On Behalf By
+        * * SQL Data Type: uniqueidentifier`),
+    ModifiedOnBehalfBy: z.string().nullish().describe(`
+        * * Field Name: ModifiedOnBehalfBy
+        * * Display Name: Modified On Behalf By
+        * * SQL Data Type: uniqueidentifier`),
+    IsAutoCreate: z.boolean().nullish().describe(`
+        * * Field Name: IsAutoCreate
+        * * Display Name: Is Auto Create
+        * * SQL Data Type: bit`),
+    StageId: z.string().nullish().describe(`
+        * * Field Name: StageId
+        * * Display Name: Stage Id
+        * * SQL Data Type: uniqueidentifier`),
+    ProcessId: z.string().nullish().describe(`
+        * * Field Name: ProcessId
+        * * Display Name: Process Id
+        * * SQL Data Type: uniqueidentifier`),
+    EntityImageId: z.string().nullish().describe(`
+        * * Field Name: EntityImageId
+        * * Display Name: Entity Image Id
+        * * SQL Data Type: uniqueidentifier`),
+    TraversedPath: z.string().nullish().describe(`
+        * * Field Name: TraversedPath
+        * * Display Name: Traversed Path
+        * * SQL Data Type: nvarchar(1250)`),
+    SLAId: z.string().nullish().describe(`
+        * * Field Name: SLAId
+        * * Display Name: SLAId
+        * * SQL Data Type: uniqueidentifier`),
+    SLAInvokedId: z.string().nullish().describe(`
+        * * Field Name: SLAInvokedId
+        * * Display Name: SLAInvoked Id
+        * * SQL Data Type: uniqueidentifier`),
+    OnHoldTime: z.number().nullish().describe(`
+        * * Field Name: OnHoldTime
+        * * Display Name: On Hold Time
+        * * SQL Data Type: int`),
+    LastOnHoldTime: z.date().nullish().describe(`
+        * * Field Name: LastOnHoldTime
+        * * Display Name: Last On Hold Time
+        * * SQL Data Type: datetime`),
+    FollowEmail: z.boolean().nullish().describe(`
+        * * Field Name: FollowEmail
+        * * Display Name: Follow Email
+        * * SQL Data Type: bit`),
+    TimeSpentByMeOnEmailAndMeetings: z.string().nullish().describe(`
+        * * Field Name: TimeSpentByMeOnEmailAndMeetings
+        * * Display Name: Time Spent By Me On Email And Meetings
+        * * SQL Data Type: nvarchar(1250)`),
+    Business2: z.string().nullish().describe(`
+        * * Field Name: Business2
+        * * Display Name: Business 2
+        * * SQL Data Type: nvarchar(50)`),
+    Callback: z.string().nullish().describe(`
+        * * Field Name: Callback
+        * * Display Name: Callback
+        * * SQL Data Type: nvarchar(50)`),
+    Company: z.string().nullish().describe(`
+        * * Field Name: Company
+        * * Display Name: Company
+        * * SQL Data Type: nvarchar(50)`),
+    Home2: z.string().nullish().describe(`
+        * * Field Name: Home2
+        * * Display Name: Home 2
+        * * SQL Data Type: nvarchar(50)`),
+    CreatedByExternalParty: z.string().nullish().describe(`
+        * * Field Name: CreatedByExternalParty
+        * * Display Name: Created By External Party
+        * * SQL Data Type: uniqueidentifier`),
+    ModifiedByExternalParty: z.string().nullish().describe(`
+        * * Field Name: ModifiedByExternalParty
+        * * Display Name: Modified By External Party
+        * * SQL Data Type: uniqueidentifier`),
+    MarketingOnly: z.boolean().nullish().describe(`
+        * * Field Name: MarketingOnly
+        * * Display Name: Marketing Only
+        * * SQL Data Type: bit`),
+    Acep_Org: z.string().nullish().describe(`
+        * * Field Name: Acep_Org
+        * * Display Name: Acep _Org
+        * * SQL Data Type: nvarchar(100)`),
+    Acep_MSPromoCode: z.string().nullish().describe(`
+        * * Field Name: Acep_MSPromoCode
+        * * Display Name: Acep _MSPromo Code
+        * * SQL Data Type: nvarchar(100)`),
+    Acep_AllowRenewalEmail: z.boolean().nullish().describe(`
+        * * Field Name: Acep_AllowRenewalEmail
+        * * Display Name: Acep _Allow Renewal Email
+        * * SQL Data Type: bit`),
+    Acep_npinumber: z.string().nullish().describe(`
+        * * Field Name: Acep_npinumber
+        * * Display Name: Acep _npinumber
+        * * SQL Data Type: nvarchar(100)`),
+    Acep_AllowOtherACEPChapterMarketing: z.boolean().nullish().describe(`
+        * * Field Name: Acep_AllowOtherACEPChapterMarketing
+        * * Display Name: Acep _Allow Other ACEPChapter Marketing
+        * * SQL Data Type: bit`),
+    Acep_AllowSEMPAClinicalCases: z.boolean().nullish().describe(`
+        * * Field Name: Acep_AllowSEMPAClinicalCases
+        * * Display Name: Acep _Allow SEMPAClinical Cases
+        * * SQL Data Type: bit`),
+    Acep_AllowSEMPAEducationalMeetings: z.boolean().nullish().describe(`
+        * * Field Name: Acep_AllowSEMPAEducationalMeetings
+        * * Display Name: Acep _Allow SEMPAEducational Meetings
+        * * SQL Data Type: bit`),
+    Acep_AllowSEMPANews: z.boolean().nullish().describe(`
+        * * Field Name: Acep_AllowSEMPANews
+        * * Display Name: Acep _Allow SEMPANews
+        * * SQL Data Type: bit`),
+    Acep_AllowSEMPAWeekendEdition: z.boolean().nullish().describe(`
+        * * Field Name: Acep_AllowSEMPAWeekendEdition
+        * * Display Name: Acep _Allow SEMPAWeekend Edition
+        * * SQL Data Type: bit`),
+    Acep_AllowSEMPAProducts: z.boolean().nullish().describe(`
+        * * Field Name: Acep_AllowSEMPAProducts
+        * * Display Name: Acep _Allow SEMPAProducts
+        * * SQL Data Type: bit`),
+    Acep_AllowSEMPAEducationalProductsandPrograms: z.boolean().nullish().describe(`
+        * * Field Name: Acep_AllowSEMPAEducationalProductsandPrograms
+        * * Display Name: Acep _Allow SEMPAEducational Productsand Programs
+        * * SQL Data Type: bit`),
+    Acep_CareerStatus: z.number().nullish().describe(`
+        * * Field Name: Acep_CareerStatus
+        * * Display Name: Acep _Career Status
+        * * SQL Data Type: int`),
+    Acep_StatementUrl: z.string().nullish().describe(`
+        * * Field Name: Acep_StatementUrl
+        * * Display Name: Acep _Statement Url
+        * * SQL Data Type: nvarchar(150)`),
+    Et_lastbouncesendid: z.string().nullish().describe(`
+        * * Field Name: Et_lastbouncesendid
+        * * Display Name: Et _lastbouncesendid
+        * * SQL Data Type: nvarchar(1)`),
+    Et_lastbouncedate: z.string().nullish().describe(`
+        * * Field Name: Et_lastbouncedate
+        * * Display Name: Et _lastbouncedate
+        * * SQL Data Type: nvarchar(1)`),
+    Et_lastbouncetype: z.string().nullish().describe(`
+        * * Field Name: Et_lastbouncetype
+        * * Display Name: Et _lastbouncetype
+        * * SQL Data Type: nvarchar(1)`),
+    Acep_CourseList: z.string().nullish().describe(`
+        * * Field Name: Acep_CourseList
+        * * Display Name: Acep _Course List
+        * * SQL Data Type: nvarchar(MAX)`),
+    Acep_ConferenceReceipt: z.string().nullish().describe(`
+        * * Field Name: Acep_ConferenceReceipt
+        * * Display Name: Acep _Conference Receipt
+        * * SQL Data Type: nvarchar(150)`),
+    Acep_ConferenceSchedule: z.string().nullish().describe(`
+        * * Field Name: Acep_ConferenceSchedule
+        * * Display Name: Acep _Conference Schedule
+        * * SQL Data Type: nvarchar(150)`),
+    Acep_WebAccountURL: z.string().nullish().describe(`
+        * * Field Name: Acep_WebAccountURL
+        * * Display Name: Acep _Web Account URL
+        * * SQL Data Type: nvarchar(150)`),
+    cdi_allowtextmessages: z.boolean().nullish().describe(`
+        * * Field Name: cdi_allowtextmessages
+        * * Display Name: cdi _allowtextmessages
+        * * SQL Data Type: bit`),
+    Acep_buildbadgetitle: z.string().nullish().describe(`
+        * * Field Name: Acep_buildbadgetitle
+        * * Display Name: Acep _buildbadgetitle
+        * * SQL Data Type: nvarchar(100)`),
+    Acep_ABEMNumber: z.string().nullish().describe(`
+        * * Field Name: Acep_ABEMNumber
+        * * Display Name: Acep _ABEMNumber
+        * * SQL Data Type: nvarchar(100)`),
+    Acep_EktronId: z.string().nullish().describe(`
+        * * Field Name: Acep_EktronId
+        * * Display Name: Acep _Ektron Id
+        * * SQL Data Type: nvarchar(100)`),
+    acep_plannersid: z.string().nullish().describe(`
+        * * Field Name: acep_plannersid
+        * * Display Name: acep _plannersid
+        * * SQL Data Type: uniqueidentifier`),
+    Acep_EmployerAddressState: z.string().nullish().describe(`
+        * * Field Name: Acep_EmployerAddressState
+        * * Display Name: Acep _Employer Address State
+        * * SQL Data Type: nvarchar(100)`),
+    Acep_SEMPAMaterialNeeded: z.number().nullish().describe(`
+        * * Field Name: Acep_SEMPAMaterialNeeded
+        * * Display Name: Acep _SEMPAMaterial Needed
+        * * SQL Data Type: int`),
+    Acep_EmployerAddressStreet2: z.string().nullish().describe(`
+        * * Field Name: Acep_EmployerAddressStreet2
+        * * Display Name: Acep _Employer Address Street 2
+        * * SQL Data Type: nvarchar(100)`),
+    Acep_MaidenName: z.string().nullish().describe(`
+        * * Field Name: Acep_MaidenName
+        * * Display Name: Acep _Maiden Name
+        * * SQL Data Type: nvarchar(100)`),
+    Acep_IsAAPAMember: z.boolean().nullish().describe(`
+        * * Field Name: Acep_IsAAPAMember
+        * * Display Name: Acep _Is AAPAMember
+        * * SQL Data Type: bit`),
+    Acep_EmployerName: z.string().nullish().describe(`
+        * * Field Name: Acep_EmployerName
+        * * Display Name: Acep _Employer Name
+        * * SQL Data Type: nvarchar(100)`),
+    cdi_totalscore: z.number().nullish().describe(`
+        * * Field Name: cdi_totalscore
+        * * Display Name: cdi _totalscore
+        * * SQL Data Type: int`),
+    Adx_LastFailedLogon: z.date().nullish().describe(`
+        * * Field Name: Adx_LastFailedLogon
+        * * Display Name: Adx _Last Failed Logon
+        * * SQL Data Type: datetime`),
+    cdi_score: z.number().nullish().describe(`
+        * * Field Name: cdi_score
+        * * Display Name: cdi _score
+        * * SQL Data Type: int`),
+    Adx_failedpasswordattemptwindowstart: z.date().nullish().describe(`
+        * * Field Name: Adx_failedpasswordattemptwindowstart
+        * * Display Name: Adx _failedpasswordattemptwindowstart
+        * * SQL Data Type: datetime`),
+    acep_countryofcitizenshipid: z.string().nullish().describe(`
+        * * Field Name: acep_countryofcitizenshipid
+        * * Display Name: acep _countryofcitizenshipid
+        * * SQL Data Type: uniqueidentifier`),
+    Acep_PrimaryFax: z.string().nullish().describe(`
+        * * Field Name: Acep_PrimaryFax
+        * * Display Name: Acep _Primary Fax
+        * * SQL Data Type: nvarchar(25)`),
+    Acep_DonotBill: z.boolean().nullish().describe(`
+        * * Field Name: Acep_DonotBill
+        * * Display Name: Acep _Donot Bill
+        * * SQL Data Type: bit`),
+    Acep_emailaddress6: z.string().nullish().describe(`
+        * * Field Name: Acep_emailaddress6
+        * * Display Name: Acep _emailaddress 6
+        * * SQL Data Type: nvarchar(100)`),
+    Acep_CMEDate: z.date().nullish().describe(`
+        * * Field Name: Acep_CMEDate
+        * * Display Name: Acep _CMEDate
+        * * SQL Data Type: datetime`),
+    acep_countryid: z.string().nullish().describe(`
+        * * Field Name: acep_countryid
+        * * Display Name: acep _countryid
+        * * SQL Data Type: uniqueidentifier`),
+    Acep_emailaddress4: z.string().nullish().describe(`
+        * * Field Name: Acep_emailaddress4
+        * * Display Name: Acep _emailaddress 4
+        * * SQL Data Type: nvarchar(100)`),
+    Adx_changepasswordatnextlogon: z.boolean().nullish().describe(`
+        * * Field Name: Adx_changepasswordatnextlogon
+        * * Display Name: Adx _changepasswordatnextlogon
+        * * SQL Data Type: bit`),
+    Acep_ServedasLiaison: z.boolean().nullish().describe(`
+        * * Field Name: Acep_ServedasLiaison
+        * * Display Name: Acep _Servedas Liaison
+        * * SQL Data Type: bit`),
+    Acep_EmployerAddressStreet1: z.string().nullish().describe(`
+        * * Field Name: Acep_EmployerAddressStreet1
+        * * Display Name: Acep _Employer Address Street 1
+        * * SQL Data Type: nvarchar(100)`),
+    MSA_eServicesAccessLevel: z.number().nullish().describe(`
+        * * Field Name: MSA_eServicesAccessLevel
+        * * Display Name: MSA_e Services Access Level
+        * * SQL Data Type: int`),
+    Acep_AutoChargeMembership: z.boolean().nullish().describe(`
+        * * Field Name: Acep_AutoChargeMembership
+        * * Display Name: Acep _Auto Charge Membership
+        * * SQL Data Type: bit`),
+    Adx_LastSuccessfulLogon: z.date().nullish().describe(`
+        * * Field Name: Adx_LastSuccessfulLogon
+        * * Display Name: Adx _Last Successful Logon
+        * * SQL Data Type: datetime`),
+    Acep_AllowWeekendReview: z.boolean().nullish().describe(`
+        * * Field Name: Acep_AllowWeekendReview
+        * * Display Name: Acep _Allow Weekend Review
+        * * SQL Data Type: bit`),
+    Acep_ACEPMembershipId: z.string().nullish().describe(`
+        * * Field Name: Acep_ACEPMembershipId
+        * * Display Name: Acep _ACEPMembership Id
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: client _memberships (vwclient_memberships.Acep_membershipId)`),
+    Acep_PercentFundedbyIndividual: z.number().nullish().describe(`
+        * * Field Name: Acep_PercentFundedbyIndividual
+        * * Display Name: Acep _Percent Fundedby Individual
+        * * SQL Data Type: float(53)`),
+    Adx_CreatedByUsername: z.string().nullish().describe(`
+        * * Field Name: Adx_CreatedByUsername
+        * * Display Name: Adx _Created By Username
+        * * SQL Data Type: nvarchar(100)`),
+    Acep_AllowEMRAWhatsUpinEM: z.boolean().nullish().describe(`
+        * * Field Name: Acep_AllowEMRAWhatsUpinEM
+        * * Display Name: Acep _Allow EMRAWhats Upin EM
+        * * SQL Data Type: bit`),
+    Acep_AllowAdvocacy: z.boolean().nullish().describe(`
+        * * Field Name: Acep_AllowAdvocacy
+        * * Display Name: Acep _Allow Advocacy
+        * * SQL Data Type: bit`),
+    Acep_DuesStatementHTML: z.string().nullish().describe(`
+        * * Field Name: Acep_DuesStatementHTML
+        * * Display Name: Acep _Dues Statement HTML
+        * * SQL Data Type: nvarchar(MAX)`),
+    Acep_DoNotPromote: z.boolean().nullish().describe(`
+        * * Field Name: Acep_DoNotPromote
+        * * Display Name: Acep _Do Not Promote
+        * * SQL Data Type: bit`),
+    Acep_Telephone2Ext: z.string().nullish().describe(`
+        * * Field Name: Acep_Telephone2Ext
+        * * Display Name: Acep _Telephone 2Ext
+        * * SQL Data Type: nvarchar(100)`),
+    Acep_Answer: z.string().nullish().describe(`
+        * * Field Name: Acep_Answer
+        * * Display Name: Acep _Answer
+        * * SQL Data Type: nvarchar(100)`),
+    Acep_EmployerAddressZip: z.string().nullish().describe(`
+        * * Field Name: Acep_EmployerAddressZip
+        * * Display Name: Acep _Employer Address Zip
+        * * SQL Data Type: nvarchar(100)`),
+    Acep_AllowInternationalACEPNews: z.boolean().nullish().describe(`
+        * * Field Name: Acep_AllowInternationalACEPNews
+        * * Display Name: Acep _Allow International ACEPNews
+        * * SQL Data Type: bit`),
+    Acep_EmployerAddressStreet3: z.string().nullish().describe(`
+        * * Field Name: Acep_EmployerAddressStreet3
+        * * Display Name: Acep _Employer Address Street 3
+        * * SQL Data Type: nvarchar(100)`),
+    Acep_ReferredBy: z.string().nullish().describe(`
+        * * Field Name: Acep_ReferredBy
+        * * Display Name: Acep _Referred By
+        * * SQL Data Type: nvarchar(300)`),
+    Adx_ModifiedByUsername: z.string().nullish().describe(`
+        * * Field Name: Adx_ModifiedByUsername
+        * * Display Name: Adx _Modified By Username
+        * * SQL Data Type: nvarchar(100)`),
+    Acep_Designation: z.string().nullish().describe(`
+        * * Field Name: Acep_Designation
+        * * Display Name: Acep _Designation
+        * * SQL Data Type: nvarchar(100)`),
+    Acep_count: z.number().nullish().describe(`
+        * * Field Name: Acep_count
+        * * Display Name: Acep _count
+        * * SQL Data Type: int`),
+    Adx_username: z.string().nullish().describe(`
+        * * Field Name: Adx_username
+        * * Display Name: Adx _username
+        * * SQL Data Type: nvarchar(100)`),
+    cdi_grade: z.string().nullish().describe(`
+        * * Field Name: cdi_grade
+        * * Display Name: cdi _grade
+        * * SQL Data Type: nvarchar(50)`),
+    adx_systemuserid: z.string().nullish().describe(`
+        * * Field Name: adx_systemuserid
+        * * Display Name: adx _systemuserid
+        * * SQL Data Type: uniqueidentifier`),
+    Acep_QuestionCode: z.number().nullish().describe(`
+        * * Field Name: Acep_QuestionCode
+        * * Display Name: Acep _Question Code
+        * * SQL Data Type: int`),
+    Acep_Deceased: z.boolean().nullish().describe(`
+        * * Field Name: Acep_Deceased
+        * * Display Name: Acep _Deceased
+        * * SQL Data Type: bit`),
+    Acep_IsLockedOut: z.boolean().nullish().describe(`
+        * * Field Name: Acep_IsLockedOut
+        * * Display Name: Acep _Is Locked Out
+        * * SQL Data Type: bit`),
+    Acep_WrittenorNewspaperColumn: z.boolean().nullish().describe(`
+        * * Field Name: Acep_WrittenorNewspaperColumn
+        * * Display Name: Acep _Writtenor Newspaper Column
+        * * SQL Data Type: bit`),
+    Acep_FormattedAddresses: z.string().nullish().describe(`
+        * * Field Name: Acep_FormattedAddresses
+        * * Display Name: Acep _Formatted Addresses
+        * * SQL Data Type: nvarchar(MAX)`),
+    Adx_failedpasswordanswerattemptwindowstart: z.date().nullish().describe(`
+        * * Field Name: Adx_failedpasswordanswerattemptwindowstart
+        * * Display Name: Adx _failedpasswordanswerattemptwindowstart
+        * * SQL Data Type: datetime`),
+    Acep_MaterialNeeded: z.number().nullish().describe(`
+        * * Field Name: Acep_MaterialNeeded
+        * * Display Name: Acep _Material Needed
+        * * SQL Data Type: int`),
+    Acep_AllowEMF: z.boolean().nullish().describe(`
+        * * Field Name: Acep_AllowEMF
+        * * Display Name: Acep _Allow EMF
+        * * SQL Data Type: bit`),
+    Acep_WebSessionId: z.string().nullish().describe(`
+        * * Field Name: Acep_WebSessionId
+        * * Display Name: Acep _Web Session Id
+        * * SQL Data Type: nvarchar(200)`),
+    acep_emcareercountryid: z.string().nullish().describe(`
+        * * Field Name: acep_emcareercountryid
+        * * Display Name: acep _emcareercountryid
+        * * SQL Data Type: uniqueidentifier`),
+    Acep_WorkSettingOther: z.string().nullish().describe(`
+        * * Field Name: Acep_WorkSettingOther
+        * * Display Name: Acep _Work Setting Other
+        * * SQL Data Type: nvarchar(100)`),
+    Adx_OrganizationName: z.string().nullish().describe(`
+        * * Field Name: Adx_OrganizationName
+        * * Display Name: Adx _Organization Name
+        * * SQL Data Type: nvarchar(250)`),
+    Acep_EktronUserId: z.number().nullish().describe(`
+        * * Field Name: Acep_EktronUserId
+        * * Display Name: Acep _Ektron User Id
+        * * SQL Data Type: int`),
+    Adx_TimeZone: z.number().nullish().describe(`
+        * * Field Name: Adx_TimeZone
+        * * Display Name: Adx _Time Zone
+        * * SQL Data Type: int`),
+    Acep_WebAccountOriginatedOrgCode: z.number().nullish().describe(`
+        * * Field Name: Acep_WebAccountOriginatedOrgCode
+        * * Display Name: Acep _Web Account Originated Org Code
+        * * SQL Data Type: int`),
+    Acep_Migrationupdate: z.boolean().nullish().describe(`
+        * * Field Name: Acep_Migrationupdate
+        * * Display Name: Acep _Migrationupdate
+        * * SQL Data Type: bit`),
+    Acep_PrimaryChapter: z.string().nullish().describe(`
+        * * Field Name: Acep_PrimaryChapter
+        * * Display Name: Acep _Primary Chapter
+        * * SQL Data Type: nvarchar(100)`),
+    Acep_LastLockedOutDate: z.date().nullish().describe(`
+        * * Field Name: Acep_LastLockedOutDate
+        * * Display Name: Acep _Last Locked Out Date
+        * * SQL Data Type: datetime`),
+    Acep_GPTaxScheduleIDCode: z.number().nullish().describe(`
+        * * Field Name: Acep_GPTaxScheduleIDCode
+        * * Display Name: Acep _GPTax Schedule IDCode
+        * * SQL Data Type: int`),
+    Adx_passwordanswer: z.string().nullish().describe(`
+        * * Field Name: Adx_passwordanswer
+        * * Display Name: Adx _passwordanswer
+        * * SQL Data Type: nvarchar(128)`),
+    Acep_crmupdate: z.boolean().nullish().describe(`
+        * * Field Name: Acep_crmupdate
+        * * Display Name: Acep _crmupdate
+        * * SQL Data Type: bit`),
+    Acep_ProfessionalDesignation: z.string().nullish().describe(`
+        * * Field Name: Acep_ProfessionalDesignation
+        * * Display Name: Acep _Professional Designation
+        * * SQL Data Type: nvarchar(255)`),
+    Acep_SempaAAPAID: z.string().nullish().describe(`
+        * * Field Name: Acep_SempaAAPAID
+        * * Display Name: Acep _Sempa AAPAID
+        * * SQL Data Type: nvarchar(100)`),
+    Acep_QuestionnaireReceived: z.boolean().nullish().describe(`
+        * * Field Name: Acep_QuestionnaireReceived
+        * * Display Name: Acep _Questionnaire Received
+        * * SQL Data Type: bit`),
+    Acep_PrefixCode: z.number().nullish().describe(`
+        * * Field Name: Acep_PrefixCode
+        * * Display Name: Acep _Prefix Code
+        * * SQL Data Type: int`),
+    Acep_AmaMemberNumber: z.string().nullish().describe(`
+        * * Field Name: Acep_AmaMemberNumber
+        * * Display Name: Acep _Ama Member Number
+        * * SQL Data Type: nvarchar(100)`),
+    acep_cmespending_Base: z.number().nullish().describe(`
+        * * Field Name: acep_cmespending_Base
+        * * Display Name: acep _cmespending _Base
+        * * SQL Data Type: money`),
+    Acep_AllowSMS: z.boolean().nullish().describe(`
+        * * Field Name: Acep_AllowSMS
+        * * Display Name: Acep _Allow SMS
+        * * SQL Data Type: bit`),
+    Acep_GPPriceLevel: z.number().nullish().describe(`
+        * * Field Name: Acep_GPPriceLevel
+        * * Display Name: Acep _GPPrice Level
+        * * SQL Data Type: int`),
+    Acep_EMRAMembershipId: z.string().nullish().describe(`
+        * * Field Name: Acep_EMRAMembershipId
+        * * Display Name: Acep _EMRAMembership Id
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: client _memberships (vwclient_memberships.Acep_membershipId)`),
+    Acep_FormalName: z.string().nullish().describe(`
+        * * Field Name: Acep_FormalName
+        * * Display Name: Acep _Formal Name
+        * * SQL Data Type: nvarchar(100)`),
+    Adx_ProfileIsAnonymous: z.boolean().nullish().describe(`
+        * * Field Name: Adx_ProfileIsAnonymous
+        * * Display Name: Adx _Profile Is Anonymous
+        * * SQL Data Type: bit`),
+    Acep_WorkSetting: z.number().nullish().describe(`
+        * * Field Name: Acep_WorkSetting
+        * * Display Name: Acep _Work Setting
+        * * SQL Data Type: int`),
+    cdi_identifiedon: z.date().nullish().describe(`
+        * * Field Name: cdi_identifiedon
+        * * Display Name: cdi _identifiedon
+        * * SQL Data Type: datetime`),
+    Acep_Fax3: z.string().nullish().describe(`
+        * * Field Name: Acep_Fax3
+        * * Display Name: Acep _Fax 3
+        * * SQL Data Type: nvarchar(25)`),
+    Adx_resetpassword: z.string().nullish().describe(`
+        * * Field Name: Adx_resetpassword
+        * * Display Name: Adx _resetpassword
+        * * SQL Data Type: nvarchar(128)`),
+    Acep_LastActivityDate: z.date().nullish().describe(`
+        * * Field Name: Acep_LastActivityDate
+        * * Display Name: Acep _Last Activity Date
+        * * SQL Data Type: datetime`),
+    Acep_BirthdayisToday: z.boolean().nullish().describe(`
+        * * Field Name: Acep_BirthdayisToday
+        * * Display Name: Acep _Birthdayis Today
+        * * SQL Data Type: bit`),
+    Acep_MembershipButtons: z.string().nullish().describe(`
+        * * Field Name: Acep_MembershipButtons
+        * * Display Name: Acep _Membership Buttons
+        * * SQL Data Type: nvarchar(100)`),
+    cdi_age: z.number().nullish().describe(`
+        * * Field Name: cdi_age
+        * * Display Name: cdi _age
+        * * SQL Data Type: int`),
+    Acep_PrimaryPhone: z.string().nullish().describe(`
+        * * Field Name: Acep_PrimaryPhone
+        * * Display Name: Acep _Primary Phone
+        * * SQL Data Type: nvarchar(100)`),
+    cdi_image: z.string().nullish().describe(`
+        * * Field Name: cdi_image
+        * * Display Name: cdi _image
+        * * SQL Data Type: nvarchar(500)`),
+    cdi_social: z.string().nullish().describe(`
+        * * Field Name: cdi_social
+        * * Display Name: cdi _social
+        * * SQL Data Type: nvarchar(MAX)`),
+    Adx_LogonEnabled: z.boolean().nullish().describe(`
+        * * Field Name: Adx_LogonEnabled
+        * * Display Name: Adx _Logon Enabled
+        * * SQL Data Type: bit`),
+    Adx_passwordsalt: z.string().nullish().describe(`
+        * * Field Name: Adx_passwordsalt
+        * * Display Name: Adx _passwordsalt
+        * * SQL Data Type: nvarchar(128)`),
+    New_renewaldate: z.string().nullish().describe(`
+        * * Field Name: New_renewaldate
+        * * Display Name: New _renewaldate
+        * * SQL Data Type: nvarchar(100)`),
+    Acep_EmploymentPriorto2000: z.boolean().nullish().describe(`
+        * * Field Name: Acep_EmploymentPriorto2000
+        * * Display Name: Acep _Employment Priorto 2000
+        * * SQL Data Type: bit`),
+    Acep_CMESpending: z.number().nullish().describe(`
+        * * Field Name: Acep_CMESpending
+        * * Display Name: Acep _CMESpending
+        * * SQL Data Type: money`),
+    Acep_currentbilltocode: z.number().nullish().describe(`
+        * * Field Name: Acep_currentbilltocode
+        * * Display Name: Acep _currentbilltocode
+        * * SQL Data Type: int`),
+    Adx_lockedout: z.boolean().nullish().describe(`
+        * * Field Name: Adx_lockedout
+        * * Display Name: Adx _lockedout
+        * * SQL Data Type: bit`),
+    Acep_NumberOfYearsInPractice: z.number().nullish().describe(`
+        * * Field Name: Acep_NumberOfYearsInPractice
+        * * Display Name: Acep _Number Of Years In Practice
+        * * SQL Data Type: int`),
+    Adx_lastlockedout: z.date().nullish().describe(`
+        * * Field Name: Adx_lastlockedout
+        * * Display Name: Adx _lastlockedout
+        * * SQL Data Type: datetime`),
+    Acep_SempaPhysician: z.string().nullish().describe(`
+        * * Field Name: Acep_SempaPhysician
+        * * Display Name: Acep _Sempa Physician
+        * * SQL Data Type: nvarchar(100)`),
+    Adx_lastactivity: z.date().nullish().describe(`
+        * * Field Name: Adx_lastactivity
+        * * Display Name: Adx _lastactivity
+        * * SQL Data Type: datetime`),
+    cdi_gender: z.boolean().nullish().describe(`
+        * * Field Name: cdi_gender
+        * * Display Name: cdi _gender
+        * * SQL Data Type: bit`),
+    cdi_twitter: z.string().nullish().describe(`
+        * * Field Name: cdi_twitter
+        * * Display Name: cdi _twitter
+        * * SQL Data Type: nvarchar(500)`),
+    Acep_SEMPAMembershipId: z.string().nullish().describe(`
+        * * Field Name: Acep_SEMPAMembershipId
+        * * Display Name: Acep _SEMPAMembership Id
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: client _memberships (vwclient_memberships.Acep_membershipId)`),
+    Adx_failedpasswordattempts: z.number().nullish().describe(`
+        * * Field Name: Adx_failedpasswordattempts
+        * * Display Name: Adx _failedpasswordattempts
+        * * SQL Data Type: int`),
+    Adx_failedpasswordanswerattempts: z.number().nullish().describe(`
+        * * Field Name: Adx_failedpasswordanswerattempts
+        * * Display Name: Adx _failedpasswordanswerattempts
+        * * SQL Data Type: int`),
+    Acep_EMCareerCity: z.string().nullish().describe(`
+        * * Field Name: Acep_EMCareerCity
+        * * Display Name: Acep _EMCareer City
+        * * SQL Data Type: nvarchar(100)`),
+    cdi_visitorkey: z.string().nullish().describe(`
+        * * Field Name: cdi_visitorkey
+        * * Display Name: cdi _visitorkey
+        * * SQL Data Type: nvarchar(50)`),
+    cdi_rowkey: z.string().nullish().describe(`
+        * * Field Name: cdi_rowkey
+        * * Display Name: cdi _rowkey
+        * * SQL Data Type: nvarchar(50)`),
+    Acep_Fax2: z.string().nullish().describe(`
+        * * Field Name: Acep_Fax2
+        * * Display Name: Acep _Fax 2
+        * * SQL Data Type: nvarchar(25)`),
+    Acep_SempaNCCPAID: z.string().nullish().describe(`
+        * * Field Name: Acep_SempaNCCPAID
+        * * Display Name: Acep _Sempa NCCPAID
+        * * SQL Data Type: nvarchar(100)`),
+    Acep_PrimaryPhoneExt: z.string().nullish().describe(`
+        * * Field Name: Acep_PrimaryPhoneExt
+        * * Display Name: Acep _Primary Phone Ext
+        * * SQL Data Type: nvarchar(100)`),
+    Acep_EMReferenceBooksSpending: z.number().nullish().describe(`
+        * * Field Name: Acep_EMReferenceBooksSpending
+        * * Display Name: Acep _EMReference Books Spending
+        * * SQL Data Type: int`),
+    Adx_ModifiedByIPAddress: z.string().nullish().describe(`
+        * * Field Name: Adx_ModifiedByIPAddress
+        * * Display Name: Adx _Modified By IPAddress
+        * * SQL Data Type: nvarchar(100)`),
+    Acep_BadgeName: z.string().nullish().describe(`
+        * * Field Name: Acep_BadgeName
+        * * Display Name: Acep _Badge Name
+        * * SQL Data Type: nvarchar(100)`),
+    Acep_telephone4: z.string().nullish().describe(`
+        * * Field Name: Acep_telephone4
+        * * Display Name: Acep _telephone 4
+        * * SQL Data Type: nvarchar(50)`),
+    cdi_linkedin: z.string().nullish().describe(`
+        * * Field Name: cdi_linkedin
+        * * Display Name: cdi _linkedin
+        * * SQL Data Type: nvarchar(500)`),
+    Acep_InvoiceDonations: z.boolean().nullish().describe(`
+        * * Field Name: Acep_InvoiceDonations
+        * * Display Name: Acep _Invoice Donations
+        * * SQL Data Type: bit`),
+    Acep_InvalidPasswordAttempts: z.number().nullish().describe(`
+        * * Field Name: Acep_InvalidPasswordAttempts
+        * * Display Name: Acep _Invalid Password Attempts
+        * * SQL Data Type: int`),
+    acep_emcareerstateorprovinceid: z.string().nullish().describe(`
+        * * Field Name: acep_emcareerstateorprovinceid
+        * * Display Name: acep _emcareerstateorprovinceid
+        * * SQL Data Type: uniqueidentifier`),
+    Acep_AllowBirthday: z.boolean().nullish().describe(`
+        * * Field Name: Acep_AllowBirthday
+        * * Display Name: Acep _Allow Birthday
+        * * SQL Data Type: bit`),
+    Acep_AllowNEMPAC: z.boolean().nullish().describe(`
+        * * Field Name: Acep_AllowNEMPAC
+        * * Display Name: Acep _Allow NEMPAC
+        * * SQL Data Type: bit`),
+    cdi_partitionkey: z.string().nullish().describe(`
+        * * Field Name: cdi_partitionkey
+        * * Display Name: cdi _partitionkey
+        * * SQL Data Type: nvarchar(50)`),
+    Adx_passwordformat: z.string().nullish().describe(`
+        * * Field Name: Adx_passwordformat
+        * * Display Name: Adx _passwordformat
+        * * SQL Data Type: nvarchar(100)`),
+    Acep_LastPasswordChangedDate: z.date().nullish().describe(`
+        * * Field Name: Acep_LastPasswordChangedDate
+        * * Display Name: Acep _Last Password Changed Date
+        * * SQL Data Type: datetime`),
+    Acep_buildaddress: z.string().nullish().describe(`
+        * * Field Name: Acep_buildaddress
+        * * Display Name: Acep _buildaddress
+        * * SQL Data Type: nvarchar(100)`),
+    Acep_MemberAppSavedStep: z.string().nullish().describe(`
+        * * Field Name: Acep_MemberAppSavedStep
+        * * Display Name: Acep _Member App Saved Step
+        * * SQL Data Type: nvarchar(100)`),
+    Acep_AllowWebinars: z.boolean().nullish().describe(`
+        * * Field Name: Acep_AllowWebinars
+        * * Display Name: Acep _Allow Webinars
+        * * SQL Data Type: bit`),
+    Adx_passwordquestion: z.string().nullish().describe(`
+        * * Field Name: Adx_passwordquestion
+        * * Display Name: Adx _passwordquestion
+        * * SQL Data Type: nvarchar(256)`),
+    Acep_AllowEMRAEducationalProductsandPrograms: z.boolean().nullish().describe(`
+        * * Field Name: Acep_AllowEMRAEducationalProductsandPrograms
+        * * Display Name: Acep _Allow EMRAEducational Productsand Programs
+        * * SQL Data Type: bit`),
+    Adx_lastpasswordchange: z.date().nullish().describe(`
+        * * Field Name: Adx_lastpasswordchange
+        * * Display Name: Adx _lastpasswordchange
+        * * SQL Data Type: datetime`),
+    Acep_buildfullname: z.string().nullish().describe(`
+        * * Field Name: Acep_buildfullname
+        * * Display Name: Acep _buildfullname
+        * * SQL Data Type: nvarchar(100)`),
+    msa_managingpartnerid: z.string().nullish().describe(`
+        * * Field Name: msa_managingpartnerid
+        * * Display Name: msa _managingpartnerid
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Accounts__client_crm (vwAccounts__client_crm.AccountId)`),
+    Acep_emailaddress5: z.string().nullish().describe(`
+        * * Field Name: Acep_emailaddress5
+        * * Display Name: Acep _emailaddress 5
+        * * SQL Data Type: nvarchar(100)`),
+    Acep_BookstoreCustomerType: z.number().nullish().describe(`
+        * * Field Name: Acep_BookstoreCustomerType
+        * * Display Name: Acep _Bookstore Customer Type
+        * * SQL Data Type: int`),
+    cdi_longitude: z.string().nullish().describe(`
+        * * Field Name: cdi_longitude
+        * * Display Name: cdi _longitude
+        * * SQL Data Type: nvarchar(50)`),
+    Acep_CreatedByProcess: z.string().nullish().describe(`
+        * * Field Name: Acep_CreatedByProcess
+        * * Display Name: Acep _Created By Process
+        * * SQL Data Type: nvarchar(100)`),
+    Acep_AllowSpecialAlertsandUpdates: z.boolean().nullish().describe(`
+        * * Field Name: Acep_AllowSpecialAlertsandUpdates
+        * * Display Name: Acep _Allow Special Alertsand Updates
+        * * SQL Data Type: bit`),
+    Adx_password: z.string().nullish().describe(`
+        * * Field Name: Adx_password
+        * * Display Name: Adx _password
+        * * SQL Data Type: nvarchar(128)`),
+    New_Childsname: z.string().nullish().describe(`
+        * * Field Name: New_Childsname
+        * * Display Name: New _Childsname
+        * * SQL Data Type: nvarchar(100)`),
+    Acep_CreatedReasonCode: z.number().nullish().describe(`
+        * * Field Name: Acep_CreatedReasonCode
+        * * Display Name: Acep _Created Reason Code
+        * * SQL Data Type: int`),
+    Acep_EMCareerHospital: z.string().nullish().describe(`
+        * * Field Name: Acep_EMCareerHospital
+        * * Display Name: Acep _EMCareer Hospital
+        * * SQL Data Type: nvarchar(100)`),
+    Acep_AppearedonTelevision: z.boolean().nullish().describe(`
+        * * Field Name: Acep_AppearedonTelevision
+        * * Display Name: Acep _Appearedon Television
+        * * SQL Data Type: bit`),
+    cdi_ip: z.string().nullish().describe(`
+        * * Field Name: cdi_ip
+        * * Display Name: cdi _ip
+        * * SQL Data Type: nvarchar(50)`),
+    Acep_AllowACEPEducationalMeetings: z.boolean().nullish().describe(`
+        * * Field Name: Acep_AllowACEPEducationalMeetings
+        * * Display Name: Acep _Allow ACEPEducational Meetings
+        * * SQL Data Type: bit`),
+    Acep_AllowEMToday: z.boolean().nullish().describe(`
+        * * Field Name: Acep_AllowEMToday
+        * * Display Name: Acep _Allow EMToday
+        * * SQL Data Type: bit`),
+    Acep_SEMPAPromoCodeForDiscounts: z.string().nullish().describe(`
+        * * Field Name: Acep_SEMPAPromoCodeForDiscounts
+        * * Display Name: Acep _SEMPAPromo Code For Discounts
+        * * SQL Data Type: nvarchar(100)`),
+    cdi_latitude: z.string().nullish().describe(`
+        * * Field Name: cdi_latitude
+        * * Display Name: cdi _latitude
+        * * SQL Data Type: nvarchar(50)`),
+    Acep_Fax1: z.string().nullish().describe(`
+        * * Field Name: Acep_Fax1
+        * * Display Name: Acep _Fax 1
+        * * SQL Data Type: nvarchar(100)`),
+    cdi_facebook: z.string().nullish().describe(`
+        * * Field Name: cdi_facebook
+        * * Display Name: cdi _facebook
+        * * SQL Data Type: nvarchar(500)`),
+    Adx_CreatedByIPAddress: z.string().nullish().describe(`
+        * * Field Name: Adx_CreatedByIPAddress
+        * * Display Name: Adx _Created By IPAddress
+        * * SQL Data Type: nvarchar(100)`),
+    Acep_NewsMediaInterviews: z.boolean().nullish().describe(`
+        * * Field Name: Acep_NewsMediaInterviews
+        * * Display Name: Acep _News Media Interviews
+        * * SQL Data Type: bit`),
+    Acep_LastLoginDate: z.date().nullish().describe(`
+        * * Field Name: Acep_LastLoginDate
+        * * Display Name: Acep _Last Login Date
+        * * SQL Data Type: datetime`),
+    Adx_ProfileLastActivity: z.date().nullish().describe(`
+        * * Field Name: Adx_ProfileLastActivity
+        * * Display Name: Adx _Profile Last Activity
+        * * SQL Data Type: datetime`),
+    Acep_EmployerAddressCity: z.string().nullish().describe(`
+        * * Field Name: Acep_EmployerAddressCity
+        * * Display Name: Acep _Employer Address City
+        * * SQL Data Type: nvarchar(100)`),
+    acep_stateorprovinceid: z.string().nullish().describe(`
+        * * Field Name: acep_stateorprovinceid
+        * * Display Name: acep _stateorprovinceid
+        * * SQL Data Type: uniqueidentifier`),
+    Acep_ModifiedByProcess: z.string().nullish().describe(`
+        * * Field Name: Acep_ModifiedByProcess
+        * * Display Name: Acep _Modified By Process
+        * * SQL Data Type: nvarchar(100)`),
+    Acep_suffix: z.number().nullish().describe(`
+        * * Field Name: Acep_suffix
+        * * Display Name: Acep _suffix
+        * * SQL Data Type: int`),
+    Acep_HospitalFax: z.string().nullish().describe(`
+        * * Field Name: Acep_HospitalFax
+        * * Display Name: Acep _Hospital Fax
+        * * SQL Data Type: nvarchar(50)`),
+    Acep_AllowACEPEducationalProducts: z.boolean().nullish().describe(`
+        * * Field Name: Acep_AllowACEPEducationalProducts
+        * * Display Name: Acep _Allow ACEPEducational Products
+        * * SQL Data Type: bit`),
+    Acep_isfaculty: z.boolean().nullish().describe(`
+        * * Field Name: Acep_isfaculty
+        * * Display Name: Acep _isfaculty
+        * * SQL Data Type: bit`),
+    Acep_Telephone3Ext: z.string().nullish().describe(`
+        * * Field Name: Acep_Telephone3Ext
+        * * Display Name: Acep _Telephone 3Ext
+        * * SQL Data Type: nvarchar(100)`),
+    MSA_webuser: z.boolean().nullish().describe(`
+        * * Field Name: MSA_webuser
+        * * Display Name: MSA_webuser
+        * * SQL Data Type: bit`),
+    Acep_AOANumber: z.string().nullish().describe(`
+        * * Field Name: Acep_AOANumber
+        * * Display Name: Acep _AOANumber
+        * * SQL Data Type: nvarchar(100)`),
+    Adx_InvitationCode: z.string().nullish().describe(`
+        * * Field Name: Adx_InvitationCode
+        * * Display Name: Adx _Invitation Code
+        * * SQL Data Type: nvarchar(500)`),
+    Acep_Telephone1Ext: z.string().nullish().describe(`
+        * * Field Name: Acep_Telephone1Ext
+        * * Display Name: Acep _Telephone 1Ext
+        * * SQL Data Type: nvarchar(100)`),
+    Acep_EthnicityCode: z.number().nullish().describe(`
+        * * Field Name: Acep_EthnicityCode
+        * * Display Name: Acep _Ethnicity Code
+        * * SQL Data Type: int`),
+    Adx_InvitationCodeExpiryDate: z.date().nullish().describe(`
+        * * Field Name: Adx_InvitationCodeExpiryDate
+        * * Display Name: Adx _Invitation Code Expiry Date
+        * * SQL Data Type: datetime`),
+    Acep_EMFDoNotMail: z.boolean().nullish().describe(`
+        * * Field Name: Acep_EMFDoNotMail
+        * * Display Name: Acep _EMFDo Not Mail
+        * * SQL Data Type: bit`),
+    Acep_SEMPAReferredNumber: z.string().nullish().describe(`
+        * * Field Name: Acep_SEMPAReferredNumber
+        * * Display Name: Acep _SEMPAReferred Number
+        * * SQL Data Type: nvarchar(100)`),
+    new_c360sisiteurl: z.string().nullish().describe(`
+        * * Field Name: new_c360sisiteurl
+        * * Display Name: new _c 360sisiteurl
+        * * SQL Data Type: nvarchar(4000)`),
+    Acep_AllowEMRANews: z.boolean().nullish().describe(`
+        * * Field Name: Acep_AllowEMRANews
+        * * Display Name: Acep _Allow EMRANews
+        * * SQL Data Type: bit`),
+    Acep_ContactNumber: z.string().nullish().describe(`
+        * * Field Name: Acep_ContactNumber
+        * * Display Name: Acep _Contact Number
+        * * SQL Data Type: nvarchar(100)`),
+    Acep_IsApproved: z.boolean().nullish().describe(`
+        * * Field Name: Acep_IsApproved
+        * * Display Name: Acep _Is Approved
+        * * SQL Data Type: bit`),
+    acep_Country: z.number().nullish().describe(`
+        * * Field Name: acep_Country
+        * * Display Name: acep _Country
+        * * SQL Data Type: int`),
+    acep_State: z.number().nullish().describe(`
+        * * Field Name: acep_State
+        * * Display Name: acep _State
+        * * SQL Data Type: int`),
+    acep_NextBirthday: z.date().nullish().describe(`
+        * * Field Name: acep_NextBirthday
+        * * Display Name: acep _Next Birthday
+        * * SQL Data Type: datetime`),
+    acep_ProfilePictureURL: z.string().nullish().describe(`
+        * * Field Name: acep_ProfilePictureURL
+        * * Display Name: acep _Profile Picture URL
+        * * SQL Data Type: nvarchar(150)`),
+    acep_BasecampIdACEP: z.string().nullish().describe(`
+        * * Field Name: acep_BasecampIdACEP
+        * * Display Name: acep _Basecamp Id ACEP
+        * * SQL Data Type: nvarchar(20)`),
+    acep_BasecampIdEMRA: z.string().nullish().describe(`
+        * * Field Name: acep_BasecampIdEMRA
+        * * Display Name: acep _Basecamp Id EMRA
+        * * SQL Data Type: nvarchar(20)`),
+    acep_BasecampIdSEMPA: z.string().nullish().describe(`
+        * * Field Name: acep_BasecampIdSEMPA
+        * * Display Name: acep _Basecamp Id SEMPA
+        * * SQL Data Type: nvarchar(20)`),
+    acep_AllowACEPJobAlerts: z.boolean().nullish().describe(`
+        * * Field Name: acep_AllowACEPJobAlerts
+        * * Display Name: acep _Allow ACEPJob Alerts
+        * * SQL Data Type: bit`),
+    acep_AllowEMRAAnnouncements: z.boolean().nullish().describe(`
+        * * Field Name: acep_AllowEMRAAnnouncements
+        * * Display Name: acep _Allow EMRAAnnouncements
+        * * SQL Data Type: bit`),
+    acep_AllowSEMPAAnnouncements: z.boolean().nullish().describe(`
+        * * Field Name: acep_AllowSEMPAAnnouncements
+        * * Display Name: acep _Allow SEMPAAnnouncements
+        * * SQL Data Type: bit`),
+    acep_AllowSEMPADidYouKnow: z.boolean().nullish().describe(`
+        * * Field Name: acep_AllowSEMPADidYouKnow
+        * * Display Name: acep _Allow SEMPADid You Know
+        * * SQL Data Type: bit`),
+    acep_AllowSEMPAFoundation: z.boolean().nullish().describe(`
+        * * Field Name: acep_AllowSEMPAFoundation
+        * * Display Name: acep _Allow SEMPAFoundation
+        * * SQL Data Type: bit`),
+    acep_AllowSEMPAwhatshappening: z.boolean().nullish().describe(`
+        * * Field Name: acep_AllowSEMPAwhatshappening
+        * * Display Name: acep _Allow SEMPAwhatshappening
+        * * SQL Data Type: bit`),
+    acep_ParticipateinSurveys: z.boolean().nullish().describe(`
+        * * Field Name: acep_ParticipateinSurveys
+        * * Display Name: acep _Participatein Surveys
+        * * SQL Data Type: bit`),
+    acep_SyncedtoHigherLogic: z.boolean().nullish().describe(`
+        * * Field Name: acep_SyncedtoHigherLogic
+        * * Display Name: acep _Syncedto Higher Logic
+        * * SQL Data Type: bit`),
+    acep_MarketingDataIndividual: z.string().nullish().describe(`
+        * * Field Name: acep_MarketingDataIndividual
+        * * Display Name: acep _Marketing Data Individual
+        * * SQL Data Type: uniqueidentifier`),
+    acep_Biography: z.string().nullish().describe(`
+        * * Field Name: acep_Biography
+        * * Display Name: acep _Biography
+        * * SQL Data Type: nvarchar(MAX)`),
+    acep_Instagram: z.string().nullish().describe(`
+        * * Field Name: acep_Instagram
+        * * Display Name: acep _Instagram
+        * * SQL Data Type: nvarchar(100)`),
+    acep_Clinician: z.boolean().nullish().describe(`
+        * * Field Name: acep_Clinician
+        * * Display Name: acep _Clinician
+        * * SQL Data Type: bit`),
+    acep_ExternalID: z.string().nullish().describe(`
+        * * Field Name: acep_ExternalID
+        * * Display Name: acep _External ID
+        * * SQL Data Type: nvarchar(100)`),
+    acep_EMRAKit: z.string().nullish().describe(`
+        * * Field Name: acep_EMRAKit
+        * * Display Name: acep _EMRAKit
+        * * SQL Data Type: nvarchar(50)`),
+    acep_EMRAKitDate: z.date().nullish().describe(`
+        * * Field Name: acep_EMRAKitDate
+        * * Display Name: acep _EMRAKit Date
+        * * SQL Data Type: datetime`),
+    acep_EMRAKitShipper: z.number().nullish().describe(`
+        * * Field Name: acep_EMRAKitShipper
+        * * Display Name: acep _EMRAKit Shipper
+        * * SQL Data Type: int`),
+    acep_PracticeSetting: z.number().nullish().describe(`
+        * * Field Name: acep_PracticeSetting
+        * * Display Name: acep _Practice Setting
+        * * SQL Data Type: int`),
+    cdi_timezones: z.number().nullish().describe(`
+        * * Field Name: cdi_timezones
+        * * Display Name: cdi _timezones
+        * * SQL Data Type: int`),
+    acep_NeedsanEMRACVRecord: z.boolean().nullish().describe(`
+        * * Field Name: acep_NeedsanEMRACVRecord
+        * * Display Name: acep _Needsan EMRACVRecord
+        * * SQL Data Type: bit`),
+    acep_AutoRenewal: z.boolean().nullish().describe(`
+        * * Field Name: acep_AutoRenewal
+        * * Display Name: acep _Auto Renewal
+        * * SQL Data Type: bit`),
+    acep_PrimaryPractice: z.number().nullish().describe(`
+        * * Field Name: acep_PrimaryPractice
+        * * Display Name: acep _Primary Practice
+        * * SQL Data Type: int`),
+    acep_ShortBiography: z.string().nullish().describe(`
+        * * Field Name: acep_ShortBiography
+        * * Display Name: acep _Short Biography
+        * * SQL Data Type: nvarchar(MAX)`),
+    acep_Disability: z.number().nullish().describe(`
+        * * Field Name: acep_Disability
+        * * Display Name: acep _Disability
+        * * SQL Data Type: int`),
+    acep_PrimaryInterest: z.number().nullish().describe(`
+        * * Field Name: acep_PrimaryInterest
+        * * Display Name: acep _Primary Interest
+        * * SQL Data Type: int`),
+    acep_PrimaryLanguage: z.number().nullish().describe(`
+        * * Field Name: acep_PrimaryLanguage
+        * * Display Name: acep _Primary Language
+        * * SQL Data Type: int`),
+    acep_Pronouns: z.number().nullish().describe(`
+        * * Field Name: acep_Pronouns
+        * * Display Name: acep _Pronouns
+        * * SQL Data Type: int`),
+    acep_SexualOrientation: z.number().nullish().describe(`
+        * * Field Name: acep_SexualOrientation
+        * * Display Name: acep _Sexual Orientation
+        * * SQL Data Type: int`),
+    acep_PaperInvoice: z.boolean().nullish().describe(`
+        * * Field Name: acep_PaperInvoice
+        * * Display Name: acep _Paper Invoice
+        * * SQL Data Type: bit`),
+    acep_AllowRenewalPhone: z.boolean().nullish().describe(`
+        * * Field Name: acep_AllowRenewalPhone
+        * * Display Name: acep _Allow Renewal Phone
+        * * SQL Data Type: bit`),
+    acep_retired: z.boolean().nullish().describe(`
+        * * Field Name: acep_retired
+        * * Display Name: acep _retired
+        * * SQL Data Type: bit`),
+    acep_allowacepnow: z.boolean().nullish().describe(`
+        * * Field Name: acep_allowacepnow
+        * * Display Name: acep _allowacepnow
+        * * SQL Data Type: bit`),
+    acep_allowannals: z.boolean().nullish().describe(`
+        * * Field Name: acep_allowannals
+        * * Display Name: acep _allowannals
+        * * SQL Data Type: bit`),
+    acep_allowchapternews: z.boolean().nullish().describe(`
+        * * Field Name: acep_allowchapternews
+        * * Display Name: acep _allowchapternews
+        * * SQL Data Type: bit`),
+    acep_allowclinicalupdates: z.boolean().nullish().describe(`
+        * * Field Name: acep_allowclinicalupdates
+        * * Display Name: acep _allowclinicalupdates
+        * * SQL Data Type: bit`),
+    acep_allowjacepopen: z.boolean().nullish().describe(`
+        * * Field Name: acep_allowjacepopen
+        * * Display Name: acep _allowjacepopen
+        * * SQL Data Type: bit`),
+    acep_allowmemberbenefits: z.boolean().nullish().describe(`
+        * * Field Name: acep_allowmemberbenefits
+        * * Display Name: acep _allowmemberbenefits
+        * * SQL Data Type: bit`),
+    acep_allowmembershippromotions: z.boolean().nullish().describe(`
+        * * Field Name: acep_allowmembershippromotions
+        * * Display Name: acep _allowmembershippromotions
+        * * SQL Data Type: bit`),
+    acep_acepaccreditationprograms: z.boolean().nullish().describe(`
+        * * Field Name: acep_acepaccreditationprograms
+        * * Display Name: acep _acepaccreditationprograms
+        * * SQL Data Type: bit`),
+    acep_emdatainstitutecedrandequal: z.boolean().nullish().describe(`
+        * * Field Name: acep_emdatainstitutecedrandequal
+        * * Display Name: acep _emdatainstitutecedrandequal
+        * * SQL Data Type: bit`),
+    acep_optoutregyr123: z.boolean().nullish().describe(`
+        * * Field Name: acep_optoutregyr123
+        * * Display Name: acep _optoutregyr 123
+        * * SQL Data Type: bit`),
+});
+
+export type Contact__client_crmEntityType = z.infer<typeof Contact__client_crmSchema>;
+       
+/**
+ * zod schema definition for the entity Customer Address
+ */
+export const CustomerAddressSchema = z.object({
+    Customer_Number: z.string().describe(`
+        * * Field Name: Customer Number
+        * * Display Name: Customer  Number
+        * * SQL Data Type: varchar(15)
+        * * Related Entity/Foreign Key: Customers (vwCustomers.Customer Number)`),
+    Customer_Name: z.string().nullish().describe(`
+        * * Field Name: Customer Name
+        * * Display Name: Customer  Name
+        * * SQL Data Type: varchar(65)`),
+    Address_1: z.string().nullish().describe(`
+        * * Field Name: Address 1
+        * * Display Name: Address  1
+        * * SQL Data Type: varchar(61)`),
+    Address_2: z.string().nullish().describe(`
+        * * Field Name: Address 2
+        * * Display Name: Address  2
+        * * SQL Data Type: varchar(61)`),
+    City: z.string().nullish().describe(`
+        * * Field Name: City
+        * * Display Name: City
+        * * SQL Data Type: varchar(35)`),
+    State: z.string().nullish().describe(`
+        * * Field Name: State
+        * * Display Name: State
+        * * SQL Data Type: varchar(29)`),
+    Zip: z.string().nullish().describe(`
+        * * Field Name: Zip
+        * * Display Name: Zip
+        * * SQL Data Type: varchar(11)`),
+    Phone_1: z.string().nullish().describe(`
+        * * Field Name: Phone 1
+        * * Display Name: Phone  1
+        * * SQL Data Type: varchar(21)`),
+    Accounts_Receivable_Account_Number: z.string().nullish().describe(`
+        * * Field Name: Accounts Receivable Account Number
+        * * Display Name: Accounts  Receivable  Account  Number
+        * * SQL Data Type: varchar(129)`),
+    Address_3: z.string().nullish().describe(`
+        * * Field Name: Address 3
+        * * Display Name: Address  3
+        * * SQL Data Type: varchar(61)`),
+    Address_Code: z.string().describe(`
+        * * Field Name: Address Code
+        * * Display Name: Address  Code
+        * * SQL Data Type: varchar(15)`),
+    Balance_Type: z.string().nullish().describe(`
+        * * Field Name: Balance Type
+        * * Display Name: Balance  Type
+        * * SQL Data Type: varchar(100)`),
+    Bank_Branch: z.string().nullish().describe(`
+        * * Field Name: Bank Branch
+        * * Display Name: Bank  Branch
+        * * SQL Data Type: varchar(21)`),
+    Bank_Name: z.string().nullish().describe(`
+        * * Field Name: Bank Name
+        * * Display Name: Bank  Name
+        * * SQL Data Type: varchar(31)`),
+    COGS_Account_Number: z.string().nullish().describe(`
+        * * Field Name: COGS Account Number
+        * * Display Name: COGS Account  Number
+        * * SQL Data Type: varchar(129)`),
+    Cash_Account_Number: z.string().nullish().describe(`
+        * * Field Name: Cash Account Number
+        * * Display Name: Cash  Account  Number
+        * * SQL Data Type: varchar(129)`),
+    Checkbook_ID: z.string().nullish().describe(`
+        * * Field Name: Checkbook ID
+        * * Display Name: Checkbook  ID
+        * * SQL Data Type: varchar(15)`),
+    Comment1: z.string().nullish().describe(`
+        * * Field Name: Comment1
+        * * Display Name: Comment 1
+        * * SQL Data Type: varchar(31)`),
+    Comment2: z.string().nullish().describe(`
+        * * Field Name: Comment2
+        * * Display Name: Comment 2
+        * * SQL Data Type: varchar(31)`),
+    Contact_Person: z.string().nullish().describe(`
+        * * Field Name: Contact Person
+        * * Display Name: Contact  Person
+        * * SQL Data Type: varchar(61)`),
+    Corporate_Customer_Number: z.string().nullish().describe(`
+        * * Field Name: Corporate Customer Number
+        * * Display Name: Corporate  Customer  Number
+        * * SQL Data Type: varchar(15)`),
+    Country: z.string().nullish().describe(`
+        * * Field Name: Country
+        * * Display Name: Country
+        * * SQL Data Type: varchar(61)`),
+    Created_Date: z.date().nullish().describe(`
+        * * Field Name: Created Date
+        * * Display Name: Created  Date
+        * * SQL Data Type: datetime`),
+    Credit_Card_Exp_Date: z.date().nullish().describe(`
+        * * Field Name: Credit Card Exp Date
+        * * Display Name: Credit  Card  Exp  Date
+        * * SQL Data Type: datetime`),
+    Credit_Card_ID: z.string().nullish().describe(`
+        * * Field Name: Credit Card ID
+        * * Display Name: Credit  Card  ID
+        * * SQL Data Type: varchar(15)`),
+    Credit_Limit_Amount: z.number().nullish().describe(`
+        * * Field Name: Credit Limit Amount
+        * * Display Name: Credit  Limit  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Credit_Limit_Period: z.number().nullish().describe(`
+        * * Field Name: Credit Limit Period
+        * * Display Name: Credit  Limit  Period
+        * * SQL Data Type: smallint`),
+    Credit_Limit_Period_Amount: z.number().nullish().describe(`
+        * * Field Name: Credit Limit Period Amount
+        * * Display Name: Credit  Limit  Period  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Credit_Limit_Type: z.string().nullish().describe(`
+        * * Field Name: Credit Limit Type
+        * * Display Name: Credit  Limit  Type
+        * * SQL Data Type: varchar(100)`),
+    Currency_ID: z.string().nullish().describe(`
+        * * Field Name: Currency ID
+        * * Display Name: Currency  ID
+        * * SQL Data Type: varchar(15)`),
+    Customer_Class: z.string().nullish().describe(`
+        * * Field Name: Customer Class
+        * * Display Name: Customer  Class
+        * * SQL Data Type: varchar(15)`),
+    Customer_Discount: z.number().nullish().describe(`
+        * * Field Name: Customer Discount
+        * * Display Name: Customer  Discount
+        * * SQL Data Type: decimal(13, 6)`),
+    Default_Cash_Account_Type: z.string().nullish().describe(`
+        * * Field Name: Default Cash Account Type
+        * * Display Name: Default  Cash  Account  Type
+        * * SQL Data Type: varchar(100)`),
+    Discount_Grace_Period: z.number().nullish().describe(`
+        * * Field Name: Discount Grace Period
+        * * Display Name: Discount  Grace  Period
+        * * SQL Data Type: smallint`),
+    Discounts_Avail_Account_Number: z.string().nullish().describe(`
+        * * Field Name: Discounts Avail Account Number
+        * * Display Name: Discounts  Avail  Account  Number
+        * * SQL Data Type: varchar(129)`),
+    Discounts_Taken_Account_Number: z.string().nullish().describe(`
+        * * Field Name: Discounts Taken Account Number
+        * * Display Name: Discounts  Taken  Account  Number
+        * * SQL Data Type: varchar(129)`),
+    Document_Format_ID: z.string().nullish().describe(`
+        * * Field Name: Document Format ID
+        * * Display Name: Document  Format  ID
+        * * SQL Data Type: varchar(15)`),
+    Due_Date_Grace_Period: z.number().nullish().describe(`
+        * * Field Name: Due Date Grace Period
+        * * Display Name: Due  Date  Grace  Period
+        * * SQL Data Type: smallint`),
+    Fax: z.string().nullish().describe(`
+        * * Field Name: Fax
+        * * Display Name: Fax
+        * * SQL Data Type: varchar(21)`),
+    Finance_Charge_Account_Number: z.string().nullish().describe(`
+        * * Field Name: Finance Charge Account Number
+        * * Display Name: Finance  Charge  Account  Number
+        * * SQL Data Type: varchar(129)`),
+    Finance_Charge_Amt_Type: z.string().nullish().describe(`
+        * * Field Name: Finance Charge Amt Type
+        * * Display Name: Finance  Charge  Amt  Type
+        * * SQL Data Type: varchar(100)`),
+    Finance_Charge_Dollar: z.number().nullish().describe(`
+        * * Field Name: Finance Charge Dollar
+        * * Display Name: Finance  Charge  Dollar
+        * * SQL Data Type: decimal(19, 5)`),
+    Finance_Charge_ID: z.string().nullish().describe(`
+        * * Field Name: Finance Charge ID
+        * * Display Name: Finance  Charge  ID
+        * * SQL Data Type: varchar(15)`),
+    Finance_Charge_Percent: z.number().nullish().describe(`
+        * * Field Name: Finance Charge Percent
+        * * Display Name: Finance  Charge  Percent
+        * * SQL Data Type: decimal(13, 6)`),
+    First_Invoice_Date: z.date().nullish().describe(`
+        * * Field Name: First Invoice Date
+        * * Display Name: First  Invoice  Date
+        * * SQL Data Type: datetime`),
+    Governmental_Corporate_ID: z.string().nullish().describe(`
+        * * Field Name: Governmental Corporate ID
+        * * Display Name: Governmental  Corporate  ID
+        * * SQL Data Type: varchar(31)`),
+    Governmental_Individual_ID: z.string().nullish().describe(`
+        * * Field Name: Governmental Individual ID
+        * * Display Name: Governmental  Individual  ID
+        * * SQL Data Type: varchar(31)`),
+    Hold: z.string().nullish().describe(`
+        * * Field Name: Hold
+        * * Display Name: Hold
+        * * SQL Data Type: varchar(100)`),
+    INet1: z.string().nullish().describe(`
+        * * Field Name: INet1
+        * * Display Name: INet 1
+        * * SQL Data Type: varchar(201)`),
+    INet2: z.string().nullish().describe(`
+        * * Field Name: INet2
+        * * Display Name: INet 2
+        * * SQL Data Type: varchar(201)`),
+    INet3: z.string().nullish().describe(`
+        * * Field Name: INet3
+        * * Display Name: INet 3
+        * * SQL Data Type: varchar(201)`),
+    INet4: z.string().nullish().describe(`
+        * * Field Name: INet4
+        * * Display Name: INet 4
+        * * SQL Data Type: varchar(201)`),
+    INet5: z.string().nullish().describe(`
+        * * Field Name: INet5
+        * * Display Name: INet 5
+        * * SQL Data Type: varchar(201)`),
+    INet6: z.string().nullish().describe(`
+        * * Field Name: INet6
+        * * Display Name: INet 6
+        * * SQL Data Type: varchar(201)`),
+    INet7: z.string().nullish().describe(`
+        * * Field Name: INet7
+        * * Display Name: INet 7
+        * * SQL Data Type: varchar(201)`),
+    INet8: z.string().nullish().describe(`
+        * * Field Name: INet8
+        * * Display Name: INet 8
+        * * SQL Data Type: varchar(201)`),
+    Inactive: z.string().nullish().describe(`
+        * * Field Name: Inactive
+        * * Display Name: Inactive
+        * * SQL Data Type: varchar(100)`),
+    Inventory_Account_Number: z.string().nullish().describe(`
+        * * Field Name: Inventory Account Number
+        * * Display Name: Inventory  Account  Number
+        * * SQL Data Type: varchar(129)`),
+    Keep_Calendar_History: z.string().nullish().describe(`
+        * * Field Name: Keep Calendar History
+        * * Display Name: Keep  Calendar  History
+        * * SQL Data Type: varchar(100)`),
+    Keep_Distribution_History: z.string().nullish().describe(`
+        * * Field Name: Keep Distribution History
+        * * Display Name: Keep  Distribution  History
+        * * SQL Data Type: varchar(100)`),
+    Keep_Period_History: z.string().nullish().describe(`
+        * * Field Name: Keep Period History
+        * * Display Name: Keep  Period  History
+        * * SQL Data Type: varchar(100)`),
+    Keep_Trx_History: z.string().nullish().describe(`
+        * * Field Name: Keep Trx History
+        * * Display Name: Keep  Trx  History
+        * * SQL Data Type: varchar(100)`),
+    Max_Writeoff_Amount: z.number().nullish().describe(`
+        * * Field Name: Max Writeoff Amount
+        * * Display Name: Max  Writeoff  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Maximum_Writeoff_Type: z.string().nullish().describe(`
+        * * Field Name: Maximum Writeoff Type
+        * * Display Name: Maximum  Writeoff  Type
+        * * SQL Data Type: varchar(100)`),
+    Minimum_Payment_Dollar: z.number().nullish().describe(`
+        * * Field Name: Minimum Payment Dollar
+        * * Display Name: Minimum  Payment  Dollar
+        * * SQL Data Type: decimal(19, 5)`),
+    Minimum_Payment_Percent: z.number().nullish().describe(`
+        * * Field Name: Minimum Payment Percent
+        * * Display Name: Minimum  Payment  Percent
+        * * SQL Data Type: decimal(13, 6)`),
+    Minimum_Payment_Type: z.string().nullish().describe(`
+        * * Field Name: Minimum Payment Type
+        * * Display Name: Minimum  Payment  Type
+        * * SQL Data Type: varchar(100)`),
+    Modified_Date: z.date().nullish().describe(`
+        * * Field Name: Modified Date
+        * * Display Name: Modified  Date
+        * * SQL Data Type: datetime`),
+    Note_Index: z.number().nullish().describe(`
+        * * Field Name: Note Index
+        * * Display Name: Note  Index
+        * * SQL Data Type: decimal(19, 5)`),
+    Order_Fulfillment_Shortage_Default: z.string().nullish().describe(`
+        * * Field Name: Order Fulfillment Shortage Default
+        * * Display Name: Order  Fulfillment  Shortage  Default
+        * * SQL Data Type: varchar(100)`),
+    Payment_Terms_ID: z.string().nullish().describe(`
+        * * Field Name: Payment Terms ID
+        * * Display Name: Payment  Terms  ID
+        * * SQL Data Type: varchar(21)`),
+    Phone_2: z.string().nullish().describe(`
+        * * Field Name: Phone 2
+        * * Display Name: Phone  2
+        * * SQL Data Type: varchar(21)`),
+    Phone_3: z.string().nullish().describe(`
+        * * Field Name: Phone 3
+        * * Display Name: Phone  3
+        * * SQL Data Type: varchar(21)`),
+    Post_Results_To: z.string().nullish().describe(`
+        * * Field Name: Post Results To
+        * * Display Name: Post  Results  To
+        * * SQL Data Type: varchar(100)`),
+    PriceLevel: z.string().nullish().describe(`
+        * * Field Name: PriceLevel
+        * * Display Name: Price Level
+        * * SQL Data Type: varchar(11)`),
+    Primary_Billto_Address_Code: z.string().nullish().describe(`
+        * * Field Name: Primary Billto Address Code
+        * * Display Name: Primary  Billto  Address  Code
+        * * SQL Data Type: varchar(15)`),
+    Primary_Shipto_Address_Code: z.string().nullish().describe(`
+        * * Field Name: Primary Shipto Address Code
+        * * Display Name: Primary  Shipto  Address  Code
+        * * SQL Data Type: varchar(15)`),
+    Priority: z.string().nullish().describe(`
+        * * Field Name: Priority
+        * * Display Name: Priority
+        * * SQL Data Type: varchar(100)`),
+    Rate_Type_ID: z.string().nullish().describe(`
+        * * Field Name: Rate Type ID
+        * * Display Name: Rate  Type  ID
+        * * SQL Data Type: varchar(15)`),
+    Revalue_Customer: z.string().nullish().describe(`
+        * * Field Name: Revalue Customer
+        * * Display Name: Revalue  Customer
+        * * SQL Data Type: varchar(100)`),
+    Sales_Account_Number: z.string().nullish().describe(`
+        * * Field Name: Sales Account Number
+        * * Display Name: Sales  Account  Number
+        * * SQL Data Type: varchar(129)`),
+    Sales_Territory: z.string().nullish().describe(`
+        * * Field Name: Sales Territory
+        * * Display Name: Sales  Territory
+        * * SQL Data Type: varchar(15)`),
+    Salesperson_ID: z.string().nullish().describe(`
+        * * Field Name: Salesperson ID
+        * * Display Name: Salesperson  ID
+        * * SQL Data Type: varchar(15)`),
+    Salesperson_ID_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: Salesperson ID from Customer Master
+        * * Display Name: Salesperson  ID from  Customer  Master
+        * * SQL Data Type: varchar(15)`),
+    Shipping_Method: z.string().nullish().describe(`
+        * * Field Name: Shipping Method
+        * * Display Name: Shipping  Method
+        * * SQL Data Type: varchar(15)`),
+    Short_Name: z.string().nullish().describe(`
+        * * Field Name: Short Name
+        * * Display Name: Short  Name
+        * * SQL Data Type: varchar(15)`),
+    Site_ID: z.string().nullish().describe(`
+        * * Field Name: Site ID
+        * * Display Name: Site  ID
+        * * SQL Data Type: varchar(11)`),
+    Statement_Address_Code: z.string().nullish().describe(`
+        * * Field Name: Statement Address Code
+        * * Display Name: Statement  Address  Code
+        * * SQL Data Type: varchar(15)`),
+    Statement_Cycle: z.string().nullish().describe(`
+        * * Field Name: Statement Cycle
+        * * Display Name: Statement  Cycle
+        * * SQL Data Type: varchar(100)`),
+    Statement_Name: z.string().nullish().describe(`
+        * * Field Name: Statement Name
+        * * Display Name: Statement  Name
+        * * SQL Data Type: varchar(65)`),
+    Tax_Exempt_1: z.string().nullish().describe(`
+        * * Field Name: Tax Exempt 1
+        * * Display Name: Tax  Exempt  1
+        * * SQL Data Type: varchar(25)`),
+    Tax_Exempt_2: z.string().nullish().describe(`
+        * * Field Name: Tax Exempt 2
+        * * Display Name: Tax  Exempt  2
+        * * SQL Data Type: varchar(25)`),
+    Tax_Registration_Number: z.string().nullish().describe(`
+        * * Field Name: Tax Registration Number
+        * * Display Name: Tax  Registration  Number
+        * * SQL Data Type: varchar(25)`),
+    Tax_Schedule_ID: z.string().nullish().describe(`
+        * * Field Name: Tax Schedule ID
+        * * Display Name: Tax  Schedule  ID
+        * * SQL Data Type: varchar(15)`),
+    Territory_ID: z.string().nullish().describe(`
+        * * Field Name: Territory ID
+        * * Display Name: Territory  ID
+        * * SQL Data Type: varchar(15)`),
+    UPS_Zone: z.string().nullish().describe(`
+        * * Field Name: UPS Zone
+        * * Display Name: UPS Zone
+        * * SQL Data Type: varchar(3)`),
+    User_Defined_1: z.string().nullish().describe(`
+        * * Field Name: User Defined 1
+        * * Display Name: User  Defined  1
+        * * SQL Data Type: varchar(21)`),
+    User_Defined_1_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: User Defined 1 from Customer Master
+        * * Display Name: User  Defined  1 from  Customer  Master
+        * * SQL Data Type: varchar(21)`),
+    User_Defined_2: z.string().nullish().describe(`
+        * * Field Name: User Defined 2
+        * * Display Name: User  Defined  2
+        * * SQL Data Type: varchar(21)`),
+    User_Defined_2_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: User Defined 2 from Customer Master
+        * * Display Name: User  Defined  2 from  Customer  Master
+        * * SQL Data Type: varchar(21)`),
+    Writeoff_Account_Number: z.string().nullish().describe(`
+        * * Field Name: Writeoff Account Number
+        * * Display Name: Writeoff  Account  Number
+        * * SQL Data Type: varchar(129)`),
+    Accounts_Receivable_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Accounts Receivable Account Number For Drillback
+        * * Display Name: Accounts  Receivable  Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Cash_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Cash Account Number For Drillback
+        * * Display Name: Cash  Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Checkbook_ID_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Checkbook ID For Drillback
+        * * Display Name: Checkbook  ID For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    COGS_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: COGS Account Number For Drillback
+        * * Display Name: COGS Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Customer_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Customer Number For Drillback
+        * * Display Name: Customer  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Discounts_Avail_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Discounts Avail Account Number For Drillback
+        * * Display Name: Discounts  Avail  Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Discounts_Taken_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Discounts Taken Account Number For Drillback
+        * * Display Name: Discounts  Taken  Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Finance_Charge_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Finance Charge Account Number For Drillback
+        * * Display Name: Finance  Charge  Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Inventory_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Inventory Account Number For Drillback
+        * * Display Name: Inventory  Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Sales_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Sales Account Number For Drillback
+        * * Display Name: Sales  Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Salesperson_ID_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Salesperson ID For Drillback
+        * * Display Name: Salesperson  ID For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Writeoff_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Writeoff Account Number For Drillback
+        * * Display Name: Writeoff  Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+});
+
+export type CustomerAddressEntityType = z.infer<typeof CustomerAddressSchema>;
+       
+/**
+ * zod schema definition for the entity Customer Address__client_finance
+ */
+export const CustomerAddress__client_financeSchema = z.object({
+    Customer_Number: z.string().describe(`
+        * * Field Name: Customer Number
+        * * Display Name: Customer  Number
+        * * SQL Data Type: varchar(15)
+        * * Related Entity/Foreign Key: Customers__client_finance (vwCustomers__client_finance.Customer Number)`),
+    Customer_Name: z.string().nullish().describe(`
+        * * Field Name: Customer Name
+        * * Display Name: Customer  Name
+        * * SQL Data Type: varchar(65)`),
+    Address_1: z.string().nullish().describe(`
+        * * Field Name: Address 1
+        * * Display Name: Address  1
+        * * SQL Data Type: varchar(61)`),
+    Address_2: z.string().nullish().describe(`
+        * * Field Name: Address 2
+        * * Display Name: Address  2
+        * * SQL Data Type: varchar(61)`),
+    City: z.string().nullish().describe(`
+        * * Field Name: City
+        * * Display Name: City
+        * * SQL Data Type: varchar(35)`),
+    State: z.string().nullish().describe(`
+        * * Field Name: State
+        * * Display Name: State
+        * * SQL Data Type: varchar(29)`),
+    Zip: z.string().nullish().describe(`
+        * * Field Name: Zip
+        * * Display Name: Zip
+        * * SQL Data Type: varchar(11)`),
+    Phone_1: z.string().nullish().describe(`
+        * * Field Name: Phone 1
+        * * Display Name: Phone  1
+        * * SQL Data Type: varchar(21)`),
+    Accounts_Receivable_Account_Number: z.string().nullish().describe(`
+        * * Field Name: Accounts Receivable Account Number
+        * * Display Name: Accounts  Receivable  Account  Number
+        * * SQL Data Type: varchar(129)`),
+    Address_3: z.string().nullish().describe(`
+        * * Field Name: Address 3
+        * * Display Name: Address  3
+        * * SQL Data Type: varchar(61)`),
+    Address_Code: z.string().describe(`
+        * * Field Name: Address Code
+        * * Display Name: Address  Code
+        * * SQL Data Type: varchar(15)`),
+    Balance_Type: z.string().nullish().describe(`
+        * * Field Name: Balance Type
+        * * Display Name: Balance  Type
+        * * SQL Data Type: varchar(100)`),
+    Bank_Branch: z.string().nullish().describe(`
+        * * Field Name: Bank Branch
+        * * Display Name: Bank  Branch
+        * * SQL Data Type: varchar(21)`),
+    Bank_Name: z.string().nullish().describe(`
+        * * Field Name: Bank Name
+        * * Display Name: Bank  Name
+        * * SQL Data Type: varchar(31)`),
+    COGS_Account_Number: z.string().nullish().describe(`
+        * * Field Name: COGS Account Number
+        * * Display Name: COGS Account  Number
+        * * SQL Data Type: varchar(129)`),
+    Cash_Account_Number: z.string().nullish().describe(`
+        * * Field Name: Cash Account Number
+        * * Display Name: Cash  Account  Number
+        * * SQL Data Type: varchar(129)`),
+    Checkbook_ID: z.string().nullish().describe(`
+        * * Field Name: Checkbook ID
+        * * Display Name: Checkbook  ID
+        * * SQL Data Type: varchar(15)`),
+    Comment1: z.string().nullish().describe(`
+        * * Field Name: Comment1
+        * * Display Name: Comment 1
+        * * SQL Data Type: varchar(31)`),
+    Comment2: z.string().nullish().describe(`
+        * * Field Name: Comment2
+        * * Display Name: Comment 2
+        * * SQL Data Type: varchar(31)`),
+    Contact_Person: z.string().nullish().describe(`
+        * * Field Name: Contact Person
+        * * Display Name: Contact  Person
+        * * SQL Data Type: varchar(61)`),
+    Corporate_Customer_Number: z.string().nullish().describe(`
+        * * Field Name: Corporate Customer Number
+        * * Display Name: Corporate  Customer  Number
+        * * SQL Data Type: varchar(15)`),
+    Country: z.string().nullish().describe(`
+        * * Field Name: Country
+        * * Display Name: Country
+        * * SQL Data Type: varchar(61)`),
+    Created_Date: z.date().nullish().describe(`
+        * * Field Name: Created Date
+        * * Display Name: Created  Date
+        * * SQL Data Type: datetime`),
+    Credit_Card_Exp_Date: z.date().nullish().describe(`
+        * * Field Name: Credit Card Exp Date
+        * * Display Name: Credit  Card  Exp  Date
+        * * SQL Data Type: datetime`),
+    Credit_Card_ID: z.string().nullish().describe(`
+        * * Field Name: Credit Card ID
+        * * Display Name: Credit  Card  ID
+        * * SQL Data Type: varchar(15)`),
+    Credit_Limit_Amount: z.number().nullish().describe(`
+        * * Field Name: Credit Limit Amount
+        * * Display Name: Credit  Limit  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Credit_Limit_Period: z.number().nullish().describe(`
+        * * Field Name: Credit Limit Period
+        * * Display Name: Credit  Limit  Period
+        * * SQL Data Type: smallint`),
+    Credit_Limit_Period_Amount: z.number().nullish().describe(`
+        * * Field Name: Credit Limit Period Amount
+        * * Display Name: Credit  Limit  Period  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Credit_Limit_Type: z.string().nullish().describe(`
+        * * Field Name: Credit Limit Type
+        * * Display Name: Credit  Limit  Type
+        * * SQL Data Type: varchar(100)`),
+    Currency_ID: z.string().nullish().describe(`
+        * * Field Name: Currency ID
+        * * Display Name: Currency  ID
+        * * SQL Data Type: varchar(15)`),
+    Customer_Class: z.string().nullish().describe(`
+        * * Field Name: Customer Class
+        * * Display Name: Customer  Class
+        * * SQL Data Type: varchar(15)`),
+    Customer_Discount: z.number().nullish().describe(`
+        * * Field Name: Customer Discount
+        * * Display Name: Customer  Discount
+        * * SQL Data Type: decimal(13, 6)`),
+    Default_Cash_Account_Type: z.string().nullish().describe(`
+        * * Field Name: Default Cash Account Type
+        * * Display Name: Default  Cash  Account  Type
+        * * SQL Data Type: varchar(100)`),
+    Discount_Grace_Period: z.number().nullish().describe(`
+        * * Field Name: Discount Grace Period
+        * * Display Name: Discount  Grace  Period
+        * * SQL Data Type: smallint`),
+    Discounts_Avail_Account_Number: z.string().nullish().describe(`
+        * * Field Name: Discounts Avail Account Number
+        * * Display Name: Discounts  Avail  Account  Number
+        * * SQL Data Type: varchar(129)`),
+    Discounts_Taken_Account_Number: z.string().nullish().describe(`
+        * * Field Name: Discounts Taken Account Number
+        * * Display Name: Discounts  Taken  Account  Number
+        * * SQL Data Type: varchar(129)`),
+    Document_Format_ID: z.string().nullish().describe(`
+        * * Field Name: Document Format ID
+        * * Display Name: Document  Format  ID
+        * * SQL Data Type: varchar(15)`),
+    Due_Date_Grace_Period: z.number().nullish().describe(`
+        * * Field Name: Due Date Grace Period
+        * * Display Name: Due  Date  Grace  Period
+        * * SQL Data Type: smallint`),
+    Fax: z.string().nullish().describe(`
+        * * Field Name: Fax
+        * * Display Name: Fax
+        * * SQL Data Type: varchar(21)`),
+    Finance_Charge_Account_Number: z.string().nullish().describe(`
+        * * Field Name: Finance Charge Account Number
+        * * Display Name: Finance  Charge  Account  Number
+        * * SQL Data Type: varchar(129)`),
+    Finance_Charge_Amt_Type: z.string().nullish().describe(`
+        * * Field Name: Finance Charge Amt Type
+        * * Display Name: Finance  Charge  Amt  Type
+        * * SQL Data Type: varchar(100)`),
+    Finance_Charge_Dollar: z.number().nullish().describe(`
+        * * Field Name: Finance Charge Dollar
+        * * Display Name: Finance  Charge  Dollar
+        * * SQL Data Type: decimal(19, 5)`),
+    Finance_Charge_ID: z.string().nullish().describe(`
+        * * Field Name: Finance Charge ID
+        * * Display Name: Finance  Charge  ID
+        * * SQL Data Type: varchar(15)`),
+    Finance_Charge_Percent: z.number().nullish().describe(`
+        * * Field Name: Finance Charge Percent
+        * * Display Name: Finance  Charge  Percent
+        * * SQL Data Type: decimal(13, 6)`),
+    First_Invoice_Date: z.date().nullish().describe(`
+        * * Field Name: First Invoice Date
+        * * Display Name: First  Invoice  Date
+        * * SQL Data Type: datetime`),
+    Governmental_Corporate_ID: z.string().nullish().describe(`
+        * * Field Name: Governmental Corporate ID
+        * * Display Name: Governmental  Corporate  ID
+        * * SQL Data Type: varchar(31)`),
+    Governmental_Individual_ID: z.string().nullish().describe(`
+        * * Field Name: Governmental Individual ID
+        * * Display Name: Governmental  Individual  ID
+        * * SQL Data Type: varchar(31)`),
+    Hold: z.string().nullish().describe(`
+        * * Field Name: Hold
+        * * Display Name: Hold
+        * * SQL Data Type: varchar(100)`),
+    INet1: z.string().nullish().describe(`
+        * * Field Name: INet1
+        * * Display Name: INet 1
+        * * SQL Data Type: varchar(201)`),
+    INet2: z.string().nullish().describe(`
+        * * Field Name: INet2
+        * * Display Name: INet 2
+        * * SQL Data Type: varchar(201)`),
+    INet3: z.string().nullish().describe(`
+        * * Field Name: INet3
+        * * Display Name: INet 3
+        * * SQL Data Type: varchar(201)`),
+    INet4: z.string().nullish().describe(`
+        * * Field Name: INet4
+        * * Display Name: INet 4
+        * * SQL Data Type: varchar(201)`),
+    INet5: z.string().nullish().describe(`
+        * * Field Name: INet5
+        * * Display Name: INet 5
+        * * SQL Data Type: varchar(201)`),
+    INet6: z.string().nullish().describe(`
+        * * Field Name: INet6
+        * * Display Name: INet 6
+        * * SQL Data Type: varchar(201)`),
+    INet7: z.string().nullish().describe(`
+        * * Field Name: INet7
+        * * Display Name: INet 7
+        * * SQL Data Type: varchar(201)`),
+    INet8: z.string().nullish().describe(`
+        * * Field Name: INet8
+        * * Display Name: INet 8
+        * * SQL Data Type: varchar(201)`),
+    Inactive: z.string().nullish().describe(`
+        * * Field Name: Inactive
+        * * Display Name: Inactive
+        * * SQL Data Type: varchar(100)`),
+    Inventory_Account_Number: z.string().nullish().describe(`
+        * * Field Name: Inventory Account Number
+        * * Display Name: Inventory  Account  Number
+        * * SQL Data Type: varchar(129)`),
+    Keep_Calendar_History: z.string().nullish().describe(`
+        * * Field Name: Keep Calendar History
+        * * Display Name: Keep  Calendar  History
+        * * SQL Data Type: varchar(100)`),
+    Keep_Distribution_History: z.string().nullish().describe(`
+        * * Field Name: Keep Distribution History
+        * * Display Name: Keep  Distribution  History
+        * * SQL Data Type: varchar(100)`),
+    Keep_Period_History: z.string().nullish().describe(`
+        * * Field Name: Keep Period History
+        * * Display Name: Keep  Period  History
+        * * SQL Data Type: varchar(100)`),
+    Keep_Trx_History: z.string().nullish().describe(`
+        * * Field Name: Keep Trx History
+        * * Display Name: Keep  Trx  History
+        * * SQL Data Type: varchar(100)`),
+    Max_Writeoff_Amount: z.number().nullish().describe(`
+        * * Field Name: Max Writeoff Amount
+        * * Display Name: Max  Writeoff  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Maximum_Writeoff_Type: z.string().nullish().describe(`
+        * * Field Name: Maximum Writeoff Type
+        * * Display Name: Maximum  Writeoff  Type
+        * * SQL Data Type: varchar(100)`),
+    Minimum_Payment_Dollar: z.number().nullish().describe(`
+        * * Field Name: Minimum Payment Dollar
+        * * Display Name: Minimum  Payment  Dollar
+        * * SQL Data Type: decimal(19, 5)`),
+    Minimum_Payment_Percent: z.number().nullish().describe(`
+        * * Field Name: Minimum Payment Percent
+        * * Display Name: Minimum  Payment  Percent
+        * * SQL Data Type: decimal(13, 6)`),
+    Minimum_Payment_Type: z.string().nullish().describe(`
+        * * Field Name: Minimum Payment Type
+        * * Display Name: Minimum  Payment  Type
+        * * SQL Data Type: varchar(100)`),
+    Modified_Date: z.date().nullish().describe(`
+        * * Field Name: Modified Date
+        * * Display Name: Modified  Date
+        * * SQL Data Type: datetime`),
+    Note_Index: z.number().nullish().describe(`
+        * * Field Name: Note Index
+        * * Display Name: Note  Index
+        * * SQL Data Type: decimal(19, 5)`),
+    Order_Fulfillment_Shortage_Default: z.string().nullish().describe(`
+        * * Field Name: Order Fulfillment Shortage Default
+        * * Display Name: Order  Fulfillment  Shortage  Default
+        * * SQL Data Type: varchar(100)`),
+    Payment_Terms_ID: z.string().nullish().describe(`
+        * * Field Name: Payment Terms ID
+        * * Display Name: Payment  Terms  ID
+        * * SQL Data Type: varchar(21)`),
+    Phone_2: z.string().nullish().describe(`
+        * * Field Name: Phone 2
+        * * Display Name: Phone  2
+        * * SQL Data Type: varchar(21)`),
+    Phone_3: z.string().nullish().describe(`
+        * * Field Name: Phone 3
+        * * Display Name: Phone  3
+        * * SQL Data Type: varchar(21)`),
+    Post_Results_To: z.string().nullish().describe(`
+        * * Field Name: Post Results To
+        * * Display Name: Post  Results  To
+        * * SQL Data Type: varchar(100)`),
+    PriceLevel: z.string().nullish().describe(`
+        * * Field Name: PriceLevel
+        * * Display Name: Price Level
+        * * SQL Data Type: varchar(11)`),
+    Primary_Billto_Address_Code: z.string().nullish().describe(`
+        * * Field Name: Primary Billto Address Code
+        * * Display Name: Primary  Billto  Address  Code
+        * * SQL Data Type: varchar(15)`),
+    Primary_Shipto_Address_Code: z.string().nullish().describe(`
+        * * Field Name: Primary Shipto Address Code
+        * * Display Name: Primary  Shipto  Address  Code
+        * * SQL Data Type: varchar(15)`),
+    Priority: z.string().nullish().describe(`
+        * * Field Name: Priority
+        * * Display Name: Priority
+        * * SQL Data Type: varchar(100)`),
+    Rate_Type_ID: z.string().nullish().describe(`
+        * * Field Name: Rate Type ID
+        * * Display Name: Rate  Type  ID
+        * * SQL Data Type: varchar(15)`),
+    Revalue_Customer: z.string().nullish().describe(`
+        * * Field Name: Revalue Customer
+        * * Display Name: Revalue  Customer
+        * * SQL Data Type: varchar(100)`),
+    Sales_Account_Number: z.string().nullish().describe(`
+        * * Field Name: Sales Account Number
+        * * Display Name: Sales  Account  Number
+        * * SQL Data Type: varchar(129)`),
+    Sales_Territory: z.string().nullish().describe(`
+        * * Field Name: Sales Territory
+        * * Display Name: Sales  Territory
+        * * SQL Data Type: varchar(15)`),
+    Salesperson_ID: z.string().nullish().describe(`
+        * * Field Name: Salesperson ID
+        * * Display Name: Salesperson  ID
+        * * SQL Data Type: varchar(15)`),
+    Salesperson_ID_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: Salesperson ID from Customer Master
+        * * Display Name: Salesperson  ID from  Customer  Master
+        * * SQL Data Type: varchar(15)`),
+    Shipping_Method: z.string().nullish().describe(`
+        * * Field Name: Shipping Method
+        * * Display Name: Shipping  Method
+        * * SQL Data Type: varchar(15)`),
+    Short_Name: z.string().nullish().describe(`
+        * * Field Name: Short Name
+        * * Display Name: Short  Name
+        * * SQL Data Type: varchar(15)`),
+    Site_ID: z.string().nullish().describe(`
+        * * Field Name: Site ID
+        * * Display Name: Site  ID
+        * * SQL Data Type: varchar(11)`),
+    Statement_Address_Code: z.string().nullish().describe(`
+        * * Field Name: Statement Address Code
+        * * Display Name: Statement  Address  Code
+        * * SQL Data Type: varchar(15)`),
+    Statement_Cycle: z.string().nullish().describe(`
+        * * Field Name: Statement Cycle
+        * * Display Name: Statement  Cycle
+        * * SQL Data Type: varchar(100)`),
+    Statement_Name: z.string().nullish().describe(`
+        * * Field Name: Statement Name
+        * * Display Name: Statement  Name
+        * * SQL Data Type: varchar(65)`),
+    Tax_Exempt_1: z.string().nullish().describe(`
+        * * Field Name: Tax Exempt 1
+        * * Display Name: Tax  Exempt  1
+        * * SQL Data Type: varchar(25)`),
+    Tax_Exempt_2: z.string().nullish().describe(`
+        * * Field Name: Tax Exempt 2
+        * * Display Name: Tax  Exempt  2
+        * * SQL Data Type: varchar(25)`),
+    Tax_Registration_Number: z.string().nullish().describe(`
+        * * Field Name: Tax Registration Number
+        * * Display Name: Tax  Registration  Number
+        * * SQL Data Type: varchar(25)`),
+    Tax_Schedule_ID: z.string().nullish().describe(`
+        * * Field Name: Tax Schedule ID
+        * * Display Name: Tax  Schedule  ID
+        * * SQL Data Type: varchar(15)`),
+    Territory_ID: z.string().nullish().describe(`
+        * * Field Name: Territory ID
+        * * Display Name: Territory  ID
+        * * SQL Data Type: varchar(15)`),
+    UPS_Zone: z.string().nullish().describe(`
+        * * Field Name: UPS Zone
+        * * Display Name: UPS Zone
+        * * SQL Data Type: varchar(3)`),
+    User_Defined_1: z.string().nullish().describe(`
+        * * Field Name: User Defined 1
+        * * Display Name: User  Defined  1
+        * * SQL Data Type: varchar(21)`),
+    User_Defined_1_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: User Defined 1 from Customer Master
+        * * Display Name: User  Defined  1 from  Customer  Master
+        * * SQL Data Type: varchar(21)`),
+    User_Defined_2: z.string().nullish().describe(`
+        * * Field Name: User Defined 2
+        * * Display Name: User  Defined  2
+        * * SQL Data Type: varchar(21)`),
+    User_Defined_2_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: User Defined 2 from Customer Master
+        * * Display Name: User  Defined  2 from  Customer  Master
+        * * SQL Data Type: varchar(21)`),
+    Writeoff_Account_Number: z.string().nullish().describe(`
+        * * Field Name: Writeoff Account Number
+        * * Display Name: Writeoff  Account  Number
+        * * SQL Data Type: varchar(129)`),
+    Accounts_Receivable_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Accounts Receivable Account Number For Drillback
+        * * Display Name: Accounts  Receivable  Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Cash_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Cash Account Number For Drillback
+        * * Display Name: Cash  Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Checkbook_ID_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Checkbook ID For Drillback
+        * * Display Name: Checkbook  ID For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    COGS_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: COGS Account Number For Drillback
+        * * Display Name: COGS Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Customer_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Customer Number For Drillback
+        * * Display Name: Customer  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Discounts_Avail_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Discounts Avail Account Number For Drillback
+        * * Display Name: Discounts  Avail  Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Discounts_Taken_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Discounts Taken Account Number For Drillback
+        * * Display Name: Discounts  Taken  Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Finance_Charge_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Finance Charge Account Number For Drillback
+        * * Display Name: Finance  Charge  Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Inventory_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Inventory Account Number For Drillback
+        * * Display Name: Inventory  Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Sales_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Sales Account Number For Drillback
+        * * Display Name: Sales  Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Salesperson_ID_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Salesperson ID For Drillback
+        * * Display Name: Salesperson  ID For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Writeoff_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Writeoff Account Number For Drillback
+        * * Display Name: Writeoff  Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+});
+
+export type CustomerAddress__client_financeEntityType = z.infer<typeof CustomerAddress__client_financeSchema>;
+       
+/**
+ * zod schema definition for the entity Customers
+ */
+export const CustomerSchema = z.object({
+    Customer_Number: z.string().describe(`
+        * * Field Name: Customer Number
+        * * Display Name: Customer  Number
+        * * SQL Data Type: varchar(15)`),
+    Customer_Name: z.string().nullish().describe(`
+        * * Field Name: Customer Name
+        * * Display Name: Customer  Name
+        * * SQL Data Type: varchar(65)`),
+    Address_1: z.string().nullish().describe(`
+        * * Field Name: Address 1
+        * * Display Name: Address  1
+        * * SQL Data Type: varchar(61)`),
+    Address_2: z.string().nullish().describe(`
+        * * Field Name: Address 2
+        * * Display Name: Address  2
+        * * SQL Data Type: varchar(61)`),
+    City: z.string().nullish().describe(`
+        * * Field Name: City
+        * * Display Name: City
+        * * SQL Data Type: varchar(35)`),
+    State: z.string().nullish().describe(`
+        * * Field Name: State
+        * * Display Name: State
+        * * SQL Data Type: varchar(29)`),
+    Zip: z.string().nullish().describe(`
+        * * Field Name: Zip
+        * * Display Name: Zip
+        * * SQL Data Type: varchar(11)`),
+    Phone_1: z.string().nullish().describe(`
+        * * Field Name: Phone 1
+        * * Display Name: Phone  1
+        * * SQL Data Type: varchar(21)`),
+    Aging_Bucket1: z.number().nullish().describe(`
+        * * Field Name: Aging Bucket1
+        * * Display Name: Aging  Bucket 1
+        * * SQL Data Type: decimal(19, 5)`),
+    Aging_Bucket2: z.number().nullish().describe(`
+        * * Field Name: Aging Bucket2
+        * * Display Name: Aging  Bucket 2
+        * * SQL Data Type: decimal(19, 5)`),
+    Aging_Bucket3: z.number().nullish().describe(`
+        * * Field Name: Aging Bucket3
+        * * Display Name: Aging  Bucket 3
+        * * SQL Data Type: decimal(19, 5)`),
+    Aging_Bucket4: z.number().nullish().describe(`
+        * * Field Name: Aging Bucket4
+        * * Display Name: Aging  Bucket 4
+        * * SQL Data Type: decimal(19, 5)`),
+    Aging_Bucket5: z.number().nullish().describe(`
+        * * Field Name: Aging Bucket5
+        * * Display Name: Aging  Bucket 5
+        * * SQL Data Type: decimal(19, 5)`),
+    Aging_Bucket6: z.number().nullish().describe(`
+        * * Field Name: Aging Bucket6
+        * * Display Name: Aging  Bucket 6
+        * * SQL Data Type: decimal(19, 5)`),
+    Aging_Bucket7: z.number().nullish().describe(`
+        * * Field Name: Aging Bucket7
+        * * Display Name: Aging  Bucket 7
+        * * SQL Data Type: decimal(19, 5)`),
+    Accounts_Receivable_Account_Number: z.string().nullish().describe(`
+        * * Field Name: Accounts Receivable Account Number
+        * * Display Name: Accounts  Receivable  Account  Number
+        * * SQL Data Type: varchar(129)`),
+    Address_3: z.string().nullish().describe(`
+        * * Field Name: Address 3
+        * * Display Name: Address  3
+        * * SQL Data Type: varchar(61)`),
+    Address_Code: z.string().nullish().describe(`
+        * * Field Name: Address Code
+        * * Display Name: Address  Code
+        * * SQL Data Type: varchar(15)`),
+    Average_Days_To_Pay___Life: z.number().nullish().describe(`
+        * * Field Name: Average Days To Pay - Life
+        * * Display Name: Average  Days  To  Pay  - Life
+        * * SQL Data Type: smallint`),
+    Average_Days_To_Pay___Year: z.number().nullish().describe(`
+        * * Field Name: Average Days To Pay - Year
+        * * Display Name: Average  Days  To  Pay  - Year
+        * * SQL Data Type: smallint`),
+    Average_Days_to_Pay___LYR: z.number().nullish().describe(`
+        * * Field Name: Average Days to Pay - LYR
+        * * Display Name: Average  Days  to  Pay  - LYR
+        * * SQL Data Type: smallint`),
+    Balance_Type: z.string().nullish().describe(`
+        * * Field Name: Balance Type
+        * * Display Name: Balance  Type
+        * * SQL Data Type: varchar(100)`),
+    Bank_Branch: z.string().nullish().describe(`
+        * * Field Name: Bank Branch
+        * * Display Name: Bank  Branch
+        * * SQL Data Type: varchar(21)`),
+    Bank_Name: z.string().nullish().describe(`
+        * * Field Name: Bank Name
+        * * Display Name: Bank  Name
+        * * SQL Data Type: varchar(31)`),
+    COGS_Account_Number: z.string().nullish().describe(`
+        * * Field Name: COGS Account Number
+        * * Display Name: COGS Account  Number
+        * * SQL Data Type: varchar(129)`),
+    Cash_Account_Number: z.string().nullish().describe(`
+        * * Field Name: Cash Account Number
+        * * Display Name: Cash  Account  Number
+        * * SQL Data Type: varchar(129)`),
+    Checkbook_ID: z.string().nullish().describe(`
+        * * Field Name: Checkbook ID
+        * * Display Name: Checkbook  ID
+        * * SQL Data Type: varchar(15)`),
+    Comment1: z.string().nullish().describe(`
+        * * Field Name: Comment1
+        * * Display Name: Comment 1
+        * * SQL Data Type: varchar(31)`),
+    Comment2: z.string().nullish().describe(`
+        * * Field Name: Comment2
+        * * Display Name: Comment 2
+        * * SQL Data Type: varchar(31)`),
+    Contact_Person: z.string().nullish().describe(`
+        * * Field Name: Contact Person
+        * * Display Name: Contact  Person
+        * * SQL Data Type: varchar(61)`),
+    Corporate_Customer_Number: z.string().nullish().describe(`
+        * * Field Name: Corporate Customer Number
+        * * Display Name: Corporate  Customer  Number
+        * * SQL Data Type: varchar(15)`),
+    Country: z.string().nullish().describe(`
+        * * Field Name: Country
+        * * Display Name: Country
+        * * SQL Data Type: varchar(61)`),
+    Created_Date: z.date().nullish().describe(`
+        * * Field Name: Created Date
+        * * Display Name: Created  Date
+        * * SQL Data Type: datetime`),
+    Credit_Card_Exp_Date: z.date().nullish().describe(`
+        * * Field Name: Credit Card Exp Date
+        * * Display Name: Credit  Card  Exp  Date
+        * * SQL Data Type: datetime`),
+    Credit_Card_ID: z.string().nullish().describe(`
+        * * Field Name: Credit Card ID
+        * * Display Name: Credit  Card  ID
+        * * SQL Data Type: varchar(15)`),
+    Credit_Limit_Amount: z.number().nullish().describe(`
+        * * Field Name: Credit Limit Amount
+        * * Display Name: Credit  Limit  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Credit_Limit_Period: z.number().nullish().describe(`
+        * * Field Name: Credit Limit Period
+        * * Display Name: Credit  Limit  Period
+        * * SQL Data Type: smallint`),
+    Credit_Limit_Period_Amount: z.number().nullish().describe(`
+        * * Field Name: Credit Limit Period Amount
+        * * Display Name: Credit  Limit  Period  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Credit_Limit_Type: z.string().nullish().describe(`
+        * * Field Name: Credit Limit Type
+        * * Display Name: Credit  Limit  Type
+        * * SQL Data Type: varchar(100)`),
+    Currency_ID: z.string().nullish().describe(`
+        * * Field Name: Currency ID
+        * * Display Name: Currency  ID
+        * * SQL Data Type: varchar(15)`),
+    Customer_Balance: z.number().nullish().describe(`
+        * * Field Name: Customer Balance
+        * * Display Name: Customer  Balance
+        * * SQL Data Type: decimal(19, 5)`),
+    Customer_Class: z.string().nullish().describe(`
+        * * Field Name: Customer Class
+        * * Display Name: Customer  Class
+        * * SQL Data Type: varchar(15)`),
+    Customer_Discount: z.number().nullish().describe(`
+        * * Field Name: Customer Discount
+        * * Display Name: Customer  Discount
+        * * SQL Data Type: decimal(13, 6)`),
+    Default_Cash_Account_Type: z.string().nullish().describe(`
+        * * Field Name: Default Cash Account Type
+        * * Display Name: Default  Cash  Account  Type
+        * * SQL Data Type: varchar(100)`),
+    Deposits_Received: z.number().nullish().describe(`
+        * * Field Name: Deposits Received
+        * * Display Name: Deposits  Received
+        * * SQL Data Type: decimal(19, 5)`),
+    Discount_Grace_Period: z.number().nullish().describe(`
+        * * Field Name: Discount Grace Period
+        * * Display Name: Discount  Grace  Period
+        * * SQL Data Type: smallint`),
+    Discounts_Available_Account_Number: z.string().nullish().describe(`
+        * * Field Name: Discounts Available Account Number
+        * * Display Name: Discounts  Available  Account  Number
+        * * SQL Data Type: varchar(129)`),
+    Discounts_Taken_Account_Number: z.string().nullish().describe(`
+        * * Field Name: Discounts Taken Account Number
+        * * Display Name: Discounts  Taken  Account  Number
+        * * SQL Data Type: varchar(129)`),
+    Document_Format_ID: z.string().nullish().describe(`
+        * * Field Name: Document Format ID
+        * * Display Name: Document  Format  ID
+        * * SQL Data Type: varchar(15)`),
+    Due_Date_Grace_Period: z.number().nullish().describe(`
+        * * Field Name: Due Date Grace Period
+        * * Display Name: Due  Date  Grace  Period
+        * * SQL Data Type: smallint`),
+    Fax: z.string().nullish().describe(`
+        * * Field Name: Fax
+        * * Display Name: Fax
+        * * SQL Data Type: varchar(21)`),
+    Finance_Charge_Account_Number: z.string().nullish().describe(`
+        * * Field Name: Finance Charge Account Number
+        * * Display Name: Finance  Charge  Account  Number
+        * * SQL Data Type: varchar(129)`),
+    Finance_Charge_Amt_Type: z.string().nullish().describe(`
+        * * Field Name: Finance Charge Amt Type
+        * * Display Name: Finance  Charge  Amt  Type
+        * * SQL Data Type: varchar(100)`),
+    Finance_Charge_Dollar: z.number().nullish().describe(`
+        * * Field Name: Finance Charge Dollar
+        * * Display Name: Finance  Charge  Dollar
+        * * SQL Data Type: decimal(19, 5)`),
+    Finance_Charge_ID: z.string().nullish().describe(`
+        * * Field Name: Finance Charge ID
+        * * Display Name: Finance  Charge  ID
+        * * SQL Data Type: varchar(15)`),
+    Finance_Charge_Percent: z.number().nullish().describe(`
+        * * Field Name: Finance Charge Percent
+        * * Display Name: Finance  Charge  Percent
+        * * SQL Data Type: decimal(13, 6)`),
+    Finance_Charges_CYTD: z.number().nullish().describe(`
+        * * Field Name: Finance Charges CYTD
+        * * Display Name: Finance  Charges  CYTD
+        * * SQL Data Type: decimal(19, 5)`),
+    Finance_Charges_LYR_Calendar: z.number().nullish().describe(`
+        * * Field Name: Finance Charges LYR Calendar
+        * * Display Name: Finance  Charges  LYR Calendar
+        * * SQL Data Type: decimal(19, 5)`),
+    First_Invoice_Date: z.date().nullish().describe(`
+        * * Field Name: First Invoice Date
+        * * Display Name: First  Invoice  Date
+        * * SQL Data Type: datetime`),
+    Governmental_Corporate_ID: z.string().nullish().describe(`
+        * * Field Name: Governmental Corporate ID
+        * * Display Name: Governmental  Corporate  ID
+        * * SQL Data Type: varchar(31)`),
+    Governmental_Individual_ID: z.string().nullish().describe(`
+        * * Field Name: Governmental Individual ID
+        * * Display Name: Governmental  Individual  ID
+        * * SQL Data Type: varchar(31)`),
+    High_Balance_LTD: z.number().nullish().describe(`
+        * * Field Name: High Balance LTD
+        * * Display Name: High  Balance  LTD
+        * * SQL Data Type: decimal(19, 5)`),
+    High_Balance_LYR: z.number().nullish().describe(`
+        * * Field Name: High Balance LYR
+        * * Display Name: High  Balance  LYR
+        * * SQL Data Type: decimal(19, 5)`),
+    High_Balance_YTD: z.number().nullish().describe(`
+        * * Field Name: High Balance YTD
+        * * Display Name: High  Balance  YTD
+        * * SQL Data Type: decimal(19, 5)`),
+    Hold: z.string().nullish().describe(`
+        * * Field Name: Hold
+        * * Display Name: Hold
+        * * SQL Data Type: varchar(100)`),
+    Inactive: z.string().nullish().describe(`
+        * * Field Name: Inactive
+        * * Display Name: Inactive
+        * * SQL Data Type: varchar(100)`),
+    Inventory_Account_Number: z.string().nullish().describe(`
+        * * Field Name: Inventory Account Number
+        * * Display Name: Inventory  Account  Number
+        * * SQL Data Type: varchar(129)`),
+    Keep_Calendar_History: z.string().nullish().describe(`
+        * * Field Name: Keep Calendar History
+        * * Display Name: Keep  Calendar  History
+        * * SQL Data Type: varchar(100)`),
+    Keep_Distribution_History: z.string().nullish().describe(`
+        * * Field Name: Keep Distribution History
+        * * Display Name: Keep  Distribution  History
+        * * SQL Data Type: varchar(100)`),
+    Keep_Period_History: z.string().nullish().describe(`
+        * * Field Name: Keep Period History
+        * * Display Name: Keep  Period  History
+        * * SQL Data Type: varchar(100)`),
+    Keep_Trx_History: z.string().nullish().describe(`
+        * * Field Name: Keep Trx History
+        * * Display Name: Keep  Trx  History
+        * * SQL Data Type: varchar(100)`),
+    Last_Aged: z.date().nullish().describe(`
+        * * Field Name: Last Aged
+        * * Display Name: Last  Aged
+        * * SQL Data Type: datetime`),
+    Last_Finance_Charge_Amount: z.number().nullish().describe(`
+        * * Field Name: Last Finance Charge Amount
+        * * Display Name: Last  Finance  Charge  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Last_NSF_Check_Date: z.date().nullish().describe(`
+        * * Field Name: Last NSF Check Date
+        * * Display Name: Last  NSF Check  Date
+        * * SQL Data Type: datetime`),
+    Last_Payment_Amount: z.number().nullish().describe(`
+        * * Field Name: Last Payment Amount
+        * * Display Name: Last  Payment  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Last_Payment_Date: z.date().nullish().describe(`
+        * * Field Name: Last Payment Date
+        * * Display Name: Last  Payment  Date
+        * * SQL Data Type: datetime`),
+    Last_Statement_Amount: z.number().nullish().describe(`
+        * * Field Name: Last Statement Amount
+        * * Display Name: Last  Statement  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Last_Statement_Date: z.date().nullish().describe(`
+        * * Field Name: Last Statement Date
+        * * Display Name: Last  Statement  Date
+        * * SQL Data Type: datetime`),
+    Last_Transaction_Amount: z.number().nullish().describe(`
+        * * Field Name: Last Transaction Amount
+        * * Display Name: Last  Transaction  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Last_Transaction_Date: z.date().nullish().describe(`
+        * * Field Name: Last Transaction Date
+        * * Display Name: Last  Transaction  Date
+        * * SQL Data Type: datetime`),
+    Max_Writeoff_Amount: z.number().nullish().describe(`
+        * * Field Name: Max Writeoff Amount
+        * * Display Name: Max  Writeoff  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Maximum_Writeoff_Type: z.string().nullish().describe(`
+        * * Field Name: Maximum Writeoff Type
+        * * Display Name: Maximum  Writeoff  Type
+        * * SQL Data Type: varchar(100)`),
+    Minimum_Payment_Dollar: z.number().nullish().describe(`
+        * * Field Name: Minimum Payment Dollar
+        * * Display Name: Minimum  Payment  Dollar
+        * * SQL Data Type: decimal(19, 5)`),
+    Minimum_Payment_Percent: z.number().nullish().describe(`
+        * * Field Name: Minimum Payment Percent
+        * * Display Name: Minimum  Payment  Percent
+        * * SQL Data Type: decimal(13, 6)`),
+    Minimum_Payment_Type: z.string().nullish().describe(`
+        * * Field Name: Minimum Payment Type
+        * * Display Name: Minimum  Payment  Type
+        * * SQL Data Type: varchar(100)`),
+    Modified_Date: z.date().nullish().describe(`
+        * * Field Name: Modified Date
+        * * Display Name: Modified  Date
+        * * SQL Data Type: datetime`),
+    Non_Current_Scheduled_Payments: z.number().nullish().describe(`
+        * * Field Name: Non Current Scheduled Payments
+        * * Display Name: Non  Current  Scheduled  Payments
+        * * SQL Data Type: decimal(19, 5)`),
+    Note_Index: z.number().nullish().describe(`
+        * * Field Name: Note Index
+        * * Display Name: Note  Index
+        * * SQL Data Type: decimal(19, 5)`),
+    Number_ADTP_Documents___LYR: z.number().nullish().describe(`
+        * * Field Name: Number ADTP Documents - LYR
+        * * Display Name: Number  ADTP Documents  - LYR
+        * * SQL Data Type: int`),
+    Number_ADTP_Documents___Life: z.number().nullish().describe(`
+        * * Field Name: Number ADTP Documents - Life
+        * * Display Name: Number  ADTP Documents  - Life
+        * * SQL Data Type: int`),
+    Number_ADTP_Documents___Year: z.number().nullish().describe(`
+        * * Field Name: Number ADTP Documents - Year
+        * * Display Name: Number  ADTP Documents  - Year
+        * * SQL Data Type: int`),
+    Number_Of_NSF_Checks_Life: z.number().nullish().describe(`
+        * * Field Name: Number Of NSF Checks Life
+        * * Display Name: Number  Of  NSF Checks  Life
+        * * SQL Data Type: int`),
+    Number_Of_NSF_Checks_YTD: z.number().nullish().describe(`
+        * * Field Name: Number Of NSF Checks YTD
+        * * Display Name: Number  Of  NSF Checks  YTD
+        * * SQL Data Type: int`),
+    On_Order_Amount: z.number().nullish().describe(`
+        * * Field Name: On Order Amount
+        * * Display Name: On  Order  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Order_Fulfillment_Shortage_Default: z.string().nullish().describe(`
+        * * Field Name: Order Fulfillment Shortage Default
+        * * Display Name: Order  Fulfillment  Shortage  Default
+        * * SQL Data Type: varchar(100)`),
+    Payment_Terms_ID: z.string().nullish().describe(`
+        * * Field Name: Payment Terms ID
+        * * Display Name: Payment  Terms  ID
+        * * SQL Data Type: varchar(21)`),
+    Phone_2: z.string().nullish().describe(`
+        * * Field Name: Phone 2
+        * * Display Name: Phone  2
+        * * SQL Data Type: varchar(21)`),
+    Phone_3: z.string().nullish().describe(`
+        * * Field Name: Phone 3
+        * * Display Name: Phone  3
+        * * SQL Data Type: varchar(21)`),
+    Post_Results_To: z.string().nullish().describe(`
+        * * Field Name: Post Results To
+        * * Display Name: Post  Results  To
+        * * SQL Data Type: varchar(100)`),
+    PriceLevel: z.string().nullish().describe(`
+        * * Field Name: PriceLevel
+        * * Display Name: Price Level
+        * * SQL Data Type: varchar(11)`),
+    Primary_Billto_Address_Code: z.string().nullish().describe(`
+        * * Field Name: Primary Billto Address Code
+        * * Display Name: Primary  Billto  Address  Code
+        * * SQL Data Type: varchar(15)`),
+    Primary_Shipto_Address_Code: z.string().nullish().describe(`
+        * * Field Name: Primary Shipto Address Code
+        * * Display Name: Primary  Shipto  Address  Code
+        * * SQL Data Type: varchar(15)`),
+    Priority: z.string().nullish().describe(`
+        * * Field Name: Priority
+        * * Display Name: Priority
+        * * SQL Data Type: varchar(100)`),
+    Rate_Type_ID: z.string().nullish().describe(`
+        * * Field Name: Rate Type ID
+        * * Display Name: Rate  Type  ID
+        * * SQL Data Type: varchar(15)`),
+    Retainage: z.number().nullish().describe(`
+        * * Field Name: Retainage
+        * * Display Name: Retainage
+        * * SQL Data Type: decimal(19, 5)`),
+    Revalue_Customer: z.string().nullish().describe(`
+        * * Field Name: Revalue Customer
+        * * Display Name: Revalue  Customer
+        * * SQL Data Type: varchar(100)`),
+    Sales_Account_Number: z.string().nullish().describe(`
+        * * Field Name: Sales Account Number
+        * * Display Name: Sales  Account  Number
+        * * SQL Data Type: varchar(129)`),
+    Sales_Order_Returns_Account_Number: z.string().nullish().describe(`
+        * * Field Name: Sales Order Returns Account Number
+        * * Display Name: Sales  Order  Returns  Account  Number
+        * * SQL Data Type: varchar(129)`),
+    Sales_Territory: z.string().nullish().describe(`
+        * * Field Name: Sales Territory
+        * * Display Name: Sales  Territory
+        * * SQL Data Type: varchar(15)`),
+    Salesperson_ID: z.string().nullish().describe(`
+        * * Field Name: Salesperson ID
+        * * Display Name: Salesperson  ID
+        * * SQL Data Type: varchar(15)`),
+    Send_Email_Statements: z.string().nullish().describe(`
+        * * Field Name: Send Email Statements
+        * * Display Name: Send  Email  Statements
+        * * SQL Data Type: varchar(100)`),
+    Ship_Complete_Document: z.string().nullish().describe(`
+        * * Field Name: Ship Complete Document
+        * * Display Name: Ship  Complete  Document
+        * * SQL Data Type: varchar(100)`),
+    Shipping_Method: z.string().nullish().describe(`
+        * * Field Name: Shipping Method
+        * * Display Name: Shipping  Method
+        * * SQL Data Type: varchar(15)`),
+    Short_Name: z.string().nullish().describe(`
+        * * Field Name: Short Name
+        * * Display Name: Short  Name
+        * * SQL Data Type: varchar(15)`),
+    Statement_Address_Code: z.string().nullish().describe(`
+        * * Field Name: Statement Address Code
+        * * Display Name: Statement  Address  Code
+        * * SQL Data Type: varchar(15)`),
+    Statement_Cycle: z.string().nullish().describe(`
+        * * Field Name: Statement Cycle
+        * * Display Name: Statement  Cycle
+        * * SQL Data Type: varchar(100)`),
+    Statement_Name: z.string().nullish().describe(`
+        * * Field Name: Statement Name
+        * * Display Name: Statement  Name
+        * * SQL Data Type: varchar(65)`),
+    Tax_Exempt_1: z.string().nullish().describe(`
+        * * Field Name: Tax Exempt 1
+        * * Display Name: Tax  Exempt  1
+        * * SQL Data Type: varchar(25)`),
+    Tax_Exempt_2: z.string().nullish().describe(`
+        * * Field Name: Tax Exempt 2
+        * * Display Name: Tax  Exempt  2
+        * * SQL Data Type: varchar(25)`),
+    Tax_Registration_Number: z.string().nullish().describe(`
+        * * Field Name: Tax Registration Number
+        * * Display Name: Tax  Registration  Number
+        * * SQL Data Type: varchar(25)`),
+    Tax_Schedule_ID: z.string().nullish().describe(`
+        * * Field Name: Tax Schedule ID
+        * * Display Name: Tax  Schedule  ID
+        * * SQL Data Type: varchar(15)`),
+    Total___FC_LTD: z.number().nullish().describe(`
+        * * Field Name: Total # FC LTD
+        * * Display Name: Total  # FC LTD
+        * * SQL Data Type: int`),
+    Total___FC_LYR: z.number().nullish().describe(`
+        * * Field Name: Total # FC LYR
+        * * Display Name: Total  # FC LYR
+        * * SQL Data Type: int`),
+    Total___FC_YTD: z.number().nullish().describe(`
+        * * Field Name: Total # FC YTD
+        * * Display Name: Total  # FC YTD
+        * * SQL Data Type: int`),
+    Total___Invoices_LTD: z.number().nullish().describe(`
+        * * Field Name: Total # Invoices LTD
+        * * Display Name: Total  # Invoices  LTD
+        * * SQL Data Type: int`),
+    Total___Invoices_LYR: z.number().nullish().describe(`
+        * * Field Name: Total # Invoices LYR
+        * * Display Name: Total  # Invoices  LYR
+        * * SQL Data Type: int`),
+    Total___Invoices_YTD: z.number().nullish().describe(`
+        * * Field Name: Total # Invoices YTD
+        * * Display Name: Total  # Invoices  YTD
+        * * SQL Data Type: int`),
+    Total_Amount_Of_NSF_Checks_Life: z.number().nullish().describe(`
+        * * Field Name: Total Amount Of NSF Checks Life
+        * * Display Name: Total  Amount  Of  NSF Checks  Life
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Amount_Of_NSF_Checks_YTD: z.number().nullish().describe(`
+        * * Field Name: Total Amount Of NSF Checks YTD
+        * * Display Name: Total  Amount  Of  NSF Checks  YTD
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Bad_Deb_LYR: z.number().nullish().describe(`
+        * * Field Name: Total Bad Deb LYR
+        * * Display Name: Total  Bad  Deb  LYR
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Bad_Debt_LTD: z.number().nullish().describe(`
+        * * Field Name: Total Bad Debt LTD
+        * * Display Name: Total  Bad  Debt  LTD
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Bad_Debt_YTD: z.number().nullish().describe(`
+        * * Field Name: Total Bad Debt YTD
+        * * Display Name: Total  Bad  Debt  YTD
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Cash_Received_LTD: z.number().nullish().describe(`
+        * * Field Name: Total Cash Received LTD
+        * * Display Name: Total  Cash  Received  LTD
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Cash_Received_LYR: z.number().nullish().describe(`
+        * * Field Name: Total Cash Received LYR
+        * * Display Name: Total  Cash  Received  LYR
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Cash_Received_YTD: z.number().nullish().describe(`
+        * * Field Name: Total Cash Received YTD
+        * * Display Name: Total  Cash  Received  YTD
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Costs_LTD: z.number().nullish().describe(`
+        * * Field Name: Total Costs LTD
+        * * Display Name: Total  Costs  LTD
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Costs_LYR: z.number().nullish().describe(`
+        * * Field Name: Total Costs LYR
+        * * Display Name: Total  Costs  LYR
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Costs_YTD: z.number().nullish().describe(`
+        * * Field Name: Total Costs YTD
+        * * Display Name: Total  Costs  YTD
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Discounts_Available_YTD: z.number().nullish().describe(`
+        * * Field Name: Total Discounts Available YTD
+        * * Display Name: Total  Discounts  Available  YTD
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Discounts_Taken_LTD: z.number().nullish().describe(`
+        * * Field Name: Total Discounts Taken LTD
+        * * Display Name: Total  Discounts  Taken  LTD
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Discounts_Taken_LYR: z.number().nullish().describe(`
+        * * Field Name: Total Discounts Taken LYR
+        * * Display Name: Total  Discounts  Taken  LYR
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Discounts_Taken_YTD: z.number().nullish().describe(`
+        * * Field Name: Total Discounts Taken YTD
+        * * Display Name: Total  Discounts  Taken  YTD
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Finance_Charges_LTD: z.number().nullish().describe(`
+        * * Field Name: Total Finance Charges LTD
+        * * Display Name: Total  Finance  Charges  LTD
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Finance_Charges_LYR: z.number().nullish().describe(`
+        * * Field Name: Total Finance Charges LYR
+        * * Display Name: Total  Finance  Charges  LYR
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Finance_Charges_YTD: z.number().nullish().describe(`
+        * * Field Name: Total Finance Charges YTD
+        * * Display Name: Total  Finance  Charges  YTD
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Returns_LTD: z.number().nullish().describe(`
+        * * Field Name: Total Returns LTD
+        * * Display Name: Total  Returns  LTD
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Returns_LYR: z.number().nullish().describe(`
+        * * Field Name: Total Returns LYR
+        * * Display Name: Total  Returns  LYR
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Returns_YTD: z.number().nullish().describe(`
+        * * Field Name: Total Returns YTD
+        * * Display Name: Total  Returns  YTD
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Sales_LTD: z.number().nullish().describe(`
+        * * Field Name: Total Sales LTD
+        * * Display Name: Total  Sales  LTD
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Sales_LYR: z.number().nullish().describe(`
+        * * Field Name: Total Sales LYR
+        * * Display Name: Total  Sales  LYR
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Sales_YTD: z.number().nullish().describe(`
+        * * Field Name: Total Sales YTD
+        * * Display Name: Total  Sales  YTD
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Waived_FC_LTD: z.number().nullish().describe(`
+        * * Field Name: Total Waived FC LTD
+        * * Display Name: Total  Waived  FC LTD
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Waived_FC_LYR: z.number().nullish().describe(`
+        * * Field Name: Total Waived FC LYR
+        * * Display Name: Total  Waived  FC LYR
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Waived_FC_YTD: z.number().nullish().describe(`
+        * * Field Name: Total Waived FC YTD
+        * * Display Name: Total  Waived  FC YTD
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Writeoffs_LTD: z.number().nullish().describe(`
+        * * Field Name: Total Writeoffs LTD
+        * * Display Name: Total  Writeoffs  LTD
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Writeoffs_LYR: z.number().nullish().describe(`
+        * * Field Name: Total Writeoffs LYR
+        * * Display Name: Total  Writeoffs  LYR
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Writeoffs_YTD: z.number().nullish().describe(`
+        * * Field Name: Total Writeoffs YTD
+        * * Display Name: Total  Writeoffs  YTD
+        * * SQL Data Type: decimal(19, 5)`),
+    UPS_Zone: z.string().nullish().describe(`
+        * * Field Name: UPS Zone
+        * * Display Name: UPS Zone
+        * * SQL Data Type: varchar(3)`),
+    Unpaid_Finance_Charges_YTD: z.number().nullish().describe(`
+        * * Field Name: Unpaid Finance Charges YTD
+        * * Display Name: Unpaid  Finance  Charges  YTD
+        * * SQL Data Type: decimal(19, 5)`),
+    Unposted_Cash_Amount: z.number().nullish().describe(`
+        * * Field Name: Unposted Cash Amount
+        * * Display Name: Unposted  Cash  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Unposted_Other_Cash_Amount: z.number().nullish().describe(`
+        * * Field Name: Unposted Other Cash Amount
+        * * Display Name: Unposted  Other  Cash  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Unposted_Other_Sales_Amount: z.number().nullish().describe(`
+        * * Field Name: Unposted Other Sales Amount
+        * * Display Name: Unposted  Other  Sales  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Unposted_Sales_Amount: z.number().nullish().describe(`
+        * * Field Name: Unposted Sales Amount
+        * * Display Name: Unposted  Sales  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    User_Defined_1: z.string().nullish().describe(`
+        * * Field Name: User Defined 1
+        * * Display Name: User  Defined  1
+        * * SQL Data Type: varchar(21)`),
+    User_Defined_2: z.string().nullish().describe(`
+        * * Field Name: User Defined 2
+        * * Display Name: User  Defined  2
+        * * SQL Data Type: varchar(21)`),
+    Write_Offs_LIFE: z.number().nullish().describe(`
+        * * Field Name: Write Offs LIFE
+        * * Display Name: Write  Offs  LIFE
+        * * SQL Data Type: decimal(19, 5)`),
+    Write_Offs_LYR: z.number().nullish().describe(`
+        * * Field Name: Write Offs LYR
+        * * Display Name: Write  Offs  LYR
+        * * SQL Data Type: decimal(19, 5)`),
+    Write_Offs_YTD: z.number().nullish().describe(`
+        * * Field Name: Write Offs YTD
+        * * Display Name: Write  Offs  YTD
+        * * SQL Data Type: decimal(19, 5)`),
+    Writeoff_Account_Number: z.string().nullish().describe(`
+        * * Field Name: Writeoff Account Number
+        * * Display Name: Writeoff  Account  Number
+        * * SQL Data Type: varchar(129)`),
+    Accounts_Receivable_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Accounts Receivable Account Number For Drillback
+        * * Display Name: Accounts  Receivable  Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Cash_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Cash Account Number For Drillback
+        * * Display Name: Cash  Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Checkbook_ID_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Checkbook ID For Drillback
+        * * Display Name: Checkbook  ID For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    COGS_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: COGS Account Number For Drillback
+        * * Display Name: COGS Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Customer_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Customer Number For Drillback
+        * * Display Name: Customer  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Discounts_Available_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Discounts Available Account Number For Drillback
+        * * Display Name: Discounts  Available  Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Discounts_Taken_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Discounts Taken Account Number For Drillback
+        * * Display Name: Discounts  Taken  Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Finance_Charge_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Finance Charge Account Number For Drillback
+        * * Display Name: Finance  Charge  Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Inventory_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Inventory Account Number For Drillback
+        * * Display Name: Inventory  Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Sales_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Sales Account Number For Drillback
+        * * Display Name: Sales  Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Sales_Order_Returns_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Sales Order Returns Account Number For Drillback
+        * * Display Name: Sales  Order  Returns  Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Salesperson_ID_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Salesperson ID For Drillback
+        * * Display Name: Salesperson  ID For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Writeoff_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Writeoff Account Number For Drillback
+        * * Display Name: Writeoff  Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+});
+
+export type CustomerEntityType = z.infer<typeof CustomerSchema>;
+       
+/**
+ * zod schema definition for the entity Customers__client_finance
+ */
+export const Customer__client_financeSchema = z.object({
+    Customer_Number: z.string().describe(`
+        * * Field Name: Customer Number
+        * * Display Name: Customer  Number
+        * * SQL Data Type: varchar(15)`),
+    Customer_Name: z.string().nullish().describe(`
+        * * Field Name: Customer Name
+        * * Display Name: Customer  Name
+        * * SQL Data Type: varchar(65)`),
+    Address_1: z.string().nullish().describe(`
+        * * Field Name: Address 1
+        * * Display Name: Address  1
+        * * SQL Data Type: varchar(61)`),
+    Address_2: z.string().nullish().describe(`
+        * * Field Name: Address 2
+        * * Display Name: Address  2
+        * * SQL Data Type: varchar(61)`),
+    City: z.string().nullish().describe(`
+        * * Field Name: City
+        * * Display Name: City
+        * * SQL Data Type: varchar(35)`),
+    State: z.string().nullish().describe(`
+        * * Field Name: State
+        * * Display Name: State
+        * * SQL Data Type: varchar(29)`),
+    Zip: z.string().nullish().describe(`
+        * * Field Name: Zip
+        * * Display Name: Zip
+        * * SQL Data Type: varchar(11)`),
+    Phone_1: z.string().nullish().describe(`
+        * * Field Name: Phone 1
+        * * Display Name: Phone  1
+        * * SQL Data Type: varchar(21)`),
+    Aging_Bucket1: z.number().nullish().describe(`
+        * * Field Name: Aging Bucket1
+        * * Display Name: Aging  Bucket 1
+        * * SQL Data Type: decimal(19, 5)`),
+    Aging_Bucket2: z.number().nullish().describe(`
+        * * Field Name: Aging Bucket2
+        * * Display Name: Aging  Bucket 2
+        * * SQL Data Type: decimal(19, 5)`),
+    Aging_Bucket3: z.number().nullish().describe(`
+        * * Field Name: Aging Bucket3
+        * * Display Name: Aging  Bucket 3
+        * * SQL Data Type: decimal(19, 5)`),
+    Aging_Bucket4: z.number().nullish().describe(`
+        * * Field Name: Aging Bucket4
+        * * Display Name: Aging  Bucket 4
+        * * SQL Data Type: decimal(19, 5)`),
+    Aging_Bucket5: z.number().nullish().describe(`
+        * * Field Name: Aging Bucket5
+        * * Display Name: Aging  Bucket 5
+        * * SQL Data Type: decimal(19, 5)`),
+    Aging_Bucket6: z.number().nullish().describe(`
+        * * Field Name: Aging Bucket6
+        * * Display Name: Aging  Bucket 6
+        * * SQL Data Type: decimal(19, 5)`),
+    Aging_Bucket7: z.number().nullish().describe(`
+        * * Field Name: Aging Bucket7
+        * * Display Name: Aging  Bucket 7
+        * * SQL Data Type: decimal(19, 5)`),
+    Accounts_Receivable_Account_Number: z.string().nullish().describe(`
+        * * Field Name: Accounts Receivable Account Number
+        * * Display Name: Accounts  Receivable  Account  Number
+        * * SQL Data Type: varchar(129)`),
+    Address_3: z.string().nullish().describe(`
+        * * Field Name: Address 3
+        * * Display Name: Address  3
+        * * SQL Data Type: varchar(61)`),
+    Address_Code: z.string().nullish().describe(`
+        * * Field Name: Address Code
+        * * Display Name: Address  Code
+        * * SQL Data Type: varchar(15)`),
+    Average_Days_To_Pay___Life: z.number().nullish().describe(`
+        * * Field Name: Average Days To Pay - Life
+        * * Display Name: Average  Days  To  Pay  - Life
+        * * SQL Data Type: smallint`),
+    Average_Days_To_Pay___Year: z.number().nullish().describe(`
+        * * Field Name: Average Days To Pay - Year
+        * * Display Name: Average  Days  To  Pay  - Year
+        * * SQL Data Type: smallint`),
+    Average_Days_to_Pay___LYR: z.number().nullish().describe(`
+        * * Field Name: Average Days to Pay - LYR
+        * * Display Name: Average  Days  to  Pay  - LYR
+        * * SQL Data Type: smallint`),
+    Balance_Type: z.string().nullish().describe(`
+        * * Field Name: Balance Type
+        * * Display Name: Balance  Type
+        * * SQL Data Type: varchar(100)`),
+    Bank_Branch: z.string().nullish().describe(`
+        * * Field Name: Bank Branch
+        * * Display Name: Bank  Branch
+        * * SQL Data Type: varchar(21)`),
+    Bank_Name: z.string().nullish().describe(`
+        * * Field Name: Bank Name
+        * * Display Name: Bank  Name
+        * * SQL Data Type: varchar(31)`),
+    COGS_Account_Number: z.string().nullish().describe(`
+        * * Field Name: COGS Account Number
+        * * Display Name: COGS Account  Number
+        * * SQL Data Type: varchar(129)`),
+    Cash_Account_Number: z.string().nullish().describe(`
+        * * Field Name: Cash Account Number
+        * * Display Name: Cash  Account  Number
+        * * SQL Data Type: varchar(129)`),
+    Checkbook_ID: z.string().nullish().describe(`
+        * * Field Name: Checkbook ID
+        * * Display Name: Checkbook  ID
+        * * SQL Data Type: varchar(15)`),
+    Comment1: z.string().nullish().describe(`
+        * * Field Name: Comment1
+        * * Display Name: Comment 1
+        * * SQL Data Type: varchar(31)`),
+    Comment2: z.string().nullish().describe(`
+        * * Field Name: Comment2
+        * * Display Name: Comment 2
+        * * SQL Data Type: varchar(31)`),
+    Contact_Person: z.string().nullish().describe(`
+        * * Field Name: Contact Person
+        * * Display Name: Contact  Person
+        * * SQL Data Type: varchar(61)`),
+    Corporate_Customer_Number: z.string().nullish().describe(`
+        * * Field Name: Corporate Customer Number
+        * * Display Name: Corporate  Customer  Number
+        * * SQL Data Type: varchar(15)`),
+    Country: z.string().nullish().describe(`
+        * * Field Name: Country
+        * * Display Name: Country
+        * * SQL Data Type: varchar(61)`),
+    Created_Date: z.date().nullish().describe(`
+        * * Field Name: Created Date
+        * * Display Name: Created  Date
+        * * SQL Data Type: datetime`),
+    Credit_Card_Exp_Date: z.date().nullish().describe(`
+        * * Field Name: Credit Card Exp Date
+        * * Display Name: Credit  Card  Exp  Date
+        * * SQL Data Type: datetime`),
+    Credit_Card_ID: z.string().nullish().describe(`
+        * * Field Name: Credit Card ID
+        * * Display Name: Credit  Card  ID
+        * * SQL Data Type: varchar(15)`),
+    Credit_Limit_Amount: z.number().nullish().describe(`
+        * * Field Name: Credit Limit Amount
+        * * Display Name: Credit  Limit  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Credit_Limit_Period: z.number().nullish().describe(`
+        * * Field Name: Credit Limit Period
+        * * Display Name: Credit  Limit  Period
+        * * SQL Data Type: smallint`),
+    Credit_Limit_Period_Amount: z.number().nullish().describe(`
+        * * Field Name: Credit Limit Period Amount
+        * * Display Name: Credit  Limit  Period  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Credit_Limit_Type: z.string().nullish().describe(`
+        * * Field Name: Credit Limit Type
+        * * Display Name: Credit  Limit  Type
+        * * SQL Data Type: varchar(100)`),
+    Currency_ID: z.string().nullish().describe(`
+        * * Field Name: Currency ID
+        * * Display Name: Currency  ID
+        * * SQL Data Type: varchar(15)`),
+    Customer_Balance: z.number().nullish().describe(`
+        * * Field Name: Customer Balance
+        * * Display Name: Customer  Balance
+        * * SQL Data Type: decimal(19, 5)`),
+    Customer_Class: z.string().nullish().describe(`
+        * * Field Name: Customer Class
+        * * Display Name: Customer  Class
+        * * SQL Data Type: varchar(15)`),
+    Customer_Discount: z.number().nullish().describe(`
+        * * Field Name: Customer Discount
+        * * Display Name: Customer  Discount
+        * * SQL Data Type: decimal(13, 6)`),
+    Default_Cash_Account_Type: z.string().nullish().describe(`
+        * * Field Name: Default Cash Account Type
+        * * Display Name: Default  Cash  Account  Type
+        * * SQL Data Type: varchar(100)`),
+    Deposits_Received: z.number().nullish().describe(`
+        * * Field Name: Deposits Received
+        * * Display Name: Deposits  Received
+        * * SQL Data Type: decimal(19, 5)`),
+    Discount_Grace_Period: z.number().nullish().describe(`
+        * * Field Name: Discount Grace Period
+        * * Display Name: Discount  Grace  Period
+        * * SQL Data Type: smallint`),
+    Discounts_Available_Account_Number: z.string().nullish().describe(`
+        * * Field Name: Discounts Available Account Number
+        * * Display Name: Discounts  Available  Account  Number
+        * * SQL Data Type: varchar(129)`),
+    Discounts_Taken_Account_Number: z.string().nullish().describe(`
+        * * Field Name: Discounts Taken Account Number
+        * * Display Name: Discounts  Taken  Account  Number
+        * * SQL Data Type: varchar(129)`),
+    Document_Format_ID: z.string().nullish().describe(`
+        * * Field Name: Document Format ID
+        * * Display Name: Document  Format  ID
+        * * SQL Data Type: varchar(15)`),
+    Due_Date_Grace_Period: z.number().nullish().describe(`
+        * * Field Name: Due Date Grace Period
+        * * Display Name: Due  Date  Grace  Period
+        * * SQL Data Type: smallint`),
+    Fax: z.string().nullish().describe(`
+        * * Field Name: Fax
+        * * Display Name: Fax
+        * * SQL Data Type: varchar(21)`),
+    Finance_Charge_Account_Number: z.string().nullish().describe(`
+        * * Field Name: Finance Charge Account Number
+        * * Display Name: Finance  Charge  Account  Number
+        * * SQL Data Type: varchar(129)`),
+    Finance_Charge_Amt_Type: z.string().nullish().describe(`
+        * * Field Name: Finance Charge Amt Type
+        * * Display Name: Finance  Charge  Amt  Type
+        * * SQL Data Type: varchar(100)`),
+    Finance_Charge_Dollar: z.number().nullish().describe(`
+        * * Field Name: Finance Charge Dollar
+        * * Display Name: Finance  Charge  Dollar
+        * * SQL Data Type: decimal(19, 5)`),
+    Finance_Charge_ID: z.string().nullish().describe(`
+        * * Field Name: Finance Charge ID
+        * * Display Name: Finance  Charge  ID
+        * * SQL Data Type: varchar(15)`),
+    Finance_Charge_Percent: z.number().nullish().describe(`
+        * * Field Name: Finance Charge Percent
+        * * Display Name: Finance  Charge  Percent
+        * * SQL Data Type: decimal(13, 6)`),
+    Finance_Charges_CYTD: z.number().nullish().describe(`
+        * * Field Name: Finance Charges CYTD
+        * * Display Name: Finance  Charges  CYTD
+        * * SQL Data Type: decimal(19, 5)`),
+    Finance_Charges_LYR_Calendar: z.number().nullish().describe(`
+        * * Field Name: Finance Charges LYR Calendar
+        * * Display Name: Finance  Charges  LYR Calendar
+        * * SQL Data Type: decimal(19, 5)`),
+    First_Invoice_Date: z.date().nullish().describe(`
+        * * Field Name: First Invoice Date
+        * * Display Name: First  Invoice  Date
+        * * SQL Data Type: datetime`),
+    Governmental_Corporate_ID: z.string().nullish().describe(`
+        * * Field Name: Governmental Corporate ID
+        * * Display Name: Governmental  Corporate  ID
+        * * SQL Data Type: varchar(31)`),
+    Governmental_Individual_ID: z.string().nullish().describe(`
+        * * Field Name: Governmental Individual ID
+        * * Display Name: Governmental  Individual  ID
+        * * SQL Data Type: varchar(31)`),
+    High_Balance_LTD: z.number().nullish().describe(`
+        * * Field Name: High Balance LTD
+        * * Display Name: High  Balance  LTD
+        * * SQL Data Type: decimal(19, 5)`),
+    High_Balance_LYR: z.number().nullish().describe(`
+        * * Field Name: High Balance LYR
+        * * Display Name: High  Balance  LYR
+        * * SQL Data Type: decimal(19, 5)`),
+    High_Balance_YTD: z.number().nullish().describe(`
+        * * Field Name: High Balance YTD
+        * * Display Name: High  Balance  YTD
+        * * SQL Data Type: decimal(19, 5)`),
+    Hold: z.string().nullish().describe(`
+        * * Field Name: Hold
+        * * Display Name: Hold
+        * * SQL Data Type: varchar(100)`),
+    Inactive: z.string().nullish().describe(`
+        * * Field Name: Inactive
+        * * Display Name: Inactive
+        * * SQL Data Type: varchar(100)`),
+    Inventory_Account_Number: z.string().nullish().describe(`
+        * * Field Name: Inventory Account Number
+        * * Display Name: Inventory  Account  Number
+        * * SQL Data Type: varchar(129)`),
+    Keep_Calendar_History: z.string().nullish().describe(`
+        * * Field Name: Keep Calendar History
+        * * Display Name: Keep  Calendar  History
+        * * SQL Data Type: varchar(100)`),
+    Keep_Distribution_History: z.string().nullish().describe(`
+        * * Field Name: Keep Distribution History
+        * * Display Name: Keep  Distribution  History
+        * * SQL Data Type: varchar(100)`),
+    Keep_Period_History: z.string().nullish().describe(`
+        * * Field Name: Keep Period History
+        * * Display Name: Keep  Period  History
+        * * SQL Data Type: varchar(100)`),
+    Keep_Trx_History: z.string().nullish().describe(`
+        * * Field Name: Keep Trx History
+        * * Display Name: Keep  Trx  History
+        * * SQL Data Type: varchar(100)`),
+    Last_Aged: z.date().nullish().describe(`
+        * * Field Name: Last Aged
+        * * Display Name: Last  Aged
+        * * SQL Data Type: datetime`),
+    Last_Finance_Charge_Amount: z.number().nullish().describe(`
+        * * Field Name: Last Finance Charge Amount
+        * * Display Name: Last  Finance  Charge  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Last_NSF_Check_Date: z.date().nullish().describe(`
+        * * Field Name: Last NSF Check Date
+        * * Display Name: Last  NSF Check  Date
+        * * SQL Data Type: datetime`),
+    Last_Payment_Amount: z.number().nullish().describe(`
+        * * Field Name: Last Payment Amount
+        * * Display Name: Last  Payment  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Last_Payment_Date: z.date().nullish().describe(`
+        * * Field Name: Last Payment Date
+        * * Display Name: Last  Payment  Date
+        * * SQL Data Type: datetime`),
+    Last_Statement_Amount: z.number().nullish().describe(`
+        * * Field Name: Last Statement Amount
+        * * Display Name: Last  Statement  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Last_Statement_Date: z.date().nullish().describe(`
+        * * Field Name: Last Statement Date
+        * * Display Name: Last  Statement  Date
+        * * SQL Data Type: datetime`),
+    Last_Transaction_Amount: z.number().nullish().describe(`
+        * * Field Name: Last Transaction Amount
+        * * Display Name: Last  Transaction  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Last_Transaction_Date: z.date().nullish().describe(`
+        * * Field Name: Last Transaction Date
+        * * Display Name: Last  Transaction  Date
+        * * SQL Data Type: datetime`),
+    Max_Writeoff_Amount: z.number().nullish().describe(`
+        * * Field Name: Max Writeoff Amount
+        * * Display Name: Max  Writeoff  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Maximum_Writeoff_Type: z.string().nullish().describe(`
+        * * Field Name: Maximum Writeoff Type
+        * * Display Name: Maximum  Writeoff  Type
+        * * SQL Data Type: varchar(100)`),
+    Minimum_Payment_Dollar: z.number().nullish().describe(`
+        * * Field Name: Minimum Payment Dollar
+        * * Display Name: Minimum  Payment  Dollar
+        * * SQL Data Type: decimal(19, 5)`),
+    Minimum_Payment_Percent: z.number().nullish().describe(`
+        * * Field Name: Minimum Payment Percent
+        * * Display Name: Minimum  Payment  Percent
+        * * SQL Data Type: decimal(13, 6)`),
+    Minimum_Payment_Type: z.string().nullish().describe(`
+        * * Field Name: Minimum Payment Type
+        * * Display Name: Minimum  Payment  Type
+        * * SQL Data Type: varchar(100)`),
+    Modified_Date: z.date().nullish().describe(`
+        * * Field Name: Modified Date
+        * * Display Name: Modified  Date
+        * * SQL Data Type: datetime`),
+    Non_Current_Scheduled_Payments: z.number().nullish().describe(`
+        * * Field Name: Non Current Scheduled Payments
+        * * Display Name: Non  Current  Scheduled  Payments
+        * * SQL Data Type: decimal(19, 5)`),
+    Note_Index: z.number().nullish().describe(`
+        * * Field Name: Note Index
+        * * Display Name: Note  Index
+        * * SQL Data Type: decimal(19, 5)`),
+    Number_ADTP_Documents___LYR: z.number().nullish().describe(`
+        * * Field Name: Number ADTP Documents - LYR
+        * * Display Name: Number  ADTP Documents  - LYR
+        * * SQL Data Type: int`),
+    Number_ADTP_Documents___Life: z.number().nullish().describe(`
+        * * Field Name: Number ADTP Documents - Life
+        * * Display Name: Number  ADTP Documents  - Life
+        * * SQL Data Type: int`),
+    Number_ADTP_Documents___Year: z.number().nullish().describe(`
+        * * Field Name: Number ADTP Documents - Year
+        * * Display Name: Number  ADTP Documents  - Year
+        * * SQL Data Type: int`),
+    Number_Of_NSF_Checks_Life: z.number().nullish().describe(`
+        * * Field Name: Number Of NSF Checks Life
+        * * Display Name: Number  Of  NSF Checks  Life
+        * * SQL Data Type: int`),
+    Number_Of_NSF_Checks_YTD: z.number().nullish().describe(`
+        * * Field Name: Number Of NSF Checks YTD
+        * * Display Name: Number  Of  NSF Checks  YTD
+        * * SQL Data Type: int`),
+    On_Order_Amount: z.number().nullish().describe(`
+        * * Field Name: On Order Amount
+        * * Display Name: On  Order  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Order_Fulfillment_Shortage_Default: z.string().nullish().describe(`
+        * * Field Name: Order Fulfillment Shortage Default
+        * * Display Name: Order  Fulfillment  Shortage  Default
+        * * SQL Data Type: varchar(100)`),
+    Payment_Terms_ID: z.string().nullish().describe(`
+        * * Field Name: Payment Terms ID
+        * * Display Name: Payment  Terms  ID
+        * * SQL Data Type: varchar(21)`),
+    Phone_2: z.string().nullish().describe(`
+        * * Field Name: Phone 2
+        * * Display Name: Phone  2
+        * * SQL Data Type: varchar(21)`),
+    Phone_3: z.string().nullish().describe(`
+        * * Field Name: Phone 3
+        * * Display Name: Phone  3
+        * * SQL Data Type: varchar(21)`),
+    Post_Results_To: z.string().nullish().describe(`
+        * * Field Name: Post Results To
+        * * Display Name: Post  Results  To
+        * * SQL Data Type: varchar(100)`),
+    PriceLevel: z.string().nullish().describe(`
+        * * Field Name: PriceLevel
+        * * Display Name: Price Level
+        * * SQL Data Type: varchar(11)`),
+    Primary_Billto_Address_Code: z.string().nullish().describe(`
+        * * Field Name: Primary Billto Address Code
+        * * Display Name: Primary  Billto  Address  Code
+        * * SQL Data Type: varchar(15)`),
+    Primary_Shipto_Address_Code: z.string().nullish().describe(`
+        * * Field Name: Primary Shipto Address Code
+        * * Display Name: Primary  Shipto  Address  Code
+        * * SQL Data Type: varchar(15)`),
+    Priority: z.string().nullish().describe(`
+        * * Field Name: Priority
+        * * Display Name: Priority
+        * * SQL Data Type: varchar(100)`),
+    Rate_Type_ID: z.string().nullish().describe(`
+        * * Field Name: Rate Type ID
+        * * Display Name: Rate  Type  ID
+        * * SQL Data Type: varchar(15)`),
+    Retainage: z.number().nullish().describe(`
+        * * Field Name: Retainage
+        * * Display Name: Retainage
+        * * SQL Data Type: decimal(19, 5)`),
+    Revalue_Customer: z.string().nullish().describe(`
+        * * Field Name: Revalue Customer
+        * * Display Name: Revalue  Customer
+        * * SQL Data Type: varchar(100)`),
+    Sales_Account_Number: z.string().nullish().describe(`
+        * * Field Name: Sales Account Number
+        * * Display Name: Sales  Account  Number
+        * * SQL Data Type: varchar(129)`),
+    Sales_Order_Returns_Account_Number: z.string().nullish().describe(`
+        * * Field Name: Sales Order Returns Account Number
+        * * Display Name: Sales  Order  Returns  Account  Number
+        * * SQL Data Type: varchar(129)`),
+    Sales_Territory: z.string().nullish().describe(`
+        * * Field Name: Sales Territory
+        * * Display Name: Sales  Territory
+        * * SQL Data Type: varchar(15)`),
+    Salesperson_ID: z.string().nullish().describe(`
+        * * Field Name: Salesperson ID
+        * * Display Name: Salesperson  ID
+        * * SQL Data Type: varchar(15)`),
+    Send_Email_Statements: z.string().nullish().describe(`
+        * * Field Name: Send Email Statements
+        * * Display Name: Send  Email  Statements
+        * * SQL Data Type: varchar(100)`),
+    Ship_Complete_Document: z.string().nullish().describe(`
+        * * Field Name: Ship Complete Document
+        * * Display Name: Ship  Complete  Document
+        * * SQL Data Type: varchar(100)`),
+    Shipping_Method: z.string().nullish().describe(`
+        * * Field Name: Shipping Method
+        * * Display Name: Shipping  Method
+        * * SQL Data Type: varchar(15)`),
+    Short_Name: z.string().nullish().describe(`
+        * * Field Name: Short Name
+        * * Display Name: Short  Name
+        * * SQL Data Type: varchar(15)`),
+    Statement_Address_Code: z.string().nullish().describe(`
+        * * Field Name: Statement Address Code
+        * * Display Name: Statement  Address  Code
+        * * SQL Data Type: varchar(15)`),
+    Statement_Cycle: z.string().nullish().describe(`
+        * * Field Name: Statement Cycle
+        * * Display Name: Statement  Cycle
+        * * SQL Data Type: varchar(100)`),
+    Statement_Name: z.string().nullish().describe(`
+        * * Field Name: Statement Name
+        * * Display Name: Statement  Name
+        * * SQL Data Type: varchar(65)`),
+    Tax_Exempt_1: z.string().nullish().describe(`
+        * * Field Name: Tax Exempt 1
+        * * Display Name: Tax  Exempt  1
+        * * SQL Data Type: varchar(25)`),
+    Tax_Exempt_2: z.string().nullish().describe(`
+        * * Field Name: Tax Exempt 2
+        * * Display Name: Tax  Exempt  2
+        * * SQL Data Type: varchar(25)`),
+    Tax_Registration_Number: z.string().nullish().describe(`
+        * * Field Name: Tax Registration Number
+        * * Display Name: Tax  Registration  Number
+        * * SQL Data Type: varchar(25)`),
+    Tax_Schedule_ID: z.string().nullish().describe(`
+        * * Field Name: Tax Schedule ID
+        * * Display Name: Tax  Schedule  ID
+        * * SQL Data Type: varchar(15)`),
+    Total___FC_LTD: z.number().nullish().describe(`
+        * * Field Name: Total # FC LTD
+        * * Display Name: Total  # FC LTD
+        * * SQL Data Type: int`),
+    Total___FC_LYR: z.number().nullish().describe(`
+        * * Field Name: Total # FC LYR
+        * * Display Name: Total  # FC LYR
+        * * SQL Data Type: int`),
+    Total___FC_YTD: z.number().nullish().describe(`
+        * * Field Name: Total # FC YTD
+        * * Display Name: Total  # FC YTD
+        * * SQL Data Type: int`),
+    Total___Invoices_LTD: z.number().nullish().describe(`
+        * * Field Name: Total # Invoices LTD
+        * * Display Name: Total  # Invoices  LTD
+        * * SQL Data Type: int`),
+    Total___Invoices_LYR: z.number().nullish().describe(`
+        * * Field Name: Total # Invoices LYR
+        * * Display Name: Total  # Invoices  LYR
+        * * SQL Data Type: int`),
+    Total___Invoices_YTD: z.number().nullish().describe(`
+        * * Field Name: Total # Invoices YTD
+        * * Display Name: Total  # Invoices  YTD
+        * * SQL Data Type: int`),
+    Total_Amount_Of_NSF_Checks_Life: z.number().nullish().describe(`
+        * * Field Name: Total Amount Of NSF Checks Life
+        * * Display Name: Total  Amount  Of  NSF Checks  Life
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Amount_Of_NSF_Checks_YTD: z.number().nullish().describe(`
+        * * Field Name: Total Amount Of NSF Checks YTD
+        * * Display Name: Total  Amount  Of  NSF Checks  YTD
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Bad_Deb_LYR: z.number().nullish().describe(`
+        * * Field Name: Total Bad Deb LYR
+        * * Display Name: Total  Bad  Deb  LYR
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Bad_Debt_LTD: z.number().nullish().describe(`
+        * * Field Name: Total Bad Debt LTD
+        * * Display Name: Total  Bad  Debt  LTD
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Bad_Debt_YTD: z.number().nullish().describe(`
+        * * Field Name: Total Bad Debt YTD
+        * * Display Name: Total  Bad  Debt  YTD
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Cash_Received_LTD: z.number().nullish().describe(`
+        * * Field Name: Total Cash Received LTD
+        * * Display Name: Total  Cash  Received  LTD
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Cash_Received_LYR: z.number().nullish().describe(`
+        * * Field Name: Total Cash Received LYR
+        * * Display Name: Total  Cash  Received  LYR
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Cash_Received_YTD: z.number().nullish().describe(`
+        * * Field Name: Total Cash Received YTD
+        * * Display Name: Total  Cash  Received  YTD
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Costs_LTD: z.number().nullish().describe(`
+        * * Field Name: Total Costs LTD
+        * * Display Name: Total  Costs  LTD
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Costs_LYR: z.number().nullish().describe(`
+        * * Field Name: Total Costs LYR
+        * * Display Name: Total  Costs  LYR
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Costs_YTD: z.number().nullish().describe(`
+        * * Field Name: Total Costs YTD
+        * * Display Name: Total  Costs  YTD
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Discounts_Available_YTD: z.number().nullish().describe(`
+        * * Field Name: Total Discounts Available YTD
+        * * Display Name: Total  Discounts  Available  YTD
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Discounts_Taken_LTD: z.number().nullish().describe(`
+        * * Field Name: Total Discounts Taken LTD
+        * * Display Name: Total  Discounts  Taken  LTD
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Discounts_Taken_LYR: z.number().nullish().describe(`
+        * * Field Name: Total Discounts Taken LYR
+        * * Display Name: Total  Discounts  Taken  LYR
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Discounts_Taken_YTD: z.number().nullish().describe(`
+        * * Field Name: Total Discounts Taken YTD
+        * * Display Name: Total  Discounts  Taken  YTD
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Finance_Charges_LTD: z.number().nullish().describe(`
+        * * Field Name: Total Finance Charges LTD
+        * * Display Name: Total  Finance  Charges  LTD
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Finance_Charges_LYR: z.number().nullish().describe(`
+        * * Field Name: Total Finance Charges LYR
+        * * Display Name: Total  Finance  Charges  LYR
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Finance_Charges_YTD: z.number().nullish().describe(`
+        * * Field Name: Total Finance Charges YTD
+        * * Display Name: Total  Finance  Charges  YTD
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Returns_LTD: z.number().nullish().describe(`
+        * * Field Name: Total Returns LTD
+        * * Display Name: Total  Returns  LTD
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Returns_LYR: z.number().nullish().describe(`
+        * * Field Name: Total Returns LYR
+        * * Display Name: Total  Returns  LYR
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Returns_YTD: z.number().nullish().describe(`
+        * * Field Name: Total Returns YTD
+        * * Display Name: Total  Returns  YTD
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Sales_LTD: z.number().nullish().describe(`
+        * * Field Name: Total Sales LTD
+        * * Display Name: Total  Sales  LTD
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Sales_LYR: z.number().nullish().describe(`
+        * * Field Name: Total Sales LYR
+        * * Display Name: Total  Sales  LYR
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Sales_YTD: z.number().nullish().describe(`
+        * * Field Name: Total Sales YTD
+        * * Display Name: Total  Sales  YTD
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Waived_FC_LTD: z.number().nullish().describe(`
+        * * Field Name: Total Waived FC LTD
+        * * Display Name: Total  Waived  FC LTD
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Waived_FC_LYR: z.number().nullish().describe(`
+        * * Field Name: Total Waived FC LYR
+        * * Display Name: Total  Waived  FC LYR
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Waived_FC_YTD: z.number().nullish().describe(`
+        * * Field Name: Total Waived FC YTD
+        * * Display Name: Total  Waived  FC YTD
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Writeoffs_LTD: z.number().nullish().describe(`
+        * * Field Name: Total Writeoffs LTD
+        * * Display Name: Total  Writeoffs  LTD
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Writeoffs_LYR: z.number().nullish().describe(`
+        * * Field Name: Total Writeoffs LYR
+        * * Display Name: Total  Writeoffs  LYR
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Writeoffs_YTD: z.number().nullish().describe(`
+        * * Field Name: Total Writeoffs YTD
+        * * Display Name: Total  Writeoffs  YTD
+        * * SQL Data Type: decimal(19, 5)`),
+    UPS_Zone: z.string().nullish().describe(`
+        * * Field Name: UPS Zone
+        * * Display Name: UPS Zone
+        * * SQL Data Type: varchar(3)`),
+    Unpaid_Finance_Charges_YTD: z.number().nullish().describe(`
+        * * Field Name: Unpaid Finance Charges YTD
+        * * Display Name: Unpaid  Finance  Charges  YTD
+        * * SQL Data Type: decimal(19, 5)`),
+    Unposted_Cash_Amount: z.number().nullish().describe(`
+        * * Field Name: Unposted Cash Amount
+        * * Display Name: Unposted  Cash  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Unposted_Other_Cash_Amount: z.number().nullish().describe(`
+        * * Field Name: Unposted Other Cash Amount
+        * * Display Name: Unposted  Other  Cash  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Unposted_Other_Sales_Amount: z.number().nullish().describe(`
+        * * Field Name: Unposted Other Sales Amount
+        * * Display Name: Unposted  Other  Sales  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Unposted_Sales_Amount: z.number().nullish().describe(`
+        * * Field Name: Unposted Sales Amount
+        * * Display Name: Unposted  Sales  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    User_Defined_1: z.string().nullish().describe(`
+        * * Field Name: User Defined 1
+        * * Display Name: User  Defined  1
+        * * SQL Data Type: varchar(21)`),
+    User_Defined_2: z.string().nullish().describe(`
+        * * Field Name: User Defined 2
+        * * Display Name: User  Defined  2
+        * * SQL Data Type: varchar(21)`),
+    Write_Offs_LIFE: z.number().nullish().describe(`
+        * * Field Name: Write Offs LIFE
+        * * Display Name: Write  Offs  LIFE
+        * * SQL Data Type: decimal(19, 5)`),
+    Write_Offs_LYR: z.number().nullish().describe(`
+        * * Field Name: Write Offs LYR
+        * * Display Name: Write  Offs  LYR
+        * * SQL Data Type: decimal(19, 5)`),
+    Write_Offs_YTD: z.number().nullish().describe(`
+        * * Field Name: Write Offs YTD
+        * * Display Name: Write  Offs  YTD
+        * * SQL Data Type: decimal(19, 5)`),
+    Writeoff_Account_Number: z.string().nullish().describe(`
+        * * Field Name: Writeoff Account Number
+        * * Display Name: Writeoff  Account  Number
+        * * SQL Data Type: varchar(129)`),
+    Accounts_Receivable_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Accounts Receivable Account Number For Drillback
+        * * Display Name: Accounts  Receivable  Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Cash_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Cash Account Number For Drillback
+        * * Display Name: Cash  Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Checkbook_ID_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Checkbook ID For Drillback
+        * * Display Name: Checkbook  ID For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    COGS_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: COGS Account Number For Drillback
+        * * Display Name: COGS Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Customer_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Customer Number For Drillback
+        * * Display Name: Customer  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Discounts_Available_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Discounts Available Account Number For Drillback
+        * * Display Name: Discounts  Available  Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Discounts_Taken_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Discounts Taken Account Number For Drillback
+        * * Display Name: Discounts  Taken  Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Finance_Charge_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Finance Charge Account Number For Drillback
+        * * Display Name: Finance  Charge  Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Inventory_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Inventory Account Number For Drillback
+        * * Display Name: Inventory  Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Sales_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Sales Account Number For Drillback
+        * * Display Name: Sales  Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Sales_Order_Returns_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Sales Order Returns Account Number For Drillback
+        * * Display Name: Sales  Order  Returns  Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Salesperson_ID_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Salesperson ID For Drillback
+        * * Display Name: Salesperson  ID For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Writeoff_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Writeoff Account Number For Drillback
+        * * Display Name: Writeoff  Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+});
+
+export type Customer__client_financeEntityType = z.infer<typeof Customer__client_financeSchema>;
+       
+/**
+ * zod schema definition for the entity Deal Forecast Categories
+ */
+export const DealForecastCategorySchema = z.object({
+    ID: z.number().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: int`),
+    Name: z.string().nullish().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(50)`),
+    DisplayName: z.string().nullish().describe(`
+        * * Field Name: DisplayName
+        * * Display Name: Display Name
+        * * SQL Data Type: nvarchar(50)`),
+    Description: z.string().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(200)`),
+    CreatedAt: z.date().describe(`
+        * * Field Name: CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()`),
+    UpdatedAt: z.date().describe(`
+        * * Field Name: UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()`),
+});
+
+export type DealForecastCategoryEntityType = z.infer<typeof DealForecastCategorySchema>;
+       
+/**
+ * zod schema definition for the entity Deal Stages
+ */
+export const DealStageSchema = z.object({
+    ID: z.number().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: int`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(20)`),
+    Description: z.string().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(200)`),
+    CreatedAt: z.date().describe(`
+        * * Field Name: CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()`),
+    UpdatedAt: z.date().describe(`
+        * * Field Name: UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()`),
+});
+
+export type DealStageEntityType = z.infer<typeof DealStageSchema>;
+       
+/**
+ * zod schema definition for the entity Deal Types
+ */
+export const DealTypeSchema = z.object({
+    ID: z.number().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: int`),
+    Name: z.string().nullish().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(50)`),
+    Description: z.string().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(200)`),
+    CreatedAt: z.date().describe(`
+        * * Field Name: CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()`),
+    UpdatedAt: z.date().describe(`
+        * * Field Name: UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()`),
+    DisplayName: z.string().nullish().describe(`
+        * * Field Name: DisplayName
+        * * Display Name: Display Name
+        * * SQL Data Type: nvarchar(20)`),
+});
+
+export type DealTypeEntityType = z.infer<typeof DealTypeSchema>;
+       
+/**
+ * zod schema definition for the entity Deals
+ */
+export const DealSchema = z.object({
+    ID: z.number().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: int`),
+    BCMID: z.string().describe(`
+        * * Field Name: BCMID
+        * * Display Name: BCMID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newid()`),
+    ExternalSystemRecordID: z.string().describe(`
+        * * Field Name: ExternalSystemRecordID
+        * * Display Name: External System Record ID
+        * * SQL Data Type: nvarchar(50)`),
+    CompanyIntegrationID: z.number().describe(`
+        * * Field Name: CompanyIntegrationID
+        * * Display Name: Company Integration ID
+        * * SQL Data Type: int`),
+    AccountID: z.number().nullish().describe(`
+        * * Field Name: AccountID
+        * * Display Name: Account ID
+        * * SQL Data Type: int
+        * * Related Entity/Foreign Key: Accounts (vwAccounts.ID)`),
+    ContactID: z.number().nullish().describe(`
+        * * Field Name: ContactID
+        * * Display Name: Contact ID
+        * * SQL Data Type: int
+        * * Related Entity/Foreign Key: Contacts (vwContacts.ID)`),
+    Title: z.string().nullish().describe(`
+        * * Field Name: Title
+        * * Display Name: Title
+        * * SQL Data Type: nvarchar(255)`),
+    Description: z.string().nullish().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)`),
+    Value: z.number().nullish().describe(`
+        * * Field Name: Value
+        * * Display Name: Value
+        * * SQL Data Type: money`),
+    IncludeInForecast: z.boolean().nullish().describe(`
+        * * Field Name: IncludeInForecast
+        * * Display Name: Include In Forecast
+        * * SQL Data Type: bit`),
+    Probability: z.number().nullish().describe(`
+        * * Field Name: Probability
+        * * Display Name: Probability
+        * * SQL Data Type: decimal(10, 2)`),
+    CloseDate: z.date().nullish().describe(`
+        * * Field Name: CloseDate
+        * * Display Name: Close Date
+        * * SQL Data Type: datetime`),
+    EmployeeID: z.number().nullish().describe(`
+        * * Field Name: EmployeeID
+        * * Display Name: Employee ID
+        * * SQL Data Type: int`),
+    Pipeline: z.string().nullish().describe(`
+        * * Field Name: Pipeline
+        * * Display Name: Pipeline
+        * * SQL Data Type: nvarchar(50)`),
+    LeadSource: z.string().nullish().describe(`
+        * * Field Name: LeadSource
+        * * Display Name: Lead Source
+        * * SQL Data Type: nvarchar(50)`),
+    LeadSourceDetail: z.string().nullish().describe(`
+        * * Field Name: LeadSourceDetail
+        * * Display Name: Lead Source Detail
+        * * SQL Data Type: nvarchar(MAX)`),
+    ExternalSystemCreatedAt: z.date().nullish().describe(`
+        * * Field Name: ExternalSystemCreatedAt
+        * * Display Name: External System Created At
+        * * SQL Data Type: datetime`),
+    ExternalSystemUpdatedAt: z.date().nullish().describe(`
+        * * Field Name: ExternalSystemUpdatedAt
+        * * Display Name: External System Updated At
+        * * SQL Data Type: datetime`),
+    CreatedAt: z.date().describe(`
+        * * Field Name: CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()`),
+    UpdatedAt: z.date().describe(`
+        * * Field Name: UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()`),
+    DealTypeID: z.number().nullish().describe(`
+        * * Field Name: DealTypeID
+        * * Display Name: Deal Type ID
+        * * SQL Data Type: int
+        * * Related Entity/Foreign Key: Deal Types (vwDealTypes.ID)`),
+    DealStageID: z.number().nullish().describe(`
+        * * Field Name: DealStageID
+        * * Display Name: Deal Stage ID
+        * * SQL Data Type: int
+        * * Related Entity/Foreign Key: Deal Stages (vwDealStages.ID)`),
+    DealForecastCategoryID: z.number().nullish().describe(`
+        * * Field Name: DealForecastCategoryID
+        * * Display Name: Deal Forecast Category ID
+        * * SQL Data Type: int
+        * * Related Entity/Foreign Key: Deal Forecast Categories (vwDealForecastCategories.ID)`),
+    MRR: z.number().describe(`
+        * * Field Name: MRR
+        * * Display Name: MRR
+        * * SQL Data Type: money
+        * * Default Value: 0`),
+    OneTimeFees: z.number().describe(`
+        * * Field Name: OneTimeFees
+        * * Display Name: One Time Fees
+        * * SQL Data Type: money
+        * * Default Value: 0`),
+    ContractTermMonths: z.number().describe(`
+        * * Field Name: ContractTermMonths
+        * * Display Name: Contract Term Months
+        * * SQL Data Type: int
+        * * Default Value: 0`),
+    ForecastNotes: z.string().nullish().describe(`
+        * * Field Name: ForecastNotes
+        * * Display Name: Forecast Notes
+        * * SQL Data Type: nvarchar(MAX)`),
+    IsDeleted: z.boolean().describe(`
+        * * Field Name: IsDeleted
+        * * Display Name: Is Deleted
+        * * SQL Data Type: bit
+        * * Default Value: 0`),
+    Account: z.string().nullish().describe(`
+        * * Field Name: Account
+        * * Display Name: Account
+        * * SQL Data Type: nvarchar(255)`),
+    DealType: z.string().nullish().describe(`
+        * * Field Name: DealType
+        * * Display Name: Deal Type
+        * * SQL Data Type: nvarchar(50)`),
+    DealStage: z.string().nullish().describe(`
+        * * Field Name: DealStage
+        * * Display Name: Deal Stage
+        * * SQL Data Type: nvarchar(20)`),
+    DealForecastCategory: z.string().nullish().describe(`
+        * * Field Name: DealForecastCategory
+        * * Display Name: Deal Forecast Category
+        * * SQL Data Type: nvarchar(50)`),
+});
+
+export type DealEntityType = z.infer<typeof DealSchema>;
+       
+/**
+ * zod schema definition for the entity Industries
+ */
+export const IndustrySchema = z.object({
+    ID: z.number().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: int`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(20)`),
+    Description: z.string().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(200)`),
+    CreatedAt: z.date().describe(`
+        * * Field Name: CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()`),
+    UpdatedAt: z.date().describe(`
+        * * Field Name: UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()`),
+    Keywords: z.string().nullish().describe(`
+        * * Field Name: Keywords
+        * * Display Name: Keywords
+        * * SQL Data Type: nvarchar(MAX)`),
+});
+
+export type IndustryEntityType = z.infer<typeof IndustrySchema>;
+       
+/**
+ * zod schema definition for the entity Invoice Status Types
+ */
+export const InvoiceStatusTypeSchema = z.object({
+    ID: z.number().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: int`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(20)`),
+    Description: z.string().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(200)`),
+    CreatedAt: z.date().describe(`
+        * * Field Name: CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()`),
+    UpdatedAt: z.date().describe(`
+        * * Field Name: UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()`),
+});
+
+export type InvoiceStatusTypeEntityType = z.infer<typeof InvoiceStatusTypeSchema>;
+       
+/**
+ * zod schema definition for the entity Invoices
+ */
+export const InvoiceSchema = z.object({
+    ID: z.number().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: int`),
+    BCMID: z.string().describe(`
+        * * Field Name: BCMID
+        * * Display Name: BCMID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newid()`),
+    InvoiceDate: z.date().describe(`
+        * * Field Name: InvoiceDate
+        * * Display Name: Invoice Date
+        * * SQL Data Type: datetime`),
+    AccountID: z.number().describe(`
+        * * Field Name: AccountID
+        * * Display Name: Account ID
+        * * SQL Data Type: int
+        * * Related Entity/Foreign Key: Accounts (vwAccounts.ID)`),
+    ContactID: z.number().nullish().describe(`
+        * * Field Name: ContactID
+        * * Display Name: Contact ID
+        * * SQL Data Type: int
+        * * Related Entity/Foreign Key: Contacts (vwContacts.ID)`),
+    SubTotal: z.number().describe(`
+        * * Field Name: SubTotal
+        * * Display Name: Sub Total
+        * * SQL Data Type: money
+        * * Default Value: 0`),
+    Tax: z.number().describe(`
+        * * Field Name: Tax
+        * * Display Name: Tax
+        * * SQL Data Type: money
+        * * Default Value: 0`),
+    Total: z.number().describe(`
+        * * Field Name: Total
+        * * Display Name: Total
+        * * SQL Data Type: money
+        * * Default Value: 0`),
+    CompanyIntegrationID: z.number().describe(`
+        * * Field Name: CompanyIntegrationID
+        * * Display Name: Company Integration ID
+        * * SQL Data Type: int`),
+    ExternalSystemRecordID: z.string().describe(`
+        * * Field Name: ExternalSystemRecordID
+        * * Display Name: External System Record ID
+        * * SQL Data Type: nvarchar(50)`),
+    InvoiceNumber: z.string().describe(`
+        * * Field Name: InvoiceNumber
+        * * Display Name: Invoice Number
+        * * SQL Data Type: nvarchar(20)`),
+    PostingDate: z.date().nullish().describe(`
+        * * Field Name: PostingDate
+        * * Display Name: Posting Date
+        * * SQL Data Type: datetime`),
+    DueDate: z.date().nullish().describe(`
+        * * Field Name: DueDate
+        * * Display Name: Due Date
+        * * SQL Data Type: datetime`),
+    StatusID: z.number().describe(`
+        * * Field Name: StatusID
+        * * Display Name: Status ID
+        * * SQL Data Type: int
+        * * Related Entity/Foreign Key: Invoice Status Types (vwInvoiceStatusTypes.ID)`),
+    PaymentTermsID: z.number().nullish().describe(`
+        * * Field Name: PaymentTermsID
+        * * Display Name: Payment Terms ID
+        * * SQL Data Type: int
+        * * Related Entity/Foreign Key: Payment Terms Types (vwPaymentTermsTypes.ID)`),
+    CreatedAt: z.date().describe(`
+        * * Field Name: CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()`),
+    UpdatedAt: z.date().describe(`
+        * * Field Name: UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()`),
+    Account: z.string().describe(`
+        * * Field Name: Account
+        * * Display Name: Account
+        * * SQL Data Type: nvarchar(255)`),
+    Status: z.string().describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)`),
+    PaymentTerms: z.string().nullish().describe(`
+        * * Field Name: PaymentTerms
+        * * Display Name: Payment Terms
+        * * SQL Data Type: nvarchar(50)`),
+});
+
+export type InvoiceEntityType = z.infer<typeof InvoiceSchema>;
+       
+/**
+ * zod schema definition for the entity Items
+ */
+export const ItemSchema = z.object({
+    Item_Number: z.string().describe(`
+        * * Field Name: Item Number
+        * * Display Name: Item  Number
+        * * SQL Data Type: varchar(31)`),
+    Item_Description: z.string().nullish().describe(`
+        * * Field Name: Item Description
+        * * Display Name: Item  Description
+        * * SQL Data Type: varchar(101)`),
+    Item_Type: z.string().nullish().describe(`
+        * * Field Name: Item Type
+        * * Display Name: Item  Type
+        * * SQL Data Type: varchar(100)`),
+    ABC_Code: z.string().nullish().describe(`
+        * * Field Name: ABC Code
+        * * Display Name: ABC Code
+        * * SQL Data Type: varchar(100)`),
+    Allow_Back_Orders: z.string().nullish().describe(`
+        * * Field Name: Allow Back Orders
+        * * Display Name: Allow  Back  Orders
+        * * SQL Data Type: varchar(100)`),
+    Alternate_Item_1: z.string().nullish().describe(`
+        * * Field Name: Alternate Item 1
+        * * Display Name: Alternate  Item  1
+        * * SQL Data Type: varchar(31)`),
+    Alternate_Item_2: z.string().nullish().describe(`
+        * * Field Name: Alternate Item 2
+        * * Display Name: Alternate  Item  2
+        * * SQL Data Type: varchar(31)`),
+    Assembly_Variance_Account_Number: z.string().nullish().describe(`
+        * * Field Name: Assembly Variance Account Number
+        * * Display Name: Assembly  Variance  Account  Number
+        * * SQL Data Type: varchar(129)`),
+    COGS_Account_Number: z.string().nullish().describe(`
+        * * Field Name: COGS Account Number
+        * * Display Name: COGS Account  Number
+        * * SQL Data Type: varchar(129)`),
+    COGS_Inflation_Account_Number: z.string().nullish().describe(`
+        * * Field Name: COGS Inflation Account Number
+        * * Display Name: COGS Inflation  Account  Number
+        * * SQL Data Type: varchar(129)`),
+    COGS_Monetary_Correction_Account_Number: z.string().nullish().describe(`
+        * * Field Name: COGS Monetary Correction Account Number
+        * * Display Name: COGS Monetary  Correction  Account  Number
+        * * SQL Data Type: varchar(129)`),
+    Country_Origin: z.string().nullish().describe(`
+        * * Field Name: Country Origin
+        * * Display Name: Country  Origin
+        * * SQL Data Type: varchar(7)`),
+    Created_Date: z.date().nullish().describe(`
+        * * Field Name: Created Date
+        * * Display Name: Created  Date
+        * * SQL Data Type: datetime`),
+    Current_Cost: z.number().nullish().describe(`
+        * * Field Name: Current Cost
+        * * Display Name: Current  Cost
+        * * SQL Data Type: decimal(19, 5)`),
+    Damaged_Account_Number: z.string().nullish().describe(`
+        * * Field Name: Damaged Account Number
+        * * Display Name: Damaged  Account  Number
+        * * SQL Data Type: varchar(129)`),
+    Decimal_Places_Currency: z.string().nullish().describe(`
+        * * Field Name: Decimal Places Currency
+        * * Display Name: Decimal  Places  Currency
+        * * SQL Data Type: varchar(100)`),
+    Decimal_Places_QTYS: z.string().nullish().describe(`
+        * * Field Name: Decimal Places QTYS
+        * * Display Name: Decimal  Places  QTYS
+        * * SQL Data Type: varchar(100)`),
+    Drop_Ship_Account_Number: z.string().nullish().describe(`
+        * * Field Name: Drop Ship Account Number
+        * * Display Name: Drop  Ship  Account  Number
+        * * SQL Data Type: varchar(129)`),
+    In_Service_Account_Number: z.string().nullish().describe(`
+        * * Field Name: In Service Account Number
+        * * Display Name: In  Service  Account  Number
+        * * SQL Data Type: varchar(129)`),
+    In_Use_Account_Number: z.string().nullish().describe(`
+        * * Field Name: In Use Account Number
+        * * Display Name: In  Use  Account  Number
+        * * SQL Data Type: varchar(129)`),
+    Inventory_Account_Number: z.string().nullish().describe(`
+        * * Field Name: Inventory Account Number
+        * * Display Name: Inventory  Account  Number
+        * * SQL Data Type: varchar(129)`),
+    Inventory_Inflation_Account_Number: z.string().nullish().describe(`
+        * * Field Name: Inventory Inflation Account Number
+        * * Display Name: Inventory  Inflation  Account  Number
+        * * SQL Data Type: varchar(129)`),
+    Inventory_Monetary_Correction_Account_Number: z.string().nullish().describe(`
+        * * Field Name: Inventory Monetary Correction Account Number
+        * * Display Name: Inventory  Monetary  Correction  Account  Number
+        * * SQL Data Type: varchar(129)`),
+    Inventory_Offset_Account_Number: z.string().nullish().describe(`
+        * * Field Name: Inventory Offset Account Number
+        * * Display Name: Inventory  Offset  Account  Number
+        * * SQL Data Type: varchar(129)`),
+    Inventory_Returns_Account_Number: z.string().nullish().describe(`
+        * * Field Name: Inventory Returns Account Number
+        * * Display Name: Inventory  Returns  Account  Number
+        * * SQL Data Type: varchar(129)`),
+    Item_Class_Code: z.string().nullish().describe(`
+        * * Field Name: Item Class Code
+        * * Display Name: Item  Class  Code
+        * * SQL Data Type: varchar(11)`),
+    Item_Code: z.string().nullish().describe(`
+        * * Field Name: Item Code
+        * * Display Name: Item  Code
+        * * SQL Data Type: varchar(15)`),
+    Item_Generic_Description: z.string().nullish().describe(`
+        * * Field Name: Item Generic Description
+        * * Display Name: Item  Generic  Description
+        * * SQL Data Type: varchar(11)`),
+    Item_Shipping_Weight: z.number().nullish().describe(`
+        * * Field Name: Item Shipping Weight
+        * * Display Name: Item  Shipping  Weight
+        * * SQL Data Type: decimal(18, 6)`),
+    Item_Short_Name: z.string().nullish().describe(`
+        * * Field Name: Item Short Name
+        * * Display Name: Item  Short  Name
+        * * SQL Data Type: varchar(15)`),
+    Item_Tax_Schedule_ID: z.string().nullish().describe(`
+        * * Field Name: Item Tax Schedule ID
+        * * Display Name: Item  Tax  Schedule  ID
+        * * SQL Data Type: varchar(15)`),
+    Item_Tracking_Option: z.string().nullish().describe(`
+        * * Field Name: Item Tracking Option
+        * * Display Name: Item  Tracking  Option
+        * * SQL Data Type: varchar(100)`),
+    Keep_Calendar_History: z.string().nullish().describe(`
+        * * Field Name: Keep Calendar History
+        * * Display Name: Keep  Calendar  History
+        * * SQL Data Type: varchar(100)`),
+    Keep_Distribution_History: z.string().nullish().describe(`
+        * * Field Name: Keep Distribution History
+        * * Display Name: Keep  Distribution  History
+        * * SQL Data Type: varchar(100)`),
+    Keep_Period_History: z.string().nullish().describe(`
+        * * Field Name: Keep Period History
+        * * Display Name: Keep  Period  History
+        * * SQL Data Type: varchar(100)`),
+    Keep_Trx_History: z.string().nullish().describe(`
+        * * Field Name: Keep Trx History
+        * * Display Name: Keep  Trx  History
+        * * SQL Data Type: varchar(100)`),
+    Kit_COGS_Account_Source: z.string().nullish().describe(`
+        * * Field Name: Kit COGS Account Source
+        * * Display Name: Kit  COGS Account  Source
+        * * SQL Data Type: varchar(100)`),
+    Last_Generated_Serial_Number: z.string().nullish().describe(`
+        * * Field Name: Last Generated Serial Number
+        * * Display Name: Last  Generated  Serial  Number
+        * * SQL Data Type: varchar(21)`),
+    Location_Code: z.string().nullish().describe(`
+        * * Field Name: Location Code
+        * * Display Name: Location  Code
+        * * SQL Data Type: varchar(11)`),
+    Lot_Type: z.string().nullish().describe(`
+        * * Field Name: Lot Type
+        * * Display Name: Lot  Type
+        * * SQL Data Type: varchar(11)`),
+    Manufacturer: z.string().nullish().describe(`
+        * * Field Name: Manufacturer
+        * * Display Name: Manufacturer
+        * * SQL Data Type: varchar(31)`),
+    Manufacturer_Item_Number: z.string().nullish().describe(`
+        * * Field Name: Manufacturer Item Number
+        * * Display Name: Manufacturer  Item  Number
+        * * SQL Data Type: varchar(31)`),
+    Master_Record_Type: z.number().nullish().describe(`
+        * * Field Name: Master Record Type
+        * * Display Name: Master  Record  Type
+        * * SQL Data Type: smallint`),
+    Mfg__Item_Description: z.string().nullish().describe(`
+        * * Field Name: Mfg. Item Description
+        * * Display Name: Mfg . Item  Description
+        * * SQL Data Type: varchar(101)`),
+    Modified_Date: z.date().nullish().describe(`
+        * * Field Name: Modified Date
+        * * Display Name: Modified  Date
+        * * SQL Data Type: datetime`),
+    Note_Index: z.number().nullish().describe(`
+        * * Field Name: Note Index
+        * * Display Name: Note  Index
+        * * SQL Data Type: decimal(19, 5)`),
+    PriceLevel: z.string().nullish().describe(`
+        * * Field Name: PriceLevel
+        * * Display Name: Price Level
+        * * SQL Data Type: varchar(11)`),
+    Price_Group: z.string().nullish().describe(`
+        * * Field Name: Price Group
+        * * Display Name: Price  Group
+        * * SQL Data Type: varchar(11)`),
+    Price_Method: z.string().nullish().describe(`
+        * * Field Name: Price Method
+        * * Display Name: Price  Method
+        * * SQL Data Type: varchar(100)`),
+    Primary_Mfg__Number: z.string().nullish().describe(`
+        * * Field Name: Primary Mfg. Number
+        * * Display Name: Primary  Mfg . Number
+        * * SQL Data Type: varchar(100)`),
+    Purch_Inflation_Account_Number: z.string().nullish().describe(`
+        * * Field Name: Purch Inflation Account Number
+        * * Display Name: Purch  Inflation  Account  Number
+        * * SQL Data Type: varchar(129)`),
+    Purch_Monetary_Correction_Account_Number: z.string().nullish().describe(`
+        * * Field Name: Purch Monetary Correction Account Number
+        * * Display Name: Purch  Monetary  Correction  Account  Number
+        * * SQL Data Type: varchar(129)`),
+    Purchase_Item_Tax_Schedule_ID: z.string().nullish().describe(`
+        * * Field Name: Purchase Item Tax Schedule ID
+        * * Display Name: Purchase  Item  Tax  Schedule  ID
+        * * SQL Data Type: varchar(15)`),
+    Purchase_Price_Variance_Account_Number: z.string().nullish().describe(`
+        * * Field Name: Purchase Price Variance Account Number
+        * * Display Name: Purchase  Price  Variance  Account  Number
+        * * SQL Data Type: varchar(129)`),
+    Purchase_Tax_Options: z.string().nullish().describe(`
+        * * Field Name: Purchase Tax Options
+        * * Display Name: Purchase  Tax  Options
+        * * SQL Data Type: varchar(100)`),
+    Purchasing_U_Of_M: z.string().nullish().describe(`
+        * * Field Name: Purchasing U Of M
+        * * Display Name: Purchasing  U Of  M
+        * * SQL Data Type: varchar(9)`),
+    Revalue_Inventory: z.string().nullish().describe(`
+        * * Field Name: Revalue Inventory
+        * * Display Name: Revalue  Inventory
+        * * SQL Data Type: varchar(100)`),
+    Sales_Account_Number: z.string().nullish().describe(`
+        * * Field Name: Sales Account Number
+        * * Display Name: Sales  Account  Number
+        * * SQL Data Type: varchar(129)`),
+    Sales_Discounts_Account_Number: z.string().nullish().describe(`
+        * * Field Name: Sales Discounts Account Number
+        * * Display Name: Sales  Discounts  Account  Number
+        * * SQL Data Type: varchar(129)`),
+    Sales_Returns_Account_Number: z.string().nullish().describe(`
+        * * Field Name: Sales Returns Account Number
+        * * Display Name: Sales  Returns  Account  Number
+        * * SQL Data Type: varchar(129)`),
+    Selling_U_Of_M: z.string().nullish().describe(`
+        * * Field Name: Selling U Of M
+        * * Display Name: Selling  U Of  M
+        * * SQL Data Type: varchar(9)`),
+    Standard_Cost: z.number().nullish().describe(`
+        * * Field Name: Standard Cost
+        * * Display Name: Standard  Cost
+        * * SQL Data Type: decimal(19, 5)`),
+    Tax_Commodity_Code: z.string().nullish().describe(`
+        * * Field Name: Tax Commodity Code
+        * * Display Name: Tax  Commodity  Code
+        * * SQL Data Type: varchar(31)`),
+    Tax_Options: z.string().nullish().describe(`
+        * * Field Name: Tax Options
+        * * Display Name: Tax  Options
+        * * SQL Data Type: varchar(100)`),
+    Tolerance_Percentage: z.number().nullish().describe(`
+        * * Field Name: Tolerance Percentage
+        * * Display Name: Tolerance  Percentage
+        * * SQL Data Type: int`),
+    U_Of_M_Schedule: z.string().nullish().describe(`
+        * * Field Name: U Of M Schedule
+        * * Display Name: U Of  M Schedule
+        * * SQL Data Type: varchar(11)`),
+    Unrealized_Purchase_Price_Variance_Account_Number: z.string().nullish().describe(`
+        * * Field Name: Unrealized Purchase Price Variance Account Number
+        * * Display Name: Unrealized  Purchase  Price  Variance  Account  Number
+        * * SQL Data Type: varchar(129)`),
+    User_Category_Value_1: z.string().nullish().describe(`
+        * * Field Name: User Category Value 1
+        * * Display Name: User  Category  Value  1
+        * * SQL Data Type: varchar(11)`),
+    User_Category_Value_2: z.string().nullish().describe(`
+        * * Field Name: User Category Value 2
+        * * Display Name: User  Category  Value  2
+        * * SQL Data Type: varchar(11)`),
+    User_Category_Value_3: z.string().nullish().describe(`
+        * * Field Name: User Category Value 3
+        * * Display Name: User  Category  Value  3
+        * * SQL Data Type: varchar(11)`),
+    User_Category_Value_4: z.string().nullish().describe(`
+        * * Field Name: User Category Value 4
+        * * Display Name: User  Category  Value  4
+        * * SQL Data Type: varchar(11)`),
+    User_Category_Value_5: z.string().nullish().describe(`
+        * * Field Name: User Category Value 5
+        * * Display Name: User  Category  Value  5
+        * * SQL Data Type: varchar(11)`),
+    User_Category_Value_6: z.string().nullish().describe(`
+        * * Field Name: User Category Value 6
+        * * Display Name: User  Category  Value  6
+        * * SQL Data Type: varchar(11)`),
+    Valuation_Method: z.string().nullish().describe(`
+        * * Field Name: Valuation Method
+        * * Display Name: Valuation  Method
+        * * SQL Data Type: varchar(100)`),
+    Variances_Account_Number: z.string().nullish().describe(`
+        * * Field Name: Variances Account Number
+        * * Display Name: Variances  Account  Number
+        * * SQL Data Type: varchar(129)`),
+    Warranty_Days: z.number().nullish().describe(`
+        * * Field Name: Warranty Days
+        * * Display Name: Warranty  Days
+        * * SQL Data Type: smallint`),
+    Assembly_Variance_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Assembly Variance Account Number For Drillback
+        * * Display Name: Assembly  Variance  Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    COGS_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: COGS Account Number For Drillback
+        * * Display Name: COGS Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    COGS_Inflation_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: COGS Inflation Account Number For Drillback
+        * * Display Name: COGS Inflation  Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    COGS_Monetary_Correction_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: COGS Monetary Correction Account Number For Drillback
+        * * Display Name: COGS Monetary  Correction  Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Damaged_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Damaged Account Number For Drillback
+        * * Display Name: Damaged  Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Drop_Ship_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Drop Ship Account Number For Drillback
+        * * Display Name: Drop  Ship  Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    In_Service_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: In Service Account Number For Drillback
+        * * Display Name: In  Service  Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    In_Use_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: In Use Account Number For Drillback
+        * * Display Name: In  Use  Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Inventory_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Inventory Account Number For Drillback
+        * * Display Name: Inventory  Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Inventory_Inflation_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Inventory Inflation Account Number For Drillback
+        * * Display Name: Inventory  Inflation  Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Inventory_Monetary_Correction_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Inventory Monetary Correction Account Number For Drillback
+        * * Display Name: Inventory  Monetary  Correction  Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Inventory_Offset_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Inventory Offset Account Number For Drillback
+        * * Display Name: Inventory  Offset  Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Inventory_Returns_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Inventory Returns Account Number For Drillback
+        * * Display Name: Inventory  Returns  Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Item_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Item Number For Drillback
+        * * Display Name: Item  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Purch_Inflation_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Purch Inflation Account Number For Drillback
+        * * Display Name: Purch  Inflation  Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Purch_Monetary_Correction_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Purch Monetary Correction Account Number For Drillback
+        * * Display Name: Purch  Monetary  Correction  Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Purchase_Price_Variance_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Purchase Price Variance Account Number For Drillback
+        * * Display Name: Purchase  Price  Variance  Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Sales_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Sales Account Number For Drillback
+        * * Display Name: Sales  Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Sales_Discounts_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Sales Discounts Account Number For Drillback
+        * * Display Name: Sales  Discounts  Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Sales_Returns_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Sales Returns Account Number For Drillback
+        * * Display Name: Sales  Returns  Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Unrealized_Purchase_Price_Variance_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Unrealized Purchase Price Variance Account Number For Drillback
+        * * Display Name: Unrealized  Purchase  Price  Variance  Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Variances_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Variances Account Number For Drillback
+        * * Display Name: Variances  Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Use_Qty_Overage_Tolerance: z.string().nullish().describe(`
+        * * Field Name: Use Qty Overage Tolerance
+        * * Display Name: Use  Qty  Overage  Tolerance
+        * * SQL Data Type: varchar(100)`),
+    Qty_Overage_Tolerance_Percentage: z.number().nullish().describe(`
+        * * Field Name: Qty Overage Tolerance Percentage
+        * * Display Name: Qty  Overage  Tolerance  Percentage
+        * * SQL Data Type: int`),
+    Use_Qty_Shortage_Tolerance: z.string().nullish().describe(`
+        * * Field Name: Use Qty Shortage Tolerance
+        * * Display Name: Use  Qty  Shortage  Tolerance
+        * * SQL Data Type: varchar(100)`),
+    Qty_Shortage_Tolerance_Percentage: z.number().nullish().describe(`
+        * * Field Name: Qty Shortage Tolerance Percentage
+        * * Display Name: Qty  Shortage  Tolerance  Percentage
+        * * SQL Data Type: int`),
+});
+
+export type ItemEntityType = z.infer<typeof ItemSchema>;
+       
+/**
+ * zod schema definition for the entity Items__client_finance
+ */
+export const Item__client_financeSchema = z.object({
+    Item_Number: z.string().describe(`
+        * * Field Name: Item Number
+        * * Display Name: Item  Number
+        * * SQL Data Type: varchar(31)`),
+    Item_Description: z.string().nullish().describe(`
+        * * Field Name: Item Description
+        * * Display Name: Item  Description
+        * * SQL Data Type: varchar(101)`),
+    Item_Type: z.string().nullish().describe(`
+        * * Field Name: Item Type
+        * * Display Name: Item  Type
+        * * SQL Data Type: varchar(100)`),
+    ABC_Code: z.string().nullish().describe(`
+        * * Field Name: ABC Code
+        * * Display Name: ABC Code
+        * * SQL Data Type: varchar(100)`),
+    Allow_Back_Orders: z.string().nullish().describe(`
+        * * Field Name: Allow Back Orders
+        * * Display Name: Allow  Back  Orders
+        * * SQL Data Type: varchar(100)`),
+    Alternate_Item_1: z.string().nullish().describe(`
+        * * Field Name: Alternate Item 1
+        * * Display Name: Alternate  Item  1
+        * * SQL Data Type: varchar(31)`),
+    Alternate_Item_2: z.string().nullish().describe(`
+        * * Field Name: Alternate Item 2
+        * * Display Name: Alternate  Item  2
+        * * SQL Data Type: varchar(31)`),
+    Assembly_Variance_Account_Number: z.string().nullish().describe(`
+        * * Field Name: Assembly Variance Account Number
+        * * Display Name: Assembly  Variance  Account  Number
+        * * SQL Data Type: varchar(129)`),
+    COGS_Account_Number: z.string().nullish().describe(`
+        * * Field Name: COGS Account Number
+        * * Display Name: COGS Account  Number
+        * * SQL Data Type: varchar(129)`),
+    COGS_Inflation_Account_Number: z.string().nullish().describe(`
+        * * Field Name: COGS Inflation Account Number
+        * * Display Name: COGS Inflation  Account  Number
+        * * SQL Data Type: varchar(129)`),
+    COGS_Monetary_Correction_Account_Number: z.string().nullish().describe(`
+        * * Field Name: COGS Monetary Correction Account Number
+        * * Display Name: COGS Monetary  Correction  Account  Number
+        * * SQL Data Type: varchar(129)`),
+    Country_Origin: z.string().nullish().describe(`
+        * * Field Name: Country Origin
+        * * Display Name: Country  Origin
+        * * SQL Data Type: varchar(7)`),
+    Created_Date: z.date().nullish().describe(`
+        * * Field Name: Created Date
+        * * Display Name: Created  Date
+        * * SQL Data Type: datetime`),
+    Current_Cost: z.number().nullish().describe(`
+        * * Field Name: Current Cost
+        * * Display Name: Current  Cost
+        * * SQL Data Type: decimal(19, 5)`),
+    Damaged_Account_Number: z.string().nullish().describe(`
+        * * Field Name: Damaged Account Number
+        * * Display Name: Damaged  Account  Number
+        * * SQL Data Type: varchar(129)`),
+    Decimal_Places_Currency: z.string().nullish().describe(`
+        * * Field Name: Decimal Places Currency
+        * * Display Name: Decimal  Places  Currency
+        * * SQL Data Type: varchar(100)`),
+    Decimal_Places_QTYS: z.string().nullish().describe(`
+        * * Field Name: Decimal Places QTYS
+        * * Display Name: Decimal  Places  QTYS
+        * * SQL Data Type: varchar(100)`),
+    Drop_Ship_Account_Number: z.string().nullish().describe(`
+        * * Field Name: Drop Ship Account Number
+        * * Display Name: Drop  Ship  Account  Number
+        * * SQL Data Type: varchar(129)`),
+    In_Service_Account_Number: z.string().nullish().describe(`
+        * * Field Name: In Service Account Number
+        * * Display Name: In  Service  Account  Number
+        * * SQL Data Type: varchar(129)`),
+    In_Use_Account_Number: z.string().nullish().describe(`
+        * * Field Name: In Use Account Number
+        * * Display Name: In  Use  Account  Number
+        * * SQL Data Type: varchar(129)`),
+    Inventory_Account_Number: z.string().nullish().describe(`
+        * * Field Name: Inventory Account Number
+        * * Display Name: Inventory  Account  Number
+        * * SQL Data Type: varchar(129)`),
+    Inventory_Inflation_Account_Number: z.string().nullish().describe(`
+        * * Field Name: Inventory Inflation Account Number
+        * * Display Name: Inventory  Inflation  Account  Number
+        * * SQL Data Type: varchar(129)`),
+    Inventory_Monetary_Correction_Account_Number: z.string().nullish().describe(`
+        * * Field Name: Inventory Monetary Correction Account Number
+        * * Display Name: Inventory  Monetary  Correction  Account  Number
+        * * SQL Data Type: varchar(129)`),
+    Inventory_Offset_Account_Number: z.string().nullish().describe(`
+        * * Field Name: Inventory Offset Account Number
+        * * Display Name: Inventory  Offset  Account  Number
+        * * SQL Data Type: varchar(129)`),
+    Inventory_Returns_Account_Number: z.string().nullish().describe(`
+        * * Field Name: Inventory Returns Account Number
+        * * Display Name: Inventory  Returns  Account  Number
+        * * SQL Data Type: varchar(129)`),
+    Item_Class_Code: z.string().nullish().describe(`
+        * * Field Name: Item Class Code
+        * * Display Name: Item  Class  Code
+        * * SQL Data Type: varchar(11)`),
+    Item_Code: z.string().nullish().describe(`
+        * * Field Name: Item Code
+        * * Display Name: Item  Code
+        * * SQL Data Type: varchar(15)`),
+    Item_Generic_Description: z.string().nullish().describe(`
+        * * Field Name: Item Generic Description
+        * * Display Name: Item  Generic  Description
+        * * SQL Data Type: varchar(11)`),
+    Item_Shipping_Weight: z.number().nullish().describe(`
+        * * Field Name: Item Shipping Weight
+        * * Display Name: Item  Shipping  Weight
+        * * SQL Data Type: decimal(18, 6)`),
+    Item_Short_Name: z.string().nullish().describe(`
+        * * Field Name: Item Short Name
+        * * Display Name: Item  Short  Name
+        * * SQL Data Type: varchar(15)`),
+    Item_Tax_Schedule_ID: z.string().nullish().describe(`
+        * * Field Name: Item Tax Schedule ID
+        * * Display Name: Item  Tax  Schedule  ID
+        * * SQL Data Type: varchar(15)`),
+    Item_Tracking_Option: z.string().nullish().describe(`
+        * * Field Name: Item Tracking Option
+        * * Display Name: Item  Tracking  Option
+        * * SQL Data Type: varchar(100)`),
+    Keep_Calendar_History: z.string().nullish().describe(`
+        * * Field Name: Keep Calendar History
+        * * Display Name: Keep  Calendar  History
+        * * SQL Data Type: varchar(100)`),
+    Keep_Distribution_History: z.string().nullish().describe(`
+        * * Field Name: Keep Distribution History
+        * * Display Name: Keep  Distribution  History
+        * * SQL Data Type: varchar(100)`),
+    Keep_Period_History: z.string().nullish().describe(`
+        * * Field Name: Keep Period History
+        * * Display Name: Keep  Period  History
+        * * SQL Data Type: varchar(100)`),
+    Keep_Trx_History: z.string().nullish().describe(`
+        * * Field Name: Keep Trx History
+        * * Display Name: Keep  Trx  History
+        * * SQL Data Type: varchar(100)`),
+    Kit_COGS_Account_Source: z.string().nullish().describe(`
+        * * Field Name: Kit COGS Account Source
+        * * Display Name: Kit  COGS Account  Source
+        * * SQL Data Type: varchar(100)`),
+    Last_Generated_Serial_Number: z.string().nullish().describe(`
+        * * Field Name: Last Generated Serial Number
+        * * Display Name: Last  Generated  Serial  Number
+        * * SQL Data Type: varchar(21)`),
+    Location_Code: z.string().nullish().describe(`
+        * * Field Name: Location Code
+        * * Display Name: Location  Code
+        * * SQL Data Type: varchar(11)`),
+    Lot_Type: z.string().nullish().describe(`
+        * * Field Name: Lot Type
+        * * Display Name: Lot  Type
+        * * SQL Data Type: varchar(11)`),
+    Manufacturer: z.string().nullish().describe(`
+        * * Field Name: Manufacturer
+        * * Display Name: Manufacturer
+        * * SQL Data Type: varchar(31)`),
+    Manufacturer_Item_Number: z.string().nullish().describe(`
+        * * Field Name: Manufacturer Item Number
+        * * Display Name: Manufacturer  Item  Number
+        * * SQL Data Type: varchar(31)`),
+    Master_Record_Type: z.number().nullish().describe(`
+        * * Field Name: Master Record Type
+        * * Display Name: Master  Record  Type
+        * * SQL Data Type: smallint`),
+    Mfg__Item_Description: z.string().nullish().describe(`
+        * * Field Name: Mfg. Item Description
+        * * Display Name: Mfg . Item  Description
+        * * SQL Data Type: varchar(101)`),
+    Modified_Date: z.date().nullish().describe(`
+        * * Field Name: Modified Date
+        * * Display Name: Modified  Date
+        * * SQL Data Type: datetime`),
+    Note_Index: z.number().nullish().describe(`
+        * * Field Name: Note Index
+        * * Display Name: Note  Index
+        * * SQL Data Type: decimal(19, 5)`),
+    PriceLevel: z.string().nullish().describe(`
+        * * Field Name: PriceLevel
+        * * Display Name: Price Level
+        * * SQL Data Type: varchar(11)`),
+    Price_Group: z.string().nullish().describe(`
+        * * Field Name: Price Group
+        * * Display Name: Price  Group
+        * * SQL Data Type: varchar(11)`),
+    Price_Method: z.string().nullish().describe(`
+        * * Field Name: Price Method
+        * * Display Name: Price  Method
+        * * SQL Data Type: varchar(100)`),
+    Primary_Mfg__Number: z.string().nullish().describe(`
+        * * Field Name: Primary Mfg. Number
+        * * Display Name: Primary  Mfg . Number
+        * * SQL Data Type: varchar(100)`),
+    Purch_Inflation_Account_Number: z.string().nullish().describe(`
+        * * Field Name: Purch Inflation Account Number
+        * * Display Name: Purch  Inflation  Account  Number
+        * * SQL Data Type: varchar(129)`),
+    Purch_Monetary_Correction_Account_Number: z.string().nullish().describe(`
+        * * Field Name: Purch Monetary Correction Account Number
+        * * Display Name: Purch  Monetary  Correction  Account  Number
+        * * SQL Data Type: varchar(129)`),
+    Purchase_Item_Tax_Schedule_ID: z.string().nullish().describe(`
+        * * Field Name: Purchase Item Tax Schedule ID
+        * * Display Name: Purchase  Item  Tax  Schedule  ID
+        * * SQL Data Type: varchar(15)`),
+    Purchase_Price_Variance_Account_Number: z.string().nullish().describe(`
+        * * Field Name: Purchase Price Variance Account Number
+        * * Display Name: Purchase  Price  Variance  Account  Number
+        * * SQL Data Type: varchar(129)`),
+    Purchase_Tax_Options: z.string().nullish().describe(`
+        * * Field Name: Purchase Tax Options
+        * * Display Name: Purchase  Tax  Options
+        * * SQL Data Type: varchar(100)`),
+    Purchasing_U_Of_M: z.string().nullish().describe(`
+        * * Field Name: Purchasing U Of M
+        * * Display Name: Purchasing  U Of  M
+        * * SQL Data Type: varchar(9)`),
+    Revalue_Inventory: z.string().nullish().describe(`
+        * * Field Name: Revalue Inventory
+        * * Display Name: Revalue  Inventory
+        * * SQL Data Type: varchar(100)`),
+    Sales_Account_Number: z.string().nullish().describe(`
+        * * Field Name: Sales Account Number
+        * * Display Name: Sales  Account  Number
+        * * SQL Data Type: varchar(129)`),
+    Sales_Discounts_Account_Number: z.string().nullish().describe(`
+        * * Field Name: Sales Discounts Account Number
+        * * Display Name: Sales  Discounts  Account  Number
+        * * SQL Data Type: varchar(129)`),
+    Sales_Returns_Account_Number: z.string().nullish().describe(`
+        * * Field Name: Sales Returns Account Number
+        * * Display Name: Sales  Returns  Account  Number
+        * * SQL Data Type: varchar(129)`),
+    Selling_U_Of_M: z.string().nullish().describe(`
+        * * Field Name: Selling U Of M
+        * * Display Name: Selling  U Of  M
+        * * SQL Data Type: varchar(9)`),
+    Standard_Cost: z.number().nullish().describe(`
+        * * Field Name: Standard Cost
+        * * Display Name: Standard  Cost
+        * * SQL Data Type: decimal(19, 5)`),
+    Tax_Commodity_Code: z.string().nullish().describe(`
+        * * Field Name: Tax Commodity Code
+        * * Display Name: Tax  Commodity  Code
+        * * SQL Data Type: varchar(31)`),
+    Tax_Options: z.string().nullish().describe(`
+        * * Field Name: Tax Options
+        * * Display Name: Tax  Options
+        * * SQL Data Type: varchar(100)`),
+    Tolerance_Percentage: z.number().nullish().describe(`
+        * * Field Name: Tolerance Percentage
+        * * Display Name: Tolerance  Percentage
+        * * SQL Data Type: int`),
+    U_Of_M_Schedule: z.string().nullish().describe(`
+        * * Field Name: U Of M Schedule
+        * * Display Name: U Of  M Schedule
+        * * SQL Data Type: varchar(11)`),
+    Unrealized_Purchase_Price_Variance_Account_Number: z.string().nullish().describe(`
+        * * Field Name: Unrealized Purchase Price Variance Account Number
+        * * Display Name: Unrealized  Purchase  Price  Variance  Account  Number
+        * * SQL Data Type: varchar(129)`),
+    User_Category_Value_1: z.string().nullish().describe(`
+        * * Field Name: User Category Value 1
+        * * Display Name: User  Category  Value  1
+        * * SQL Data Type: varchar(11)`),
+    User_Category_Value_2: z.string().nullish().describe(`
+        * * Field Name: User Category Value 2
+        * * Display Name: User  Category  Value  2
+        * * SQL Data Type: varchar(11)`),
+    User_Category_Value_3: z.string().nullish().describe(`
+        * * Field Name: User Category Value 3
+        * * Display Name: User  Category  Value  3
+        * * SQL Data Type: varchar(11)`),
+    User_Category_Value_4: z.string().nullish().describe(`
+        * * Field Name: User Category Value 4
+        * * Display Name: User  Category  Value  4
+        * * SQL Data Type: varchar(11)`),
+    User_Category_Value_5: z.string().nullish().describe(`
+        * * Field Name: User Category Value 5
+        * * Display Name: User  Category  Value  5
+        * * SQL Data Type: varchar(11)`),
+    User_Category_Value_6: z.string().nullish().describe(`
+        * * Field Name: User Category Value 6
+        * * Display Name: User  Category  Value  6
+        * * SQL Data Type: varchar(11)`),
+    Valuation_Method: z.string().nullish().describe(`
+        * * Field Name: Valuation Method
+        * * Display Name: Valuation  Method
+        * * SQL Data Type: varchar(100)`),
+    Variances_Account_Number: z.string().nullish().describe(`
+        * * Field Name: Variances Account Number
+        * * Display Name: Variances  Account  Number
+        * * SQL Data Type: varchar(129)`),
+    Warranty_Days: z.number().nullish().describe(`
+        * * Field Name: Warranty Days
+        * * Display Name: Warranty  Days
+        * * SQL Data Type: smallint`),
+    Assembly_Variance_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Assembly Variance Account Number For Drillback
+        * * Display Name: Assembly  Variance  Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    COGS_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: COGS Account Number For Drillback
+        * * Display Name: COGS Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    COGS_Inflation_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: COGS Inflation Account Number For Drillback
+        * * Display Name: COGS Inflation  Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    COGS_Monetary_Correction_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: COGS Monetary Correction Account Number For Drillback
+        * * Display Name: COGS Monetary  Correction  Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Damaged_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Damaged Account Number For Drillback
+        * * Display Name: Damaged  Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Drop_Ship_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Drop Ship Account Number For Drillback
+        * * Display Name: Drop  Ship  Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    In_Service_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: In Service Account Number For Drillback
+        * * Display Name: In  Service  Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    In_Use_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: In Use Account Number For Drillback
+        * * Display Name: In  Use  Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Inventory_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Inventory Account Number For Drillback
+        * * Display Name: Inventory  Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Inventory_Inflation_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Inventory Inflation Account Number For Drillback
+        * * Display Name: Inventory  Inflation  Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Inventory_Monetary_Correction_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Inventory Monetary Correction Account Number For Drillback
+        * * Display Name: Inventory  Monetary  Correction  Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Inventory_Offset_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Inventory Offset Account Number For Drillback
+        * * Display Name: Inventory  Offset  Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Inventory_Returns_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Inventory Returns Account Number For Drillback
+        * * Display Name: Inventory  Returns  Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Item_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Item Number For Drillback
+        * * Display Name: Item  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Purch_Inflation_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Purch Inflation Account Number For Drillback
+        * * Display Name: Purch  Inflation  Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Purch_Monetary_Correction_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Purch Monetary Correction Account Number For Drillback
+        * * Display Name: Purch  Monetary  Correction  Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Purchase_Price_Variance_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Purchase Price Variance Account Number For Drillback
+        * * Display Name: Purchase  Price  Variance  Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Sales_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Sales Account Number For Drillback
+        * * Display Name: Sales  Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Sales_Discounts_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Sales Discounts Account Number For Drillback
+        * * Display Name: Sales  Discounts  Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Sales_Returns_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Sales Returns Account Number For Drillback
+        * * Display Name: Sales  Returns  Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Unrealized_Purchase_Price_Variance_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Unrealized Purchase Price Variance Account Number For Drillback
+        * * Display Name: Unrealized  Purchase  Price  Variance  Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Variances_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Variances Account Number For Drillback
+        * * Display Name: Variances  Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Use_Qty_Overage_Tolerance: z.string().nullish().describe(`
+        * * Field Name: Use Qty Overage Tolerance
+        * * Display Name: Use  Qty  Overage  Tolerance
+        * * SQL Data Type: varchar(100)`),
+    Qty_Overage_Tolerance_Percentage: z.number().nullish().describe(`
+        * * Field Name: Qty Overage Tolerance Percentage
+        * * Display Name: Qty  Overage  Tolerance  Percentage
+        * * SQL Data Type: int`),
+    Use_Qty_Shortage_Tolerance: z.string().nullish().describe(`
+        * * Field Name: Use Qty Shortage Tolerance
+        * * Display Name: Use  Qty  Shortage  Tolerance
+        * * SQL Data Type: varchar(100)`),
+    Qty_Shortage_Tolerance_Percentage: z.number().nullish().describe(`
+        * * Field Name: Qty Shortage Tolerance Percentage
+        * * Display Name: Qty  Shortage  Tolerance  Percentage
+        * * SQL Data Type: int`),
+});
+
+export type Item__client_financeEntityType = z.infer<typeof Item__client_financeSchema>;
+       
+/**
+ * zod schema definition for the entity Organization Links
+ */
+export const OrganizationLinkSchema = z.object({
+    OrganizationLinkID: z.number().describe(`
+        * * Field Name: OrganizationLinkID
+        * * Display Name: Organization Link ID
+        * * SQL Data Type: int`),
+    CRMAccountID: z.string().nullish().describe(`
+        * * Field Name: CRMAccountID
+        * * Display Name: CRMAccount ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Accounts__client_crm (vwAccounts__client_crm.AccountId)`),
+    MainGreatPlainsCustomerID: z.string().nullish().describe(`
+        * * Field Name: MainGreatPlainsCustomerID
+        * * Display Name: Main Great Plains Customer ID
+        * * SQL Data Type: varchar(15)
+        * * Related Entity/Foreign Key: Customers__client_finance (vwCustomers__client_finance.Customer Number)`),
+    MembershipGreatPlainsCustomerID: z.string().nullish().describe(`
+        * * Field Name: MembershipGreatPlainsCustomerID
+        * * Display Name: Membership Great Plains Customer ID
+        * * SQL Data Type: varchar(15)
+        * * Related Entity/Foreign Key: Customers (vwCustomers.Customer Number)`),
+    OrganizationName: z.string().nullish().describe(`
+        * * Field Name: OrganizationName
+        * * Display Name: Organization Name
+        * * SQL Data Type: nvarchar(160)`),
+    CategoryName: z.string().nullish().describe(`
+        * * Field Name: CategoryName
+        * * Display Name: Category Name
+        * * SQL Data Type: nvarchar(100)`),
+    CreatedAt: z.date().describe(`
+        * * Field Name: CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()`),
+    UpdatedAt: z.date().describe(`
+        * * Field Name: UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()`),
+});
+
+export type OrganizationLinkEntityType = z.infer<typeof OrganizationLinkSchema>;
+       
+/**
+ * zod schema definition for the entity Payment Terms Types
+ */
+export const PaymentTermsTypeSchema = z.object({
+    ID: z.number().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: int`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(50)`),
+    DisplayName: z.string().nullish().describe(`
+        * * Field Name: DisplayName
+        * * Display Name: Display Name
+        * * SQL Data Type: nvarchar(20)`),
+    Code: z.string().nullish().describe(`
+        * * Field Name: Code
+        * * Display Name: Code
+        * * SQL Data Type: nvarchar(20)`),
+    DueDateCalculation: z.string().nullish().describe(`
+        * * Field Name: DueDateCalculation
+        * * Display Name: Due Date Calculation
+        * * SQL Data Type: nvarchar(20)`),
+    Description: z.string().nullish().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(200)`),
+    CreatedAt: z.date().describe(`
+        * * Field Name: CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()`),
+    UpdatedAt: z.date().describe(`
+        * * Field Name: UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()`),
+    CompanyIntegrationID: z.number().nullish().describe(`
+        * * Field Name: CompanyIntegrationID
+        * * Display Name: Company Integration ID
+        * * SQL Data Type: int`),
+    ExternalSystemRecordID: z.string().nullish().describe(`
+        * * Field Name: ExternalSystemRecordID
+        * * Display Name: External System Record ID
+        * * SQL Data Type: nvarchar(100)`),
+});
+
+export type PaymentTermsTypeEntityType = z.infer<typeof PaymentTermsTypeSchema>;
+       
+/**
+ * zod schema definition for the entity Person Links
+ */
+export const PersonLinkSchema = z.object({
+    PersonLinkID: z.number().describe(`
+        * * Field Name: PersonLinkID
+        * * Display Name: Person Link ID
+        * * SQL Data Type: int`),
+    CRMContactID: z.string().nullish().describe(`
+        * * Field Name: CRMContactID
+        * * Display Name: CRMContact ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Contacts__client_crm (vwContacts__client_crm.ContactId)`),
+    MainGreatPlainsCustomerID: z.string().nullish().describe(`
+        * * Field Name: MainGreatPlainsCustomerID
+        * * Display Name: Main Great Plains Customer ID
+        * * SQL Data Type: varchar(15)
+        * * Related Entity/Foreign Key: Customers__client_finance (vwCustomers__client_finance.Customer Number)`),
+    MembershipGreatPlainsCustomerID: z.string().nullish().describe(`
+        * * Field Name: MembershipGreatPlainsCustomerID
+        * * Display Name: Membership Great Plains Customer ID
+        * * SQL Data Type: varchar(15)
+        * * Related Entity/Foreign Key: Customers (vwCustomers.Customer Number)`),
+    FirstName: z.string().nullish().describe(`
+        * * Field Name: FirstName
+        * * Display Name: First Name
+        * * SQL Data Type: nvarchar(160)`),
+    LastName: z.string().nullish().describe(`
+        * * Field Name: LastName
+        * * Display Name: Last Name
+        * * SQL Data Type: nvarchar(160)`),
+    Email: z.string().nullish().describe(`
+        * * Field Name: Email
+        * * Display Name: Email
+        * * SQL Data Type: nvarchar(160)`),
+    CRMAccountID: z.string().nullish().describe(`
+        * * Field Name: CRMAccountID
+        * * Display Name: CRMAccount ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Accounts__client_crm (vwAccounts__client_crm.AccountId)`),
+    CreatedAt: z.date().describe(`
+        * * Field Name: CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()`),
+    UpdatedAt: z.date().describe(`
+        * * Field Name: UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()`),
+});
+
+export type PersonLinkEntityType = z.infer<typeof PersonLinkSchema>;
+       
+/**
+ * zod schema definition for the entity Product Price Levels
+ */
+export const ProductPriceLevelSchema = z.object({
+    DiscountTypeIdName: z.string().nullish().describe(`
+        * * Field Name: DiscountTypeIdName
+        * * Display Name: Discount Type Id Name
+        * * SQL Data Type: nvarchar(100)`),
+    ModifiedOnBehalfByYomiName: z.string().nullish().describe(`
+        * * Field Name: ModifiedOnBehalfByYomiName
+        * * Display Name: Modified On Behalf By Yomi Name
+        * * SQL Data Type: nvarchar(200)`),
+    ModifiedOnBehalfByName: z.string().nullish().describe(`
+        * * Field Name: ModifiedOnBehalfByName
+        * * Display Name: Modified On Behalf By Name
+        * * SQL Data Type: nvarchar(200)`),
+    PriceLevelIdName: z.string().nullish().describe(`
+        * * Field Name: PriceLevelIdName
+        * * Display Name: Price Level Id Name
+        * * SQL Data Type: nvarchar(100)`),
+    OrganizationId: z.string().nullish().describe(`
+        * * Field Name: OrganizationId
+        * * Display Name: Organization Id
+        * * SQL Data Type: uniqueidentifier`),
+    ModifiedByYomiName: z.string().nullish().describe(`
+        * * Field Name: ModifiedByYomiName
+        * * Display Name: Modified By Yomi Name
+        * * SQL Data Type: nvarchar(200)`),
+    ModifiedByName: z.string().nullish().describe(`
+        * * Field Name: ModifiedByName
+        * * Display Name: Modified By Name
+        * * SQL Data Type: nvarchar(200)`),
+    CreatedByYomiName: z.string().nullish().describe(`
+        * * Field Name: CreatedByYomiName
+        * * Display Name: Created By Yomi Name
+        * * SQL Data Type: nvarchar(200)`),
+    CreatedByName: z.string().nullish().describe(`
+        * * Field Name: CreatedByName
+        * * Display Name: Created By Name
+        * * SQL Data Type: nvarchar(200)`),
+    ProductIdName: z.string().nullish().describe(`
+        * * Field Name: ProductIdName
+        * * Display Name: Product Id Name
+        * * SQL Data Type: nvarchar(200)`),
+    ProductNumber: z.string().nullish().describe(`
+        * * Field Name: ProductNumber
+        * * Display Name: Product Number
+        * * SQL Data Type: nvarchar(100)`),
+    CreatedOnBehalfByName: z.string().nullish().describe(`
+        * * Field Name: CreatedOnBehalfByName
+        * * Display Name: Created On Behalf By Name
+        * * SQL Data Type: nvarchar(200)`),
+    CreatedOnBehalfByYomiName: z.string().nullish().describe(`
+        * * Field Name: CreatedOnBehalfByYomiName
+        * * Display Name: Created On Behalf By Yomi Name
+        * * SQL Data Type: nvarchar(200)`),
+    UoMScheduleIdName: z.string().nullish().describe(`
+        * * Field Name: UoMScheduleIdName
+        * * Display Name: Uo MSchedule Id Name
+        * * SQL Data Type: nvarchar(200)`),
+    UoMIdName: z.string().nullish().describe(`
+        * * Field Name: UoMIdName
+        * * Display Name: Uo MId Name
+        * * SQL Data Type: nvarchar(100)`),
+    TransactionCurrencyIdName: z.string().nullish().describe(`
+        * * Field Name: TransactionCurrencyIdName
+        * * Display Name: Transaction Currency Id Name
+        * * SQL Data Type: nvarchar(100)`),
+    PriceLevelId: z.string().nullish().describe(`
+        * * Field Name: PriceLevelId
+        * * Display Name: Price Level Id
+        * * SQL Data Type: uniqueidentifier`),
+    ProductPriceLevelId: z.string().describe(`
+        * * Field Name: ProductPriceLevelId
+        * * Display Name: Product Price Level Id
+        * * SQL Data Type: uniqueidentifier`),
+    UoMId: z.string().nullish().describe(`
+        * * Field Name: UoMId
+        * * Display Name: Uo MId
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Uo Ms (vwUoMs.UoMId)`),
+    UoMScheduleId: z.string().nullish().describe(`
+        * * Field Name: UoMScheduleId
+        * * Display Name: Uo MSchedule Id
+        * * SQL Data Type: uniqueidentifier`),
+    DiscountTypeId: z.string().nullish().describe(`
+        * * Field Name: DiscountTypeId
+        * * Display Name: Discount Type Id
+        * * SQL Data Type: uniqueidentifier`),
+    ProductId: z.string().nullish().describe(`
+        * * Field Name: ProductId
+        * * Display Name: Product Id
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Products (vwProducts.ProductId)`),
+    Percentage: z.number().nullish().describe(`
+        * * Field Name: Percentage
+        * * Display Name: Percentage
+        * * SQL Data Type: decimal(23, 10)`),
+    Amount: z.number().nullish().describe(`
+        * * Field Name: Amount
+        * * Display Name: Amount
+        * * SQL Data Type: money`),
+    CreatedOn: z.date().nullish().describe(`
+        * * Field Name: CreatedOn
+        * * Display Name: Created On
+        * * SQL Data Type: datetime`),
+    QuantitySellingCode: z.number().nullish().describe(`
+        * * Field Name: QuantitySellingCode
+        * * Display Name: Quantity Selling Code
+        * * SQL Data Type: int`),
+    RoundingPolicyCode: z.number().nullish().describe(`
+        * * Field Name: RoundingPolicyCode
+        * * Display Name: Rounding Policy Code
+        * * SQL Data Type: int`),
+    ModifiedOn: z.date().nullish().describe(`
+        * * Field Name: ModifiedOn
+        * * Display Name: Modified On
+        * * SQL Data Type: datetime`),
+    PricingMethodCode: z.number().nullish().describe(`
+        * * Field Name: PricingMethodCode
+        * * Display Name: Pricing Method Code
+        * * SQL Data Type: int`),
+    RoundingOptionCode: z.number().nullish().describe(`
+        * * Field Name: RoundingOptionCode
+        * * Display Name: Rounding Option Code
+        * * SQL Data Type: int`),
+    RoundingOptionAmount: z.number().nullish().describe(`
+        * * Field Name: RoundingOptionAmount
+        * * Display Name: Rounding Option Amount
+        * * SQL Data Type: money`),
+    VersionNumber: z.number().describe(`
+        * * Field Name: VersionNumber
+        * * Display Name: Version Number
+        * * SQL Data Type: timestamp`),
+    CreatedBy: z.string().nullish().describe(`
+        * * Field Name: CreatedBy
+        * * Display Name: Created By
+        * * SQL Data Type: uniqueidentifier`),
+    ModifiedBy: z.string().nullish().describe(`
+        * * Field Name: ModifiedBy
+        * * Display Name: Modified By
+        * * SQL Data Type: uniqueidentifier`),
+    ExchangeRate: z.number().nullish().describe(`
+        * * Field Name: ExchangeRate
+        * * Display Name: Exchange Rate
+        * * SQL Data Type: decimal(23, 10)`),
+    TransactionCurrencyId: z.string().nullish().describe(`
+        * * Field Name: TransactionCurrencyId
+        * * Display Name: Transaction Currency Id
+        * * SQL Data Type: uniqueidentifier`),
+    OverriddenCreatedOn: z.date().nullish().describe(`
+        * * Field Name: OverriddenCreatedOn
+        * * Display Name: Overridden Created On
+        * * SQL Data Type: datetime`),
+    ImportSequenceNumber: z.number().nullish().describe(`
+        * * Field Name: ImportSequenceNumber
+        * * Display Name: Import Sequence Number
+        * * SQL Data Type: int`),
+    Amount_Base: z.number().nullish().describe(`
+        * * Field Name: Amount_Base
+        * * Display Name: Amount _Base
+        * * SQL Data Type: money`),
+    RoundingOptionAmount_Base: z.number().nullish().describe(`
+        * * Field Name: RoundingOptionAmount_Base
+        * * Display Name: Rounding Option Amount _Base
+        * * SQL Data Type: money`),
+    CreatedOnBehalfBy: z.string().nullish().describe(`
+        * * Field Name: CreatedOnBehalfBy
+        * * Display Name: Created On Behalf By
+        * * SQL Data Type: uniqueidentifier`),
+    ModifiedOnBehalfBy: z.string().nullish().describe(`
+        * * Field Name: ModifiedOnBehalfBy
+        * * Display Name: Modified On Behalf By
+        * * SQL Data Type: uniqueidentifier`),
+    ProcessId: z.string().nullish().describe(`
+        * * Field Name: ProcessId
+        * * Display Name: Process Id
+        * * SQL Data Type: uniqueidentifier`),
+    StageId: z.string().nullish().describe(`
+        * * Field Name: StageId
+        * * Display Name: Stage Id
+        * * SQL Data Type: uniqueidentifier`),
+    TraversedPath: z.string().nullish().describe(`
+        * * Field Name: TraversedPath
+        * * Display Name: Traversed Path
+        * * SQL Data Type: nvarchar(1250)`),
+});
+
+export type ProductPriceLevelEntityType = z.infer<typeof ProductPriceLevelSchema>;
+       
+/**
+ * zod schema definition for the entity Products
+ */
+export const ProductSchema = z.object({
+    acep_CountryofOriginIdName: z.string().nullish().describe(`
+        * * Field Name: acep_CountryofOriginIdName
+        * * Display Name: acep _Countryof Origin Id Name
+        * * SQL Data Type: nvarchar(100)`),
+    acep_subscriptiondetailidName: z.string().nullish().describe(`
+        * * Field Name: acep_subscriptiondetailidName
+        * * Display Name: acep _subscriptiondetailid Name
+        * * SQL Data Type: nvarchar(100)`),
+    Acep_PublicationIdName: z.string().nullish().describe(`
+        * * Field Name: Acep_PublicationIdName
+        * * Display Name: Acep _Publication Id Name
+        * * SQL Data Type: nvarchar(100)`),
+    TransactionCurrencyIdName: z.string().nullish().describe(`
+        * * Field Name: TransactionCurrencyIdName
+        * * Display Name: Transaction Currency Id Name
+        * * SQL Data Type: nvarchar(100)`),
+    OrganizationIdName: z.string().nullish().describe(`
+        * * Field Name: OrganizationIdName
+        * * Display Name: Organization Id Name
+        * * SQL Data Type: nvarchar(160)`),
+    ModifiedByYomiName: z.string().nullish().describe(`
+        * * Field Name: ModifiedByYomiName
+        * * Display Name: Modified By Yomi Name
+        * * SQL Data Type: nvarchar(200)`),
+    ModifiedByName: z.string().nullish().describe(`
+        * * Field Name: ModifiedByName
+        * * Display Name: Modified By Name
+        * * SQL Data Type: nvarchar(200)`),
+    acep_OrderTypeIdName: z.string().nullish().describe(`
+        * * Field Name: acep_OrderTypeIdName
+        * * Display Name: acep _Order Type Id Name
+        * * SQL Data Type: nvarchar(100)`),
+    ParentProductIdName: z.string().nullish().describe(`
+        * * Field Name: ParentProductIdName
+        * * Display Name: Parent Product Id Name
+        * * SQL Data Type: nvarchar(200)`),
+    SubjectIdName: z.string().nullish().describe(`
+        * * Field Name: SubjectIdName
+        * * Display Name: Subject Id Name
+        * * SQL Data Type: nvarchar(500)`),
+    ModifiedOnBehalfByYomiName: z.string().nullish().describe(`
+        * * Field Name: ModifiedOnBehalfByYomiName
+        * * Display Name: Modified On Behalf By Yomi Name
+        * * SQL Data Type: nvarchar(200)`),
+    ModifiedOnBehalfByName: z.string().nullish().describe(`
+        * * Field Name: ModifiedOnBehalfByName
+        * * Display Name: Modified On Behalf By Name
+        * * SQL Data Type: nvarchar(200)`),
+    DefaultUoMScheduleIdName: z.string().nullish().describe(`
+        * * Field Name: DefaultUoMScheduleIdName
+        * * Display Name: Default Uo MSchedule Id Name
+        * * SQL Data Type: nvarchar(200)`),
+    acep_eventproductidName: z.string().nullish().describe(`
+        * * Field Name: acep_eventproductidName
+        * * Display Name: acep _eventproductid Name
+        * * SQL Data Type: nvarchar(100)`),
+    CreatedByExternalPartyName: z.string().nullish().describe(`
+        * * Field Name: CreatedByExternalPartyName
+        * * Display Name: Created By External Party Name
+        * * SQL Data Type: nvarchar(300)`),
+    CreatedByExternalPartyYomiName: z.string().nullish().describe(`
+        * * Field Name: CreatedByExternalPartyYomiName
+        * * Display Name: Created By External Party Yomi Name
+        * * SQL Data Type: nvarchar(450)`),
+    CreatedByYomiName: z.string().nullish().describe(`
+        * * Field Name: CreatedByYomiName
+        * * Display Name: Created By Yomi Name
+        * * SQL Data Type: nvarchar(200)`),
+    CreatedByName: z.string().nullish().describe(`
+        * * Field Name: CreatedByName
+        * * Display Name: Created By Name
+        * * SQL Data Type: nvarchar(200)`),
+    PriceLevelIdName: z.string().nullish().describe(`
+        * * Field Name: PriceLevelIdName
+        * * Display Name: Price Level Id Name
+        * * SQL Data Type: nvarchar(100)`),
+    acep_ecmeproducttypeidName: z.string().nullish().describe(`
+        * * Field Name: acep_ecmeproducttypeidName
+        * * Display Name: acep _ecmeproducttypeid Name
+        * * SQL Data Type: nvarchar(100)`),
+    acep_ProductTypeIdName: z.string().nullish().describe(`
+        * * Field Name: acep_ProductTypeIdName
+        * * Display Name: acep _Product Type Id Name
+        * * SQL Data Type: nvarchar(100)`),
+    ModifiedByExternalPartyYomiName: z.string().nullish().describe(`
+        * * Field Name: ModifiedByExternalPartyYomiName
+        * * Display Name: Modified By External Party Yomi Name
+        * * SQL Data Type: nvarchar(450)`),
+    ModifiedByExternalPartyName: z.string().nullish().describe(`
+        * * Field Name: ModifiedByExternalPartyName
+        * * Display Name: Modified By External Party Name
+        * * SQL Data Type: nvarchar(300)`),
+    acep_courseproductidName: z.string().nullish().describe(`
+        * * Field Name: acep_courseproductidName
+        * * Display Name: acep _courseproductid Name
+        * * SQL Data Type: nvarchar(100)`),
+    CreatedOnBehalfByYomiName: z.string().nullish().describe(`
+        * * Field Name: CreatedOnBehalfByYomiName
+        * * Display Name: Created On Behalf By Yomi Name
+        * * SQL Data Type: nvarchar(200)`),
+    CreatedOnBehalfByName: z.string().nullish().describe(`
+        * * Field Name: CreatedOnBehalfByName
+        * * Display Name: Created On Behalf By Name
+        * * SQL Data Type: nvarchar(200)`),
+    acep_productidName: z.string().nullish().describe(`
+        * * Field Name: acep_productidName
+        * * Display Name: acep _productid Name
+        * * SQL Data Type: nvarchar(100)`),
+    acep_CMEActivityIdName: z.string().nullish().describe(`
+        * * Field Name: acep_CMEActivityIdName
+        * * Display Name: acep _CMEActivity Id Name
+        * * SQL Data Type: nvarchar(450)`),
+    acep_VariantParentIdName: z.string().nullish().describe(`
+        * * Field Name: acep_VariantParentIdName
+        * * Display Name: acep _Variant Parent Id Name
+        * * SQL Data Type: nvarchar(200)`),
+    acep_PublisherIdName: z.string().nullish().describe(`
+        * * Field Name: acep_PublisherIdName
+        * * Display Name: acep _Publisher Id Name
+        * * SQL Data Type: nvarchar(160)`),
+    acep_PublisherIdYomiName: z.string().nullish().describe(`
+        * * Field Name: acep_PublisherIdYomiName
+        * * Display Name: acep _Publisher Id Yomi Name
+        * * SQL Data Type: nvarchar(160)`),
+    EntityImage_Timestamp: z.number().nullish().describe(`
+        * * Field Name: EntityImage_Timestamp
+        * * Display Name: Entity Image _Timestamp
+        * * SQL Data Type: bigint`),
+    EntityImage: z.number().nullish().describe(`
+        * * Field Name: EntityImage
+        * * Display Name: Entity Image
+        * * SQL Data Type: image`),
+    EntityImage_URL: z.string().nullish().describe(`
+        * * Field Name: EntityImage_URL
+        * * Display Name: Entity Image _URL
+        * * SQL Data Type: nvarchar(200)`),
+    DefaultUoMIdName: z.string().nullish().describe(`
+        * * Field Name: DefaultUoMIdName
+        * * Display Name: Default Uo MId Name
+        * * SQL Data Type: nvarchar(100)`),
+    ProductId: z.string().describe(`
+        * * Field Name: ProductId
+        * * Display Name: Product Id
+        * * SQL Data Type: uniqueidentifier`),
+    DefaultUoMScheduleId: z.string().nullish().describe(`
+        * * Field Name: DefaultUoMScheduleId
+        * * Display Name: Default Uo MSchedule Id
+        * * SQL Data Type: uniqueidentifier`),
+    SubjectId: z.string().nullish().describe(`
+        * * Field Name: SubjectId
+        * * Display Name: Subject Id
+        * * SQL Data Type: uniqueidentifier`),
+    OrganizationId: z.string().nullish().describe(`
+        * * Field Name: OrganizationId
+        * * Display Name: Organization Id
+        * * SQL Data Type: uniqueidentifier`),
+    Name: z.string().nullish().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(200)`),
+    DefaultUoMId: z.string().nullish().describe(`
+        * * Field Name: DefaultUoMId
+        * * Display Name: Default Uo MId
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Uo Ms (vwUoMs.UoMId)`),
+    PriceLevelId: z.string().nullish().describe(`
+        * * Field Name: PriceLevelId
+        * * Display Name: Price Level Id
+        * * SQL Data Type: uniqueidentifier`),
+    Description: z.string().nullish().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)`),
+    ProductTypeCode: z.number().nullish().describe(`
+        * * Field Name: ProductTypeCode
+        * * Display Name: Product Type Code
+        * * SQL Data Type: int`),
+    ProductUrl: z.string().nullish().describe(`
+        * * Field Name: ProductUrl
+        * * Display Name: Product Url
+        * * SQL Data Type: nvarchar(255)`),
+    Price: z.number().nullish().describe(`
+        * * Field Name: Price
+        * * Display Name: Price
+        * * SQL Data Type: money`),
+    IsKit: z.boolean().nullish().describe(`
+        * * Field Name: IsKit
+        * * Display Name: Is Kit
+        * * SQL Data Type: bit`),
+    ProductNumber: z.string().nullish().describe(`
+        * * Field Name: ProductNumber
+        * * Display Name: Product Number
+        * * SQL Data Type: nvarchar(100)`),
+    Size: z.string().nullish().describe(`
+        * * Field Name: Size
+        * * Display Name: Size
+        * * SQL Data Type: nvarchar(200)`),
+    CurrentCost: z.number().nullish().describe(`
+        * * Field Name: CurrentCost
+        * * Display Name: Current Cost
+        * * SQL Data Type: money`),
+    StockVolume: z.number().nullish().describe(`
+        * * Field Name: StockVolume
+        * * Display Name: Stock Volume
+        * * SQL Data Type: decimal(23, 10)`),
+    StandardCost: z.number().nullish().describe(`
+        * * Field Name: StandardCost
+        * * Display Name: Standard Cost
+        * * SQL Data Type: money`),
+    StockWeight: z.number().nullish().describe(`
+        * * Field Name: StockWeight
+        * * Display Name: Stock Weight
+        * * SQL Data Type: decimal(23, 10)`),
+    QuantityDecimal: z.number().nullish().describe(`
+        * * Field Name: QuantityDecimal
+        * * Display Name: Quantity Decimal
+        * * SQL Data Type: int`),
+    QuantityOnHand: z.number().nullish().describe(`
+        * * Field Name: QuantityOnHand
+        * * Display Name: Quantity On Hand
+        * * SQL Data Type: decimal(23, 10)`),
+    IsStockItem: z.boolean().nullish().describe(`
+        * * Field Name: IsStockItem
+        * * Display Name: Is Stock Item
+        * * SQL Data Type: bit`),
+    SupplierName: z.string().nullish().describe(`
+        * * Field Name: SupplierName
+        * * Display Name: Supplier Name
+        * * SQL Data Type: nvarchar(100)`),
+    VendorName: z.string().nullish().describe(`
+        * * Field Name: VendorName
+        * * Display Name: Vendor Name
+        * * SQL Data Type: nvarchar(100)`),
+    VendorPartNumber: z.string().nullish().describe(`
+        * * Field Name: VendorPartNumber
+        * * Display Name: Vendor Part Number
+        * * SQL Data Type: nvarchar(100)`),
+    CreatedOn: z.date().nullish().describe(`
+        * * Field Name: CreatedOn
+        * * Display Name: Created On
+        * * SQL Data Type: datetime`),
+    ModifiedOn: z.date().nullish().describe(`
+        * * Field Name: ModifiedOn
+        * * Display Name: Modified On
+        * * SQL Data Type: datetime`),
+    CreatedBy: z.string().nullish().describe(`
+        * * Field Name: CreatedBy
+        * * Display Name: Created By
+        * * SQL Data Type: uniqueidentifier`),
+    StateCode: z.number().nullish().describe(`
+        * * Field Name: StateCode
+        * * Display Name: State Code
+        * * SQL Data Type: int`),
+    ModifiedBy: z.string().nullish().describe(`
+        * * Field Name: ModifiedBy
+        * * Display Name: Modified By
+        * * SQL Data Type: uniqueidentifier`),
+    StatusCode: z.number().nullish().describe(`
+        * * Field Name: StatusCode
+        * * Display Name: Status Code
+        * * SQL Data Type: int`),
+    VersionNumber: z.number().describe(`
+        * * Field Name: VersionNumber
+        * * Display Name: Version Number
+        * * SQL Data Type: timestamp`),
+    OverriddenCreatedOn: z.date().nullish().describe(`
+        * * Field Name: OverriddenCreatedOn
+        * * Display Name: Overridden Created On
+        * * SQL Data Type: datetime`),
+    TransactionCurrencyId: z.string().nullish().describe(`
+        * * Field Name: TransactionCurrencyId
+        * * Display Name: Transaction Currency Id
+        * * SQL Data Type: uniqueidentifier`),
+    ExchangeRate: z.number().nullish().describe(`
+        * * Field Name: ExchangeRate
+        * * Display Name: Exchange Rate
+        * * SQL Data Type: decimal(23, 10)`),
+    UTCConversionTimeZoneCode: z.number().nullish().describe(`
+        * * Field Name: UTCConversionTimeZoneCode
+        * * Display Name: UTCConversion Time Zone Code
+        * * SQL Data Type: int`),
+    ImportSequenceNumber: z.number().nullish().describe(`
+        * * Field Name: ImportSequenceNumber
+        * * Display Name: Import Sequence Number
+        * * SQL Data Type: int`),
+    TimeZoneRuleVersionNumber: z.number().nullish().describe(`
+        * * Field Name: TimeZoneRuleVersionNumber
+        * * Display Name: Time Zone Rule Version Number
+        * * SQL Data Type: int`),
+    CurrentCost_Base: z.number().nullish().describe(`
+        * * Field Name: CurrentCost_Base
+        * * Display Name: Current Cost _Base
+        * * SQL Data Type: money`),
+    Price_Base: z.number().nullish().describe(`
+        * * Field Name: Price_Base
+        * * Display Name: Price _Base
+        * * SQL Data Type: money`),
+    StandardCost_Base: z.number().nullish().describe(`
+        * * Field Name: StandardCost_Base
+        * * Display Name: Standard Cost _Base
+        * * SQL Data Type: money`),
+    CreatedOnBehalfBy: z.string().nullish().describe(`
+        * * Field Name: CreatedOnBehalfBy
+        * * Display Name: Created On Behalf By
+        * * SQL Data Type: uniqueidentifier`),
+    ModifiedOnBehalfBy: z.string().nullish().describe(`
+        * * Field Name: ModifiedOnBehalfBy
+        * * Display Name: Modified On Behalf By
+        * * SQL Data Type: uniqueidentifier`),
+    EntityImageId: z.string().nullish().describe(`
+        * * Field Name: EntityImageId
+        * * Display Name: Entity Image Id
+        * * SQL Data Type: uniqueidentifier`),
+    ProcessId: z.string().nullish().describe(`
+        * * Field Name: ProcessId
+        * * Display Name: Process Id
+        * * SQL Data Type: uniqueidentifier`),
+    StageId: z.string().nullish().describe(`
+        * * Field Name: StageId
+        * * Display Name: Stage Id
+        * * SQL Data Type: uniqueidentifier`),
+    ParentProductId: z.string().nullish().describe(`
+        * * Field Name: ParentProductId
+        * * Display Name: Parent Product Id
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Products (vwProducts.ProductId)`),
+    ProductStructure: z.number().nullish().describe(`
+        * * Field Name: ProductStructure
+        * * Display Name: Product Structure
+        * * SQL Data Type: int`),
+    VendorID: z.string().nullish().describe(`
+        * * Field Name: VendorID
+        * * Display Name: Vendor ID
+        * * SQL Data Type: nvarchar(100)`),
+    TraversedPath: z.string().nullish().describe(`
+        * * Field Name: TraversedPath
+        * * Display Name: Traversed Path
+        * * SQL Data Type: nvarchar(1250)`),
+    ValidFromDate: z.date().nullish().describe(`
+        * * Field Name: ValidFromDate
+        * * Display Name: Valid From Date
+        * * SQL Data Type: datetime`),
+    ValidToDate: z.date().nullish().describe(`
+        * * Field Name: ValidToDate
+        * * Display Name: Valid To Date
+        * * SQL Data Type: datetime`),
+    HierarchyPath: z.string().nullish().describe(`
+        * * Field Name: HierarchyPath
+        * * Display Name: Hierarchy Path
+        * * SQL Data Type: nvarchar(900)`),
+    CreatedByExternalParty: z.string().nullish().describe(`
+        * * Field Name: CreatedByExternalParty
+        * * Display Name: Created By External Party
+        * * SQL Data Type: uniqueidentifier`),
+    ModifiedByExternalParty: z.string().nullish().describe(`
+        * * Field Name: ModifiedByExternalParty
+        * * Display Name: Modified By External Party
+        * * SQL Data Type: uniqueidentifier`),
+    Eone_QuantityDamaged: z.number().nullish().describe(`
+        * * Field Name: Eone_QuantityDamaged
+        * * Display Name: Eone _Quantity Damaged
+        * * SQL Data Type: decimal(23, 10)`),
+    Acep_AllowWebQuantity: z.boolean().nullish().describe(`
+        * * Field Name: Acep_AllowWebQuantity
+        * * Display Name: Acep _Allow Web Quantity
+        * * SQL Data Type: bit`),
+    acep_courseproductid: z.string().nullish().describe(`
+        * * Field Name: acep_courseproductid
+        * * Display Name: acep _courseproductid
+        * * SQL Data Type: uniqueidentifier`),
+    Acep_Duration: z.number().nullish().describe(`
+        * * Field Name: Acep_Duration
+        * * Display Name: Acep _Duration
+        * * SQL Data Type: int`),
+    Acep_Print: z.boolean().nullish().describe(`
+        * * Field Name: Acep_Print
+        * * Display Name: Acep _Print
+        * * SQL Data Type: bit`),
+    acep_subscriptiondetailid: z.string().nullish().describe(`
+        * * Field Name: acep_subscriptiondetailid
+        * * Display Name: acep _subscriptiondetailid
+        * * SQL Data Type: uniqueidentifier`),
+    Acep_IntegrationPartnerCode: z.number().nullish().describe(`
+        * * Field Name: Acep_IntegrationPartnerCode
+        * * Display Name: Acep _Integration Partner Code
+        * * SQL Data Type: int`),
+    Acep_Online: z.boolean().nullish().describe(`
+        * * Field Name: Acep_Online
+        * * Display Name: Acep _Online
+        * * SQL Data Type: bit`),
+    Acep_Issue: z.string().nullish().describe(`
+        * * Field Name: Acep_Issue
+        * * Display Name: Acep _Issue
+        * * SQL Data Type: nvarchar(100)`),
+    Acep_ExpireDate: z.date().nullish().describe(`
+        * * Field Name: Acep_ExpireDate
+        * * Display Name: Acep _Expire Date
+        * * SQL Data Type: datetime`),
+    Eone_QuantityOnOrder: z.number().nullish().describe(`
+        * * Field Name: Eone_QuantityOnOrder
+        * * Display Name: Eone _Quantity On Order
+        * * SQL Data Type: decimal(23, 10)`),
+    Acep_ProductSubType: z.number().nullish().describe(`
+        * * Field Name: Acep_ProductSubType
+        * * Display Name: Acep _Product Sub Type
+        * * SQL Data Type: int`),
+    Acep_OrgCode: z.number().nullish().describe(`
+        * * Field Name: Acep_OrgCode
+        * * Display Name: Acep _Org Code
+        * * SQL Data Type: int`),
+    Eone_QuantityReturned: z.number().nullish().describe(`
+        * * Field Name: Eone_QuantityReturned
+        * * Display Name: Eone _Quantity Returned
+        * * SQL Data Type: decimal(23, 10)`),
+    Acep_Volume: z.string().nullish().describe(`
+        * * Field Name: Acep_Volume
+        * * Display Name: Acep _Volume
+        * * SQL Data Type: nvarchar(100)`),
+    Acep_Frequency: z.number().nullish().describe(`
+        * * Field Name: Acep_Frequency
+        * * Display Name: Acep _Frequency
+        * * SQL Data Type: int`),
+    Eone_QuantityAllocated: z.number().nullish().describe(`
+        * * Field Name: Eone_QuantityAllocated
+        * * Display Name: Eone _Quantity Allocated
+        * * SQL Data Type: decimal(23, 10)`),
+    Acep_defaultquantity: z.number().nullish().describe(`
+        * * Field Name: Acep_defaultquantity
+        * * Display Name: Acep _defaultquantity
+        * * SQL Data Type: decimal(23, 10)`),
+    Acep_GPOrgCode: z.number().nullish().describe(`
+        * * Field Name: Acep_GPOrgCode
+        * * Display Name: Acep _GPOrg Code
+        * * SQL Data Type: int`),
+    Eone_QuantityAvailable: z.number().nullish().describe(`
+        * * Field Name: Eone_QuantityAvailable
+        * * Display Name: Eone _Quantity Available
+        * * SQL Data Type: decimal(23, 10)`),
+    Acep_SalesTaxOptionCode: z.number().nullish().describe(`
+        * * Field Name: Acep_SalesTaxOptionCode
+        * * Display Name: Acep _Sales Tax Option Code
+        * * SQL Data Type: int`),
+    acep_eventproductid: z.string().nullish().describe(`
+        * * Field Name: acep_eventproductid
+        * * Display Name: acep _eventproductid
+        * * SQL Data Type: uniqueidentifier`),
+    Acep_Date: z.date().nullish().describe(`
+        * * Field Name: Acep_Date
+        * * Display Name: Acep _Date
+        * * SQL Data Type: datetime`),
+    Acep_PublicationId: z.string().nullish().describe(`
+        * * Field Name: Acep_PublicationId
+        * * Display Name: Acep _Publication Id
+        * * SQL Data Type: uniqueidentifier`),
+    Acep_MultiYearValue: z.number().nullish().describe(`
+        * * Field Name: Acep_MultiYearValue
+        * * Display Name: Acep _Multi Year Value
+        * * SQL Data Type: int`),
+    Eone_QuantityOrdered: z.number().nullish().describe(`
+        * * Field Name: Eone_QuantityOrdered
+        * * Display Name: Eone _Quantity Ordered
+        * * SQL Data Type: decimal(23, 10)`),
+    Acep_StatementDescription: z.string().nullish().describe(`
+        * * Field Name: Acep_StatementDescription
+        * * Display Name: Acep _Statement Description
+        * * SQL Data Type: nvarchar(100)`),
+    Acep_IncludeinSubscriptionIntegration: z.boolean().nullish().describe(`
+        * * Field Name: Acep_IncludeinSubscriptionIntegration
+        * * Display Name: Acep _Includein Subscription Integration
+        * * SQL Data Type: bit`),
+    acep_productid: z.string().nullish().describe(`
+        * * Field Name: acep_productid
+        * * Display Name: acep _productid
+        * * SQL Data Type: uniqueidentifier`),
+    Eone_QuantityInService: z.number().nullish().describe(`
+        * * Field Name: Eone_QuantityInService
+        * * Display Name: Eone _Quantity In Service
+        * * SQL Data Type: decimal(23, 10)`),
+    Eone_QuantityInUse: z.number().nullish().describe(`
+        * * Field Name: Eone_QuantityInUse
+        * * Display Name: Eone _Quantity In Use
+        * * SQL Data Type: decimal(23, 10)`),
+    Eone_QuantitySold: z.number().nullish().describe(`
+        * * Field Name: Eone_QuantitySold
+        * * Display Name: Eone _Quantity Sold
+        * * SQL Data Type: decimal(23, 10)`),
+    acep_ItemClassID: z.string().nullish().describe(`
+        * * Field Name: acep_ItemClassID
+        * * Display Name: acep _Item Class ID
+        * * SQL Data Type: nvarchar(20)`),
+    acep_Optional: z.boolean().nullish().describe(`
+        * * Field Name: acep_Optional
+        * * Display Name: acep _Optional
+        * * SQL Data Type: bit`),
+    acep_Selected: z.boolean().nullish().describe(`
+        * * Field Name: acep_Selected
+        * * Display Name: acep _Selected
+        * * SQL Data Type: bit`),
+    acep_GracePeriod: z.number().nullish().describe(`
+        * * Field Name: acep_GracePeriod
+        * * Display Name: acep _Grace Period
+        * * SQL Data Type: int`),
+    acep_IsSubscriptionSequential: z.boolean().nullish().describe(`
+        * * Field Name: acep_IsSubscriptionSequential
+        * * Display Name: acep _Is Subscription Sequential
+        * * SQL Data Type: bit`),
+    acep_IsSubscriptionSnappedtoMonth: z.boolean().nullish().describe(`
+        * * Field Name: acep_IsSubscriptionSnappedtoMonth
+        * * Display Name: acep _Is Subscription Snappedto Month
+        * * SQL Data Type: bit`),
+    acep_ProductFamily: z.number().nullish().describe(`
+        * * Field Name: acep_ProductFamily
+        * * Display Name: acep _Product Family
+        * * SQL Data Type: int`),
+    acep_CurrencyDecimal: z.number().nullish().describe(`
+        * * Field Name: acep_CurrencyDecimal
+        * * Display Name: acep _Currency Decimal
+        * * SQL Data Type: int`),
+    acep_ShowPAC: z.boolean().nullish().describe(`
+        * * Field Name: acep_ShowPAC
+        * * Display Name: acep _Show PAC
+        * * SQL Data Type: bit`),
+    acep_UnitType: z.number().nullish().describe(`
+        * * Field Name: acep_UnitType
+        * * Display Name: acep _Unit Type
+        * * SQL Data Type: int`),
+    acep_iscollection: z.boolean().nullish().describe(`
+        * * Field Name: acep_iscollection
+        * * Display Name: acep _iscollection
+        * * SQL Data Type: bit`),
+    acep_setautorenew: z.number().nullish().describe(`
+        * * Field Name: acep_setautorenew
+        * * Display Name: acep _setautorenew
+        * * SQL Data Type: int`),
+    acep_Accessibility: z.string().nullish().describe(`
+        * * Field Name: acep_Accessibility
+        * * Display Name: acep _Accessibility
+        * * SQL Data Type: nvarchar(100)`),
+    acep_ACEPRank: z.number().nullish().describe(`
+        * * Field Name: acep_ACEPRank
+        * * Display Name: acep _ACEPRank
+        * * SQL Data Type: int`),
+    acep_CMEActivityId: z.string().nullish().describe(`
+        * * Field Name: acep_CMEActivityId
+        * * Display Name: acep _CMEActivity Id
+        * * SQL Data Type: uniqueidentifier`),
+    acep_Color: z.number().nullish().describe(`
+        * * Field Name: acep_Color
+        * * Display Name: acep _Color
+        * * SQL Data Type: int`),
+    acep_CountryofOriginId: z.string().nullish().describe(`
+        * * Field Name: acep_CountryofOriginId
+        * * Display Name: acep _Countryof Origin Id
+        * * SQL Data Type: uniqueidentifier`),
+    acep_Dimensions: z.string().nullish().describe(`
+        * * Field Name: acep_Dimensions
+        * * Display Name: acep _Dimensions
+        * * SQL Data Type: nvarchar(100)`),
+    acep_Discontinued: z.boolean().nullish().describe(`
+        * * Field Name: acep_Discontinued
+        * * Display Name: acep _Discontinued
+        * * SQL Data Type: bit`),
+    acep_Format: z.number().nullish().describe(`
+        * * Field Name: acep_Format
+        * * Display Name: acep _Format
+        * * SQL Data Type: int`),
+    acep_ISBN10: z.string().nullish().describe(`
+        * * Field Name: acep_ISBN10
+        * * Display Name: acep _ISBN10
+        * * SQL Data Type: nvarchar(10)`),
+    acep_ISBN13: z.string().nullish().describe(`
+        * * Field Name: acep_ISBN13
+        * * Display Name: acep _ISBN13
+        * * SQL Data Type: nvarchar(18)`),
+    acep_Language: z.number().nullish().describe(`
+        * * Field Name: acep_Language
+        * * Display Name: acep _Language
+        * * SQL Data Type: int`),
+    acep_Material: z.number().nullish().describe(`
+        * * Field Name: acep_Material
+        * * Display Name: acep _Material
+        * * SQL Data Type: int`),
+    acep_ModelNumber: z.string().nullish().describe(`
+        * * Field Name: acep_ModelNumber
+        * * Display Name: acep _Model Number
+        * * SQL Data Type: nvarchar(100)`),
+    acep_NumberofVariants: z.number().nullish().describe(`
+        * * Field Name: acep_NumberofVariants
+        * * Display Name: acep _Numberof Variants
+        * * SQL Data Type: int`),
+    acep_ProductTypeId: z.string().nullish().describe(`
+        * * Field Name: acep_ProductTypeId
+        * * Display Name: acep _Product Type Id
+        * * SQL Data Type: uniqueidentifier`),
+    acep_ProductURL: z.string().nullish().describe(`
+        * * Field Name: acep_ProductURL
+        * * Display Name: acep _Product URL
+        * * SQL Data Type: nvarchar(200)`),
+    acep_PublisherId: z.string().nullish().describe(`
+        * * Field Name: acep_PublisherId
+        * * Display Name: acep _Publisher Id
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Accounts__client_crm (vwAccounts__client_crm.AccountId)`),
+    acep_PurchaseURL: z.string().nullish().describe(`
+        * * Field Name: acep_PurchaseURL
+        * * Display Name: acep _Purchase URL
+        * * SQL Data Type: nvarchar(200)`),
+    acep_Ratings: z.number().nullish().describe(`
+        * * Field Name: acep_Ratings
+        * * Display Name: acep _Ratings
+        * * SQL Data Type: decimal(23, 10)`),
+    acep_Size: z.number().nullish().describe(`
+        * * Field Name: acep_Size
+        * * Display Name: acep _Size
+        * * SQL Data Type: int`),
+    acep_UNSPSC: z.string().nullish().describe(`
+        * * Field Name: acep_UNSPSC
+        * * Display Name: acep _UNSPSC
+        * * SQL Data Type: nvarchar(100)`),
+    acep_UPC: z.string().nullish().describe(`
+        * * Field Name: acep_UPC
+        * * Display Name: acep _UPC
+        * * SQL Data Type: nvarchar(12)`),
+    acep_VariantParentId: z.string().nullish().describe(`
+        * * Field Name: acep_VariantParentId
+        * * Display Name: acep _Variant Parent Id
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Products (vwProducts.ProductId)`),
+    acep_About: z.string().nullish().describe(`
+        * * Field Name: acep_About
+        * * Display Name: acep _About
+        * * SQL Data Type: nvarchar(MAX)`),
+    acep_Compliance: z.string().nullish().describe(`
+        * * Field Name: acep_Compliance
+        * * Display Name: acep _Compliance
+        * * SQL Data Type: nvarchar(MAX)`),
+    acep_ExportRestriction: z.string().nullish().describe(`
+        * * Field Name: acep_ExportRestriction
+        * * Display Name: acep _Export Restriction
+        * * SQL Data Type: nvarchar(MAX)`),
+    acep_Price: z.number().nullish().describe(`
+        * * Field Name: acep_Price
+        * * Display Name: acep _Price
+        * * SQL Data Type: money`),
+    acep_price_Base: z.number().nullish().describe(`
+        * * Field Name: acep_price_Base
+        * * Display Name: acep _price _Base
+        * * SQL Data Type: money`),
+    acep_Edition: z.string().nullish().describe(`
+        * * Field Name: acep_Edition
+        * * Display Name: acep _Edition
+        * * SQL Data Type: nvarchar(100)`),
+    acep_OrderTypeId: z.string().nullish().describe(`
+        * * Field Name: acep_OrderTypeId
+        * * Display Name: acep _Order Type Id
+        * * SQL Data Type: uniqueidentifier`),
+    acep_PublishtoStore: z.boolean().nullish().describe(`
+        * * Field Name: acep_PublishtoStore
+        * * Display Name: acep _Publishto Store
+        * * SQL Data Type: bit`),
+    acep_cmecredithours: z.number().nullish().describe(`
+        * * Field Name: acep_cmecredithours
+        * * Display Name: acep _cmecredithours
+        * * SQL Data Type: decimal(23, 10)`),
+    acep_ecmehidden: z.boolean().nullish().describe(`
+        * * Field Name: acep_ecmehidden
+        * * Display Name: acep _ecmehidden
+        * * SQL Data Type: bit`),
+    acep_ecmeproducttypeid: z.string().nullish().describe(`
+        * * Field Name: acep_ecmeproducttypeid
+        * * Display Name: acep _ecmeproducttypeid
+        * * SQL Data Type: uniqueidentifier`),
+    acep_importsource: z.string().nullish().describe(`
+        * * Field Name: acep_importsource
+        * * Display Name: acep _importsource
+        * * SQL Data Type: nvarchar(100)`),
+    acep_publishtolms: z.boolean().nullish().describe(`
+        * * Field Name: acep_publishtolms
+        * * Display Name: acep _publishtolms
+        * * SQL Data Type: bit`),
+    acep_issuecme: z.boolean().nullish().describe(`
+        * * Field Name: acep_issuecme
+        * * Display Name: acep _issuecme
+        * * SQL Data Type: bit`),
+});
+
+export type ProductEntityType = z.infer<typeof ProductSchema>;
+       
+/**
+ * zod schema definition for the entity Quad Demos
+ */
+export const QuadDemoSchema = z.object({
+    ID: z.number().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: int`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(255)`),
+    Description: z.string().nullish().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+});
+
+export type QuadDemoEntityType = z.infer<typeof QuadDemoSchema>;
+       
+/**
+ * zod schema definition for the entity Sales Line Items
+ */
+export const SalesLineItemSchema = z.object({
+    SOP_Type: z.string().describe(`
+        * * Field Name: SOP Type
+        * * Display Name: SOP Type
+        * * SQL Data Type: varchar(100)`),
+    SOP_Number: z.string().describe(`
+        * * Field Name: SOP Number
+        * * Display Name: SOP Number
+        * * SQL Data Type: varchar(21)`),
+    Item_Number: z.string().nullish().describe(`
+        * * Field Name: Item Number
+        * * Display Name: Item  Number
+        * * SQL Data Type: varchar(31)`),
+    Item_Description: z.string().nullish().describe(`
+        * * Field Name: Item Description
+        * * Display Name: Item  Description
+        * * SQL Data Type: varchar(101)`),
+    QTY: z.number().nullish().describe(`
+        * * Field Name: QTY
+        * * Display Name: QTY
+        * * SQL Data Type: decimal(19, 5)`),
+    Extended_Cost: z.number().nullish().describe(`
+        * * Field Name: Extended Cost
+        * * Display Name: Extended  Cost
+        * * SQL Data Type: decimal(19, 5)`),
+    Extended_Price: z.number().nullish().describe(`
+        * * Field Name: Extended Price
+        * * Display Name: Extended  Price
+        * * SQL Data Type: decimal(19, 5)`),
+    Unit_Cost: z.number().nullish().describe(`
+        * * Field Name: Unit Cost
+        * * Display Name: Unit  Cost
+        * * SQL Data Type: decimal(19, 5)`),
+    Unit_Price: z.number().nullish().describe(`
+        * * Field Name: Unit Price
+        * * Display Name: Unit  Price
+        * * SQL Data Type: decimal(19, 5)`),
+    Customer_Number: z.string().nullish().describe(`
+        * * Field Name: Customer Number
+        * * Display Name: Customer  Number
+        * * SQL Data Type: varchar(15)`),
+    ABC_Code: z.string().nullish().describe(`
+        * * Field Name: ABC Code
+        * * Display Name: ABC Code
+        * * SQL Data Type: varchar(100)`),
+    Account_Amount: z.number().nullish().describe(`
+        * * Field Name: Account Amount
+        * * Display Name: Account  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Accounts_Receivable_Account_Number: z.string().nullish().describe(`
+        * * Field Name: Accounts Receivable Account Number
+        * * Display Name: Accounts  Receivable  Account  Number
+        * * SQL Data Type: varchar(129)`),
+    Actual_Ship_Date: z.date().nullish().describe(`
+        * * Field Name: Actual Ship Date
+        * * Display Name: Actual  Ship  Date
+        * * SQL Data Type: datetime`),
+    Actual_Ship_Date_from_Sales_Transaction: z.date().nullish().describe(`
+        * * Field Name: Actual Ship Date from Sales Transaction
+        * * Display Name: Actual  Ship  Date  from  Sales  Transaction
+        * * SQL Data Type: datetime`),
+    Address_1_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: Address 1 from Customer Master
+        * * Display Name: Address  1 from  Customer  Master
+        * * SQL Data Type: varchar(61)`),
+    Address_1_from_Sales_Line_Item: z.string().nullish().describe(`
+        * * Field Name: Address 1 from Sales Line Item
+        * * Display Name: Address  1 from  Sales  Line  Item
+        * * SQL Data Type: varchar(61)`),
+    Address_1_from_Sales_Transaction: z.string().nullish().describe(`
+        * * Field Name: Address 1 from Sales Transaction
+        * * Display Name: Address  1 from  Sales  Transaction
+        * * SQL Data Type: varchar(61)`),
+    Address_2_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: Address 2 from Customer Master
+        * * Display Name: Address  2 from  Customer  Master
+        * * SQL Data Type: varchar(61)`),
+    Address_2_from_Sales_Line_Item: z.string().nullish().describe(`
+        * * Field Name: Address 2 from Sales Line Item
+        * * Display Name: Address  2 from  Sales  Line  Item
+        * * SQL Data Type: varchar(61)`),
+    Address_2_from_Sales_Transaction: z.string().nullish().describe(`
+        * * Field Name: Address 2 from Sales Transaction
+        * * Display Name: Address  2 from  Sales  Transaction
+        * * SQL Data Type: varchar(61)`),
+    Address_3_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: Address 3 from Customer Master
+        * * Display Name: Address  3 from  Customer  Master
+        * * SQL Data Type: varchar(61)`),
+    Address_3_from_Sales_Line_Item: z.string().nullish().describe(`
+        * * Field Name: Address 3 from Sales Line Item
+        * * Display Name: Address  3 from  Sales  Line  Item
+        * * SQL Data Type: varchar(61)`),
+    Address_3_from_Sales_Transaction: z.string().nullish().describe(`
+        * * Field Name: Address 3 from Sales Transaction
+        * * Display Name: Address  3 from  Sales  Transaction
+        * * SQL Data Type: varchar(61)`),
+    Address_Code_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: Address Code from Customer Master
+        * * Display Name: Address  Code  from  Customer  Master
+        * * SQL Data Type: varchar(15)`),
+    Aging_Bucket1: z.number().nullish().describe(`
+        * * Field Name: Aging Bucket1
+        * * Display Name: Aging  Bucket 1
+        * * SQL Data Type: decimal(19, 5)`),
+    Aging_Bucket2: z.number().nullish().describe(`
+        * * Field Name: Aging Bucket2
+        * * Display Name: Aging  Bucket 2
+        * * SQL Data Type: decimal(19, 5)`),
+    Aging_Bucket3: z.number().nullish().describe(`
+        * * Field Name: Aging Bucket3
+        * * Display Name: Aging  Bucket 3
+        * * SQL Data Type: decimal(19, 5)`),
+    Aging_Bucket4: z.number().nullish().describe(`
+        * * Field Name: Aging Bucket4
+        * * Display Name: Aging  Bucket 4
+        * * SQL Data Type: decimal(19, 5)`),
+    Aging_Bucket5: z.number().nullish().describe(`
+        * * Field Name: Aging Bucket5
+        * * Display Name: Aging  Bucket 5
+        * * SQL Data Type: decimal(19, 5)`),
+    Aging_Bucket6: z.number().nullish().describe(`
+        * * Field Name: Aging Bucket6
+        * * Display Name: Aging  Bucket 6
+        * * SQL Data Type: decimal(19, 5)`),
+    Aging_Bucket7: z.number().nullish().describe(`
+        * * Field Name: Aging Bucket7
+        * * Display Name: Aging  Bucket 7
+        * * SQL Data Type: decimal(19, 5)`),
+    Allocate_By: z.string().nullish().describe(`
+        * * Field Name: Allocate By
+        * * Display Name: Allocate  By
+        * * SQL Data Type: varchar(100)`),
+    Allow_Back_Orders: z.string().nullish().describe(`
+        * * Field Name: Allow Back Orders
+        * * Display Name: Allow  Back  Orders
+        * * SQL Data Type: varchar(100)`),
+    Alternate_Item_1: z.string().nullish().describe(`
+        * * Field Name: Alternate Item 1
+        * * Display Name: Alternate  Item  1
+        * * SQL Data Type: varchar(31)`),
+    Alternate_Item_2: z.string().nullish().describe(`
+        * * Field Name: Alternate Item 2
+        * * Display Name: Alternate  Item  2
+        * * SQL Data Type: varchar(31)`),
+    Apply_Withholding: z.string().nullish().describe(`
+        * * Field Name: Apply Withholding
+        * * Display Name: Apply  Withholding
+        * * SQL Data Type: varchar(100)`),
+    Assembly_Variance_Account_Number: z.string().nullish().describe(`
+        * * Field Name: Assembly Variance Account Number
+        * * Display Name: Assembly  Variance  Account  Number
+        * * SQL Data Type: varchar(129)`),
+    Average_Days_To_Pay___Life: z.number().nullish().describe(`
+        * * Field Name: Average Days To Pay - Life
+        * * Display Name: Average  Days  To  Pay  - Life
+        * * SQL Data Type: smallint`),
+    Average_Days_To_Pay___Year: z.number().nullish().describe(`
+        * * Field Name: Average Days To Pay - Year
+        * * Display Name: Average  Days  To  Pay  - Year
+        * * SQL Data Type: smallint`),
+    Average_Days_to_Pay___LYR: z.number().nullish().describe(`
+        * * Field Name: Average Days to Pay - LYR
+        * * Display Name: Average  Days  to  Pay  - LYR
+        * * SQL Data Type: smallint`),
+    Back_Order_Date: z.date().nullish().describe(`
+        * * Field Name: Back Order Date
+        * * Display Name: Back  Order  Date
+        * * SQL Data Type: datetime`),
+    Backout_Freight_Amount: z.number().nullish().describe(`
+        * * Field Name: Backout Freight Amount
+        * * Display Name: Backout  Freight  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Backout_Misc_Amount: z.number().nullish().describe(`
+        * * Field Name: Backout Misc Amount
+        * * Display Name: Backout  Misc  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Backout_Sales_Amount: z.number().nullish().describe(`
+        * * Field Name: Backout Sales Amount
+        * * Display Name: Backout  Sales  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Backout_Tax_Amount: z.number().nullish().describe(`
+        * * Field Name: Backout Tax Amount
+        * * Display Name: Backout  Tax  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Balance_Type: z.string().nullish().describe(`
+        * * Field Name: Balance Type
+        * * Display Name: Balance  Type
+        * * SQL Data Type: varchar(100)`),
+    Bank_Branch: z.string().nullish().describe(`
+        * * Field Name: Bank Branch
+        * * Display Name: Bank  Branch
+        * * SQL Data Type: varchar(21)`),
+    Bank_Name: z.string().nullish().describe(`
+        * * Field Name: Bank Name
+        * * Display Name: Bank  Name
+        * * SQL Data Type: varchar(31)`),
+    Based_On_Invoice_Total: z.string().nullish().describe(`
+        * * Field Name: Based On Invoice Total
+        * * Display Name: Based  On  Invoice  Total
+        * * SQL Data Type: varchar(100)`),
+    Based_On_Invoice_Total_from_Sales_Transaction: z.string().nullish().describe(`
+        * * Field Name: Based On Invoice Total from Sales Transaction
+        * * Display Name: Based  On  Invoice  Total  from  Sales  Transaction
+        * * SQL Data Type: varchar(100)`),
+    Batch_Number: z.string().nullish().describe(`
+        * * Field Name: Batch Number
+        * * Display Name: Batch  Number
+        * * SQL Data Type: varchar(15)`),
+    Batch_Source: z.string().nullish().describe(`
+        * * Field Name: Batch Source
+        * * Display Name: Batch  Source
+        * * SQL Data Type: varchar(15)`),
+    Break_Field_1: z.number().nullish().describe(`
+        * * Field Name: Break Field 1
+        * * Display Name: Break  Field  1
+        * * SQL Data Type: smallint`),
+    Break_Field_2: z.number().nullish().describe(`
+        * * Field Name: Break Field 2
+        * * Display Name: Break  Field  2
+        * * SQL Data Type: smallint`),
+    Break_Field_3: z.number().nullish().describe(`
+        * * Field Name: Break Field 3
+        * * Display Name: Break  Field  3
+        * * SQL Data Type: smallint`),
+    COD_Amount: z.number().nullish().describe(`
+        * * Field Name: COD Amount
+        * * Display Name: COD Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    COGS_Account_Number: z.string().nullish().describe(`
+        * * Field Name: COGS Account Number
+        * * Display Name: COGS Account  Number
+        * * SQL Data Type: varchar(129)`),
+    COGS_Account_Number_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: COGS Account Number from Customer Master
+        * * Display Name: COGS Account  Number  from  Customer  Master
+        * * SQL Data Type: varchar(129)`),
+    COGS_Account_Number_from_Item_Master: z.string().nullish().describe(`
+        * * Field Name: COGS Account Number from Item Master
+        * * Display Name: COGS Account  Number  from  Item  Master
+        * * SQL Data Type: varchar(129)`),
+    COGS_Inflation_Account_Number: z.string().nullish().describe(`
+        * * Field Name: COGS Inflation Account Number
+        * * Display Name: COGS Inflation  Account  Number
+        * * SQL Data Type: varchar(129)`),
+    COGS_Monetary_Correction_Account_Number: z.string().nullish().describe(`
+        * * Field Name: COGS Monetary Correction Account Number
+        * * Display Name: COGS Monetary  Correction  Account  Number
+        * * SQL Data Type: varchar(129)`),
+    Cash_Account_Number: z.string().nullish().describe(`
+        * * Field Name: Cash Account Number
+        * * Display Name: Cash  Account  Number
+        * * SQL Data Type: varchar(129)`),
+    Checkbook_ID: z.string().nullish().describe(`
+        * * Field Name: Checkbook ID
+        * * Display Name: Checkbook  ID
+        * * SQL Data Type: varchar(15)`),
+    City_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: City from Customer Master
+        * * Display Name: City  from  Customer  Master
+        * * SQL Data Type: varchar(35)`),
+    City_from_Sales_Line_Item: z.string().nullish().describe(`
+        * * Field Name: City from Sales Line Item
+        * * Display Name: City  from  Sales  Line  Item
+        * * SQL Data Type: varchar(35)`),
+    City_from_Sales_Transaction: z.string().nullish().describe(`
+        * * Field Name: City from Sales Transaction
+        * * Display Name: City  from  Sales  Transaction
+        * * SQL Data Type: varchar(35)`),
+    Comment1_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: Comment1 from Customer Master
+        * * Display Name: Comment 1 from  Customer  Master
+        * * SQL Data Type: varchar(31)`),
+    Comment2_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: Comment2 from Customer Master
+        * * Display Name: Comment 2 from  Customer  Master
+        * * SQL Data Type: varchar(31)`),
+    Comment_1: z.string().nullish().describe(`
+        * * Field Name: Comment 1
+        * * Display Name: Comment  1
+        * * SQL Data Type: varchar(51)`),
+    Comment_2: z.string().nullish().describe(`
+        * * Field Name: Comment 2
+        * * Display Name: Comment  2
+        * * SQL Data Type: varchar(51)`),
+    Comment_3: z.string().nullish().describe(`
+        * * Field Name: Comment 3
+        * * Display Name: Comment  3
+        * * SQL Data Type: varchar(51)`),
+    Comment_4: z.string().nullish().describe(`
+        * * Field Name: Comment 4
+        * * Display Name: Comment  4
+        * * SQL Data Type: varchar(51)`),
+    Comment_ID: z.string().nullish().describe(`
+        * * Field Name: Comment ID
+        * * Display Name: Comment  ID
+        * * SQL Data Type: varchar(15)`),
+    Comment_ID_from_Sales_Transaction: z.string().nullish().describe(`
+        * * Field Name: Comment ID from Sales Transaction
+        * * Display Name: Comment  ID from  Sales  Transaction
+        * * SQL Data Type: varchar(15)`),
+    Commission_Amount: z.number().nullish().describe(`
+        * * Field Name: Commission Amount
+        * * Display Name: Commission  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Commission_Applied_To: z.string().nullish().describe(`
+        * * Field Name: Commission Applied To
+        * * Display Name: Commission  Applied  To
+        * * SQL Data Type: varchar(100)`),
+    Commission_Sale_Amount: z.number().nullish().describe(`
+        * * Field Name: Commission Sale Amount
+        * * Display Name: Commission  Sale  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Component_Sequence: z.number().describe(`
+        * * Field Name: Component Sequence
+        * * Display Name: Component  Sequence
+        * * SQL Data Type: int`),
+    Contact_Person_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: Contact Person from Customer Master
+        * * Display Name: Contact  Person  from  Customer  Master
+        * * SQL Data Type: varchar(61)`),
+    Contact_Person_from_Sales_Line_Item: z.string().nullish().describe(`
+        * * Field Name: Contact Person from Sales Line Item
+        * * Display Name: Contact  Person  from  Sales  Line  Item
+        * * SQL Data Type: varchar(61)`),
+    Contact_Person_from_Sales_Transaction: z.string().nullish().describe(`
+        * * Field Name: Contact Person from Sales Transaction
+        * * Display Name: Contact  Person  from  Sales  Transaction
+        * * SQL Data Type: varchar(61)`),
+    Contract_End_Date: z.date().nullish().describe(`
+        * * Field Name: Contract End Date
+        * * Display Name: Contract  End  Date
+        * * SQL Data Type: datetime`),
+    Contract_Item_Number: z.string().nullish().describe(`
+        * * Field Name: Contract Item Number
+        * * Display Name: Contract  Item  Number
+        * * SQL Data Type: varchar(31)`),
+    Contract_Number: z.string().nullish().describe(`
+        * * Field Name: Contract Number
+        * * Display Name: Contract  Number
+        * * SQL Data Type: varchar(11)`),
+    Contract_Serial_Number: z.string().nullish().describe(`
+        * * Field Name: Contract Serial Number
+        * * Display Name: Contract  Serial  Number
+        * * SQL Data Type: varchar(21)`),
+    Contract_Start_Date: z.date().nullish().describe(`
+        * * Field Name: Contract Start Date
+        * * Display Name: Contract  Start  Date
+        * * SQL Data Type: datetime`),
+    Corporate_Customer_Number: z.string().nullish().describe(`
+        * * Field Name: Corporate Customer Number
+        * * Display Name: Corporate  Customer  Number
+        * * SQL Data Type: varchar(15)`),
+    Correction: z.string().nullish().describe(`
+        * * Field Name: Correction
+        * * Display Name: Correction
+        * * SQL Data Type: varchar(100)`),
+    Correction_to_Nonexisting_Transaction: z.string().nullish().describe(`
+        * * Field Name: Correction to Nonexisting Transaction
+        * * Display Name: Correction  to  Nonexisting  Transaction
+        * * SQL Data Type: varchar(100)`),
+    Country_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: Country from Customer Master
+        * * Display Name: Country  from  Customer  Master
+        * * SQL Data Type: varchar(61)`),
+    Country_from_Sales_Line_Item: z.string().nullish().describe(`
+        * * Field Name: Country from Sales Line Item
+        * * Display Name: Country  from  Sales  Line  Item
+        * * SQL Data Type: varchar(61)`),
+    Country_from_Sales_Transaction: z.string().nullish().describe(`
+        * * Field Name: Country from Sales Transaction
+        * * Display Name: Country  from  Sales  Transaction
+        * * SQL Data Type: varchar(61)`),
+    Created_Date_from_Customer_Master: z.date().nullish().describe(`
+        * * Field Name: Created Date from Customer Master
+        * * Display Name: Created  Date  from  Customer  Master
+        * * SQL Data Type: datetime`),
+    Created_Date_from_Item_Master: z.date().nullish().describe(`
+        * * Field Name: Created Date from Item Master
+        * * Display Name: Created  Date  from  Item  Master
+        * * SQL Data Type: datetime`),
+    Created_Date_from_Sales_Transaction: z.date().nullish().describe(`
+        * * Field Name: Created Date from Sales Transaction
+        * * Display Name: Created  Date  from  Sales  Transaction
+        * * SQL Data Type: datetime`),
+    Credit_Card_Exp_Date: z.date().nullish().describe(`
+        * * Field Name: Credit Card Exp Date
+        * * Display Name: Credit  Card  Exp  Date
+        * * SQL Data Type: datetime`),
+    Credit_Card_ID: z.string().nullish().describe(`
+        * * Field Name: Credit Card ID
+        * * Display Name: Credit  Card  ID
+        * * SQL Data Type: varchar(15)`),
+    Credit_Limit_Amount: z.number().nullish().describe(`
+        * * Field Name: Credit Limit Amount
+        * * Display Name: Credit  Limit  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Credit_Limit_Period: z.number().nullish().describe(`
+        * * Field Name: Credit Limit Period
+        * * Display Name: Credit  Limit  Period
+        * * SQL Data Type: smallint`),
+    Credit_Limit_Period_Amount: z.number().nullish().describe(`
+        * * Field Name: Credit Limit Period Amount
+        * * Display Name: Credit  Limit  Period  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Credit_Limit_Type: z.string().nullish().describe(`
+        * * Field Name: Credit Limit Type
+        * * Display Name: Credit  Limit  Type
+        * * SQL Data Type: varchar(100)`),
+    Currency_ID: z.string().nullish().describe(`
+        * * Field Name: Currency ID
+        * * Display Name: Currency  ID
+        * * SQL Data Type: varchar(15)`),
+    Currency_ID_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: Currency ID from Customer Master
+        * * Display Name: Currency  ID from  Customer  Master
+        * * SQL Data Type: varchar(15)`),
+    Currency_Index: z.number().nullish().describe(`
+        * * Field Name: Currency Index
+        * * Display Name: Currency  Index
+        * * SQL Data Type: smallint`),
+    Currency_Index_from_Sales_Transaction: z.number().nullish().describe(`
+        * * Field Name: Currency Index from Sales Transaction
+        * * Display Name: Currency  Index  from  Sales  Transaction
+        * * SQL Data Type: smallint`),
+    Current_Cost: z.number().nullish().describe(`
+        * * Field Name: Current Cost
+        * * Display Name: Current  Cost
+        * * SQL Data Type: decimal(19, 5)`),
+    Customer_Balance: z.number().nullish().describe(`
+        * * Field Name: Customer Balance
+        * * Display Name: Customer  Balance
+        * * SQL Data Type: decimal(19, 5)`),
+    Customer_Class: z.string().nullish().describe(`
+        * * Field Name: Customer Class
+        * * Display Name: Customer  Class
+        * * SQL Data Type: varchar(15)`),
+    Customer_Discount: z.number().nullish().describe(`
+        * * Field Name: Customer Discount
+        * * Display Name: Customer  Discount
+        * * SQL Data Type: decimal(13, 6)`),
+    Customer_Name: z.string().nullish().describe(`
+        * * Field Name: Customer Name
+        * * Display Name: Customer  Name
+        * * SQL Data Type: varchar(65)`),
+    Customer_Name_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: Customer Name from Customer Master
+        * * Display Name: Customer  Name  from  Customer  Master
+        * * SQL Data Type: varchar(65)`),
+    Customer_PO_Number: z.string().nullish().describe(`
+        * * Field Name: Customer PO Number
+        * * Display Name: Customer  PO Number
+        * * SQL Data Type: varchar(21)`),
+    Damaged_Account_Number: z.string().nullish().describe(`
+        * * Field Name: Damaged Account Number
+        * * Display Name: Damaged  Account  Number
+        * * SQL Data Type: varchar(129)`),
+    Damaged_Account_Number_from_Item_Master: z.string().nullish().describe(`
+        * * Field Name: Damaged Account Number from Item Master
+        * * Display Name: Damaged  Account  Number  from  Item  Master
+        * * SQL Data Type: varchar(129)`),
+    Date_Last_Repeated: z.date().nullish().describe(`
+        * * Field Name: Date Last Repeated
+        * * Display Name: Date  Last  Repeated
+        * * SQL Data Type: datetime`),
+    Days_to_Increment: z.number().nullish().describe(`
+        * * Field Name: Days to Increment
+        * * Display Name: Days  to  Increment
+        * * SQL Data Type: smallint`),
+    Decimal_Places_Currency: z.string().nullish().describe(`
+        * * Field Name: Decimal Places Currency
+        * * Display Name: Decimal  Places  Currency
+        * * SQL Data Type: varchar(100)`),
+    Decimal_Places_Currency_from_Item_Master: z.string().nullish().describe(`
+        * * Field Name: Decimal Places Currency from Item Master
+        * * Display Name: Decimal  Places  Currency  from  Item  Master
+        * * SQL Data Type: varchar(100)`),
+    Decimal_Places_QTYS: z.string().nullish().describe(`
+        * * Field Name: Decimal Places QTYS
+        * * Display Name: Decimal  Places  QTYS
+        * * SQL Data Type: varchar(100)`),
+    Decimal_Places_QTYS_from_Item_Master: z.string().nullish().describe(`
+        * * Field Name: Decimal Places QTYS from Item Master
+        * * Display Name: Decimal  Places  QTYS from  Item  Master
+        * * SQL Data Type: varchar(100)`),
+    Default_Cash_Account_Type: z.string().nullish().describe(`
+        * * Field Name: Default Cash Account Type
+        * * Display Name: Default  Cash  Account  Type
+        * * SQL Data Type: varchar(100)`),
+    Denomination_Exchange_Rate: z.number().nullish().describe(`
+        * * Field Name: Denomination Exchange Rate
+        * * Display Name: Denomination  Exchange  Rate
+        * * SQL Data Type: decimal(19, 7)`),
+    Deposit_Received: z.number().nullish().describe(`
+        * * Field Name: Deposit Received
+        * * Display Name: Deposit  Received
+        * * SQL Data Type: decimal(19, 5)`),
+    Deposits_Received: z.number().nullish().describe(`
+        * * Field Name: Deposits Received
+        * * Display Name: Deposits  Received
+        * * SQL Data Type: decimal(19, 5)`),
+    Dest_Batch_1: z.string().nullish().describe(`
+        * * Field Name: Dest Batch 1
+        * * Display Name: Dest  Batch  1
+        * * SQL Data Type: varchar(15)`),
+    Dest_Batch_2: z.string().nullish().describe(`
+        * * Field Name: Dest Batch 2
+        * * Display Name: Dest  Batch  2
+        * * SQL Data Type: varchar(15)`),
+    Discount_Available_Amount: z.number().nullish().describe(`
+        * * Field Name: Discount Available Amount
+        * * Display Name: Discount  Available  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Discount_Available_Freight: z.number().nullish().describe(`
+        * * Field Name: Discount Available Freight
+        * * Display Name: Discount  Available  Freight
+        * * SQL Data Type: decimal(19, 5)`),
+    Discount_Available_Misc: z.number().nullish().describe(`
+        * * Field Name: Discount Available Misc
+        * * Display Name: Discount  Available  Misc
+        * * SQL Data Type: decimal(19, 5)`),
+    Discount_Available_Sales: z.number().nullish().describe(`
+        * * Field Name: Discount Available Sales
+        * * Display Name: Discount  Available  Sales
+        * * SQL Data Type: decimal(19, 5)`),
+    Discount_Available_Taken: z.number().nullish().describe(`
+        * * Field Name: Discount Available Taken
+        * * Display Name: Discount  Available  Taken
+        * * SQL Data Type: decimal(19, 5)`),
+    Discount_Date: z.date().nullish().describe(`
+        * * Field Name: Discount Date
+        * * Display Name: Discount  Date
+        * * SQL Data Type: datetime`),
+    Discount_Dollar_Amount: z.number().nullish().describe(`
+        * * Field Name: Discount Dollar Amount
+        * * Display Name: Discount  Dollar  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Discount_Grace_Period: z.number().nullish().describe(`
+        * * Field Name: Discount Grace Period
+        * * Display Name: Discount  Grace  Period
+        * * SQL Data Type: smallint`),
+    Discount_Percent_Amount: z.number().nullish().describe(`
+        * * Field Name: Discount Percent Amount
+        * * Display Name: Discount  Percent  Amount
+        * * SQL Data Type: decimal(13, 6)`),
+    Discount_Returned: z.number().nullish().describe(`
+        * * Field Name: Discount Returned
+        * * Display Name: Discount  Returned
+        * * SQL Data Type: decimal(19, 5)`),
+    Discount_Taken_Amount: z.number().nullish().describe(`
+        * * Field Name: Discount Taken Amount
+        * * Display Name: Discount  Taken  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Discounts_Available_Account_Number: z.string().nullish().describe(`
+        * * Field Name: Discounts Available Account Number
+        * * Display Name: Discounts  Available  Account  Number
+        * * SQL Data Type: varchar(129)`),
+    Discounts_Taken_Account_Number: z.string().nullish().describe(`
+        * * Field Name: Discounts Taken Account Number
+        * * Display Name: Discounts  Taken  Account  Number
+        * * SQL Data Type: varchar(129)`),
+    Document_Amount: z.number().nullish().describe(`
+        * * Field Name: Document Amount
+        * * Display Name: Document  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Document_Date: z.date().nullish().describe(`
+        * * Field Name: Document Date
+        * * Display Name: Document  Date
+        * * SQL Data Type: datetime`),
+    Document_Format_ID: z.string().nullish().describe(`
+        * * Field Name: Document Format ID
+        * * Display Name: Document  Format  ID
+        * * SQL Data Type: varchar(15)`),
+    Document_ID: z.string().nullish().describe(`
+        * * Field Name: Document ID
+        * * Display Name: Document  ID
+        * * SQL Data Type: varchar(15)`),
+    Document_Number_Corrected: z.string().nullish().describe(`
+        * * Field Name: Document Number Corrected
+        * * Display Name: Document  Number  Corrected
+        * * SQL Data Type: varchar(21)`),
+    Document_Number_Corrected_from_Sales_Transaction: z.string().nullish().describe(`
+        * * Field Name: Document Number Corrected from Sales Transaction
+        * * Display Name: Document  Number  Corrected  from  Sales  Transaction
+        * * SQL Data Type: varchar(21)`),
+    Document_Status: z.string().nullish().describe(`
+        * * Field Name: Document Status
+        * * Display Name: Document  Status
+        * * SQL Data Type: varchar(100)`),
+    Drop_Ship: z.number().nullish().describe(`
+        * * Field Name: Drop Ship
+        * * Display Name: Drop  Ship
+        * * SQL Data Type: smallint`),
+    Drop_Ship_Account_Number: z.string().nullish().describe(`
+        * * Field Name: Drop Ship Account Number
+        * * Display Name: Drop  Ship  Account  Number
+        * * SQL Data Type: varchar(129)`),
+    Due_Date: z.date().nullish().describe(`
+        * * Field Name: Due Date
+        * * Display Name: Due  Date
+        * * SQL Data Type: datetime`),
+    Due_Date_Grace_Period: z.number().nullish().describe(`
+        * * Field Name: Due Date Grace Period
+        * * Display Name: Due  Date  Grace  Period
+        * * SQL Data Type: smallint`),
+    EC_Transaction: z.string().nullish().describe(`
+        * * Field Name: EC Transaction
+        * * Display Name: EC Transaction
+        * * SQL Data Type: varchar(100)`),
+    Exceptional_Demand_from_Sales_Line_Item: z.string().nullish().describe(`
+        * * Field Name: Exceptional Demand from Sales Line Item
+        * * Display Name: Exceptional  Demand  from  Sales  Line  Item
+        * * SQL Data Type: varchar(100)`),
+    Exchange_Date: z.date().nullish().describe(`
+        * * Field Name: Exchange Date
+        * * Display Name: Exchange  Date
+        * * SQL Data Type: datetime`),
+    Exchange_Rate: z.number().nullish().describe(`
+        * * Field Name: Exchange Rate
+        * * Display Name: Exchange  Rate
+        * * SQL Data Type: decimal(19, 7)`),
+    Exchange_Table_ID: z.string().nullish().describe(`
+        * * Field Name: Exchange Table ID
+        * * Display Name: Exchange  Table  ID
+        * * SQL Data Type: varchar(15)`),
+    Existing_Qty_Available: z.number().nullish().describe(`
+        * * Field Name: Existing Qty Available
+        * * Display Name: Existing  Qty  Available
+        * * SQL Data Type: decimal(19, 5)`),
+    Existing_Qty_Selected: z.number().nullish().describe(`
+        * * Field Name: Existing Qty Selected
+        * * Display Name: Existing  Qty  Selected
+        * * SQL Data Type: decimal(19, 5)`),
+    Extended_Cost_from_Sales_Transaction: z.number().nullish().describe(`
+        * * Field Name: Extended Cost from Sales Transaction
+        * * Display Name: Extended  Cost  from  Sales  Transaction
+        * * SQL Data Type: decimal(19, 5)`),
+    Fax_Number_from_Sales_Line_Item: z.string().nullish().describe(`
+        * * Field Name: Fax Number from Sales Line Item
+        * * Display Name: Fax  Number  from  Sales  Line  Item
+        * * SQL Data Type: varchar(21)`),
+    Fax_Number_from_Sales_Transaction: z.string().nullish().describe(`
+        * * Field Name: Fax Number from Sales Transaction
+        * * Display Name: Fax  Number  from  Sales  Transaction
+        * * SQL Data Type: varchar(21)`),
+    Fax_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: Fax from Customer Master
+        * * Display Name: Fax  from  Customer  Master
+        * * SQL Data Type: varchar(21)`),
+    Finance_Charge_Account_Number: z.string().nullish().describe(`
+        * * Field Name: Finance Charge Account Number
+        * * Display Name: Finance  Charge  Account  Number
+        * * SQL Data Type: varchar(129)`),
+    Finance_Charge_Amt_Type: z.string().nullish().describe(`
+        * * Field Name: Finance Charge Amt Type
+        * * Display Name: Finance  Charge  Amt  Type
+        * * SQL Data Type: varchar(100)`),
+    Finance_Charge_Dollar: z.number().nullish().describe(`
+        * * Field Name: Finance Charge Dollar
+        * * Display Name: Finance  Charge  Dollar
+        * * SQL Data Type: decimal(19, 5)`),
+    Finance_Charge_ID: z.string().nullish().describe(`
+        * * Field Name: Finance Charge ID
+        * * Display Name: Finance  Charge  ID
+        * * SQL Data Type: varchar(15)`),
+    Finance_Charge_Percent: z.number().nullish().describe(`
+        * * Field Name: Finance Charge Percent
+        * * Display Name: Finance  Charge  Percent
+        * * SQL Data Type: decimal(13, 6)`),
+    Finance_Charges_CYTD: z.number().nullish().describe(`
+        * * Field Name: Finance Charges CYTD
+        * * Display Name: Finance  Charges  CYTD
+        * * SQL Data Type: decimal(19, 5)`),
+    Finance_Charges_LYR_Calendar: z.number().nullish().describe(`
+        * * Field Name: Finance Charges LYR Calendar
+        * * Display Name: Finance  Charges  LYR Calendar
+        * * SQL Data Type: decimal(19, 5)`),
+    First_Invoice_Date: z.date().nullish().describe(`
+        * * Field Name: First Invoice Date
+        * * Display Name: First  Invoice  Date
+        * * SQL Data Type: datetime`),
+    Freight_Amount: z.number().nullish().describe(`
+        * * Field Name: Freight Amount
+        * * Display Name: Freight  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Freight_Schedule_ID: z.string().nullish().describe(`
+        * * Field Name: Freight Schedule ID
+        * * Display Name: Freight  Schedule  ID
+        * * SQL Data Type: varchar(15)`),
+    Freight_Tax_Amount: z.number().nullish().describe(`
+        * * Field Name: Freight Tax Amount
+        * * Display Name: Freight  Tax  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Freight_Taxable: z.string().nullish().describe(`
+        * * Field Name: Freight Taxable
+        * * Display Name: Freight  Taxable
+        * * SQL Data Type: varchar(100)`),
+    Fulfillment_Date: z.date().nullish().describe(`
+        * * Field Name: Fulfillment Date
+        * * Display Name: Fulfillment  Date
+        * * SQL Data Type: datetime`),
+    Fulfillment_Date_from_Sales_Transaction: z.date().nullish().describe(`
+        * * Field Name: Fulfillment Date from Sales Transaction
+        * * Display Name: Fulfillment  Date  from  Sales  Transaction
+        * * SQL Data Type: datetime`),
+    GL_Posting_Date: z.date().nullish().describe(`
+        * * Field Name: GL Posting Date
+        * * Display Name: GL Posting  Date
+        * * SQL Data Type: datetime`),
+    Governmental_Corporate_ID: z.string().nullish().describe(`
+        * * Field Name: Governmental Corporate ID
+        * * Display Name: Governmental  Corporate  ID
+        * * SQL Data Type: varchar(31)`),
+    Governmental_Individual_ID: z.string().nullish().describe(`
+        * * Field Name: Governmental Individual ID
+        * * Display Name: Governmental  Individual  ID
+        * * SQL Data Type: varchar(31)`),
+    High_Balance_LTD: z.number().nullish().describe(`
+        * * Field Name: High Balance LTD
+        * * Display Name: High  Balance  LTD
+        * * SQL Data Type: decimal(19, 5)`),
+    High_Balance_LYR: z.number().nullish().describe(`
+        * * Field Name: High Balance LYR
+        * * Display Name: High  Balance  LYR
+        * * SQL Data Type: decimal(19, 5)`),
+    High_Balance_YTD: z.number().nullish().describe(`
+        * * Field Name: High Balance YTD
+        * * Display Name: High  Balance  YTD
+        * * SQL Data Type: decimal(19, 5)`),
+    Hold: z.string().nullish().describe(`
+        * * Field Name: Hold
+        * * Display Name: Hold
+        * * SQL Data Type: varchar(100)`),
+    IV_Item_Taxable: z.string().nullish().describe(`
+        * * Field Name: IV Item Taxable
+        * * Display Name: IV Item  Taxable
+        * * SQL Data Type: varchar(100)`),
+    In_Service_Account_Number: z.string().nullish().describe(`
+        * * Field Name: In Service Account Number
+        * * Display Name: In  Service  Account  Number
+        * * SQL Data Type: varchar(129)`),
+    In_Service_Account_Number_from_Item_Master: z.string().nullish().describe(`
+        * * Field Name: In Service Account Number from Item Master
+        * * Display Name: In  Service  Account  Number  from  Item  Master
+        * * SQL Data Type: varchar(129)`),
+    In_Use_Account_Number: z.string().nullish().describe(`
+        * * Field Name: In Use Account Number
+        * * Display Name: In  Use  Account  Number
+        * * SQL Data Type: varchar(129)`),
+    In_Use_Account_Number_from_Item_Master: z.string().nullish().describe(`
+        * * Field Name: In Use Account Number from Item Master
+        * * Display Name: In  Use  Account  Number  from  Item  Master
+        * * SQL Data Type: varchar(129)`),
+    Inactive: z.string().nullish().describe(`
+        * * Field Name: Inactive
+        * * Display Name: Inactive
+        * * SQL Data Type: varchar(100)`),
+    Inventory_Account_Number: z.string().nullish().describe(`
+        * * Field Name: Inventory Account Number
+        * * Display Name: Inventory  Account  Number
+        * * SQL Data Type: varchar(129)`),
+    Inventory_Account_Number_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: Inventory Account Number from Customer Master
+        * * Display Name: Inventory  Account  Number  from  Customer  Master
+        * * SQL Data Type: varchar(129)`),
+    Inventory_Account_Number_from_Item_Master: z.string().nullish().describe(`
+        * * Field Name: Inventory Account Number from Item Master
+        * * Display Name: Inventory  Account  Number  from  Item  Master
+        * * SQL Data Type: varchar(129)`),
+    Inventory_Inflation_Account_Number: z.string().nullish().describe(`
+        * * Field Name: Inventory Inflation Account Number
+        * * Display Name: Inventory  Inflation  Account  Number
+        * * SQL Data Type: varchar(129)`),
+    Inventory_Monetary_Correction_Account_Number: z.string().nullish().describe(`
+        * * Field Name: Inventory Monetary Correction Account Number
+        * * Display Name: Inventory  Monetary  Correction  Account  Number
+        * * SQL Data Type: varchar(129)`),
+    Inventory_Offset_Account_Number: z.string().nullish().describe(`
+        * * Field Name: Inventory Offset Account Number
+        * * Display Name: Inventory  Offset  Account  Number
+        * * SQL Data Type: varchar(129)`),
+    Inventory_Returns_Account_Number: z.string().nullish().describe(`
+        * * Field Name: Inventory Returns Account Number
+        * * Display Name: Inventory  Returns  Account  Number
+        * * SQL Data Type: varchar(129)`),
+    Invoice_Date: z.date().nullish().describe(`
+        * * Field Name: Invoice Date
+        * * Display Name: Invoice  Date
+        * * SQL Data Type: datetime`),
+    Item_Class_Code: z.string().nullish().describe(`
+        * * Field Name: Item Class Code
+        * * Display Name: Item  Class  Code
+        * * SQL Data Type: varchar(11)`),
+    Item_Code: z.string().nullish().describe(`
+        * * Field Name: Item Code
+        * * Display Name: Item  Code
+        * * SQL Data Type: varchar(15)`),
+    Item_Code_from_Item_Master: z.string().nullish().describe(`
+        * * Field Name: Item Code from Item Master
+        * * Display Name: Item  Code  from  Item  Master
+        * * SQL Data Type: varchar(15)`),
+    Item_Description_from_Item_Master: z.string().nullish().describe(`
+        * * Field Name: Item Description from Item Master
+        * * Display Name: Item  Description  from  Item  Master
+        * * SQL Data Type: varchar(101)`),
+    Item_Generic_Description: z.string().nullish().describe(`
+        * * Field Name: Item Generic Description
+        * * Display Name: Item  Generic  Description
+        * * SQL Data Type: varchar(11)`),
+    Item_Shipping_Weight: z.number().nullish().describe(`
+        * * Field Name: Item Shipping Weight
+        * * Display Name: Item  Shipping  Weight
+        * * SQL Data Type: decimal(18, 6)`),
+    Item_Short_Name: z.string().nullish().describe(`
+        * * Field Name: Item Short Name
+        * * Display Name: Item  Short  Name
+        * * SQL Data Type: varchar(15)`),
+    Item_Tax_Schedule_ID: z.string().nullish().describe(`
+        * * Field Name: Item Tax Schedule ID
+        * * Display Name: Item  Tax  Schedule  ID
+        * * SQL Data Type: varchar(15)`),
+    Item_Tax_Schedule_ID_from_Item_Master: z.string().nullish().describe(`
+        * * Field Name: Item Tax Schedule ID from Item Master
+        * * Display Name: Item  Tax  Schedule  ID from  Item  Master
+        * * SQL Data Type: varchar(15)`),
+    Item_Tracking_Option: z.string().nullish().describe(`
+        * * Field Name: Item Tracking Option
+        * * Display Name: Item  Tracking  Option
+        * * SQL Data Type: varchar(100)`),
+    Item_Type: z.string().nullish().describe(`
+        * * Field Name: Item Type
+        * * Display Name: Item  Type
+        * * SQL Data Type: varchar(100)`),
+    Keep_Calendar_History: z.string().nullish().describe(`
+        * * Field Name: Keep Calendar History
+        * * Display Name: Keep  Calendar  History
+        * * SQL Data Type: varchar(100)`),
+    Keep_Calendar_History_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: Keep Calendar History from Customer Master
+        * * Display Name: Keep  Calendar  History  from  Customer  Master
+        * * SQL Data Type: varchar(100)`),
+    Keep_Distribution_History: z.string().nullish().describe(`
+        * * Field Name: Keep Distribution History
+        * * Display Name: Keep  Distribution  History
+        * * SQL Data Type: varchar(100)`),
+    Keep_Distribution_History_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: Keep Distribution History from Customer Master
+        * * Display Name: Keep  Distribution  History  from  Customer  Master
+        * * SQL Data Type: varchar(100)`),
+    Keep_Period_History: z.string().nullish().describe(`
+        * * Field Name: Keep Period History
+        * * Display Name: Keep  Period  History
+        * * SQL Data Type: varchar(100)`),
+    Keep_Period_History_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: Keep Period History from Customer Master
+        * * Display Name: Keep  Period  History  from  Customer  Master
+        * * SQL Data Type: varchar(100)`),
+    Keep_Trx_History: z.string().nullish().describe(`
+        * * Field Name: Keep Trx History
+        * * Display Name: Keep  Trx  History
+        * * SQL Data Type: varchar(100)`),
+    Keep_Trx_History_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: Keep Trx History from Customer Master
+        * * Display Name: Keep  Trx  History  from  Customer  Master
+        * * SQL Data Type: varchar(100)`),
+    Kit_COGS_Account_Source: z.string().nullish().describe(`
+        * * Field Name: Kit COGS Account Source
+        * * Display Name: Kit  COGS Account  Source
+        * * SQL Data Type: varchar(100)`),
+    Last_Aged: z.date().nullish().describe(`
+        * * Field Name: Last Aged
+        * * Display Name: Last  Aged
+        * * SQL Data Type: datetime`),
+    Last_Finance_Charge_Amount: z.number().nullish().describe(`
+        * * Field Name: Last Finance Charge Amount
+        * * Display Name: Last  Finance  Charge  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Last_Generated_Serial_Number: z.string().nullish().describe(`
+        * * Field Name: Last Generated Serial Number
+        * * Display Name: Last  Generated  Serial  Number
+        * * SQL Data Type: varchar(21)`),
+    Last_NSF_Check_Date: z.date().nullish().describe(`
+        * * Field Name: Last NSF Check Date
+        * * Display Name: Last  NSF Check  Date
+        * * SQL Data Type: datetime`),
+    Last_Payment_Amount: z.number().nullish().describe(`
+        * * Field Name: Last Payment Amount
+        * * Display Name: Last  Payment  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Last_Payment_Date: z.date().nullish().describe(`
+        * * Field Name: Last Payment Date
+        * * Display Name: Last  Payment  Date
+        * * SQL Data Type: datetime`),
+    Last_Statement_Amount: z.number().nullish().describe(`
+        * * Field Name: Last Statement Amount
+        * * Display Name: Last  Statement  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Last_Statement_Date: z.date().nullish().describe(`
+        * * Field Name: Last Statement Date
+        * * Display Name: Last  Statement  Date
+        * * SQL Data Type: datetime`),
+    Last_Transaction_Amount: z.number().nullish().describe(`
+        * * Field Name: Last Transaction Amount
+        * * Display Name: Last  Transaction  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Last_Transaction_Date: z.date().nullish().describe(`
+        * * Field Name: Last Transaction Date
+        * * Display Name: Last  Transaction  Date
+        * * SQL Data Type: datetime`),
+    Line_Item_Sequence: z.number().describe(`
+        * * Field Name: Line Item Sequence
+        * * Display Name: Line  Item  Sequence
+        * * SQL Data Type: int`),
+    Location_Code: z.string().nullish().describe(`
+        * * Field Name: Location Code
+        * * Display Name: Location  Code
+        * * SQL Data Type: varchar(11)`),
+    Location_Code_from_Item_Master: z.string().nullish().describe(`
+        * * Field Name: Location Code from Item Master
+        * * Display Name: Location  Code  from  Item  Master
+        * * SQL Data Type: varchar(11)`),
+    Location_Code_from_Sales_Transaction: z.string().nullish().describe(`
+        * * Field Name: Location Code from Sales Transaction
+        * * Display Name: Location  Code  from  Sales  Transaction
+        * * SQL Data Type: varchar(11)`),
+    Lot_Type: z.string().nullish().describe(`
+        * * Field Name: Lot Type
+        * * Display Name: Lot  Type
+        * * SQL Data Type: varchar(11)`),
+    MC_Transaction_State: z.string().nullish().describe(`
+        * * Field Name: MC Transaction State
+        * * Display Name: MC Transaction  State
+        * * SQL Data Type: varchar(100)`),
+    Markdown_Account_Number: z.string().nullish().describe(`
+        * * Field Name: Markdown Account Number
+        * * Display Name: Markdown  Account  Number
+        * * SQL Data Type: varchar(129)`),
+    Markdown_Amount: z.number().nullish().describe(`
+        * * Field Name: Markdown Amount
+        * * Display Name: Markdown  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Markdown_Amount_from_Sales_Transaction: z.number().nullish().describe(`
+        * * Field Name: Markdown Amount from Sales Transaction
+        * * Display Name: Markdown  Amount  from  Sales  Transaction
+        * * SQL Data Type: decimal(19, 5)`),
+    Markdown_Percent: z.number().nullish().describe(`
+        * * Field Name: Markdown Percent
+        * * Display Name: Markdown  Percent
+        * * SQL Data Type: decimal(13, 6)`),
+    Markdown_Type: z.string().nullish().describe(`
+        * * Field Name: Markdown Type
+        * * Display Name: Markdown  Type
+        * * SQL Data Type: varchar(100)`),
+    Master_Number: z.number().nullish().describe(`
+        * * Field Name: Master Number
+        * * Display Name: Master  Number
+        * * SQL Data Type: int`),
+    Master_Record_Type: z.number().nullish().describe(`
+        * * Field Name: Master Record Type
+        * * Display Name: Master  Record  Type
+        * * SQL Data Type: smallint`),
+    Max_Writeoff_Amount: z.number().nullish().describe(`
+        * * Field Name: Max Writeoff Amount
+        * * Display Name: Max  Writeoff  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Maximum_Writeoff_Type: z.string().nullish().describe(`
+        * * Field Name: Maximum Writeoff Type
+        * * Display Name: Maximum  Writeoff  Type
+        * * SQL Data Type: varchar(100)`),
+    Minimum_Payment_Dollar: z.number().nullish().describe(`
+        * * Field Name: Minimum Payment Dollar
+        * * Display Name: Minimum  Payment  Dollar
+        * * SQL Data Type: decimal(19, 5)`),
+    Minimum_Payment_Percent: z.number().nullish().describe(`
+        * * Field Name: Minimum Payment Percent
+        * * Display Name: Minimum  Payment  Percent
+        * * SQL Data Type: decimal(13, 6)`),
+    Minimum_Payment_Type: z.string().nullish().describe(`
+        * * Field Name: Minimum Payment Type
+        * * Display Name: Minimum  Payment  Type
+        * * SQL Data Type: varchar(100)`),
+    Misc_Amount: z.number().nullish().describe(`
+        * * Field Name: Misc Amount
+        * * Display Name: Misc  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Misc_Schedule_ID: z.string().nullish().describe(`
+        * * Field Name: Misc Schedule ID
+        * * Display Name: Misc  Schedule  ID
+        * * SQL Data Type: varchar(15)`),
+    Misc_Tax_Amount: z.number().nullish().describe(`
+        * * Field Name: Misc Tax Amount
+        * * Display Name: Misc  Tax  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Misc_Taxable: z.string().nullish().describe(`
+        * * Field Name: Misc Taxable
+        * * Display Name: Misc  Taxable
+        * * SQL Data Type: varchar(100)`),
+    Modified_Date_from_Customer_Master: z.date().nullish().describe(`
+        * * Field Name: Modified Date from Customer Master
+        * * Display Name: Modified  Date  from  Customer  Master
+        * * SQL Data Type: datetime`),
+    Modified_Date_from_Item_Master: z.date().nullish().describe(`
+        * * Field Name: Modified Date from Item Master
+        * * Display Name: Modified  Date  from  Item  Master
+        * * SQL Data Type: datetime`),
+    Modified_Date_from_Sales_Transaction: z.date().nullish().describe(`
+        * * Field Name: Modified Date from Sales Transaction
+        * * Display Name: Modified  Date  from  Sales  Transaction
+        * * SQL Data Type: datetime`),
+    Non_Commissioned_Amount: z.number().nullish().describe(`
+        * * Field Name: Non-Commissioned Amount
+        * * Display Name: Non -Commissioned  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Non_Current_Scheduled_Payments: z.number().nullish().describe(`
+        * * Field Name: Non Current Scheduled Payments
+        * * Display Name: Non  Current  Scheduled  Payments
+        * * SQL Data Type: decimal(19, 5)`),
+    Non_IV: z.string().nullish().describe(`
+        * * Field Name: Non IV
+        * * Display Name: Non  IV
+        * * SQL Data Type: varchar(100)`),
+    Note_Index_from_Customer_Master: z.number().nullish().describe(`
+        * * Field Name: Note Index from Customer Master
+        * * Display Name: Note  Index  from  Customer  Master
+        * * SQL Data Type: decimal(19, 5)`),
+    Note_Index_from_Item_Master: z.number().nullish().describe(`
+        * * Field Name: Note Index from Item Master
+        * * Display Name: Note  Index  from  Item  Master
+        * * SQL Data Type: decimal(19, 5)`),
+    Note_Index_from_Sales_Transaction: z.number().nullish().describe(`
+        * * Field Name: Note Index from Sales Transaction
+        * * Display Name: Note  Index  from  Sales  Transaction
+        * * SQL Data Type: decimal(19, 5)`),
+    Number_ADTP_Documents___LYR: z.number().nullish().describe(`
+        * * Field Name: Number ADTP Documents - LYR
+        * * Display Name: Number  ADTP Documents  - LYR
+        * * SQL Data Type: int`),
+    Number_ADTP_Documents___Life: z.number().nullish().describe(`
+        * * Field Name: Number ADTP Documents - Life
+        * * Display Name: Number  ADTP Documents  - Life
+        * * SQL Data Type: int`),
+    Number_ADTP_Documents___Year: z.number().nullish().describe(`
+        * * Field Name: Number ADTP Documents - Year
+        * * Display Name: Number  ADTP Documents  - Year
+        * * SQL Data Type: int`),
+    Number_Of_NSF_Checks_Life: z.number().nullish().describe(`
+        * * Field Name: Number Of NSF Checks Life
+        * * Display Name: Number  Of  NSF Checks  Life
+        * * SQL Data Type: int`),
+    Number_Of_NSF_Checks_YTD: z.number().nullish().describe(`
+        * * Field Name: Number Of NSF Checks YTD
+        * * Display Name: Number  Of  NSF Checks  YTD
+        * * SQL Data Type: int`),
+    On_Order_Amount: z.number().nullish().describe(`
+        * * Field Name: On Order Amount
+        * * Display Name: On  Order  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Order_Date: z.date().nullish().describe(`
+        * * Field Name: Order Date
+        * * Display Name: Order  Date
+        * * SQL Data Type: datetime`),
+    Order_Fulfillment_Shortage_Default: z.string().nullish().describe(`
+        * * Field Name: Order Fulfillment Shortage Default
+        * * Display Name: Order  Fulfillment  Shortage  Default
+        * * SQL Data Type: varchar(100)`),
+    Original_Number: z.string().nullish().describe(`
+        * * Field Name: Original Number
+        * * Display Name: Original  Number
+        * * SQL Data Type: varchar(21)`),
+    Original_Sequence_Number_Corrected: z.number().nullish().describe(`
+        * * Field Name: Original Sequence Number Corrected
+        * * Display Name: Original  Sequence  Number  Corrected
+        * * SQL Data Type: int`),
+    Original_Type: z.string().nullish().describe(`
+        * * Field Name: Original Type
+        * * Display Name: Original  Type
+        * * SQL Data Type: varchar(100)`),
+    Originating_Account_Amount: z.number().nullish().describe(`
+        * * Field Name: Originating Account Amount
+        * * Display Name: Originating  Account  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Originating_Backout_Freight_Amount: z.number().nullish().describe(`
+        * * Field Name: Originating Backout Freight Amount
+        * * Display Name: Originating  Backout  Freight  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Originating_Backout_Misc_Amount: z.number().nullish().describe(`
+        * * Field Name: Originating Backout Misc Amount
+        * * Display Name: Originating  Backout  Misc  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Originating_Backout_Sales_Amount: z.number().nullish().describe(`
+        * * Field Name: Originating Backout Sales Amount
+        * * Display Name: Originating  Backout  Sales  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Originating_Backout_Tax_Amount: z.number().nullish().describe(`
+        * * Field Name: Originating Backout Tax Amount
+        * * Display Name: Originating  Backout  Tax  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Originating_COD_Amount: z.number().nullish().describe(`
+        * * Field Name: Originating COD Amount
+        * * Display Name: Originating  COD Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Originating_Commission_Amount: z.number().nullish().describe(`
+        * * Field Name: Originating Commission Amount
+        * * Display Name: Originating  Commission  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Originating_Commission_Sales_Amount: z.number().nullish().describe(`
+        * * Field Name: Originating Commission Sales Amount
+        * * Display Name: Originating  Commission  Sales  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Originating_Decimal_Places_Currency: z.string().nullish().describe(`
+        * * Field Name: Originating Decimal Places Currency
+        * * Display Name: Originating  Decimal  Places  Currency
+        * * SQL Data Type: varchar(100)`),
+    Originating_Deposit_Received: z.number().nullish().describe(`
+        * * Field Name: Originating Deposit Received
+        * * Display Name: Originating  Deposit  Received
+        * * SQL Data Type: decimal(19, 5)`),
+    Originating_Discount_Available_Amount: z.number().nullish().describe(`
+        * * Field Name: Originating Discount Available Amount
+        * * Display Name: Originating  Discount  Available  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Originating_Discount_Available_Freight: z.number().nullish().describe(`
+        * * Field Name: Originating Discount Available Freight
+        * * Display Name: Originating  Discount  Available  Freight
+        * * SQL Data Type: decimal(19, 5)`),
+    Originating_Discount_Available_Misc: z.number().nullish().describe(`
+        * * Field Name: Originating Discount Available Misc
+        * * Display Name: Originating  Discount  Available  Misc
+        * * SQL Data Type: decimal(19, 5)`),
+    Originating_Discount_Available_Sales: z.number().nullish().describe(`
+        * * Field Name: Originating Discount Available Sales
+        * * Display Name: Originating  Discount  Available  Sales
+        * * SQL Data Type: decimal(19, 5)`),
+    Originating_Discount_Available_Taken: z.number().nullish().describe(`
+        * * Field Name: Originating Discount Available Taken
+        * * Display Name: Originating  Discount  Available  Taken
+        * * SQL Data Type: decimal(19, 5)`),
+    Originating_Discount_Dollar_Amount: z.number().nullish().describe(`
+        * * Field Name: Originating Discount Dollar Amount
+        * * Display Name: Originating  Discount  Dollar  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Originating_Discount_Returned: z.number().nullish().describe(`
+        * * Field Name: Originating Discount Returned
+        * * Display Name: Originating  Discount  Returned
+        * * SQL Data Type: decimal(19, 5)`),
+    Originating_Discount_Taken_Amount: z.number().nullish().describe(`
+        * * Field Name: Originating Discount Taken Amount
+        * * Display Name: Originating  Discount  Taken  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Originating_Document_Amount: z.number().nullish().describe(`
+        * * Field Name: Originating Document Amount
+        * * Display Name: Originating  Document  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Originating_Extended_Cost: z.number().nullish().describe(`
+        * * Field Name: Originating Extended Cost
+        * * Display Name: Originating  Extended  Cost
+        * * SQL Data Type: decimal(19, 5)`),
+    Originating_Extended_Cost_from_Sales_Transaction: z.number().nullish().describe(`
+        * * Field Name: Originating Extended Cost from Sales Transaction
+        * * Display Name: Originating  Extended  Cost  from  Sales  Transaction
+        * * SQL Data Type: decimal(19, 5)`),
+    Originating_Extended_Price: z.number().nullish().describe(`
+        * * Field Name: Originating Extended Price
+        * * Display Name: Originating  Extended  Price
+        * * SQL Data Type: decimal(19, 5)`),
+    Originating_Freight_Amount: z.number().nullish().describe(`
+        * * Field Name: Originating Freight Amount
+        * * Display Name: Originating  Freight  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Originating_Freight_Tax_Amount: z.number().nullish().describe(`
+        * * Field Name: Originating Freight Tax Amount
+        * * Display Name: Originating  Freight  Tax  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Originating_Markdown_Amount: z.number().nullish().describe(`
+        * * Field Name: Originating Markdown Amount
+        * * Display Name: Originating  Markdown  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Originating_Markdown_Amount_from_Sales_Transaction: z.number().nullish().describe(`
+        * * Field Name: Originating Markdown Amount from Sales Transaction
+        * * Display Name: Originating  Markdown  Amount  from  Sales  Transaction
+        * * SQL Data Type: decimal(19, 5)`),
+    Originating_Misc_Amount: z.number().nullish().describe(`
+        * * Field Name: Originating Misc Amount
+        * * Display Name: Originating  Misc  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Originating_Misc_Tax_Amount: z.number().nullish().describe(`
+        * * Field Name: Originating Misc Tax Amount
+        * * Display Name: Originating  Misc  Tax  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Originating_Non_Commissioned_Amount: z.number().nullish().describe(`
+        * * Field Name: Originating Non-Commissioned Amount
+        * * Display Name: Originating  Non -Commissioned  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Originating_Payment_Received: z.number().nullish().describe(`
+        * * Field Name: Originating Payment Received
+        * * Display Name: Originating  Payment  Received
+        * * SQL Data Type: decimal(19, 5)`),
+    Originating_Remaining_Price: z.number().nullish().describe(`
+        * * Field Name: Originating Remaining Price
+        * * Display Name: Originating  Remaining  Price
+        * * SQL Data Type: decimal(19, 5)`),
+    Originating_Remaining_Subtotal: z.number().nullish().describe(`
+        * * Field Name: Originating Remaining Subtotal
+        * * Display Name: Originating  Remaining  Subtotal
+        * * SQL Data Type: decimal(19, 5)`),
+    Originating_Subtotal: z.number().nullish().describe(`
+        * * Field Name: Originating Subtotal
+        * * Display Name: Originating  Subtotal
+        * * SQL Data Type: decimal(19, 5)`),
+    Originating_Tax_Amount: z.number().nullish().describe(`
+        * * Field Name: Originating Tax Amount
+        * * Display Name: Originating  Tax  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Originating_Tax_Amount_from_Sales_Transaction: z.number().nullish().describe(`
+        * * Field Name: Originating Tax Amount from Sales Transaction
+        * * Display Name: Originating  Tax  Amount  from  Sales  Transaction
+        * * SQL Data Type: decimal(19, 5)`),
+    Originating_Taxable_Tax_Amount: z.number().nullish().describe(`
+        * * Field Name: Originating Taxable Tax Amount
+        * * Display Name: Originating  Taxable  Tax  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Originating_Taxable_Tax_Amount_from_Sales_Transaction: z.number().nullish().describe(`
+        * * Field Name: Originating Taxable Tax Amount from Sales Transaction
+        * * Display Name: Originating  Taxable  Tax  Amount  from  Sales  Transaction
+        * * SQL Data Type: decimal(19, 5)`),
+    Originating_Trade_Discount_Amount: z.number().nullish().describe(`
+        * * Field Name: Originating Trade Discount Amount
+        * * Display Name: Originating  Trade  Discount  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Originating_Trade_Discount_Amount_from_Sales_Transaction: z.number().nullish().describe(`
+        * * Field Name: Originating Trade Discount Amount from Sales Transaction
+        * * Display Name: Originating  Trade  Discount  Amount  from  Sales  Transaction
+        * * SQL Data Type: decimal(19, 5)`),
+    Originating_Unit_Cost: z.number().nullish().describe(`
+        * * Field Name: Originating Unit Cost
+        * * Display Name: Originating  Unit  Cost
+        * * SQL Data Type: decimal(19, 5)`),
+    Originating_Unit_Price: z.number().nullish().describe(`
+        * * Field Name: Originating Unit Price
+        * * Display Name: Originating  Unit  Price
+        * * SQL Data Type: decimal(19, 5)`),
+    Packing_Slip_Number: z.string().nullish().describe(`
+        * * Field Name: Packing Slip Number
+        * * Display Name: Packing  Slip  Number
+        * * SQL Data Type: varchar(21)`),
+    Payment_Received: z.number().nullish().describe(`
+        * * Field Name: Payment Received
+        * * Display Name: Payment  Received
+        * * SQL Data Type: decimal(19, 5)`),
+    Payment_Terms_ID: z.string().nullish().describe(`
+        * * Field Name: Payment Terms ID
+        * * Display Name: Payment  Terms  ID
+        * * SQL Data Type: varchar(21)`),
+    Payment_Terms_ID_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: Payment Terms ID from Customer Master
+        * * Display Name: Payment  Terms  ID from  Customer  Master
+        * * SQL Data Type: varchar(21)`),
+    Phone_1_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: Phone 1 from Customer Master
+        * * Display Name: Phone  1 from  Customer  Master
+        * * SQL Data Type: varchar(21)`),
+    Phone_1_from_Sales_Line_Item: z.string().nullish().describe(`
+        * * Field Name: Phone 1 from Sales Line Item
+        * * Display Name: Phone  1 from  Sales  Line  Item
+        * * SQL Data Type: varchar(21)`),
+    Phone_2_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: Phone 2 from Customer Master
+        * * Display Name: Phone  2 from  Customer  Master
+        * * SQL Data Type: varchar(21)`),
+    Phone_2_from_Sales_Line_Item: z.string().nullish().describe(`
+        * * Field Name: Phone 2 from Sales Line Item
+        * * Display Name: Phone  2 from  Sales  Line  Item
+        * * SQL Data Type: varchar(21)`),
+    Phone_3_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: Phone 3 from Customer Master
+        * * Display Name: Phone  3 from  Customer  Master
+        * * SQL Data Type: varchar(21)`),
+    Phone_3_from_Sales_Line_Item: z.string().nullish().describe(`
+        * * Field Name: Phone 3 from Sales Line Item
+        * * Display Name: Phone  3 from  Sales  Line  Item
+        * * SQL Data Type: varchar(21)`),
+    Phone_3_from_Sales_Transaction: z.string().nullish().describe(`
+        * * Field Name: Phone 3 from Sales Transaction
+        * * Display Name: Phone  3 from  Sales  Transaction
+        * * SQL Data Type: varchar(21)`),
+    Phone_Number_1_from_Sales_Transaction: z.string().nullish().describe(`
+        * * Field Name: Phone Number 1 from Sales Transaction
+        * * Display Name: Phone  Number  1 from  Sales  Transaction
+        * * SQL Data Type: varchar(21)`),
+    Phone_Number_2_from_Sales_Transaction: z.string().nullish().describe(`
+        * * Field Name: Phone Number 2 from Sales Transaction
+        * * Display Name: Phone  Number  2 from  Sales  Transaction
+        * * SQL Data Type: varchar(21)`),
+    Picking_Ticket_Number: z.string().nullish().describe(`
+        * * Field Name: Picking Ticket Number
+        * * Display Name: Picking  Ticket  Number
+        * * SQL Data Type: varchar(21)`),
+    Post_Results_To: z.string().nullish().describe(`
+        * * Field Name: Post Results To
+        * * Display Name: Post  Results  To
+        * * SQL Data Type: varchar(100)`),
+    Posted_Date: z.date().nullish().describe(`
+        * * Field Name: Posted Date
+        * * Display Name: Posted  Date
+        * * SQL Data Type: datetime`),
+    Posted_User_ID: z.string().nullish().describe(`
+        * * Field Name: Posted User ID
+        * * Display Name: Posted  User  ID
+        * * SQL Data Type: varchar(15)`),
+    Posting_Status: z.string().nullish().describe(`
+        * * Field Name: Posting Status
+        * * Display Name: Posting  Status
+        * * SQL Data Type: varchar(100)`),
+    PriceLevel: z.string().nullish().describe(`
+        * * Field Name: PriceLevel
+        * * Display Name: Price Level
+        * * SQL Data Type: varchar(11)`),
+    PriceLevel_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: PriceLevel from Customer Master
+        * * Display Name: Price Level  from  Customer  Master
+        * * SQL Data Type: varchar(11)`),
+    PriceLevel_from_Item_Master: z.string().nullish().describe(`
+        * * Field Name: PriceLevel from Item Master
+        * * Display Name: Price Level  from  Item  Master
+        * * SQL Data Type: varchar(11)`),
+    PriceLevel_from_Sales_Transaction: z.string().nullish().describe(`
+        * * Field Name: PriceLevel from Sales Transaction
+        * * Display Name: Price Level  from  Sales  Transaction
+        * * SQL Data Type: varchar(11)`),
+    Price_Group: z.string().nullish().describe(`
+        * * Field Name: Price Group
+        * * Display Name: Price  Group
+        * * SQL Data Type: varchar(11)`),
+    Price_Method: z.string().nullish().describe(`
+        * * Field Name: Price Method
+        * * Display Name: Price  Method
+        * * SQL Data Type: varchar(100)`),
+    Primary_Billto_Address_Code: z.string().nullish().describe(`
+        * * Field Name: Primary Billto Address Code
+        * * Display Name: Primary  Billto  Address  Code
+        * * SQL Data Type: varchar(15)`),
+    Primary_Billto_Address_Code_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: Primary Billto Address Code from Customer Master
+        * * Display Name: Primary  Billto  Address  Code  from  Customer  Master
+        * * SQL Data Type: varchar(15)`),
+    Primary_Shipto_Address_Code_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: Primary Shipto Address Code from Customer Master
+        * * Display Name: Primary  Shipto  Address  Code  from  Customer  Master
+        * * SQL Data Type: varchar(15)`),
+    Primary_Shipto_Address_Code_from_Sales_Line_Item: z.string().nullish().describe(`
+        * * Field Name: Primary Shipto Address Code from Sales Line Item
+        * * Display Name: Primary  Shipto  Address  Code  from  Sales  Line  Item
+        * * SQL Data Type: varchar(15)`),
+    Primary_Shipto_Address_Code_from_Sales_Transaction: z.string().nullish().describe(`
+        * * Field Name: Primary Shipto Address Code from Sales Transaction
+        * * Display Name: Primary  Shipto  Address  Code  from  Sales  Transaction
+        * * SQL Data Type: varchar(15)`),
+    Priority_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: Priority from Customer Master
+        * * Display Name: Priority  from  Customer  Master
+        * * SQL Data Type: varchar(100)`),
+    Prospect: z.string().nullish().describe(`
+        * * Field Name: Prospect
+        * * Display Name: Prospect
+        * * SQL Data Type: varchar(100)`),
+    Purch_Inflation_Account_Number: z.string().nullish().describe(`
+        * * Field Name: Purch Inflation Account Number
+        * * Display Name: Purch  Inflation  Account  Number
+        * * SQL Data Type: varchar(129)`),
+    Purch_Monetary_Correction_Account_Number: z.string().nullish().describe(`
+        * * Field Name: Purch Monetary Correction Account Number
+        * * Display Name: Purch  Monetary  Correction  Account  Number
+        * * SQL Data Type: varchar(129)`),
+    Purchase_Price_Variance_Account_Number: z.string().nullish().describe(`
+        * * Field Name: Purchase Price Variance Account Number
+        * * Display Name: Purchase  Price  Variance  Account  Number
+        * * SQL Data Type: varchar(129)`),
+    Purchasing_Status: z.string().nullish().describe(`
+        * * Field Name: Purchasing Status
+        * * Display Name: Purchasing  Status
+        * * SQL Data Type: varchar(100)`),
+    Purchasing_U_Of_M: z.string().nullish().describe(`
+        * * Field Name: Purchasing U Of M
+        * * Display Name: Purchasing  U Of  M
+        * * SQL Data Type: varchar(9)`),
+    QTY_Allocated: z.number().nullish().describe(`
+        * * Field Name: QTY Allocated
+        * * Display Name: QTY Allocated
+        * * SQL Data Type: decimal(19, 5)`),
+    QTY_Canceled: z.number().nullish().describe(`
+        * * Field Name: QTY Canceled
+        * * Display Name: QTY Canceled
+        * * SQL Data Type: decimal(19, 5)`),
+    QTY_Canceled_Other: z.number().nullish().describe(`
+        * * Field Name: QTY Canceled Other
+        * * Display Name: QTY Canceled  Other
+        * * SQL Data Type: decimal(19, 5)`),
+    QTY_Damaged: z.number().nullish().describe(`
+        * * Field Name: QTY Damaged
+        * * Display Name: QTY Damaged
+        * * SQL Data Type: decimal(19, 5)`),
+    QTY_Fulfilled: z.number().nullish().describe(`
+        * * Field Name: QTY Fulfilled
+        * * Display Name: QTY Fulfilled
+        * * SQL Data Type: decimal(19, 5)`),
+    QTY_In_Base_U_Of_M: z.number().nullish().describe(`
+        * * Field Name: QTY In Base U Of M
+        * * Display Name: QTY In  Base  U Of  M
+        * * SQL Data Type: decimal(19, 5)`),
+    QTY_In_Service: z.number().nullish().describe(`
+        * * Field Name: QTY In Service
+        * * Display Name: QTY In  Service
+        * * SQL Data Type: decimal(19, 5)`),
+    QTY_In_Use: z.number().nullish().describe(`
+        * * Field Name: QTY In Use
+        * * Display Name: QTY In  Use
+        * * SQL Data Type: decimal(19, 5)`),
+    QTY_On_Hand: z.number().nullish().describe(`
+        * * Field Name: QTY On Hand
+        * * Display Name: QTY On  Hand
+        * * SQL Data Type: decimal(19, 5)`),
+    QTY_On_PO: z.number().nullish().describe(`
+        * * Field Name: QTY On PO
+        * * Display Name: QTY On  PO
+        * * SQL Data Type: decimal(19, 5)`),
+    QTY_Ordered: z.number().nullish().describe(`
+        * * Field Name: QTY Ordered
+        * * Display Name: QTY Ordered
+        * * SQL Data Type: decimal(19, 5)`),
+    QTY_Prev_BO_On_Order: z.number().nullish().describe(`
+        * * Field Name: QTY Prev BO On Order
+        * * Display Name: QTY Prev  BO On  Order
+        * * SQL Data Type: decimal(19, 5)`),
+    QTY_Prev_Back_Ordered: z.number().nullish().describe(`
+        * * Field Name: QTY Prev Back Ordered
+        * * Display Name: QTY Prev  Back  Ordered
+        * * SQL Data Type: decimal(19, 5)`),
+    QTY_Prev_Invoiced: z.number().nullish().describe(`
+        * * Field Name: QTY Prev Invoiced
+        * * Display Name: QTY Prev  Invoiced
+        * * SQL Data Type: decimal(19, 5)`),
+    QTY_Prev_Ordered: z.number().nullish().describe(`
+        * * Field Name: QTY Prev Ordered
+        * * Display Name: QTY Prev  Ordered
+        * * SQL Data Type: decimal(19, 5)`),
+    QTY_Prev_Received: z.number().nullish().describe(`
+        * * Field Name: QTY Prev Received
+        * * Display Name: QTY Prev  Received
+        * * SQL Data Type: decimal(19, 5)`),
+    QTY_Received: z.number().nullish().describe(`
+        * * Field Name: QTY Received
+        * * Display Name: QTY Received
+        * * SQL Data Type: decimal(19, 5)`),
+    QTY_Remaining: z.number().nullish().describe(`
+        * * Field Name: QTY Remaining
+        * * Display Name: QTY Remaining
+        * * SQL Data Type: decimal(19, 5)`),
+    QTY_Remaining_On_BO: z.number().nullish().describe(`
+        * * Field Name: QTY Remaining On BO
+        * * Display Name: QTY Remaining  On  BO
+        * * SQL Data Type: decimal(19, 5)`),
+    QTY_Returned: z.number().nullish().describe(`
+        * * Field Name: QTY Returned
+        * * Display Name: QTY Returned
+        * * SQL Data Type: decimal(19, 5)`),
+    QTY_Selected: z.number().nullish().describe(`
+        * * Field Name: QTY Selected
+        * * Display Name: QTY Selected
+        * * SQL Data Type: decimal(19, 5)`),
+    QTY_To_Back_Order: z.number().nullish().describe(`
+        * * Field Name: QTY To Back Order
+        * * Display Name: QTY To  Back  Order
+        * * SQL Data Type: decimal(19, 5)`),
+    QTY_To_Invoice: z.number().nullish().describe(`
+        * * Field Name: QTY To Invoice
+        * * Display Name: QTY To  Invoice
+        * * SQL Data Type: decimal(19, 5)`),
+    QTY_To_Order: z.number().nullish().describe(`
+        * * Field Name: QTY To Order
+        * * Display Name: QTY To  Order
+        * * SQL Data Type: decimal(19, 5)`),
+    Quote_Date: z.date().nullish().describe(`
+        * * Field Name: Quote Date
+        * * Display Name: Quote  Date
+        * * SQL Data Type: datetime`),
+    Quote_Expiration_Date: z.date().nullish().describe(`
+        * * Field Name: Quote Expiration Date
+        * * Display Name: Quote  Expiration  Date
+        * * SQL Data Type: datetime`),
+    Rate_Calculation_Method: z.string().nullish().describe(`
+        * * Field Name: Rate Calculation Method
+        * * Display Name: Rate  Calculation  Method
+        * * SQL Data Type: varchar(100)`),
+    Rate_Type_ID: z.string().nullish().describe(`
+        * * Field Name: Rate Type ID
+        * * Display Name: Rate  Type  ID
+        * * SQL Data Type: varchar(15)`),
+    Rate_Type_ID_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: Rate Type ID from Customer Master
+        * * Display Name: Rate  Type  ID from  Customer  Master
+        * * SQL Data Type: varchar(15)`),
+    Reference: z.string().nullish().describe(`
+        * * Field Name: Reference
+        * * Display Name: Reference
+        * * SQL Data Type: varchar(31)`),
+    Remaining_Price: z.number().nullish().describe(`
+        * * Field Name: Remaining Price
+        * * Display Name: Remaining  Price
+        * * SQL Data Type: decimal(19, 5)`),
+    Remaining_Subtotal: z.number().nullish().describe(`
+        * * Field Name: Remaining Subtotal
+        * * Display Name: Remaining  Subtotal
+        * * SQL Data Type: decimal(19, 5)`),
+    Repeating: z.string().nullish().describe(`
+        * * Field Name: Repeating
+        * * Display Name: Repeating
+        * * SQL Data Type: varchar(100)`),
+    Requested_Ship_Date: z.date().nullish().describe(`
+        * * Field Name: Requested Ship Date
+        * * Display Name: Requested  Ship  Date
+        * * SQL Data Type: datetime`),
+    Requested_Ship_Date_from_Sales_Transaction: z.date().nullish().describe(`
+        * * Field Name: Requested Ship Date from Sales Transaction
+        * * Display Name: Requested  Ship  Date  from  Sales  Transaction
+        * * SQL Data Type: datetime`),
+    Retainage: z.number().nullish().describe(`
+        * * Field Name: Retainage
+        * * Display Name: Retainage
+        * * SQL Data Type: decimal(19, 5)`),
+    Return_Date: z.date().nullish().describe(`
+        * * Field Name: Return Date
+        * * Display Name: Return  Date
+        * * SQL Data Type: datetime`),
+    Returns_Account_Number: z.string().nullish().describe(`
+        * * Field Name: Returns Account Number
+        * * Display Name: Returns  Account  Number
+        * * SQL Data Type: varchar(129)`),
+    Revalue_Customer: z.string().nullish().describe(`
+        * * Field Name: Revalue Customer
+        * * Display Name: Revalue  Customer
+        * * SQL Data Type: varchar(100)`),
+    Sale_Date: z.date().nullish().describe(`
+        * * Field Name: Sale Date
+        * * Display Name: Sale  Date
+        * * SQL Data Type: datetime`),
+    Sales_Account_Number: z.string().nullish().describe(`
+        * * Field Name: Sales Account Number
+        * * Display Name: Sales  Account  Number
+        * * SQL Data Type: varchar(129)`),
+    Sales_Account_Number_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: Sales Account Number from Customer Master
+        * * Display Name: Sales  Account  Number  from  Customer  Master
+        * * SQL Data Type: varchar(129)`),
+    Sales_Account_Number_from_Item_Master: z.string().nullish().describe(`
+        * * Field Name: Sales Account Number from Item Master
+        * * Display Name: Sales  Account  Number  from  Item  Master
+        * * SQL Data Type: varchar(129)`),
+    Sales_Discounts_Account_Number: z.string().nullish().describe(`
+        * * Field Name: Sales Discounts Account Number
+        * * Display Name: Sales  Discounts  Account  Number
+        * * SQL Data Type: varchar(129)`),
+    Sales_Document_Status: z.string().nullish().describe(`
+        * * Field Name: Sales Document Status
+        * * Display Name: Sales  Document  Status
+        * * SQL Data Type: varchar(100)`),
+    Sales_Returns_Account_Number: z.string().nullish().describe(`
+        * * Field Name: Sales Returns Account Number
+        * * Display Name: Sales  Returns  Account  Number
+        * * SQL Data Type: varchar(129)`),
+    Sales_Territory: z.string().nullish().describe(`
+        * * Field Name: Sales Territory
+        * * Display Name: Sales  Territory
+        * * SQL Data Type: varchar(15)`),
+    Sales_Territory_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: Sales Territory from Customer Master
+        * * Display Name: Sales  Territory  from  Customer  Master
+        * * SQL Data Type: varchar(15)`),
+    Sales_Territory_from_Sales_Transaction: z.string().nullish().describe(`
+        * * Field Name: Sales Territory from Sales Transaction
+        * * Display Name: Sales  Territory  from  Sales  Transaction
+        * * SQL Data Type: varchar(15)`),
+    Salesperson_ID: z.string().nullish().describe(`
+        * * Field Name: Salesperson ID
+        * * Display Name: Salesperson  ID
+        * * SQL Data Type: varchar(15)`),
+    Salesperson_ID_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: Salesperson ID from Customer Master
+        * * Display Name: Salesperson  ID from  Customer  Master
+        * * SQL Data Type: varchar(15)`),
+    Salesperson_ID_from_Sales_Transaction: z.string().nullish().describe(`
+        * * Field Name: Salesperson ID from Sales Transaction
+        * * Display Name: Salesperson  ID from  Sales  Transaction
+        * * SQL Data Type: varchar(15)`),
+    Selling_U_Of_M: z.string().nullish().describe(`
+        * * Field Name: Selling U Of M
+        * * Display Name: Selling  U Of  M
+        * * SQL Data Type: varchar(9)`),
+    Sequence_Number_Corrected: z.number().nullish().describe(`
+        * * Field Name: Sequence Number Corrected
+        * * Display Name: Sequence  Number  Corrected
+        * * SQL Data Type: smallint`),
+    ShipToName_from_Sales_Line_Item: z.string().nullish().describe(`
+        * * Field Name: ShipToName from Sales Line Item
+        * * Display Name: Ship To Name  from  Sales  Line  Item
+        * * SQL Data Type: varchar(65)`),
+    ShipToName_from_Sales_Transaction: z.string().nullish().describe(`
+        * * Field Name: ShipToName from Sales Transaction
+        * * Display Name: Ship To Name  from  Sales  Transaction
+        * * SQL Data Type: varchar(65)`),
+    Ship_Complete_Document: z.string().nullish().describe(`
+        * * Field Name: Ship Complete Document
+        * * Display Name: Ship  Complete  Document
+        * * SQL Data Type: varchar(100)`),
+    Ship_Complete_Document_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: Ship Complete Document from Customer Master
+        * * Display Name: Ship  Complete  Document  from  Customer  Master
+        * * SQL Data Type: varchar(100)`),
+    Shipping_Document: z.string().nullish().describe(`
+        * * Field Name: Shipping Document
+        * * Display Name: Shipping  Document
+        * * SQL Data Type: varchar(100)`),
+    Shipping_Method: z.string().nullish().describe(`
+        * * Field Name: Shipping Method
+        * * Display Name: Shipping  Method
+        * * SQL Data Type: varchar(15)`),
+    Shipping_Method_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: Shipping Method from Customer Master
+        * * Display Name: Shipping  Method  from  Customer  Master
+        * * SQL Data Type: varchar(15)`),
+    Shipping_Method_from_Sales_Transaction: z.string().nullish().describe(`
+        * * Field Name: Shipping Method from Sales Transaction
+        * * Display Name: Shipping  Method  from  Sales  Transaction
+        * * SQL Data Type: varchar(15)`),
+    Short_Name: z.string().nullish().describe(`
+        * * Field Name: Short Name
+        * * Display Name: Short  Name
+        * * SQL Data Type: varchar(15)`),
+    Simplified: z.string().nullish().describe(`
+        * * Field Name: Simplified
+        * * Display Name: Simplified
+        * * SQL Data Type: varchar(100)`),
+    Standard_Cost: z.number().nullish().describe(`
+        * * Field Name: Standard Cost
+        * * Display Name: Standard  Cost
+        * * SQL Data Type: decimal(19, 5)`),
+    State_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: State from Customer Master
+        * * Display Name: State  from  Customer  Master
+        * * SQL Data Type: varchar(29)`),
+    State_from_Sales_Line_Item: z.string().nullish().describe(`
+        * * Field Name: State from Sales Line Item
+        * * Display Name: State  from  Sales  Line  Item
+        * * SQL Data Type: varchar(29)`),
+    State_from_Sales_Transaction: z.string().nullish().describe(`
+        * * Field Name: State from Sales Transaction
+        * * Display Name: State  from  Sales  Transaction
+        * * SQL Data Type: varchar(29)`),
+    Statement_Address_Code: z.string().nullish().describe(`
+        * * Field Name: Statement Address Code
+        * * Display Name: Statement  Address  Code
+        * * SQL Data Type: varchar(15)`),
+    Statement_Cycle: z.string().nullish().describe(`
+        * * Field Name: Statement Cycle
+        * * Display Name: Statement  Cycle
+        * * SQL Data Type: varchar(100)`),
+    Statement_Name: z.string().nullish().describe(`
+        * * Field Name: Statement Name
+        * * Display Name: Statement  Name
+        * * SQL Data Type: varchar(65)`),
+    Subtotal: z.number().nullish().describe(`
+        * * Field Name: Subtotal
+        * * Display Name: Subtotal
+        * * SQL Data Type: decimal(19, 5)`),
+    TRX_Frequency: z.string().nullish().describe(`
+        * * Field Name: TRX Frequency
+        * * Display Name: TRX Frequency
+        * * SQL Data Type: varchar(100)`),
+    TRX_Source: z.string().nullish().describe(`
+        * * Field Name: TRX Source
+        * * Display Name: TRX Source
+        * * SQL Data Type: varchar(13)`),
+    TRX_Source_from_Sales_Transaction: z.string().nullish().describe(`
+        * * Field Name: TRX Source from Sales Transaction
+        * * Display Name: TRX Source  from  Sales  Transaction
+        * * SQL Data Type: varchar(13)`),
+    Tax_Amount: z.number().nullish().describe(`
+        * * Field Name: Tax Amount
+        * * Display Name: Tax  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Tax_Amount_from_Sales_Transaction: z.number().nullish().describe(`
+        * * Field Name: Tax Amount from Sales Transaction
+        * * Display Name: Tax  Amount  from  Sales  Transaction
+        * * SQL Data Type: decimal(19, 5)`),
+    Tax_Commodity_Code: z.string().nullish().describe(`
+        * * Field Name: Tax Commodity Code
+        * * Display Name: Tax  Commodity  Code
+        * * SQL Data Type: varchar(31)`),
+    Tax_Date: z.date().nullish().describe(`
+        * * Field Name: Tax Date
+        * * Display Name: Tax  Date
+        * * SQL Data Type: datetime`),
+    Tax_Engine_Called: z.string().nullish().describe(`
+        * * Field Name: Tax Engine Called
+        * * Display Name: Tax  Engine  Called
+        * * SQL Data Type: varchar(100)`),
+    Tax_Exempt_1: z.string().nullish().describe(`
+        * * Field Name: Tax Exempt 1
+        * * Display Name: Tax  Exempt  1
+        * * SQL Data Type: varchar(25)`),
+    Tax_Exempt_1_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: Tax Exempt 1 from Customer Master
+        * * Display Name: Tax  Exempt  1 from  Customer  Master
+        * * SQL Data Type: varchar(25)`),
+    Tax_Exempt_2: z.string().nullish().describe(`
+        * * Field Name: Tax Exempt 2
+        * * Display Name: Tax  Exempt  2
+        * * SQL Data Type: varchar(25)`),
+    Tax_Exempt_2_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: Tax Exempt 2 from Customer Master
+        * * Display Name: Tax  Exempt  2 from  Customer  Master
+        * * SQL Data Type: varchar(25)`),
+    Tax_Options: z.string().nullish().describe(`
+        * * Field Name: Tax Options
+        * * Display Name: Tax  Options
+        * * SQL Data Type: varchar(100)`),
+    Tax_Registration_Number: z.string().nullish().describe(`
+        * * Field Name: Tax Registration Number
+        * * Display Name: Tax  Registration  Number
+        * * SQL Data Type: varchar(25)`),
+    Tax_Registration_Number_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: Tax Registration Number from Customer Master
+        * * Display Name: Tax  Registration  Number  from  Customer  Master
+        * * SQL Data Type: varchar(25)`),
+    Tax_Schedule_ID_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: Tax Schedule ID from Customer Master
+        * * Display Name: Tax  Schedule  ID from  Customer  Master
+        * * SQL Data Type: varchar(15)`),
+    Tax_Schedule_ID_from_Sales_Line_Item: z.string().nullish().describe(`
+        * * Field Name: Tax Schedule ID from Sales Line Item
+        * * Display Name: Tax  Schedule  ID from  Sales  Line  Item
+        * * SQL Data Type: varchar(15)`),
+    Tax_Schedule_ID_from_Sales_Transaction: z.string().nullish().describe(`
+        * * Field Name: Tax Schedule ID from Sales Transaction
+        * * Display Name: Tax  Schedule  ID from  Sales  Transaction
+        * * SQL Data Type: varchar(15)`),
+    Tax_Schedule_Source_from_Sales_Line_Item: z.string().nullish().describe(`
+        * * Field Name: Tax Schedule Source from Sales Line Item
+        * * Display Name: Tax  Schedule  Source  from  Sales  Line  Item
+        * * SQL Data Type: varchar(100)`),
+    Tax_Schedule_Source_from_Sales_Transaction: z.string().nullish().describe(`
+        * * Field Name: Tax Schedule Source from Sales Transaction
+        * * Display Name: Tax  Schedule  Source  from  Sales  Transaction
+        * * SQL Data Type: varchar(100)`),
+    Taxable_Tax_Amount: z.number().nullish().describe(`
+        * * Field Name: Taxable Tax Amount
+        * * Display Name: Taxable  Tax  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Taxable_Tax_Amount_from_Sales_Transaction: z.number().nullish().describe(`
+        * * Field Name: Taxable Tax Amount from Sales Transaction
+        * * Display Name: Taxable  Tax  Amount  from  Sales  Transaction
+        * * SQL Data Type: decimal(19, 5)`),
+    Time: z.date().nullish().describe(`
+        * * Field Name: Time
+        * * Display Name: Time
+        * * SQL Data Type: datetime`),
+    Times_Printed: z.number().nullish().describe(`
+        * * Field Name: Times Printed
+        * * Display Name: Times  Printed
+        * * SQL Data Type: decimal(13, 6)`),
+    Times_Repeated: z.number().nullish().describe(`
+        * * Field Name: Times Repeated
+        * * Display Name: Times  Repeated
+        * * SQL Data Type: smallint`),
+    Times_To_Repeat: z.number().nullish().describe(`
+        * * Field Name: Times To Repeat
+        * * Display Name: Times  To  Repeat
+        * * SQL Data Type: smallint`),
+    Total___FC_LTD: z.number().nullish().describe(`
+        * * Field Name: Total # FC LTD
+        * * Display Name: Total  # FC LTD
+        * * SQL Data Type: int`),
+    Total___FC_LYR: z.number().nullish().describe(`
+        * * Field Name: Total # FC LYR
+        * * Display Name: Total  # FC LYR
+        * * SQL Data Type: int`),
+    Total___FC_YTD: z.number().nullish().describe(`
+        * * Field Name: Total # FC YTD
+        * * Display Name: Total  # FC YTD
+        * * SQL Data Type: int`),
+    Total___Invoices_LTD: z.number().nullish().describe(`
+        * * Field Name: Total # Invoices LTD
+        * * Display Name: Total  # Invoices  LTD
+        * * SQL Data Type: int`),
+    Total___Invoices_LYR: z.number().nullish().describe(`
+        * * Field Name: Total # Invoices LYR
+        * * Display Name: Total  # Invoices  LYR
+        * * SQL Data Type: int`),
+    Total___Invoices_YTD: z.number().nullish().describe(`
+        * * Field Name: Total # Invoices YTD
+        * * Display Name: Total  # Invoices  YTD
+        * * SQL Data Type: int`),
+    Total_Amount_Of_NSF_Checks_Life: z.number().nullish().describe(`
+        * * Field Name: Total Amount Of NSF Checks Life
+        * * Display Name: Total  Amount  Of  NSF Checks  Life
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Amount_Of_NSF_Checks_YTD: z.number().nullish().describe(`
+        * * Field Name: Total Amount Of NSF Checks YTD
+        * * Display Name: Total  Amount  Of  NSF Checks  YTD
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Bad_Deb_LYR: z.number().nullish().describe(`
+        * * Field Name: Total Bad Deb LYR
+        * * Display Name: Total  Bad  Deb  LYR
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Bad_Debt_LTD: z.number().nullish().describe(`
+        * * Field Name: Total Bad Debt LTD
+        * * Display Name: Total  Bad  Debt  LTD
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Bad_Debt_YTD: z.number().nullish().describe(`
+        * * Field Name: Total Bad Debt YTD
+        * * Display Name: Total  Bad  Debt  YTD
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Cash_Received_LTD: z.number().nullish().describe(`
+        * * Field Name: Total Cash Received LTD
+        * * Display Name: Total  Cash  Received  LTD
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Cash_Received_LYR: z.number().nullish().describe(`
+        * * Field Name: Total Cash Received LYR
+        * * Display Name: Total  Cash  Received  LYR
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Cash_Received_YTD: z.number().nullish().describe(`
+        * * Field Name: Total Cash Received YTD
+        * * Display Name: Total  Cash  Received  YTD
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Costs_LTD: z.number().nullish().describe(`
+        * * Field Name: Total Costs LTD
+        * * Display Name: Total  Costs  LTD
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Costs_LYR: z.number().nullish().describe(`
+        * * Field Name: Total Costs LYR
+        * * Display Name: Total  Costs  LYR
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Costs_YTD: z.number().nullish().describe(`
+        * * Field Name: Total Costs YTD
+        * * Display Name: Total  Costs  YTD
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Discounts_Available_YTD: z.number().nullish().describe(`
+        * * Field Name: Total Discounts Available YTD
+        * * Display Name: Total  Discounts  Available  YTD
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Discounts_Taken_LTD: z.number().nullish().describe(`
+        * * Field Name: Total Discounts Taken LTD
+        * * Display Name: Total  Discounts  Taken  LTD
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Discounts_Taken_LYR: z.number().nullish().describe(`
+        * * Field Name: Total Discounts Taken LYR
+        * * Display Name: Total  Discounts  Taken  LYR
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Discounts_Taken_YTD: z.number().nullish().describe(`
+        * * Field Name: Total Discounts Taken YTD
+        * * Display Name: Total  Discounts  Taken  YTD
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Finance_Charges_LTD: z.number().nullish().describe(`
+        * * Field Name: Total Finance Charges LTD
+        * * Display Name: Total  Finance  Charges  LTD
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Finance_Charges_LYR: z.number().nullish().describe(`
+        * * Field Name: Total Finance Charges LYR
+        * * Display Name: Total  Finance  Charges  LYR
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Finance_Charges_YTD: z.number().nullish().describe(`
+        * * Field Name: Total Finance Charges YTD
+        * * Display Name: Total  Finance  Charges  YTD
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Returns_LTD: z.number().nullish().describe(`
+        * * Field Name: Total Returns LTD
+        * * Display Name: Total  Returns  LTD
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Returns_LYR: z.number().nullish().describe(`
+        * * Field Name: Total Returns LYR
+        * * Display Name: Total  Returns  LYR
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Returns_YTD: z.number().nullish().describe(`
+        * * Field Name: Total Returns YTD
+        * * Display Name: Total  Returns  YTD
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Sales_LTD: z.number().nullish().describe(`
+        * * Field Name: Total Sales LTD
+        * * Display Name: Total  Sales  LTD
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Sales_LYR: z.number().nullish().describe(`
+        * * Field Name: Total Sales LYR
+        * * Display Name: Total  Sales  LYR
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Sales_YTD: z.number().nullish().describe(`
+        * * Field Name: Total Sales YTD
+        * * Display Name: Total  Sales  YTD
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Waived_FC_LTD: z.number().nullish().describe(`
+        * * Field Name: Total Waived FC LTD
+        * * Display Name: Total  Waived  FC LTD
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Waived_FC_LYR: z.number().nullish().describe(`
+        * * Field Name: Total Waived FC LYR
+        * * Display Name: Total  Waived  FC LYR
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Waived_FC_YTD: z.number().nullish().describe(`
+        * * Field Name: Total Waived FC YTD
+        * * Display Name: Total  Waived  FC YTD
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Writeoffs_LTD: z.number().nullish().describe(`
+        * * Field Name: Total Writeoffs LTD
+        * * Display Name: Total  Writeoffs  LTD
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Writeoffs_LYR: z.number().nullish().describe(`
+        * * Field Name: Total Writeoffs LYR
+        * * Display Name: Total  Writeoffs  LYR
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Writeoffs_YTD: z.number().nullish().describe(`
+        * * Field Name: Total Writeoffs YTD
+        * * Display Name: Total  Writeoffs  YTD
+        * * SQL Data Type: decimal(19, 5)`),
+    Trade_Discount_Amount: z.number().nullish().describe(`
+        * * Field Name: Trade Discount Amount
+        * * Display Name: Trade  Discount  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Trade_Discount_Amount_from_Sales_Transaction: z.number().nullish().describe(`
+        * * Field Name: Trade Discount Amount from Sales Transaction
+        * * Display Name: Trade  Discount  Amount  from  Sales  Transaction
+        * * SQL Data Type: decimal(19, 5)`),
+    Trade_Discount_Percent: z.number().nullish().describe(`
+        * * Field Name: Trade Discount Percent
+        * * Display Name: Trade  Discount  Percent
+        * * SQL Data Type: smallint`),
+    UPS_Zone: z.string().nullish().describe(`
+        * * Field Name: UPS Zone
+        * * Display Name: UPS Zone
+        * * SQL Data Type: varchar(3)`),
+    UPS_Zone_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: UPS Zone from Customer Master
+        * * Display Name: UPS Zone  from  Customer  Master
+        * * SQL Data Type: varchar(3)`),
+    U_Of_M: z.string().nullish().describe(`
+        * * Field Name: U Of M
+        * * Display Name: U Of  M
+        * * SQL Data Type: varchar(9)`),
+    U_Of_M_Schedule: z.string().nullish().describe(`
+        * * Field Name: U Of M Schedule
+        * * Display Name: U Of  M Schedule
+        * * SQL Data Type: varchar(11)`),
+    Unpaid_Finance_Charges_YTD: z.number().nullish().describe(`
+        * * Field Name: Unpaid Finance Charges YTD
+        * * Display Name: Unpaid  Finance  Charges  YTD
+        * * SQL Data Type: decimal(19, 5)`),
+    Unposted_Cash_Amount: z.number().nullish().describe(`
+        * * Field Name: Unposted Cash Amount
+        * * Display Name: Unposted  Cash  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Unposted_Other_Cash_Amount: z.number().nullish().describe(`
+        * * Field Name: Unposted Other Cash Amount
+        * * Display Name: Unposted  Other  Cash  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Unposted_Other_Sales_Amount: z.number().nullish().describe(`
+        * * Field Name: Unposted Other Sales Amount
+        * * Display Name: Unposted  Other  Sales  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Unposted_Sales_Amount: z.number().nullish().describe(`
+        * * Field Name: Unposted Sales Amount
+        * * Display Name: Unposted  Sales  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Unrealized_Purchase_Price_Variance_Account_Number: z.string().nullish().describe(`
+        * * Field Name: Unrealized Purchase Price Variance Account Number
+        * * Display Name: Unrealized  Purchase  Price  Variance  Account  Number
+        * * SQL Data Type: varchar(129)`),
+    Use_Document_ID_1: z.string().nullish().describe(`
+        * * Field Name: Use Document ID 1
+        * * Display Name: Use  Document  ID 1
+        * * SQL Data Type: varchar(15)`),
+    Use_Document_ID_2: z.string().nullish().describe(`
+        * * Field Name: Use Document ID 2
+        * * Display Name: Use  Document  ID 2
+        * * SQL Data Type: varchar(15)`),
+    User_Category_Value_1: z.string().nullish().describe(`
+        * * Field Name: User Category Value 1
+        * * Display Name: User  Category  Value  1
+        * * SQL Data Type: varchar(11)`),
+    User_Category_Value_2: z.string().nullish().describe(`
+        * * Field Name: User Category Value 2
+        * * Display Name: User  Category  Value  2
+        * * SQL Data Type: varchar(11)`),
+    User_Category_Value_3: z.string().nullish().describe(`
+        * * Field Name: User Category Value 3
+        * * Display Name: User  Category  Value  3
+        * * SQL Data Type: varchar(11)`),
+    User_Category_Value_4: z.string().nullish().describe(`
+        * * Field Name: User Category Value 4
+        * * Display Name: User  Category  Value  4
+        * * SQL Data Type: varchar(11)`),
+    User_Category_Value_5: z.string().nullish().describe(`
+        * * Field Name: User Category Value 5
+        * * Display Name: User  Category  Value  5
+        * * SQL Data Type: varchar(11)`),
+    User_Category_Value_6: z.string().nullish().describe(`
+        * * Field Name: User Category Value 6
+        * * Display Name: User  Category  Value  6
+        * * SQL Data Type: varchar(11)`),
+    User_Defined_1: z.string().nullish().describe(`
+        * * Field Name: User Defined 1
+        * * Display Name: User  Defined  1
+        * * SQL Data Type: varchar(21)`),
+    User_Defined_1_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: User Defined 1 from Customer Master
+        * * Display Name: User  Defined  1 from  Customer  Master
+        * * SQL Data Type: varchar(21)`),
+    User_Defined_2: z.string().nullish().describe(`
+        * * Field Name: User Defined 2
+        * * Display Name: User  Defined  2
+        * * SQL Data Type: varchar(21)`),
+    User_Defined_2_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: User Defined 2 from Customer Master
+        * * Display Name: User  Defined  2 from  Customer  Master
+        * * SQL Data Type: varchar(21)`),
+    User_Defined_3: z.string().nullish().describe(`
+        * * Field Name: User Defined 3
+        * * Display Name: User  Defined  3
+        * * SQL Data Type: varchar(21)`),
+    User_Defined_4: z.string().nullish().describe(`
+        * * Field Name: User Defined 4
+        * * Display Name: User  Defined  4
+        * * SQL Data Type: varchar(21)`),
+    User_Defined_5: z.string().nullish().describe(`
+        * * Field Name: User Defined 5
+        * * Display Name: User  Defined  5
+        * * SQL Data Type: varchar(21)`),
+    User_Defined_Date_1: z.date().nullish().describe(`
+        * * Field Name: User Defined Date 1
+        * * Display Name: User  Defined  Date  1
+        * * SQL Data Type: datetime`),
+    User_Defined_Date_2: z.date().nullish().describe(`
+        * * Field Name: User Defined Date 2
+        * * Display Name: User  Defined  Date  2
+        * * SQL Data Type: datetime`),
+    User_Defined_Table_1: z.string().nullish().describe(`
+        * * Field Name: User Defined Table 1
+        * * Display Name: User  Defined  Table  1
+        * * SQL Data Type: varchar(21)`),
+    User_Defined_Table_2: z.string().nullish().describe(`
+        * * Field Name: User Defined Table 2
+        * * Display Name: User  Defined  Table  2
+        * * SQL Data Type: varchar(21)`),
+    User_Defined_Table_3: z.string().nullish().describe(`
+        * * Field Name: User Defined Table 3
+        * * Display Name: User  Defined  Table  3
+        * * SQL Data Type: varchar(21)`),
+    User_To_Enter: z.string().nullish().describe(`
+        * * Field Name: User To Enter
+        * * Display Name: User  To  Enter
+        * * SQL Data Type: varchar(15)`),
+    Valuation_Method: z.string().nullish().describe(`
+        * * Field Name: Valuation Method
+        * * Display Name: Valuation  Method
+        * * SQL Data Type: varchar(100)`),
+    Variances_Account_Number: z.string().nullish().describe(`
+        * * Field Name: Variances Account Number
+        * * Display Name: Variances  Account  Number
+        * * SQL Data Type: varchar(129)`),
+    Void_Status: z.string().nullish().describe(`
+        * * Field Name: Void Status
+        * * Display Name: Void  Status
+        * * SQL Data Type: varchar(100)`),
+    Warranty_Days: z.number().nullish().describe(`
+        * * Field Name: Warranty Days
+        * * Display Name: Warranty  Days
+        * * SQL Data Type: smallint`),
+    Withholding_Amount: z.number().nullish().describe(`
+        * * Field Name: Withholding Amount
+        * * Display Name: Withholding  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Write_Offs_LIFE: z.number().nullish().describe(`
+        * * Field Name: Write Offs LIFE
+        * * Display Name: Write  Offs  LIFE
+        * * SQL Data Type: decimal(19, 5)`),
+    Write_Offs_LYR: z.number().nullish().describe(`
+        * * Field Name: Write Offs LYR
+        * * Display Name: Write  Offs  LYR
+        * * SQL Data Type: decimal(19, 5)`),
+    Write_Offs_YTD: z.number().nullish().describe(`
+        * * Field Name: Write Offs YTD
+        * * Display Name: Write  Offs  YTD
+        * * SQL Data Type: decimal(19, 5)`),
+    Writeoff_Account_Number: z.string().nullish().describe(`
+        * * Field Name: Writeoff Account Number
+        * * Display Name: Writeoff  Account  Number
+        * * SQL Data Type: varchar(129)`),
+    Zip_Code_from_Sales_Line_Item: z.string().nullish().describe(`
+        * * Field Name: Zip Code from Sales Line Item
+        * * Display Name: Zip  Code  from  Sales  Line  Item
+        * * SQL Data Type: varchar(11)`),
+    Zip_Code_from_Sales_Transaction: z.string().nullish().describe(`
+        * * Field Name: Zip Code from Sales Transaction
+        * * Display Name: Zip  Code  from  Sales  Transaction
+        * * SQL Data Type: varchar(11)`),
+    Zip_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: Zip from Customer Master
+        * * Display Name: Zip  from  Customer  Master
+        * * SQL Data Type: varchar(11)`),
+    Workflow_Approval_Status_Credit_Limit: z.string().nullish().describe(`
+        * * Field Name: Workflow Approval Status Credit Limit
+        * * Display Name: Workflow  Approval  Status  Credit  Limit
+        * * SQL Data Type: varchar(100)`),
+    Workflow_Priority_Credit_Limit: z.string().nullish().describe(`
+        * * Field Name: Workflow Priority Credit Limit
+        * * Display Name: Workflow  Priority  Credit  Limit
+        * * SQL Data Type: varchar(100)`),
+    Workflow_Approval_Status_Quote: z.string().nullish().describe(`
+        * * Field Name: Workflow Approval Status Quote
+        * * Display Name: Workflow  Approval  Status  Quote
+        * * SQL Data Type: varchar(100)`),
+    Workflow_Priority_Quote: z.string().nullish().describe(`
+        * * Field Name: Workflow Priority Quote
+        * * Display Name: Workflow  Priority  Quote
+        * * SQL Data Type: varchar(100)`),
+    Accounts_Receivable_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Accounts Receivable Account Number For Drillback
+        * * Display Name: Accounts  Receivable  Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Assembly_Variance_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Assembly Variance Account Number For Drillback
+        * * Display Name: Assembly  Variance  Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Cash_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Cash Account Number For Drillback
+        * * Display Name: Cash  Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Checkbook_ID_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Checkbook ID For Drillback
+        * * Display Name: Checkbook  ID For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    COGS_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: COGS Account Number For Drillback
+        * * Display Name: COGS Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    COGS_Inflation_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: COGS Inflation Account Number For Drillback
+        * * Display Name: COGS Inflation  Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    COGS_Monetary_Correction_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: COGS Monetary Correction Account Number For Drillback
+        * * Display Name: COGS Monetary  Correction  Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Customer_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Customer Number For Drillback
+        * * Display Name: Customer  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Damaged_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Damaged Account Number For Drillback
+        * * Display Name: Damaged  Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Discounts_Available_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Discounts Available Account Number For Drillback
+        * * Display Name: Discounts  Available  Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Discounts_Taken_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Discounts Taken Account Number For Drillback
+        * * Display Name: Discounts  Taken  Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Drop_Ship_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Drop Ship Account Number For Drillback
+        * * Display Name: Drop  Ship  Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Finance_Charge_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Finance Charge Account Number For Drillback
+        * * Display Name: Finance  Charge  Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    In_Service_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: In Service Account Number For Drillback
+        * * Display Name: In  Service  Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    In_Use_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: In Use Account Number For Drillback
+        * * Display Name: In  Use  Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Inventory_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Inventory Account Number For Drillback
+        * * Display Name: Inventory  Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Inventory_Inflation_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Inventory Inflation Account Number For Drillback
+        * * Display Name: Inventory  Inflation  Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Inventory_Monetary_Correction_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Inventory Monetary Correction Account Number For Drillback
+        * * Display Name: Inventory  Monetary  Correction  Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Inventory_Offset_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Inventory Offset Account Number For Drillback
+        * * Display Name: Inventory  Offset  Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Inventory_Returns_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Inventory Returns Account Number For Drillback
+        * * Display Name: Inventory  Returns  Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Item_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Item Number For Drillback
+        * * Display Name: Item  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Markdown_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Markdown Account Number For Drillback
+        * * Display Name: Markdown  Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Purch_Inflation_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Purch Inflation Account Number For Drillback
+        * * Display Name: Purch  Inflation  Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Purch_Monetary_Correction_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Purch Monetary Correction Account Number For Drillback
+        * * Display Name: Purch  Monetary  Correction  Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Purchase_Price_Variance_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Purchase Price Variance Account Number For Drillback
+        * * Display Name: Purchase  Price  Variance  Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Returns_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Returns Account Number For Drillback
+        * * Display Name: Returns  Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Sales_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Sales Account Number For Drillback
+        * * Display Name: Sales  Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Sales_Discounts_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Sales Discounts Account Number For Drillback
+        * * Display Name: Sales  Discounts  Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Sales_Returns_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Sales Returns Account Number For Drillback
+        * * Display Name: Sales  Returns  Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Salesperson_ID_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Salesperson ID For Drillback
+        * * Display Name: Salesperson  ID For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    SOP_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: SOP Number For Drillback
+        * * Display Name: SOP Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Unrealized_Purchase_Price_Variance_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Unrealized Purchase Price Variance Account Number For Drillback
+        * * Display Name: Unrealized  Purchase  Price  Variance  Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Variances_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Variances Account Number For Drillback
+        * * Display Name: Variances  Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Writeoff_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Writeoff Account Number For Drillback
+        * * Display Name: Writeoff  Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    ID: z.number().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: int`),
+    SalesTransactionID: z.number().nullish().describe(`
+        * * Field Name: SalesTransactionID
+        * * Display Name: Sales Transaction ID
+        * * SQL Data Type: int
+        * * Related Entity/Foreign Key: Sales Transactions (vwSalesTransactions.ID)`),
+});
+
+export type SalesLineItemEntityType = z.infer<typeof SalesLineItemSchema>;
+       
+/**
+ * zod schema definition for the entity Sales Line Items__client_membership
+ */
+export const SalesLineItem__client_membershipSchema = z.object({
+    SOP_Type: z.string().nullish().describe(`
+        * * Field Name: SOP Type
+        * * Display Name: SOP Type
+        * * SQL Data Type: varchar(100)`),
+    SOP_Number: z.string().nullish().describe(`
+        * * Field Name: SOP Number
+        * * Display Name: SOP Number
+        * * SQL Data Type: varchar(21)`),
+    Item_Number: z.string().nullish().describe(`
+        * * Field Name: Item Number
+        * * Display Name: Item  Number
+        * * SQL Data Type: varchar(31)
+        * * Related Entity/Foreign Key: Items (vwItems.Item Number)`),
+    Item_Description: z.string().nullish().describe(`
+        * * Field Name: Item Description
+        * * Display Name: Item  Description
+        * * SQL Data Type: varchar(101)`),
+    QTY: z.number().nullish().describe(`
+        * * Field Name: QTY
+        * * Display Name: QTY
+        * * SQL Data Type: decimal(19, 5)`),
+    Extended_Cost: z.number().nullish().describe(`
+        * * Field Name: Extended Cost
+        * * Display Name: Extended  Cost
+        * * SQL Data Type: decimal(19, 5)`),
+    Extended_Price: z.number().nullish().describe(`
+        * * Field Name: Extended Price
+        * * Display Name: Extended  Price
+        * * SQL Data Type: decimal(19, 5)`),
+    Unit_Cost: z.number().nullish().describe(`
+        * * Field Name: Unit Cost
+        * * Display Name: Unit  Cost
+        * * SQL Data Type: decimal(19, 5)`),
+    Unit_Price: z.number().nullish().describe(`
+        * * Field Name: Unit Price
+        * * Display Name: Unit  Price
+        * * SQL Data Type: decimal(19, 5)`),
+    Customer_Number: z.string().nullish().describe(`
+        * * Field Name: Customer Number
+        * * Display Name: Customer  Number
+        * * SQL Data Type: varchar(15)
+        * * Related Entity/Foreign Key: Customers (vwCustomers.Customer Number)`),
+    ABC_Code: z.string().nullish().describe(`
+        * * Field Name: ABC Code
+        * * Display Name: ABC Code
+        * * SQL Data Type: varchar(100)`),
+    Account_Amount: z.number().nullish().describe(`
+        * * Field Name: Account Amount
+        * * Display Name: Account  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Accounts_Receivable_Account_Number: z.string().nullish().describe(`
+        * * Field Name: Accounts Receivable Account Number
+        * * Display Name: Accounts  Receivable  Account  Number
+        * * SQL Data Type: varchar(129)`),
+    Actual_Ship_Date: z.date().nullish().describe(`
+        * * Field Name: Actual Ship Date
+        * * Display Name: Actual  Ship  Date
+        * * SQL Data Type: datetime`),
+    Actual_Ship_Date_from_Sales_Transaction: z.date().nullish().describe(`
+        * * Field Name: Actual Ship Date from Sales Transaction
+        * * Display Name: Actual  Ship  Date  from  Sales  Transaction
+        * * SQL Data Type: datetime`),
+    Address_1_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: Address 1 from Customer Master
+        * * Display Name: Address  1 from  Customer  Master
+        * * SQL Data Type: varchar(61)`),
+    Address_1_from_Sales_Line_Item: z.string().nullish().describe(`
+        * * Field Name: Address 1 from Sales Line Item
+        * * Display Name: Address  1 from  Sales  Line  Item
+        * * SQL Data Type: varchar(61)`),
+    Address_1_from_Sales_Transaction: z.string().nullish().describe(`
+        * * Field Name: Address 1 from Sales Transaction
+        * * Display Name: Address  1 from  Sales  Transaction
+        * * SQL Data Type: varchar(61)`),
+    Address_2_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: Address 2 from Customer Master
+        * * Display Name: Address  2 from  Customer  Master
+        * * SQL Data Type: varchar(61)`),
+    Address_2_from_Sales_Line_Item: z.string().nullish().describe(`
+        * * Field Name: Address 2 from Sales Line Item
+        * * Display Name: Address  2 from  Sales  Line  Item
+        * * SQL Data Type: varchar(61)`),
+    Address_2_from_Sales_Transaction: z.string().nullish().describe(`
+        * * Field Name: Address 2 from Sales Transaction
+        * * Display Name: Address  2 from  Sales  Transaction
+        * * SQL Data Type: varchar(61)`),
+    Address_3_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: Address 3 from Customer Master
+        * * Display Name: Address  3 from  Customer  Master
+        * * SQL Data Type: varchar(61)`),
+    Address_3_from_Sales_Line_Item: z.string().nullish().describe(`
+        * * Field Name: Address 3 from Sales Line Item
+        * * Display Name: Address  3 from  Sales  Line  Item
+        * * SQL Data Type: varchar(61)`),
+    Address_3_from_Sales_Transaction: z.string().nullish().describe(`
+        * * Field Name: Address 3 from Sales Transaction
+        * * Display Name: Address  3 from  Sales  Transaction
+        * * SQL Data Type: varchar(61)`),
+    Address_Code_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: Address Code from Customer Master
+        * * Display Name: Address  Code  from  Customer  Master
+        * * SQL Data Type: varchar(15)`),
+    Aging_Bucket1: z.number().nullish().describe(`
+        * * Field Name: Aging Bucket1
+        * * Display Name: Aging  Bucket 1
+        * * SQL Data Type: decimal(19, 5)`),
+    Aging_Bucket2: z.number().nullish().describe(`
+        * * Field Name: Aging Bucket2
+        * * Display Name: Aging  Bucket 2
+        * * SQL Data Type: decimal(19, 5)`),
+    Aging_Bucket3: z.number().nullish().describe(`
+        * * Field Name: Aging Bucket3
+        * * Display Name: Aging  Bucket 3
+        * * SQL Data Type: decimal(19, 5)`),
+    Aging_Bucket4: z.number().nullish().describe(`
+        * * Field Name: Aging Bucket4
+        * * Display Name: Aging  Bucket 4
+        * * SQL Data Type: decimal(19, 5)`),
+    Aging_Bucket5: z.number().nullish().describe(`
+        * * Field Name: Aging Bucket5
+        * * Display Name: Aging  Bucket 5
+        * * SQL Data Type: decimal(19, 5)`),
+    Aging_Bucket6: z.number().nullish().describe(`
+        * * Field Name: Aging Bucket6
+        * * Display Name: Aging  Bucket 6
+        * * SQL Data Type: decimal(19, 5)`),
+    Aging_Bucket7: z.number().nullish().describe(`
+        * * Field Name: Aging Bucket7
+        * * Display Name: Aging  Bucket 7
+        * * SQL Data Type: decimal(19, 5)`),
+    Allocate_By: z.string().nullish().describe(`
+        * * Field Name: Allocate By
+        * * Display Name: Allocate  By
+        * * SQL Data Type: varchar(100)`),
+    Allow_Back_Orders: z.string().nullish().describe(`
+        * * Field Name: Allow Back Orders
+        * * Display Name: Allow  Back  Orders
+        * * SQL Data Type: varchar(100)`),
+    Alternate_Item_1: z.string().nullish().describe(`
+        * * Field Name: Alternate Item 1
+        * * Display Name: Alternate  Item  1
+        * * SQL Data Type: varchar(31)`),
+    Alternate_Item_2: z.string().nullish().describe(`
+        * * Field Name: Alternate Item 2
+        * * Display Name: Alternate  Item  2
+        * * SQL Data Type: varchar(31)`),
+    Apply_Withholding: z.string().nullish().describe(`
+        * * Field Name: Apply Withholding
+        * * Display Name: Apply  Withholding
+        * * SQL Data Type: varchar(100)`),
+    Assembly_Variance_Account_Number: z.string().nullish().describe(`
+        * * Field Name: Assembly Variance Account Number
+        * * Display Name: Assembly  Variance  Account  Number
+        * * SQL Data Type: varchar(129)`),
+    Average_Days_To_Pay___Life: z.number().nullish().describe(`
+        * * Field Name: Average Days To Pay - Life
+        * * Display Name: Average  Days  To  Pay  - Life
+        * * SQL Data Type: smallint`),
+    Average_Days_To_Pay___Year: z.number().nullish().describe(`
+        * * Field Name: Average Days To Pay - Year
+        * * Display Name: Average  Days  To  Pay  - Year
+        * * SQL Data Type: smallint`),
+    Average_Days_to_Pay___LYR: z.number().nullish().describe(`
+        * * Field Name: Average Days to Pay - LYR
+        * * Display Name: Average  Days  to  Pay  - LYR
+        * * SQL Data Type: smallint`),
+    Back_Order_Date: z.date().nullish().describe(`
+        * * Field Name: Back Order Date
+        * * Display Name: Back  Order  Date
+        * * SQL Data Type: datetime`),
+    Backout_Freight_Amount: z.number().nullish().describe(`
+        * * Field Name: Backout Freight Amount
+        * * Display Name: Backout  Freight  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Backout_Misc_Amount: z.number().nullish().describe(`
+        * * Field Name: Backout Misc Amount
+        * * Display Name: Backout  Misc  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Backout_Sales_Amount: z.number().nullish().describe(`
+        * * Field Name: Backout Sales Amount
+        * * Display Name: Backout  Sales  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Backout_Tax_Amount: z.number().nullish().describe(`
+        * * Field Name: Backout Tax Amount
+        * * Display Name: Backout  Tax  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Balance_Type: z.string().nullish().describe(`
+        * * Field Name: Balance Type
+        * * Display Name: Balance  Type
+        * * SQL Data Type: varchar(100)`),
+    Bank_Branch: z.string().nullish().describe(`
+        * * Field Name: Bank Branch
+        * * Display Name: Bank  Branch
+        * * SQL Data Type: varchar(21)`),
+    Bank_Name: z.string().nullish().describe(`
+        * * Field Name: Bank Name
+        * * Display Name: Bank  Name
+        * * SQL Data Type: varchar(31)`),
+    Based_On_Invoice_Total: z.string().nullish().describe(`
+        * * Field Name: Based On Invoice Total
+        * * Display Name: Based  On  Invoice  Total
+        * * SQL Data Type: varchar(100)`),
+    Based_On_Invoice_Total_from_Sales_Transaction: z.string().nullish().describe(`
+        * * Field Name: Based On Invoice Total from Sales Transaction
+        * * Display Name: Based  On  Invoice  Total  from  Sales  Transaction
+        * * SQL Data Type: varchar(100)`),
+    Batch_Number: z.string().nullish().describe(`
+        * * Field Name: Batch Number
+        * * Display Name: Batch  Number
+        * * SQL Data Type: varchar(15)`),
+    Batch_Source: z.string().nullish().describe(`
+        * * Field Name: Batch Source
+        * * Display Name: Batch  Source
+        * * SQL Data Type: varchar(15)`),
+    Break_Field_1: z.number().nullish().describe(`
+        * * Field Name: Break Field 1
+        * * Display Name: Break  Field  1
+        * * SQL Data Type: smallint`),
+    Break_Field_2: z.number().nullish().describe(`
+        * * Field Name: Break Field 2
+        * * Display Name: Break  Field  2
+        * * SQL Data Type: smallint`),
+    Break_Field_3: z.number().nullish().describe(`
+        * * Field Name: Break Field 3
+        * * Display Name: Break  Field  3
+        * * SQL Data Type: smallint`),
+    COD_Amount: z.number().nullish().describe(`
+        * * Field Name: COD Amount
+        * * Display Name: COD Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    COGS_Account_Number: z.string().nullish().describe(`
+        * * Field Name: COGS Account Number
+        * * Display Name: COGS Account  Number
+        * * SQL Data Type: varchar(129)`),
+    COGS_Account_Number_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: COGS Account Number from Customer Master
+        * * Display Name: COGS Account  Number  from  Customer  Master
+        * * SQL Data Type: varchar(129)`),
+    COGS_Account_Number_from_Item_Master: z.string().nullish().describe(`
+        * * Field Name: COGS Account Number from Item Master
+        * * Display Name: COGS Account  Number  from  Item  Master
+        * * SQL Data Type: varchar(129)`),
+    COGS_Inflation_Account_Number: z.string().nullish().describe(`
+        * * Field Name: COGS Inflation Account Number
+        * * Display Name: COGS Inflation  Account  Number
+        * * SQL Data Type: varchar(129)`),
+    COGS_Monetary_Correction_Account_Number: z.string().nullish().describe(`
+        * * Field Name: COGS Monetary Correction Account Number
+        * * Display Name: COGS Monetary  Correction  Account  Number
+        * * SQL Data Type: varchar(129)`),
+    Cash_Account_Number: z.string().nullish().describe(`
+        * * Field Name: Cash Account Number
+        * * Display Name: Cash  Account  Number
+        * * SQL Data Type: varchar(129)`),
+    Checkbook_ID: z.string().nullish().describe(`
+        * * Field Name: Checkbook ID
+        * * Display Name: Checkbook  ID
+        * * SQL Data Type: varchar(15)`),
+    City_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: City from Customer Master
+        * * Display Name: City  from  Customer  Master
+        * * SQL Data Type: varchar(35)`),
+    City_from_Sales_Line_Item: z.string().nullish().describe(`
+        * * Field Name: City from Sales Line Item
+        * * Display Name: City  from  Sales  Line  Item
+        * * SQL Data Type: varchar(35)`),
+    City_from_Sales_Transaction: z.string().nullish().describe(`
+        * * Field Name: City from Sales Transaction
+        * * Display Name: City  from  Sales  Transaction
+        * * SQL Data Type: varchar(35)`),
+    Comment1_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: Comment1 from Customer Master
+        * * Display Name: Comment 1 from  Customer  Master
+        * * SQL Data Type: varchar(31)`),
+    Comment2_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: Comment2 from Customer Master
+        * * Display Name: Comment 2 from  Customer  Master
+        * * SQL Data Type: varchar(31)`),
+    Comment_1: z.string().nullish().describe(`
+        * * Field Name: Comment 1
+        * * Display Name: Comment  1
+        * * SQL Data Type: varchar(51)`),
+    Comment_2: z.string().nullish().describe(`
+        * * Field Name: Comment 2
+        * * Display Name: Comment  2
+        * * SQL Data Type: varchar(51)`),
+    Comment_3: z.string().nullish().describe(`
+        * * Field Name: Comment 3
+        * * Display Name: Comment  3
+        * * SQL Data Type: varchar(51)`),
+    Comment_4: z.string().nullish().describe(`
+        * * Field Name: Comment 4
+        * * Display Name: Comment  4
+        * * SQL Data Type: varchar(51)`),
+    Comment_ID: z.string().nullish().describe(`
+        * * Field Name: Comment ID
+        * * Display Name: Comment  ID
+        * * SQL Data Type: varchar(15)`),
+    Comment_ID_from_Sales_Transaction: z.string().nullish().describe(`
+        * * Field Name: Comment ID from Sales Transaction
+        * * Display Name: Comment  ID from  Sales  Transaction
+        * * SQL Data Type: varchar(15)`),
+    Commission_Amount: z.number().nullish().describe(`
+        * * Field Name: Commission Amount
+        * * Display Name: Commission  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Commission_Applied_To: z.string().nullish().describe(`
+        * * Field Name: Commission Applied To
+        * * Display Name: Commission  Applied  To
+        * * SQL Data Type: varchar(100)`),
+    Commission_Sale_Amount: z.number().nullish().describe(`
+        * * Field Name: Commission Sale Amount
+        * * Display Name: Commission  Sale  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Component_Sequence: z.number().nullish().describe(`
+        * * Field Name: Component Sequence
+        * * Display Name: Component  Sequence
+        * * SQL Data Type: int`),
+    Contact_Person_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: Contact Person from Customer Master
+        * * Display Name: Contact  Person  from  Customer  Master
+        * * SQL Data Type: varchar(61)`),
+    Contact_Person_from_Sales_Line_Item: z.string().nullish().describe(`
+        * * Field Name: Contact Person from Sales Line Item
+        * * Display Name: Contact  Person  from  Sales  Line  Item
+        * * SQL Data Type: varchar(61)`),
+    Contact_Person_from_Sales_Transaction: z.string().nullish().describe(`
+        * * Field Name: Contact Person from Sales Transaction
+        * * Display Name: Contact  Person  from  Sales  Transaction
+        * * SQL Data Type: varchar(61)`),
+    Contract_End_Date: z.date().nullish().describe(`
+        * * Field Name: Contract End Date
+        * * Display Name: Contract  End  Date
+        * * SQL Data Type: datetime`),
+    Contract_Item_Number: z.string().nullish().describe(`
+        * * Field Name: Contract Item Number
+        * * Display Name: Contract  Item  Number
+        * * SQL Data Type: varchar(31)`),
+    Contract_Number: z.string().nullish().describe(`
+        * * Field Name: Contract Number
+        * * Display Name: Contract  Number
+        * * SQL Data Type: varchar(11)`),
+    Contract_Serial_Number: z.string().nullish().describe(`
+        * * Field Name: Contract Serial Number
+        * * Display Name: Contract  Serial  Number
+        * * SQL Data Type: varchar(21)`),
+    Contract_Start_Date: z.date().nullish().describe(`
+        * * Field Name: Contract Start Date
+        * * Display Name: Contract  Start  Date
+        * * SQL Data Type: datetime`),
+    Corporate_Customer_Number: z.string().nullish().describe(`
+        * * Field Name: Corporate Customer Number
+        * * Display Name: Corporate  Customer  Number
+        * * SQL Data Type: varchar(15)`),
+    Correction: z.string().nullish().describe(`
+        * * Field Name: Correction
+        * * Display Name: Correction
+        * * SQL Data Type: varchar(100)`),
+    Correction_to_Nonexisting_Transaction: z.string().nullish().describe(`
+        * * Field Name: Correction to Nonexisting Transaction
+        * * Display Name: Correction  to  Nonexisting  Transaction
+        * * SQL Data Type: varchar(100)`),
+    Country_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: Country from Customer Master
+        * * Display Name: Country  from  Customer  Master
+        * * SQL Data Type: varchar(61)`),
+    Country_from_Sales_Line_Item: z.string().nullish().describe(`
+        * * Field Name: Country from Sales Line Item
+        * * Display Name: Country  from  Sales  Line  Item
+        * * SQL Data Type: varchar(61)`),
+    Country_from_Sales_Transaction: z.string().nullish().describe(`
+        * * Field Name: Country from Sales Transaction
+        * * Display Name: Country  from  Sales  Transaction
+        * * SQL Data Type: varchar(61)`),
+    Created_Date_from_Customer_Master: z.date().nullish().describe(`
+        * * Field Name: Created Date from Customer Master
+        * * Display Name: Created  Date  from  Customer  Master
+        * * SQL Data Type: datetime`),
+    Created_Date_from_Item_Master: z.date().nullish().describe(`
+        * * Field Name: Created Date from Item Master
+        * * Display Name: Created  Date  from  Item  Master
+        * * SQL Data Type: datetime`),
+    Created_Date_from_Sales_Transaction: z.date().nullish().describe(`
+        * * Field Name: Created Date from Sales Transaction
+        * * Display Name: Created  Date  from  Sales  Transaction
+        * * SQL Data Type: datetime`),
+    Credit_Card_Exp_Date: z.date().nullish().describe(`
+        * * Field Name: Credit Card Exp Date
+        * * Display Name: Credit  Card  Exp  Date
+        * * SQL Data Type: datetime`),
+    Credit_Card_ID: z.string().nullish().describe(`
+        * * Field Name: Credit Card ID
+        * * Display Name: Credit  Card  ID
+        * * SQL Data Type: varchar(15)`),
+    Credit_Limit_Amount: z.number().nullish().describe(`
+        * * Field Name: Credit Limit Amount
+        * * Display Name: Credit  Limit  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Credit_Limit_Period: z.number().nullish().describe(`
+        * * Field Name: Credit Limit Period
+        * * Display Name: Credit  Limit  Period
+        * * SQL Data Type: smallint`),
+    Credit_Limit_Period_Amount: z.number().nullish().describe(`
+        * * Field Name: Credit Limit Period Amount
+        * * Display Name: Credit  Limit  Period  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Credit_Limit_Type: z.string().nullish().describe(`
+        * * Field Name: Credit Limit Type
+        * * Display Name: Credit  Limit  Type
+        * * SQL Data Type: varchar(100)`),
+    Currency_ID: z.string().nullish().describe(`
+        * * Field Name: Currency ID
+        * * Display Name: Currency  ID
+        * * SQL Data Type: varchar(15)`),
+    Currency_ID_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: Currency ID from Customer Master
+        * * Display Name: Currency  ID from  Customer  Master
+        * * SQL Data Type: varchar(15)`),
+    Currency_Index: z.number().nullish().describe(`
+        * * Field Name: Currency Index
+        * * Display Name: Currency  Index
+        * * SQL Data Type: smallint`),
+    Currency_Index_from_Sales_Transaction: z.number().nullish().describe(`
+        * * Field Name: Currency Index from Sales Transaction
+        * * Display Name: Currency  Index  from  Sales  Transaction
+        * * SQL Data Type: smallint`),
+    Current_Cost: z.number().nullish().describe(`
+        * * Field Name: Current Cost
+        * * Display Name: Current  Cost
+        * * SQL Data Type: decimal(19, 5)`),
+    Customer_Balance: z.number().nullish().describe(`
+        * * Field Name: Customer Balance
+        * * Display Name: Customer  Balance
+        * * SQL Data Type: decimal(19, 5)`),
+    Customer_Class: z.string().nullish().describe(`
+        * * Field Name: Customer Class
+        * * Display Name: Customer  Class
+        * * SQL Data Type: varchar(15)`),
+    Customer_Discount: z.number().nullish().describe(`
+        * * Field Name: Customer Discount
+        * * Display Name: Customer  Discount
+        * * SQL Data Type: decimal(13, 6)`),
+    Customer_Name: z.string().nullish().describe(`
+        * * Field Name: Customer Name
+        * * Display Name: Customer  Name
+        * * SQL Data Type: varchar(65)`),
+    Customer_Name_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: Customer Name from Customer Master
+        * * Display Name: Customer  Name  from  Customer  Master
+        * * SQL Data Type: varchar(65)`),
+    Customer_PO_Number: z.string().nullish().describe(`
+        * * Field Name: Customer PO Number
+        * * Display Name: Customer  PO Number
+        * * SQL Data Type: varchar(21)`),
+    Damaged_Account_Number: z.string().nullish().describe(`
+        * * Field Name: Damaged Account Number
+        * * Display Name: Damaged  Account  Number
+        * * SQL Data Type: varchar(129)`),
+    Damaged_Account_Number_from_Item_Master: z.string().nullish().describe(`
+        * * Field Name: Damaged Account Number from Item Master
+        * * Display Name: Damaged  Account  Number  from  Item  Master
+        * * SQL Data Type: varchar(129)`),
+    Date_Last_Repeated: z.date().nullish().describe(`
+        * * Field Name: Date Last Repeated
+        * * Display Name: Date  Last  Repeated
+        * * SQL Data Type: datetime`),
+    Days_to_Increment: z.number().nullish().describe(`
+        * * Field Name: Days to Increment
+        * * Display Name: Days  to  Increment
+        * * SQL Data Type: smallint`),
+    Decimal_Places_Currency: z.string().nullish().describe(`
+        * * Field Name: Decimal Places Currency
+        * * Display Name: Decimal  Places  Currency
+        * * SQL Data Type: varchar(100)`),
+    Decimal_Places_Currency_from_Item_Master: z.string().nullish().describe(`
+        * * Field Name: Decimal Places Currency from Item Master
+        * * Display Name: Decimal  Places  Currency  from  Item  Master
+        * * SQL Data Type: varchar(100)`),
+    Decimal_Places_QTYS: z.string().nullish().describe(`
+        * * Field Name: Decimal Places QTYS
+        * * Display Name: Decimal  Places  QTYS
+        * * SQL Data Type: varchar(100)`),
+    Decimal_Places_QTYS_from_Item_Master: z.string().nullish().describe(`
+        * * Field Name: Decimal Places QTYS from Item Master
+        * * Display Name: Decimal  Places  QTYS from  Item  Master
+        * * SQL Data Type: varchar(100)`),
+    Default_Cash_Account_Type: z.string().nullish().describe(`
+        * * Field Name: Default Cash Account Type
+        * * Display Name: Default  Cash  Account  Type
+        * * SQL Data Type: varchar(100)`),
+    Denomination_Exchange_Rate: z.number().nullish().describe(`
+        * * Field Name: Denomination Exchange Rate
+        * * Display Name: Denomination  Exchange  Rate
+        * * SQL Data Type: decimal(19, 7)`),
+    Deposit_Received: z.number().nullish().describe(`
+        * * Field Name: Deposit Received
+        * * Display Name: Deposit  Received
+        * * SQL Data Type: decimal(19, 5)`),
+    Deposits_Received: z.number().nullish().describe(`
+        * * Field Name: Deposits Received
+        * * Display Name: Deposits  Received
+        * * SQL Data Type: decimal(19, 5)`),
+    Dest_Batch_1: z.string().nullish().describe(`
+        * * Field Name: Dest Batch 1
+        * * Display Name: Dest  Batch  1
+        * * SQL Data Type: varchar(15)`),
+    Dest_Batch_2: z.string().nullish().describe(`
+        * * Field Name: Dest Batch 2
+        * * Display Name: Dest  Batch  2
+        * * SQL Data Type: varchar(15)`),
+    Discount_Available_Amount: z.number().nullish().describe(`
+        * * Field Name: Discount Available Amount
+        * * Display Name: Discount  Available  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Discount_Available_Freight: z.number().nullish().describe(`
+        * * Field Name: Discount Available Freight
+        * * Display Name: Discount  Available  Freight
+        * * SQL Data Type: decimal(19, 5)`),
+    Discount_Available_Misc: z.number().nullish().describe(`
+        * * Field Name: Discount Available Misc
+        * * Display Name: Discount  Available  Misc
+        * * SQL Data Type: decimal(19, 5)`),
+    Discount_Available_Sales: z.number().nullish().describe(`
+        * * Field Name: Discount Available Sales
+        * * Display Name: Discount  Available  Sales
+        * * SQL Data Type: decimal(19, 5)`),
+    Discount_Available_Taken: z.number().nullish().describe(`
+        * * Field Name: Discount Available Taken
+        * * Display Name: Discount  Available  Taken
+        * * SQL Data Type: decimal(19, 5)`),
+    Discount_Date: z.date().nullish().describe(`
+        * * Field Name: Discount Date
+        * * Display Name: Discount  Date
+        * * SQL Data Type: datetime`),
+    Discount_Dollar_Amount: z.number().nullish().describe(`
+        * * Field Name: Discount Dollar Amount
+        * * Display Name: Discount  Dollar  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Discount_Grace_Period: z.number().nullish().describe(`
+        * * Field Name: Discount Grace Period
+        * * Display Name: Discount  Grace  Period
+        * * SQL Data Type: smallint`),
+    Discount_Percent_Amount: z.number().nullish().describe(`
+        * * Field Name: Discount Percent Amount
+        * * Display Name: Discount  Percent  Amount
+        * * SQL Data Type: decimal(13, 6)`),
+    Discount_Returned: z.number().nullish().describe(`
+        * * Field Name: Discount Returned
+        * * Display Name: Discount  Returned
+        * * SQL Data Type: decimal(19, 5)`),
+    Discount_Taken_Amount: z.number().nullish().describe(`
+        * * Field Name: Discount Taken Amount
+        * * Display Name: Discount  Taken  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Discounts_Available_Account_Number: z.string().nullish().describe(`
+        * * Field Name: Discounts Available Account Number
+        * * Display Name: Discounts  Available  Account  Number
+        * * SQL Data Type: varchar(129)`),
+    Discounts_Taken_Account_Number: z.string().nullish().describe(`
+        * * Field Name: Discounts Taken Account Number
+        * * Display Name: Discounts  Taken  Account  Number
+        * * SQL Data Type: varchar(129)`),
+    Document_Amount: z.number().nullish().describe(`
+        * * Field Name: Document Amount
+        * * Display Name: Document  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Document_Date: z.date().nullish().describe(`
+        * * Field Name: Document Date
+        * * Display Name: Document  Date
+        * * SQL Data Type: datetime`),
+    Document_Format_ID: z.string().nullish().describe(`
+        * * Field Name: Document Format ID
+        * * Display Name: Document  Format  ID
+        * * SQL Data Type: varchar(15)`),
+    Document_ID: z.string().nullish().describe(`
+        * * Field Name: Document ID
+        * * Display Name: Document  ID
+        * * SQL Data Type: varchar(15)`),
+    Document_Number_Corrected: z.string().nullish().describe(`
+        * * Field Name: Document Number Corrected
+        * * Display Name: Document  Number  Corrected
+        * * SQL Data Type: varchar(21)`),
+    Document_Number_Corrected_from_Sales_Transaction: z.string().nullish().describe(`
+        * * Field Name: Document Number Corrected from Sales Transaction
+        * * Display Name: Document  Number  Corrected  from  Sales  Transaction
+        * * SQL Data Type: varchar(21)`),
+    Document_Status: z.string().nullish().describe(`
+        * * Field Name: Document Status
+        * * Display Name: Document  Status
+        * * SQL Data Type: varchar(100)`),
+    Drop_Ship: z.number().nullish().describe(`
+        * * Field Name: Drop Ship
+        * * Display Name: Drop  Ship
+        * * SQL Data Type: smallint`),
+    Drop_Ship_Account_Number: z.string().nullish().describe(`
+        * * Field Name: Drop Ship Account Number
+        * * Display Name: Drop  Ship  Account  Number
+        * * SQL Data Type: varchar(129)`),
+    Due_Date: z.date().nullish().describe(`
+        * * Field Name: Due Date
+        * * Display Name: Due  Date
+        * * SQL Data Type: datetime`),
+    Due_Date_Grace_Period: z.number().nullish().describe(`
+        * * Field Name: Due Date Grace Period
+        * * Display Name: Due  Date  Grace  Period
+        * * SQL Data Type: smallint`),
+    EC_Transaction: z.string().nullish().describe(`
+        * * Field Name: EC Transaction
+        * * Display Name: EC Transaction
+        * * SQL Data Type: varchar(100)`),
+    Exceptional_Demand_from_Sales_Line_Item: z.string().nullish().describe(`
+        * * Field Name: Exceptional Demand from Sales Line Item
+        * * Display Name: Exceptional  Demand  from  Sales  Line  Item
+        * * SQL Data Type: varchar(100)`),
+    Exchange_Date: z.date().nullish().describe(`
+        * * Field Name: Exchange Date
+        * * Display Name: Exchange  Date
+        * * SQL Data Type: datetime`),
+    Exchange_Rate: z.number().nullish().describe(`
+        * * Field Name: Exchange Rate
+        * * Display Name: Exchange  Rate
+        * * SQL Data Type: decimal(19, 7)`),
+    Exchange_Table_ID: z.string().nullish().describe(`
+        * * Field Name: Exchange Table ID
+        * * Display Name: Exchange  Table  ID
+        * * SQL Data Type: varchar(15)`),
+    Existing_Qty_Available: z.number().nullish().describe(`
+        * * Field Name: Existing Qty Available
+        * * Display Name: Existing  Qty  Available
+        * * SQL Data Type: decimal(19, 5)`),
+    Existing_Qty_Selected: z.number().nullish().describe(`
+        * * Field Name: Existing Qty Selected
+        * * Display Name: Existing  Qty  Selected
+        * * SQL Data Type: decimal(19, 5)`),
+    Extended_Cost_from_Sales_Transaction: z.number().nullish().describe(`
+        * * Field Name: Extended Cost from Sales Transaction
+        * * Display Name: Extended  Cost  from  Sales  Transaction
+        * * SQL Data Type: decimal(19, 5)`),
+    Fax_Number_from_Sales_Line_Item: z.string().nullish().describe(`
+        * * Field Name: Fax Number from Sales Line Item
+        * * Display Name: Fax  Number  from  Sales  Line  Item
+        * * SQL Data Type: varchar(21)`),
+    Fax_Number_from_Sales_Transaction: z.string().nullish().describe(`
+        * * Field Name: Fax Number from Sales Transaction
+        * * Display Name: Fax  Number  from  Sales  Transaction
+        * * SQL Data Type: varchar(21)`),
+    Fax_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: Fax from Customer Master
+        * * Display Name: Fax  from  Customer  Master
+        * * SQL Data Type: varchar(21)`),
+    Finance_Charge_Account_Number: z.string().nullish().describe(`
+        * * Field Name: Finance Charge Account Number
+        * * Display Name: Finance  Charge  Account  Number
+        * * SQL Data Type: varchar(129)`),
+    Finance_Charge_Amt_Type: z.string().nullish().describe(`
+        * * Field Name: Finance Charge Amt Type
+        * * Display Name: Finance  Charge  Amt  Type
+        * * SQL Data Type: varchar(100)`),
+    Finance_Charge_Dollar: z.number().nullish().describe(`
+        * * Field Name: Finance Charge Dollar
+        * * Display Name: Finance  Charge  Dollar
+        * * SQL Data Type: decimal(19, 5)`),
+    Finance_Charge_ID: z.string().nullish().describe(`
+        * * Field Name: Finance Charge ID
+        * * Display Name: Finance  Charge  ID
+        * * SQL Data Type: varchar(15)`),
+    Finance_Charge_Percent: z.number().nullish().describe(`
+        * * Field Name: Finance Charge Percent
+        * * Display Name: Finance  Charge  Percent
+        * * SQL Data Type: decimal(13, 6)`),
+    Finance_Charges_CYTD: z.number().nullish().describe(`
+        * * Field Name: Finance Charges CYTD
+        * * Display Name: Finance  Charges  CYTD
+        * * SQL Data Type: decimal(19, 5)`),
+    Finance_Charges_LYR_Calendar: z.number().nullish().describe(`
+        * * Field Name: Finance Charges LYR Calendar
+        * * Display Name: Finance  Charges  LYR Calendar
+        * * SQL Data Type: decimal(19, 5)`),
+    First_Invoice_Date: z.date().nullish().describe(`
+        * * Field Name: First Invoice Date
+        * * Display Name: First  Invoice  Date
+        * * SQL Data Type: datetime`),
+    Freight_Amount: z.number().nullish().describe(`
+        * * Field Name: Freight Amount
+        * * Display Name: Freight  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Freight_Schedule_ID: z.string().nullish().describe(`
+        * * Field Name: Freight Schedule ID
+        * * Display Name: Freight  Schedule  ID
+        * * SQL Data Type: varchar(15)`),
+    Freight_Tax_Amount: z.number().nullish().describe(`
+        * * Field Name: Freight Tax Amount
+        * * Display Name: Freight  Tax  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Freight_Taxable: z.string().nullish().describe(`
+        * * Field Name: Freight Taxable
+        * * Display Name: Freight  Taxable
+        * * SQL Data Type: varchar(100)`),
+    Fulfillment_Date: z.date().nullish().describe(`
+        * * Field Name: Fulfillment Date
+        * * Display Name: Fulfillment  Date
+        * * SQL Data Type: datetime`),
+    Fulfillment_Date_from_Sales_Transaction: z.date().nullish().describe(`
+        * * Field Name: Fulfillment Date from Sales Transaction
+        * * Display Name: Fulfillment  Date  from  Sales  Transaction
+        * * SQL Data Type: datetime`),
+    GL_Posting_Date: z.date().nullish().describe(`
+        * * Field Name: GL Posting Date
+        * * Display Name: GL Posting  Date
+        * * SQL Data Type: datetime`),
+    Governmental_Corporate_ID: z.string().nullish().describe(`
+        * * Field Name: Governmental Corporate ID
+        * * Display Name: Governmental  Corporate  ID
+        * * SQL Data Type: varchar(31)`),
+    Governmental_Individual_ID: z.string().nullish().describe(`
+        * * Field Name: Governmental Individual ID
+        * * Display Name: Governmental  Individual  ID
+        * * SQL Data Type: varchar(31)`),
+    High_Balance_LTD: z.number().nullish().describe(`
+        * * Field Name: High Balance LTD
+        * * Display Name: High  Balance  LTD
+        * * SQL Data Type: decimal(19, 5)`),
+    High_Balance_LYR: z.number().nullish().describe(`
+        * * Field Name: High Balance LYR
+        * * Display Name: High  Balance  LYR
+        * * SQL Data Type: decimal(19, 5)`),
+    High_Balance_YTD: z.number().nullish().describe(`
+        * * Field Name: High Balance YTD
+        * * Display Name: High  Balance  YTD
+        * * SQL Data Type: decimal(19, 5)`),
+    Hold: z.string().nullish().describe(`
+        * * Field Name: Hold
+        * * Display Name: Hold
+        * * SQL Data Type: varchar(100)`),
+    IV_Item_Taxable: z.string().nullish().describe(`
+        * * Field Name: IV Item Taxable
+        * * Display Name: IV Item  Taxable
+        * * SQL Data Type: varchar(100)`),
+    In_Service_Account_Number: z.string().nullish().describe(`
+        * * Field Name: In Service Account Number
+        * * Display Name: In  Service  Account  Number
+        * * SQL Data Type: varchar(129)`),
+    In_Service_Account_Number_from_Item_Master: z.string().nullish().describe(`
+        * * Field Name: In Service Account Number from Item Master
+        * * Display Name: In  Service  Account  Number  from  Item  Master
+        * * SQL Data Type: varchar(129)`),
+    In_Use_Account_Number: z.string().nullish().describe(`
+        * * Field Name: In Use Account Number
+        * * Display Name: In  Use  Account  Number
+        * * SQL Data Type: varchar(129)`),
+    In_Use_Account_Number_from_Item_Master: z.string().nullish().describe(`
+        * * Field Name: In Use Account Number from Item Master
+        * * Display Name: In  Use  Account  Number  from  Item  Master
+        * * SQL Data Type: varchar(129)`),
+    Inactive: z.string().nullish().describe(`
+        * * Field Name: Inactive
+        * * Display Name: Inactive
+        * * SQL Data Type: varchar(100)`),
+    Inventory_Account_Number: z.string().nullish().describe(`
+        * * Field Name: Inventory Account Number
+        * * Display Name: Inventory  Account  Number
+        * * SQL Data Type: varchar(129)`),
+    Inventory_Account_Number_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: Inventory Account Number from Customer Master
+        * * Display Name: Inventory  Account  Number  from  Customer  Master
+        * * SQL Data Type: varchar(129)`),
+    Inventory_Account_Number_from_Item_Master: z.string().nullish().describe(`
+        * * Field Name: Inventory Account Number from Item Master
+        * * Display Name: Inventory  Account  Number  from  Item  Master
+        * * SQL Data Type: varchar(129)`),
+    Inventory_Inflation_Account_Number: z.string().nullish().describe(`
+        * * Field Name: Inventory Inflation Account Number
+        * * Display Name: Inventory  Inflation  Account  Number
+        * * SQL Data Type: varchar(129)`),
+    Inventory_Monetary_Correction_Account_Number: z.string().nullish().describe(`
+        * * Field Name: Inventory Monetary Correction Account Number
+        * * Display Name: Inventory  Monetary  Correction  Account  Number
+        * * SQL Data Type: varchar(129)`),
+    Inventory_Offset_Account_Number: z.string().nullish().describe(`
+        * * Field Name: Inventory Offset Account Number
+        * * Display Name: Inventory  Offset  Account  Number
+        * * SQL Data Type: varchar(129)`),
+    Inventory_Returns_Account_Number: z.string().nullish().describe(`
+        * * Field Name: Inventory Returns Account Number
+        * * Display Name: Inventory  Returns  Account  Number
+        * * SQL Data Type: varchar(129)`),
+    Invoice_Date: z.date().nullish().describe(`
+        * * Field Name: Invoice Date
+        * * Display Name: Invoice  Date
+        * * SQL Data Type: datetime`),
+    Item_Class_Code: z.string().nullish().describe(`
+        * * Field Name: Item Class Code
+        * * Display Name: Item  Class  Code
+        * * SQL Data Type: varchar(11)`),
+    Item_Code: z.string().nullish().describe(`
+        * * Field Name: Item Code
+        * * Display Name: Item  Code
+        * * SQL Data Type: varchar(15)`),
+    Item_Code_from_Item_Master: z.string().nullish().describe(`
+        * * Field Name: Item Code from Item Master
+        * * Display Name: Item  Code  from  Item  Master
+        * * SQL Data Type: varchar(15)`),
+    Item_Description_from_Item_Master: z.string().nullish().describe(`
+        * * Field Name: Item Description from Item Master
+        * * Display Name: Item  Description  from  Item  Master
+        * * SQL Data Type: varchar(101)`),
+    Item_Generic_Description: z.string().nullish().describe(`
+        * * Field Name: Item Generic Description
+        * * Display Name: Item  Generic  Description
+        * * SQL Data Type: varchar(11)`),
+    Item_Shipping_Weight: z.number().nullish().describe(`
+        * * Field Name: Item Shipping Weight
+        * * Display Name: Item  Shipping  Weight
+        * * SQL Data Type: decimal(18, 6)`),
+    Item_Short_Name: z.string().nullish().describe(`
+        * * Field Name: Item Short Name
+        * * Display Name: Item  Short  Name
+        * * SQL Data Type: varchar(15)`),
+    Item_Tax_Schedule_ID: z.string().nullish().describe(`
+        * * Field Name: Item Tax Schedule ID
+        * * Display Name: Item  Tax  Schedule  ID
+        * * SQL Data Type: varchar(15)`),
+    Item_Tax_Schedule_ID_from_Item_Master: z.string().nullish().describe(`
+        * * Field Name: Item Tax Schedule ID from Item Master
+        * * Display Name: Item  Tax  Schedule  ID from  Item  Master
+        * * SQL Data Type: varchar(15)`),
+    Item_Tracking_Option: z.string().nullish().describe(`
+        * * Field Name: Item Tracking Option
+        * * Display Name: Item  Tracking  Option
+        * * SQL Data Type: varchar(100)`),
+    Item_Type: z.string().nullish().describe(`
+        * * Field Name: Item Type
+        * * Display Name: Item  Type
+        * * SQL Data Type: varchar(100)`),
+    Keep_Calendar_History: z.string().nullish().describe(`
+        * * Field Name: Keep Calendar History
+        * * Display Name: Keep  Calendar  History
+        * * SQL Data Type: varchar(100)`),
+    Keep_Calendar_History_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: Keep Calendar History from Customer Master
+        * * Display Name: Keep  Calendar  History  from  Customer  Master
+        * * SQL Data Type: varchar(100)`),
+    Keep_Distribution_History: z.string().nullish().describe(`
+        * * Field Name: Keep Distribution History
+        * * Display Name: Keep  Distribution  History
+        * * SQL Data Type: varchar(100)`),
+    Keep_Distribution_History_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: Keep Distribution History from Customer Master
+        * * Display Name: Keep  Distribution  History  from  Customer  Master
+        * * SQL Data Type: varchar(100)`),
+    Keep_Period_History: z.string().nullish().describe(`
+        * * Field Name: Keep Period History
+        * * Display Name: Keep  Period  History
+        * * SQL Data Type: varchar(100)`),
+    Keep_Period_History_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: Keep Period History from Customer Master
+        * * Display Name: Keep  Period  History  from  Customer  Master
+        * * SQL Data Type: varchar(100)`),
+    Keep_Trx_History: z.string().nullish().describe(`
+        * * Field Name: Keep Trx History
+        * * Display Name: Keep  Trx  History
+        * * SQL Data Type: varchar(100)`),
+    Keep_Trx_History_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: Keep Trx History from Customer Master
+        * * Display Name: Keep  Trx  History  from  Customer  Master
+        * * SQL Data Type: varchar(100)`),
+    Kit_COGS_Account_Source: z.string().nullish().describe(`
+        * * Field Name: Kit COGS Account Source
+        * * Display Name: Kit  COGS Account  Source
+        * * SQL Data Type: varchar(100)`),
+    Last_Aged: z.date().nullish().describe(`
+        * * Field Name: Last Aged
+        * * Display Name: Last  Aged
+        * * SQL Data Type: datetime`),
+    Last_Finance_Charge_Amount: z.number().nullish().describe(`
+        * * Field Name: Last Finance Charge Amount
+        * * Display Name: Last  Finance  Charge  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Last_Generated_Serial_Number: z.string().nullish().describe(`
+        * * Field Name: Last Generated Serial Number
+        * * Display Name: Last  Generated  Serial  Number
+        * * SQL Data Type: varchar(21)`),
+    Last_NSF_Check_Date: z.date().nullish().describe(`
+        * * Field Name: Last NSF Check Date
+        * * Display Name: Last  NSF Check  Date
+        * * SQL Data Type: datetime`),
+    Last_Payment_Amount: z.number().nullish().describe(`
+        * * Field Name: Last Payment Amount
+        * * Display Name: Last  Payment  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Last_Payment_Date: z.date().nullish().describe(`
+        * * Field Name: Last Payment Date
+        * * Display Name: Last  Payment  Date
+        * * SQL Data Type: datetime`),
+    Last_Statement_Amount: z.number().nullish().describe(`
+        * * Field Name: Last Statement Amount
+        * * Display Name: Last  Statement  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Last_Statement_Date: z.date().nullish().describe(`
+        * * Field Name: Last Statement Date
+        * * Display Name: Last  Statement  Date
+        * * SQL Data Type: datetime`),
+    Last_Transaction_Amount: z.number().nullish().describe(`
+        * * Field Name: Last Transaction Amount
+        * * Display Name: Last  Transaction  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Last_Transaction_Date: z.date().nullish().describe(`
+        * * Field Name: Last Transaction Date
+        * * Display Name: Last  Transaction  Date
+        * * SQL Data Type: datetime`),
+    Line_Item_Sequence: z.number().nullish().describe(`
+        * * Field Name: Line Item Sequence
+        * * Display Name: Line  Item  Sequence
+        * * SQL Data Type: int`),
+    Location_Code: z.string().nullish().describe(`
+        * * Field Name: Location Code
+        * * Display Name: Location  Code
+        * * SQL Data Type: varchar(11)`),
+    Location_Code_from_Item_Master: z.string().nullish().describe(`
+        * * Field Name: Location Code from Item Master
+        * * Display Name: Location  Code  from  Item  Master
+        * * SQL Data Type: varchar(11)`),
+    Location_Code_from_Sales_Transaction: z.string().nullish().describe(`
+        * * Field Name: Location Code from Sales Transaction
+        * * Display Name: Location  Code  from  Sales  Transaction
+        * * SQL Data Type: varchar(11)`),
+    Lot_Type: z.string().nullish().describe(`
+        * * Field Name: Lot Type
+        * * Display Name: Lot  Type
+        * * SQL Data Type: varchar(11)`),
+    MC_Transaction_State: z.string().nullish().describe(`
+        * * Field Name: MC Transaction State
+        * * Display Name: MC Transaction  State
+        * * SQL Data Type: varchar(100)`),
+    Markdown_Account_Number: z.string().nullish().describe(`
+        * * Field Name: Markdown Account Number
+        * * Display Name: Markdown  Account  Number
+        * * SQL Data Type: varchar(129)`),
+    Markdown_Amount: z.number().nullish().describe(`
+        * * Field Name: Markdown Amount
+        * * Display Name: Markdown  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Markdown_Amount_from_Sales_Transaction: z.number().nullish().describe(`
+        * * Field Name: Markdown Amount from Sales Transaction
+        * * Display Name: Markdown  Amount  from  Sales  Transaction
+        * * SQL Data Type: decimal(19, 5)`),
+    Markdown_Percent: z.number().nullish().describe(`
+        * * Field Name: Markdown Percent
+        * * Display Name: Markdown  Percent
+        * * SQL Data Type: decimal(13, 6)`),
+    Markdown_Type: z.string().nullish().describe(`
+        * * Field Name: Markdown Type
+        * * Display Name: Markdown  Type
+        * * SQL Data Type: varchar(100)`),
+    Master_Number: z.number().nullish().describe(`
+        * * Field Name: Master Number
+        * * Display Name: Master  Number
+        * * SQL Data Type: int`),
+    Master_Record_Type: z.number().nullish().describe(`
+        * * Field Name: Master Record Type
+        * * Display Name: Master  Record  Type
+        * * SQL Data Type: smallint`),
+    Max_Writeoff_Amount: z.number().nullish().describe(`
+        * * Field Name: Max Writeoff Amount
+        * * Display Name: Max  Writeoff  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Maximum_Writeoff_Type: z.string().nullish().describe(`
+        * * Field Name: Maximum Writeoff Type
+        * * Display Name: Maximum  Writeoff  Type
+        * * SQL Data Type: varchar(100)`),
+    Minimum_Payment_Dollar: z.number().nullish().describe(`
+        * * Field Name: Minimum Payment Dollar
+        * * Display Name: Minimum  Payment  Dollar
+        * * SQL Data Type: decimal(19, 5)`),
+    Minimum_Payment_Percent: z.number().nullish().describe(`
+        * * Field Name: Minimum Payment Percent
+        * * Display Name: Minimum  Payment  Percent
+        * * SQL Data Type: decimal(13, 6)`),
+    Minimum_Payment_Type: z.string().nullish().describe(`
+        * * Field Name: Minimum Payment Type
+        * * Display Name: Minimum  Payment  Type
+        * * SQL Data Type: varchar(100)`),
+    Misc_Amount: z.number().nullish().describe(`
+        * * Field Name: Misc Amount
+        * * Display Name: Misc  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Misc_Schedule_ID: z.string().nullish().describe(`
+        * * Field Name: Misc Schedule ID
+        * * Display Name: Misc  Schedule  ID
+        * * SQL Data Type: varchar(15)`),
+    Misc_Tax_Amount: z.number().nullish().describe(`
+        * * Field Name: Misc Tax Amount
+        * * Display Name: Misc  Tax  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Misc_Taxable: z.string().nullish().describe(`
+        * * Field Name: Misc Taxable
+        * * Display Name: Misc  Taxable
+        * * SQL Data Type: varchar(100)`),
+    Modified_Date_from_Customer_Master: z.date().nullish().describe(`
+        * * Field Name: Modified Date from Customer Master
+        * * Display Name: Modified  Date  from  Customer  Master
+        * * SQL Data Type: datetime`),
+    Modified_Date_from_Item_Master: z.date().nullish().describe(`
+        * * Field Name: Modified Date from Item Master
+        * * Display Name: Modified  Date  from  Item  Master
+        * * SQL Data Type: datetime`),
+    Modified_Date_from_Sales_Transaction: z.date().nullish().describe(`
+        * * Field Name: Modified Date from Sales Transaction
+        * * Display Name: Modified  Date  from  Sales  Transaction
+        * * SQL Data Type: datetime`),
+    Non_Commissioned_Amount: z.number().nullish().describe(`
+        * * Field Name: Non-Commissioned Amount
+        * * Display Name: Non -Commissioned  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Non_Current_Scheduled_Payments: z.number().nullish().describe(`
+        * * Field Name: Non Current Scheduled Payments
+        * * Display Name: Non  Current  Scheduled  Payments
+        * * SQL Data Type: decimal(19, 5)`),
+    Non_IV: z.string().nullish().describe(`
+        * * Field Name: Non IV
+        * * Display Name: Non  IV
+        * * SQL Data Type: varchar(100)`),
+    Note_Index_from_Customer_Master: z.number().nullish().describe(`
+        * * Field Name: Note Index from Customer Master
+        * * Display Name: Note  Index  from  Customer  Master
+        * * SQL Data Type: decimal(19, 5)`),
+    Note_Index_from_Item_Master: z.number().nullish().describe(`
+        * * Field Name: Note Index from Item Master
+        * * Display Name: Note  Index  from  Item  Master
+        * * SQL Data Type: decimal(19, 5)`),
+    Note_Index_from_Sales_Transaction: z.number().nullish().describe(`
+        * * Field Name: Note Index from Sales Transaction
+        * * Display Name: Note  Index  from  Sales  Transaction
+        * * SQL Data Type: decimal(19, 5)`),
+    Number_ADTP_Documents___LYR: z.number().nullish().describe(`
+        * * Field Name: Number ADTP Documents - LYR
+        * * Display Name: Number  ADTP Documents  - LYR
+        * * SQL Data Type: int`),
+    Number_ADTP_Documents___Life: z.number().nullish().describe(`
+        * * Field Name: Number ADTP Documents - Life
+        * * Display Name: Number  ADTP Documents  - Life
+        * * SQL Data Type: int`),
+    Number_ADTP_Documents___Year: z.number().nullish().describe(`
+        * * Field Name: Number ADTP Documents - Year
+        * * Display Name: Number  ADTP Documents  - Year
+        * * SQL Data Type: int`),
+    Number_Of_NSF_Checks_Life: z.number().nullish().describe(`
+        * * Field Name: Number Of NSF Checks Life
+        * * Display Name: Number  Of  NSF Checks  Life
+        * * SQL Data Type: int`),
+    Number_Of_NSF_Checks_YTD: z.number().nullish().describe(`
+        * * Field Name: Number Of NSF Checks YTD
+        * * Display Name: Number  Of  NSF Checks  YTD
+        * * SQL Data Type: int`),
+    On_Order_Amount: z.number().nullish().describe(`
+        * * Field Name: On Order Amount
+        * * Display Name: On  Order  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Order_Date: z.date().nullish().describe(`
+        * * Field Name: Order Date
+        * * Display Name: Order  Date
+        * * SQL Data Type: datetime`),
+    Order_Fulfillment_Shortage_Default: z.string().nullish().describe(`
+        * * Field Name: Order Fulfillment Shortage Default
+        * * Display Name: Order  Fulfillment  Shortage  Default
+        * * SQL Data Type: varchar(100)`),
+    Original_Number: z.string().nullish().describe(`
+        * * Field Name: Original Number
+        * * Display Name: Original  Number
+        * * SQL Data Type: varchar(21)`),
+    Original_Sequence_Number_Corrected: z.number().nullish().describe(`
+        * * Field Name: Original Sequence Number Corrected
+        * * Display Name: Original  Sequence  Number  Corrected
+        * * SQL Data Type: int`),
+    Original_Type: z.string().nullish().describe(`
+        * * Field Name: Original Type
+        * * Display Name: Original  Type
+        * * SQL Data Type: varchar(100)`),
+    Originating_Account_Amount: z.number().nullish().describe(`
+        * * Field Name: Originating Account Amount
+        * * Display Name: Originating  Account  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Originating_Backout_Freight_Amount: z.number().nullish().describe(`
+        * * Field Name: Originating Backout Freight Amount
+        * * Display Name: Originating  Backout  Freight  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Originating_Backout_Misc_Amount: z.number().nullish().describe(`
+        * * Field Name: Originating Backout Misc Amount
+        * * Display Name: Originating  Backout  Misc  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Originating_Backout_Sales_Amount: z.number().nullish().describe(`
+        * * Field Name: Originating Backout Sales Amount
+        * * Display Name: Originating  Backout  Sales  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Originating_Backout_Tax_Amount: z.number().nullish().describe(`
+        * * Field Name: Originating Backout Tax Amount
+        * * Display Name: Originating  Backout  Tax  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Originating_COD_Amount: z.number().nullish().describe(`
+        * * Field Name: Originating COD Amount
+        * * Display Name: Originating  COD Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Originating_Commission_Amount: z.number().nullish().describe(`
+        * * Field Name: Originating Commission Amount
+        * * Display Name: Originating  Commission  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Originating_Commission_Sales_Amount: z.number().nullish().describe(`
+        * * Field Name: Originating Commission Sales Amount
+        * * Display Name: Originating  Commission  Sales  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Originating_Decimal_Places_Currency: z.string().nullish().describe(`
+        * * Field Name: Originating Decimal Places Currency
+        * * Display Name: Originating  Decimal  Places  Currency
+        * * SQL Data Type: varchar(100)`),
+    Originating_Deposit_Received: z.number().nullish().describe(`
+        * * Field Name: Originating Deposit Received
+        * * Display Name: Originating  Deposit  Received
+        * * SQL Data Type: decimal(19, 5)`),
+    Originating_Discount_Available_Amount: z.number().nullish().describe(`
+        * * Field Name: Originating Discount Available Amount
+        * * Display Name: Originating  Discount  Available  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Originating_Discount_Available_Freight: z.number().nullish().describe(`
+        * * Field Name: Originating Discount Available Freight
+        * * Display Name: Originating  Discount  Available  Freight
+        * * SQL Data Type: decimal(19, 5)`),
+    Originating_Discount_Available_Misc: z.number().nullish().describe(`
+        * * Field Name: Originating Discount Available Misc
+        * * Display Name: Originating  Discount  Available  Misc
+        * * SQL Data Type: decimal(19, 5)`),
+    Originating_Discount_Available_Sales: z.number().nullish().describe(`
+        * * Field Name: Originating Discount Available Sales
+        * * Display Name: Originating  Discount  Available  Sales
+        * * SQL Data Type: decimal(19, 5)`),
+    Originating_Discount_Available_Taken: z.number().nullish().describe(`
+        * * Field Name: Originating Discount Available Taken
+        * * Display Name: Originating  Discount  Available  Taken
+        * * SQL Data Type: decimal(19, 5)`),
+    Originating_Discount_Dollar_Amount: z.number().nullish().describe(`
+        * * Field Name: Originating Discount Dollar Amount
+        * * Display Name: Originating  Discount  Dollar  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Originating_Discount_Returned: z.number().nullish().describe(`
+        * * Field Name: Originating Discount Returned
+        * * Display Name: Originating  Discount  Returned
+        * * SQL Data Type: decimal(19, 5)`),
+    Originating_Discount_Taken_Amount: z.number().nullish().describe(`
+        * * Field Name: Originating Discount Taken Amount
+        * * Display Name: Originating  Discount  Taken  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Originating_Document_Amount: z.number().nullish().describe(`
+        * * Field Name: Originating Document Amount
+        * * Display Name: Originating  Document  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Originating_Extended_Cost: z.number().nullish().describe(`
+        * * Field Name: Originating Extended Cost
+        * * Display Name: Originating  Extended  Cost
+        * * SQL Data Type: decimal(19, 5)`),
+    Originating_Extended_Cost_from_Sales_Transaction: z.number().nullish().describe(`
+        * * Field Name: Originating Extended Cost from Sales Transaction
+        * * Display Name: Originating  Extended  Cost  from  Sales  Transaction
+        * * SQL Data Type: decimal(19, 5)`),
+    Originating_Extended_Price: z.number().nullish().describe(`
+        * * Field Name: Originating Extended Price
+        * * Display Name: Originating  Extended  Price
+        * * SQL Data Type: decimal(19, 5)`),
+    Originating_Freight_Amount: z.number().nullish().describe(`
+        * * Field Name: Originating Freight Amount
+        * * Display Name: Originating  Freight  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Originating_Freight_Tax_Amount: z.number().nullish().describe(`
+        * * Field Name: Originating Freight Tax Amount
+        * * Display Name: Originating  Freight  Tax  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Originating_Markdown_Amount: z.number().nullish().describe(`
+        * * Field Name: Originating Markdown Amount
+        * * Display Name: Originating  Markdown  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Originating_Markdown_Amount_from_Sales_Transaction: z.number().nullish().describe(`
+        * * Field Name: Originating Markdown Amount from Sales Transaction
+        * * Display Name: Originating  Markdown  Amount  from  Sales  Transaction
+        * * SQL Data Type: decimal(19, 5)`),
+    Originating_Misc_Amount: z.number().nullish().describe(`
+        * * Field Name: Originating Misc Amount
+        * * Display Name: Originating  Misc  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Originating_Misc_Tax_Amount: z.number().nullish().describe(`
+        * * Field Name: Originating Misc Tax Amount
+        * * Display Name: Originating  Misc  Tax  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Originating_Non_Commissioned_Amount: z.number().nullish().describe(`
+        * * Field Name: Originating Non-Commissioned Amount
+        * * Display Name: Originating  Non -Commissioned  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Originating_Payment_Received: z.number().nullish().describe(`
+        * * Field Name: Originating Payment Received
+        * * Display Name: Originating  Payment  Received
+        * * SQL Data Type: decimal(19, 5)`),
+    Originating_Remaining_Price: z.number().nullish().describe(`
+        * * Field Name: Originating Remaining Price
+        * * Display Name: Originating  Remaining  Price
+        * * SQL Data Type: decimal(19, 5)`),
+    Originating_Remaining_Subtotal: z.number().nullish().describe(`
+        * * Field Name: Originating Remaining Subtotal
+        * * Display Name: Originating  Remaining  Subtotal
+        * * SQL Data Type: decimal(19, 5)`),
+    Originating_Subtotal: z.number().nullish().describe(`
+        * * Field Name: Originating Subtotal
+        * * Display Name: Originating  Subtotal
+        * * SQL Data Type: decimal(19, 5)`),
+    Originating_Tax_Amount: z.number().nullish().describe(`
+        * * Field Name: Originating Tax Amount
+        * * Display Name: Originating  Tax  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Originating_Tax_Amount_from_Sales_Transaction: z.number().nullish().describe(`
+        * * Field Name: Originating Tax Amount from Sales Transaction
+        * * Display Name: Originating  Tax  Amount  from  Sales  Transaction
+        * * SQL Data Type: decimal(19, 5)`),
+    Originating_Taxable_Tax_Amount: z.number().nullish().describe(`
+        * * Field Name: Originating Taxable Tax Amount
+        * * Display Name: Originating  Taxable  Tax  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Originating_Taxable_Tax_Amount_from_Sales_Transaction: z.number().nullish().describe(`
+        * * Field Name: Originating Taxable Tax Amount from Sales Transaction
+        * * Display Name: Originating  Taxable  Tax  Amount  from  Sales  Transaction
+        * * SQL Data Type: decimal(19, 5)`),
+    Originating_Trade_Discount_Amount: z.number().nullish().describe(`
+        * * Field Name: Originating Trade Discount Amount
+        * * Display Name: Originating  Trade  Discount  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Originating_Trade_Discount_Amount_from_Sales_Transaction: z.number().nullish().describe(`
+        * * Field Name: Originating Trade Discount Amount from Sales Transaction
+        * * Display Name: Originating  Trade  Discount  Amount  from  Sales  Transaction
+        * * SQL Data Type: decimal(19, 5)`),
+    Originating_Unit_Cost: z.number().nullish().describe(`
+        * * Field Name: Originating Unit Cost
+        * * Display Name: Originating  Unit  Cost
+        * * SQL Data Type: decimal(19, 5)`),
+    Originating_Unit_Price: z.number().nullish().describe(`
+        * * Field Name: Originating Unit Price
+        * * Display Name: Originating  Unit  Price
+        * * SQL Data Type: decimal(19, 5)`),
+    Packing_Slip_Number: z.string().nullish().describe(`
+        * * Field Name: Packing Slip Number
+        * * Display Name: Packing  Slip  Number
+        * * SQL Data Type: varchar(21)`),
+    Payment_Received: z.number().nullish().describe(`
+        * * Field Name: Payment Received
+        * * Display Name: Payment  Received
+        * * SQL Data Type: decimal(19, 5)`),
+    Payment_Terms_ID: z.string().nullish().describe(`
+        * * Field Name: Payment Terms ID
+        * * Display Name: Payment  Terms  ID
+        * * SQL Data Type: varchar(21)`),
+    Payment_Terms_ID_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: Payment Terms ID from Customer Master
+        * * Display Name: Payment  Terms  ID from  Customer  Master
+        * * SQL Data Type: varchar(21)`),
+    Phone_1_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: Phone 1 from Customer Master
+        * * Display Name: Phone  1 from  Customer  Master
+        * * SQL Data Type: varchar(21)`),
+    Phone_1_from_Sales_Line_Item: z.string().nullish().describe(`
+        * * Field Name: Phone 1 from Sales Line Item
+        * * Display Name: Phone  1 from  Sales  Line  Item
+        * * SQL Data Type: varchar(21)`),
+    Phone_2_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: Phone 2 from Customer Master
+        * * Display Name: Phone  2 from  Customer  Master
+        * * SQL Data Type: varchar(21)`),
+    Phone_2_from_Sales_Line_Item: z.string().nullish().describe(`
+        * * Field Name: Phone 2 from Sales Line Item
+        * * Display Name: Phone  2 from  Sales  Line  Item
+        * * SQL Data Type: varchar(21)`),
+    Phone_3_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: Phone 3 from Customer Master
+        * * Display Name: Phone  3 from  Customer  Master
+        * * SQL Data Type: varchar(21)`),
+    Phone_3_from_Sales_Line_Item: z.string().nullish().describe(`
+        * * Field Name: Phone 3 from Sales Line Item
+        * * Display Name: Phone  3 from  Sales  Line  Item
+        * * SQL Data Type: varchar(21)`),
+    Phone_3_from_Sales_Transaction: z.string().nullish().describe(`
+        * * Field Name: Phone 3 from Sales Transaction
+        * * Display Name: Phone  3 from  Sales  Transaction
+        * * SQL Data Type: varchar(21)`),
+    Phone_Number_1_from_Sales_Transaction: z.string().nullish().describe(`
+        * * Field Name: Phone Number 1 from Sales Transaction
+        * * Display Name: Phone  Number  1 from  Sales  Transaction
+        * * SQL Data Type: varchar(21)`),
+    Phone_Number_2_from_Sales_Transaction: z.string().nullish().describe(`
+        * * Field Name: Phone Number 2 from Sales Transaction
+        * * Display Name: Phone  Number  2 from  Sales  Transaction
+        * * SQL Data Type: varchar(21)`),
+    Picking_Ticket_Number: z.string().nullish().describe(`
+        * * Field Name: Picking Ticket Number
+        * * Display Name: Picking  Ticket  Number
+        * * SQL Data Type: varchar(21)`),
+    Post_Results_To: z.string().nullish().describe(`
+        * * Field Name: Post Results To
+        * * Display Name: Post  Results  To
+        * * SQL Data Type: varchar(100)`),
+    Posted_Date: z.date().nullish().describe(`
+        * * Field Name: Posted Date
+        * * Display Name: Posted  Date
+        * * SQL Data Type: datetime`),
+    Posted_User_ID: z.string().nullish().describe(`
+        * * Field Name: Posted User ID
+        * * Display Name: Posted  User  ID
+        * * SQL Data Type: varchar(15)`),
+    Posting_Status: z.string().nullish().describe(`
+        * * Field Name: Posting Status
+        * * Display Name: Posting  Status
+        * * SQL Data Type: varchar(100)`),
+    PriceLevel: z.string().nullish().describe(`
+        * * Field Name: PriceLevel
+        * * Display Name: Price Level
+        * * SQL Data Type: varchar(11)`),
+    PriceLevel_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: PriceLevel from Customer Master
+        * * Display Name: Price Level  from  Customer  Master
+        * * SQL Data Type: varchar(11)`),
+    PriceLevel_from_Item_Master: z.string().nullish().describe(`
+        * * Field Name: PriceLevel from Item Master
+        * * Display Name: Price Level  from  Item  Master
+        * * SQL Data Type: varchar(11)`),
+    PriceLevel_from_Sales_Transaction: z.string().nullish().describe(`
+        * * Field Name: PriceLevel from Sales Transaction
+        * * Display Name: Price Level  from  Sales  Transaction
+        * * SQL Data Type: varchar(11)`),
+    Price_Group: z.string().nullish().describe(`
+        * * Field Name: Price Group
+        * * Display Name: Price  Group
+        * * SQL Data Type: varchar(11)`),
+    Price_Method: z.string().nullish().describe(`
+        * * Field Name: Price Method
+        * * Display Name: Price  Method
+        * * SQL Data Type: varchar(100)`),
+    Primary_Billto_Address_Code: z.string().nullish().describe(`
+        * * Field Name: Primary Billto Address Code
+        * * Display Name: Primary  Billto  Address  Code
+        * * SQL Data Type: varchar(15)`),
+    Primary_Billto_Address_Code_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: Primary Billto Address Code from Customer Master
+        * * Display Name: Primary  Billto  Address  Code  from  Customer  Master
+        * * SQL Data Type: varchar(15)`),
+    Primary_Shipto_Address_Code_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: Primary Shipto Address Code from Customer Master
+        * * Display Name: Primary  Shipto  Address  Code  from  Customer  Master
+        * * SQL Data Type: varchar(15)`),
+    Primary_Shipto_Address_Code_from_Sales_Line_Item: z.string().nullish().describe(`
+        * * Field Name: Primary Shipto Address Code from Sales Line Item
+        * * Display Name: Primary  Shipto  Address  Code  from  Sales  Line  Item
+        * * SQL Data Type: varchar(15)`),
+    Primary_Shipto_Address_Code_from_Sales_Transaction: z.string().nullish().describe(`
+        * * Field Name: Primary Shipto Address Code from Sales Transaction
+        * * Display Name: Primary  Shipto  Address  Code  from  Sales  Transaction
+        * * SQL Data Type: varchar(15)`),
+    Priority_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: Priority from Customer Master
+        * * Display Name: Priority  from  Customer  Master
+        * * SQL Data Type: varchar(100)`),
+    Prospect: z.string().nullish().describe(`
+        * * Field Name: Prospect
+        * * Display Name: Prospect
+        * * SQL Data Type: varchar(100)`),
+    Purch_Inflation_Account_Number: z.string().nullish().describe(`
+        * * Field Name: Purch Inflation Account Number
+        * * Display Name: Purch  Inflation  Account  Number
+        * * SQL Data Type: varchar(129)`),
+    Purch_Monetary_Correction_Account_Number: z.string().nullish().describe(`
+        * * Field Name: Purch Monetary Correction Account Number
+        * * Display Name: Purch  Monetary  Correction  Account  Number
+        * * SQL Data Type: varchar(129)`),
+    Purchase_Price_Variance_Account_Number: z.string().nullish().describe(`
+        * * Field Name: Purchase Price Variance Account Number
+        * * Display Name: Purchase  Price  Variance  Account  Number
+        * * SQL Data Type: varchar(129)`),
+    Purchasing_Status: z.string().nullish().describe(`
+        * * Field Name: Purchasing Status
+        * * Display Name: Purchasing  Status
+        * * SQL Data Type: varchar(100)`),
+    Purchasing_U_Of_M: z.string().nullish().describe(`
+        * * Field Name: Purchasing U Of M
+        * * Display Name: Purchasing  U Of  M
+        * * SQL Data Type: varchar(9)`),
+    QTY_Allocated: z.number().nullish().describe(`
+        * * Field Name: QTY Allocated
+        * * Display Name: QTY Allocated
+        * * SQL Data Type: decimal(19, 5)`),
+    QTY_Canceled: z.number().nullish().describe(`
+        * * Field Name: QTY Canceled
+        * * Display Name: QTY Canceled
+        * * SQL Data Type: decimal(19, 5)`),
+    QTY_Canceled_Other: z.number().nullish().describe(`
+        * * Field Name: QTY Canceled Other
+        * * Display Name: QTY Canceled  Other
+        * * SQL Data Type: decimal(19, 5)`),
+    QTY_Damaged: z.number().nullish().describe(`
+        * * Field Name: QTY Damaged
+        * * Display Name: QTY Damaged
+        * * SQL Data Type: decimal(19, 5)`),
+    QTY_Fulfilled: z.number().nullish().describe(`
+        * * Field Name: QTY Fulfilled
+        * * Display Name: QTY Fulfilled
+        * * SQL Data Type: decimal(19, 5)`),
+    QTY_In_Base_U_Of_M: z.number().nullish().describe(`
+        * * Field Name: QTY In Base U Of M
+        * * Display Name: QTY In  Base  U Of  M
+        * * SQL Data Type: decimal(19, 5)`),
+    QTY_In_Service: z.number().nullish().describe(`
+        * * Field Name: QTY In Service
+        * * Display Name: QTY In  Service
+        * * SQL Data Type: decimal(19, 5)`),
+    QTY_In_Use: z.number().nullish().describe(`
+        * * Field Name: QTY In Use
+        * * Display Name: QTY In  Use
+        * * SQL Data Type: decimal(19, 5)`),
+    QTY_On_Hand: z.number().nullish().describe(`
+        * * Field Name: QTY On Hand
+        * * Display Name: QTY On  Hand
+        * * SQL Data Type: decimal(19, 5)`),
+    QTY_On_PO: z.number().nullish().describe(`
+        * * Field Name: QTY On PO
+        * * Display Name: QTY On  PO
+        * * SQL Data Type: decimal(19, 5)`),
+    QTY_Ordered: z.number().nullish().describe(`
+        * * Field Name: QTY Ordered
+        * * Display Name: QTY Ordered
+        * * SQL Data Type: decimal(19, 5)`),
+    QTY_Prev_BO_On_Order: z.number().nullish().describe(`
+        * * Field Name: QTY Prev BO On Order
+        * * Display Name: QTY Prev  BO On  Order
+        * * SQL Data Type: decimal(19, 5)`),
+    QTY_Prev_Back_Ordered: z.number().nullish().describe(`
+        * * Field Name: QTY Prev Back Ordered
+        * * Display Name: QTY Prev  Back  Ordered
+        * * SQL Data Type: decimal(19, 5)`),
+    QTY_Prev_Invoiced: z.number().nullish().describe(`
+        * * Field Name: QTY Prev Invoiced
+        * * Display Name: QTY Prev  Invoiced
+        * * SQL Data Type: decimal(19, 5)`),
+    QTY_Prev_Ordered: z.number().nullish().describe(`
+        * * Field Name: QTY Prev Ordered
+        * * Display Name: QTY Prev  Ordered
+        * * SQL Data Type: decimal(19, 5)`),
+    QTY_Prev_Received: z.number().nullish().describe(`
+        * * Field Name: QTY Prev Received
+        * * Display Name: QTY Prev  Received
+        * * SQL Data Type: decimal(19, 5)`),
+    QTY_Received: z.number().nullish().describe(`
+        * * Field Name: QTY Received
+        * * Display Name: QTY Received
+        * * SQL Data Type: decimal(19, 5)`),
+    QTY_Remaining: z.number().nullish().describe(`
+        * * Field Name: QTY Remaining
+        * * Display Name: QTY Remaining
+        * * SQL Data Type: decimal(19, 5)`),
+    QTY_Remaining_On_BO: z.number().nullish().describe(`
+        * * Field Name: QTY Remaining On BO
+        * * Display Name: QTY Remaining  On  BO
+        * * SQL Data Type: decimal(19, 5)`),
+    QTY_Returned: z.number().nullish().describe(`
+        * * Field Name: QTY Returned
+        * * Display Name: QTY Returned
+        * * SQL Data Type: decimal(19, 5)`),
+    QTY_Selected: z.number().nullish().describe(`
+        * * Field Name: QTY Selected
+        * * Display Name: QTY Selected
+        * * SQL Data Type: decimal(19, 5)`),
+    QTY_To_Back_Order: z.number().nullish().describe(`
+        * * Field Name: QTY To Back Order
+        * * Display Name: QTY To  Back  Order
+        * * SQL Data Type: decimal(19, 5)`),
+    QTY_To_Invoice: z.number().nullish().describe(`
+        * * Field Name: QTY To Invoice
+        * * Display Name: QTY To  Invoice
+        * * SQL Data Type: decimal(19, 5)`),
+    QTY_To_Order: z.number().nullish().describe(`
+        * * Field Name: QTY To Order
+        * * Display Name: QTY To  Order
+        * * SQL Data Type: decimal(19, 5)`),
+    Quote_Date: z.date().nullish().describe(`
+        * * Field Name: Quote Date
+        * * Display Name: Quote  Date
+        * * SQL Data Type: datetime`),
+    Quote_Expiration_Date: z.date().nullish().describe(`
+        * * Field Name: Quote Expiration Date
+        * * Display Name: Quote  Expiration  Date
+        * * SQL Data Type: datetime`),
+    Rate_Calculation_Method: z.string().nullish().describe(`
+        * * Field Name: Rate Calculation Method
+        * * Display Name: Rate  Calculation  Method
+        * * SQL Data Type: varchar(100)`),
+    Rate_Type_ID: z.string().nullish().describe(`
+        * * Field Name: Rate Type ID
+        * * Display Name: Rate  Type  ID
+        * * SQL Data Type: varchar(15)`),
+    Rate_Type_ID_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: Rate Type ID from Customer Master
+        * * Display Name: Rate  Type  ID from  Customer  Master
+        * * SQL Data Type: varchar(15)`),
+    Reference: z.string().nullish().describe(`
+        * * Field Name: Reference
+        * * Display Name: Reference
+        * * SQL Data Type: varchar(31)`),
+    Remaining_Price: z.number().nullish().describe(`
+        * * Field Name: Remaining Price
+        * * Display Name: Remaining  Price
+        * * SQL Data Type: decimal(19, 5)`),
+    Remaining_Subtotal: z.number().nullish().describe(`
+        * * Field Name: Remaining Subtotal
+        * * Display Name: Remaining  Subtotal
+        * * SQL Data Type: decimal(19, 5)`),
+    Repeating: z.string().nullish().describe(`
+        * * Field Name: Repeating
+        * * Display Name: Repeating
+        * * SQL Data Type: varchar(100)`),
+    Requested_Ship_Date: z.date().nullish().describe(`
+        * * Field Name: Requested Ship Date
+        * * Display Name: Requested  Ship  Date
+        * * SQL Data Type: datetime`),
+    Requested_Ship_Date_from_Sales_Transaction: z.date().nullish().describe(`
+        * * Field Name: Requested Ship Date from Sales Transaction
+        * * Display Name: Requested  Ship  Date  from  Sales  Transaction
+        * * SQL Data Type: datetime`),
+    Retainage: z.number().nullish().describe(`
+        * * Field Name: Retainage
+        * * Display Name: Retainage
+        * * SQL Data Type: decimal(19, 5)`),
+    Return_Date: z.date().nullish().describe(`
+        * * Field Name: Return Date
+        * * Display Name: Return  Date
+        * * SQL Data Type: datetime`),
+    Returns_Account_Number: z.string().nullish().describe(`
+        * * Field Name: Returns Account Number
+        * * Display Name: Returns  Account  Number
+        * * SQL Data Type: varchar(129)`),
+    Revalue_Customer: z.string().nullish().describe(`
+        * * Field Name: Revalue Customer
+        * * Display Name: Revalue  Customer
+        * * SQL Data Type: varchar(100)`),
+    Sale_Date: z.date().nullish().describe(`
+        * * Field Name: Sale Date
+        * * Display Name: Sale  Date
+        * * SQL Data Type: datetime`),
+    Sales_Account_Number: z.string().nullish().describe(`
+        * * Field Name: Sales Account Number
+        * * Display Name: Sales  Account  Number
+        * * SQL Data Type: varchar(129)`),
+    Sales_Account_Number_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: Sales Account Number from Customer Master
+        * * Display Name: Sales  Account  Number  from  Customer  Master
+        * * SQL Data Type: varchar(129)`),
+    Sales_Account_Number_from_Item_Master: z.string().nullish().describe(`
+        * * Field Name: Sales Account Number from Item Master
+        * * Display Name: Sales  Account  Number  from  Item  Master
+        * * SQL Data Type: varchar(129)`),
+    Sales_Discounts_Account_Number: z.string().nullish().describe(`
+        * * Field Name: Sales Discounts Account Number
+        * * Display Name: Sales  Discounts  Account  Number
+        * * SQL Data Type: varchar(129)`),
+    Sales_Document_Status: z.string().nullish().describe(`
+        * * Field Name: Sales Document Status
+        * * Display Name: Sales  Document  Status
+        * * SQL Data Type: varchar(100)`),
+    Sales_Returns_Account_Number: z.string().nullish().describe(`
+        * * Field Name: Sales Returns Account Number
+        * * Display Name: Sales  Returns  Account  Number
+        * * SQL Data Type: varchar(129)`),
+    Sales_Territory: z.string().nullish().describe(`
+        * * Field Name: Sales Territory
+        * * Display Name: Sales  Territory
+        * * SQL Data Type: varchar(15)`),
+    Sales_Territory_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: Sales Territory from Customer Master
+        * * Display Name: Sales  Territory  from  Customer  Master
+        * * SQL Data Type: varchar(15)`),
+    Sales_Territory_from_Sales_Transaction: z.string().nullish().describe(`
+        * * Field Name: Sales Territory from Sales Transaction
+        * * Display Name: Sales  Territory  from  Sales  Transaction
+        * * SQL Data Type: varchar(15)`),
+    Salesperson_ID: z.string().nullish().describe(`
+        * * Field Name: Salesperson ID
+        * * Display Name: Salesperson  ID
+        * * SQL Data Type: varchar(15)`),
+    Salesperson_ID_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: Salesperson ID from Customer Master
+        * * Display Name: Salesperson  ID from  Customer  Master
+        * * SQL Data Type: varchar(15)`),
+    Salesperson_ID_from_Sales_Transaction: z.string().nullish().describe(`
+        * * Field Name: Salesperson ID from Sales Transaction
+        * * Display Name: Salesperson  ID from  Sales  Transaction
+        * * SQL Data Type: varchar(15)`),
+    Selling_U_Of_M: z.string().nullish().describe(`
+        * * Field Name: Selling U Of M
+        * * Display Name: Selling  U Of  M
+        * * SQL Data Type: varchar(9)`),
+    Sequence_Number_Corrected: z.number().nullish().describe(`
+        * * Field Name: Sequence Number Corrected
+        * * Display Name: Sequence  Number  Corrected
+        * * SQL Data Type: smallint`),
+    ShipToName_from_Sales_Line_Item: z.string().nullish().describe(`
+        * * Field Name: ShipToName from Sales Line Item
+        * * Display Name: Ship To Name  from  Sales  Line  Item
+        * * SQL Data Type: varchar(65)`),
+    ShipToName_from_Sales_Transaction: z.string().nullish().describe(`
+        * * Field Name: ShipToName from Sales Transaction
+        * * Display Name: Ship To Name  from  Sales  Transaction
+        * * SQL Data Type: varchar(65)`),
+    Ship_Complete_Document: z.string().nullish().describe(`
+        * * Field Name: Ship Complete Document
+        * * Display Name: Ship  Complete  Document
+        * * SQL Data Type: varchar(100)`),
+    Ship_Complete_Document_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: Ship Complete Document from Customer Master
+        * * Display Name: Ship  Complete  Document  from  Customer  Master
+        * * SQL Data Type: varchar(100)`),
+    Shipping_Document: z.string().nullish().describe(`
+        * * Field Name: Shipping Document
+        * * Display Name: Shipping  Document
+        * * SQL Data Type: varchar(100)`),
+    Shipping_Method: z.string().nullish().describe(`
+        * * Field Name: Shipping Method
+        * * Display Name: Shipping  Method
+        * * SQL Data Type: varchar(15)`),
+    Shipping_Method_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: Shipping Method from Customer Master
+        * * Display Name: Shipping  Method  from  Customer  Master
+        * * SQL Data Type: varchar(15)`),
+    Shipping_Method_from_Sales_Transaction: z.string().nullish().describe(`
+        * * Field Name: Shipping Method from Sales Transaction
+        * * Display Name: Shipping  Method  from  Sales  Transaction
+        * * SQL Data Type: varchar(15)`),
+    Short_Name: z.string().nullish().describe(`
+        * * Field Name: Short Name
+        * * Display Name: Short  Name
+        * * SQL Data Type: varchar(15)`),
+    Simplified: z.string().nullish().describe(`
+        * * Field Name: Simplified
+        * * Display Name: Simplified
+        * * SQL Data Type: varchar(100)`),
+    Standard_Cost: z.number().nullish().describe(`
+        * * Field Name: Standard Cost
+        * * Display Name: Standard  Cost
+        * * SQL Data Type: decimal(19, 5)`),
+    State_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: State from Customer Master
+        * * Display Name: State  from  Customer  Master
+        * * SQL Data Type: varchar(29)`),
+    State_from_Sales_Line_Item: z.string().nullish().describe(`
+        * * Field Name: State from Sales Line Item
+        * * Display Name: State  from  Sales  Line  Item
+        * * SQL Data Type: varchar(29)`),
+    State_from_Sales_Transaction: z.string().nullish().describe(`
+        * * Field Name: State from Sales Transaction
+        * * Display Name: State  from  Sales  Transaction
+        * * SQL Data Type: varchar(29)`),
+    Statement_Address_Code: z.string().nullish().describe(`
+        * * Field Name: Statement Address Code
+        * * Display Name: Statement  Address  Code
+        * * SQL Data Type: varchar(15)`),
+    Statement_Cycle: z.string().nullish().describe(`
+        * * Field Name: Statement Cycle
+        * * Display Name: Statement  Cycle
+        * * SQL Data Type: varchar(100)`),
+    Statement_Name: z.string().nullish().describe(`
+        * * Field Name: Statement Name
+        * * Display Name: Statement  Name
+        * * SQL Data Type: varchar(65)`),
+    Subtotal: z.number().nullish().describe(`
+        * * Field Name: Subtotal
+        * * Display Name: Subtotal
+        * * SQL Data Type: decimal(19, 5)`),
+    TRX_Frequency: z.string().nullish().describe(`
+        * * Field Name: TRX Frequency
+        * * Display Name: TRX Frequency
+        * * SQL Data Type: varchar(100)`),
+    TRX_Source: z.string().nullish().describe(`
+        * * Field Name: TRX Source
+        * * Display Name: TRX Source
+        * * SQL Data Type: varchar(13)`),
+    TRX_Source_from_Sales_Transaction: z.string().nullish().describe(`
+        * * Field Name: TRX Source from Sales Transaction
+        * * Display Name: TRX Source  from  Sales  Transaction
+        * * SQL Data Type: varchar(13)`),
+    Tax_Amount: z.number().nullish().describe(`
+        * * Field Name: Tax Amount
+        * * Display Name: Tax  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Tax_Amount_from_Sales_Transaction: z.number().nullish().describe(`
+        * * Field Name: Tax Amount from Sales Transaction
+        * * Display Name: Tax  Amount  from  Sales  Transaction
+        * * SQL Data Type: decimal(19, 5)`),
+    Tax_Commodity_Code: z.string().nullish().describe(`
+        * * Field Name: Tax Commodity Code
+        * * Display Name: Tax  Commodity  Code
+        * * SQL Data Type: varchar(31)`),
+    Tax_Date: z.date().nullish().describe(`
+        * * Field Name: Tax Date
+        * * Display Name: Tax  Date
+        * * SQL Data Type: datetime`),
+    Tax_Engine_Called: z.string().nullish().describe(`
+        * * Field Name: Tax Engine Called
+        * * Display Name: Tax  Engine  Called
+        * * SQL Data Type: varchar(100)`),
+    Tax_Exempt_1: z.string().nullish().describe(`
+        * * Field Name: Tax Exempt 1
+        * * Display Name: Tax  Exempt  1
+        * * SQL Data Type: varchar(25)`),
+    Tax_Exempt_1_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: Tax Exempt 1 from Customer Master
+        * * Display Name: Tax  Exempt  1 from  Customer  Master
+        * * SQL Data Type: varchar(25)`),
+    Tax_Exempt_2: z.string().nullish().describe(`
+        * * Field Name: Tax Exempt 2
+        * * Display Name: Tax  Exempt  2
+        * * SQL Data Type: varchar(25)`),
+    Tax_Exempt_2_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: Tax Exempt 2 from Customer Master
+        * * Display Name: Tax  Exempt  2 from  Customer  Master
+        * * SQL Data Type: varchar(25)`),
+    Tax_Options: z.string().nullish().describe(`
+        * * Field Name: Tax Options
+        * * Display Name: Tax  Options
+        * * SQL Data Type: varchar(100)`),
+    Tax_Registration_Number: z.string().nullish().describe(`
+        * * Field Name: Tax Registration Number
+        * * Display Name: Tax  Registration  Number
+        * * SQL Data Type: varchar(25)`),
+    Tax_Registration_Number_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: Tax Registration Number from Customer Master
+        * * Display Name: Tax  Registration  Number  from  Customer  Master
+        * * SQL Data Type: varchar(25)`),
+    Tax_Schedule_ID_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: Tax Schedule ID from Customer Master
+        * * Display Name: Tax  Schedule  ID from  Customer  Master
+        * * SQL Data Type: varchar(15)`),
+    Tax_Schedule_ID_from_Sales_Line_Item: z.string().nullish().describe(`
+        * * Field Name: Tax Schedule ID from Sales Line Item
+        * * Display Name: Tax  Schedule  ID from  Sales  Line  Item
+        * * SQL Data Type: varchar(15)`),
+    Tax_Schedule_ID_from_Sales_Transaction: z.string().nullish().describe(`
+        * * Field Name: Tax Schedule ID from Sales Transaction
+        * * Display Name: Tax  Schedule  ID from  Sales  Transaction
+        * * SQL Data Type: varchar(15)`),
+    Tax_Schedule_Source_from_Sales_Line_Item: z.string().nullish().describe(`
+        * * Field Name: Tax Schedule Source from Sales Line Item
+        * * Display Name: Tax  Schedule  Source  from  Sales  Line  Item
+        * * SQL Data Type: varchar(100)`),
+    Tax_Schedule_Source_from_Sales_Transaction: z.string().nullish().describe(`
+        * * Field Name: Tax Schedule Source from Sales Transaction
+        * * Display Name: Tax  Schedule  Source  from  Sales  Transaction
+        * * SQL Data Type: varchar(100)`),
+    Taxable_Tax_Amount: z.number().nullish().describe(`
+        * * Field Name: Taxable Tax Amount
+        * * Display Name: Taxable  Tax  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Taxable_Tax_Amount_from_Sales_Transaction: z.number().nullish().describe(`
+        * * Field Name: Taxable Tax Amount from Sales Transaction
+        * * Display Name: Taxable  Tax  Amount  from  Sales  Transaction
+        * * SQL Data Type: decimal(19, 5)`),
+    Time: z.date().nullish().describe(`
+        * * Field Name: Time
+        * * Display Name: Time
+        * * SQL Data Type: datetime`),
+    Times_Printed: z.number().nullish().describe(`
+        * * Field Name: Times Printed
+        * * Display Name: Times  Printed
+        * * SQL Data Type: decimal(13, 6)`),
+    Times_Repeated: z.number().nullish().describe(`
+        * * Field Name: Times Repeated
+        * * Display Name: Times  Repeated
+        * * SQL Data Type: smallint`),
+    Times_To_Repeat: z.number().nullish().describe(`
+        * * Field Name: Times To Repeat
+        * * Display Name: Times  To  Repeat
+        * * SQL Data Type: smallint`),
+    Total___FC_LTD: z.number().nullish().describe(`
+        * * Field Name: Total # FC LTD
+        * * Display Name: Total  # FC LTD
+        * * SQL Data Type: int`),
+    Total___FC_LYR: z.number().nullish().describe(`
+        * * Field Name: Total # FC LYR
+        * * Display Name: Total  # FC LYR
+        * * SQL Data Type: int`),
+    Total___FC_YTD: z.number().nullish().describe(`
+        * * Field Name: Total # FC YTD
+        * * Display Name: Total  # FC YTD
+        * * SQL Data Type: int`),
+    Total___Invoices_LTD: z.number().nullish().describe(`
+        * * Field Name: Total # Invoices LTD
+        * * Display Name: Total  # Invoices  LTD
+        * * SQL Data Type: int`),
+    Total___Invoices_LYR: z.number().nullish().describe(`
+        * * Field Name: Total # Invoices LYR
+        * * Display Name: Total  # Invoices  LYR
+        * * SQL Data Type: int`),
+    Total___Invoices_YTD: z.number().nullish().describe(`
+        * * Field Name: Total # Invoices YTD
+        * * Display Name: Total  # Invoices  YTD
+        * * SQL Data Type: int`),
+    Total_Amount_Of_NSF_Checks_Life: z.number().nullish().describe(`
+        * * Field Name: Total Amount Of NSF Checks Life
+        * * Display Name: Total  Amount  Of  NSF Checks  Life
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Amount_Of_NSF_Checks_YTD: z.number().nullish().describe(`
+        * * Field Name: Total Amount Of NSF Checks YTD
+        * * Display Name: Total  Amount  Of  NSF Checks  YTD
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Bad_Deb_LYR: z.number().nullish().describe(`
+        * * Field Name: Total Bad Deb LYR
+        * * Display Name: Total  Bad  Deb  LYR
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Bad_Debt_LTD: z.number().nullish().describe(`
+        * * Field Name: Total Bad Debt LTD
+        * * Display Name: Total  Bad  Debt  LTD
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Bad_Debt_YTD: z.number().nullish().describe(`
+        * * Field Name: Total Bad Debt YTD
+        * * Display Name: Total  Bad  Debt  YTD
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Cash_Received_LTD: z.number().nullish().describe(`
+        * * Field Name: Total Cash Received LTD
+        * * Display Name: Total  Cash  Received  LTD
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Cash_Received_LYR: z.number().nullish().describe(`
+        * * Field Name: Total Cash Received LYR
+        * * Display Name: Total  Cash  Received  LYR
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Cash_Received_YTD: z.number().nullish().describe(`
+        * * Field Name: Total Cash Received YTD
+        * * Display Name: Total  Cash  Received  YTD
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Costs_LTD: z.number().nullish().describe(`
+        * * Field Name: Total Costs LTD
+        * * Display Name: Total  Costs  LTD
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Costs_LYR: z.number().nullish().describe(`
+        * * Field Name: Total Costs LYR
+        * * Display Name: Total  Costs  LYR
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Costs_YTD: z.number().nullish().describe(`
+        * * Field Name: Total Costs YTD
+        * * Display Name: Total  Costs  YTD
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Discounts_Available_YTD: z.number().nullish().describe(`
+        * * Field Name: Total Discounts Available YTD
+        * * Display Name: Total  Discounts  Available  YTD
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Discounts_Taken_LTD: z.number().nullish().describe(`
+        * * Field Name: Total Discounts Taken LTD
+        * * Display Name: Total  Discounts  Taken  LTD
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Discounts_Taken_LYR: z.number().nullish().describe(`
+        * * Field Name: Total Discounts Taken LYR
+        * * Display Name: Total  Discounts  Taken  LYR
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Discounts_Taken_YTD: z.number().nullish().describe(`
+        * * Field Name: Total Discounts Taken YTD
+        * * Display Name: Total  Discounts  Taken  YTD
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Finance_Charges_LTD: z.number().nullish().describe(`
+        * * Field Name: Total Finance Charges LTD
+        * * Display Name: Total  Finance  Charges  LTD
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Finance_Charges_LYR: z.number().nullish().describe(`
+        * * Field Name: Total Finance Charges LYR
+        * * Display Name: Total  Finance  Charges  LYR
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Finance_Charges_YTD: z.number().nullish().describe(`
+        * * Field Name: Total Finance Charges YTD
+        * * Display Name: Total  Finance  Charges  YTD
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Returns_LTD: z.number().nullish().describe(`
+        * * Field Name: Total Returns LTD
+        * * Display Name: Total  Returns  LTD
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Returns_LYR: z.number().nullish().describe(`
+        * * Field Name: Total Returns LYR
+        * * Display Name: Total  Returns  LYR
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Returns_YTD: z.number().nullish().describe(`
+        * * Field Name: Total Returns YTD
+        * * Display Name: Total  Returns  YTD
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Sales_LTD: z.number().nullish().describe(`
+        * * Field Name: Total Sales LTD
+        * * Display Name: Total  Sales  LTD
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Sales_LYR: z.number().nullish().describe(`
+        * * Field Name: Total Sales LYR
+        * * Display Name: Total  Sales  LYR
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Sales_YTD: z.number().nullish().describe(`
+        * * Field Name: Total Sales YTD
+        * * Display Name: Total  Sales  YTD
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Waived_FC_LTD: z.number().nullish().describe(`
+        * * Field Name: Total Waived FC LTD
+        * * Display Name: Total  Waived  FC LTD
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Waived_FC_LYR: z.number().nullish().describe(`
+        * * Field Name: Total Waived FC LYR
+        * * Display Name: Total  Waived  FC LYR
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Waived_FC_YTD: z.number().nullish().describe(`
+        * * Field Name: Total Waived FC YTD
+        * * Display Name: Total  Waived  FC YTD
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Writeoffs_LTD: z.number().nullish().describe(`
+        * * Field Name: Total Writeoffs LTD
+        * * Display Name: Total  Writeoffs  LTD
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Writeoffs_LYR: z.number().nullish().describe(`
+        * * Field Name: Total Writeoffs LYR
+        * * Display Name: Total  Writeoffs  LYR
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Writeoffs_YTD: z.number().nullish().describe(`
+        * * Field Name: Total Writeoffs YTD
+        * * Display Name: Total  Writeoffs  YTD
+        * * SQL Data Type: decimal(19, 5)`),
+    Trade_Discount_Amount: z.number().nullish().describe(`
+        * * Field Name: Trade Discount Amount
+        * * Display Name: Trade  Discount  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Trade_Discount_Amount_from_Sales_Transaction: z.number().nullish().describe(`
+        * * Field Name: Trade Discount Amount from Sales Transaction
+        * * Display Name: Trade  Discount  Amount  from  Sales  Transaction
+        * * SQL Data Type: decimal(19, 5)`),
+    Trade_Discount_Percent: z.number().nullish().describe(`
+        * * Field Name: Trade Discount Percent
+        * * Display Name: Trade  Discount  Percent
+        * * SQL Data Type: smallint`),
+    UPS_Zone: z.string().nullish().describe(`
+        * * Field Name: UPS Zone
+        * * Display Name: UPS Zone
+        * * SQL Data Type: varchar(3)`),
+    UPS_Zone_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: UPS Zone from Customer Master
+        * * Display Name: UPS Zone  from  Customer  Master
+        * * SQL Data Type: varchar(3)`),
+    U_Of_M: z.string().nullish().describe(`
+        * * Field Name: U Of M
+        * * Display Name: U Of  M
+        * * SQL Data Type: varchar(9)`),
+    U_Of_M_Schedule: z.string().nullish().describe(`
+        * * Field Name: U Of M Schedule
+        * * Display Name: U Of  M Schedule
+        * * SQL Data Type: varchar(11)`),
+    Unpaid_Finance_Charges_YTD: z.number().nullish().describe(`
+        * * Field Name: Unpaid Finance Charges YTD
+        * * Display Name: Unpaid  Finance  Charges  YTD
+        * * SQL Data Type: decimal(19, 5)`),
+    Unposted_Cash_Amount: z.number().nullish().describe(`
+        * * Field Name: Unposted Cash Amount
+        * * Display Name: Unposted  Cash  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Unposted_Other_Cash_Amount: z.number().nullish().describe(`
+        * * Field Name: Unposted Other Cash Amount
+        * * Display Name: Unposted  Other  Cash  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Unposted_Other_Sales_Amount: z.number().nullish().describe(`
+        * * Field Name: Unposted Other Sales Amount
+        * * Display Name: Unposted  Other  Sales  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Unposted_Sales_Amount: z.number().nullish().describe(`
+        * * Field Name: Unposted Sales Amount
+        * * Display Name: Unposted  Sales  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Unrealized_Purchase_Price_Variance_Account_Number: z.string().nullish().describe(`
+        * * Field Name: Unrealized Purchase Price Variance Account Number
+        * * Display Name: Unrealized  Purchase  Price  Variance  Account  Number
+        * * SQL Data Type: varchar(129)`),
+    Use_Document_ID_1: z.string().nullish().describe(`
+        * * Field Name: Use Document ID 1
+        * * Display Name: Use  Document  ID 1
+        * * SQL Data Type: varchar(15)`),
+    Use_Document_ID_2: z.string().nullish().describe(`
+        * * Field Name: Use Document ID 2
+        * * Display Name: Use  Document  ID 2
+        * * SQL Data Type: varchar(15)`),
+    User_Category_Value_1: z.string().nullish().describe(`
+        * * Field Name: User Category Value 1
+        * * Display Name: User  Category  Value  1
+        * * SQL Data Type: varchar(11)`),
+    User_Category_Value_2: z.string().nullish().describe(`
+        * * Field Name: User Category Value 2
+        * * Display Name: User  Category  Value  2
+        * * SQL Data Type: varchar(11)`),
+    User_Category_Value_3: z.string().nullish().describe(`
+        * * Field Name: User Category Value 3
+        * * Display Name: User  Category  Value  3
+        * * SQL Data Type: varchar(11)`),
+    User_Category_Value_4: z.string().nullish().describe(`
+        * * Field Name: User Category Value 4
+        * * Display Name: User  Category  Value  4
+        * * SQL Data Type: varchar(11)`),
+    User_Category_Value_5: z.string().nullish().describe(`
+        * * Field Name: User Category Value 5
+        * * Display Name: User  Category  Value  5
+        * * SQL Data Type: varchar(11)`),
+    User_Category_Value_6: z.string().nullish().describe(`
+        * * Field Name: User Category Value 6
+        * * Display Name: User  Category  Value  6
+        * * SQL Data Type: varchar(11)`),
+    User_Defined_1: z.string().nullish().describe(`
+        * * Field Name: User Defined 1
+        * * Display Name: User  Defined  1
+        * * SQL Data Type: varchar(21)`),
+    User_Defined_1_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: User Defined 1 from Customer Master
+        * * Display Name: User  Defined  1 from  Customer  Master
+        * * SQL Data Type: varchar(21)`),
+    User_Defined_2: z.string().nullish().describe(`
+        * * Field Name: User Defined 2
+        * * Display Name: User  Defined  2
+        * * SQL Data Type: varchar(21)`),
+    User_Defined_2_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: User Defined 2 from Customer Master
+        * * Display Name: User  Defined  2 from  Customer  Master
+        * * SQL Data Type: varchar(21)`),
+    User_Defined_3: z.string().nullish().describe(`
+        * * Field Name: User Defined 3
+        * * Display Name: User  Defined  3
+        * * SQL Data Type: varchar(21)`),
+    User_Defined_4: z.string().nullish().describe(`
+        * * Field Name: User Defined 4
+        * * Display Name: User  Defined  4
+        * * SQL Data Type: varchar(21)`),
+    User_Defined_5: z.string().nullish().describe(`
+        * * Field Name: User Defined 5
+        * * Display Name: User  Defined  5
+        * * SQL Data Type: varchar(21)`),
+    User_Defined_Date_1: z.date().nullish().describe(`
+        * * Field Name: User Defined Date 1
+        * * Display Name: User  Defined  Date  1
+        * * SQL Data Type: datetime`),
+    User_Defined_Date_2: z.date().nullish().describe(`
+        * * Field Name: User Defined Date 2
+        * * Display Name: User  Defined  Date  2
+        * * SQL Data Type: datetime`),
+    User_Defined_Table_1: z.string().nullish().describe(`
+        * * Field Name: User Defined Table 1
+        * * Display Name: User  Defined  Table  1
+        * * SQL Data Type: varchar(21)`),
+    User_Defined_Table_2: z.string().nullish().describe(`
+        * * Field Name: User Defined Table 2
+        * * Display Name: User  Defined  Table  2
+        * * SQL Data Type: varchar(21)`),
+    User_Defined_Table_3: z.string().nullish().describe(`
+        * * Field Name: User Defined Table 3
+        * * Display Name: User  Defined  Table  3
+        * * SQL Data Type: varchar(21)`),
+    User_To_Enter: z.string().nullish().describe(`
+        * * Field Name: User To Enter
+        * * Display Name: User  To  Enter
+        * * SQL Data Type: varchar(15)`),
+    Valuation_Method: z.string().nullish().describe(`
+        * * Field Name: Valuation Method
+        * * Display Name: Valuation  Method
+        * * SQL Data Type: varchar(100)`),
+    Variances_Account_Number: z.string().nullish().describe(`
+        * * Field Name: Variances Account Number
+        * * Display Name: Variances  Account  Number
+        * * SQL Data Type: varchar(129)`),
+    Void_Status: z.string().nullish().describe(`
+        * * Field Name: Void Status
+        * * Display Name: Void  Status
+        * * SQL Data Type: varchar(100)`),
+    Warranty_Days: z.number().nullish().describe(`
+        * * Field Name: Warranty Days
+        * * Display Name: Warranty  Days
+        * * SQL Data Type: smallint`),
+    Withholding_Amount: z.number().nullish().describe(`
+        * * Field Name: Withholding Amount
+        * * Display Name: Withholding  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Write_Offs_LIFE: z.number().nullish().describe(`
+        * * Field Name: Write Offs LIFE
+        * * Display Name: Write  Offs  LIFE
+        * * SQL Data Type: decimal(19, 5)`),
+    Write_Offs_LYR: z.number().nullish().describe(`
+        * * Field Name: Write Offs LYR
+        * * Display Name: Write  Offs  LYR
+        * * SQL Data Type: decimal(19, 5)`),
+    Write_Offs_YTD: z.number().nullish().describe(`
+        * * Field Name: Write Offs YTD
+        * * Display Name: Write  Offs  YTD
+        * * SQL Data Type: decimal(19, 5)`),
+    Writeoff_Account_Number: z.string().nullish().describe(`
+        * * Field Name: Writeoff Account Number
+        * * Display Name: Writeoff  Account  Number
+        * * SQL Data Type: varchar(129)`),
+    Zip_Code_from_Sales_Line_Item: z.string().nullish().describe(`
+        * * Field Name: Zip Code from Sales Line Item
+        * * Display Name: Zip  Code  from  Sales  Line  Item
+        * * SQL Data Type: varchar(11)`),
+    Zip_Code_from_Sales_Transaction: z.string().nullish().describe(`
+        * * Field Name: Zip Code from Sales Transaction
+        * * Display Name: Zip  Code  from  Sales  Transaction
+        * * SQL Data Type: varchar(11)`),
+    Zip_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: Zip from Customer Master
+        * * Display Name: Zip  from  Customer  Master
+        * * SQL Data Type: varchar(11)`),
+    Workflow_Approval_Status_Credit_Limit: z.string().nullish().describe(`
+        * * Field Name: Workflow Approval Status Credit Limit
+        * * Display Name: Workflow  Approval  Status  Credit  Limit
+        * * SQL Data Type: varchar(100)`),
+    Workflow_Priority_Credit_Limit: z.string().nullish().describe(`
+        * * Field Name: Workflow Priority Credit Limit
+        * * Display Name: Workflow  Priority  Credit  Limit
+        * * SQL Data Type: varchar(100)`),
+    Workflow_Approval_Status_Quote: z.string().nullish().describe(`
+        * * Field Name: Workflow Approval Status Quote
+        * * Display Name: Workflow  Approval  Status  Quote
+        * * SQL Data Type: varchar(100)`),
+    Workflow_Priority_Quote: z.string().nullish().describe(`
+        * * Field Name: Workflow Priority Quote
+        * * Display Name: Workflow  Priority  Quote
+        * * SQL Data Type: varchar(100)`),
+    Accounts_Receivable_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Accounts Receivable Account Number For Drillback
+        * * Display Name: Accounts  Receivable  Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Assembly_Variance_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Assembly Variance Account Number For Drillback
+        * * Display Name: Assembly  Variance  Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Cash_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Cash Account Number For Drillback
+        * * Display Name: Cash  Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Checkbook_ID_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Checkbook ID For Drillback
+        * * Display Name: Checkbook  ID For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    COGS_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: COGS Account Number For Drillback
+        * * Display Name: COGS Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    COGS_Inflation_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: COGS Inflation Account Number For Drillback
+        * * Display Name: COGS Inflation  Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    COGS_Monetary_Correction_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: COGS Monetary Correction Account Number For Drillback
+        * * Display Name: COGS Monetary  Correction  Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Customer_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Customer Number For Drillback
+        * * Display Name: Customer  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Damaged_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Damaged Account Number For Drillback
+        * * Display Name: Damaged  Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Discounts_Available_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Discounts Available Account Number For Drillback
+        * * Display Name: Discounts  Available  Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Discounts_Taken_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Discounts Taken Account Number For Drillback
+        * * Display Name: Discounts  Taken  Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Drop_Ship_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Drop Ship Account Number For Drillback
+        * * Display Name: Drop  Ship  Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Finance_Charge_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Finance Charge Account Number For Drillback
+        * * Display Name: Finance  Charge  Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    In_Service_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: In Service Account Number For Drillback
+        * * Display Name: In  Service  Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    In_Use_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: In Use Account Number For Drillback
+        * * Display Name: In  Use  Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Inventory_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Inventory Account Number For Drillback
+        * * Display Name: Inventory  Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Inventory_Inflation_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Inventory Inflation Account Number For Drillback
+        * * Display Name: Inventory  Inflation  Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Inventory_Monetary_Correction_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Inventory Monetary Correction Account Number For Drillback
+        * * Display Name: Inventory  Monetary  Correction  Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Inventory_Offset_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Inventory Offset Account Number For Drillback
+        * * Display Name: Inventory  Offset  Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Inventory_Returns_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Inventory Returns Account Number For Drillback
+        * * Display Name: Inventory  Returns  Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Item_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Item Number For Drillback
+        * * Display Name: Item  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Markdown_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Markdown Account Number For Drillback
+        * * Display Name: Markdown  Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Purch_Inflation_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Purch Inflation Account Number For Drillback
+        * * Display Name: Purch  Inflation  Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Purch_Monetary_Correction_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Purch Monetary Correction Account Number For Drillback
+        * * Display Name: Purch  Monetary  Correction  Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Purchase_Price_Variance_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Purchase Price Variance Account Number For Drillback
+        * * Display Name: Purchase  Price  Variance  Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Returns_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Returns Account Number For Drillback
+        * * Display Name: Returns  Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Sales_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Sales Account Number For Drillback
+        * * Display Name: Sales  Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Sales_Discounts_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Sales Discounts Account Number For Drillback
+        * * Display Name: Sales  Discounts  Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Sales_Returns_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Sales Returns Account Number For Drillback
+        * * Display Name: Sales  Returns  Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Salesperson_ID_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Salesperson ID For Drillback
+        * * Display Name: Salesperson  ID For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    SOP_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: SOP Number For Drillback
+        * * Display Name: SOP Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Unrealized_Purchase_Price_Variance_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Unrealized Purchase Price Variance Account Number For Drillback
+        * * Display Name: Unrealized  Purchase  Price  Variance  Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Variances_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Variances Account Number For Drillback
+        * * Display Name: Variances  Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Writeoff_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Writeoff Account Number For Drillback
+        * * Display Name: Writeoff  Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    ID: z.number().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: int`),
+    SalesTransactionID: z.number().nullish().describe(`
+        * * Field Name: SalesTransactionID
+        * * Display Name: Sales Transaction ID
+        * * SQL Data Type: int
+        * * Related Entity/Foreign Key: Sales Transactions__client_membership (vwSalesTransactions__client_membership.ID)`),
+});
+
+export type SalesLineItem__client_membershipEntityType = z.infer<typeof SalesLineItem__client_membershipSchema>;
+       
+/**
+ * zod schema definition for the entity Sales Order Details
+ */
+export const SalesOrderDetailSchema = z.object({
+    UoMIdName: z.string().nullish().describe(`
+        * * Field Name: UoMIdName
+        * * Display Name: Uo MId Name
+        * * SQL Data Type: nvarchar(100)`),
+    OwnerId: z.string().nullish().describe(`
+        * * Field Name: OwnerId
+        * * Display Name: Owner Id
+        * * SQL Data Type: uniqueidentifier`),
+    OwnerIdType: z.number().nullish().describe(`
+        * * Field Name: OwnerIdType
+        * * Display Name: Owner Id Type
+        * * SQL Data Type: int`),
+    SalesOrderStateCode: z.number().nullish().describe(`
+        * * Field Name: SalesOrderStateCode
+        * * Display Name: Sales Order State Code
+        * * SQL Data Type: int`),
+    OwningBusinessUnit: z.string().nullish().describe(`
+        * * Field Name: OwningBusinessUnit
+        * * Display Name: Owning Business Unit
+        * * SQL Data Type: uniqueidentifier`),
+    SalesOrderIsPriceLocked: z.boolean().nullish().describe(`
+        * * Field Name: SalesOrderIsPriceLocked
+        * * Display Name: Sales Order Is Price Locked
+        * * SQL Data Type: bit`),
+    OwningUser: z.string().nullish().describe(`
+        * * Field Name: OwningUser
+        * * Display Name: Owning User
+        * * SQL Data Type: uniqueidentifier`),
+    SalesOrderIdName: z.string().nullish().describe(`
+        * * Field Name: SalesOrderIdName
+        * * Display Name: Sales Order Id Name
+        * * SQL Data Type: nvarchar(300)`),
+    SalesRepIdYomiName: z.string().nullish().describe(`
+        * * Field Name: SalesRepIdYomiName
+        * * Display Name: Sales Rep Id Yomi Name
+        * * SQL Data Type: nvarchar(200)`),
+    SalesRepIdName: z.string().nullish().describe(`
+        * * Field Name: SalesRepIdName
+        * * Display Name: Sales Rep Id Name
+        * * SQL Data Type: nvarchar(200)`),
+    ProductIdName: z.string().nullish().describe(`
+        * * Field Name: ProductIdName
+        * * Display Name: Product Id Name
+        * * SQL Data Type: nvarchar(200)`),
+    TransactionCurrencyIdName: z.string().nullish().describe(`
+        * * Field Name: TransactionCurrencyIdName
+        * * Display Name: Transaction Currency Id Name
+        * * SQL Data Type: nvarchar(100)`),
+    ModifiedOnBehalfByYomiName: z.string().nullish().describe(`
+        * * Field Name: ModifiedOnBehalfByYomiName
+        * * Display Name: Modified On Behalf By Yomi Name
+        * * SQL Data Type: nvarchar(200)`),
+    ModifiedOnBehalfByName: z.string().nullish().describe(`
+        * * Field Name: ModifiedOnBehalfByName
+        * * Display Name: Modified On Behalf By Name
+        * * SQL Data Type: nvarchar(200)`),
+    ModifiedByYomiName: z.string().nullish().describe(`
+        * * Field Name: ModifiedByYomiName
+        * * Display Name: Modified By Yomi Name
+        * * SQL Data Type: nvarchar(200)`),
+    ModifiedByName: z.string().nullish().describe(`
+        * * Field Name: ModifiedByName
+        * * Display Name: Modified By Name
+        * * SQL Data Type: nvarchar(200)`),
+    CreatedOnBehalfByName: z.string().nullish().describe(`
+        * * Field Name: CreatedOnBehalfByName
+        * * Display Name: Created On Behalf By Name
+        * * SQL Data Type: nvarchar(200)`),
+    CreatedOnBehalfByYomiName: z.string().nullish().describe(`
+        * * Field Name: CreatedOnBehalfByYomiName
+        * * Display Name: Created On Behalf By Yomi Name
+        * * SQL Data Type: nvarchar(200)`),
+    CreatedByYomiName: z.string().nullish().describe(`
+        * * Field Name: CreatedByYomiName
+        * * Display Name: Created By Yomi Name
+        * * SQL Data Type: nvarchar(200)`),
+    CreatedByName: z.string().nullish().describe(`
+        * * Field Name: CreatedByName
+        * * Display Name: Created By Name
+        * * SQL Data Type: nvarchar(200)`),
+    acep_BillingOptionName: z.string().nullish().describe(`
+        * * Field Name: acep_BillingOptionName
+        * * Display Name: acep _Billing Option Name
+        * * SQL Data Type: nvarchar(100)`),
+    SalesOrderDetailId: z.string().describe(`
+        * * Field Name: SalesOrderDetailId
+        * * Display Name: Sales Order Detail Id
+        * * SQL Data Type: uniqueidentifier`),
+    SalesOrderId: z.string().nullish().describe(`
+        * * Field Name: SalesOrderId
+        * * Display Name: Sales Order Id
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Sales Orders (vwSalesOrders.SalesOrderId)`),
+    SalesRepId: z.string().nullish().describe(`
+        * * Field Name: SalesRepId
+        * * Display Name: Sales Rep Id
+        * * SQL Data Type: uniqueidentifier`),
+    IsProductOverridden: z.boolean().nullish().describe(`
+        * * Field Name: IsProductOverridden
+        * * Display Name: Is Product Overridden
+        * * SQL Data Type: bit`),
+    IsCopied: z.boolean().nullish().describe(`
+        * * Field Name: IsCopied
+        * * Display Name: Is Copied
+        * * SQL Data Type: bit`),
+    QuantityShipped: z.number().nullish().describe(`
+        * * Field Name: QuantityShipped
+        * * Display Name: Quantity Shipped
+        * * SQL Data Type: decimal(23, 10)`),
+    LineItemNumber: z.number().nullish().describe(`
+        * * Field Name: LineItemNumber
+        * * Display Name: Line Item Number
+        * * SQL Data Type: int`),
+    QuantityBackordered: z.number().nullish().describe(`
+        * * Field Name: QuantityBackordered
+        * * Display Name: Quantity Backordered
+        * * SQL Data Type: decimal(23, 10)`),
+    UoMId: z.string().nullish().describe(`
+        * * Field Name: UoMId
+        * * Display Name: Uo MId
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Uo Ms (vwUoMs.UoMId)`),
+    QuantityCancelled: z.number().nullish().describe(`
+        * * Field Name: QuantityCancelled
+        * * Display Name: Quantity Cancelled
+        * * SQL Data Type: decimal(23, 10)`),
+    ProductId: z.string().nullish().describe(`
+        * * Field Name: ProductId
+        * * Display Name: Product Id
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Products (vwProducts.ProductId)`),
+    RequestDeliveryBy: z.date().nullish().describe(`
+        * * Field Name: RequestDeliveryBy
+        * * Display Name: Request Delivery By
+        * * SQL Data Type: datetime`),
+    Quantity: z.number().nullish().describe(`
+        * * Field Name: Quantity
+        * * Display Name: Quantity
+        * * SQL Data Type: decimal(23, 10)`),
+    PricingErrorCode: z.number().nullish().describe(`
+        * * Field Name: PricingErrorCode
+        * * Display Name: Pricing Error Code
+        * * SQL Data Type: int`),
+    ManualDiscountAmount: z.number().nullish().describe(`
+        * * Field Name: ManualDiscountAmount
+        * * Display Name: Manual Discount Amount
+        * * SQL Data Type: money`),
+    ProductDescription: z.string().nullish().describe(`
+        * * Field Name: ProductDescription
+        * * Display Name: Product Description
+        * * SQL Data Type: nvarchar(500)`),
+    VolumeDiscountAmount: z.number().nullish().describe(`
+        * * Field Name: VolumeDiscountAmount
+        * * Display Name: Volume Discount Amount
+        * * SQL Data Type: money`),
+    PricePerUnit: z.number().nullish().describe(`
+        * * Field Name: PricePerUnit
+        * * Display Name: Price Per Unit
+        * * SQL Data Type: money`),
+    BaseAmount: z.number().nullish().describe(`
+        * * Field Name: BaseAmount
+        * * Display Name: Base Amount
+        * * SQL Data Type: money`),
+    ExtendedAmount: z.number().nullish().describe(`
+        * * Field Name: ExtendedAmount
+        * * Display Name: Extended Amount
+        * * SQL Data Type: money`),
+    Description: z.string().nullish().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)`),
+    IsPriceOverridden: z.boolean().nullish().describe(`
+        * * Field Name: IsPriceOverridden
+        * * Display Name: Is Price Overridden
+        * * SQL Data Type: bit`),
+    ShipTo_Name: z.string().nullish().describe(`
+        * * Field Name: ShipTo_Name
+        * * Display Name: Ship To _Name
+        * * SQL Data Type: nvarchar(200)`),
+    Tax: z.number().nullish().describe(`
+        * * Field Name: Tax
+        * * Display Name: Tax
+        * * SQL Data Type: money`),
+    CreatedOn: z.date().nullish().describe(`
+        * * Field Name: CreatedOn
+        * * Display Name: Created On
+        * * SQL Data Type: datetime`),
+    ShipTo_Line1: z.string().nullish().describe(`
+        * * Field Name: ShipTo_Line1
+        * * Display Name: Ship To _Line 1
+        * * SQL Data Type: nvarchar(4000)`),
+    CreatedBy: z.string().nullish().describe(`
+        * * Field Name: CreatedBy
+        * * Display Name: Created By
+        * * SQL Data Type: uniqueidentifier`),
+    ModifiedBy: z.string().nullish().describe(`
+        * * Field Name: ModifiedBy
+        * * Display Name: Modified By
+        * * SQL Data Type: uniqueidentifier`),
+    ShipTo_Line2: z.string().nullish().describe(`
+        * * Field Name: ShipTo_Line2
+        * * Display Name: Ship To _Line 2
+        * * SQL Data Type: nvarchar(4000)`),
+    ShipTo_Line3: z.string().nullish().describe(`
+        * * Field Name: ShipTo_Line3
+        * * Display Name: Ship To _Line 3
+        * * SQL Data Type: nvarchar(4000)`),
+    ModifiedOn: z.date().nullish().describe(`
+        * * Field Name: ModifiedOn
+        * * Display Name: Modified On
+        * * SQL Data Type: datetime`),
+    ShipTo_City: z.string().nullish().describe(`
+        * * Field Name: ShipTo_City
+        * * Display Name: Ship To _City
+        * * SQL Data Type: nvarchar(80)`),
+    ShipTo_StateOrProvince: z.string().nullish().describe(`
+        * * Field Name: ShipTo_StateOrProvince
+        * * Display Name: Ship To _State Or Province
+        * * SQL Data Type: nvarchar(50)`),
+    ShipTo_Country: z.string().nullish().describe(`
+        * * Field Name: ShipTo_Country
+        * * Display Name: Ship To _Country
+        * * SQL Data Type: nvarchar(80)`),
+    ShipTo_PostalCode: z.string().nullish().describe(`
+        * * Field Name: ShipTo_PostalCode
+        * * Display Name: Ship To _Postal Code
+        * * SQL Data Type: nvarchar(20)`),
+    WillCall: z.boolean().nullish().describe(`
+        * * Field Name: WillCall
+        * * Display Name: Will Call
+        * * SQL Data Type: bit`),
+    ShipTo_Telephone: z.string().nullish().describe(`
+        * * Field Name: ShipTo_Telephone
+        * * Display Name: Ship To _Telephone
+        * * SQL Data Type: nvarchar(50)`),
+    ShipTo_Fax: z.string().nullish().describe(`
+        * * Field Name: ShipTo_Fax
+        * * Display Name: Ship To _Fax
+        * * SQL Data Type: nvarchar(50)`),
+    ShipTo_FreightTermsCode: z.number().nullish().describe(`
+        * * Field Name: ShipTo_FreightTermsCode
+        * * Display Name: Ship To _Freight Terms Code
+        * * SQL Data Type: int`),
+    ShipTo_ContactName: z.string().nullish().describe(`
+        * * Field Name: ShipTo_ContactName
+        * * Display Name: Ship To _Contact Name
+        * * SQL Data Type: nvarchar(150)`),
+    VersionNumber: z.number().describe(`
+        * * Field Name: VersionNumber
+        * * Display Name: Version Number
+        * * SQL Data Type: timestamp`),
+    ShipTo_AddressId: z.string().nullish().describe(`
+        * * Field Name: ShipTo_AddressId
+        * * Display Name: Ship To _Address Id
+        * * SQL Data Type: uniqueidentifier`),
+    TimeZoneRuleVersionNumber: z.number().nullish().describe(`
+        * * Field Name: TimeZoneRuleVersionNumber
+        * * Display Name: Time Zone Rule Version Number
+        * * SQL Data Type: int`),
+    ImportSequenceNumber: z.number().nullish().describe(`
+        * * Field Name: ImportSequenceNumber
+        * * Display Name: Import Sequence Number
+        * * SQL Data Type: int`),
+    UTCConversionTimeZoneCode: z.number().nullish().describe(`
+        * * Field Name: UTCConversionTimeZoneCode
+        * * Display Name: UTCConversion Time Zone Code
+        * * SQL Data Type: int`),
+    ExchangeRate: z.number().nullish().describe(`
+        * * Field Name: ExchangeRate
+        * * Display Name: Exchange Rate
+        * * SQL Data Type: decimal(23, 10)`),
+    OverriddenCreatedOn: z.date().nullish().describe(`
+        * * Field Name: OverriddenCreatedOn
+        * * Display Name: Overridden Created On
+        * * SQL Data Type: datetime`),
+    TransactionCurrencyId: z.string().nullish().describe(`
+        * * Field Name: TransactionCurrencyId
+        * * Display Name: Transaction Currency Id
+        * * SQL Data Type: uniqueidentifier`),
+    BaseAmount_Base: z.number().nullish().describe(`
+        * * Field Name: BaseAmount_Base
+        * * Display Name: Base Amount _Base
+        * * SQL Data Type: money`),
+    PricePerUnit_Base: z.number().nullish().describe(`
+        * * Field Name: PricePerUnit_Base
+        * * Display Name: Price Per Unit _Base
+        * * SQL Data Type: money`),
+    VolumeDiscountAmount_Base: z.number().nullish().describe(`
+        * * Field Name: VolumeDiscountAmount_Base
+        * * Display Name: Volume Discount Amount _Base
+        * * SQL Data Type: money`),
+    ExtendedAmount_Base: z.number().nullish().describe(`
+        * * Field Name: ExtendedAmount_Base
+        * * Display Name: Extended Amount _Base
+        * * SQL Data Type: money`),
+    Tax_Base: z.number().nullish().describe(`
+        * * Field Name: Tax_Base
+        * * Display Name: Tax _Base
+        * * SQL Data Type: money`),
+    ManualDiscountAmount_Base: z.number().nullish().describe(`
+        * * Field Name: ManualDiscountAmount_Base
+        * * Display Name: Manual Discount Amount _Base
+        * * SQL Data Type: money`),
+    CreatedOnBehalfBy: z.string().nullish().describe(`
+        * * Field Name: CreatedOnBehalfBy
+        * * Display Name: Created On Behalf By
+        * * SQL Data Type: uniqueidentifier`),
+    ModifiedOnBehalfBy: z.string().nullish().describe(`
+        * * Field Name: ModifiedOnBehalfBy
+        * * Display Name: Modified On Behalf By
+        * * SQL Data Type: uniqueidentifier`),
+    SequenceNumber: z.number().nullish().describe(`
+        * * Field Name: SequenceNumber
+        * * Display Name: Sequence Number
+        * * SQL Data Type: int`),
+    ParentBundleId: z.string().nullish().describe(`
+        * * Field Name: ParentBundleId
+        * * Display Name: Parent Bundle Id
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Sales Order Details (vwSalesOrderDetails.SalesOrderDetailId)`),
+    ProductTypeCode: z.number().nullish().describe(`
+        * * Field Name: ProductTypeCode
+        * * Display Name: Product Type Code
+        * * SQL Data Type: int`),
+    PropertyConfigurationStatus: z.number().nullish().describe(`
+        * * Field Name: PropertyConfigurationStatus
+        * * Display Name: Property Configuration Status
+        * * SQL Data Type: int`),
+    ProductAssociationId: z.string().nullish().describe(`
+        * * Field Name: ProductAssociationId
+        * * Display Name: Product Association Id
+        * * SQL Data Type: uniqueidentifier`),
+    Acep_IsPrimary: z.boolean().nullish().describe(`
+        * * Field Name: Acep_IsPrimary
+        * * Display Name: Acep _Is Primary
+        * * SQL Data Type: bit`),
+    Acep_reinstate: z.boolean().nullish().describe(`
+        * * Field Name: Acep_reinstate
+        * * Display Name: Acep _reinstate
+        * * SQL Data Type: bit`),
+    Acep_ExistingProductDescription: z.string().nullish().describe(`
+        * * Field Name: Acep_ExistingProductDescription
+        * * Display Name: Acep _Existing Product Description
+        * * SQL Data Type: nvarchar(500)`),
+    acep_IsRefunded: z.boolean().nullish().describe(`
+        * * Field Name: acep_IsRefunded
+        * * Display Name: acep _Is Refunded
+        * * SQL Data Type: bit`),
+    acep_Autorenewal: z.boolean().nullish().describe(`
+        * * Field Name: acep_Autorenewal
+        * * Display Name: acep _Autorenewal
+        * * SQL Data Type: bit`),
+    acep_promocode: z.string().nullish().describe(`
+        * * Field Name: acep_promocode
+        * * Display Name: acep _promocode
+        * * SQL Data Type: nvarchar(100)`),
+    acep_BillingOption: z.string().nullish().describe(`
+        * * Field Name: acep_BillingOption
+        * * Display Name: acep _Billing Option
+        * * SQL Data Type: uniqueidentifier`),
+    acep_primaryemployer: z.string().nullish().describe(`
+        * * Field Name: acep_primaryemployer
+        * * Display Name: acep _primaryemployer
+        * * SQL Data Type: nvarchar(100)`),
+});
+
+export type SalesOrderDetailEntityType = z.infer<typeof SalesOrderDetailSchema>;
+       
+/**
+ * zod schema definition for the entity Sales Orders
+ */
+export const SalesOrderSchema = z.object({
+    Acep_ACEPMembershipIdName: z.string().nullish().describe(`
+        * * Field Name: Acep_ACEPMembershipIdName
+        * * Display Name: Acep _ACEPMembership Id Name
+        * * SQL Data Type: nvarchar(185)`),
+    EntityImage_URL: z.string().nullish().describe(`
+        * * Field Name: EntityImage_URL
+        * * Display Name: Entity Image _URL
+        * * SQL Data Type: nvarchar(200)`),
+    acep_OrderContactYomiName: z.string().nullish().describe(`
+        * * Field Name: acep_OrderContactYomiName
+        * * Display Name: acep _Order Contact Yomi Name
+        * * SQL Data Type: nvarchar(450)`),
+    QuoteIdName: z.string().nullish().describe(`
+        * * Field Name: QuoteIdName
+        * * Display Name: Quote Id Name
+        * * SQL Data Type: nvarchar(300)`),
+    Acep_GroupBillIdName: z.string().nullish().describe(`
+        * * Field Name: Acep_GroupBillIdName
+        * * Display Name: Acep _Group Bill Id Name
+        * * SQL Data Type: nvarchar(20)`),
+    Acep_EMRAMembershipIdName: z.string().nullish().describe(`
+        * * Field Name: Acep_EMRAMembershipIdName
+        * * Display Name: Acep _EMRAMembership Id Name
+        * * SQL Data Type: nvarchar(185)`),
+    SLAInvokedIdName: z.string().nullish().describe(`
+        * * Field Name: SLAInvokedIdName
+        * * Display Name: SLAInvoked Id Name
+        * * SQL Data Type: nvarchar(160)`),
+    acep_membershipidName: z.string().nullish().describe(`
+        * * Field Name: acep_membershipidName
+        * * Display Name: acep _membershipid Name
+        * * SQL Data Type: nvarchar(100)`),
+    acep_OrderContactName: z.string().nullish().describe(`
+        * * Field Name: acep_OrderContactName
+        * * Display Name: acep _Order Contact Name
+        * * SQL Data Type: nvarchar(160)`),
+    ModifiedOnBehalfByYomiName: z.string().nullish().describe(`
+        * * Field Name: ModifiedOnBehalfByYomiName
+        * * Display Name: Modified On Behalf By Yomi Name
+        * * SQL Data Type: nvarchar(200)`),
+    acep_MeetingRegistrationIdName: z.string().nullish().describe(`
+        * * Field Name: acep_MeetingRegistrationIdName
+        * * Display Name: acep _Meeting Registration Id Name
+        * * SQL Data Type: nvarchar(200)`),
+    acep_salesorderidName: z.string().nullish().describe(`
+        * * Field Name: acep_salesorderidName
+        * * Display Name: acep _salesorderid Name
+        * * SQL Data Type: nvarchar(100)`),
+    ModifiedByYomiName: z.string().nullish().describe(`
+        * * Field Name: ModifiedByYomiName
+        * * Display Name: Modified By Yomi Name
+        * * SQL Data Type: nvarchar(200)`),
+    acep_statementbatchName: z.string().nullish().describe(`
+        * * Field Name: acep_statementbatchName
+        * * Display Name: acep _statementbatch Name
+        * * SQL Data Type: nvarchar(100)`),
+    acep_cmeapprovalidName: z.string().nullish().describe(`
+        * * Field Name: acep_cmeapprovalidName
+        * * Display Name: acep _cmeapprovalid Name
+        * * SQL Data Type: nvarchar(500)`),
+    Acep_OrderTypeIdName: z.string().nullish().describe(`
+        * * Field Name: Acep_OrderTypeIdName
+        * * Display Name: Acep _Order Type Id Name
+        * * SQL Data Type: nvarchar(100)`),
+    acep_orgorderforrefundidName: z.string().nullish().describe(`
+        * * Field Name: acep_orgorderforrefundidName
+        * * Display Name: acep _orgorderforrefundid Name
+        * * SQL Data Type: nvarchar(300)`),
+    CreatedOnBehalfByYomiName: z.string().nullish().describe(`
+        * * Field Name: CreatedOnBehalfByYomiName
+        * * Display Name: Created On Behalf By Yomi Name
+        * * SQL Data Type: nvarchar(200)`),
+    CreatedByName: z.string().nullish().describe(`
+        * * Field Name: CreatedByName
+        * * Display Name: Created By Name
+        * * SQL Data Type: nvarchar(200)`),
+    acep_conferenceregistrationidName: z.string().nullish().describe(`
+        * * Field Name: acep_conferenceregistrationidName
+        * * Display Name: acep _conferenceregistrationid Name
+        * * SQL Data Type: nvarchar(200)`),
+    CreatedOnBehalfByName: z.string().nullish().describe(`
+        * * Field Name: CreatedOnBehalfByName
+        * * Display Name: Created On Behalf By Name
+        * * SQL Data Type: nvarchar(200)`),
+    ModifiedOnBehalfByName: z.string().nullish().describe(`
+        * * Field Name: ModifiedOnBehalfByName
+        * * Display Name: Modified On Behalf By Name
+        * * SQL Data Type: nvarchar(200)`),
+    OpportunityIdName: z.string().nullish().describe(`
+        * * Field Name: OpportunityIdName
+        * * Display Name: Opportunity Id Name
+        * * SQL Data Type: nvarchar(300)`),
+    ModifiedByName: z.string().nullish().describe(`
+        * * Field Name: ModifiedByName
+        * * Display Name: Modified By Name
+        * * SQL Data Type: nvarchar(200)`),
+    acep_batchidName: z.string().nullish().describe(`
+        * * Field Name: acep_batchidName
+        * * Display Name: acep _batchid Name
+        * * SQL Data Type: nvarchar(100)`),
+    TransactionCurrencyIdName: z.string().nullish().describe(`
+        * * Field Name: TransactionCurrencyIdName
+        * * Display Name: Transaction Currency Id Name
+        * * SQL Data Type: nvarchar(100)`),
+    acep_printrunidName: z.string().nullish().describe(`
+        * * Field Name: acep_printrunidName
+        * * Display Name: acep _printrunid Name
+        * * SQL Data Type: nvarchar(100)`),
+    SLAName: z.string().nullish().describe(`
+        * * Field Name: SLAName
+        * * Display Name: SLAName
+        * * SQL Data Type: nvarchar(160)`),
+    acep_eventregisteridName: z.string().nullish().describe(`
+        * * Field Name: acep_eventregisteridName
+        * * Display Name: acep _eventregisterid Name
+        * * SQL Data Type: nvarchar(100)`),
+    eone_paymenttermsidName: z.string().nullish().describe(`
+        * * Field Name: eone_paymenttermsidName
+        * * Display Name: eone _paymenttermsid Name
+        * * SQL Data Type: nvarchar(100)`),
+    Acep_SEMPAMembershipIdName: z.string().nullish().describe(`
+        * * Field Name: Acep_SEMPAMembershipIdName
+        * * Display Name: Acep _SEMPAMembership Id Name
+        * * SQL Data Type: nvarchar(185)`),
+    Acep_ACEPMembershipHistoryIdName: z.string().nullish().describe(`
+        * * Field Name: Acep_ACEPMembershipHistoryIdName
+        * * Display Name: Acep _ACEPMembership History Id Name
+        * * SQL Data Type: nvarchar(185)`),
+    CampaignIdName: z.string().nullish().describe(`
+        * * Field Name: CampaignIdName
+        * * Display Name: Campaign Id Name
+        * * SQL Data Type: nvarchar(128)`),
+    EntityImage_Timestamp: z.number().nullish().describe(`
+        * * Field Name: EntityImage_Timestamp
+        * * Display Name: Entity Image _Timestamp
+        * * SQL Data Type: bigint`),
+    eone_shippingmethodidName: z.string().nullish().describe(`
+        * * Field Name: eone_shippingmethodidName
+        * * Display Name: eone _shippingmethodid Name
+        * * SQL Data Type: nvarchar(100)`),
+    CreatedByYomiName: z.string().nullish().describe(`
+        * * Field Name: CreatedByYomiName
+        * * Display Name: Created By Yomi Name
+        * * SQL Data Type: nvarchar(200)`),
+    PriceLevelIdName: z.string().nullish().describe(`
+        * * Field Name: PriceLevelIdName
+        * * Display Name: Price Level Id Name
+        * * SQL Data Type: nvarchar(100)`),
+    Acep_BillingOptionIdName: z.string().nullish().describe(`
+        * * Field Name: Acep_BillingOptionIdName
+        * * Display Name: Acep _Billing Option Id Name
+        * * SQL Data Type: nvarchar(100)`),
+    EntityImage: z.number().nullish().describe(`
+        * * Field Name: EntityImage
+        * * Display Name: Entity Image
+        * * SQL Data Type: image`),
+    acep_eventsponsoridName: z.string().nullish().describe(`
+        * * Field Name: acep_eventsponsoridName
+        * * Display Name: acep _eventsponsorid Name
+        * * SQL Data Type: nvarchar(100)`),
+    acep_eventexhibitoridName: z.string().nullish().describe(`
+        * * Field Name: acep_eventexhibitoridName
+        * * Display Name: acep _eventexhibitorid Name
+        * * SQL Data Type: nvarchar(100)`),
+    OwnerId: z.string().nullish().describe(`
+        * * Field Name: OwnerId
+        * * Display Name: Owner Id
+        * * SQL Data Type: uniqueidentifier`),
+    OwnerIdName: z.string().nullish().describe(`
+        * * Field Name: OwnerIdName
+        * * Display Name: Owner Id Name
+        * * SQL Data Type: nvarchar(160)`),
+    OwnerIdYomiName: z.string().nullish().describe(`
+        * * Field Name: OwnerIdYomiName
+        * * Display Name: Owner Id Yomi Name
+        * * SQL Data Type: nvarchar(160)`),
+    OwnerIdDsc: z.number().nullish().describe(`
+        * * Field Name: OwnerIdDsc
+        * * Display Name: Owner Id Dsc
+        * * SQL Data Type: int`),
+    OwnerIdType: z.number().nullish().describe(`
+        * * Field Name: OwnerIdType
+        * * Display Name: Owner Id Type
+        * * SQL Data Type: int`),
+    OwningUser: z.string().nullish().describe(`
+        * * Field Name: OwningUser
+        * * Display Name: Owning User
+        * * SQL Data Type: uniqueidentifier`),
+    OwningTeam: z.string().nullish().describe(`
+        * * Field Name: OwningTeam
+        * * Display Name: Owning Team
+        * * SQL Data Type: uniqueidentifier`),
+    AccountId: z.string().nullish().describe(`
+        * * Field Name: AccountId
+        * * Display Name: Account Id
+        * * SQL Data Type: uniqueidentifier`),
+    AccountIdName: z.string().nullish().describe(`
+        * * Field Name: AccountIdName
+        * * Display Name: Account Id Name
+        * * SQL Data Type: nvarchar(4000)`),
+    AccountIdYomiName: z.string().nullish().describe(`
+        * * Field Name: AccountIdYomiName
+        * * Display Name: Account Id Yomi Name
+        * * SQL Data Type: nvarchar(4000)`),
+    ContactId: z.string().nullish().describe(`
+        * * Field Name: ContactId
+        * * Display Name: Contact Id
+        * * SQL Data Type: uniqueidentifier`),
+    ContactIdName: z.string().nullish().describe(`
+        * * Field Name: ContactIdName
+        * * Display Name: Contact Id Name
+        * * SQL Data Type: nvarchar(4000)`),
+    ContactIdYomiName: z.string().nullish().describe(`
+        * * Field Name: ContactIdYomiName
+        * * Display Name: Contact Id Yomi Name
+        * * SQL Data Type: nvarchar(4000)`),
+    SalesOrderId: z.string().describe(`
+        * * Field Name: SalesOrderId
+        * * Display Name: Sales Order Id
+        * * SQL Data Type: uniqueidentifier`),
+    OpportunityId: z.string().nullish().describe(`
+        * * Field Name: OpportunityId
+        * * Display Name: Opportunity Id
+        * * SQL Data Type: uniqueidentifier`),
+    QuoteId: z.string().nullish().describe(`
+        * * Field Name: QuoteId
+        * * Display Name: Quote Id
+        * * SQL Data Type: uniqueidentifier`),
+    PriorityCode: z.number().nullish().describe(`
+        * * Field Name: PriorityCode
+        * * Display Name: Priority Code
+        * * SQL Data Type: int`),
+    SubmitStatus: z.number().nullish().describe(`
+        * * Field Name: SubmitStatus
+        * * Display Name: Submit Status
+        * * SQL Data Type: int`),
+    SubmitDate: z.date().nullish().describe(`
+        * * Field Name: SubmitDate
+        * * Display Name: Submit Date
+        * * SQL Data Type: datetime`),
+    OwningBusinessUnit: z.string().nullish().describe(`
+        * * Field Name: OwningBusinessUnit
+        * * Display Name: Owning Business Unit
+        * * SQL Data Type: uniqueidentifier`),
+    SubmitStatusDescription: z.string().nullish().describe(`
+        * * Field Name: SubmitStatusDescription
+        * * Display Name: Submit Status Description
+        * * SQL Data Type: nvarchar(MAX)`),
+    PriceLevelId: z.string().nullish().describe(`
+        * * Field Name: PriceLevelId
+        * * Display Name: Price Level Id
+        * * SQL Data Type: uniqueidentifier`),
+    LastBackofficeSubmit: z.date().nullish().describe(`
+        * * Field Name: LastBackofficeSubmit
+        * * Display Name: Last Backoffice Submit
+        * * SQL Data Type: datetime`),
+    OrderNumber: z.string().nullish().describe(`
+        * * Field Name: OrderNumber
+        * * Display Name: Order Number
+        * * SQL Data Type: nvarchar(100)`),
+    Name: z.string().nullish().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(300)`),
+    PricingErrorCode: z.number().nullish().describe(`
+        * * Field Name: PricingErrorCode
+        * * Display Name: Pricing Error Code
+        * * SQL Data Type: int`),
+    Description: z.string().nullish().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)`),
+    DiscountAmount: z.number().nullish().describe(`
+        * * Field Name: DiscountAmount
+        * * Display Name: Discount Amount
+        * * SQL Data Type: money`),
+    FreightAmount: z.number().nullish().describe(`
+        * * Field Name: FreightAmount
+        * * Display Name: Freight Amount
+        * * SQL Data Type: money`),
+    TotalAmount: z.number().nullish().describe(`
+        * * Field Name: TotalAmount
+        * * Display Name: Total Amount
+        * * SQL Data Type: money`),
+    TotalLineItemAmount: z.number().nullish().describe(`
+        * * Field Name: TotalLineItemAmount
+        * * Display Name: Total Line Item Amount
+        * * SQL Data Type: money`),
+    TotalLineItemDiscountAmount: z.number().nullish().describe(`
+        * * Field Name: TotalLineItemDiscountAmount
+        * * Display Name: Total Line Item Discount Amount
+        * * SQL Data Type: money`),
+    TotalAmountLessFreight: z.number().nullish().describe(`
+        * * Field Name: TotalAmountLessFreight
+        * * Display Name: Total Amount Less Freight
+        * * SQL Data Type: money`),
+    TotalDiscountAmount: z.number().nullish().describe(`
+        * * Field Name: TotalDiscountAmount
+        * * Display Name: Total Discount Amount
+        * * SQL Data Type: money`),
+    RequestDeliveryBy: z.date().nullish().describe(`
+        * * Field Name: RequestDeliveryBy
+        * * Display Name: Request Delivery By
+        * * SQL Data Type: datetime`),
+    TotalTax: z.number().nullish().describe(`
+        * * Field Name: TotalTax
+        * * Display Name: Total Tax
+        * * SQL Data Type: money`),
+    ShippingMethodCode: z.number().nullish().describe(`
+        * * Field Name: ShippingMethodCode
+        * * Display Name: Shipping Method Code
+        * * SQL Data Type: int`),
+    PaymentTermsCode: z.number().nullish().describe(`
+        * * Field Name: PaymentTermsCode
+        * * Display Name: Payment Terms Code
+        * * SQL Data Type: int`),
+    FreightTermsCode: z.number().nullish().describe(`
+        * * Field Name: FreightTermsCode
+        * * Display Name: Freight Terms Code
+        * * SQL Data Type: int`),
+    CreatedBy: z.string().nullish().describe(`
+        * * Field Name: CreatedBy
+        * * Display Name: Created By
+        * * SQL Data Type: uniqueidentifier`),
+    CreatedOn: z.date().nullish().describe(`
+        * * Field Name: CreatedOn
+        * * Display Name: Created On
+        * * SQL Data Type: datetime`),
+    ModifiedBy: z.string().nullish().describe(`
+        * * Field Name: ModifiedBy
+        * * Display Name: Modified By
+        * * SQL Data Type: uniqueidentifier`),
+    ModifiedOn: z.date().nullish().describe(`
+        * * Field Name: ModifiedOn
+        * * Display Name: Modified On
+        * * SQL Data Type: datetime`),
+    StateCode: z.number().nullish().describe(`
+        * * Field Name: StateCode
+        * * Display Name: State Code
+        * * SQL Data Type: int`),
+    StatusCode: z.number().nullish().describe(`
+        * * Field Name: StatusCode
+        * * Display Name: Status Code
+        * * SQL Data Type: int`),
+    ShipTo_Name: z.string().nullish().describe(`
+        * * Field Name: ShipTo_Name
+        * * Display Name: Ship To _Name
+        * * SQL Data Type: nvarchar(200)`),
+    VersionNumber: z.number().describe(`
+        * * Field Name: VersionNumber
+        * * Display Name: Version Number
+        * * SQL Data Type: timestamp`),
+    ShipTo_Line1: z.string().nullish().describe(`
+        * * Field Name: ShipTo_Line1
+        * * Display Name: Ship To _Line 1
+        * * SQL Data Type: nvarchar(4000)`),
+    ShipTo_Line2: z.string().nullish().describe(`
+        * * Field Name: ShipTo_Line2
+        * * Display Name: Ship To _Line 2
+        * * SQL Data Type: nvarchar(4000)`),
+    ShipTo_Line3: z.string().nullish().describe(`
+        * * Field Name: ShipTo_Line3
+        * * Display Name: Ship To _Line 3
+        * * SQL Data Type: nvarchar(4000)`),
+    ShipTo_City: z.string().nullish().describe(`
+        * * Field Name: ShipTo_City
+        * * Display Name: Ship To _City
+        * * SQL Data Type: nvarchar(80)`),
+    ShipTo_StateOrProvince: z.string().nullish().describe(`
+        * * Field Name: ShipTo_StateOrProvince
+        * * Display Name: Ship To _State Or Province
+        * * SQL Data Type: nvarchar(50)`),
+    ShipTo_Country: z.string().nullish().describe(`
+        * * Field Name: ShipTo_Country
+        * * Display Name: Ship To _Country
+        * * SQL Data Type: nvarchar(80)`),
+    ShipTo_PostalCode: z.string().nullish().describe(`
+        * * Field Name: ShipTo_PostalCode
+        * * Display Name: Ship To _Postal Code
+        * * SQL Data Type: nvarchar(20)`),
+    WillCall: z.boolean().nullish().describe(`
+        * * Field Name: WillCall
+        * * Display Name: Will Call
+        * * SQL Data Type: bit`),
+    ShipTo_Telephone: z.string().nullish().describe(`
+        * * Field Name: ShipTo_Telephone
+        * * Display Name: Ship To _Telephone
+        * * SQL Data Type: nvarchar(50)`),
+    BillTo_Name: z.string().nullish().describe(`
+        * * Field Name: BillTo_Name
+        * * Display Name: Bill To _Name
+        * * SQL Data Type: nvarchar(200)`),
+    ShipTo_FreightTermsCode: z.number().nullish().describe(`
+        * * Field Name: ShipTo_FreightTermsCode
+        * * Display Name: Ship To _Freight Terms Code
+        * * SQL Data Type: int`),
+    ShipTo_Fax: z.string().nullish().describe(`
+        * * Field Name: ShipTo_Fax
+        * * Display Name: Ship To _Fax
+        * * SQL Data Type: nvarchar(50)`),
+    BillTo_Line1: z.string().nullish().describe(`
+        * * Field Name: BillTo_Line1
+        * * Display Name: Bill To _Line 1
+        * * SQL Data Type: nvarchar(4000)`),
+    BillTo_Line2: z.string().nullish().describe(`
+        * * Field Name: BillTo_Line2
+        * * Display Name: Bill To _Line 2
+        * * SQL Data Type: nvarchar(4000)`),
+    BillTo_Line3: z.string().nullish().describe(`
+        * * Field Name: BillTo_Line3
+        * * Display Name: Bill To _Line 3
+        * * SQL Data Type: nvarchar(4000)`),
+    BillTo_City: z.string().nullish().describe(`
+        * * Field Name: BillTo_City
+        * * Display Name: Bill To _City
+        * * SQL Data Type: nvarchar(80)`),
+    BillTo_StateOrProvince: z.string().nullish().describe(`
+        * * Field Name: BillTo_StateOrProvince
+        * * Display Name: Bill To _State Or Province
+        * * SQL Data Type: nvarchar(50)`),
+    BillTo_Country: z.string().nullish().describe(`
+        * * Field Name: BillTo_Country
+        * * Display Name: Bill To _Country
+        * * SQL Data Type: nvarchar(80)`),
+    BillTo_PostalCode: z.string().nullish().describe(`
+        * * Field Name: BillTo_PostalCode
+        * * Display Name: Bill To _Postal Code
+        * * SQL Data Type: nvarchar(20)`),
+    BillTo_Telephone: z.string().nullish().describe(`
+        * * Field Name: BillTo_Telephone
+        * * Display Name: Bill To _Telephone
+        * * SQL Data Type: nvarchar(50)`),
+    BillTo_Fax: z.string().nullish().describe(`
+        * * Field Name: BillTo_Fax
+        * * Display Name: Bill To _Fax
+        * * SQL Data Type: nvarchar(50)`),
+    DiscountPercentage: z.number().nullish().describe(`
+        * * Field Name: DiscountPercentage
+        * * Display Name: Discount Percentage
+        * * SQL Data Type: decimal(23, 10)`),
+    CustomerId: z.string().nullish().describe(`
+        * * Field Name: CustomerId
+        * * Display Name: Customer Id
+        * * SQL Data Type: uniqueidentifier`),
+    CustomerIdName: z.string().nullish().describe(`
+        * * Field Name: CustomerIdName
+        * * Display Name: Customer Id Name
+        * * SQL Data Type: nvarchar(4000)`),
+    CustomerIdType: z.number().nullish().describe(`
+        * * Field Name: CustomerIdType
+        * * Display Name: Customer Id Type
+        * * SQL Data Type: int`),
+    BillTo_ContactName: z.string().nullish().describe(`
+        * * Field Name: BillTo_ContactName
+        * * Display Name: Bill To _Contact Name
+        * * SQL Data Type: nvarchar(150)`),
+    CampaignId: z.string().nullish().describe(`
+        * * Field Name: CampaignId
+        * * Display Name: Campaign Id
+        * * SQL Data Type: uniqueidentifier`),
+    BillTo_AddressId: z.string().nullish().describe(`
+        * * Field Name: BillTo_AddressId
+        * * Display Name: Bill To _Address Id
+        * * SQL Data Type: uniqueidentifier`),
+    ShipTo_AddressId: z.string().nullish().describe(`
+        * * Field Name: ShipTo_AddressId
+        * * Display Name: Ship To _Address Id
+        * * SQL Data Type: uniqueidentifier`),
+    IsPriceLocked: z.boolean().nullish().describe(`
+        * * Field Name: IsPriceLocked
+        * * Display Name: Is Price Locked
+        * * SQL Data Type: bit`),
+    DateFulfilled: z.date().nullish().describe(`
+        * * Field Name: DateFulfilled
+        * * Display Name: Date Fulfilled
+        * * SQL Data Type: datetime`),
+    ShipTo_ContactName: z.string().nullish().describe(`
+        * * Field Name: ShipTo_ContactName
+        * * Display Name: Ship To _Contact Name
+        * * SQL Data Type: nvarchar(150)`),
+    UTCConversionTimeZoneCode: z.number().nullish().describe(`
+        * * Field Name: UTCConversionTimeZoneCode
+        * * Display Name: UTCConversion Time Zone Code
+        * * SQL Data Type: int`),
+    TransactionCurrencyId: z.string().nullish().describe(`
+        * * Field Name: TransactionCurrencyId
+        * * Display Name: Transaction Currency Id
+        * * SQL Data Type: uniqueidentifier`),
+    TimeZoneRuleVersionNumber: z.number().nullish().describe(`
+        * * Field Name: TimeZoneRuleVersionNumber
+        * * Display Name: Time Zone Rule Version Number
+        * * SQL Data Type: int`),
+    ImportSequenceNumber: z.number().nullish().describe(`
+        * * Field Name: ImportSequenceNumber
+        * * Display Name: Import Sequence Number
+        * * SQL Data Type: int`),
+    ExchangeRate: z.number().nullish().describe(`
+        * * Field Name: ExchangeRate
+        * * Display Name: Exchange Rate
+        * * SQL Data Type: decimal(23, 10)`),
+    OverriddenCreatedOn: z.date().nullish().describe(`
+        * * Field Name: OverriddenCreatedOn
+        * * Display Name: Overridden Created On
+        * * SQL Data Type: datetime`),
+    TotalLineItemAmount_Base: z.number().nullish().describe(`
+        * * Field Name: TotalLineItemAmount_Base
+        * * Display Name: Total Line Item Amount _Base
+        * * SQL Data Type: money`),
+    TotalDiscountAmount_Base: z.number().nullish().describe(`
+        * * Field Name: TotalDiscountAmount_Base
+        * * Display Name: Total Discount Amount _Base
+        * * SQL Data Type: money`),
+    TotalAmountLessFreight_Base: z.number().nullish().describe(`
+        * * Field Name: TotalAmountLessFreight_Base
+        * * Display Name: Total Amount Less Freight _Base
+        * * SQL Data Type: money`),
+    TotalAmount_Base: z.number().nullish().describe(`
+        * * Field Name: TotalAmount_Base
+        * * Display Name: Total Amount _Base
+        * * SQL Data Type: money`),
+    DiscountAmount_Base: z.number().nullish().describe(`
+        * * Field Name: DiscountAmount_Base
+        * * Display Name: Discount Amount _Base
+        * * SQL Data Type: money`),
+    FreightAmount_Base: z.number().nullish().describe(`
+        * * Field Name: FreightAmount_Base
+        * * Display Name: Freight Amount _Base
+        * * SQL Data Type: money`),
+    TotalLineItemDiscountAmount_Base: z.number().nullish().describe(`
+        * * Field Name: TotalLineItemDiscountAmount_Base
+        * * Display Name: Total Line Item Discount Amount _Base
+        * * SQL Data Type: money`),
+    TotalTax_Base: z.number().nullish().describe(`
+        * * Field Name: TotalTax_Base
+        * * Display Name: Total Tax _Base
+        * * SQL Data Type: money`),
+    CustomerIdYomiName: z.string().nullish().describe(`
+        * * Field Name: CustomerIdYomiName
+        * * Display Name: Customer Id Yomi Name
+        * * SQL Data Type: nvarchar(4000)`),
+    CreatedOnBehalfBy: z.string().nullish().describe(`
+        * * Field Name: CreatedOnBehalfBy
+        * * Display Name: Created On Behalf By
+        * * SQL Data Type: uniqueidentifier`),
+    ModifiedOnBehalfBy: z.string().nullish().describe(`
+        * * Field Name: ModifiedOnBehalfBy
+        * * Display Name: Modified On Behalf By
+        * * SQL Data Type: uniqueidentifier`),
+    BillTo_Composite: z.string().nullish().describe(`
+        * * Field Name: BillTo_Composite
+        * * Display Name: Bill To _Composite
+        * * SQL Data Type: nvarchar(MAX)`),
+    ShipTo_Composite: z.string().nullish().describe(`
+        * * Field Name: ShipTo_Composite
+        * * Display Name: Ship To _Composite
+        * * SQL Data Type: nvarchar(MAX)`),
+    ProcessId: z.string().nullish().describe(`
+        * * Field Name: ProcessId
+        * * Display Name: Process Id
+        * * SQL Data Type: uniqueidentifier`),
+    StageId: z.string().nullish().describe(`
+        * * Field Name: StageId
+        * * Display Name: Stage Id
+        * * SQL Data Type: uniqueidentifier`),
+    EntityImageId: z.string().nullish().describe(`
+        * * Field Name: EntityImageId
+        * * Display Name: Entity Image Id
+        * * SQL Data Type: uniqueidentifier`),
+    TraversedPath: z.string().nullish().describe(`
+        * * Field Name: TraversedPath
+        * * Display Name: Traversed Path
+        * * SQL Data Type: nvarchar(1250)`),
+    OnHoldTime: z.number().nullish().describe(`
+        * * Field Name: OnHoldTime
+        * * Display Name: On Hold Time
+        * * SQL Data Type: int`),
+    LastOnHoldTime: z.date().nullish().describe(`
+        * * Field Name: LastOnHoldTime
+        * * Display Name: Last On Hold Time
+        * * SQL Data Type: datetime`),
+    SLAId: z.string().nullish().describe(`
+        * * Field Name: SLAId
+        * * Display Name: SLAId
+        * * SQL Data Type: uniqueidentifier`),
+    SLAInvokedId: z.string().nullish().describe(`
+        * * Field Name: SLAInvokedId
+        * * Display Name: SLAInvoked Id
+        * * SQL Data Type: uniqueidentifier`),
+    Acep_InstallmentStartDate: z.date().nullish().describe(`
+        * * Field Name: Acep_InstallmentStartDate
+        * * Display Name: Acep _Installment Start Date
+        * * SQL Data Type: datetime`),
+    Acep_gptaxscheduleidcode: z.number().nullish().describe(`
+        * * Field Name: Acep_gptaxscheduleidcode
+        * * Display Name: Acep _gptaxscheduleidcode
+        * * SQL Data Type: int`),
+    Acep_GeneratedOrderTypeCode: z.number().nullish().describe(`
+        * * Field Name: Acep_GeneratedOrderTypeCode
+        * * Display Name: Acep _Generated Order Type Code
+        * * SQL Data Type: int`),
+    Acep_GPBatchNumber: z.string().nullish().describe(`
+        * * Field Name: Acep_GPBatchNumber
+        * * Display Name: Acep _GPBatch Number
+        * * SQL Data Type: nvarchar(100)`),
+    Acep_RegisteredBycode: z.number().nullish().describe(`
+        * * Field Name: Acep_RegisteredBycode
+        * * Display Name: Acep _Registered Bycode
+        * * SQL Data Type: int`),
+    Acep_OrderType: z.number().nullish().describe(`
+        * * Field Name: Acep_OrderType
+        * * Display Name: Acep _Order Type
+        * * SQL Data Type: int`),
+    Acep_InstallmentExpiryDate: z.date().nullish().describe(`
+        * * Field Name: Acep_InstallmentExpiryDate
+        * * Display Name: Acep _Installment Expiry Date
+        * * SQL Data Type: datetime`),
+    Acep_SEMPAMembershipId: z.string().nullish().describe(`
+        * * Field Name: Acep_SEMPAMembershipId
+        * * Display Name: Acep _SEMPAMembership Id
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: client _memberships (vwclient_memberships.Acep_membershipId)`),
+    Acep_ChangeOrdertoInstallmenttype: z.number().nullish().describe(`
+        * * Field Name: Acep_ChangeOrdertoInstallmenttype
+        * * Display Name: Acep _Change Orderto Installmenttype
+        * * SQL Data Type: int`),
+    Acep_CCTransactionSucceeded: z.boolean().nullish().describe(`
+        * * Field Name: Acep_CCTransactionSucceeded
+        * * Display Name: Acep _CCTransaction Succeeded
+        * * SQL Data Type: bit`),
+    Acep_ACEPMembershipHistoryId: z.string().nullish().describe(`
+        * * Field Name: Acep_ACEPMembershipHistoryId
+        * * Display Name: Acep _ACEPMembership History Id
+        * * SQL Data Type: uniqueidentifier`),
+    Acep_parentorderid: z.string().nullish().describe(`
+        * * Field Name: Acep_parentorderid
+        * * Display Name: Acep _parentorderid
+        * * SQL Data Type: nvarchar(100)`),
+    acep_orgorderforrefundid: z.string().nullish().describe(`
+        * * Field Name: acep_orgorderforrefundid
+        * * Display Name: acep _orgorderforrefundid
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Sales Orders (vwSalesOrders.SalesOrderId)`),
+    Acep_expirationdate: z.date().nullish().describe(`
+        * * Field Name: Acep_expirationdate
+        * * Display Name: Acep _expirationdate
+        * * SQL Data Type: datetime`),
+    Acep_ACEPMembershipId: z.string().nullish().describe(`
+        * * Field Name: Acep_ACEPMembershipId
+        * * Display Name: Acep _ACEPMembership Id
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: client _memberships (vwclient_memberships.Acep_membershipId)`),
+    Acep_CCTransactionDetails: z.string().nullish().describe(`
+        * * Field Name: Acep_CCTransactionDetails
+        * * Display Name: Acep _CCTransaction Details
+        * * SQL Data Type: nvarchar(MAX)`),
+    Acep_BillingOptionId: z.string().nullish().describe(`
+        * * Field Name: Acep_BillingOptionId
+        * * Display Name: Acep _Billing Option Id
+        * * SQL Data Type: uniqueidentifier`),
+    Acep_installmenttype: z.number().nullish().describe(`
+        * * Field Name: Acep_installmenttype
+        * * Display Name: Acep _installmenttype
+        * * SQL Data Type: int`),
+    Acep_GPOrderNumber: z.string().nullish().describe(`
+        * * Field Name: Acep_GPOrderNumber
+        * * Display Name: Acep _GPOrder Number
+        * * SQL Data Type: nvarchar(20)`),
+    acep_eventregisterid: z.string().nullish().describe(`
+        * * Field Name: acep_eventregisterid
+        * * Display Name: acep _eventregisterid
+        * * SQL Data Type: uniqueidentifier`),
+    acep_batchid: z.string().nullish().describe(`
+        * * Field Name: acep_batchid
+        * * Display Name: acep _batchid
+        * * SQL Data Type: uniqueidentifier`),
+    acep_printrunid: z.string().nullish().describe(`
+        * * Field Name: acep_printrunid
+        * * Display Name: acep _printrunid
+        * * SQL Data Type: uniqueidentifier`),
+    Acep_PaymentTypeCode: z.number().nullish().describe(`
+        * * Field Name: Acep_PaymentTypeCode
+        * * Display Name: Acep _Payment Type Code
+        * * SQL Data Type: int`),
+    Acep_installmentbilled: z.number().nullish().describe(`
+        * * Field Name: Acep_installmentbilled
+        * * Display Name: Acep _installmentbilled
+        * * SQL Data Type: int`),
+    acep_eventexhibitorid: z.string().nullish().describe(`
+        * * Field Name: acep_eventexhibitorid
+        * * Display Name: acep _eventexhibitorid
+        * * SQL Data Type: uniqueidentifier`),
+    Acep_cyclestartdate: z.date().nullish().describe(`
+        * * Field Name: Acep_cyclestartdate
+        * * Display Name: Acep _cyclestartdate
+        * * SQL Data Type: datetime`),
+    Acep_OrgCode: z.number().nullish().describe(`
+        * * Field Name: Acep_OrgCode
+        * * Display Name: Acep _Org Code
+        * * SQL Data Type: int`),
+    Acep_numberofinstallments: z.number().nullish().describe(`
+        * * Field Name: Acep_numberofinstallments
+        * * Display Name: Acep _numberofinstallments
+        * * SQL Data Type: int`),
+    acep_cmeapprovalid: z.string().nullish().describe(`
+        * * Field Name: acep_cmeapprovalid
+        * * Display Name: acep _cmeapprovalid
+        * * SQL Data Type: uniqueidentifier`),
+    Acep_PostedDate: z.date().nullish().describe(`
+        * * Field Name: Acep_PostedDate
+        * * Display Name: Acep _Posted Date
+        * * SQL Data Type: datetime`),
+    Acep_IsCRMUpdateProcessed: z.boolean().nullish().describe(`
+        * * Field Name: Acep_IsCRMUpdateProcessed
+        * * Display Name: Acep _Is CRMUpdate Processed
+        * * SQL Data Type: bit`),
+    Acep_StartCycleImmediately: z.boolean().nullish().describe(`
+        * * Field Name: Acep_StartCycleImmediately
+        * * Display Name: Acep _Start Cycle Immediately
+        * * SQL Data Type: bit`),
+    Acep_isrefund: z.boolean().nullish().describe(`
+        * * Field Name: Acep_isrefund
+        * * Display Name: Acep _isrefund
+        * * SQL Data Type: bit`),
+    Acep_EMRAMembershipId: z.string().nullish().describe(`
+        * * Field Name: Acep_EMRAMembershipId
+        * * Display Name: Acep _EMRAMembership Id
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: client _memberships (vwclient_memberships.Acep_membershipId)`),
+    Eone_OrderStatus: z.number().nullish().describe(`
+        * * Field Name: Eone_OrderStatus
+        * * Display Name: Eone _Order Status
+        * * SQL Data Type: int`),
+    Acep_relatedcompany: z.string().nullish().describe(`
+        * * Field Name: Acep_relatedcompany
+        * * Display Name: Acep _relatedcompany
+        * * SQL Data Type: nvarchar(20)`),
+    Acep_OrderPayer: z.string().nullish().describe(`
+        * * Field Name: Acep_OrderPayer
+        * * Display Name: Acep _Order Payer
+        * * SQL Data Type: nvarchar(100)`),
+    Eone_TestDate: z.date().nullish().describe(`
+        * * Field Name: Eone_TestDate
+        * * Display Name: Eone _Test Date
+        * * SQL Data Type: datetime`),
+    acep_conferenceregistrationid: z.string().nullish().describe(`
+        * * Field Name: acep_conferenceregistrationid
+        * * Display Name: acep _conferenceregistrationid
+        * * SQL Data Type: uniqueidentifier`),
+    Acep_InstallmentDate: z.string().nullish().describe(`
+        * * Field Name: Acep_InstallmentDate
+        * * Display Name: Acep _Installment Date
+        * * SQL Data Type: nvarchar(100)`),
+    Acep_GPOrgCode: z.number().nullish().describe(`
+        * * Field Name: Acep_GPOrgCode
+        * * Display Name: Acep _GPOrg Code
+        * * SQL Data Type: int`),
+    Acep_CheckNumber: z.string().nullish().describe(`
+        * * Field Name: Acep_CheckNumber
+        * * Display Name: Acep _Check Number
+        * * SQL Data Type: nvarchar(100)`),
+    Acep_PromoCode: z.string().nullish().describe(`
+        * * Field Name: Acep_PromoCode
+        * * Display Name: Acep _Promo Code
+        * * SQL Data Type: nvarchar(100)`),
+    eone_paymenttermsid: z.string().nullish().describe(`
+        * * Field Name: eone_paymenttermsid
+        * * Display Name: eone _paymenttermsid
+        * * SQL Data Type: uniqueidentifier`),
+    Acep_GroupBillId: z.string().nullish().describe(`
+        * * Field Name: Acep_GroupBillId
+        * * Display Name: Acep _Group Bill Id
+        * * SQL Data Type: uniqueidentifier`),
+    acep_eventsponsorid: z.string().nullish().describe(`
+        * * Field Name: acep_eventsponsorid
+        * * Display Name: acep _eventsponsorid
+        * * SQL Data Type: uniqueidentifier`),
+    Acep_OrderTypeId: z.string().nullish().describe(`
+        * * Field Name: Acep_OrderTypeId
+        * * Display Name: Acep _Order Type Id
+        * * SQL Data Type: uniqueidentifier`),
+    acep_salesorderid: z.string().nullish().describe(`
+        * * Field Name: acep_salesorderid
+        * * Display Name: acep _salesorderid
+        * * SQL Data Type: uniqueidentifier`),
+    eone_shippingmethodid: z.string().nullish().describe(`
+        * * Field Name: eone_shippingmethodid
+        * * Display Name: eone _shippingmethodid
+        * * SQL Data Type: uniqueidentifier`),
+    acep_membershipid: z.string().nullish().describe(`
+        * * Field Name: acep_membershipid
+        * * Display Name: acep _membershipid
+        * * SQL Data Type: uniqueidentifier`),
+    acep_ordersource: z.number().nullish().describe(`
+        * * Field Name: acep_ordersource
+        * * Display Name: acep _ordersource
+        * * SQL Data Type: int`),
+    acep_HeaderNumber: z.string().nullish().describe(`
+        * * Field Name: acep_HeaderNumber
+        * * Display Name: acep _Header Number
+        * * SQL Data Type: nvarchar(10)`),
+    acep_ClientIPAddress: z.string().nullish().describe(`
+        * * Field Name: acep_ClientIPAddress
+        * * Display Name: acep _Client IPAddress
+        * * SQL Data Type: nvarchar(100)`),
+    acep_ClientID: z.string().nullish().describe(`
+        * * Field Name: acep_ClientID
+        * * Display Name: acep _Client ID
+        * * SQL Data Type: nvarchar(100)`),
+    acep_CustomerPONumber: z.string().nullish().describe(`
+        * * Field Name: acep_CustomerPONumber
+        * * Display Name: acep _Customer PONumber
+        * * SQL Data Type: nvarchar(100)`),
+    acep_TransactionID: z.string().nullish().describe(`
+        * * Field Name: acep_TransactionID
+        * * Display Name: acep _Transaction ID
+        * * SQL Data Type: nvarchar(100)`),
+    acep_OrderContact: z.string().nullish().describe(`
+        * * Field Name: acep_OrderContact
+        * * Display Name: acep _Order Contact
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Contacts__client_crm (vwContacts__client_crm.ContactId)`),
+    acep_AlternateToEmailAddresses: z.string().nullish().describe(`
+        * * Field Name: acep_AlternateToEmailAddresses
+        * * Display Name: acep _Alternate To Email Addresses
+        * * SQL Data Type: nvarchar(200)`),
+    acep_ReasonType: z.number().nullish().describe(`
+        * * Field Name: acep_ReasonType
+        * * Display Name: acep _Reason Type
+        * * SQL Data Type: int`),
+    acep_MeetingRegistrationId: z.string().nullish().describe(`
+        * * Field Name: acep_MeetingRegistrationId
+        * * Display Name: acep _Meeting Registration Id
+        * * SQL Data Type: uniqueidentifier`),
+    acep_shiptoemail: z.string().nullish().describe(`
+        * * Field Name: acep_shiptoemail
+        * * Display Name: acep _shiptoemail
+        * * SQL Data Type: nvarchar(100)`),
+    acep_TrackingNumber: z.string().nullish().describe(`
+        * * Field Name: acep_TrackingNumber
+        * * Display Name: acep _Tracking Number
+        * * SQL Data Type: nvarchar(50)`),
+    acep_statementbatch: z.string().nullish().describe(`
+        * * Field Name: acep_statementbatch
+        * * Display Name: acep _statementbatch
+        * * SQL Data Type: uniqueidentifier`),
+});
+
+export type SalesOrderEntityType = z.infer<typeof SalesOrderSchema>;
+       
+/**
+ * zod schema definition for the entity Sales Transactions
+ */
+export const SalesTransactionSchema = z.object({
+    SOP_Type: z.string().describe(`
+        * * Field Name: SOP Type
+        * * Display Name: SOP Type
+        * * SQL Data Type: varchar(100)`),
+    SOP_Number: z.string().describe(`
+        * * Field Name: SOP Number
+        * * Display Name: SOP Number
+        * * SQL Data Type: varchar(21)`),
+    Document_Date: z.date().nullish().describe(`
+        * * Field Name: Document Date
+        * * Display Name: Document  Date
+        * * SQL Data Type: datetime`),
+    Customer_Number: z.string().nullish().describe(`
+        * * Field Name: Customer Number
+        * * Display Name: Customer  Number
+        * * SQL Data Type: varchar(15)`),
+    Customer_Name: z.string().nullish().describe(`
+        * * Field Name: Customer Name
+        * * Display Name: Customer  Name
+        * * SQL Data Type: varchar(65)`),
+    Customer_PO_Number: z.string().nullish().describe(`
+        * * Field Name: Customer PO Number
+        * * Display Name: Customer  PO Number
+        * * SQL Data Type: varchar(21)`),
+    Primary_Shipto_Address_Code: z.string().nullish().describe(`
+        * * Field Name: Primary Shipto Address Code
+        * * Display Name: Primary  Shipto  Address  Code
+        * * SQL Data Type: varchar(15)`),
+    Sales_Document_Status: z.string().nullish().describe(`
+        * * Field Name: Sales Document Status
+        * * Display Name: Sales  Document  Status
+        * * SQL Data Type: varchar(100)`),
+    Document_Amount: z.number().nullish().describe(`
+        * * Field Name: Document Amount
+        * * Display Name: Document  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Account_Amount: z.number().nullish().describe(`
+        * * Field Name: Account Amount
+        * * Display Name: Account  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Accounts_Receivable_Account_Number: z.string().nullish().describe(`
+        * * Field Name: Accounts Receivable Account Number
+        * * Display Name: Accounts  Receivable  Account  Number
+        * * SQL Data Type: varchar(129)`),
+    Actual_Ship_Date: z.date().nullish().describe(`
+        * * Field Name: Actual Ship Date
+        * * Display Name: Actual  Ship  Date
+        * * SQL Data Type: datetime`),
+    Address_1: z.string().nullish().describe(`
+        * * Field Name: Address 1
+        * * Display Name: Address  1
+        * * SQL Data Type: varchar(61)`),
+    Address_1_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: Address 1 from Customer Master
+        * * Display Name: Address  1 from  Customer  Master
+        * * SQL Data Type: varchar(61)`),
+    Address_2: z.string().nullish().describe(`
+        * * Field Name: Address 2
+        * * Display Name: Address  2
+        * * SQL Data Type: varchar(61)`),
+    Address_2_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: Address 2 from Customer Master
+        * * Display Name: Address  2 from  Customer  Master
+        * * SQL Data Type: varchar(61)`),
+    Address_3: z.string().nullish().describe(`
+        * * Field Name: Address 3
+        * * Display Name: Address  3
+        * * SQL Data Type: varchar(61)`),
+    Address_3_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: Address 3 from Customer Master
+        * * Display Name: Address  3 from  Customer  Master
+        * * SQL Data Type: varchar(61)`),
+    Address_Code_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: Address Code from Customer Master
+        * * Display Name: Address  Code  from  Customer  Master
+        * * SQL Data Type: varchar(15)`),
+    Aging_Bucket1: z.number().nullish().describe(`
+        * * Field Name: Aging Bucket1
+        * * Display Name: Aging  Bucket 1
+        * * SQL Data Type: decimal(19, 5)`),
+    Aging_Bucket2: z.number().nullish().describe(`
+        * * Field Name: Aging Bucket2
+        * * Display Name: Aging  Bucket 2
+        * * SQL Data Type: decimal(19, 5)`),
+    Aging_Bucket3: z.number().nullish().describe(`
+        * * Field Name: Aging Bucket3
+        * * Display Name: Aging  Bucket 3
+        * * SQL Data Type: decimal(19, 5)`),
+    Aging_Bucket4: z.number().nullish().describe(`
+        * * Field Name: Aging Bucket4
+        * * Display Name: Aging  Bucket 4
+        * * SQL Data Type: decimal(19, 5)`),
+    Aging_Bucket5: z.number().nullish().describe(`
+        * * Field Name: Aging Bucket5
+        * * Display Name: Aging  Bucket 5
+        * * SQL Data Type: decimal(19, 5)`),
+    Aging_Bucket6: z.number().nullish().describe(`
+        * * Field Name: Aging Bucket6
+        * * Display Name: Aging  Bucket 6
+        * * SQL Data Type: decimal(19, 5)`),
+    Aging_Bucket7: z.number().nullish().describe(`
+        * * Field Name: Aging Bucket7
+        * * Display Name: Aging  Bucket 7
+        * * SQL Data Type: decimal(19, 5)`),
+    Allocate_By: z.string().nullish().describe(`
+        * * Field Name: Allocate By
+        * * Display Name: Allocate  By
+        * * SQL Data Type: varchar(100)`),
+    Apply_Withholding: z.string().nullish().describe(`
+        * * Field Name: Apply Withholding
+        * * Display Name: Apply  Withholding
+        * * SQL Data Type: varchar(100)`),
+    Average_Days_To_Pay___Life: z.number().nullish().describe(`
+        * * Field Name: Average Days To Pay - Life
+        * * Display Name: Average  Days  To  Pay  - Life
+        * * SQL Data Type: smallint`),
+    Average_Days_To_Pay___Year: z.number().nullish().describe(`
+        * * Field Name: Average Days To Pay - Year
+        * * Display Name: Average  Days  To  Pay  - Year
+        * * SQL Data Type: smallint`),
+    Average_Days_to_Pay___LYR: z.number().nullish().describe(`
+        * * Field Name: Average Days to Pay - LYR
+        * * Display Name: Average  Days  to  Pay  - LYR
+        * * SQL Data Type: smallint`),
+    Back_Order_Date: z.date().nullish().describe(`
+        * * Field Name: Back Order Date
+        * * Display Name: Back  Order  Date
+        * * SQL Data Type: datetime`),
+    Backout_Freight_Amount: z.number().nullish().describe(`
+        * * Field Name: Backout Freight Amount
+        * * Display Name: Backout  Freight  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Backout_Misc_Amount: z.number().nullish().describe(`
+        * * Field Name: Backout Misc Amount
+        * * Display Name: Backout  Misc  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Backout_Tax_Amount: z.number().nullish().describe(`
+        * * Field Name: Backout Tax Amount
+        * * Display Name: Backout  Tax  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Balance_Type: z.string().nullish().describe(`
+        * * Field Name: Balance Type
+        * * Display Name: Balance  Type
+        * * SQL Data Type: varchar(100)`),
+    Bank_Branch: z.string().nullish().describe(`
+        * * Field Name: Bank Branch
+        * * Display Name: Bank  Branch
+        * * SQL Data Type: varchar(21)`),
+    Bank_Name: z.string().nullish().describe(`
+        * * Field Name: Bank Name
+        * * Display Name: Bank  Name
+        * * SQL Data Type: varchar(31)`),
+    Based_On_Invoice_Total: z.string().nullish().describe(`
+        * * Field Name: Based On Invoice Total
+        * * Display Name: Based  On  Invoice  Total
+        * * SQL Data Type: varchar(100)`),
+    Batch_Number: z.string().nullish().describe(`
+        * * Field Name: Batch Number
+        * * Display Name: Batch  Number
+        * * SQL Data Type: varchar(15)`),
+    Batch_Source: z.string().nullish().describe(`
+        * * Field Name: Batch Source
+        * * Display Name: Batch  Source
+        * * SQL Data Type: varchar(15)`),
+    COD_Amount: z.number().nullish().describe(`
+        * * Field Name: COD Amount
+        * * Display Name: COD Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    COGS_Account_Number: z.string().nullish().describe(`
+        * * Field Name: COGS Account Number
+        * * Display Name: COGS Account  Number
+        * * SQL Data Type: varchar(129)`),
+    Cash_Account_Number: z.string().nullish().describe(`
+        * * Field Name: Cash Account Number
+        * * Display Name: Cash  Account  Number
+        * * SQL Data Type: varchar(129)`),
+    Checkbook_ID: z.string().nullish().describe(`
+        * * Field Name: Checkbook ID
+        * * Display Name: Checkbook  ID
+        * * SQL Data Type: varchar(15)`),
+    City: z.string().nullish().describe(`
+        * * Field Name: City
+        * * Display Name: City
+        * * SQL Data Type: varchar(35)`),
+    City_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: City from Customer Master
+        * * Display Name: City  from  Customer  Master
+        * * SQL Data Type: varchar(35)`),
+    Comment1_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: Comment1 from Customer Master
+        * * Display Name: Comment 1 from  Customer  Master
+        * * SQL Data Type: varchar(31)`),
+    Comment2_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: Comment2 from Customer Master
+        * * Display Name: Comment 2 from  Customer  Master
+        * * SQL Data Type: varchar(31)`),
+    Comment_1: z.string().nullish().describe(`
+        * * Field Name: Comment 1
+        * * Display Name: Comment  1
+        * * SQL Data Type: varchar(51)`),
+    Comment_2: z.string().nullish().describe(`
+        * * Field Name: Comment 2
+        * * Display Name: Comment  2
+        * * SQL Data Type: varchar(51)`),
+    Comment_3: z.string().nullish().describe(`
+        * * Field Name: Comment 3
+        * * Display Name: Comment  3
+        * * SQL Data Type: varchar(51)`),
+    Comment_4: z.string().nullish().describe(`
+        * * Field Name: Comment 4
+        * * Display Name: Comment  4
+        * * SQL Data Type: varchar(51)`),
+    Comment_ID: z.string().nullish().describe(`
+        * * Field Name: Comment ID
+        * * Display Name: Comment  ID
+        * * SQL Data Type: varchar(15)`),
+    Commission_Amount: z.number().nullish().describe(`
+        * * Field Name: Commission Amount
+        * * Display Name: Commission  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Commission_Applied_To: z.string().nullish().describe(`
+        * * Field Name: Commission Applied To
+        * * Display Name: Commission  Applied  To
+        * * SQL Data Type: varchar(100)`),
+    Commission_Sale_Amount: z.number().nullish().describe(`
+        * * Field Name: Commission Sale Amount
+        * * Display Name: Commission  Sale  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Contact_Person: z.string().nullish().describe(`
+        * * Field Name: Contact Person
+        * * Display Name: Contact  Person
+        * * SQL Data Type: varchar(61)`),
+    Contact_Person_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: Contact Person from Customer Master
+        * * Display Name: Contact  Person  from  Customer  Master
+        * * SQL Data Type: varchar(61)`),
+    Corporate_Customer_Number: z.string().nullish().describe(`
+        * * Field Name: Corporate Customer Number
+        * * Display Name: Corporate  Customer  Number
+        * * SQL Data Type: varchar(15)`),
+    Correction: z.string().nullish().describe(`
+        * * Field Name: Correction
+        * * Display Name: Correction
+        * * SQL Data Type: varchar(100)`),
+    Correction_to_Nonexisting_Transaction: z.string().nullish().describe(`
+        * * Field Name: Correction to Nonexisting Transaction
+        * * Display Name: Correction  to  Nonexisting  Transaction
+        * * SQL Data Type: varchar(100)`),
+    Country: z.string().nullish().describe(`
+        * * Field Name: Country
+        * * Display Name: Country
+        * * SQL Data Type: varchar(61)`),
+    Country_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: Country from Customer Master
+        * * Display Name: Country  from  Customer  Master
+        * * SQL Data Type: varchar(61)`),
+    Created_Date: z.date().nullish().describe(`
+        * * Field Name: Created Date
+        * * Display Name: Created  Date
+        * * SQL Data Type: datetime`),
+    Created_Date_from_Customer_Master: z.date().nullish().describe(`
+        * * Field Name: Created Date from Customer Master
+        * * Display Name: Created  Date  from  Customer  Master
+        * * SQL Data Type: datetime`),
+    Credit_Card_Exp_Date: z.date().nullish().describe(`
+        * * Field Name: Credit Card Exp Date
+        * * Display Name: Credit  Card  Exp  Date
+        * * SQL Data Type: datetime`),
+    Credit_Card_ID: z.string().nullish().describe(`
+        * * Field Name: Credit Card ID
+        * * Display Name: Credit  Card  ID
+        * * SQL Data Type: varchar(15)`),
+    Credit_Limit_Amount: z.number().nullish().describe(`
+        * * Field Name: Credit Limit Amount
+        * * Display Name: Credit  Limit  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Credit_Limit_Period: z.number().nullish().describe(`
+        * * Field Name: Credit Limit Period
+        * * Display Name: Credit  Limit  Period
+        * * SQL Data Type: smallint`),
+    Credit_Limit_Period_Amount: z.number().nullish().describe(`
+        * * Field Name: Credit Limit Period Amount
+        * * Display Name: Credit  Limit  Period  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Credit_Limit_Type: z.string().nullish().describe(`
+        * * Field Name: Credit Limit Type
+        * * Display Name: Credit  Limit  Type
+        * * SQL Data Type: varchar(100)`),
+    Currency_ID: z.string().nullish().describe(`
+        * * Field Name: Currency ID
+        * * Display Name: Currency  ID
+        * * SQL Data Type: varchar(15)`),
+    Currency_ID_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: Currency ID from Customer Master
+        * * Display Name: Currency  ID from  Customer  Master
+        * * SQL Data Type: varchar(15)`),
+    Currency_Index: z.number().nullish().describe(`
+        * * Field Name: Currency Index
+        * * Display Name: Currency  Index
+        * * SQL Data Type: smallint`),
+    Customer_Balance: z.number().nullish().describe(`
+        * * Field Name: Customer Balance
+        * * Display Name: Customer  Balance
+        * * SQL Data Type: decimal(19, 5)`),
+    Customer_Class: z.string().nullish().describe(`
+        * * Field Name: Customer Class
+        * * Display Name: Customer  Class
+        * * SQL Data Type: varchar(15)`),
+    Customer_Discount: z.number().nullish().describe(`
+        * * Field Name: Customer Discount
+        * * Display Name: Customer  Discount
+        * * SQL Data Type: decimal(13, 6)`),
+    Customer_Name_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: Customer Name from Customer Master
+        * * Display Name: Customer  Name  from  Customer  Master
+        * * SQL Data Type: varchar(65)`),
+    Date_Last_Repeated: z.date().nullish().describe(`
+        * * Field Name: Date Last Repeated
+        * * Display Name: Date  Last  Repeated
+        * * SQL Data Type: datetime`),
+    Days_to_Increment: z.number().nullish().describe(`
+        * * Field Name: Days to Increment
+        * * Display Name: Days  to  Increment
+        * * SQL Data Type: smallint`),
+    Default_Cash_Account_Type: z.string().nullish().describe(`
+        * * Field Name: Default Cash Account Type
+        * * Display Name: Default  Cash  Account  Type
+        * * SQL Data Type: varchar(100)`),
+    Denomination_Exchange_Rate: z.number().nullish().describe(`
+        * * Field Name: Denomination Exchange Rate
+        * * Display Name: Denomination  Exchange  Rate
+        * * SQL Data Type: decimal(19, 7)`),
+    Deposit_Received: z.number().nullish().describe(`
+        * * Field Name: Deposit Received
+        * * Display Name: Deposit  Received
+        * * SQL Data Type: decimal(19, 5)`),
+    Deposits_Received: z.number().nullish().describe(`
+        * * Field Name: Deposits Received
+        * * Display Name: Deposits  Received
+        * * SQL Data Type: decimal(19, 5)`),
+    Dest_Batch_1: z.string().nullish().describe(`
+        * * Field Name: Dest Batch 1
+        * * Display Name: Dest  Batch  1
+        * * SQL Data Type: varchar(15)`),
+    Dest_Batch_2: z.string().nullish().describe(`
+        * * Field Name: Dest Batch 2
+        * * Display Name: Dest  Batch  2
+        * * SQL Data Type: varchar(15)`),
+    Discount_Available_Amount: z.number().nullish().describe(`
+        * * Field Name: Discount Available Amount
+        * * Display Name: Discount  Available  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Discount_Available_Freight: z.number().nullish().describe(`
+        * * Field Name: Discount Available Freight
+        * * Display Name: Discount  Available  Freight
+        * * SQL Data Type: decimal(19, 5)`),
+    Discount_Available_Misc: z.number().nullish().describe(`
+        * * Field Name: Discount Available Misc
+        * * Display Name: Discount  Available  Misc
+        * * SQL Data Type: decimal(19, 5)`),
+    Discount_Available_Taken: z.number().nullish().describe(`
+        * * Field Name: Discount Available Taken
+        * * Display Name: Discount  Available  Taken
+        * * SQL Data Type: decimal(19, 5)`),
+    Discount_Date: z.date().nullish().describe(`
+        * * Field Name: Discount Date
+        * * Display Name: Discount  Date
+        * * SQL Data Type: datetime`),
+    Discount_Dollar_Amount: z.number().nullish().describe(`
+        * * Field Name: Discount Dollar Amount
+        * * Display Name: Discount  Dollar  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Discount_Grace_Period: z.number().nullish().describe(`
+        * * Field Name: Discount Grace Period
+        * * Display Name: Discount  Grace  Period
+        * * SQL Data Type: smallint`),
+    Discount_Percent_Amount: z.number().nullish().describe(`
+        * * Field Name: Discount Percent Amount
+        * * Display Name: Discount  Percent  Amount
+        * * SQL Data Type: decimal(13, 6)`),
+    Discount_Returned: z.number().nullish().describe(`
+        * * Field Name: Discount Returned
+        * * Display Name: Discount  Returned
+        * * SQL Data Type: decimal(19, 5)`),
+    Discount_Taken_Amount: z.number().nullish().describe(`
+        * * Field Name: Discount Taken Amount
+        * * Display Name: Discount  Taken  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Discounts_Available_Account_Number: z.string().nullish().describe(`
+        * * Field Name: Discounts Available Account Number
+        * * Display Name: Discounts  Available  Account  Number
+        * * SQL Data Type: varchar(129)`),
+    Discounts_Taken_Account_Number: z.string().nullish().describe(`
+        * * Field Name: Discounts Taken Account Number
+        * * Display Name: Discounts  Taken  Account  Number
+        * * SQL Data Type: varchar(129)`),
+    Document_Format_ID: z.string().nullish().describe(`
+        * * Field Name: Document Format ID
+        * * Display Name: Document  Format  ID
+        * * SQL Data Type: varchar(15)`),
+    Document_ID: z.string().nullish().describe(`
+        * * Field Name: Document ID
+        * * Display Name: Document  ID
+        * * SQL Data Type: varchar(15)`),
+    Document_Number_Corrected: z.string().nullish().describe(`
+        * * Field Name: Document Number Corrected
+        * * Display Name: Document  Number  Corrected
+        * * SQL Data Type: varchar(21)`),
+    Document_Status: z.string().nullish().describe(`
+        * * Field Name: Document Status
+        * * Display Name: Document  Status
+        * * SQL Data Type: varchar(100)`),
+    Due_Date: z.date().nullish().describe(`
+        * * Field Name: Due Date
+        * * Display Name: Due  Date
+        * * SQL Data Type: datetime`),
+    Due_Date_Grace_Period: z.number().nullish().describe(`
+        * * Field Name: Due Date Grace Period
+        * * Display Name: Due  Date  Grace  Period
+        * * SQL Data Type: smallint`),
+    EC_Transaction: z.string().nullish().describe(`
+        * * Field Name: EC Transaction
+        * * Display Name: EC Transaction
+        * * SQL Data Type: varchar(100)`),
+    Exceptional_Demand_from_Sales_Transaction: z.string().nullish().describe(`
+        * * Field Name: Exceptional Demand from Sales Transaction
+        * * Display Name: Exceptional  Demand  from  Sales  Transaction
+        * * SQL Data Type: varchar(100)`),
+    Exchange_Date: z.date().nullish().describe(`
+        * * Field Name: Exchange Date
+        * * Display Name: Exchange  Date
+        * * SQL Data Type: datetime`),
+    Exchange_Rate: z.number().nullish().describe(`
+        * * Field Name: Exchange Rate
+        * * Display Name: Exchange  Rate
+        * * SQL Data Type: decimal(19, 7)`),
+    Exchange_Table_ID: z.string().nullish().describe(`
+        * * Field Name: Exchange Table ID
+        * * Display Name: Exchange  Table  ID
+        * * SQL Data Type: varchar(15)`),
+    Extended_Cost: z.number().nullish().describe(`
+        * * Field Name: Extended Cost
+        * * Display Name: Extended  Cost
+        * * SQL Data Type: decimal(19, 5)`),
+    Fax_Number: z.string().nullish().describe(`
+        * * Field Name: Fax Number
+        * * Display Name: Fax  Number
+        * * SQL Data Type: varchar(21)`),
+    Fax_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: Fax from Customer Master
+        * * Display Name: Fax  from  Customer  Master
+        * * SQL Data Type: varchar(21)`),
+    Finance_Charge_Account_Number: z.string().nullish().describe(`
+        * * Field Name: Finance Charge Account Number
+        * * Display Name: Finance  Charge  Account  Number
+        * * SQL Data Type: varchar(129)`),
+    Finance_Charge_Amt_Type: z.string().nullish().describe(`
+        * * Field Name: Finance Charge Amt Type
+        * * Display Name: Finance  Charge  Amt  Type
+        * * SQL Data Type: varchar(100)`),
+    Finance_Charge_Dollar: z.number().nullish().describe(`
+        * * Field Name: Finance Charge Dollar
+        * * Display Name: Finance  Charge  Dollar
+        * * SQL Data Type: decimal(19, 5)`),
+    Finance_Charge_ID: z.string().nullish().describe(`
+        * * Field Name: Finance Charge ID
+        * * Display Name: Finance  Charge  ID
+        * * SQL Data Type: varchar(15)`),
+    Finance_Charge_Percent: z.number().nullish().describe(`
+        * * Field Name: Finance Charge Percent
+        * * Display Name: Finance  Charge  Percent
+        * * SQL Data Type: decimal(13, 6)`),
+    Finance_Charges_CYTD: z.number().nullish().describe(`
+        * * Field Name: Finance Charges CYTD
+        * * Display Name: Finance  Charges  CYTD
+        * * SQL Data Type: decimal(19, 5)`),
+    Finance_Charges_LYR_Calendar: z.number().nullish().describe(`
+        * * Field Name: Finance Charges LYR Calendar
+        * * Display Name: Finance  Charges  LYR Calendar
+        * * SQL Data Type: decimal(19, 5)`),
+    First_Invoice_Date: z.date().nullish().describe(`
+        * * Field Name: First Invoice Date
+        * * Display Name: First  Invoice  Date
+        * * SQL Data Type: datetime`),
+    Freight_Amount: z.number().nullish().describe(`
+        * * Field Name: Freight Amount
+        * * Display Name: Freight  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Freight_Schedule_ID: z.string().nullish().describe(`
+        * * Field Name: Freight Schedule ID
+        * * Display Name: Freight  Schedule  ID
+        * * SQL Data Type: varchar(15)`),
+    Freight_Tax_Amount: z.number().nullish().describe(`
+        * * Field Name: Freight Tax Amount
+        * * Display Name: Freight  Tax  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Freight_Taxable: z.string().nullish().describe(`
+        * * Field Name: Freight Taxable
+        * * Display Name: Freight  Taxable
+        * * SQL Data Type: varchar(100)`),
+    Fulfillment_Date: z.date().nullish().describe(`
+        * * Field Name: Fulfillment Date
+        * * Display Name: Fulfillment  Date
+        * * SQL Data Type: datetime`),
+    GL_Posting_Date: z.date().nullish().describe(`
+        * * Field Name: GL Posting Date
+        * * Display Name: GL Posting  Date
+        * * SQL Data Type: datetime`),
+    Governmental_Corporate_ID: z.string().nullish().describe(`
+        * * Field Name: Governmental Corporate ID
+        * * Display Name: Governmental  Corporate  ID
+        * * SQL Data Type: varchar(31)`),
+    Governmental_Individual_ID: z.string().nullish().describe(`
+        * * Field Name: Governmental Individual ID
+        * * Display Name: Governmental  Individual  ID
+        * * SQL Data Type: varchar(31)`),
+    High_Balance_LTD: z.number().nullish().describe(`
+        * * Field Name: High Balance LTD
+        * * Display Name: High  Balance  LTD
+        * * SQL Data Type: decimal(19, 5)`),
+    High_Balance_LYR: z.number().nullish().describe(`
+        * * Field Name: High Balance LYR
+        * * Display Name: High  Balance  LYR
+        * * SQL Data Type: decimal(19, 5)`),
+    High_Balance_YTD: z.number().nullish().describe(`
+        * * Field Name: High Balance YTD
+        * * Display Name: High  Balance  YTD
+        * * SQL Data Type: decimal(19, 5)`),
+    Hold: z.string().nullish().describe(`
+        * * Field Name: Hold
+        * * Display Name: Hold
+        * * SQL Data Type: varchar(100)`),
+    Inactive: z.string().nullish().describe(`
+        * * Field Name: Inactive
+        * * Display Name: Inactive
+        * * SQL Data Type: varchar(100)`),
+    Inventory_Account_Number: z.string().nullish().describe(`
+        * * Field Name: Inventory Account Number
+        * * Display Name: Inventory  Account  Number
+        * * SQL Data Type: varchar(129)`),
+    Invoice_Date: z.date().nullish().describe(`
+        * * Field Name: Invoice Date
+        * * Display Name: Invoice  Date
+        * * SQL Data Type: datetime`),
+    Keep_Calendar_History: z.string().nullish().describe(`
+        * * Field Name: Keep Calendar History
+        * * Display Name: Keep  Calendar  History
+        * * SQL Data Type: varchar(100)`),
+    Keep_Distribution_History: z.string().nullish().describe(`
+        * * Field Name: Keep Distribution History
+        * * Display Name: Keep  Distribution  History
+        * * SQL Data Type: varchar(100)`),
+    Keep_Period_History: z.string().nullish().describe(`
+        * * Field Name: Keep Period History
+        * * Display Name: Keep  Period  History
+        * * SQL Data Type: varchar(100)`),
+    Keep_Trx_History: z.string().nullish().describe(`
+        * * Field Name: Keep Trx History
+        * * Display Name: Keep  Trx  History
+        * * SQL Data Type: varchar(100)`),
+    Last_Aged: z.date().nullish().describe(`
+        * * Field Name: Last Aged
+        * * Display Name: Last  Aged
+        * * SQL Data Type: datetime`),
+    Last_Finance_Charge_Amount: z.number().nullish().describe(`
+        * * Field Name: Last Finance Charge Amount
+        * * Display Name: Last  Finance  Charge  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Last_NSF_Check_Date: z.date().nullish().describe(`
+        * * Field Name: Last NSF Check Date
+        * * Display Name: Last  NSF Check  Date
+        * * SQL Data Type: datetime`),
+    Last_Payment_Amount: z.number().nullish().describe(`
+        * * Field Name: Last Payment Amount
+        * * Display Name: Last  Payment  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Last_Payment_Date: z.date().nullish().describe(`
+        * * Field Name: Last Payment Date
+        * * Display Name: Last  Payment  Date
+        * * SQL Data Type: datetime`),
+    Last_Statement_Amount: z.number().nullish().describe(`
+        * * Field Name: Last Statement Amount
+        * * Display Name: Last  Statement  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Last_Statement_Date: z.date().nullish().describe(`
+        * * Field Name: Last Statement Date
+        * * Display Name: Last  Statement  Date
+        * * SQL Data Type: datetime`),
+    Last_Transaction_Amount: z.number().nullish().describe(`
+        * * Field Name: Last Transaction Amount
+        * * Display Name: Last  Transaction  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Last_Transaction_Date: z.date().nullish().describe(`
+        * * Field Name: Last Transaction Date
+        * * Display Name: Last  Transaction  Date
+        * * SQL Data Type: datetime`),
+    Location_Code: z.string().nullish().describe(`
+        * * Field Name: Location Code
+        * * Display Name: Location  Code
+        * * SQL Data Type: varchar(11)`),
+    MC_Transaction_State: z.string().nullish().describe(`
+        * * Field Name: MC Transaction State
+        * * Display Name: MC Transaction  State
+        * * SQL Data Type: varchar(100)`),
+    Markdown_Amount: z.number().nullish().describe(`
+        * * Field Name: Markdown Amount
+        * * Display Name: Markdown  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Master_Number: z.number().nullish().describe(`
+        * * Field Name: Master Number
+        * * Display Name: Master  Number
+        * * SQL Data Type: int`),
+    Max_Writeoff_Amount: z.number().nullish().describe(`
+        * * Field Name: Max Writeoff Amount
+        * * Display Name: Max  Writeoff  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Maximum_Writeoff_Type: z.string().nullish().describe(`
+        * * Field Name: Maximum Writeoff Type
+        * * Display Name: Maximum  Writeoff  Type
+        * * SQL Data Type: varchar(100)`),
+    Minimum_Payment_Dollar: z.number().nullish().describe(`
+        * * Field Name: Minimum Payment Dollar
+        * * Display Name: Minimum  Payment  Dollar
+        * * SQL Data Type: decimal(19, 5)`),
+    Minimum_Payment_Percent: z.number().nullish().describe(`
+        * * Field Name: Minimum Payment Percent
+        * * Display Name: Minimum  Payment  Percent
+        * * SQL Data Type: decimal(13, 6)`),
+    Minimum_Payment_Type: z.string().nullish().describe(`
+        * * Field Name: Minimum Payment Type
+        * * Display Name: Minimum  Payment  Type
+        * * SQL Data Type: varchar(100)`),
+    Misc_Amount: z.number().nullish().describe(`
+        * * Field Name: Misc Amount
+        * * Display Name: Misc  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Misc_Schedule_ID: z.string().nullish().describe(`
+        * * Field Name: Misc Schedule ID
+        * * Display Name: Misc  Schedule  ID
+        * * SQL Data Type: varchar(15)`),
+    Misc_Tax_Amount: z.number().nullish().describe(`
+        * * Field Name: Misc Tax Amount
+        * * Display Name: Misc  Tax  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Misc_Taxable: z.string().nullish().describe(`
+        * * Field Name: Misc Taxable
+        * * Display Name: Misc  Taxable
+        * * SQL Data Type: varchar(100)`),
+    Modified_Date: z.date().nullish().describe(`
+        * * Field Name: Modified Date
+        * * Display Name: Modified  Date
+        * * SQL Data Type: datetime`),
+    Modified_Date_from_Customer_Master: z.date().nullish().describe(`
+        * * Field Name: Modified Date from Customer Master
+        * * Display Name: Modified  Date  from  Customer  Master
+        * * SQL Data Type: datetime`),
+    Non_Commissioned_Amount: z.number().nullish().describe(`
+        * * Field Name: Non-Commissioned Amount
+        * * Display Name: Non -Commissioned  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Non_Current_Scheduled_Payments: z.number().nullish().describe(`
+        * * Field Name: Non Current Scheduled Payments
+        * * Display Name: Non  Current  Scheduled  Payments
+        * * SQL Data Type: decimal(19, 5)`),
+    Note_Index: z.number().nullish().describe(`
+        * * Field Name: Note Index
+        * * Display Name: Note  Index
+        * * SQL Data Type: decimal(19, 5)`),
+    Note_Index_from_Customer_Master: z.number().nullish().describe(`
+        * * Field Name: Note Index from Customer Master
+        * * Display Name: Note  Index  from  Customer  Master
+        * * SQL Data Type: decimal(19, 5)`),
+    Number_ADTP_Documents___LYR: z.number().nullish().describe(`
+        * * Field Name: Number ADTP Documents - LYR
+        * * Display Name: Number  ADTP Documents  - LYR
+        * * SQL Data Type: int`),
+    Number_ADTP_Documents___Life: z.number().nullish().describe(`
+        * * Field Name: Number ADTP Documents - Life
+        * * Display Name: Number  ADTP Documents  - Life
+        * * SQL Data Type: int`),
+    Number_ADTP_Documents___Year: z.number().nullish().describe(`
+        * * Field Name: Number ADTP Documents - Year
+        * * Display Name: Number  ADTP Documents  - Year
+        * * SQL Data Type: int`),
+    Number_Of_NSF_Checks_Life: z.number().nullish().describe(`
+        * * Field Name: Number Of NSF Checks Life
+        * * Display Name: Number  Of  NSF Checks  Life
+        * * SQL Data Type: int`),
+    Number_Of_NSF_Checks_YTD: z.number().nullish().describe(`
+        * * Field Name: Number Of NSF Checks YTD
+        * * Display Name: Number  Of  NSF Checks  YTD
+        * * SQL Data Type: int`),
+    On_Order_Amount: z.number().nullish().describe(`
+        * * Field Name: On Order Amount
+        * * Display Name: On  Order  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Order_Date: z.date().nullish().describe(`
+        * * Field Name: Order Date
+        * * Display Name: Order  Date
+        * * SQL Data Type: datetime`),
+    Order_Fulfillment_Shortage_Default: z.string().nullish().describe(`
+        * * Field Name: Order Fulfillment Shortage Default
+        * * Display Name: Order  Fulfillment  Shortage  Default
+        * * SQL Data Type: varchar(100)`),
+    Original_Number: z.string().nullish().describe(`
+        * * Field Name: Original Number
+        * * Display Name: Original  Number
+        * * SQL Data Type: varchar(21)`),
+    Original_Type: z.string().nullish().describe(`
+        * * Field Name: Original Type
+        * * Display Name: Original  Type
+        * * SQL Data Type: varchar(100)`),
+    Originating_Account_Amount: z.number().nullish().describe(`
+        * * Field Name: Originating Account Amount
+        * * Display Name: Originating  Account  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Originating_Backout_Freight_Amount: z.number().nullish().describe(`
+        * * Field Name: Originating Backout Freight Amount
+        * * Display Name: Originating  Backout  Freight  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Originating_Backout_Misc_Amount: z.number().nullish().describe(`
+        * * Field Name: Originating Backout Misc Amount
+        * * Display Name: Originating  Backout  Misc  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Originating_Backout_Tax_Amount: z.number().nullish().describe(`
+        * * Field Name: Originating Backout Tax Amount
+        * * Display Name: Originating  Backout  Tax  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Originating_COD_Amount: z.number().nullish().describe(`
+        * * Field Name: Originating COD Amount
+        * * Display Name: Originating  COD Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Originating_Commission_Amount: z.number().nullish().describe(`
+        * * Field Name: Originating Commission Amount
+        * * Display Name: Originating  Commission  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Originating_Commission_Sales_Amount: z.number().nullish().describe(`
+        * * Field Name: Originating Commission Sales Amount
+        * * Display Name: Originating  Commission  Sales  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Originating_Deposit_Received: z.number().nullish().describe(`
+        * * Field Name: Originating Deposit Received
+        * * Display Name: Originating  Deposit  Received
+        * * SQL Data Type: decimal(19, 5)`),
+    Originating_Discount_Available_Amount: z.number().nullish().describe(`
+        * * Field Name: Originating Discount Available Amount
+        * * Display Name: Originating  Discount  Available  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Originating_Discount_Available_Freight: z.number().nullish().describe(`
+        * * Field Name: Originating Discount Available Freight
+        * * Display Name: Originating  Discount  Available  Freight
+        * * SQL Data Type: decimal(19, 5)`),
+    Originating_Discount_Available_Misc: z.number().nullish().describe(`
+        * * Field Name: Originating Discount Available Misc
+        * * Display Name: Originating  Discount  Available  Misc
+        * * SQL Data Type: decimal(19, 5)`),
+    Originating_Discount_Available_Taken: z.number().nullish().describe(`
+        * * Field Name: Originating Discount Available Taken
+        * * Display Name: Originating  Discount  Available  Taken
+        * * SQL Data Type: decimal(19, 5)`),
+    Originating_Discount_Dollar_Amount: z.number().nullish().describe(`
+        * * Field Name: Originating Discount Dollar Amount
+        * * Display Name: Originating  Discount  Dollar  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Originating_Discount_Returned: z.number().nullish().describe(`
+        * * Field Name: Originating Discount Returned
+        * * Display Name: Originating  Discount  Returned
+        * * SQL Data Type: decimal(19, 5)`),
+    Originating_Discount_Taken_Amount: z.number().nullish().describe(`
+        * * Field Name: Originating Discount Taken Amount
+        * * Display Name: Originating  Discount  Taken  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Originating_Document_Amount: z.number().nullish().describe(`
+        * * Field Name: Originating Document Amount
+        * * Display Name: Originating  Document  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Originating_Extended_Cost: z.number().nullish().describe(`
+        * * Field Name: Originating Extended Cost
+        * * Display Name: Originating  Extended  Cost
+        * * SQL Data Type: decimal(19, 5)`),
+    Originating_Freight_Amount: z.number().nullish().describe(`
+        * * Field Name: Originating Freight Amount
+        * * Display Name: Originating  Freight  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Originating_Freight_Tax_Amount: z.number().nullish().describe(`
+        * * Field Name: Originating Freight Tax Amount
+        * * Display Name: Originating  Freight  Tax  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Originating_Markdown_Amount: z.number().nullish().describe(`
+        * * Field Name: Originating Markdown Amount
+        * * Display Name: Originating  Markdown  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Originating_Misc_Amount: z.number().nullish().describe(`
+        * * Field Name: Originating Misc Amount
+        * * Display Name: Originating  Misc  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Originating_Misc_Tax_Amount: z.number().nullish().describe(`
+        * * Field Name: Originating Misc Tax Amount
+        * * Display Name: Originating  Misc  Tax  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Originating_Non_Commissioned_Amount: z.number().nullish().describe(`
+        * * Field Name: Originating Non-Commissioned Amount
+        * * Display Name: Originating  Non -Commissioned  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Originating_Payment_Received: z.number().nullish().describe(`
+        * * Field Name: Originating Payment Received
+        * * Display Name: Originating  Payment  Received
+        * * SQL Data Type: decimal(19, 5)`),
+    Originating_Remaining_Subtotal: z.number().nullish().describe(`
+        * * Field Name: Originating Remaining Subtotal
+        * * Display Name: Originating  Remaining  Subtotal
+        * * SQL Data Type: decimal(19, 5)`),
+    Originating_Subtotal: z.number().nullish().describe(`
+        * * Field Name: Originating Subtotal
+        * * Display Name: Originating  Subtotal
+        * * SQL Data Type: decimal(19, 5)`),
+    Originating_Tax_Amount: z.number().nullish().describe(`
+        * * Field Name: Originating Tax Amount
+        * * Display Name: Originating  Tax  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Originating_Taxable_Tax_Amount: z.number().nullish().describe(`
+        * * Field Name: Originating Taxable Tax Amount
+        * * Display Name: Originating  Taxable  Tax  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Originating_Trade_Discount_Amount: z.number().nullish().describe(`
+        * * Field Name: Originating Trade Discount Amount
+        * * Display Name: Originating  Trade  Discount  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Packing_Slip_Number: z.string().nullish().describe(`
+        * * Field Name: Packing Slip Number
+        * * Display Name: Packing  Slip  Number
+        * * SQL Data Type: varchar(21)`),
+    Payment_Received: z.number().nullish().describe(`
+        * * Field Name: Payment Received
+        * * Display Name: Payment  Received
+        * * SQL Data Type: decimal(19, 5)`),
+    Payment_Terms_ID: z.string().nullish().describe(`
+        * * Field Name: Payment Terms ID
+        * * Display Name: Payment  Terms  ID
+        * * SQL Data Type: varchar(21)`),
+    Payment_Terms_ID_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: Payment Terms ID from Customer Master
+        * * Display Name: Payment  Terms  ID from  Customer  Master
+        * * SQL Data Type: varchar(21)`),
+    Phone_1_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: Phone 1 from Customer Master
+        * * Display Name: Phone  1 from  Customer  Master
+        * * SQL Data Type: varchar(21)`),
+    Phone_2_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: Phone 2 from Customer Master
+        * * Display Name: Phone  2 from  Customer  Master
+        * * SQL Data Type: varchar(21)`),
+    Phone_3: z.string().nullish().describe(`
+        * * Field Name: Phone 3
+        * * Display Name: Phone  3
+        * * SQL Data Type: varchar(21)`),
+    Phone_3_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: Phone 3 from Customer Master
+        * * Display Name: Phone  3 from  Customer  Master
+        * * SQL Data Type: varchar(21)`),
+    Phone_Number_1: z.string().nullish().describe(`
+        * * Field Name: Phone Number 1
+        * * Display Name: Phone  Number  1
+        * * SQL Data Type: varchar(21)`),
+    Phone_Number_2: z.string().nullish().describe(`
+        * * Field Name: Phone Number 2
+        * * Display Name: Phone  Number  2
+        * * SQL Data Type: varchar(21)`),
+    Picking_Ticket_Number: z.string().nullish().describe(`
+        * * Field Name: Picking Ticket Number
+        * * Display Name: Picking  Ticket  Number
+        * * SQL Data Type: varchar(21)`),
+    Post_Results_To: z.string().nullish().describe(`
+        * * Field Name: Post Results To
+        * * Display Name: Post  Results  To
+        * * SQL Data Type: varchar(100)`),
+    Posted_Date: z.date().nullish().describe(`
+        * * Field Name: Posted Date
+        * * Display Name: Posted  Date
+        * * SQL Data Type: datetime`),
+    Posted_User_ID: z.string().nullish().describe(`
+        * * Field Name: Posted User ID
+        * * Display Name: Posted  User  ID
+        * * SQL Data Type: varchar(15)`),
+    Posting_Status: z.string().nullish().describe(`
+        * * Field Name: Posting Status
+        * * Display Name: Posting  Status
+        * * SQL Data Type: varchar(100)`),
+    PriceLevel: z.string().nullish().describe(`
+        * * Field Name: PriceLevel
+        * * Display Name: Price Level
+        * * SQL Data Type: varchar(11)`),
+    PriceLevel_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: PriceLevel from Customer Master
+        * * Display Name: Price Level  from  Customer  Master
+        * * SQL Data Type: varchar(11)`),
+    Primary_Billto_Address_Code: z.string().nullish().describe(`
+        * * Field Name: Primary Billto Address Code
+        * * Display Name: Primary  Billto  Address  Code
+        * * SQL Data Type: varchar(15)`),
+    Primary_Billto_Address_Code_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: Primary Billto Address Code from Customer Master
+        * * Display Name: Primary  Billto  Address  Code  from  Customer  Master
+        * * SQL Data Type: varchar(15)`),
+    Primary_Shipto_Address_Code_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: Primary Shipto Address Code from Customer Master
+        * * Display Name: Primary  Shipto  Address  Code  from  Customer  Master
+        * * SQL Data Type: varchar(15)`),
+    Priority_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: Priority from Customer Master
+        * * Display Name: Priority  from  Customer  Master
+        * * SQL Data Type: varchar(100)`),
+    Prospect: z.string().nullish().describe(`
+        * * Field Name: Prospect
+        * * Display Name: Prospect
+        * * SQL Data Type: varchar(100)`),
+    Quote_Date: z.date().nullish().describe(`
+        * * Field Name: Quote Date
+        * * Display Name: Quote  Date
+        * * SQL Data Type: datetime`),
+    Quote_Expiration_Date: z.date().nullish().describe(`
+        * * Field Name: Quote Expiration Date
+        * * Display Name: Quote  Expiration  Date
+        * * SQL Data Type: datetime`),
+    Rate_Calculation_Method: z.string().nullish().describe(`
+        * * Field Name: Rate Calculation Method
+        * * Display Name: Rate  Calculation  Method
+        * * SQL Data Type: varchar(100)`),
+    Rate_Type_ID: z.string().nullish().describe(`
+        * * Field Name: Rate Type ID
+        * * Display Name: Rate  Type  ID
+        * * SQL Data Type: varchar(15)`),
+    Rate_Type_ID_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: Rate Type ID from Customer Master
+        * * Display Name: Rate  Type  ID from  Customer  Master
+        * * SQL Data Type: varchar(15)`),
+    Reference: z.string().nullish().describe(`
+        * * Field Name: Reference
+        * * Display Name: Reference
+        * * SQL Data Type: varchar(31)`),
+    Remaining_Subtotal: z.number().nullish().describe(`
+        * * Field Name: Remaining Subtotal
+        * * Display Name: Remaining  Subtotal
+        * * SQL Data Type: decimal(19, 5)`),
+    Repeating: z.string().nullish().describe(`
+        * * Field Name: Repeating
+        * * Display Name: Repeating
+        * * SQL Data Type: varchar(100)`),
+    Requested_Ship_Date: z.date().nullish().describe(`
+        * * Field Name: Requested Ship Date
+        * * Display Name: Requested  Ship  Date
+        * * SQL Data Type: datetime`),
+    Retainage: z.number().nullish().describe(`
+        * * Field Name: Retainage
+        * * Display Name: Retainage
+        * * SQL Data Type: decimal(19, 5)`),
+    Return_Date: z.date().nullish().describe(`
+        * * Field Name: Return Date
+        * * Display Name: Return  Date
+        * * SQL Data Type: datetime`),
+    Revalue_Customer: z.string().nullish().describe(`
+        * * Field Name: Revalue Customer
+        * * Display Name: Revalue  Customer
+        * * SQL Data Type: varchar(100)`),
+    Sale_Date: z.date().nullish().describe(`
+        * * Field Name: Sale Date
+        * * Display Name: Sale  Date
+        * * SQL Data Type: datetime`),
+    Sales_Account_Number: z.string().nullish().describe(`
+        * * Field Name: Sales Account Number
+        * * Display Name: Sales  Account  Number
+        * * SQL Data Type: varchar(129)`),
+    Sales_Territory: z.string().nullish().describe(`
+        * * Field Name: Sales Territory
+        * * Display Name: Sales  Territory
+        * * SQL Data Type: varchar(15)`),
+    Sales_Territory_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: Sales Territory from Customer Master
+        * * Display Name: Sales  Territory  from  Customer  Master
+        * * SQL Data Type: varchar(15)`),
+    Salesperson_ID: z.string().nullish().describe(`
+        * * Field Name: Salesperson ID
+        * * Display Name: Salesperson  ID
+        * * SQL Data Type: varchar(15)`),
+    Salesperson_ID_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: Salesperson ID from Customer Master
+        * * Display Name: Salesperson  ID from  Customer  Master
+        * * SQL Data Type: varchar(15)`),
+    Sequence_Number_Corrected: z.number().nullish().describe(`
+        * * Field Name: Sequence Number Corrected
+        * * Display Name: Sequence  Number  Corrected
+        * * SQL Data Type: smallint`),
+    ShipToName: z.string().nullish().describe(`
+        * * Field Name: ShipToName
+        * * Display Name: Ship To Name
+        * * SQL Data Type: varchar(65)`),
+    Ship_Complete_Document: z.string().nullish().describe(`
+        * * Field Name: Ship Complete Document
+        * * Display Name: Ship  Complete  Document
+        * * SQL Data Type: varchar(100)`),
+    Ship_Complete_Document_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: Ship Complete Document from Customer Master
+        * * Display Name: Ship  Complete  Document  from  Customer  Master
+        * * SQL Data Type: varchar(100)`),
+    Shipping_Document: z.string().nullish().describe(`
+        * * Field Name: Shipping Document
+        * * Display Name: Shipping  Document
+        * * SQL Data Type: varchar(100)`),
+    Shipping_Method: z.string().nullish().describe(`
+        * * Field Name: Shipping Method
+        * * Display Name: Shipping  Method
+        * * SQL Data Type: varchar(15)`),
+    Shipping_Method_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: Shipping Method from Customer Master
+        * * Display Name: Shipping  Method  from  Customer  Master
+        * * SQL Data Type: varchar(15)`),
+    Short_Name: z.string().nullish().describe(`
+        * * Field Name: Short Name
+        * * Display Name: Short  Name
+        * * SQL Data Type: varchar(15)`),
+    Simplified: z.string().nullish().describe(`
+        * * Field Name: Simplified
+        * * Display Name: Simplified
+        * * SQL Data Type: varchar(100)`),
+    State: z.string().nullish().describe(`
+        * * Field Name: State
+        * * Display Name: State
+        * * SQL Data Type: varchar(29)`),
+    State_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: State from Customer Master
+        * * Display Name: State  from  Customer  Master
+        * * SQL Data Type: varchar(29)`),
+    Statement_Address_Code: z.string().nullish().describe(`
+        * * Field Name: Statement Address Code
+        * * Display Name: Statement  Address  Code
+        * * SQL Data Type: varchar(15)`),
+    Statement_Cycle: z.string().nullish().describe(`
+        * * Field Name: Statement Cycle
+        * * Display Name: Statement  Cycle
+        * * SQL Data Type: varchar(100)`),
+    Statement_Name: z.string().nullish().describe(`
+        * * Field Name: Statement Name
+        * * Display Name: Statement  Name
+        * * SQL Data Type: varchar(65)`),
+    Subtotal: z.number().nullish().describe(`
+        * * Field Name: Subtotal
+        * * Display Name: Subtotal
+        * * SQL Data Type: decimal(19, 5)`),
+    TRX_Frequency: z.string().nullish().describe(`
+        * * Field Name: TRX Frequency
+        * * Display Name: TRX Frequency
+        * * SQL Data Type: varchar(100)`),
+    TRX_Source: z.string().nullish().describe(`
+        * * Field Name: TRX Source
+        * * Display Name: TRX Source
+        * * SQL Data Type: varchar(13)`),
+    Tax_Amount: z.number().nullish().describe(`
+        * * Field Name: Tax Amount
+        * * Display Name: Tax  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Tax_Date: z.date().nullish().describe(`
+        * * Field Name: Tax Date
+        * * Display Name: Tax  Date
+        * * SQL Data Type: datetime`),
+    Tax_Engine_Called: z.string().nullish().describe(`
+        * * Field Name: Tax Engine Called
+        * * Display Name: Tax  Engine  Called
+        * * SQL Data Type: varchar(100)`),
+    Tax_Exempt_1: z.string().nullish().describe(`
+        * * Field Name: Tax Exempt 1
+        * * Display Name: Tax  Exempt  1
+        * * SQL Data Type: varchar(25)`),
+    Tax_Exempt_1_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: Tax Exempt 1 from Customer Master
+        * * Display Name: Tax  Exempt  1 from  Customer  Master
+        * * SQL Data Type: varchar(25)`),
+    Tax_Exempt_2: z.string().nullish().describe(`
+        * * Field Name: Tax Exempt 2
+        * * Display Name: Tax  Exempt  2
+        * * SQL Data Type: varchar(25)`),
+    Tax_Exempt_2_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: Tax Exempt 2 from Customer Master
+        * * Display Name: Tax  Exempt  2 from  Customer  Master
+        * * SQL Data Type: varchar(25)`),
+    Tax_Registration_Number: z.string().nullish().describe(`
+        * * Field Name: Tax Registration Number
+        * * Display Name: Tax  Registration  Number
+        * * SQL Data Type: varchar(25)`),
+    Tax_Registration_Number_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: Tax Registration Number from Customer Master
+        * * Display Name: Tax  Registration  Number  from  Customer  Master
+        * * SQL Data Type: varchar(25)`),
+    Tax_Schedule_ID: z.string().nullish().describe(`
+        * * Field Name: Tax Schedule ID
+        * * Display Name: Tax  Schedule  ID
+        * * SQL Data Type: varchar(15)`),
+    Tax_Schedule_ID_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: Tax Schedule ID from Customer Master
+        * * Display Name: Tax  Schedule  ID from  Customer  Master
+        * * SQL Data Type: varchar(15)`),
+    Tax_Schedule_Source: z.string().nullish().describe(`
+        * * Field Name: Tax Schedule Source
+        * * Display Name: Tax  Schedule  Source
+        * * SQL Data Type: varchar(100)`),
+    Taxable_Tax_Amount: z.number().nullish().describe(`
+        * * Field Name: Taxable Tax Amount
+        * * Display Name: Taxable  Tax  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Time: z.date().nullish().describe(`
+        * * Field Name: Time
+        * * Display Name: Time
+        * * SQL Data Type: datetime`),
+    Times_Printed: z.number().nullish().describe(`
+        * * Field Name: Times Printed
+        * * Display Name: Times  Printed
+        * * SQL Data Type: decimal(13, 6)`),
+    Times_Repeated: z.number().nullish().describe(`
+        * * Field Name: Times Repeated
+        * * Display Name: Times  Repeated
+        * * SQL Data Type: smallint`),
+    Times_To_Repeat: z.number().nullish().describe(`
+        * * Field Name: Times To Repeat
+        * * Display Name: Times  To  Repeat
+        * * SQL Data Type: smallint`),
+    Total___FC_LTD: z.number().nullish().describe(`
+        * * Field Name: Total # FC LTD
+        * * Display Name: Total  # FC LTD
+        * * SQL Data Type: int`),
+    Total___FC_LYR: z.number().nullish().describe(`
+        * * Field Name: Total # FC LYR
+        * * Display Name: Total  # FC LYR
+        * * SQL Data Type: int`),
+    Total___FC_YTD: z.number().nullish().describe(`
+        * * Field Name: Total # FC YTD
+        * * Display Name: Total  # FC YTD
+        * * SQL Data Type: int`),
+    Total___Invoices_LTD: z.number().nullish().describe(`
+        * * Field Name: Total # Invoices LTD
+        * * Display Name: Total  # Invoices  LTD
+        * * SQL Data Type: int`),
+    Total___Invoices_LYR: z.number().nullish().describe(`
+        * * Field Name: Total # Invoices LYR
+        * * Display Name: Total  # Invoices  LYR
+        * * SQL Data Type: int`),
+    Total___Invoices_YTD: z.number().nullish().describe(`
+        * * Field Name: Total # Invoices YTD
+        * * Display Name: Total  # Invoices  YTD
+        * * SQL Data Type: int`),
+    Total_Amount_Of_NSF_Checks_Life: z.number().nullish().describe(`
+        * * Field Name: Total Amount Of NSF Checks Life
+        * * Display Name: Total  Amount  Of  NSF Checks  Life
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Amount_Of_NSF_Checks_YTD: z.number().nullish().describe(`
+        * * Field Name: Total Amount Of NSF Checks YTD
+        * * Display Name: Total  Amount  Of  NSF Checks  YTD
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Bad_Deb_LYR: z.number().nullish().describe(`
+        * * Field Name: Total Bad Deb LYR
+        * * Display Name: Total  Bad  Deb  LYR
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Bad_Debt_LTD: z.number().nullish().describe(`
+        * * Field Name: Total Bad Debt LTD
+        * * Display Name: Total  Bad  Debt  LTD
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Bad_Debt_YTD: z.number().nullish().describe(`
+        * * Field Name: Total Bad Debt YTD
+        * * Display Name: Total  Bad  Debt  YTD
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Cash_Received_LTD: z.number().nullish().describe(`
+        * * Field Name: Total Cash Received LTD
+        * * Display Name: Total  Cash  Received  LTD
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Cash_Received_LYR: z.number().nullish().describe(`
+        * * Field Name: Total Cash Received LYR
+        * * Display Name: Total  Cash  Received  LYR
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Cash_Received_YTD: z.number().nullish().describe(`
+        * * Field Name: Total Cash Received YTD
+        * * Display Name: Total  Cash  Received  YTD
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Costs_LTD: z.number().nullish().describe(`
+        * * Field Name: Total Costs LTD
+        * * Display Name: Total  Costs  LTD
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Costs_LYR: z.number().nullish().describe(`
+        * * Field Name: Total Costs LYR
+        * * Display Name: Total  Costs  LYR
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Costs_YTD: z.number().nullish().describe(`
+        * * Field Name: Total Costs YTD
+        * * Display Name: Total  Costs  YTD
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Discounts_Available_YTD: z.number().nullish().describe(`
+        * * Field Name: Total Discounts Available YTD
+        * * Display Name: Total  Discounts  Available  YTD
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Discounts_Taken_LTD: z.number().nullish().describe(`
+        * * Field Name: Total Discounts Taken LTD
+        * * Display Name: Total  Discounts  Taken  LTD
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Discounts_Taken_LYR: z.number().nullish().describe(`
+        * * Field Name: Total Discounts Taken LYR
+        * * Display Name: Total  Discounts  Taken  LYR
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Discounts_Taken_YTD: z.number().nullish().describe(`
+        * * Field Name: Total Discounts Taken YTD
+        * * Display Name: Total  Discounts  Taken  YTD
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Finance_Charges_LTD: z.number().nullish().describe(`
+        * * Field Name: Total Finance Charges LTD
+        * * Display Name: Total  Finance  Charges  LTD
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Finance_Charges_LYR: z.number().nullish().describe(`
+        * * Field Name: Total Finance Charges LYR
+        * * Display Name: Total  Finance  Charges  LYR
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Finance_Charges_YTD: z.number().nullish().describe(`
+        * * Field Name: Total Finance Charges YTD
+        * * Display Name: Total  Finance  Charges  YTD
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Returns_LTD: z.number().nullish().describe(`
+        * * Field Name: Total Returns LTD
+        * * Display Name: Total  Returns  LTD
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Returns_LYR: z.number().nullish().describe(`
+        * * Field Name: Total Returns LYR
+        * * Display Name: Total  Returns  LYR
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Returns_YTD: z.number().nullish().describe(`
+        * * Field Name: Total Returns YTD
+        * * Display Name: Total  Returns  YTD
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Sales_LTD: z.number().nullish().describe(`
+        * * Field Name: Total Sales LTD
+        * * Display Name: Total  Sales  LTD
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Sales_LYR: z.number().nullish().describe(`
+        * * Field Name: Total Sales LYR
+        * * Display Name: Total  Sales  LYR
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Sales_YTD: z.number().nullish().describe(`
+        * * Field Name: Total Sales YTD
+        * * Display Name: Total  Sales  YTD
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Waived_FC_LTD: z.number().nullish().describe(`
+        * * Field Name: Total Waived FC LTD
+        * * Display Name: Total  Waived  FC LTD
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Waived_FC_LYR: z.number().nullish().describe(`
+        * * Field Name: Total Waived FC LYR
+        * * Display Name: Total  Waived  FC LYR
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Waived_FC_YTD: z.number().nullish().describe(`
+        * * Field Name: Total Waived FC YTD
+        * * Display Name: Total  Waived  FC YTD
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Writeoffs_LTD: z.number().nullish().describe(`
+        * * Field Name: Total Writeoffs LTD
+        * * Display Name: Total  Writeoffs  LTD
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Writeoffs_LYR: z.number().nullish().describe(`
+        * * Field Name: Total Writeoffs LYR
+        * * Display Name: Total  Writeoffs  LYR
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Writeoffs_YTD: z.number().nullish().describe(`
+        * * Field Name: Total Writeoffs YTD
+        * * Display Name: Total  Writeoffs  YTD
+        * * SQL Data Type: decimal(19, 5)`),
+    Trade_Discount_Amount: z.number().nullish().describe(`
+        * * Field Name: Trade Discount Amount
+        * * Display Name: Trade  Discount  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Trade_Discount_Percent: z.number().nullish().describe(`
+        * * Field Name: Trade Discount Percent
+        * * Display Name: Trade  Discount  Percent
+        * * SQL Data Type: smallint`),
+    UPS_Zone: z.string().nullish().describe(`
+        * * Field Name: UPS Zone
+        * * Display Name: UPS Zone
+        * * SQL Data Type: varchar(3)`),
+    UPS_Zone_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: UPS Zone from Customer Master
+        * * Display Name: UPS Zone  from  Customer  Master
+        * * SQL Data Type: varchar(3)`),
+    Unpaid_Finance_Charges_YTD: z.number().nullish().describe(`
+        * * Field Name: Unpaid Finance Charges YTD
+        * * Display Name: Unpaid  Finance  Charges  YTD
+        * * SQL Data Type: decimal(19, 5)`),
+    Unposted_Cash_Amount: z.number().nullish().describe(`
+        * * Field Name: Unposted Cash Amount
+        * * Display Name: Unposted  Cash  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Unposted_Other_Cash_Amount: z.number().nullish().describe(`
+        * * Field Name: Unposted Other Cash Amount
+        * * Display Name: Unposted  Other  Cash  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Unposted_Other_Sales_Amount: z.number().nullish().describe(`
+        * * Field Name: Unposted Other Sales Amount
+        * * Display Name: Unposted  Other  Sales  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Unposted_Sales_Amount: z.number().nullish().describe(`
+        * * Field Name: Unposted Sales Amount
+        * * Display Name: Unposted  Sales  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Use_Document_ID_1: z.string().nullish().describe(`
+        * * Field Name: Use Document ID 1
+        * * Display Name: Use  Document  ID 1
+        * * SQL Data Type: varchar(15)`),
+    Use_Document_ID_2: z.string().nullish().describe(`
+        * * Field Name: Use Document ID 2
+        * * Display Name: Use  Document  ID 2
+        * * SQL Data Type: varchar(15)`),
+    User_Defined_1: z.string().nullish().describe(`
+        * * Field Name: User Defined 1
+        * * Display Name: User  Defined  1
+        * * SQL Data Type: varchar(21)`),
+    User_Defined_1_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: User Defined 1 from Customer Master
+        * * Display Name: User  Defined  1 from  Customer  Master
+        * * SQL Data Type: varchar(21)`),
+    User_Defined_2: z.string().nullish().describe(`
+        * * Field Name: User Defined 2
+        * * Display Name: User  Defined  2
+        * * SQL Data Type: varchar(21)`),
+    User_Defined_2_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: User Defined 2 from Customer Master
+        * * Display Name: User  Defined  2 from  Customer  Master
+        * * SQL Data Type: varchar(21)`),
+    User_Defined_3: z.string().nullish().describe(`
+        * * Field Name: User Defined 3
+        * * Display Name: User  Defined  3
+        * * SQL Data Type: varchar(21)`),
+    User_Defined_4: z.string().nullish().describe(`
+        * * Field Name: User Defined 4
+        * * Display Name: User  Defined  4
+        * * SQL Data Type: varchar(21)`),
+    User_Defined_5: z.string().nullish().describe(`
+        * * Field Name: User Defined 5
+        * * Display Name: User  Defined  5
+        * * SQL Data Type: varchar(21)`),
+    User_Defined_Date_1: z.date().nullish().describe(`
+        * * Field Name: User Defined Date 1
+        * * Display Name: User  Defined  Date  1
+        * * SQL Data Type: datetime`),
+    User_Defined_Date_2: z.date().nullish().describe(`
+        * * Field Name: User Defined Date 2
+        * * Display Name: User  Defined  Date  2
+        * * SQL Data Type: datetime`),
+    User_Defined_Table_1: z.string().nullish().describe(`
+        * * Field Name: User Defined Table 1
+        * * Display Name: User  Defined  Table  1
+        * * SQL Data Type: varchar(21)`),
+    User_Defined_Table_2: z.string().nullish().describe(`
+        * * Field Name: User Defined Table 2
+        * * Display Name: User  Defined  Table  2
+        * * SQL Data Type: varchar(21)`),
+    User_Defined_Table_3: z.string().nullish().describe(`
+        * * Field Name: User Defined Table 3
+        * * Display Name: User  Defined  Table  3
+        * * SQL Data Type: varchar(21)`),
+    User_To_Enter: z.string().nullish().describe(`
+        * * Field Name: User To Enter
+        * * Display Name: User  To  Enter
+        * * SQL Data Type: varchar(15)`),
+    Void_Status: z.string().nullish().describe(`
+        * * Field Name: Void Status
+        * * Display Name: Void  Status
+        * * SQL Data Type: varchar(100)`),
+    Withholding_Amount: z.number().nullish().describe(`
+        * * Field Name: Withholding Amount
+        * * Display Name: Withholding  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Write_Offs_LIFE: z.number().nullish().describe(`
+        * * Field Name: Write Offs LIFE
+        * * Display Name: Write  Offs  LIFE
+        * * SQL Data Type: decimal(19, 5)`),
+    Write_Offs_LYR: z.number().nullish().describe(`
+        * * Field Name: Write Offs LYR
+        * * Display Name: Write  Offs  LYR
+        * * SQL Data Type: decimal(19, 5)`),
+    Write_Offs_YTD: z.number().nullish().describe(`
+        * * Field Name: Write Offs YTD
+        * * Display Name: Write  Offs  YTD
+        * * SQL Data Type: decimal(19, 5)`),
+    Writeoff_Account_Number: z.string().nullish().describe(`
+        * * Field Name: Writeoff Account Number
+        * * Display Name: Writeoff  Account  Number
+        * * SQL Data Type: varchar(129)`),
+    Zip_Code: z.string().nullish().describe(`
+        * * Field Name: Zip Code
+        * * Display Name: Zip  Code
+        * * SQL Data Type: varchar(11)`),
+    Zip_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: Zip from Customer Master
+        * * Display Name: Zip  from  Customer  Master
+        * * SQL Data Type: varchar(11)`),
+    Workflow_Approval_Status_Credit_Limit: z.string().nullish().describe(`
+        * * Field Name: Workflow Approval Status Credit Limit
+        * * Display Name: Workflow  Approval  Status  Credit  Limit
+        * * SQL Data Type: varchar(100)`),
+    Workflow_Priority_Credit_Limit: z.string().nullish().describe(`
+        * * Field Name: Workflow Priority Credit Limit
+        * * Display Name: Workflow  Priority  Credit  Limit
+        * * SQL Data Type: varchar(100)`),
+    Workflow_Approval_Status_Quote: z.string().nullish().describe(`
+        * * Field Name: Workflow Approval Status Quote
+        * * Display Name: Workflow  Approval  Status  Quote
+        * * SQL Data Type: varchar(100)`),
+    Workflow_Priority_Quote: z.string().nullish().describe(`
+        * * Field Name: Workflow Priority Quote
+        * * Display Name: Workflow  Priority  Quote
+        * * SQL Data Type: varchar(100)`),
+    Accounts_Receivable_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Accounts Receivable Account Number For Drillback
+        * * Display Name: Accounts  Receivable  Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Cash_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Cash Account Number For Drillback
+        * * Display Name: Cash  Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Checkbook_ID_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Checkbook ID For Drillback
+        * * Display Name: Checkbook  ID For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    COGS_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: COGS Account Number For Drillback
+        * * Display Name: COGS Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Customer_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Customer Number For Drillback
+        * * Display Name: Customer  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Discounts_Available_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Discounts Available Account Number For Drillback
+        * * Display Name: Discounts  Available  Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Discounts_Taken_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Discounts Taken Account Number For Drillback
+        * * Display Name: Discounts  Taken  Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Finance_Charge_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Finance Charge Account Number For Drillback
+        * * Display Name: Finance  Charge  Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Inventory_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Inventory Account Number For Drillback
+        * * Display Name: Inventory  Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Sales_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Sales Account Number For Drillback
+        * * Display Name: Sales  Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Salesperson_ID_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Salesperson ID For Drillback
+        * * Display Name: Salesperson  ID For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    SOP_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: SOP Number For Drillback
+        * * Display Name: SOP Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Writeoff_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Writeoff Account Number For Drillback
+        * * Display Name: Writeoff  Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    ID: z.number().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: int`),
+});
+
+export type SalesTransactionEntityType = z.infer<typeof SalesTransactionSchema>;
+       
+/**
+ * zod schema definition for the entity Sales Transactions__client_membership
+ */
+export const SalesTransaction__client_membershipSchema = z.object({
+    SOP_Type: z.string().describe(`
+        * * Field Name: SOP Type
+        * * Display Name: SOP Type
+        * * SQL Data Type: varchar(100)`),
+    SOP_Number: z.string().describe(`
+        * * Field Name: SOP Number
+        * * Display Name: SOP Number
+        * * SQL Data Type: varchar(21)`),
+    Document_Date: z.date().nullish().describe(`
+        * * Field Name: Document Date
+        * * Display Name: Document  Date
+        * * SQL Data Type: datetime`),
+    Customer_Number: z.string().nullish().describe(`
+        * * Field Name: Customer Number
+        * * Display Name: Customer  Number
+        * * SQL Data Type: varchar(15)`),
+    Customer_Name: z.string().nullish().describe(`
+        * * Field Name: Customer Name
+        * * Display Name: Customer  Name
+        * * SQL Data Type: varchar(65)`),
+    Customer_PO_Number: z.string().nullish().describe(`
+        * * Field Name: Customer PO Number
+        * * Display Name: Customer  PO Number
+        * * SQL Data Type: varchar(21)`),
+    Primary_Shipto_Address_Code: z.string().nullish().describe(`
+        * * Field Name: Primary Shipto Address Code
+        * * Display Name: Primary  Shipto  Address  Code
+        * * SQL Data Type: varchar(15)`),
+    Sales_Document_Status: z.string().nullish().describe(`
+        * * Field Name: Sales Document Status
+        * * Display Name: Sales  Document  Status
+        * * SQL Data Type: varchar(100)`),
+    Document_Amount: z.number().nullish().describe(`
+        * * Field Name: Document Amount
+        * * Display Name: Document  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Account_Amount: z.number().nullish().describe(`
+        * * Field Name: Account Amount
+        * * Display Name: Account  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Accounts_Receivable_Account_Number: z.string().nullish().describe(`
+        * * Field Name: Accounts Receivable Account Number
+        * * Display Name: Accounts  Receivable  Account  Number
+        * * SQL Data Type: varchar(129)`),
+    Actual_Ship_Date: z.date().nullish().describe(`
+        * * Field Name: Actual Ship Date
+        * * Display Name: Actual  Ship  Date
+        * * SQL Data Type: datetime`),
+    Address_1: z.string().nullish().describe(`
+        * * Field Name: Address 1
+        * * Display Name: Address  1
+        * * SQL Data Type: varchar(61)`),
+    Address_1_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: Address 1 from Customer Master
+        * * Display Name: Address  1 from  Customer  Master
+        * * SQL Data Type: varchar(61)`),
+    Address_2: z.string().nullish().describe(`
+        * * Field Name: Address 2
+        * * Display Name: Address  2
+        * * SQL Data Type: varchar(61)`),
+    Address_2_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: Address 2 from Customer Master
+        * * Display Name: Address  2 from  Customer  Master
+        * * SQL Data Type: varchar(61)`),
+    Address_3: z.string().nullish().describe(`
+        * * Field Name: Address 3
+        * * Display Name: Address  3
+        * * SQL Data Type: varchar(61)`),
+    Address_3_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: Address 3 from Customer Master
+        * * Display Name: Address  3 from  Customer  Master
+        * * SQL Data Type: varchar(61)`),
+    Address_Code_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: Address Code from Customer Master
+        * * Display Name: Address  Code  from  Customer  Master
+        * * SQL Data Type: varchar(15)`),
+    Aging_Bucket1: z.number().nullish().describe(`
+        * * Field Name: Aging Bucket1
+        * * Display Name: Aging  Bucket 1
+        * * SQL Data Type: decimal(19, 5)`),
+    Aging_Bucket2: z.number().nullish().describe(`
+        * * Field Name: Aging Bucket2
+        * * Display Name: Aging  Bucket 2
+        * * SQL Data Type: decimal(19, 5)`),
+    Aging_Bucket3: z.number().nullish().describe(`
+        * * Field Name: Aging Bucket3
+        * * Display Name: Aging  Bucket 3
+        * * SQL Data Type: decimal(19, 5)`),
+    Aging_Bucket4: z.number().nullish().describe(`
+        * * Field Name: Aging Bucket4
+        * * Display Name: Aging  Bucket 4
+        * * SQL Data Type: decimal(19, 5)`),
+    Aging_Bucket5: z.number().nullish().describe(`
+        * * Field Name: Aging Bucket5
+        * * Display Name: Aging  Bucket 5
+        * * SQL Data Type: decimal(19, 5)`),
+    Aging_Bucket6: z.number().nullish().describe(`
+        * * Field Name: Aging Bucket6
+        * * Display Name: Aging  Bucket 6
+        * * SQL Data Type: decimal(19, 5)`),
+    Aging_Bucket7: z.number().nullish().describe(`
+        * * Field Name: Aging Bucket7
+        * * Display Name: Aging  Bucket 7
+        * * SQL Data Type: decimal(19, 5)`),
+    Allocate_By: z.string().nullish().describe(`
+        * * Field Name: Allocate By
+        * * Display Name: Allocate  By
+        * * SQL Data Type: varchar(100)`),
+    Apply_Withholding: z.string().nullish().describe(`
+        * * Field Name: Apply Withholding
+        * * Display Name: Apply  Withholding
+        * * SQL Data Type: varchar(100)`),
+    Average_Days_To_Pay___Life: z.number().nullish().describe(`
+        * * Field Name: Average Days To Pay - Life
+        * * Display Name: Average  Days  To  Pay  - Life
+        * * SQL Data Type: smallint`),
+    Average_Days_To_Pay___Year: z.number().nullish().describe(`
+        * * Field Name: Average Days To Pay - Year
+        * * Display Name: Average  Days  To  Pay  - Year
+        * * SQL Data Type: smallint`),
+    Average_Days_to_Pay___LYR: z.number().nullish().describe(`
+        * * Field Name: Average Days to Pay - LYR
+        * * Display Name: Average  Days  to  Pay  - LYR
+        * * SQL Data Type: smallint`),
+    Back_Order_Date: z.date().nullish().describe(`
+        * * Field Name: Back Order Date
+        * * Display Name: Back  Order  Date
+        * * SQL Data Type: datetime`),
+    Backout_Freight_Amount: z.number().nullish().describe(`
+        * * Field Name: Backout Freight Amount
+        * * Display Name: Backout  Freight  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Backout_Misc_Amount: z.number().nullish().describe(`
+        * * Field Name: Backout Misc Amount
+        * * Display Name: Backout  Misc  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Backout_Tax_Amount: z.number().nullish().describe(`
+        * * Field Name: Backout Tax Amount
+        * * Display Name: Backout  Tax  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Balance_Type: z.string().nullish().describe(`
+        * * Field Name: Balance Type
+        * * Display Name: Balance  Type
+        * * SQL Data Type: varchar(100)`),
+    Bank_Branch: z.string().nullish().describe(`
+        * * Field Name: Bank Branch
+        * * Display Name: Bank  Branch
+        * * SQL Data Type: varchar(21)`),
+    Bank_Name: z.string().nullish().describe(`
+        * * Field Name: Bank Name
+        * * Display Name: Bank  Name
+        * * SQL Data Type: varchar(31)`),
+    Based_On_Invoice_Total: z.string().nullish().describe(`
+        * * Field Name: Based On Invoice Total
+        * * Display Name: Based  On  Invoice  Total
+        * * SQL Data Type: varchar(100)`),
+    Batch_Number: z.string().nullish().describe(`
+        * * Field Name: Batch Number
+        * * Display Name: Batch  Number
+        * * SQL Data Type: varchar(15)`),
+    Batch_Source: z.string().nullish().describe(`
+        * * Field Name: Batch Source
+        * * Display Name: Batch  Source
+        * * SQL Data Type: varchar(15)`),
+    COD_Amount: z.number().nullish().describe(`
+        * * Field Name: COD Amount
+        * * Display Name: COD Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    COGS_Account_Number: z.string().nullish().describe(`
+        * * Field Name: COGS Account Number
+        * * Display Name: COGS Account  Number
+        * * SQL Data Type: varchar(129)`),
+    Cash_Account_Number: z.string().nullish().describe(`
+        * * Field Name: Cash Account Number
+        * * Display Name: Cash  Account  Number
+        * * SQL Data Type: varchar(129)`),
+    Checkbook_ID: z.string().nullish().describe(`
+        * * Field Name: Checkbook ID
+        * * Display Name: Checkbook  ID
+        * * SQL Data Type: varchar(15)`),
+    City: z.string().nullish().describe(`
+        * * Field Name: City
+        * * Display Name: City
+        * * SQL Data Type: varchar(35)`),
+    City_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: City from Customer Master
+        * * Display Name: City  from  Customer  Master
+        * * SQL Data Type: varchar(35)`),
+    Comment1_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: Comment1 from Customer Master
+        * * Display Name: Comment 1 from  Customer  Master
+        * * SQL Data Type: varchar(31)`),
+    Comment2_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: Comment2 from Customer Master
+        * * Display Name: Comment 2 from  Customer  Master
+        * * SQL Data Type: varchar(31)`),
+    Comment_1: z.string().nullish().describe(`
+        * * Field Name: Comment 1
+        * * Display Name: Comment  1
+        * * SQL Data Type: varchar(51)`),
+    Comment_2: z.string().nullish().describe(`
+        * * Field Name: Comment 2
+        * * Display Name: Comment  2
+        * * SQL Data Type: varchar(51)`),
+    Comment_3: z.string().nullish().describe(`
+        * * Field Name: Comment 3
+        * * Display Name: Comment  3
+        * * SQL Data Type: varchar(51)`),
+    Comment_4: z.string().nullish().describe(`
+        * * Field Name: Comment 4
+        * * Display Name: Comment  4
+        * * SQL Data Type: varchar(51)`),
+    Comment_ID: z.string().nullish().describe(`
+        * * Field Name: Comment ID
+        * * Display Name: Comment  ID
+        * * SQL Data Type: varchar(15)`),
+    Commission_Amount: z.number().nullish().describe(`
+        * * Field Name: Commission Amount
+        * * Display Name: Commission  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Commission_Applied_To: z.string().nullish().describe(`
+        * * Field Name: Commission Applied To
+        * * Display Name: Commission  Applied  To
+        * * SQL Data Type: varchar(100)`),
+    Commission_Sale_Amount: z.number().nullish().describe(`
+        * * Field Name: Commission Sale Amount
+        * * Display Name: Commission  Sale  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Contact_Person: z.string().nullish().describe(`
+        * * Field Name: Contact Person
+        * * Display Name: Contact  Person
+        * * SQL Data Type: varchar(61)`),
+    Contact_Person_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: Contact Person from Customer Master
+        * * Display Name: Contact  Person  from  Customer  Master
+        * * SQL Data Type: varchar(61)`),
+    Corporate_Customer_Number: z.string().nullish().describe(`
+        * * Field Name: Corporate Customer Number
+        * * Display Name: Corporate  Customer  Number
+        * * SQL Data Type: varchar(15)`),
+    Correction: z.string().nullish().describe(`
+        * * Field Name: Correction
+        * * Display Name: Correction
+        * * SQL Data Type: varchar(100)`),
+    Correction_to_Nonexisting_Transaction: z.string().nullish().describe(`
+        * * Field Name: Correction to Nonexisting Transaction
+        * * Display Name: Correction  to  Nonexisting  Transaction
+        * * SQL Data Type: varchar(100)`),
+    Country: z.string().nullish().describe(`
+        * * Field Name: Country
+        * * Display Name: Country
+        * * SQL Data Type: varchar(61)`),
+    Country_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: Country from Customer Master
+        * * Display Name: Country  from  Customer  Master
+        * * SQL Data Type: varchar(61)`),
+    Created_Date: z.date().nullish().describe(`
+        * * Field Name: Created Date
+        * * Display Name: Created  Date
+        * * SQL Data Type: datetime`),
+    Created_Date_from_Customer_Master: z.date().nullish().describe(`
+        * * Field Name: Created Date from Customer Master
+        * * Display Name: Created  Date  from  Customer  Master
+        * * SQL Data Type: datetime`),
+    Credit_Card_Exp_Date: z.date().nullish().describe(`
+        * * Field Name: Credit Card Exp Date
+        * * Display Name: Credit  Card  Exp  Date
+        * * SQL Data Type: datetime`),
+    Credit_Card_ID: z.string().nullish().describe(`
+        * * Field Name: Credit Card ID
+        * * Display Name: Credit  Card  ID
+        * * SQL Data Type: varchar(15)`),
+    Credit_Limit_Amount: z.number().nullish().describe(`
+        * * Field Name: Credit Limit Amount
+        * * Display Name: Credit  Limit  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Credit_Limit_Period: z.number().nullish().describe(`
+        * * Field Name: Credit Limit Period
+        * * Display Name: Credit  Limit  Period
+        * * SQL Data Type: smallint`),
+    Credit_Limit_Period_Amount: z.number().nullish().describe(`
+        * * Field Name: Credit Limit Period Amount
+        * * Display Name: Credit  Limit  Period  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Credit_Limit_Type: z.string().nullish().describe(`
+        * * Field Name: Credit Limit Type
+        * * Display Name: Credit  Limit  Type
+        * * SQL Data Type: varchar(100)`),
+    Currency_ID: z.string().nullish().describe(`
+        * * Field Name: Currency ID
+        * * Display Name: Currency  ID
+        * * SQL Data Type: varchar(15)`),
+    Currency_ID_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: Currency ID from Customer Master
+        * * Display Name: Currency  ID from  Customer  Master
+        * * SQL Data Type: varchar(15)`),
+    Currency_Index: z.number().nullish().describe(`
+        * * Field Name: Currency Index
+        * * Display Name: Currency  Index
+        * * SQL Data Type: smallint`),
+    Customer_Balance: z.number().nullish().describe(`
+        * * Field Name: Customer Balance
+        * * Display Name: Customer  Balance
+        * * SQL Data Type: decimal(19, 5)`),
+    Customer_Class: z.string().nullish().describe(`
+        * * Field Name: Customer Class
+        * * Display Name: Customer  Class
+        * * SQL Data Type: varchar(15)`),
+    Customer_Discount: z.number().nullish().describe(`
+        * * Field Name: Customer Discount
+        * * Display Name: Customer  Discount
+        * * SQL Data Type: decimal(13, 6)`),
+    Customer_Name_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: Customer Name from Customer Master
+        * * Display Name: Customer  Name  from  Customer  Master
+        * * SQL Data Type: varchar(65)`),
+    Date_Last_Repeated: z.date().nullish().describe(`
+        * * Field Name: Date Last Repeated
+        * * Display Name: Date  Last  Repeated
+        * * SQL Data Type: datetime`),
+    Days_to_Increment: z.number().nullish().describe(`
+        * * Field Name: Days to Increment
+        * * Display Name: Days  to  Increment
+        * * SQL Data Type: smallint`),
+    Default_Cash_Account_Type: z.string().nullish().describe(`
+        * * Field Name: Default Cash Account Type
+        * * Display Name: Default  Cash  Account  Type
+        * * SQL Data Type: varchar(100)`),
+    Denomination_Exchange_Rate: z.number().nullish().describe(`
+        * * Field Name: Denomination Exchange Rate
+        * * Display Name: Denomination  Exchange  Rate
+        * * SQL Data Type: decimal(19, 7)`),
+    Deposit_Received: z.number().nullish().describe(`
+        * * Field Name: Deposit Received
+        * * Display Name: Deposit  Received
+        * * SQL Data Type: decimal(19, 5)`),
+    Deposits_Received: z.number().nullish().describe(`
+        * * Field Name: Deposits Received
+        * * Display Name: Deposits  Received
+        * * SQL Data Type: decimal(19, 5)`),
+    Dest_Batch_1: z.string().nullish().describe(`
+        * * Field Name: Dest Batch 1
+        * * Display Name: Dest  Batch  1
+        * * SQL Data Type: varchar(15)`),
+    Dest_Batch_2: z.string().nullish().describe(`
+        * * Field Name: Dest Batch 2
+        * * Display Name: Dest  Batch  2
+        * * SQL Data Type: varchar(15)`),
+    Discount_Available_Amount: z.number().nullish().describe(`
+        * * Field Name: Discount Available Amount
+        * * Display Name: Discount  Available  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Discount_Available_Freight: z.number().nullish().describe(`
+        * * Field Name: Discount Available Freight
+        * * Display Name: Discount  Available  Freight
+        * * SQL Data Type: decimal(19, 5)`),
+    Discount_Available_Misc: z.number().nullish().describe(`
+        * * Field Name: Discount Available Misc
+        * * Display Name: Discount  Available  Misc
+        * * SQL Data Type: decimal(19, 5)`),
+    Discount_Available_Taken: z.number().nullish().describe(`
+        * * Field Name: Discount Available Taken
+        * * Display Name: Discount  Available  Taken
+        * * SQL Data Type: decimal(19, 5)`),
+    Discount_Date: z.date().nullish().describe(`
+        * * Field Name: Discount Date
+        * * Display Name: Discount  Date
+        * * SQL Data Type: datetime`),
+    Discount_Dollar_Amount: z.number().nullish().describe(`
+        * * Field Name: Discount Dollar Amount
+        * * Display Name: Discount  Dollar  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Discount_Grace_Period: z.number().nullish().describe(`
+        * * Field Name: Discount Grace Period
+        * * Display Name: Discount  Grace  Period
+        * * SQL Data Type: smallint`),
+    Discount_Percent_Amount: z.number().nullish().describe(`
+        * * Field Name: Discount Percent Amount
+        * * Display Name: Discount  Percent  Amount
+        * * SQL Data Type: decimal(13, 6)`),
+    Discount_Returned: z.number().nullish().describe(`
+        * * Field Name: Discount Returned
+        * * Display Name: Discount  Returned
+        * * SQL Data Type: decimal(19, 5)`),
+    Discount_Taken_Amount: z.number().nullish().describe(`
+        * * Field Name: Discount Taken Amount
+        * * Display Name: Discount  Taken  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Discounts_Available_Account_Number: z.string().nullish().describe(`
+        * * Field Name: Discounts Available Account Number
+        * * Display Name: Discounts  Available  Account  Number
+        * * SQL Data Type: varchar(129)`),
+    Discounts_Taken_Account_Number: z.string().nullish().describe(`
+        * * Field Name: Discounts Taken Account Number
+        * * Display Name: Discounts  Taken  Account  Number
+        * * SQL Data Type: varchar(129)`),
+    Document_Format_ID: z.string().nullish().describe(`
+        * * Field Name: Document Format ID
+        * * Display Name: Document  Format  ID
+        * * SQL Data Type: varchar(15)`),
+    Document_ID: z.string().nullish().describe(`
+        * * Field Name: Document ID
+        * * Display Name: Document  ID
+        * * SQL Data Type: varchar(15)`),
+    Document_Number_Corrected: z.string().nullish().describe(`
+        * * Field Name: Document Number Corrected
+        * * Display Name: Document  Number  Corrected
+        * * SQL Data Type: varchar(21)`),
+    Document_Status: z.string().nullish().describe(`
+        * * Field Name: Document Status
+        * * Display Name: Document  Status
+        * * SQL Data Type: varchar(100)`),
+    Due_Date: z.date().nullish().describe(`
+        * * Field Name: Due Date
+        * * Display Name: Due  Date
+        * * SQL Data Type: datetime`),
+    Due_Date_Grace_Period: z.number().nullish().describe(`
+        * * Field Name: Due Date Grace Period
+        * * Display Name: Due  Date  Grace  Period
+        * * SQL Data Type: smallint`),
+    EC_Transaction: z.string().nullish().describe(`
+        * * Field Name: EC Transaction
+        * * Display Name: EC Transaction
+        * * SQL Data Type: varchar(100)`),
+    Exceptional_Demand_from_Sales_Transaction: z.string().nullish().describe(`
+        * * Field Name: Exceptional Demand from Sales Transaction
+        * * Display Name: Exceptional  Demand  from  Sales  Transaction
+        * * SQL Data Type: varchar(100)`),
+    Exchange_Date: z.date().nullish().describe(`
+        * * Field Name: Exchange Date
+        * * Display Name: Exchange  Date
+        * * SQL Data Type: datetime`),
+    Exchange_Rate: z.number().nullish().describe(`
+        * * Field Name: Exchange Rate
+        * * Display Name: Exchange  Rate
+        * * SQL Data Type: decimal(19, 7)`),
+    Exchange_Table_ID: z.string().nullish().describe(`
+        * * Field Name: Exchange Table ID
+        * * Display Name: Exchange  Table  ID
+        * * SQL Data Type: varchar(15)`),
+    Extended_Cost: z.number().nullish().describe(`
+        * * Field Name: Extended Cost
+        * * Display Name: Extended  Cost
+        * * SQL Data Type: decimal(19, 5)`),
+    Fax_Number: z.string().nullish().describe(`
+        * * Field Name: Fax Number
+        * * Display Name: Fax  Number
+        * * SQL Data Type: varchar(21)`),
+    Fax_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: Fax from Customer Master
+        * * Display Name: Fax  from  Customer  Master
+        * * SQL Data Type: varchar(21)`),
+    Finance_Charge_Account_Number: z.string().nullish().describe(`
+        * * Field Name: Finance Charge Account Number
+        * * Display Name: Finance  Charge  Account  Number
+        * * SQL Data Type: varchar(129)`),
+    Finance_Charge_Amt_Type: z.string().nullish().describe(`
+        * * Field Name: Finance Charge Amt Type
+        * * Display Name: Finance  Charge  Amt  Type
+        * * SQL Data Type: varchar(100)`),
+    Finance_Charge_Dollar: z.number().nullish().describe(`
+        * * Field Name: Finance Charge Dollar
+        * * Display Name: Finance  Charge  Dollar
+        * * SQL Data Type: decimal(19, 5)`),
+    Finance_Charge_ID: z.string().nullish().describe(`
+        * * Field Name: Finance Charge ID
+        * * Display Name: Finance  Charge  ID
+        * * SQL Data Type: varchar(15)`),
+    Finance_Charge_Percent: z.number().nullish().describe(`
+        * * Field Name: Finance Charge Percent
+        * * Display Name: Finance  Charge  Percent
+        * * SQL Data Type: decimal(13, 6)`),
+    Finance_Charges_CYTD: z.number().nullish().describe(`
+        * * Field Name: Finance Charges CYTD
+        * * Display Name: Finance  Charges  CYTD
+        * * SQL Data Type: decimal(19, 5)`),
+    Finance_Charges_LYR_Calendar: z.number().nullish().describe(`
+        * * Field Name: Finance Charges LYR Calendar
+        * * Display Name: Finance  Charges  LYR Calendar
+        * * SQL Data Type: decimal(19, 5)`),
+    First_Invoice_Date: z.date().nullish().describe(`
+        * * Field Name: First Invoice Date
+        * * Display Name: First  Invoice  Date
+        * * SQL Data Type: datetime`),
+    Freight_Amount: z.number().nullish().describe(`
+        * * Field Name: Freight Amount
+        * * Display Name: Freight  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Freight_Schedule_ID: z.string().nullish().describe(`
+        * * Field Name: Freight Schedule ID
+        * * Display Name: Freight  Schedule  ID
+        * * SQL Data Type: varchar(15)`),
+    Freight_Tax_Amount: z.number().nullish().describe(`
+        * * Field Name: Freight Tax Amount
+        * * Display Name: Freight  Tax  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Freight_Taxable: z.string().nullish().describe(`
+        * * Field Name: Freight Taxable
+        * * Display Name: Freight  Taxable
+        * * SQL Data Type: varchar(100)`),
+    Fulfillment_Date: z.date().nullish().describe(`
+        * * Field Name: Fulfillment Date
+        * * Display Name: Fulfillment  Date
+        * * SQL Data Type: datetime`),
+    GL_Posting_Date: z.date().nullish().describe(`
+        * * Field Name: GL Posting Date
+        * * Display Name: GL Posting  Date
+        * * SQL Data Type: datetime`),
+    Governmental_Corporate_ID: z.string().nullish().describe(`
+        * * Field Name: Governmental Corporate ID
+        * * Display Name: Governmental  Corporate  ID
+        * * SQL Data Type: varchar(31)`),
+    Governmental_Individual_ID: z.string().nullish().describe(`
+        * * Field Name: Governmental Individual ID
+        * * Display Name: Governmental  Individual  ID
+        * * SQL Data Type: varchar(31)`),
+    High_Balance_LTD: z.number().nullish().describe(`
+        * * Field Name: High Balance LTD
+        * * Display Name: High  Balance  LTD
+        * * SQL Data Type: decimal(19, 5)`),
+    High_Balance_LYR: z.number().nullish().describe(`
+        * * Field Name: High Balance LYR
+        * * Display Name: High  Balance  LYR
+        * * SQL Data Type: decimal(19, 5)`),
+    High_Balance_YTD: z.number().nullish().describe(`
+        * * Field Name: High Balance YTD
+        * * Display Name: High  Balance  YTD
+        * * SQL Data Type: decimal(19, 5)`),
+    Hold: z.string().nullish().describe(`
+        * * Field Name: Hold
+        * * Display Name: Hold
+        * * SQL Data Type: varchar(100)`),
+    Inactive: z.string().nullish().describe(`
+        * * Field Name: Inactive
+        * * Display Name: Inactive
+        * * SQL Data Type: varchar(100)`),
+    Inventory_Account_Number: z.string().nullish().describe(`
+        * * Field Name: Inventory Account Number
+        * * Display Name: Inventory  Account  Number
+        * * SQL Data Type: varchar(129)`),
+    Invoice_Date: z.date().nullish().describe(`
+        * * Field Name: Invoice Date
+        * * Display Name: Invoice  Date
+        * * SQL Data Type: datetime`),
+    Keep_Calendar_History: z.string().nullish().describe(`
+        * * Field Name: Keep Calendar History
+        * * Display Name: Keep  Calendar  History
+        * * SQL Data Type: varchar(100)`),
+    Keep_Distribution_History: z.string().nullish().describe(`
+        * * Field Name: Keep Distribution History
+        * * Display Name: Keep  Distribution  History
+        * * SQL Data Type: varchar(100)`),
+    Keep_Period_History: z.string().nullish().describe(`
+        * * Field Name: Keep Period History
+        * * Display Name: Keep  Period  History
+        * * SQL Data Type: varchar(100)`),
+    Keep_Trx_History: z.string().nullish().describe(`
+        * * Field Name: Keep Trx History
+        * * Display Name: Keep  Trx  History
+        * * SQL Data Type: varchar(100)`),
+    Last_Aged: z.date().nullish().describe(`
+        * * Field Name: Last Aged
+        * * Display Name: Last  Aged
+        * * SQL Data Type: datetime`),
+    Last_Finance_Charge_Amount: z.number().nullish().describe(`
+        * * Field Name: Last Finance Charge Amount
+        * * Display Name: Last  Finance  Charge  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Last_NSF_Check_Date: z.date().nullish().describe(`
+        * * Field Name: Last NSF Check Date
+        * * Display Name: Last  NSF Check  Date
+        * * SQL Data Type: datetime`),
+    Last_Payment_Amount: z.number().nullish().describe(`
+        * * Field Name: Last Payment Amount
+        * * Display Name: Last  Payment  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Last_Payment_Date: z.date().nullish().describe(`
+        * * Field Name: Last Payment Date
+        * * Display Name: Last  Payment  Date
+        * * SQL Data Type: datetime`),
+    Last_Statement_Amount: z.number().nullish().describe(`
+        * * Field Name: Last Statement Amount
+        * * Display Name: Last  Statement  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Last_Statement_Date: z.date().nullish().describe(`
+        * * Field Name: Last Statement Date
+        * * Display Name: Last  Statement  Date
+        * * SQL Data Type: datetime`),
+    Last_Transaction_Amount: z.number().nullish().describe(`
+        * * Field Name: Last Transaction Amount
+        * * Display Name: Last  Transaction  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Last_Transaction_Date: z.date().nullish().describe(`
+        * * Field Name: Last Transaction Date
+        * * Display Name: Last  Transaction  Date
+        * * SQL Data Type: datetime`),
+    Location_Code: z.string().nullish().describe(`
+        * * Field Name: Location Code
+        * * Display Name: Location  Code
+        * * SQL Data Type: varchar(11)`),
+    MC_Transaction_State: z.string().nullish().describe(`
+        * * Field Name: MC Transaction State
+        * * Display Name: MC Transaction  State
+        * * SQL Data Type: varchar(100)`),
+    Markdown_Amount: z.number().nullish().describe(`
+        * * Field Name: Markdown Amount
+        * * Display Name: Markdown  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Master_Number: z.number().nullish().describe(`
+        * * Field Name: Master Number
+        * * Display Name: Master  Number
+        * * SQL Data Type: int`),
+    Max_Writeoff_Amount: z.number().nullish().describe(`
+        * * Field Name: Max Writeoff Amount
+        * * Display Name: Max  Writeoff  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Maximum_Writeoff_Type: z.string().nullish().describe(`
+        * * Field Name: Maximum Writeoff Type
+        * * Display Name: Maximum  Writeoff  Type
+        * * SQL Data Type: varchar(100)`),
+    Minimum_Payment_Dollar: z.number().nullish().describe(`
+        * * Field Name: Minimum Payment Dollar
+        * * Display Name: Minimum  Payment  Dollar
+        * * SQL Data Type: decimal(19, 5)`),
+    Minimum_Payment_Percent: z.number().nullish().describe(`
+        * * Field Name: Minimum Payment Percent
+        * * Display Name: Minimum  Payment  Percent
+        * * SQL Data Type: decimal(13, 6)`),
+    Minimum_Payment_Type: z.string().nullish().describe(`
+        * * Field Name: Minimum Payment Type
+        * * Display Name: Minimum  Payment  Type
+        * * SQL Data Type: varchar(100)`),
+    Misc_Amount: z.number().nullish().describe(`
+        * * Field Name: Misc Amount
+        * * Display Name: Misc  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Misc_Schedule_ID: z.string().nullish().describe(`
+        * * Field Name: Misc Schedule ID
+        * * Display Name: Misc  Schedule  ID
+        * * SQL Data Type: varchar(15)`),
+    Misc_Tax_Amount: z.number().nullish().describe(`
+        * * Field Name: Misc Tax Amount
+        * * Display Name: Misc  Tax  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Misc_Taxable: z.string().nullish().describe(`
+        * * Field Name: Misc Taxable
+        * * Display Name: Misc  Taxable
+        * * SQL Data Type: varchar(100)`),
+    Modified_Date: z.date().nullish().describe(`
+        * * Field Name: Modified Date
+        * * Display Name: Modified  Date
+        * * SQL Data Type: datetime`),
+    Modified_Date_from_Customer_Master: z.date().nullish().describe(`
+        * * Field Name: Modified Date from Customer Master
+        * * Display Name: Modified  Date  from  Customer  Master
+        * * SQL Data Type: datetime`),
+    Non_Commissioned_Amount: z.number().nullish().describe(`
+        * * Field Name: Non-Commissioned Amount
+        * * Display Name: Non -Commissioned  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Non_Current_Scheduled_Payments: z.number().nullish().describe(`
+        * * Field Name: Non Current Scheduled Payments
+        * * Display Name: Non  Current  Scheduled  Payments
+        * * SQL Data Type: decimal(19, 5)`),
+    Note_Index: z.number().nullish().describe(`
+        * * Field Name: Note Index
+        * * Display Name: Note  Index
+        * * SQL Data Type: decimal(19, 5)`),
+    Note_Index_from_Customer_Master: z.number().nullish().describe(`
+        * * Field Name: Note Index from Customer Master
+        * * Display Name: Note  Index  from  Customer  Master
+        * * SQL Data Type: decimal(19, 5)`),
+    Number_ADTP_Documents___LYR: z.number().nullish().describe(`
+        * * Field Name: Number ADTP Documents - LYR
+        * * Display Name: Number  ADTP Documents  - LYR
+        * * SQL Data Type: int`),
+    Number_ADTP_Documents___Life: z.number().nullish().describe(`
+        * * Field Name: Number ADTP Documents - Life
+        * * Display Name: Number  ADTP Documents  - Life
+        * * SQL Data Type: int`),
+    Number_ADTP_Documents___Year: z.number().nullish().describe(`
+        * * Field Name: Number ADTP Documents - Year
+        * * Display Name: Number  ADTP Documents  - Year
+        * * SQL Data Type: int`),
+    Number_Of_NSF_Checks_Life: z.number().nullish().describe(`
+        * * Field Name: Number Of NSF Checks Life
+        * * Display Name: Number  Of  NSF Checks  Life
+        * * SQL Data Type: int`),
+    Number_Of_NSF_Checks_YTD: z.number().nullish().describe(`
+        * * Field Name: Number Of NSF Checks YTD
+        * * Display Name: Number  Of  NSF Checks  YTD
+        * * SQL Data Type: int`),
+    On_Order_Amount: z.number().nullish().describe(`
+        * * Field Name: On Order Amount
+        * * Display Name: On  Order  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Order_Date: z.date().nullish().describe(`
+        * * Field Name: Order Date
+        * * Display Name: Order  Date
+        * * SQL Data Type: datetime`),
+    Order_Fulfillment_Shortage_Default: z.string().nullish().describe(`
+        * * Field Name: Order Fulfillment Shortage Default
+        * * Display Name: Order  Fulfillment  Shortage  Default
+        * * SQL Data Type: varchar(100)`),
+    Original_Number: z.string().nullish().describe(`
+        * * Field Name: Original Number
+        * * Display Name: Original  Number
+        * * SQL Data Type: varchar(21)`),
+    Original_Type: z.string().nullish().describe(`
+        * * Field Name: Original Type
+        * * Display Name: Original  Type
+        * * SQL Data Type: varchar(100)`),
+    Originating_Account_Amount: z.number().nullish().describe(`
+        * * Field Name: Originating Account Amount
+        * * Display Name: Originating  Account  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Originating_Backout_Freight_Amount: z.number().nullish().describe(`
+        * * Field Name: Originating Backout Freight Amount
+        * * Display Name: Originating  Backout  Freight  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Originating_Backout_Misc_Amount: z.number().nullish().describe(`
+        * * Field Name: Originating Backout Misc Amount
+        * * Display Name: Originating  Backout  Misc  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Originating_Backout_Tax_Amount: z.number().nullish().describe(`
+        * * Field Name: Originating Backout Tax Amount
+        * * Display Name: Originating  Backout  Tax  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Originating_COD_Amount: z.number().nullish().describe(`
+        * * Field Name: Originating COD Amount
+        * * Display Name: Originating  COD Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Originating_Commission_Amount: z.number().nullish().describe(`
+        * * Field Name: Originating Commission Amount
+        * * Display Name: Originating  Commission  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Originating_Commission_Sales_Amount: z.number().nullish().describe(`
+        * * Field Name: Originating Commission Sales Amount
+        * * Display Name: Originating  Commission  Sales  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Originating_Deposit_Received: z.number().nullish().describe(`
+        * * Field Name: Originating Deposit Received
+        * * Display Name: Originating  Deposit  Received
+        * * SQL Data Type: decimal(19, 5)`),
+    Originating_Discount_Available_Amount: z.number().nullish().describe(`
+        * * Field Name: Originating Discount Available Amount
+        * * Display Name: Originating  Discount  Available  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Originating_Discount_Available_Freight: z.number().nullish().describe(`
+        * * Field Name: Originating Discount Available Freight
+        * * Display Name: Originating  Discount  Available  Freight
+        * * SQL Data Type: decimal(19, 5)`),
+    Originating_Discount_Available_Misc: z.number().nullish().describe(`
+        * * Field Name: Originating Discount Available Misc
+        * * Display Name: Originating  Discount  Available  Misc
+        * * SQL Data Type: decimal(19, 5)`),
+    Originating_Discount_Available_Taken: z.number().nullish().describe(`
+        * * Field Name: Originating Discount Available Taken
+        * * Display Name: Originating  Discount  Available  Taken
+        * * SQL Data Type: decimal(19, 5)`),
+    Originating_Discount_Dollar_Amount: z.number().nullish().describe(`
+        * * Field Name: Originating Discount Dollar Amount
+        * * Display Name: Originating  Discount  Dollar  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Originating_Discount_Returned: z.number().nullish().describe(`
+        * * Field Name: Originating Discount Returned
+        * * Display Name: Originating  Discount  Returned
+        * * SQL Data Type: decimal(19, 5)`),
+    Originating_Discount_Taken_Amount: z.number().nullish().describe(`
+        * * Field Name: Originating Discount Taken Amount
+        * * Display Name: Originating  Discount  Taken  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Originating_Document_Amount: z.number().nullish().describe(`
+        * * Field Name: Originating Document Amount
+        * * Display Name: Originating  Document  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Originating_Extended_Cost: z.number().nullish().describe(`
+        * * Field Name: Originating Extended Cost
+        * * Display Name: Originating  Extended  Cost
+        * * SQL Data Type: decimal(19, 5)`),
+    Originating_Freight_Amount: z.number().nullish().describe(`
+        * * Field Name: Originating Freight Amount
+        * * Display Name: Originating  Freight  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Originating_Freight_Tax_Amount: z.number().nullish().describe(`
+        * * Field Name: Originating Freight Tax Amount
+        * * Display Name: Originating  Freight  Tax  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Originating_Markdown_Amount: z.number().nullish().describe(`
+        * * Field Name: Originating Markdown Amount
+        * * Display Name: Originating  Markdown  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Originating_Misc_Amount: z.number().nullish().describe(`
+        * * Field Name: Originating Misc Amount
+        * * Display Name: Originating  Misc  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Originating_Misc_Tax_Amount: z.number().nullish().describe(`
+        * * Field Name: Originating Misc Tax Amount
+        * * Display Name: Originating  Misc  Tax  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Originating_Non_Commissioned_Amount: z.number().nullish().describe(`
+        * * Field Name: Originating Non-Commissioned Amount
+        * * Display Name: Originating  Non -Commissioned  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Originating_Payment_Received: z.number().nullish().describe(`
+        * * Field Name: Originating Payment Received
+        * * Display Name: Originating  Payment  Received
+        * * SQL Data Type: decimal(19, 5)`),
+    Originating_Remaining_Subtotal: z.number().nullish().describe(`
+        * * Field Name: Originating Remaining Subtotal
+        * * Display Name: Originating  Remaining  Subtotal
+        * * SQL Data Type: decimal(19, 5)`),
+    Originating_Subtotal: z.number().nullish().describe(`
+        * * Field Name: Originating Subtotal
+        * * Display Name: Originating  Subtotal
+        * * SQL Data Type: decimal(19, 5)`),
+    Originating_Tax_Amount: z.number().nullish().describe(`
+        * * Field Name: Originating Tax Amount
+        * * Display Name: Originating  Tax  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Originating_Taxable_Tax_Amount: z.number().nullish().describe(`
+        * * Field Name: Originating Taxable Tax Amount
+        * * Display Name: Originating  Taxable  Tax  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Originating_Trade_Discount_Amount: z.number().nullish().describe(`
+        * * Field Name: Originating Trade Discount Amount
+        * * Display Name: Originating  Trade  Discount  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Packing_Slip_Number: z.string().nullish().describe(`
+        * * Field Name: Packing Slip Number
+        * * Display Name: Packing  Slip  Number
+        * * SQL Data Type: varchar(21)`),
+    Payment_Received: z.number().nullish().describe(`
+        * * Field Name: Payment Received
+        * * Display Name: Payment  Received
+        * * SQL Data Type: decimal(19, 5)`),
+    Payment_Terms_ID: z.string().nullish().describe(`
+        * * Field Name: Payment Terms ID
+        * * Display Name: Payment  Terms  ID
+        * * SQL Data Type: varchar(21)`),
+    Payment_Terms_ID_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: Payment Terms ID from Customer Master
+        * * Display Name: Payment  Terms  ID from  Customer  Master
+        * * SQL Data Type: varchar(21)`),
+    Phone_1_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: Phone 1 from Customer Master
+        * * Display Name: Phone  1 from  Customer  Master
+        * * SQL Data Type: varchar(21)`),
+    Phone_2_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: Phone 2 from Customer Master
+        * * Display Name: Phone  2 from  Customer  Master
+        * * SQL Data Type: varchar(21)`),
+    Phone_3: z.string().nullish().describe(`
+        * * Field Name: Phone 3
+        * * Display Name: Phone  3
+        * * SQL Data Type: varchar(21)`),
+    Phone_3_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: Phone 3 from Customer Master
+        * * Display Name: Phone  3 from  Customer  Master
+        * * SQL Data Type: varchar(21)`),
+    Phone_Number_1: z.string().nullish().describe(`
+        * * Field Name: Phone Number 1
+        * * Display Name: Phone  Number  1
+        * * SQL Data Type: varchar(21)`),
+    Phone_Number_2: z.string().nullish().describe(`
+        * * Field Name: Phone Number 2
+        * * Display Name: Phone  Number  2
+        * * SQL Data Type: varchar(21)`),
+    Picking_Ticket_Number: z.string().nullish().describe(`
+        * * Field Name: Picking Ticket Number
+        * * Display Name: Picking  Ticket  Number
+        * * SQL Data Type: varchar(21)`),
+    Post_Results_To: z.string().nullish().describe(`
+        * * Field Name: Post Results To
+        * * Display Name: Post  Results  To
+        * * SQL Data Type: varchar(100)`),
+    Posted_Date: z.date().nullish().describe(`
+        * * Field Name: Posted Date
+        * * Display Name: Posted  Date
+        * * SQL Data Type: datetime`),
+    Posted_User_ID: z.string().nullish().describe(`
+        * * Field Name: Posted User ID
+        * * Display Name: Posted  User  ID
+        * * SQL Data Type: varchar(15)`),
+    Posting_Status: z.string().nullish().describe(`
+        * * Field Name: Posting Status
+        * * Display Name: Posting  Status
+        * * SQL Data Type: varchar(100)`),
+    PriceLevel: z.string().nullish().describe(`
+        * * Field Name: PriceLevel
+        * * Display Name: Price Level
+        * * SQL Data Type: varchar(11)`),
+    PriceLevel_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: PriceLevel from Customer Master
+        * * Display Name: Price Level  from  Customer  Master
+        * * SQL Data Type: varchar(11)`),
+    Primary_Billto_Address_Code: z.string().nullish().describe(`
+        * * Field Name: Primary Billto Address Code
+        * * Display Name: Primary  Billto  Address  Code
+        * * SQL Data Type: varchar(15)`),
+    Primary_Billto_Address_Code_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: Primary Billto Address Code from Customer Master
+        * * Display Name: Primary  Billto  Address  Code  from  Customer  Master
+        * * SQL Data Type: varchar(15)`),
+    Primary_Shipto_Address_Code_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: Primary Shipto Address Code from Customer Master
+        * * Display Name: Primary  Shipto  Address  Code  from  Customer  Master
+        * * SQL Data Type: varchar(15)`),
+    Priority_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: Priority from Customer Master
+        * * Display Name: Priority  from  Customer  Master
+        * * SQL Data Type: varchar(100)`),
+    Prospect: z.string().nullish().describe(`
+        * * Field Name: Prospect
+        * * Display Name: Prospect
+        * * SQL Data Type: varchar(100)`),
+    Quote_Date: z.date().nullish().describe(`
+        * * Field Name: Quote Date
+        * * Display Name: Quote  Date
+        * * SQL Data Type: datetime`),
+    Quote_Expiration_Date: z.date().nullish().describe(`
+        * * Field Name: Quote Expiration Date
+        * * Display Name: Quote  Expiration  Date
+        * * SQL Data Type: datetime`),
+    Rate_Calculation_Method: z.string().nullish().describe(`
+        * * Field Name: Rate Calculation Method
+        * * Display Name: Rate  Calculation  Method
+        * * SQL Data Type: varchar(100)`),
+    Rate_Type_ID: z.string().nullish().describe(`
+        * * Field Name: Rate Type ID
+        * * Display Name: Rate  Type  ID
+        * * SQL Data Type: varchar(15)`),
+    Rate_Type_ID_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: Rate Type ID from Customer Master
+        * * Display Name: Rate  Type  ID from  Customer  Master
+        * * SQL Data Type: varchar(15)`),
+    Reference: z.string().nullish().describe(`
+        * * Field Name: Reference
+        * * Display Name: Reference
+        * * SQL Data Type: varchar(31)`),
+    Remaining_Subtotal: z.number().nullish().describe(`
+        * * Field Name: Remaining Subtotal
+        * * Display Name: Remaining  Subtotal
+        * * SQL Data Type: decimal(19, 5)`),
+    Repeating: z.string().nullish().describe(`
+        * * Field Name: Repeating
+        * * Display Name: Repeating
+        * * SQL Data Type: varchar(100)`),
+    Requested_Ship_Date: z.date().nullish().describe(`
+        * * Field Name: Requested Ship Date
+        * * Display Name: Requested  Ship  Date
+        * * SQL Data Type: datetime`),
+    Retainage: z.number().nullish().describe(`
+        * * Field Name: Retainage
+        * * Display Name: Retainage
+        * * SQL Data Type: decimal(19, 5)`),
+    Return_Date: z.date().nullish().describe(`
+        * * Field Name: Return Date
+        * * Display Name: Return  Date
+        * * SQL Data Type: datetime`),
+    Revalue_Customer: z.string().nullish().describe(`
+        * * Field Name: Revalue Customer
+        * * Display Name: Revalue  Customer
+        * * SQL Data Type: varchar(100)`),
+    Sale_Date: z.date().nullish().describe(`
+        * * Field Name: Sale Date
+        * * Display Name: Sale  Date
+        * * SQL Data Type: datetime`),
+    Sales_Account_Number: z.string().nullish().describe(`
+        * * Field Name: Sales Account Number
+        * * Display Name: Sales  Account  Number
+        * * SQL Data Type: varchar(129)`),
+    Sales_Territory: z.string().nullish().describe(`
+        * * Field Name: Sales Territory
+        * * Display Name: Sales  Territory
+        * * SQL Data Type: varchar(15)`),
+    Sales_Territory_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: Sales Territory from Customer Master
+        * * Display Name: Sales  Territory  from  Customer  Master
+        * * SQL Data Type: varchar(15)`),
+    Salesperson_ID: z.string().nullish().describe(`
+        * * Field Name: Salesperson ID
+        * * Display Name: Salesperson  ID
+        * * SQL Data Type: varchar(15)`),
+    Salesperson_ID_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: Salesperson ID from Customer Master
+        * * Display Name: Salesperson  ID from  Customer  Master
+        * * SQL Data Type: varchar(15)`),
+    Sequence_Number_Corrected: z.number().nullish().describe(`
+        * * Field Name: Sequence Number Corrected
+        * * Display Name: Sequence  Number  Corrected
+        * * SQL Data Type: smallint`),
+    ShipToName: z.string().nullish().describe(`
+        * * Field Name: ShipToName
+        * * Display Name: Ship To Name
+        * * SQL Data Type: varchar(65)`),
+    Ship_Complete_Document: z.string().nullish().describe(`
+        * * Field Name: Ship Complete Document
+        * * Display Name: Ship  Complete  Document
+        * * SQL Data Type: varchar(100)`),
+    Ship_Complete_Document_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: Ship Complete Document from Customer Master
+        * * Display Name: Ship  Complete  Document  from  Customer  Master
+        * * SQL Data Type: varchar(100)`),
+    Shipping_Document: z.string().nullish().describe(`
+        * * Field Name: Shipping Document
+        * * Display Name: Shipping  Document
+        * * SQL Data Type: varchar(100)`),
+    Shipping_Method: z.string().nullish().describe(`
+        * * Field Name: Shipping Method
+        * * Display Name: Shipping  Method
+        * * SQL Data Type: varchar(15)`),
+    Shipping_Method_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: Shipping Method from Customer Master
+        * * Display Name: Shipping  Method  from  Customer  Master
+        * * SQL Data Type: varchar(15)`),
+    Short_Name: z.string().nullish().describe(`
+        * * Field Name: Short Name
+        * * Display Name: Short  Name
+        * * SQL Data Type: varchar(15)`),
+    Simplified: z.string().nullish().describe(`
+        * * Field Name: Simplified
+        * * Display Name: Simplified
+        * * SQL Data Type: varchar(100)`),
+    State: z.string().nullish().describe(`
+        * * Field Name: State
+        * * Display Name: State
+        * * SQL Data Type: varchar(29)`),
+    State_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: State from Customer Master
+        * * Display Name: State  from  Customer  Master
+        * * SQL Data Type: varchar(29)`),
+    Statement_Address_Code: z.string().nullish().describe(`
+        * * Field Name: Statement Address Code
+        * * Display Name: Statement  Address  Code
+        * * SQL Data Type: varchar(15)`),
+    Statement_Cycle: z.string().nullish().describe(`
+        * * Field Name: Statement Cycle
+        * * Display Name: Statement  Cycle
+        * * SQL Data Type: varchar(100)`),
+    Statement_Name: z.string().nullish().describe(`
+        * * Field Name: Statement Name
+        * * Display Name: Statement  Name
+        * * SQL Data Type: varchar(65)`),
+    Subtotal: z.number().nullish().describe(`
+        * * Field Name: Subtotal
+        * * Display Name: Subtotal
+        * * SQL Data Type: decimal(19, 5)`),
+    TRX_Frequency: z.string().nullish().describe(`
+        * * Field Name: TRX Frequency
+        * * Display Name: TRX Frequency
+        * * SQL Data Type: varchar(100)`),
+    TRX_Source: z.string().nullish().describe(`
+        * * Field Name: TRX Source
+        * * Display Name: TRX Source
+        * * SQL Data Type: varchar(13)`),
+    Tax_Amount: z.number().nullish().describe(`
+        * * Field Name: Tax Amount
+        * * Display Name: Tax  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Tax_Date: z.date().nullish().describe(`
+        * * Field Name: Tax Date
+        * * Display Name: Tax  Date
+        * * SQL Data Type: datetime`),
+    Tax_Engine_Called: z.string().nullish().describe(`
+        * * Field Name: Tax Engine Called
+        * * Display Name: Tax  Engine  Called
+        * * SQL Data Type: varchar(100)`),
+    Tax_Exempt_1: z.string().nullish().describe(`
+        * * Field Name: Tax Exempt 1
+        * * Display Name: Tax  Exempt  1
+        * * SQL Data Type: varchar(25)`),
+    Tax_Exempt_1_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: Tax Exempt 1 from Customer Master
+        * * Display Name: Tax  Exempt  1 from  Customer  Master
+        * * SQL Data Type: varchar(25)`),
+    Tax_Exempt_2: z.string().nullish().describe(`
+        * * Field Name: Tax Exempt 2
+        * * Display Name: Tax  Exempt  2
+        * * SQL Data Type: varchar(25)`),
+    Tax_Exempt_2_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: Tax Exempt 2 from Customer Master
+        * * Display Name: Tax  Exempt  2 from  Customer  Master
+        * * SQL Data Type: varchar(25)`),
+    Tax_Registration_Number: z.string().nullish().describe(`
+        * * Field Name: Tax Registration Number
+        * * Display Name: Tax  Registration  Number
+        * * SQL Data Type: varchar(25)`),
+    Tax_Registration_Number_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: Tax Registration Number from Customer Master
+        * * Display Name: Tax  Registration  Number  from  Customer  Master
+        * * SQL Data Type: varchar(25)`),
+    Tax_Schedule_ID: z.string().nullish().describe(`
+        * * Field Name: Tax Schedule ID
+        * * Display Name: Tax  Schedule  ID
+        * * SQL Data Type: varchar(15)`),
+    Tax_Schedule_ID_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: Tax Schedule ID from Customer Master
+        * * Display Name: Tax  Schedule  ID from  Customer  Master
+        * * SQL Data Type: varchar(15)`),
+    Tax_Schedule_Source: z.string().nullish().describe(`
+        * * Field Name: Tax Schedule Source
+        * * Display Name: Tax  Schedule  Source
+        * * SQL Data Type: varchar(100)`),
+    Taxable_Tax_Amount: z.number().nullish().describe(`
+        * * Field Name: Taxable Tax Amount
+        * * Display Name: Taxable  Tax  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Time: z.date().nullish().describe(`
+        * * Field Name: Time
+        * * Display Name: Time
+        * * SQL Data Type: datetime`),
+    Times_Printed: z.number().nullish().describe(`
+        * * Field Name: Times Printed
+        * * Display Name: Times  Printed
+        * * SQL Data Type: decimal(13, 6)`),
+    Times_Repeated: z.number().nullish().describe(`
+        * * Field Name: Times Repeated
+        * * Display Name: Times  Repeated
+        * * SQL Data Type: smallint`),
+    Times_To_Repeat: z.number().nullish().describe(`
+        * * Field Name: Times To Repeat
+        * * Display Name: Times  To  Repeat
+        * * SQL Data Type: smallint`),
+    Total___FC_LTD: z.number().nullish().describe(`
+        * * Field Name: Total # FC LTD
+        * * Display Name: Total  # FC LTD
+        * * SQL Data Type: int`),
+    Total___FC_LYR: z.number().nullish().describe(`
+        * * Field Name: Total # FC LYR
+        * * Display Name: Total  # FC LYR
+        * * SQL Data Type: int`),
+    Total___FC_YTD: z.number().nullish().describe(`
+        * * Field Name: Total # FC YTD
+        * * Display Name: Total  # FC YTD
+        * * SQL Data Type: int`),
+    Total___Invoices_LTD: z.number().nullish().describe(`
+        * * Field Name: Total # Invoices LTD
+        * * Display Name: Total  # Invoices  LTD
+        * * SQL Data Type: int`),
+    Total___Invoices_LYR: z.number().nullish().describe(`
+        * * Field Name: Total # Invoices LYR
+        * * Display Name: Total  # Invoices  LYR
+        * * SQL Data Type: int`),
+    Total___Invoices_YTD: z.number().nullish().describe(`
+        * * Field Name: Total # Invoices YTD
+        * * Display Name: Total  # Invoices  YTD
+        * * SQL Data Type: int`),
+    Total_Amount_Of_NSF_Checks_Life: z.number().nullish().describe(`
+        * * Field Name: Total Amount Of NSF Checks Life
+        * * Display Name: Total  Amount  Of  NSF Checks  Life
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Amount_Of_NSF_Checks_YTD: z.number().nullish().describe(`
+        * * Field Name: Total Amount Of NSF Checks YTD
+        * * Display Name: Total  Amount  Of  NSF Checks  YTD
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Bad_Deb_LYR: z.number().nullish().describe(`
+        * * Field Name: Total Bad Deb LYR
+        * * Display Name: Total  Bad  Deb  LYR
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Bad_Debt_LTD: z.number().nullish().describe(`
+        * * Field Name: Total Bad Debt LTD
+        * * Display Name: Total  Bad  Debt  LTD
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Bad_Debt_YTD: z.number().nullish().describe(`
+        * * Field Name: Total Bad Debt YTD
+        * * Display Name: Total  Bad  Debt  YTD
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Cash_Received_LTD: z.number().nullish().describe(`
+        * * Field Name: Total Cash Received LTD
+        * * Display Name: Total  Cash  Received  LTD
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Cash_Received_LYR: z.number().nullish().describe(`
+        * * Field Name: Total Cash Received LYR
+        * * Display Name: Total  Cash  Received  LYR
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Cash_Received_YTD: z.number().nullish().describe(`
+        * * Field Name: Total Cash Received YTD
+        * * Display Name: Total  Cash  Received  YTD
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Costs_LTD: z.number().nullish().describe(`
+        * * Field Name: Total Costs LTD
+        * * Display Name: Total  Costs  LTD
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Costs_LYR: z.number().nullish().describe(`
+        * * Field Name: Total Costs LYR
+        * * Display Name: Total  Costs  LYR
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Costs_YTD: z.number().nullish().describe(`
+        * * Field Name: Total Costs YTD
+        * * Display Name: Total  Costs  YTD
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Discounts_Available_YTD: z.number().nullish().describe(`
+        * * Field Name: Total Discounts Available YTD
+        * * Display Name: Total  Discounts  Available  YTD
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Discounts_Taken_LTD: z.number().nullish().describe(`
+        * * Field Name: Total Discounts Taken LTD
+        * * Display Name: Total  Discounts  Taken  LTD
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Discounts_Taken_LYR: z.number().nullish().describe(`
+        * * Field Name: Total Discounts Taken LYR
+        * * Display Name: Total  Discounts  Taken  LYR
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Discounts_Taken_YTD: z.number().nullish().describe(`
+        * * Field Name: Total Discounts Taken YTD
+        * * Display Name: Total  Discounts  Taken  YTD
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Finance_Charges_LTD: z.number().nullish().describe(`
+        * * Field Name: Total Finance Charges LTD
+        * * Display Name: Total  Finance  Charges  LTD
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Finance_Charges_LYR: z.number().nullish().describe(`
+        * * Field Name: Total Finance Charges LYR
+        * * Display Name: Total  Finance  Charges  LYR
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Finance_Charges_YTD: z.number().nullish().describe(`
+        * * Field Name: Total Finance Charges YTD
+        * * Display Name: Total  Finance  Charges  YTD
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Returns_LTD: z.number().nullish().describe(`
+        * * Field Name: Total Returns LTD
+        * * Display Name: Total  Returns  LTD
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Returns_LYR: z.number().nullish().describe(`
+        * * Field Name: Total Returns LYR
+        * * Display Name: Total  Returns  LYR
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Returns_YTD: z.number().nullish().describe(`
+        * * Field Name: Total Returns YTD
+        * * Display Name: Total  Returns  YTD
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Sales_LTD: z.number().nullish().describe(`
+        * * Field Name: Total Sales LTD
+        * * Display Name: Total  Sales  LTD
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Sales_LYR: z.number().nullish().describe(`
+        * * Field Name: Total Sales LYR
+        * * Display Name: Total  Sales  LYR
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Sales_YTD: z.number().nullish().describe(`
+        * * Field Name: Total Sales YTD
+        * * Display Name: Total  Sales  YTD
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Waived_FC_LTD: z.number().nullish().describe(`
+        * * Field Name: Total Waived FC LTD
+        * * Display Name: Total  Waived  FC LTD
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Waived_FC_LYR: z.number().nullish().describe(`
+        * * Field Name: Total Waived FC LYR
+        * * Display Name: Total  Waived  FC LYR
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Waived_FC_YTD: z.number().nullish().describe(`
+        * * Field Name: Total Waived FC YTD
+        * * Display Name: Total  Waived  FC YTD
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Writeoffs_LTD: z.number().nullish().describe(`
+        * * Field Name: Total Writeoffs LTD
+        * * Display Name: Total  Writeoffs  LTD
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Writeoffs_LYR: z.number().nullish().describe(`
+        * * Field Name: Total Writeoffs LYR
+        * * Display Name: Total  Writeoffs  LYR
+        * * SQL Data Type: decimal(19, 5)`),
+    Total_Writeoffs_YTD: z.number().nullish().describe(`
+        * * Field Name: Total Writeoffs YTD
+        * * Display Name: Total  Writeoffs  YTD
+        * * SQL Data Type: decimal(19, 5)`),
+    Trade_Discount_Amount: z.number().nullish().describe(`
+        * * Field Name: Trade Discount Amount
+        * * Display Name: Trade  Discount  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Trade_Discount_Percent: z.number().nullish().describe(`
+        * * Field Name: Trade Discount Percent
+        * * Display Name: Trade  Discount  Percent
+        * * SQL Data Type: smallint`),
+    UPS_Zone: z.string().nullish().describe(`
+        * * Field Name: UPS Zone
+        * * Display Name: UPS Zone
+        * * SQL Data Type: varchar(3)`),
+    UPS_Zone_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: UPS Zone from Customer Master
+        * * Display Name: UPS Zone  from  Customer  Master
+        * * SQL Data Type: varchar(3)`),
+    Unpaid_Finance_Charges_YTD: z.number().nullish().describe(`
+        * * Field Name: Unpaid Finance Charges YTD
+        * * Display Name: Unpaid  Finance  Charges  YTD
+        * * SQL Data Type: decimal(19, 5)`),
+    Unposted_Cash_Amount: z.number().nullish().describe(`
+        * * Field Name: Unposted Cash Amount
+        * * Display Name: Unposted  Cash  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Unposted_Other_Cash_Amount: z.number().nullish().describe(`
+        * * Field Name: Unposted Other Cash Amount
+        * * Display Name: Unposted  Other  Cash  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Unposted_Other_Sales_Amount: z.number().nullish().describe(`
+        * * Field Name: Unposted Other Sales Amount
+        * * Display Name: Unposted  Other  Sales  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Unposted_Sales_Amount: z.number().nullish().describe(`
+        * * Field Name: Unposted Sales Amount
+        * * Display Name: Unposted  Sales  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Use_Document_ID_1: z.string().nullish().describe(`
+        * * Field Name: Use Document ID 1
+        * * Display Name: Use  Document  ID 1
+        * * SQL Data Type: varchar(15)`),
+    Use_Document_ID_2: z.string().nullish().describe(`
+        * * Field Name: Use Document ID 2
+        * * Display Name: Use  Document  ID 2
+        * * SQL Data Type: varchar(15)`),
+    User_Defined_1: z.string().nullish().describe(`
+        * * Field Name: User Defined 1
+        * * Display Name: User  Defined  1
+        * * SQL Data Type: varchar(21)`),
+    User_Defined_1_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: User Defined 1 from Customer Master
+        * * Display Name: User  Defined  1 from  Customer  Master
+        * * SQL Data Type: varchar(21)`),
+    User_Defined_2: z.string().nullish().describe(`
+        * * Field Name: User Defined 2
+        * * Display Name: User  Defined  2
+        * * SQL Data Type: varchar(21)`),
+    User_Defined_2_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: User Defined 2 from Customer Master
+        * * Display Name: User  Defined  2 from  Customer  Master
+        * * SQL Data Type: varchar(21)`),
+    User_Defined_3: z.string().nullish().describe(`
+        * * Field Name: User Defined 3
+        * * Display Name: User  Defined  3
+        * * SQL Data Type: varchar(21)`),
+    User_Defined_4: z.string().nullish().describe(`
+        * * Field Name: User Defined 4
+        * * Display Name: User  Defined  4
+        * * SQL Data Type: varchar(21)`),
+    User_Defined_5: z.string().nullish().describe(`
+        * * Field Name: User Defined 5
+        * * Display Name: User  Defined  5
+        * * SQL Data Type: varchar(21)`),
+    User_Defined_Date_1: z.date().nullish().describe(`
+        * * Field Name: User Defined Date 1
+        * * Display Name: User  Defined  Date  1
+        * * SQL Data Type: datetime`),
+    User_Defined_Date_2: z.date().nullish().describe(`
+        * * Field Name: User Defined Date 2
+        * * Display Name: User  Defined  Date  2
+        * * SQL Data Type: datetime`),
+    User_Defined_Table_1: z.string().nullish().describe(`
+        * * Field Name: User Defined Table 1
+        * * Display Name: User  Defined  Table  1
+        * * SQL Data Type: varchar(21)`),
+    User_Defined_Table_2: z.string().nullish().describe(`
+        * * Field Name: User Defined Table 2
+        * * Display Name: User  Defined  Table  2
+        * * SQL Data Type: varchar(21)`),
+    User_Defined_Table_3: z.string().nullish().describe(`
+        * * Field Name: User Defined Table 3
+        * * Display Name: User  Defined  Table  3
+        * * SQL Data Type: varchar(21)`),
+    User_To_Enter: z.string().nullish().describe(`
+        * * Field Name: User To Enter
+        * * Display Name: User  To  Enter
+        * * SQL Data Type: varchar(15)`),
+    Void_Status: z.string().nullish().describe(`
+        * * Field Name: Void Status
+        * * Display Name: Void  Status
+        * * SQL Data Type: varchar(100)`),
+    Withholding_Amount: z.number().nullish().describe(`
+        * * Field Name: Withholding Amount
+        * * Display Name: Withholding  Amount
+        * * SQL Data Type: decimal(19, 5)`),
+    Write_Offs_LIFE: z.number().nullish().describe(`
+        * * Field Name: Write Offs LIFE
+        * * Display Name: Write  Offs  LIFE
+        * * SQL Data Type: decimal(19, 5)`),
+    Write_Offs_LYR: z.number().nullish().describe(`
+        * * Field Name: Write Offs LYR
+        * * Display Name: Write  Offs  LYR
+        * * SQL Data Type: decimal(19, 5)`),
+    Write_Offs_YTD: z.number().nullish().describe(`
+        * * Field Name: Write Offs YTD
+        * * Display Name: Write  Offs  YTD
+        * * SQL Data Type: decimal(19, 5)`),
+    Writeoff_Account_Number: z.string().nullish().describe(`
+        * * Field Name: Writeoff Account Number
+        * * Display Name: Writeoff  Account  Number
+        * * SQL Data Type: varchar(129)`),
+    Zip_Code: z.string().nullish().describe(`
+        * * Field Name: Zip Code
+        * * Display Name: Zip  Code
+        * * SQL Data Type: varchar(11)`),
+    Zip_from_Customer_Master: z.string().nullish().describe(`
+        * * Field Name: Zip from Customer Master
+        * * Display Name: Zip  from  Customer  Master
+        * * SQL Data Type: varchar(11)`),
+    Workflow_Approval_Status_Credit_Limit: z.string().nullish().describe(`
+        * * Field Name: Workflow Approval Status Credit Limit
+        * * Display Name: Workflow  Approval  Status  Credit  Limit
+        * * SQL Data Type: varchar(100)`),
+    Workflow_Priority_Credit_Limit: z.string().nullish().describe(`
+        * * Field Name: Workflow Priority Credit Limit
+        * * Display Name: Workflow  Priority  Credit  Limit
+        * * SQL Data Type: varchar(100)`),
+    Workflow_Approval_Status_Quote: z.string().nullish().describe(`
+        * * Field Name: Workflow Approval Status Quote
+        * * Display Name: Workflow  Approval  Status  Quote
+        * * SQL Data Type: varchar(100)`),
+    Workflow_Priority_Quote: z.string().nullish().describe(`
+        * * Field Name: Workflow Priority Quote
+        * * Display Name: Workflow  Priority  Quote
+        * * SQL Data Type: varchar(100)`),
+    Accounts_Receivable_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Accounts Receivable Account Number For Drillback
+        * * Display Name: Accounts  Receivable  Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Cash_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Cash Account Number For Drillback
+        * * Display Name: Cash  Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Checkbook_ID_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Checkbook ID For Drillback
+        * * Display Name: Checkbook  ID For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    COGS_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: COGS Account Number For Drillback
+        * * Display Name: COGS Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Customer_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Customer Number For Drillback
+        * * Display Name: Customer  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Discounts_Available_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Discounts Available Account Number For Drillback
+        * * Display Name: Discounts  Available  Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Discounts_Taken_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Discounts Taken Account Number For Drillback
+        * * Display Name: Discounts  Taken  Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Finance_Charge_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Finance Charge Account Number For Drillback
+        * * Display Name: Finance  Charge  Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Inventory_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Inventory Account Number For Drillback
+        * * Display Name: Inventory  Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Sales_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Sales Account Number For Drillback
+        * * Display Name: Sales  Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Salesperson_ID_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Salesperson ID For Drillback
+        * * Display Name: Salesperson  ID For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    SOP_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: SOP Number For Drillback
+        * * Display Name: SOP Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    Writeoff_Account_Number_For_Drillback: z.string().nullish().describe(`
+        * * Field Name: Writeoff Account Number For Drillback
+        * * Display Name: Writeoff  Account  Number  For  Drillback
+        * * SQL Data Type: varchar(2042)`),
+    ID: z.number().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: int`),
+});
+
+export type SalesTransaction__client_membershipEntityType = z.infer<typeof SalesTransaction__client_membershipSchema>;
+       
+/**
+ * zod schema definition for the entity String Maps
+ */
+export const StringMapSchema = z.object({
+    ObjectTypeCode: z.number().nullish().describe(`
+        * * Field Name: ObjectTypeCode
+        * * Display Name: Object Type Code
+        * * SQL Data Type: int`),
+    AttributeName: z.string().nullish().describe(`
+        * * Field Name: AttributeName
+        * * Display Name: Attribute Name
+        * * SQL Data Type: nvarchar(100)`),
+    AttributeValue: z.number().nullish().describe(`
+        * * Field Name: AttributeValue
+        * * Display Name: Attribute Value
+        * * SQL Data Type: int`),
+    LangId: z.number().nullish().describe(`
+        * * Field Name: LangId
+        * * Display Name: Lang Id
+        * * SQL Data Type: int`),
+    OrganizationId: z.string().nullish().describe(`
+        * * Field Name: OrganizationId
+        * * Display Name: Organization Id
+        * * SQL Data Type: uniqueidentifier`),
+    Value: z.string().nullish().describe(`
+        * * Field Name: Value
+        * * Display Name: Value
+        * * SQL Data Type: nvarchar(4000)`),
+    DisplayOrder: z.number().nullish().describe(`
+        * * Field Name: DisplayOrder
+        * * Display Name: Display Order
+        * * SQL Data Type: int`),
+    VersionNumber: z.number().describe(`
+        * * Field Name: VersionNumber
+        * * Display Name: Version Number
+        * * SQL Data Type: timestamp`),
+    StringMapId: z.string().describe(`
+        * * Field Name: StringMapId
+        * * Display Name: String Map Id
+        * * SQL Data Type: uniqueidentifier`),
+});
+
+export type StringMapEntityType = z.infer<typeof StringMapSchema>;
+       
+/**
+ * zod schema definition for the entity Thread Details
+ */
+export const ThreadDetailSchema = z.object({
+    ID: z.number().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: int`),
+    ThreadID: z.number().describe(`
+        * * Field Name: ThreadID
+        * * Display Name: Thread ID
+        * * SQL Data Type: int
+        * * Related Entity/Foreign Key: Threads (vwThreads.ID)`),
+    UserID: z.number().nullish().describe(`
+        * * Field Name: UserID
+        * * Display Name: User ID
+        * * SQL Data Type: int`),
+    UserIP: z.string().nullish().describe(`
+        * * Field Name: UserIP
+        * * Display Name: User IP
+        * * SQL Data Type: nvarchar(50)`),
+    Created: z.date().describe(`
+        * * Field Name: Created
+        * * Display Name: Created
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()`),
+    Updated: z.date().describe(`
+        * * Field Name: Updated
+        * * Display Name: Updated
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()`),
+    Status: z.string().describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: PENDING`),
+    StatusMessage: z.string().nullish().describe(`
+        * * Field Name: StatusMessage
+        * * Display Name: Status Message
+        * * SQL Data Type: nvarchar(MAX)`),
+    Response: z.string().nullish().describe(`
+        * * Field Name: Response
+        * * Display Name: Response
+        * * SQL Data Type: nvarchar(MAX)`),
+    Thread: z.string().describe(`
+        * * Field Name: Thread
+        * * Display Name: Thread
+        * * SQL Data Type: nvarchar(200)`),
+});
+
+export type ThreadDetailEntityType = z.infer<typeof ThreadDetailSchema>;
+       
+/**
+ * zod schema definition for the entity Threads
+ */
+export const ThreadSchema = z.object({
+    ID: z.number().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: int`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(200)`),
+});
+
+export type ThreadEntityType = z.infer<typeof ThreadSchema>;
+       
+/**
+ * zod schema definition for the entity Uo Ms
+ */
+export const UoMSchema = z.object({
+    ModifiedOnBehalfByYomiName: z.string().nullish().describe(`
+        * * Field Name: ModifiedOnBehalfByYomiName
+        * * Display Name: Modified On Behalf By Yomi Name
+        * * SQL Data Type: nvarchar(200)`),
+    ModifiedOnBehalfByName: z.string().nullish().describe(`
+        * * Field Name: ModifiedOnBehalfByName
+        * * Display Name: Modified On Behalf By Name
+        * * SQL Data Type: nvarchar(200)`),
+    ModifiedByYomiName: z.string().nullish().describe(`
+        * * Field Name: ModifiedByYomiName
+        * * Display Name: Modified By Yomi Name
+        * * SQL Data Type: nvarchar(200)`),
+    ModifiedByName: z.string().nullish().describe(`
+        * * Field Name: ModifiedByName
+        * * Display Name: Modified By Name
+        * * SQL Data Type: nvarchar(200)`),
+    CreatedByName: z.string().nullish().describe(`
+        * * Field Name: CreatedByName
+        * * Display Name: Created By Name
+        * * SQL Data Type: nvarchar(200)`),
+    CreatedByYomiName: z.string().nullish().describe(`
+        * * Field Name: CreatedByYomiName
+        * * Display Name: Created By Yomi Name
+        * * SQL Data Type: nvarchar(200)`),
+    ModifiedByExternalPartyYomiName: z.string().nullish().describe(`
+        * * Field Name: ModifiedByExternalPartyYomiName
+        * * Display Name: Modified By External Party Yomi Name
+        * * SQL Data Type: nvarchar(450)`),
+    ModifiedByExternalPartyName: z.string().nullish().describe(`
+        * * Field Name: ModifiedByExternalPartyName
+        * * Display Name: Modified By External Party Name
+        * * SQL Data Type: nvarchar(300)`),
+    CreatedByExternalPartyName: z.string().nullish().describe(`
+        * * Field Name: CreatedByExternalPartyName
+        * * Display Name: Created By External Party Name
+        * * SQL Data Type: nvarchar(300)`),
+    CreatedByExternalPartyYomiName: z.string().nullish().describe(`
+        * * Field Name: CreatedByExternalPartyYomiName
+        * * Display Name: Created By External Party Yomi Name
+        * * SQL Data Type: nvarchar(450)`),
+    CreatedOnBehalfByYomiName: z.string().nullish().describe(`
+        * * Field Name: CreatedOnBehalfByYomiName
+        * * Display Name: Created On Behalf By Yomi Name
+        * * SQL Data Type: nvarchar(200)`),
+    CreatedOnBehalfByName: z.string().nullish().describe(`
+        * * Field Name: CreatedOnBehalfByName
+        * * Display Name: Created On Behalf By Name
+        * * SQL Data Type: nvarchar(200)`),
+    BaseUoMName: z.string().nullish().describe(`
+        * * Field Name: BaseUoMName
+        * * Display Name: Base Uo MName
+        * * SQL Data Type: nvarchar(100)`),
+    OrganizationId: z.string().nullish().describe(`
+        * * Field Name: OrganizationId
+        * * Display Name: Organization Id
+        * * SQL Data Type: uniqueidentifier`),
+    UoMId: z.string().describe(`
+        * * Field Name: UoMId
+        * * Display Name: Uo MId
+        * * SQL Data Type: uniqueidentifier`),
+    BaseUoM: z.string().nullish().describe(`
+        * * Field Name: BaseUoM
+        * * Display Name: Base Uo M
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Uo Ms (vwUoMs.UoMId)`),
+    Name: z.string().nullish().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(100)`),
+    UoMScheduleId: z.string().nullish().describe(`
+        * * Field Name: UoMScheduleId
+        * * Display Name: Uo MSchedule Id
+        * * SQL Data Type: uniqueidentifier`),
+    Quantity: z.number().nullish().describe(`
+        * * Field Name: Quantity
+        * * Display Name: Quantity
+        * * SQL Data Type: decimal(23, 10)`),
+    CreatedOn: z.date().nullish().describe(`
+        * * Field Name: CreatedOn
+        * * Display Name: Created On
+        * * SQL Data Type: datetime`),
+    CreatedBy: z.string().nullish().describe(`
+        * * Field Name: CreatedBy
+        * * Display Name: Created By
+        * * SQL Data Type: uniqueidentifier`),
+    ModifiedBy: z.string().nullish().describe(`
+        * * Field Name: ModifiedBy
+        * * Display Name: Modified By
+        * * SQL Data Type: uniqueidentifier`),
+    ModifiedOn: z.date().nullish().describe(`
+        * * Field Name: ModifiedOn
+        * * Display Name: Modified On
+        * * SQL Data Type: datetime`),
+    IsScheduleBaseUoM: z.boolean().nullish().describe(`
+        * * Field Name: IsScheduleBaseUoM
+        * * Display Name: Is Schedule Base Uo M
+        * * SQL Data Type: bit`),
+    VersionNumber: z.number().describe(`
+        * * Field Name: VersionNumber
+        * * Display Name: Version Number
+        * * SQL Data Type: timestamp`),
+    ImportSequenceNumber: z.number().nullish().describe(`
+        * * Field Name: ImportSequenceNumber
+        * * Display Name: Import Sequence Number
+        * * SQL Data Type: int`),
+    OverriddenCreatedOn: z.date().nullish().describe(`
+        * * Field Name: OverriddenCreatedOn
+        * * Display Name: Overridden Created On
+        * * SQL Data Type: datetime`),
+    CreatedOnBehalfBy: z.string().nullish().describe(`
+        * * Field Name: CreatedOnBehalfBy
+        * * Display Name: Created On Behalf By
+        * * SQL Data Type: uniqueidentifier`),
+    ModifiedOnBehalfBy: z.string().nullish().describe(`
+        * * Field Name: ModifiedOnBehalfBy
+        * * Display Name: Modified On Behalf By
+        * * SQL Data Type: uniqueidentifier`),
+    CreatedByExternalParty: z.string().nullish().describe(`
+        * * Field Name: CreatedByExternalParty
+        * * Display Name: Created By External Party
+        * * SQL Data Type: uniqueidentifier`),
+    ModifiedByExternalParty: z.string().nullish().describe(`
+        * * Field Name: ModifiedByExternalParty
+        * * Display Name: Modified By External Party
+        * * SQL Data Type: uniqueidentifier`),
+});
+
+export type UoMEntityType = z.infer<typeof UoMSchema>;
+ 
+ 
             
 /**
  * Accounts - strongly typed entity sub-class
@@ -13,7 +17636,7 @@ import { RegisterClass } from "@memberjunction/global";
  * @public
  */
 @RegisterClass(BaseEntity, 'Accounts')
-export class AccountEntity extends BaseEntity {
+export class AccountEntity extends BaseEntity<AccountEntityType> {
     /**
     * Loads the Accounts record from the database
     * @param ID: number - primary key value to load the Accounts record.
@@ -457,7 +18080,7 @@ export class AccountEntity extends BaseEntity {
  * @public
  */
 @RegisterClass(BaseEntity, 'Accounts__client_crm')
-export class Account__client_crmEntity extends BaseEntity {
+export class Account__client_crmEntity extends BaseEntity<Account__client_crmEntityType> {
     /**
     * Loads the Accounts__client_crm record from the database
     * @param AccountId: string - primary key value to load the Accounts__client_crm record.
@@ -4077,7 +21700,7 @@ export class Account__client_crmEntity extends BaseEntity {
  * @public
  */
 @RegisterClass(BaseEntity, 'Activities')
-export class ActivityEntity extends BaseEntity {
+export class ActivityEntity extends BaseEntity<ActivityEntityType> {
     /**
     * Loads the Activities record from the database
     * @param ID: number - primary key value to load the Activities record.
@@ -4380,7 +22003,7 @@ export class ActivityEntity extends BaseEntity {
  * @public
  */
 @RegisterClass(BaseEntity, 'Activity Attachments')
-export class ActivityAttachmentEntity extends BaseEntity {
+export class ActivityAttachmentEntity extends BaseEntity<ActivityAttachmentEntityType> {
     /**
     * Loads the Activity Attachments record from the database
     * @param ID: number - primary key value to load the Activity Attachments record.
@@ -4464,7 +22087,7 @@ export class ActivityAttachmentEntity extends BaseEntity {
  * @public
  */
 @RegisterClass(BaseEntity, 'client _memberships')
-export class client_membershipEntity extends BaseEntity {
+export class client_membershipEntity extends BaseEntity<client_membershipEntityType> {
     /**
     * Loads the client _memberships record from the database
     * @param Acep_membershipId: string - primary key value to load the client _memberships record.
@@ -5323,7 +22946,7 @@ export class client_membershipEntity extends BaseEntity {
  * @public
  */
 @RegisterClass(BaseEntity, 'Contact Levels')
-export class ContactLevelEntity extends BaseEntity {
+export class ContactLevelEntity extends BaseEntity<ContactLevelEntityType> {
     /**
     * Loads the Contact Levels record from the database
     * @param ID: number - primary key value to load the Contact Levels record.
@@ -5456,7 +23079,7 @@ export class ContactLevelEntity extends BaseEntity {
  * @public
  */
 @RegisterClass(BaseEntity, 'Contact Roles')
-export class ContactRoleEntity extends BaseEntity {
+export class ContactRoleEntity extends BaseEntity<ContactRoleEntityType> {
     /**
     * Loads the Contact Roles record from the database
     * @param ID: number - primary key value to load the Contact Roles record.
@@ -5564,7 +23187,7 @@ export class ContactRoleEntity extends BaseEntity {
  * @public
  */
 @RegisterClass(BaseEntity, 'Contacts')
-export class ContactEntity extends BaseEntity {
+export class ContactEntity extends BaseEntity<ContactEntityType> {
     /**
     * Loads the Contacts record from the database
     * @param ID: number - primary key value to load the Contacts record.
@@ -5986,7 +23609,7 @@ export class ContactEntity extends BaseEntity {
  * @public
  */
 @RegisterClass(BaseEntity, 'Contacts__client_crm')
-export class Contact__client_crmEntity extends BaseEntity {
+export class Contact__client_crmEntity extends BaseEntity<Contact__client_crmEntityType> {
     /**
     * Loads the Contacts__client_crm record from the database
     * @param ContactId: string - primary key value to load the Contacts__client_crm record.
@@ -11877,300 +29500,6 @@ export class Contact__client_crmEntity extends BaseEntity {
 
             
 /**
- * Content Source Types - strongly typed entity sub-class
- * * Schema: dray
- * * Base Table: ContentSourceType
- * * Base View: vwContentSourceTypes
- * * Primary Key: ID
- * @extends {BaseEntity}
- * @class
- * @public
- */
-@RegisterClass(BaseEntity, 'Content Source Types')
-export class ContentSourceTypeEntity extends BaseEntity {
-    /**
-    * Loads the Content Source Types record from the database
-    * @param ID: number - primary key value to load the Content Source Types record.
-    * @param EntityRelationshipsToLoad - (optional) the relationships to load
-    * @returns {Promise<boolean>} - true if successful, false otherwise
-    * @public
-    * @async
-    * @memberof ContentSourceTypeEntity
-    * @method
-    * @override
-    */      
-    public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-        const compositeKey: CompositeKey = new CompositeKey();
-        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
-        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
-    }
-
-    /**
-    * * Field Name: ID
-    * * Display Name: ID
-    * * SQL Data Type: int
-    */
-    get ID(): number {  
-        return this.Get('ID');
-    }
-
-    /**
-    * * Field Name: Name
-    * * Display Name: Name
-    * * SQL Data Type: nvarchar(50)
-    */
-    get Name(): string {  
-        return this.Get('Name');
-    }
-    set Name(value: string) {
-        this.Set('Name', value);
-    }
-
-    /**
-    * * Field Name: Description
-    * * Display Name: Description
-    * * SQL Data Type: nvarchar(MAX)
-    */
-    get Description(): string | null {  
-        return this.Get('Description');
-    }
-    set Description(value: string | null) {
-        this.Set('Description', value);
-    }
-
-    /**
-    * * Field Name: __mj_CreatedAt
-    * * Display Name: Created At
-    * * SQL Data Type: datetimeoffset
-    * * Default Value: getutcdate()
-    */
-    get __mj_CreatedAt(): Date {  
-        return this.Get('__mj_CreatedAt');
-    }
-
-    /**
-    * * Field Name: __mj_UpdatedAt
-    * * Display Name: Updated At
-    * * SQL Data Type: datetimeoffset
-    * * Default Value: getutcdate()
-    */
-    get __mj_UpdatedAt(): Date {  
-        return this.Get('__mj_UpdatedAt');
-    }
-}
-
-            
-/**
- * Content Sources - strongly typed entity sub-class
- * * Schema: dray
- * * Base Table: ContentSource
- * * Base View: vwContentSources
- * * Primary Key: ID
- * @extends {BaseEntity}
- * @class
- * @public
- */
-@RegisterClass(BaseEntity, 'Content Sources')
-export class ContentSourceEntity extends BaseEntity {
-    /**
-    * Loads the Content Sources record from the database
-    * @param ID: number - primary key value to load the Content Sources record.
-    * @param EntityRelationshipsToLoad - (optional) the relationships to load
-    * @returns {Promise<boolean>} - true if successful, false otherwise
-    * @public
-    * @async
-    * @memberof ContentSourceEntity
-    * @method
-    * @override
-    */      
-    public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-        const compositeKey: CompositeKey = new CompositeKey();
-        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
-        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
-    }
-
-    /**
-    * * Field Name: ID
-    * * Display Name: ID
-    * * SQL Data Type: int
-    */
-    get ID(): number {  
-        return this.Get('ID');
-    }
-
-    /**
-    * * Field Name: OrganizationID
-    * * Display Name: Organization ID
-    * * SQL Data Type: int
-    */
-    get OrganizationID(): number {  
-        return this.Get('OrganizationID');
-    }
-    set OrganizationID(value: number) {
-        this.Set('OrganizationID', value);
-    }
-
-    /**
-    * * Field Name: TypeID
-    * * Display Name: Type ID
-    * * SQL Data Type: int
-    * * Related Entity/Foreign Key: Content Source Types (vwContentSourceTypes.ID)
-    */
-    get TypeID(): number {  
-        return this.Get('TypeID');
-    }
-    set TypeID(value: number) {
-        this.Set('TypeID', value);
-    }
-
-    /**
-    * * Field Name: Name
-    * * Display Name: Name
-    * * SQL Data Type: nvarchar(50)
-    */
-    get Name(): string {  
-        return this.Get('Name');
-    }
-    set Name(value: string) {
-        this.Set('Name', value);
-    }
-
-    /**
-    * * Field Name: Description
-    * * Display Name: Description
-    * * SQL Data Type: nvarchar(MAX)
-    */
-    get Description(): string | null {  
-        return this.Get('Description');
-    }
-    set Description(value: string | null) {
-        this.Set('Description', value);
-    }
-
-    /**
-    * * Field Name: Active
-    * * Display Name: Active
-    * * SQL Data Type: bit
-    * * Default Value: 1
-    */
-    get Active(): boolean {  
-        return this.Get('Active');
-    }
-    set Active(value: boolean) {
-        this.Set('Active', value);
-    }
-
-    /**
-    * * Field Name: ForceTraining
-    * * Display Name: Force Training
-    * * SQL Data Type: bit
-    * * Default Value: 0
-    */
-    get ForceTraining(): boolean {  
-        return this.Get('ForceTraining');
-    }
-    set ForceTraining(value: boolean) {
-        this.Set('ForceTraining', value);
-    }
-
-    /**
-    * * Field Name: AutomaticTraining
-    * * Display Name: Automatic Training
-    * * SQL Data Type: bit
-    * * Default Value: 0
-    */
-    get AutomaticTraining(): boolean {  
-        return this.Get('AutomaticTraining');
-    }
-    set AutomaticTraining(value: boolean) {
-        this.Set('AutomaticTraining', value);
-    }
-
-    /**
-    * * Field Name: FrequencyUnit
-    * * Display Name: Frequency Unit
-    * * SQL Data Type: nvarchar(50)
-    * * Default Value: DAY
-    */
-    get FrequencyUnit(): string {  
-        return this.Get('FrequencyUnit');
-    }
-    set FrequencyUnit(value: string) {
-        this.Set('FrequencyUnit', value);
-    }
-
-    /**
-    * * Field Name: FrequencyCount
-    * * Display Name: Frequency Count
-    * * SQL Data Type: int
-    * * Default Value: 0
-    */
-    get FrequencyCount(): number {  
-        return this.Get('FrequencyCount');
-    }
-    set FrequencyCount(value: number) {
-        this.Set('FrequencyCount', value);
-    }
-
-    /**
-    * * Field Name: LastTraining
-    * * Display Name: Last Training
-    * * SQL Data Type: datetime
-    * * Default Value: 1/1/1900
-    */
-    get LastTraining(): Date {  
-        return this.Get('LastTraining');
-    }
-    set LastTraining(value: Date) {
-        this.Set('LastTraining', value);
-    }
-
-    /**
-    * * Field Name: TestTraining
-    * * Display Name: Test Training
-    * * SQL Data Type: bit
-    * * Default Value: 0
-    */
-    get TestTraining(): boolean {  
-        return this.Get('TestTraining');
-    }
-    set TestTraining(value: boolean) {
-        this.Set('TestTraining', value);
-    }
-
-    /**
-    * * Field Name: __mj_CreatedAt
-    * * Display Name: Created At
-    * * SQL Data Type: datetimeoffset
-    * * Default Value: getutcdate()
-    */
-    get __mj_CreatedAt(): Date {  
-        return this.Get('__mj_CreatedAt');
-    }
-
-    /**
-    * * Field Name: __mj_UpdatedAt
-    * * Display Name: Updated At
-    * * SQL Data Type: datetimeoffset
-    * * Default Value: getutcdate()
-    */
-    get __mj_UpdatedAt(): Date {  
-        return this.Get('__mj_UpdatedAt');
-    }
-
-    /**
-    * * Field Name: Type
-    * * Display Name: Type
-    * * SQL Data Type: nvarchar(50)
-    * * Default Value: null
-    */
-    get Type(): string {  
-        return this.Get('Type');
-    }
-}
-
-            
-/**
  * Customer Address - strongly typed entity sub-class
  * * Schema: client_membership
  * * Base Table: CustomerAddress
@@ -12181,7 +29510,7 @@ export class ContentSourceEntity extends BaseEntity {
  * @public
  */
 @RegisterClass(BaseEntity, 'Customer Address')
-export class CustomerAddressEntity extends BaseEntity {
+export class CustomerAddressEntity extends BaseEntity<CustomerAddressEntityType> {
     /**
     * Loads the Customer Address record from the database
     * @param Customer_Number: string - primary key value to load the Customer Address record.
@@ -13577,7 +30906,7 @@ export class CustomerAddressEntity extends BaseEntity {
  * @public
  */
 @RegisterClass(BaseEntity, 'Customer Address__client_finance')
-export class CustomerAddress__client_financeEntity extends BaseEntity {
+export class CustomerAddress__client_financeEntity extends BaseEntity<CustomerAddress__client_financeEntityType> {
     /**
     * Loads the Customer Address__client_finance record from the database
     * @param Customer_Number: string - primary key value to load the Customer Address__client_finance record.
@@ -14973,7 +32302,7 @@ export class CustomerAddress__client_financeEntity extends BaseEntity {
  * @public
  */
 @RegisterClass(BaseEntity, 'Customers')
-export class CustomerEntity extends BaseEntity {
+export class CustomerEntity extends BaseEntity<CustomerEntityType> {
     /**
     * Loads the Customers record from the database
     * @param Customer_Number: string - primary key value to load the Customers record.
@@ -17197,7 +34526,7 @@ export class CustomerEntity extends BaseEntity {
  * @public
  */
 @RegisterClass(BaseEntity, 'Customers__client_finance')
-export class Customer__client_financeEntity extends BaseEntity {
+export class Customer__client_financeEntity extends BaseEntity<Customer__client_financeEntityType> {
     /**
     * Loads the Customers__client_finance record from the database
     * @param Customer_Number: string - primary key value to load the Customers__client_finance record.
@@ -19421,7 +36750,7 @@ export class Customer__client_financeEntity extends BaseEntity {
  * @public
  */
 @RegisterClass(BaseEntity, 'Deal Forecast Categories')
-export class DealForecastCategoryEntity extends BaseEntity {
+export class DealForecastCategoryEntity extends BaseEntity<DealForecastCategoryEntityType> {
     /**
     * Loads the Deal Forecast Categories record from the database
     * @param ID: number - primary key value to load the Deal Forecast Categories record.
@@ -19517,7 +36846,7 @@ export class DealForecastCategoryEntity extends BaseEntity {
  * @public
  */
 @RegisterClass(BaseEntity, 'Deal Stages')
-export class DealStageEntity extends BaseEntity {
+export class DealStageEntity extends BaseEntity<DealStageEntityType> {
     /**
     * Loads the Deal Stages record from the database
     * @param ID: number - primary key value to load the Deal Stages record.
@@ -19613,7 +36942,7 @@ export class DealStageEntity extends BaseEntity {
  * @public
  */
 @RegisterClass(BaseEntity, 'Deal Types')
-export class DealTypeEntity extends BaseEntity {
+export class DealTypeEntity extends BaseEntity<DealTypeEntityType> {
     /**
     * Loads the Deal Types record from the database
     * @param ID: number - primary key value to load the Deal Types record.
@@ -19721,7 +37050,7 @@ export class DealTypeEntity extends BaseEntity {
  * @public
  */
 @RegisterClass(BaseEntity, 'Deals')
-export class DealEntity extends BaseEntity {
+export class DealEntity extends BaseEntity<DealEntityType> {
     /**
     * Loads the Deals record from the database
     * @param ID: number - primary key value to load the Deals record.
@@ -20139,7 +37468,7 @@ export class DealEntity extends BaseEntity {
  * @public
  */
 @RegisterClass(BaseEntity, 'Industries')
-export class IndustryEntity extends BaseEntity {
+export class IndustryEntity extends BaseEntity<IndustryEntityType> {
     /**
     * Loads the Industries record from the database
     * @param ID: number - primary key value to load the Industries record.
@@ -20247,7 +37576,7 @@ export class IndustryEntity extends BaseEntity {
  * @public
  */
 @RegisterClass(BaseEntity, 'Invoice Status Types')
-export class InvoiceStatusTypeEntity extends BaseEntity {
+export class InvoiceStatusTypeEntity extends BaseEntity<InvoiceStatusTypeEntityType> {
     /**
     * Loads the Invoice Status Types record from the database
     * @param ID: number - primary key value to load the Invoice Status Types record.
@@ -20343,7 +37672,7 @@ export class InvoiceStatusTypeEntity extends BaseEntity {
  * @public
  */
 @RegisterClass(BaseEntity, 'Invoices')
-export class InvoiceEntity extends BaseEntity {
+export class InvoiceEntity extends BaseEntity<InvoiceEntityType> {
     /**
     * Loads the Invoices record from the database
     * @param ID: number - primary key value to load the Invoices record.
@@ -20618,7 +37947,7 @@ export class InvoiceEntity extends BaseEntity {
  * @public
  */
 @RegisterClass(BaseEntity, 'Items')
-export class ItemEntity extends BaseEntity {
+export class ItemEntity extends BaseEntity<ItemEntityType> {
     /**
     * Loads the Items record from the database
     * @param Item_Number: string - primary key value to load the Items record.
@@ -21882,7 +39211,7 @@ export class ItemEntity extends BaseEntity {
  * @public
  */
 @RegisterClass(BaseEntity, 'Items__client_finance')
-export class Item__client_financeEntity extends BaseEntity {
+export class Item__client_financeEntity extends BaseEntity<Item__client_financeEntityType> {
     /**
     * Loads the Items__client_finance record from the database
     * @param Item_Number: string - primary key value to load the Items__client_finance record.
@@ -23147,7 +40476,7 @@ export class Item__client_financeEntity extends BaseEntity {
  * @public
  */
 @RegisterClass(BaseEntity, 'Organization Links')
-export class OrganizationLinkEntity extends BaseEntity {
+export class OrganizationLinkEntity extends BaseEntity<OrganizationLinkEntityType> {
     /**
     * Loads the Organization Links record from the database
     * @param OrganizationLinkID: number - primary key value to load the Organization Links record.
@@ -23282,7 +40611,7 @@ export class OrganizationLinkEntity extends BaseEntity {
  * @public
  */
 @RegisterClass(BaseEntity, 'Payment Terms Types')
-export class PaymentTermsTypeEntity extends BaseEntity {
+export class PaymentTermsTypeEntity extends BaseEntity<PaymentTermsTypeEntityType> {
     /**
     * Loads the Payment Terms Types record from the database
     * @param ID: number - primary key value to load the Payment Terms Types record.
@@ -23439,7 +40768,7 @@ export class PaymentTermsTypeEntity extends BaseEntity {
  * @public
  */
 @RegisterClass(BaseEntity, 'Person Links')
-export class PersonLinkEntity extends BaseEntity {
+export class PersonLinkEntity extends BaseEntity<PersonLinkEntityType> {
     /**
     * Loads the Person Links record from the database
     * @param PersonLinkID: number - primary key value to load the Person Links record.
@@ -23599,7 +40928,7 @@ export class PersonLinkEntity extends BaseEntity {
  * @public
  */
 @RegisterClass(BaseEntity, 'Product Price Levels')
-export class ProductPriceLevelEntity extends BaseEntity {
+export class ProductPriceLevelEntity extends BaseEntity<ProductPriceLevelEntityType> {
     /**
     * Loads the Product Price Levels record from the database
     * @param ProductPriceLevelId: string - primary key value to load the Product Price Levels record.
@@ -24181,7 +41510,7 @@ export class ProductPriceLevelEntity extends BaseEntity {
  * @public
  */
 @RegisterClass(BaseEntity, 'Products')
-export class ProductEntity extends BaseEntity {
+export class ProductEntity extends BaseEntity<ProductEntityType> {
     /**
     * Loads the Products record from the database
     * @param ProductId: string - primary key value to load the Products record.
@@ -26265,7 +43594,7 @@ export class ProductEntity extends BaseEntity {
  * @public
  */
 @RegisterClass(BaseEntity, 'Quad Demos')
-export class QuadDemoEntity extends BaseEntity {
+export class QuadDemoEntity extends BaseEntity<QuadDemoEntityType> {
     /**
     * Loads the Quad Demos record from the database
     * @param ID: number - primary key value to load the Quad Demos record.
@@ -26349,7 +43678,7 @@ export class QuadDemoEntity extends BaseEntity {
  * @public
  */
 @RegisterClass(BaseEntity, 'Sales Line Items')
-export class SalesLineItemEntity extends BaseEntity {
+export class SalesLineItemEntity extends BaseEntity<SalesLineItemEntityType> {
     /**
     * Loads the Sales Line Items record from the database
     * @param ID: number - primary key value to load the Sales Line Items record.
@@ -33182,7 +50511,7 @@ export class SalesLineItemEntity extends BaseEntity {
  * @public
  */
 @RegisterClass(BaseEntity, 'Sales Line Items__client_membership')
-export class SalesLineItem__client_membershipEntity extends BaseEntity {
+export class SalesLineItem__client_membershipEntity extends BaseEntity<SalesLineItem__client_membershipEntityType> {
     /**
     * Loads the Sales Line Items__client_membership record from the database
     * @param ID: number - primary key value to load the Sales Line Items__client_membership record.
@@ -40017,7 +57346,7 @@ export class SalesLineItem__client_membershipEntity extends BaseEntity {
  * @public
  */
 @RegisterClass(BaseEntity, 'Sales Order Details')
-export class SalesOrderDetailEntity extends BaseEntity {
+export class SalesOrderDetailEntity extends BaseEntity<SalesOrderDetailEntityType> {
     /**
     * Loads the Sales Order Details record from the database
     * @param SalesOrderDetailId: string - primary key value to load the Sales Order Details record.
@@ -41141,7 +58470,7 @@ export class SalesOrderDetailEntity extends BaseEntity {
  * @public
  */
 @RegisterClass(BaseEntity, 'Sales Orders')
-export class SalesOrderEntity extends BaseEntity {
+export class SalesOrderEntity extends BaseEntity<SalesOrderEntityType> {
     /**
     * Loads the Sales Orders record from the database
     * @param SalesOrderId: string - primary key value to load the Sales Orders record.
@@ -43706,7 +61035,7 @@ export class SalesOrderEntity extends BaseEntity {
  * @public
  */
 @RegisterClass(BaseEntity, 'Sales Transactions')
-export class SalesTransactionEntity extends BaseEntity {
+export class SalesTransactionEntity extends BaseEntity<SalesTransactionEntityType> {
     /**
     * Loads the Sales Transactions record from the database
     * @param ID: number - primary key value to load the Sales Transactions record.
@@ -48150,7 +65479,7 @@ export class SalesTransactionEntity extends BaseEntity {
  * @public
  */
 @RegisterClass(BaseEntity, 'Sales Transactions__client_membership')
-export class SalesTransaction__client_membershipEntity extends BaseEntity {
+export class SalesTransaction__client_membershipEntity extends BaseEntity<SalesTransaction__client_membershipEntityType> {
     /**
     * Loads the Sales Transactions__client_membership record from the database
     * @param ID: number - primary key value to load the Sales Transactions__client_membership record.
@@ -52594,7 +69923,7 @@ export class SalesTransaction__client_membershipEntity extends BaseEntity {
  * @public
  */
 @RegisterClass(BaseEntity, 'String Maps')
-export class StringMapEntity extends BaseEntity {
+export class StringMapEntity extends BaseEntity<StringMapEntityType> {
     /**
     * Loads the String Maps record from the database
     * @param StringMapId: string - primary key value to load the String Maps record.
@@ -52742,7 +70071,7 @@ export class StringMapEntity extends BaseEntity {
  * @public
  */
 @RegisterClass(BaseEntity, 'Thread Details')
-export class ThreadDetailEntity extends BaseEntity {
+export class ThreadDetailEntity extends BaseEntity<ThreadDetailEntityType> {
     /**
     * Loads the Thread Details record from the database
     * @param ID: number - primary key value to load the Thread Details record.
@@ -52903,7 +70232,7 @@ export class ThreadDetailEntity extends BaseEntity {
  * @public
  */
 @RegisterClass(BaseEntity, 'Threads')
-export class ThreadEntity extends BaseEntity {
+export class ThreadEntity extends BaseEntity<ThreadEntityType> {
     /**
     * Loads the Threads record from the database
     * @param ID: number - primary key value to load the Threads record.
@@ -52967,7 +70296,7 @@ export class ThreadEntity extends BaseEntity {
  * @public
  */
 @RegisterClass(BaseEntity, 'Uo Ms')
-export class UoMEntity extends BaseEntity {
+export class UoMEntity extends BaseEntity<UoMEntityType> {
     /**
     * Loads the Uo Ms record from the database
     * @param UoMId: string - primary key value to load the Uo Ms record.

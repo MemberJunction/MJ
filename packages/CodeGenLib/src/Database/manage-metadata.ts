@@ -16,7 +16,7 @@ import path from 'path';
  */
 @RegisterClass(ManageMetadataBase)
 export class ManageMetadataBase {
-   protected _sqlUtilityObject: SQLUtilityBase = MJGlobal.Instance.ClassFactory.CreateInstance<SQLUtilityBase>(SQLUtilityBase);
+   protected _sqlUtilityObject: SQLUtilityBase = MJGlobal.Instance.ClassFactory.CreateInstance<SQLUtilityBase>(SQLUtilityBase)!;
    public get SQLUtilityObject(): SQLUtilityBase {
        return this._sqlUtilityObject;
    }
@@ -61,7 +61,7 @@ export class ManageMetadataBase {
 
       start = new Date();
       logStatus('   Recompiling base views...');
-      const sqlUtility = MJGlobal.Instance.ClassFactory.CreateInstance<SQLUtilityBase>(SQLUtilityBase);
+      const sqlUtility = MJGlobal.Instance.ClassFactory.CreateInstance<SQLUtilityBase>(SQLUtilityBase)!;
       if (! await sqlUtility.recompileAllBaseViews(ds, excludeSchemas, true)) {
          logMessage('   Warning: Non-Fatal error recompiling base views', SeverityType.Warning, false);
          // many times the former versions of base views will NOT succesfully recompile, so don't consider that scenario to be a 
@@ -252,12 +252,12 @@ export class ManageMetadataBase {
             let batchSQL = '';
             batch.forEach((f) => {
                // for each field determine if an existing relationship exists, if not, create it
-               const relationships = allRelationships.filter(r => r.EntityID===f.RelatedEntityID && r.RelatedEntityID===f.EntityID);
+               const relationships = allRelationships.filter((r: { EntityID: any; RelatedEntityID: any; }) => r.EntityID===f.RelatedEntityID && r.RelatedEntityID===f.EntityID);
                if (relationships && relationships.length === 0) {
                   // no relationship exists, so create it
-                  const e = md.Entities.find(e => e.ID === f.EntityID)
+                  const e = md.Entities.find(e => e.ID === f.EntityID)!;
                   // calculate the sequence by getting the count of existing relationships for the entity and adding 1 and then increment the count for future inserts in this loop
-                  const relCount = relationshipCountMap.get(f.EntityID) ? relationshipCountMap.get(f.EntityID) : 0;
+                  const relCount = relationshipCountMap.get(f.EntityID) || 0;
                   const sequence = relCount + 1;
                   batchSQL += `INSERT INTO ${mj_core_schema()}.EntityRelationship (EntityID, RelatedEntityID, RelatedEntityJoinField, Type, BundleInAPI, DisplayInForm, DisplayName, Sequence) 
                                           VALUES ('${f.RelatedEntityID}', '${f.EntityID}', '${f.Name}', 'One To Many', 1, 1, '${e.Name}', ${sequence});
@@ -279,7 +279,7 @@ export class ManageMetadataBase {
          return true;
       }
       catch (e) {
-         logError(e);
+         logError(e as string);
          return false;
       }
    }
@@ -314,7 +314,7 @@ export class ManageMetadataBase {
                   await this.checkDropSQLObject(ds, e.FullTextSearchFunctionGenerated, 'function', e.SchemaName, e.FullTextSearchFunction);
                }
                catch (ex) {
-                  logError(`Error removing metadata for entity ${ex.Name}, error: ${ex}`);
+                  logError(`Error removing metadata for entity ${(ex as any).Name}, error: ${ex}`);
                }
             }
 
@@ -325,7 +325,7 @@ export class ManageMetadataBase {
          return true;
       }                     
       catch (e) {
-         logError(e);
+         logError(e as string);
          return false;
       }
    }
@@ -456,14 +456,14 @@ export class ManageMetadataBase {
             const sql = `SELECT * 
                          FROM INFORMATION_SCHEMA.COLUMNS
                          WHERE 
-                         ${entities.map(e => `(TABLE_SCHEMA='${e.SchemaName}' AND TABLE_NAME='${e.BaseTable}')`).join(' OR ')}
+                         ${entities.map((e: { SchemaName: any; BaseTable: any; }) => `(TABLE_SCHEMA='${e.SchemaName}' AND TABLE_NAME='${e.BaseTable}')`).join(' OR ')}
                          AND COLUMN_NAME='${EntityInfo.DeletedAtFieldName}'`
             const result = await ds.query(sql);
 
 
             for (const e of entities) {
-               const eResult = result.filter(r => r.TABLE_NAME === e.BaseTable && r.TABLE_SCHEMA === e.SchemaName); // get just the fields for this entity
-               const deletedAt = eResult.find(r => r.COLUMN_NAME.trim().toLowerCase() === EntityInfo.DeletedAtFieldName.trim().toLowerCase());
+               const eResult = result.filter((r: { TABLE_NAME: any; TABLE_SCHEMA: any; }) => r.TABLE_NAME === e.BaseTable && r.TABLE_SCHEMA === e.SchemaName); // get just the fields for this entity
+               const deletedAt = eResult.find((r: { COLUMN_NAME: string; }) => r.COLUMN_NAME.trim().toLowerCase() === EntityInfo.DeletedAtFieldName.trim().toLowerCase());
 
                // now, if we have the fields, we need to check the default value and update if necessary
                const fieldResult = await this.ensureSpecialDateFieldExistsAndHasCorrectDefaultValue(ds, e, EntityInfo.DeletedAtFieldName, deletedAt, true)
@@ -474,7 +474,7 @@ export class ManageMetadataBase {
          return overallResult;
       }
       catch (e) {
-         logError(e);
+         logError(e as string);
          return false;
       }
    }
@@ -497,14 +497,14 @@ export class ManageMetadataBase {
             const sqlCreatedUpdated = `SELECT * 
                                        FROM INFORMATION_SCHEMA.COLUMNS
                                        WHERE 
-                                          ${entities.map(e => `(TABLE_SCHEMA='${e.SchemaName}' AND TABLE_NAME='${e.BaseTable}')`).join(' OR ')}
+                                          ${entities.map((e: { SchemaName: any; BaseTable: any; }) => `(TABLE_SCHEMA='${e.SchemaName}' AND TABLE_NAME='${e.BaseTable}')`).join(' OR ')}
                                        AND COLUMN_NAME IN ('${EntityInfo.CreatedAtFieldName}','${EntityInfo.UpdatedAtFieldName}')`
             const result = await ds.query(sqlCreatedUpdated);
             for (const e of entities) {
                // result has both created at and updated at fields, so filter on the result for each and do what we need to based on that
-               const eResult = result.filter(r => r.TABLE_NAME === e.BaseTable && r.TABLE_SCHEMA === e.SchemaName); // get just the fields for this entity
-               const createdAt = eResult.find(r => r.COLUMN_NAME.trim().toLowerCase() === EntityInfo.CreatedAtFieldName.trim().toLowerCase());
-               const updatedAt = eResult.find(r => r.COLUMN_NAME.trim().toLowerCase() === EntityInfo.UpdatedAtFieldName.trim().toLowerCase());
+               const eResult = result.filter((r: { TABLE_NAME: any; TABLE_SCHEMA: any; }) => r.TABLE_NAME === e.BaseTable && r.TABLE_SCHEMA === e.SchemaName); // get just the fields for this entity
+               const createdAt = eResult.find((r: { COLUMN_NAME: string; }) => r.COLUMN_NAME.trim().toLowerCase() === EntityInfo.CreatedAtFieldName.trim().toLowerCase());
+               const updatedAt = eResult.find((r: { COLUMN_NAME: string; }) => r.COLUMN_NAME.trim().toLowerCase() === EntityInfo.UpdatedAtFieldName.trim().toLowerCase());
 
                // now, if we have the fields, we need to check the default value and update if necessary
                const fieldResult = await this.ensureSpecialDateFieldExistsAndHasCorrectDefaultValue(ds, e, EntityInfo.CreatedAtFieldName, createdAt, false) &&
@@ -516,7 +516,7 @@ export class ManageMetadataBase {
          return overallResult;
       }
       catch (e) {
-         logError(e);
+         logError(e as string);
          return false;
       }
    }
@@ -566,7 +566,7 @@ export class ManageMetadataBase {
          return true;   
       }
       catch (e) {
-         logError(e);
+         logError(e as string);
          return false;
       }
    }
@@ -580,7 +580,7 @@ export class ManageMetadataBase {
          await ds.query(sqlAddDefaultConstraint);   
       }
       catch (e) {
-         logError(e);
+         logError(e as string);
       }
    }
 
@@ -626,7 +626,7 @@ export class ManageMetadataBase {
          await ds.query(sqlDropDefaultConstraint);      
       }
       catch (e) {
-         logError(e);
+         logError(e as string);
       }
    }
 
@@ -654,7 +654,7 @@ export class ManageMetadataBase {
                                                      Base Table: ${data[0].BaseTable}, 
                                                      Schema: ${data[0].SchemaName}. 
                                                      Fields: 
-                                                     ${fields.map(f => `   ${f.Name}: ${f.Type}`).join('\n')}`;
+                                                     ${fields.map((f: { Name: any; Type: any; }) => `   ${f.Name}: ${f.Type}`).join('\n')}`;
             const result = await llm.ChatCompletion({
                model: ag.AIModel,
                messages: [
@@ -728,7 +728,7 @@ export class ManageMetadataBase {
          return true;
       }
       catch (e) {
-         logError(e);
+         logError(e as string);
          return false;
       }
    }
@@ -747,7 +747,7 @@ export class ManageMetadataBase {
          return true;
       }
       catch (e) {
-         logError(e);
+         logError(e as string);
          return false;
       }
    }
@@ -924,7 +924,7 @@ export class ManageMetadataBase {
     * @returns 
     */
    protected parseDefaultValue(sqlDefaultValue: string): string {
-      let sResult: string = null;
+      let sResult: string = null!;
    
       if (sqlDefaultValue !== null && sqlDefaultValue !== undefined) {
          if (sqlDefaultValue.startsWith('(') && sqlDefaultValue.endsWith(')'))
@@ -963,7 +963,7 @@ export class ManageMetadataBase {
          return true;
       }
       catch (e) {
-         logError(e);
+         logError(e as string);
          return false;
       }
    }
@@ -985,7 +985,7 @@ export class ManageMetadataBase {
          return true;
       }
       catch (e) {
-         logError(e);
+         logError(e as string);
          return false;
       }
    }
@@ -995,7 +995,7 @@ export class ManageMetadataBase {
          return true;
       }
       catch (e) {
-         logError(e);   
+         logError(e as string);   
          return false;
       }
    }
@@ -1005,7 +1005,7 @@ export class ManageMetadataBase {
          return true;
       }
       catch (e) {
-         logError(e);
+         logError(e as string);
          return false;
       }
    }
@@ -1015,7 +1015,7 @@ export class ManageMetadataBase {
          return true;
       }
       catch (e) {
-         logError(e);
+         logError(e as string);
          return false;
       }
    }
@@ -1054,7 +1054,7 @@ export class ManageMetadataBase {
          return true;
       }
       catch (e) {
-         logError(e);
+         logError(e as string);
          return false;
       }
    }
@@ -1062,7 +1062,7 @@ export class ManageMetadataBase {
    protected async syncEntityFieldValues(ds: DataSource, entityFieldID: number, possibleValues: string[], allEntityFieldValues: any): Promise<boolean> {
       try {
          // first, get a list of all of the existing entity field values for the field already in the database
-         const existingValues = allEntityFieldValues.filter(efv => efv.EntityFieldID === entityFieldID); 
+         const existingValues = allEntityFieldValues.filter((efv: { EntityFieldID: number; }) => efv.EntityFieldID === entityFieldID); 
          // now, loop through the possible values and add any that are not already in the database
    
          // Step 1: for any existing value that is NOT in the list of possible Values, delete it
@@ -1080,7 +1080,7 @@ export class ManageMetadataBase {
             // Step 2: for any possible value that is NOT in the list of existing values, add it
             let numAdded = 0;
             for (const v of possibleValues) {
-               if (!existingValues.find(ev => ev.Value === v)) {
+               if (!existingValues.find((ev: { Value: string; }) => ev.Value === v)) {
                   // add the value to the database
                   const sSQLInsert = `INSERT INTO [${mj_core_schema()}].EntityFieldValue 
                                        (EntityFieldID, Sequence, Value, Code) 
@@ -1094,7 +1094,7 @@ export class ManageMetadataBase {
             // Step 3: finally, for the existing values that are in the list of possible values, update the sequence to match the order in the possible values list
             let numUpdated = 0;
             for (const v of possibleValues) {
-               const ev = existingValues.find(ev => ev.Value === v);
+               const ev = existingValues.find((ev: { Value: string; }) => ev.Value === v);
                if (ev && ev.Sequence !== 1 + possibleValues.indexOf(v)) {
                   // update the sequence to match the order in the possible values list, if it doesn't already match
                   const sSQLUpdate = `UPDATE [${mj_core_schema()}].EntityFieldValue SET Sequence=${1 + possibleValues.indexOf(v)} WHERE ID='${ev.ID}'`;
@@ -1107,7 +1107,7 @@ export class ManageMetadataBase {
          return true;
       }
       catch (e) {
-         logError(e);
+         logError(e as string);
          return false;
       }
    }
