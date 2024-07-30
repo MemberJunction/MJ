@@ -1,7 +1,0 @@
-{
-  "type": "patch",
-  "comment": "Applying package updates [skip ci]",
-  "packageName": "@memberjunction/ng-core-entity-forms",
-  "email": "155523863+JS-BC@users.noreply.github.com",
-  "dependentChangeType": "patch"
-}
