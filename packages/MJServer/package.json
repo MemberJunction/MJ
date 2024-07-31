@@ -33,6 +33,7 @@
     "@memberjunction/queue": "2.1.2",
     "@memberjunction/skip-types": "2.1.2",
     "@memberjunction/sqlserver-dataprovider": "2.1.2",
+    "@memberjunction/graphql-dataprovider": "2.1.2",
     "@memberjunction/storage": "2.1.2",
     "@memberjunction/templates": "2.1.2",
     "@types/cors": "^2.8.13",
