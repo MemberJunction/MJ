@@ -1,5 +1,5 @@
 {
-  "type": "minor",
+  "type": "patch",
   "comment": "Applying package updates [skip ci]",
   "packageName": "@memberjunction/scheduled-actions-server",
   "email": "155523863+JS-BC@users.noreply.github.com",

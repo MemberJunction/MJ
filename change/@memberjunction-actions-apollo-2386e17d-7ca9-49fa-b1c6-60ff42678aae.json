@@ -1,5 +1,5 @@
 {
-  "type": "minor",
+  "type": "patch",
   "comment": "Applying package updates [skip ci]",
   "packageName": "@memberjunction/actions-apollo",
   "email": "155523863+JS-BC@users.noreply.github.com",
