@@ -1,6 +1,6 @@
 import express from 'express';
 
-import { LogError, LogStatus } from "@memberjunction/core";
+import { LogError, LogStatus, Metadata } from "@memberjunction/core";
 import { UserCache } from "@memberjunction/sqlserver-dataprovider";
 import { currentUserEmail, serverPort } from "./config";
 import { handleServerInit } from './util';
@@ -8,10 +8,13 @@ import { ScheduledActionEngine } from '@memberjunction/scheduled-actions';
 import {LoadMistralEmbedding} from '@memberjunction/ai-mistral';
 import {LoadOpenAIEmbedding} from '@memberjunction/ai-openai';
 import {LoadPineconeVectorDB} from '@memberjunction/ai-vectors-pinecone';
+import { LoadApolloAccountsEnrichmentAction, LoadApolloContactsEnrichmentAction } from '@memberjunction/actions-apollo';
 
 LoadMistralEmbedding();
 LoadOpenAIEmbedding();
 LoadPineconeVectorDB();
+LoadApolloAccountsEnrichmentAction();
+LoadApolloContactsEnrichmentAction();
 
 const app = express();
 
@@ -44,7 +47,20 @@ const runOptions: runOption[] = [
         description: "Run all scheduled actions",
         run: runScheduledActions,
         maxConcurrency: 1,
+    },
+    {
+        name: "enrichaccounts",
+        description: "Run Apollo Enrichment for Accounts",
+        run: enrichAccounts,
+        maxConcurrency: 1
+    },
+    {
+        name: "enrichcontacts",
+        description: "Run Apollo Enrichment for Contacts",
+        run: enrichContacts,
+        maxConcurrency: 1
     }
+    
 ];
 
 app.get('/', async (req: any, res: any) => {
@@ -77,7 +93,7 @@ async function runWithOptions(options: string[]): Promise<boolean> {
         }
     
         // next loop through the runOptions and run any that are included in the args, if we get here that means we don't have the all flag
-        await handleServerInit(false); // init server here once 
+        await handleServerInit(false); // init server here once
         let bSuccess = true;
         for (const requestedOption of options) {
             // loop through the requested options from the caller and run each one
@@ -149,6 +165,32 @@ export async function runScheduledActions(): Promise<boolean> {
         ScheduledActionEngine.Instance.Config(false, user);
         const actionResults = await ScheduledActionEngine.Instance.ExecuteScheduledActions(user);
         return actionResults.some(r => !r.Success) ? false : true;
+    }
+    catch (error) {
+        LogError("An error occurred:", undefined, error);
+        return false;
+    }
+}
+
+export async function enrichAccounts(): Promise<boolean> {
+    return await runScheduledAction("Apollo Enrichment - Accounts");
+}
+
+export async function enrichContacts(): Promise<boolean> {
+    return await runScheduledAction("Apollo Enrichment - Contacts");
+}
+
+export async function runScheduledAction(actionName: string): Promise<boolean> {
+    try {
+        await handleServerInit(false); // init server here once 
+        const user = UserCache.Instance.Users.find(u => u.Email === currentUserEmail)
+        if (!user){
+            throw new Error(`User ${currentUserEmail} not found in cache`);
+        }
+
+        ScheduledActionEngine.Instance.Config(false, user);
+        const actionResults = await ScheduledActionEngine.Instance.ExecuteScheduledAction(actionName, user);
+        return actionResults.Success;
     }
     catch (error) {
         LogError("An error occurred:", undefined, error);
