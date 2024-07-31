@@ -2,6 +2,57 @@
   "name": "@memberjunction/scheduled-actions",
   "entries": [
     {
+      "date": "Wed, 31 Jul 2024 19:36:47 GMT",
+      "version": "2.1.3",
+      "tag": "@memberjunction/scheduled-actions_v2.1.3",
+      "comments": {
+        "patch": [
+          {
+            "author": "155523863+JS-BC@users.noreply.github.com",
+            "package": "@memberjunction/scheduled-actions",
+            "commit": "fd6d2d3fa81ff1bf7b572c1836018ef420f5349a",
+            "comment": "Applying package updates [skip ci]"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/scheduled-actions",
+            "comment": "Bump @memberjunction/global to v2.1.3",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/scheduled-actions",
+            "comment": "Bump @memberjunction/core to v2.1.3",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/scheduled-actions",
+            "comment": "Bump @memberjunction/core-entities to v2.1.3",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/scheduled-actions",
+            "comment": "Bump @memberjunction/actions to v2.1.3",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/scheduled-actions",
+            "comment": "Bump @memberjunction/sqlserver-dataprovider to v2.1.3",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/scheduled-actions",
+            "comment": "Bump @memberjunction/core-actions to v2.1.3",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
       "date": "Mon, 29 Jul 2024 22:52:11 GMT",
       "version": "2.1.2",
       "tag": "@memberjunction/scheduled-actions_v2.1.2",

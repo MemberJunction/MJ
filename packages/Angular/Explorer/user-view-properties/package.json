@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-user-view-properties",
-  "version": "2.1.2",
+  "version": "2.1.3",
   "description": "MemberJunction: Angular UI Dialog Component to View/Edit User View Properties",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",
@@ -24,11 +24,11 @@
     "@angular/forms": "18.0.2"
   },
   "dependencies": {
-    "@memberjunction/global": "2.1.2",
-    "@memberjunction/core": "2.1.2",
-    "@memberjunction/core-entities": "2.1.2",
-    "@memberjunction/ng-base-forms": "2.1.2",
-    "@memberjunction/ng-shared": "2.1.2",
+    "@memberjunction/global": "2.1.3",
+    "@memberjunction/core": "2.1.3",
+    "@memberjunction/core-entities": "2.1.3",
+    "@memberjunction/ng-base-forms": "2.1.3",
+    "@memberjunction/ng-shared": "2.1.3",
     "@progress/kendo-angular-sortable": "16.2.0",
     "@progress/kendo-angular-dialog": "16.2.0",
     "@progress/kendo-angular-layout": "16.2.0",
