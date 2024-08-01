@@ -19,7 +19,7 @@ import { ReplaySubject } from 'rxjs';
 import { BuildSchemaOptions, buildSchemaSync, GraphQLTimestamp } from 'type-graphql';
 import { DataSource } from 'typeorm';
 import { WebSocketServer } from 'ws';
-import buildApolloServer from './apolloServer';
+import buildApolloServer from './apolloServer/index';
 import { configInfo, graphqlPort, graphqlRootPath, mj_core_schema, websiteRunFromPackage } from './config';
 import { contextFunction, getUserPayload } from './context';
 import { publicDirective } from './directives';

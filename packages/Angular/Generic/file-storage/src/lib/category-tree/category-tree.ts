@@ -12,7 +12,7 @@ import { TreeItemAddRemoveArgs } from '@progress/kendo-angular-treeview';
   styleUrls: ['./category-tree.css'],
 })
 export class CategoryTreeComponent implements OnInit {
-  @Output() categorySelected = new EventEmitter<number>();
+  @Output() categorySelected = new EventEmitter<string | undefined>();
 
   public isLoading: boolean = false;
   public showNew: boolean = false;
