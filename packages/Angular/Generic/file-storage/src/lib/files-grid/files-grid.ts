@@ -65,7 +65,7 @@ export class FilesGridComponent implements OnInit, OnChanges {
 
   constructor(private sharedService: SharedService) {}
 
-  @Input() CategoryID: number | undefined = undefined;
+  @Input() CategoryID: string | undefined = undefined;
 
   ngOnInit(): void {
     this.Refresh();
@@ -163,10 +163,10 @@ export class FilesGridComponent implements OnInit, OnChanges {
     this.isLoading = true;
     const ID = file.ID;
     const Name = file.Name;
-    let deleteResult = await file.Delete();
+    const deleteResult = await file.Delete();
     if (deleteResult) {
       this.sharedService.CreateSimpleNotification(`Successfully deleted file ${ID} ${Name}`, 'info');
-      this.files = this.files.filter((f) => typeof f.ID === 'number' && f.ID != ID);
+      this.files = this.files.filter((f) => typeof f.ID === 'string' && f.ID !== ID);
     } else {
       this.sharedService.CreateSimpleNotification(`Unable to delete file ${ID} ${Name}`, 'error');
     }

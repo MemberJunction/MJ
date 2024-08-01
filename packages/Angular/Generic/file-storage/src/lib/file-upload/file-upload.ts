@@ -1,6 +1,6 @@
 import { Component, EventEmitter, Input, OnInit, Output } from '@angular/core';
 import { Metadata, RunView } from '@memberjunction/core';
-import { FileEntity, FileStorageProviderEntity } from '@memberjunction/core-entities';
+import { FileEntity, FileSchema, FileStorageProviderEntity } from '@memberjunction/core-entities';
 import { GraphQLDataProvider, gql } from '@memberjunction/graphql-dataprovider';
 
 import { FileInfo, SelectEvent } from '@progress/kendo-angular-upload';
@@ -42,20 +42,7 @@ const FileUploadMutationSchema = z.object({
   CreateFile: z.object({
     NameExists: z.boolean(),
     UploadUrl: z.string(),
-    File: z.object({
-      Category: z.string().nullish(),
-      CategoryID: z.number().nullish(),
-      ContentType: z.string().nullish(),
-      CreatedAt: z.number(),
-      Description: z.string().nullish(),
-      ID: z.number(),
-      Name: z.string(),
-      Provider: z.string(),
-      ProviderID: z.number(),
-      ProviderKey: z.string().nullish(),
-      Status: z.string(),
-      UpdatedAt: z.number(),
-    }),
+    File: FileSchema,
   }),
 });
 
@@ -70,7 +57,7 @@ type UploadTuple = [FileInfo, ApiFile, string];
 export class FileUploadComponent implements OnInit {
   public ConfirmQueue: Array<UploadTuple> = [];
   public UploadQueue: Array<FileInfo> = [];
-  private defaultProviderID = -1;
+  private defaultProviderID = '';
   private md = new Metadata();
 
   get IsUploading(): boolean {
@@ -80,7 +67,7 @@ export class FileUploadComponent implements OnInit {
   constructor() {}
 
   @Input() disabled = false;
-  @Input() CategoryID: number | undefined = undefined;
+  @Input() CategoryID: string | undefined = undefined;
   @Output() uploadStarted = new EventEmitter<void>();
   @Output() fileUpload = new EventEmitter<FileUploadEvent>();
 
@@ -92,7 +79,7 @@ export class FileUploadComponent implements OnInit {
     const rv = new RunView();
     const viewResults = await rv.RunView({ EntityName: 'File Storage Providers', ExtraFilter: 'IsActive = 1', OrderBy: 'Priority DESC' });
     const provider: FileStorageProviderEntity | undefined = viewResults.Results[0];
-    if (typeof provider?.ID === 'number') {
+    if (typeof provider?.ID === 'string') {
       this.defaultProviderID = provider.ID;
     }
   }
