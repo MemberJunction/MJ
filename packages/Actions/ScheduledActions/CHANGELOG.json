@@ -2,6 +2,51 @@
   "name": "@memberjunction/scheduled-actions",
   "entries": [
     {
+      "date": "Thu, 01 Aug 2024 17:23:11 GMT",
+      "version": "2.1.5",
+      "tag": "@memberjunction/scheduled-actions_v2.1.5",
+      "comments": {
+        "patch": [
+          {
+            "author": "beachball",
+            "package": "@memberjunction/scheduled-actions",
+            "comment": "Bump @memberjunction/global to v2.1.5",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/scheduled-actions",
+            "comment": "Bump @memberjunction/core to v2.1.5",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/scheduled-actions",
+            "comment": "Bump @memberjunction/core-entities to v2.1.5",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/scheduled-actions",
+            "comment": "Bump @memberjunction/actions to v2.1.5",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/scheduled-actions",
+            "comment": "Bump @memberjunction/sqlserver-dataprovider to v2.1.5",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/scheduled-actions",
+            "comment": "Bump @memberjunction/core-actions to v2.1.5",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
       "date": "Thu, 01 Aug 2024 14:43:41 GMT",
       "version": "2.1.4",
       "tag": "@memberjunction/scheduled-actions_v2.1.4",

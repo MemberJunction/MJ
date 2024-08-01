@@ -20,11 +20,11 @@
     "typescript": "^5.4.5"
   },
   "dependencies": {
-    "@memberjunction/actions": "2.1.4",
-    "@memberjunction/global": "2.1.4",
-    "@memberjunction/core": "2.1.4",
-    "@memberjunction/core-entities": "2.1.4",
-    "@memberjunction/ai": "2.1.4",
-    "@memberjunction/aiengine": "2.1.4"
+    "@memberjunction/actions": "2.1.5",
+    "@memberjunction/global": "2.1.5",
+    "@memberjunction/core": "2.1.5",
+    "@memberjunction/core-entities": "2.1.5",
+    "@memberjunction/ai": "2.1.5",
+    "@memberjunction/aiengine": "2.1.5"
   }
 }
