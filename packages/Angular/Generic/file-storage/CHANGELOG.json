@@ -2,6 +2,57 @@
   "name": "@memberjunction/ng-file-storage",
   "entries": [
     {
+      "date": "Thu, 01 Aug 2024 14:43:41 GMT",
+      "version": "2.1.4",
+      "tag": "@memberjunction/ng-file-storage_v2.1.4",
+      "comments": {
+        "patch": [
+          {
+            "author": "craig.adam@bluecypress.io",
+            "package": "@memberjunction/ng-file-storage",
+            "commit": "dedf3e4682bdf573aa23b22cd0ff1354495545f1",
+            "comment": "Applying package updates [skip ci]"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-file-storage",
+            "comment": "Bump @memberjunction/core to v2.1.4",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-file-storage",
+            "comment": "Bump @memberjunction/core-entities to v2.1.4",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-file-storage",
+            "comment": "Bump @memberjunction/global to v2.1.4",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-file-storage",
+            "comment": "Bump @memberjunction/graphql-dataprovider to v2.1.4",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-file-storage",
+            "comment": "Bump @memberjunction/ng-container-directives to v2.1.4",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-file-storage",
+            "comment": "Bump @memberjunction/ng-shared to v2.1.4",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
       "date": "Wed, 31 Jul 2024 19:36:47 GMT",
       "version": "2.1.3",
       "tag": "@memberjunction/ng-file-storage_v2.1.3",
