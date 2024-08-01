@@ -13,7 +13,7 @@ const FileFieldsFragment = gql`
     Category
     CategoryID
     ContentType
-    __mj_CreatedAt
+    _mj__CreatedAt
     Description
     ID
     Name
@@ -21,7 +21,7 @@ const FileFieldsFragment = gql`
     ProviderID
     ProviderKey
     Status
-    __mj_UpdatedAt
+    _mj__UpdatedAt
   }
 `;
 
