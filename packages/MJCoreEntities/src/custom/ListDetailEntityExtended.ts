@@ -2,7 +2,7 @@ import { BaseEntity, BaseEntityResult, RunView } from "@memberjunction/core";
 import { RegisterClass } from "@memberjunction/global";
 import { ListDetailEntity } from "../generated/entity_subclasses";
 
-@RegisterClass(BaseEntity, 'List Details', 2)
+@RegisterClass(BaseEntity, 'List Details')
 export class ListDetailEntityExtended extends ListDetailEntity  {
     public async Save(): Promise<boolean> {
         const currentResultCount = this.ResultHistory.length;
