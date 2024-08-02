@@ -2,7 +2,7 @@
 * ALL ENTITIES - TypeGraphQL Type Class Definition - AUTO GENERATED FILE
 * Generated Entities and Resolvers for Server
 *
-* GENERATED: 8/1/2024, 9:44:03 PM
+* GENERATED: 8/1/2024, 10:24:32 PM
 *
 *   >>> DO NOT MODIFY THIS FILE!!!!!!!!!!!!
 *   >>> YOUR CHANGES WILL BE OVERWRITTEN
@@ -16,7 +16,7 @@ import { Metadata, EntityPermissionType, CompositeKey } from '@memberjunction/co
 
 import { MaxLength } from 'class-validator';
 import { DataSource } from 'typeorm';
-import { mj_core_schema } from '../config.js';
+import { mj_core_schema } from '../config';
 
 
 
@@ -13277,8 +13277,9 @@ export class UserNotification_ {
     @MaxLength(16)
     ResourceTypeID?: string;
         
-    @Field(() => Int, {nullable: true}) 
-    ResourceRecordID?: number;
+    @Field({nullable: true}) 
+    @MaxLength(16)
+    ResourceRecordID?: string;
         
     @Field({nullable: true}) 
     ResourceConfiguration?: string;
@@ -13325,8 +13326,8 @@ export class CreateUserNotificationInput {
     @Field({ nullable: true })
     ResourceTypeID?: string;
 
-    @Field(() => Int, { nullable: true })
-    ResourceRecordID?: number;
+    @Field({ nullable: true })
+    ResourceRecordID?: string;
 
     @Field({ nullable: true })
     ResourceConfiguration?: string;
@@ -13359,8 +13360,8 @@ export class UpdateUserNotificationInput {
     @Field({ nullable: true })
     ResourceTypeID?: string;
 
-    @Field(() => Int, { nullable: true })
-    ResourceRecordID?: number;
+    @Field({ nullable: true })
+    ResourceRecordID?: string;
 
     @Field({ nullable: true })
     ResourceConfiguration?: string;

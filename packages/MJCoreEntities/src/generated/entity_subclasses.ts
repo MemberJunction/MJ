@@ -7281,10 +7281,10 @@ export const UserNotificationSchema = z.object({
         * * Display Name: Resource Type ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Resource Types (vwResourceTypes.ID)`),
-    ResourceRecordID: z.number().nullish().describe(`
+    ResourceRecordID: z.string().nullish().describe(`
         * * Field Name: ResourceRecordID
         * * Display Name: Resource Record ID
-        * * SQL Data Type: int`),
+        * * SQL Data Type: uniqueidentifier`),
     ResourceConfiguration: z.string().nullish().describe(`
         * * Field Name: ResourceConfiguration
         * * Display Name: Resource Configuration
@@ -27947,12 +27947,12 @@ export class UserNotificationEntity extends BaseEntity<UserNotificationEntityTyp
     /**
     * * Field Name: ResourceRecordID
     * * Display Name: Resource Record ID
-    * * SQL Data Type: int
+    * * SQL Data Type: uniqueidentifier
     */
-    get ResourceRecordID(): number | null {  
+    get ResourceRecordID(): string | null {  
         return this.Get('ResourceRecordID');
     }
-    set ResourceRecordID(value: number | null) {
+    set ResourceRecordID(value: string | null) {
         this.Set('ResourceRecordID', value);
     }
 

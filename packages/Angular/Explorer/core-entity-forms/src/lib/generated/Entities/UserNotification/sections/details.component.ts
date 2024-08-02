@@ -45,7 +45,7 @@ import { UserNotificationEntity } from '@memberjunction/core-entities';
             [record]="record"
             [ShowLabel]="true"
             FieldName="ResourceRecordID"
-            Type="numerictextbox"
+            Type="textbox"
             [EditMode]="EditMode"
         ></mj-form-field>
         <mj-form-field 
