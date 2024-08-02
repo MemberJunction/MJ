@@ -9,9 +9,9 @@ import { BaseNavigationComponent } from '@memberjunction/ng-shared';
 })
 @RegisterClass(BaseNavigationComponent, 'Files')
 export class FilesComponent extends BaseNavigationComponent {
-  public CategoryID: number | undefined;
+  public CategoryID: string | undefined;
 
-  public categorySelected(newCategoryID: number) {
+  public categorySelected(newCategoryID: string | undefined) {
     this.CategoryID = newCategoryID;
   }
 

@@ -2,6 +2,21 @@
   "name": "@memberjunction/cli",
   "entries": [
     {
+      "date": "Fri, 26 Jul 2024 17:54:29 GMT",
+      "version": "2.1.1",
+      "tag": "@memberjunction/cli_v2.1.1",
+      "comments": {
+        "patch": [
+          {
+            "author": "craig.adam@bluecypress.io",
+            "package": "@memberjunction/cli",
+            "commit": "0d85706fa45041730ff7c523e1a0daf093b631b3",
+            "comment": "Applying package updates [skip ci]"
+          }
+        ]
+      }
+    },
+    {
       "date": "Wed, 12 Jun 2024 18:53:38 GMT",
       "version": "1.7.0",
       "tag": "@memberjunction/cli_v1.7.0",

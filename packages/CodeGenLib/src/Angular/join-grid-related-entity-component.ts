@@ -14,6 +14,12 @@ export class JoinGridConfigInfo extends ComponentConfigBase {
     public RowsEntityDisplayName?: string;
     public RowsOrderBy?: string;
     public JoinEntityDisplayColumns?: string[];
+
+    constructor() {
+        super();
+        this.RowsEntityName = "";
+        this.RowsEntityDisplayField = "";
+    }
 }
 
 /**
@@ -39,9 +45,9 @@ export class JoinGridRelatedEntityGenerator extends RelatedEntityDisplayComponen
 
 
     public async Generate(input: GenerationInput): Promise<GenerationResult> {
-        const config = SafeJSONParse<JoinGridConfigInfo>(input.RelationshipInfo.DisplayComponentConfiguration);
+        const config = SafeJSONParse<JoinGridConfigInfo>(input.RelationshipInfo!.DisplayComponentConfiguration);
         if (!config)
-            throw new Error("Invalid configuration for JoinGrid component for relationship " + input.RelationshipInfo.ID);
+            throw new Error("Invalid configuration for JoinGrid component for relationship " + input.RelationshipInfo!.ID);
 
         const template = `<mj-join-grid
     [ShowSaveButton]="false"
@@ -54,18 +60,18 @@ export class JoinGridRelatedEntityGenerator extends RelatedEntityDisplayComponen
     RowsOrderBy="${config.RowsOrderBy ? config.RowsOrderBy : ''}"
     RowsEntityDisplayName="${config.RowsEntityDisplayName ? config.RowsEntityDisplayName : config.RowsEntityDisplayField}"
     ColumnsMode="Fields"
-    JoinEntityName="${input.RelationshipInfo.RelatedEntity}"
-    JoinEntityRowForeignKey="${this.GetForeignKeyName(input.RelationshipInfo.RelatedEntity, config.RowsEntityName)}"
-    [JoinEntityExtraFilter]="'${this.GetForeignKeyName(input.RelationshipInfo.RelatedEntity, input.Entity.Name)}=' + record.${input.Entity.FirstPrimaryKey.Name}"
+    JoinEntityName="${input.RelationshipInfo!.RelatedEntity}"
+    JoinEntityRowForeignKey="${this.GetForeignKeyName(input.RelationshipInfo!.RelatedEntity, config.RowsEntityName)}"
+    [JoinEntityExtraFilter]="'${this.GetForeignKeyName(input.RelationshipInfo!.RelatedEntity, input.Entity!.Name)}=' + record.${input.Entity!.FirstPrimaryKey.Name}"
     [JoinEntityDisplayColumns]="${config.JoinEntityDisplayColumns ? `[${config.JoinEntityDisplayColumns.map(c => `'${c}'`).join(',')}]` : '[]'}"
-    [NewRecordDefaultValues]="{${this.GetForeignKeyName(input.RelationshipInfo.RelatedEntity, input.Entity.Name)}: record.${input.Entity.FirstPrimaryKey.Name}}"
+    [NewRecordDefaultValues]="{${this.GetForeignKeyName(input.RelationshipInfo!.RelatedEntity, input.Entity!.Name)}: record.${input.Entity!.FirstPrimaryKey.Name}}"
 >
 </mj-join-grid>
 `
         return {
             Success: true,
             TemplateOutput: template,
-            CodeOutput: null,
+            CodeOutput: "",
             Component: this
         }
     }

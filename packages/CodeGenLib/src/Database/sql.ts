@@ -77,7 +77,7 @@ public buildEntityLevelsTree(entities: EntityInfo[]): EntityInfo[][] {
          const entityName = item[0];
          const dependencies = item[1];
          if (dependencies.size === 0) {
-            currentLevel.push(entityMap.get(entityName));
+            currentLevel.push(entityMap.get(entityName)!);
          }
      }
 
@@ -93,7 +93,7 @@ public buildEntityLevelsTree(entities: EntityInfo[]): EntityInfo[][] {
       
       for (const item of dependencyMap) {
         const entityName = item[0];
-        currentLevel.push(entityMap.get(entityName));
+        currentLevel.push(entityMap.get(entityName)!);
       }
     }
 
@@ -157,8 +157,8 @@ public async recompileAllBaseViews(ds: DataSource, excludeSchemas: string[], app
     const files: string[] = [];
     const baseViewFile = this.getDBObjectFileName('view', entity.SchemaName, entity.BaseView, false, entity.BaseViewGenerated);
     const baseViewPermissionsFile = this.getDBObjectFileName('view', entity.SchemaName, entity.BaseView, true, entity.BaseViewGenerated);
-    const baseViewFilePath = path.join(outputDir('SQL', true), baseViewFile);
-    const baseViewPermissionsFilePath = path.join(outputDir('SQL', true), baseViewPermissionsFile);
+    const baseViewFilePath = path.join(outputDir('SQL', true)!, baseViewFile);
+    const baseViewPermissionsFilePath = path.join(outputDir('SQL', true)!, baseViewPermissionsFile);
     if (fs.existsSync(baseViewFilePath)) {
       files.push(baseViewFile);
     }
@@ -171,7 +171,7 @@ public async recompileAllBaseViews(ds: DataSource, excludeSchemas: string[], app
  public combineMultipleSQLFiles(files: string[]): string {
     let combinedSQL: string = "";
     for (const file of files) {
-      const filePath = path.join(outputDir('SQL', true), file);
+      const filePath = path.join(outputDir('SQL', true)!, file);
       if (fs.existsSync(filePath)) {
         combinedSQL += (combinedSQL.length === 0 ? "" : "\n\nGO\n\n") + fs.readFileSync(filePath, 'utf-8');
       }
@@ -184,13 +184,13 @@ public async recompileAllBaseViews(ds: DataSource, excludeSchemas: string[], app
  
  public async recompileSingleBaseView(ds: DataSource, entity: EntityInfo, applyPermissions: boolean): Promise<boolean> {
    const file = this.getDBObjectFileName('view', entity.SchemaName, entity.BaseView, false, entity.BaseViewGenerated);
-   const filePath = path.join(outputDir('SQL', true), file);
+   const filePath = path.join(outputDir('SQL', true)!, file);
    if (fs.existsSync(filePath)) {
       const recompileResult = await this.executeSQLFile(filePath)
       if (applyPermissions) {
          // now apply permissions
          const permissionsFile = this.getDBObjectFileName('view', entity.SchemaName, entity.BaseView, true, entity.BaseViewGenerated);
-         const permissionsFilePath = path.join(outputDir('SQL', true), permissionsFile);
+         const permissionsFilePath = path.join(outputDir('SQL', true)!, permissionsFile);
          if (fs.existsSync(permissionsFilePath)) {
             return await this.executeSQLFile(permissionsFilePath) && recompileResult;
          }
@@ -200,8 +200,8 @@ public async recompileAllBaseViews(ds: DataSource, excludeSchemas: string[], app
    }
    else {
       logError(`     Error Recompiling Base View: File ${filePath} does not exist`)
-      return false
    }
+   return false;
  }
  
  public async executeSQLFiles(filePaths: string[], outputMessages: boolean): Promise<boolean> {
@@ -241,7 +241,7 @@ public async recompileAllBaseViews(ds: DataSource, excludeSchemas: string[], app
     return true;
   }
   catch (e) {
-    logError("Error executing batch SQL file: " + e.message);
+    logError("Error executing batch SQL file: " + (e as any).message);
     return false;
   }
  }
@@ -281,7 +281,7 @@ public async recompileAllBaseViews(ds: DataSource, excludeSchemas: string[], app
       return this.executeBatchSQLScript(scriptText);
     }
     catch (e) {
-       logError(e);
+       logError(e as string);
        return false;
     }
  }
