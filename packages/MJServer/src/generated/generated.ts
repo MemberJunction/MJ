@@ -16,7 +16,7 @@ import { Metadata, EntityPermissionType, CompositeKey } from '@memberjunction/co
 
 import { MaxLength } from 'class-validator';
 import { DataSource } from 'typeorm';
-import { mj_core_schema } from '../config';
+import { mj_core_schema } from '../config.js';
 
 
 

@@ -1,5 +1,5 @@
 import { AppContext, Arg, Ctx, Int, Query, Resolver } from '@memberjunction/server';
-import { User_, UserResolverBase } from '../generated/generated';
+import { User_, UserResolverBase } from '../generated/generated.js';
 
 @Resolver(User_)
 export class UserResolver extends UserResolverBase {

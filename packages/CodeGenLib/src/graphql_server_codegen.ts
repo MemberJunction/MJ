@@ -123,7 +123,7 @@ import { MaxLength } from 'class-validator';
 import { DataSource } from 'typeorm';
 ${
   isInternal
-    ? `import { mj_core_schema } from '../config';\n`
+    ? `import { mj_core_schema } from '../config.js';\n`
     : `import * as mj_core_schema_server_object_types from '@memberjunction/server'`
 }
 

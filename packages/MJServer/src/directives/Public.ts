@@ -1,7 +1,7 @@
 import { FieldMapper, MapperKind, getDirective, mapSchema } from '@graphql-tools/utils';
 import { GraphQLFieldResolver, defaultFieldResolver } from 'graphql';
 import { AuthorizationError, Directive } from 'type-graphql';
-import { AppContext, DirectiveBuilder } from '../types';
+import { AppContext, DirectiveBuilder } from '../types.js';
 
 const DIRECTIVE_NAME = 'Public';
 

@@ -1,7 +1,7 @@
 import { Metadata, CompositeKey } from '@memberjunction/core';
 import { Arg, Ctx, Field, InputType, ObjectType, Query, Resolver } from 'type-graphql';
-import { AppContext } from '../types';
-import { CompositeKeyInputType, CompositeKeyOutputType } from '../generic/KeyInputOutputTypes';
+import { AppContext } from '../types.js';
+import { CompositeKeyInputType, CompositeKeyOutputType } from '../generic/KeyInputOutputTypes.js';
 
 @InputType()
 export class EntityRecordNameInput {
@@ -36,7 +36,7 @@ export class EntityRecordNameResolver {
   async GetEntityRecordName(
     @Arg('EntityName', () => String) EntityName: string,
     @Arg('CompositeKey', () => CompositeKeyInputType) primaryKey: CompositeKey,
-    @Ctx() {userPayload}: AppContext
+    @Ctx() { userPayload }: AppContext
   ): Promise<EntityRecordNameResult> {
     const md = new Metadata();
     return await this.InnerGetEntityRecordName(md, EntityName, primaryKey);
@@ -60,18 +60,15 @@ export class EntityRecordNameResolver {
     const e = md.Entities.find((e) => e.Name === EntityName);
     if (e) {
       const recordName = await md.GetEntityRecordName(e.Name, pk);
-      if (recordName) 
-        return { Success: true, Status: 'OK', CompositeKey: pk, RecordName: recordName, EntityName };
+      if (recordName) return { Success: true, Status: 'OK', CompositeKey: pk, RecordName: recordName, EntityName };
       else
         return {
           Success: false,
           Status: `Name for record, or record ${pk.ToString()} itself not found, could be an access issue if user doesn't have Row Level Access (RLS) if RLS is enabled for this entity`,
           CompositeKey: pk,
-          EntityName
+          EntityName,
         };
-    } 
-    else 
-      return { Success: false, Status: `Entity ${EntityName} not found`, CompositeKey: pk, EntityName };
+    } else return { Success: false, Status: `Entity ${EntityName} not found`, CompositeKey: pk, EntityName };
   }
 }
 

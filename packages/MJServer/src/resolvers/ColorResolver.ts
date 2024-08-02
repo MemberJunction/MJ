@@ -1,6 +1,6 @@
-import { AppContext } from '../types';
+import { AppContext } from '../types.js';
 import { Ctx, Field, Int, ObjectType, PubSub, PubSubEngine, Query, Resolver, Root, Subscription } from 'type-graphql';
-import { Public } from '../directives';
+import { Public } from '../directives/index.js';
 
 @ObjectType()
 export class Color {

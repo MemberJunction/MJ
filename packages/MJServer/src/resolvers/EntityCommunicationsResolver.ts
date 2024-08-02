@@ -1,6 +1,6 @@
 import { Arg, Ctx, Field, InputType, Int, ObjectType, Query, Resolver } from 'type-graphql';
-import { AppContext } from '../types';
-import { RunViewByIDInput } from '../generic/RunViewResolver';
+import { AppContext } from '../types.js';
+import { RunViewByIDInput } from '../generic/RunViewResolver.js';
 import { Message } from '@memberjunction/communication-types';
 import { EntityCommunicationsEngine } from '@memberjunction/entity-communications-server';
 import { RunViewParams } from '@memberjunction/core';
@@ -67,7 +67,7 @@ export class TemplateInputType {
 
     @Field({ nullable: true})
     DisabledAt?: Date;
- 
+
     @Field()
     IsActive: boolean;
 
@@ -86,7 +86,7 @@ export class TemplateInputType {
 @InputType()
 export class CommunicationMessageInput {
     /**
-     * The type of message to send 
+     * The type of message to send
      */
     @Field(() => CommunicationProviderMessageType)
     public MessageType: CommunicationProviderMessageType;
@@ -99,7 +99,7 @@ export class CommunicationMessageInput {
     public From: string;
 
     /**
-     * The recipient of the message, typically an email address but can be anything that is provider-specific for example for a provider that is a social 
+     * The recipient of the message, typically an email address but can be anything that is provider-specific for example for a provider that is a social
      * media provider, it might be a user's social media handle
      */
     @Field()
@@ -111,22 +111,22 @@ export class CommunicationMessageInput {
     @Field({ nullable: true })
     public Body?: string;
     /**
-     * Optional, when provided, Body is ignored and the template is used to render the message. In addition, 
-     * if BodyTemplate is provided it will be used to render the Body and if the template has HTML content it will 
+     * Optional, when provided, Body is ignored and the template is used to render the message. In addition,
+     * if BodyTemplate is provided it will be used to render the Body and if the template has HTML content it will
      * also be used to render the HTMLBody
      */
     @Field(() => TemplateInputType, { nullable: true })
     public BodyTemplate?: TemplateInputType;
 
     /**
-     * The HTML body of the message 
+     * The HTML body of the message
      */
     @Field({ nullable: true })
     public HTMLBody?: string;
     /**
      * Optional, when provided, HTMLBody is ignored and the template is used to render the message. This OVERRIDES
      * the BodyTemplate's HTML content even if BodyTemplate is provided. This allows for flexibility in that you can
-     * specify a completely different HTMLBodyTemplate and not just relay on the TemplateContent of the BodyTemplate having 
+     * specify a completely different HTMLBodyTemplate and not just relay on the TemplateContent of the BodyTemplate having
      * an HTML option.
      */
     @Field(() => TemplateInputType, { nullable: true })
@@ -164,17 +164,17 @@ export class RunEntityCommunicationResultType {
     @Field(() => GraphQLJSONObject, { nullable: true })
     public Results?: any;
 }
- 
+
 @Resolver(RunEntityCommunicationResultType)
-export class ReportResolver { 
+export class ReportResolver {
   @Query(() => RunEntityCommunicationResultType)
-  async RunEntityCommunicationByViewID( @Arg('entityID', () => String) entityID: string, 
-                                               @Arg('runViewByIDInput', () => RunViewByIDInput) runViewByIDInput: RunViewByIDInput, 
-                                               @Arg('providerName', () => String) providerName: string, 
-                                               @Arg('providerMessageTypeName', () => String) providerMessageTypeName: string, 
-                                               @Arg('message', () => CommunicationMessageInput) message: CommunicationMessageInput, 
-                                               @Arg('previewOnly', () => Boolean) previewOnly: boolean, 
-                                               @Arg('includeProcessedMessages', () => Boolean) includeProcessedMessages: boolean, 
+  async RunEntityCommunicationByViewID( @Arg('entityID', () => String) entityID: string,
+                                               @Arg('runViewByIDInput', () => RunViewByIDInput) runViewByIDInput: RunViewByIDInput,
+                                               @Arg('providerName', () => String) providerName: string,
+                                               @Arg('providerMessageTypeName', () => String) providerMessageTypeName: string,
+                                               @Arg('message', () => CommunicationMessageInput) message: CommunicationMessageInput,
+                                               @Arg('previewOnly', () => Boolean) previewOnly: boolean,
+                                               @Arg('includeProcessedMessages', () => Boolean) includeProcessedMessages: boolean,
                                                @Ctx() { userPayload }: AppContext): Promise<RunEntityCommunicationResultType> {
     try {
         await EntityCommunicationsEngine.Instance.Config(false, userPayload.userRecord);
@@ -192,25 +192,25 @@ export class ReportResolver {
         }
         const params: EntityCommunicationParams = {
             EntityID: entityID,
-            RunViewParams: <RunViewParams>runViewByIDInput, 
-            ProviderName: providerName, 
-            ProviderMessageTypeName: providerMessageTypeName, 
-            Message: newMessage, 
-            PreviewOnly: previewOnly, 
+            RunViewParams: <RunViewParams>runViewByIDInput,
+            ProviderName: providerName,
+            ProviderMessageTypeName: providerMessageTypeName,
+            Message: newMessage,
+            PreviewOnly: previewOnly,
             IncludeProcessedMessages: includeProcessedMessages
         }
-        const result = await EntityCommunicationsEngine.Instance.RunEntityCommunication(params);  
+        const result = await EntityCommunicationsEngine.Instance.RunEntityCommunication(params);
         return {
             Success: result.Success,
             ErrorMessage: result.ErrorMessage,
             Results: includeProcessedMessages && result.Results ? {Results: result.Results} : undefined
         };
-    }   
+    }
     catch (e) {
         return {
             Success: false,
             ErrorMessage: e.message
         }
-    }                   
-  }  
+    }
+  }
 }

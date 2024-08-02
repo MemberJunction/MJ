@@ -1,12 +1,16 @@
 import { CompositeKey, EntityPermissionType, Metadata, RunView } from '@memberjunction/core';
 import { FileCategoryEntity, FileEntity } from '@memberjunction/core-entities';
 import { AppContext, Arg, Ctx, DeleteOptionsInput, Int, Mutation } from '@memberjunction/server';
-import { mj_core_schema } from '../config';
-import { FileCategoryResolver as FileCategoryResolverBase, FileCategory_ } from '../generated/generated';
+import { mj_core_schema } from '../config.js';
+import { FileCategoryResolver as FileCategoryResolverBase, FileCategory_ } from '../generated/generated.js';
 
 export class FileResolver extends FileCategoryResolverBase {
   @Mutation(() => FileCategory_)
-  async DeleteFileCategory(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext) {
+  async DeleteFileCategory(
+    @Arg('ID', () => String) ID: string,
+    @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput,
+    @Ctx() { dataSource, userPayload }: AppContext
+  ) {
     const key = new CompositeKey();
     key.LoadFromSingleKeyValuePair('ID', ID);
     if (!(await this.BeforeDelete(dataSource, key))) {
@@ -32,17 +36,20 @@ export class FileResolver extends FileCategoryResolverBase {
       // in case there are sub-classes and business logic/etc for the updates
       // the direct SQL would bypass that logic.
 
-      // const sSQL = `UPDATE [${mj_core_schema}].[File] 
+      // const sSQL = `UPDATE [${mj_core_schema}].[File]
       //                 SET [CategoryID]=${fileCategoryEntity.ParentID}
       //                 WHERE [CategoryID]=${fileCategoryEntity.ID}`;
 
       // await dataSource.query(sSQL);
       const rv = new RunView();
-      const filesResult = await rv.RunView({
-        EntityName: 'Files',
-        ExtraFilter: `CategoryID='${fileCategoryEntity.ID}'`,
-        ResultType: 'entity_object'
-      }, user);
+      const filesResult = await rv.RunView(
+        {
+          EntityName: 'Files',
+          ExtraFilter: `CategoryID='${fileCategoryEntity.ID}'`,
+          ResultType: 'entity_object',
+        },
+        user
+      );
       if (filesResult) {
         // iterate through each of the files in filesResult.Results
         // and update the CategoryID to fileCategoryEntity.ParentID

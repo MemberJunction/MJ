@@ -1,6 +1,6 @@
 import { ApolloServerPlugin, GraphQLRequestContextDidEncounterErrors, GraphQLRequestListenerParsingDidEnd } from '@apollo/server';
 import { DataSource } from 'typeorm';
-import { AppContext } from '../types';
+import { AppContext } from '../types.js';
 
 export const TransactionPlugin: ApolloServerPlugin<AppContext> = {
   async requestDidStart(requestContext) {
@@ -31,11 +31,7 @@ export const TransactionPlugin: ApolloServerPlugin<AppContext> = {
           executionDidEnd: async (err) => {
             try {
               if (err) {
-                console.log(
-                  'Error in transaction, rolling back, time spent: ',
-                  Date.now() - start,
-                  'ms '
-                );
+                console.log('Error in transaction, rolling back, time spent: ', Date.now() - start, 'ms ');
                 console.error('Rolling back transaction', err);
                 await queryRunner.rollbackTransaction();
               } else {

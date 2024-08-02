@@ -1,7 +1,7 @@
 // Queries are MemberJunction primitive operations that are used to retrieve data from the server from any stored query
 import { RunQuery } from '@memberjunction/core';
 import { Arg, Ctx, Field, Int, ObjectType, Query, Resolver } from 'type-graphql';
-import { AppContext } from '../types';
+import { AppContext } from '../types.js';
 
 @ObjectType()
 export class RunQueryResultType {

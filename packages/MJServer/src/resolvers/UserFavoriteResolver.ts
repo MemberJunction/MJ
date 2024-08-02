@@ -1,9 +1,22 @@
 import { Metadata, KeyValuePair, CompositeKey, UserInfo } from '@memberjunction/core';
-import { AppContext, Arg, CompositeKeyInputType, CompositeKeyOutputType, Ctx, Field, InputType, Int, Mutation, ObjectType, Query, Resolver } from '@memberjunction/server';
+import {
+  AppContext,
+  Arg,
+  CompositeKeyInputType,
+  CompositeKeyOutputType,
+  Ctx,
+  Field,
+  InputType,
+  Int,
+  Mutation,
+  ObjectType,
+  Query,
+  Resolver,
+} from '@memberjunction/server';
 import { UserCache } from '@memberjunction/sqlserver-dataprovider';
 import { UserFavoriteEntity } from '@memberjunction/core-entities';
 
-import { UserFavorite_, UserFavoriteResolverBase } from '../generated/generated';
+import { UserFavorite_, UserFavoriteResolverBase } from '../generated/generated.js';
 
 //****************************************************************************
 // INPUT TYPE for User Favorite Queries
@@ -97,70 +110,67 @@ export class UserFavoriteResolver extends UserFavoriteResolverBase {
         CompositeKey: params.CompositeKey,
         IsFavorite: params.IsFavorite,
       };
-    }
-    else
-      throw new Error(`Entity ID:${params.EntityID} not found`);
-
+    } else throw new Error(`Entity ID:${params.EntityID} not found`);
   }
 
   private GetTestData() {
-    return [{
-      firstName: 'John',
-      lastName: 'Doe',
-      title: 'Software Engineer II',
-      email: 'amith+john.doe@nagarajan.org',
-      age: 25,
-      address: {
-        street: '123 Main St',
-        city: 'Springfield',
-        state: 'IL',
-        zip: '62701'
+    return [
+      {
+        firstName: 'John',
+        lastName: 'Doe',
+        title: 'Software Engineer II',
+        email: 'amith+john.doe@nagarajan.org',
+        age: 25,
+        address: {
+          street: '123 Main St',
+          city: 'Springfield',
+          state: 'IL',
+          zip: '62701',
+        },
+        recommendedArticles: [
+          {
+            title: 'How to Write Better Code',
+            url: 'https://example.com/article1',
+          },
+          {
+            title: 'The Art of Debugging',
+            url: 'https://example.com/article2',
+          },
+          {
+            title: 'Using Templates Effectively',
+            url: 'https://example.com/article3',
+          },
+        ],
       },
-      recommendedArticles: [
-        {
-          title: 'How to Write Better Code',
-          url: 'https://example.com/article1'
+      {
+        firstName: 'Jane',
+        lastName: 'Smith',
+        title: 'Executive Vice President of Software Development',
+        email: 'amith+jane.smith@nagarajan.org',
+        age: 30,
+        address: {
+          street: '456 Elm St',
+          city: 'Chicago',
+          state: 'IL',
+          zip: '62702',
         },
-        {
-          title: 'The Art of Debugging',
-          url: 'https://example.com/article2'
-        },
-        {
-          title: 'Using Templates Effectively',
-          url: 'https://example.com/article3'
-        }
-      ]
-    },
-    {
-      firstName: 'Jane',
-      lastName: 'Smith',
-      title: 'Executive Vice President of Software Development',
-      email: 'amith+jane.smith@nagarajan.org',
-      age: 30,
-      address: {
-        street: '456 Elm St',
-        city: 'Chicago',
-        state: 'IL',
-        zip: '62702'
+        recommendedArticles: [
+          {
+            title: 'Exemplifying the Importance of Code Reviews',
+            url: 'https://example.com/article1',
+          },
+          {
+            title: 'AI and Software Development: A New Frontier',
+            url: 'https://example.com/article2',
+          },
+          {
+            title: 'Gardening Tips for Fun Loving Software Developers',
+            url: 'https://example.com/article3',
+          },
+        ],
       },
-      recommendedArticles: [
-        {
-          title: 'Exemplifying the Importance of Code Reviews',
-          url: 'https://example.com/article1'
-        },
-        {
-          title: 'AI and Software Development: A New Frontier',
-          url: 'https://example.com/article2'
-        },
-        {
-          title: 'Gardening Tips for Fun Loving Software Developers',
-          url: 'https://example.com/article3'
-        }
-      ]
-    }
-  ]
+    ];
   }
-
 }
 
 export default UserFavoriteResolver;
