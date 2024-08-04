@@ -321,6 +321,14 @@ export interface IMetadataProvider {
     GetAndCacheDatasetByName(datasetName: string, itemFilters?: DatasetItemFilterType[]): Promise<DatasetResultType>  
 
     /**
+     * Returns the timestamp of the local cached version of a given datasetName or null if there is no local cache for the 
+     * specified dataset
+     * @param datasetName the name of the dataset to check
+     * @param itemFilters optional filters to apply to the dataset
+     */
+    GetLocalDatasetTimestamp(datasetName: string, itemFilters?: DatasetItemFilterType[]): Promise<Date>
+
+    /**
      * This routine checks to see if the local cache version of a given datasetName/itemFilters combination is up to date with the server or not
      * @param datasetName 
      * @param itemFilters 
