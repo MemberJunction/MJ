@@ -110,7 +110,17 @@ export const serve = async (resolverPaths: Array<string>) => {
   /******TEST HARNESS FOR CHANGE DETECTION */
   /******TEST HARNESS FOR CHANGE DETECTION */
 
-  const dynamicModules = await Promise.all(paths.map((modulePath) => import(isWindows ? `file://${modulePath}` : modulePath)));
+  const dynamicModules = await Promise.all(
+    paths.map((modulePath) => () => {
+      try {
+        const module = import(isWindows ? `file://${modulePath}` : modulePath);
+        return module;
+      } catch (e) {
+        console.error(`Error loading dynamic module at '${modulePath}'`, e);
+        throw e;
+      }
+    })
+  );
   const resolvers = dynamicModules.flatMap((module) =>
     Object.values(module).filter((value) => typeof value === 'function')
   ) as BuildSchemaOptions['resolvers'];
