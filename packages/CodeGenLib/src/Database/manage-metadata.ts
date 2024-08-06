@@ -1307,14 +1307,17 @@ export class ManageMetadataBase {
             if (isNewSchema &&  configInfo.newSchemaDefaults.CreateNewApplicationWithSchemaName) {
                // new schema and config option is to create a new application from the schema name so do that
                
-               if (!await this.applicationExists(ds, newEntity.SchemaName))
+               if (!await this.applicationExists(ds, newEntity.SchemaName)) {
                   await this.createNewApplication(ds, newEntity.SchemaName);                     
+                  await md.Refresh(); // refresh now since we've added a new application, not super efficient to do this for each new application but that won't happen super 
+                                      // often so not a huge deal, would be more efficient do this in batch after all new apps are created but taht would be an over optimization IMO
+               }
             }          
             else {
                // not a new schema, attempt to look up the application for this schema
                await this.getApplicationIDForSchema(ds, newEntity.SchemaName);
             }        
-            // now we have an application ID, but make sure that we are configured to add this new entity to an application at all
+
             if (configInfo.newEntityDefaults.AddToApplicationWithSchemaName) {
                // we should add this entity to the application
                const appName: string = newEntity.SchemaName === mj_core_schema() ? 'Admin' : newEntity.SchemaName; // for the __mj schema or whatever it is installed as for mj_core - we want to drop stuff into the admin app
