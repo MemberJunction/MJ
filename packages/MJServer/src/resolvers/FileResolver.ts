@@ -75,7 +75,7 @@ export class FileResolver extends FileResolverBase {
     fileEntity.LoadFromData(mapper.ReverseMapFields({ ...input }));
     fileEntity.SetMany(mapper.ReverseMapFields({ ...updatedInput }));
     await fileEntity.Save();
-    const File = fileEntity.GetAll();
+    const File = mapper.MapFields({ ...fileEntity.GetAll() });
 
     return { File, UploadUrl, NameExists };
   }
