@@ -953,7 +953,7 @@ export class AskSkipResolver {
           }
         } catch (e) {
           LogError(e);
-          executionErrors.push({ dataRequest: dr, errorMessage: e && e.message ? e.message : e.toString() });
+          executionErrors.push({ dataRequest: dr, errorMessage: e && typeof e === 'object' && 'message' in e && e.message ? e.message : e.toString() });
         }
       }
 

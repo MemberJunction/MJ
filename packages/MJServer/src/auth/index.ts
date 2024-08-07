@@ -7,7 +7,7 @@ import { Metadata, UserInfo } from '@memberjunction/core';
 import { NewUserBase } from './newUsers.js';
 import { MJGlobal } from '@memberjunction/global';
 
-export * from './tokenExpiredError';
+export { TokenExpiredError } from './tokenExpiredError.js';
 
 const missingAzureConfig = !tenantID || !webClientID;
 const missingAuth0Config = !auth0Domain || !auth0WebClientID;

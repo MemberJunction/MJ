@@ -111,7 +111,7 @@ export const serve = async (resolverPaths: Array<string>) => {
   /******TEST HARNESS FOR CHANGE DETECTION */
 
   const dynamicModules = await Promise.all(
-    paths.map((modulePath) => () => {
+    paths.map((modulePath) => {
       try {
         const module = import(isWindows ? `file://${modulePath}` : modulePath);
         return module;

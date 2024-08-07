@@ -5,6 +5,7 @@ import { ConversationDetailEntity, ReportEntity } from '@memberjunction/core-ent
 import { SkipAPIAnalysisCompleteResponse } from '@memberjunction/skip-types';
 import { DataContext } from '@memberjunction/data-context';
 import { UserCache } from '@memberjunction/sqlserver-dataprovider';
+import { z } from 'zod';
 
 @ObjectType()
 export class RunReportResultType {
@@ -131,11 +132,12 @@ export class ReportResolverExtended {
         };
       }
     } catch (ex) {
+      const err = z.object({ message: z.string() }).safeParse(ex);
       return {
         ReportID: '',
         ReportName: '',
         Success: false,
-        ErrorMessage: 'Unable to create new report: ' + ex.message,
+        ErrorMessage: 'Unable to create new report: ' + err.success ? err.data.message : String(ex),
       };
     }
   }
