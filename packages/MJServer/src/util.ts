@@ -3,6 +3,7 @@ import { request as httpsRequest } from 'https';
 import { gzip as gzipCallback, createGunzip } from 'zlib';
 import { promisify } from 'util';
 import { URL } from 'url';
+import { z } from 'zod';
 
 const gzip = promisify(gzipCallback);
 
@@ -30,7 +31,8 @@ export async function sendPostRequest(url: string, payload: any, useCompression:
           headers = headers || {}; // Ensure headers is an object
           headers['Content-Encoding'] = 'gzip';
         } catch (error) {
-          console.error(`Error in sendPostRequest while compressing data: ${error && error.message ? error.message : error}`);
+          const err = z.object({ message: z.string() }).safeParse(error);
+          console.error(`Error in sendPostRequest while compressing data: ${err.success ? err.data.message : error}`);
           return reject(error);
         }
       } else {
@@ -67,8 +69,9 @@ export async function sendPostRequest(url: string, payload: any, useCompression:
               jsonObjects.push(jsonObject);
               streamCallback?.(jsonObject);
             } catch (e) {
+              const err = z.object({ message: z.string() }).safeParse(e);
               // Handle JSON parse error for cases of malformed JSON objects
-              console.warn(`Error in postRequest().stream(data) while parsing JSON object: ${e && e.message ? e.message : e}`);
+              console.warn(`Error in postRequest().stream(data) while parsing JSON object: ${err.success ? err.data.message : e}`);
             }
           }
         });
@@ -81,8 +84,9 @@ export async function sendPostRequest(url: string, payload: any, useCompression:
               jsonObjects.push(jsonObject);
               streamCallback?.(jsonObject);
             } catch (e) {
+              const err = z.object({ message: z.string() }).safeParse(e);
               // Handle JSON parse error for the last chunk
-              console.warn(`Error in postRequest().stream(end) while parsing JSON object: ${e && e.message ? e.message : e}`);
+              console.warn(`Error in postRequest().stream(end) while parsing JSON object: ${err.success ? err.data.message : e}`);
             }
           }
           resolve(jsonObjects);
@@ -90,7 +94,8 @@ export async function sendPostRequest(url: string, payload: any, useCompression:
       });
   
       req.on('error', (e) => {
-        console.error(`Error in sendPostRequest().req.on(error): ${e && e.message ? e.message : e}`)
+        const err = z.object({ message: z.string() }).safeParse(e);
+        console.error(`Error in sendPostRequest().req.on(error): ${err.success ? err.data.message : e}`);
         reject(e);
       });
   
@@ -98,7 +103,8 @@ export async function sendPostRequest(url: string, payload: any, useCompression:
       req.end();
     }
     catch (e) {
-      console.error(`Error in sendPostRequest: ${e && e.message ? e.message : e}`)
+      const err = z.object({ message: z.string() }).safeParse(e);
+      console.error(`Error in sendPostRequest: ${err.success ? err.data.message : e}`)
       reject(e);
     }
   }

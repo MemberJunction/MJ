@@ -11,6 +11,9 @@
     "/dist",
     "/src"
   ],
+  "exports": {
+    ".": "./dist/index.js"
+  },
   "scripts": {
     "build": "tsc",
     "bundle": "tsc -noEmit && pkgroll --sourcemap --minify",
