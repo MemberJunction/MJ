@@ -1,5 +1,5 @@
 import { fileURLToPath } from 'node:url';
-import { serve } from '@memberjunction/server/dist/index.js';
+import { serve } from '@memberjunction/server';
 import { resolve } from 'node:path';
 import { LoadGeneratedEntities } from 'mj_generatedentities';
 LoadGeneratedEntities();
