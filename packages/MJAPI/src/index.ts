@@ -1,5 +1,5 @@
 import { fileURLToPath } from 'node:url';
-import { serve } from '@memberjunction/server';
+import { serve } from '@memberjunction/server/dist/index.js';
 import { resolve } from 'node:path';
 import { LoadGeneratedEntities } from 'mj_generatedentities';
 LoadGeneratedEntities();
@@ -23,8 +23,10 @@ const resolverPaths = [
   'generated/generated.{js,ts}',
 ];
 
-serve(resolverPaths.map(localPath)).then(() => {}).catch((e: unknown) => {
-  const errorString: string = JSON.stringify(e, null, 4);
-  console.error('Error starting MJAPI server:');
-  console.error(errorString);
-});
+serve(resolverPaths.map(localPath))
+  .then(() => {})
+  .catch((e: unknown) => {
+    const errorString: string = JSON.stringify(e, null, 4);
+    console.error('Error starting MJAPI server:');
+    console.error(errorString);
+  });

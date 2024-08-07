@@ -2,6 +2,7 @@ import { LogError, Metadata, CompositeKey } from '@memberjunction/core';
 import { Arg, Ctx, Field, InputType, Int, Mutation, ObjectType, PubSub, PubSubEngine, Query, Resolver } from 'type-graphql';
 import { AppContext } from '../types.js';
 import { CompositeKeyInputType, CompositeKeyOutputType } from '../generic/KeyInputOutputTypes.js';
+import { z } from 'zod';
 
 @ObjectType()
 export class EntityDependencyResult {
@@ -28,7 +29,9 @@ export class EntityDependencyResolver {
       return md.GetEntityDependencies(entityName);
     } catch (err) {
       LogError(err);
-      throw new Error(err.message);
+      const ctx = z.object({ message: z.string() }).catch(null).parse(err)?.message ?? JSON.stringify(err);
+      
+      throw new Error(ctx);
     }
   }
 }

@@ -42,7 +42,7 @@ const FileUploadMutationSchema = z.object({
   CreateFile: z.object({
     NameExists: z.boolean(),
     UploadUrl: z.string(),
-    File: FileSchema,
+    File: FileSchema.omit({ __mj_CreatedAt: true, __mj_UpdatedAt: true }).passthrough(),
   }),
 });
 
@@ -125,6 +125,7 @@ export class FileUploadComponent implements OnInit {
 
       // call the gql
       const result = await GraphQLDataProvider.ExecuteGQL(FileUploadMutation, { input });
+      console.log(result);
 
       // make sure the response is correct
       const parsedResult = FileUploadMutationSchema.safeParse(result);
@@ -139,7 +140,7 @@ export class FileUploadComponent implements OnInit {
           await this._uploadFile(...uploadTuple);
         }
       } else {
-        console.error('The API returned an unexpected result', parsedResult.error);
+        console.error('The API returned an unexpected result', parsedResult.error.issues);
         this.fileUpload.emit({ success: false, file });
       }
       file = this.UploadQueue.shift();
