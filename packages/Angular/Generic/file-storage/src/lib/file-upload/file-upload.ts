@@ -125,7 +125,6 @@ export class FileUploadComponent implements OnInit {
 
       // call the gql
       const result = await GraphQLDataProvider.ExecuteGQL(FileUploadMutation, { input });
-      console.log(result);
 
       // make sure the response is correct
       const parsedResult = FileUploadMutationSchema.safeParse(result);
