@@ -29,4 +29,5 @@ serve(resolverPaths.map(localPath))
     const errorString: string = JSON.stringify(e, null, 4);
     console.error('Error starting MJAPI server:');
     console.error(errorString);
+    console.error(e);
   });
