@@ -30,7 +30,7 @@
     "@memberjunction/aiengine": "2.2.0",
     "@memberjunction/core": "2.2.0",
     "@memberjunction/core-actions": "2.2.0",
-    "@memberjunction/core-entities": "2.1.6",
+    "@memberjunction/core-entities": "2.2.0",
     "@memberjunction/data-context": "2.2.0",
     "@memberjunction/data-context-server": "2.2.0",
     "@memberjunction/doc-utils": "2.2.0",

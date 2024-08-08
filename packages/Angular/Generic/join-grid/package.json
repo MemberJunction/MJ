@@ -25,7 +25,7 @@
     "@angular/router": "18.0.2"
   },
   "dependencies": {
-    "@memberjunction/core-entities": "2.1.6",
+    "@memberjunction/core-entities": "2.2.0",
     "@memberjunction/global": "2.2.0",
     "@memberjunction/core": "2.2.0",
     "@memberjunction/ng-base-types": "2.2.0",

@@ -26,7 +26,7 @@
     "@azure/storage-blob": "^12.17.0",
     "@google-cloud/storage": "^7.9.0",
     "@memberjunction/core": "2.2.0",
-    "@memberjunction/core-entities": "2.1.6",
+    "@memberjunction/core-entities": "2.2.0",
     "@memberjunction/global": "2.2.0",
     "env-var": "^7.4.1",
     "mime-types": "^2.1.35"

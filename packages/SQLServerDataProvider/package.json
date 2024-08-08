@@ -24,7 +24,7 @@
     "@memberjunction/ai-vector-dupe": "2.2.0",
     "@memberjunction/aiengine": "2.2.0",
     "@memberjunction/core": "2.2.0",
-    "@memberjunction/core-entities": "2.1.6",
+    "@memberjunction/core-entities": "2.2.0",
     "@memberjunction/global": "2.2.0",
     "@memberjunction/queue": "2.2.0",
     "mssql": "^11.0.1",

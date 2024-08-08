@@ -26,7 +26,7 @@
   "dependencies": {
     "@memberjunction/global": "2.2.0",
     "@memberjunction/core": "2.2.0",
-    "@memberjunction/core-entities": "2.1.6",
+    "@memberjunction/core-entities": "2.2.0",
     "@memberjunction/ng-base-forms": "2.2.0",
     "@memberjunction/ng-shared": "2.2.0",
     "@progress/kendo-angular-sortable": "16.2.0",

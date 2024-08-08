@@ -23,7 +23,7 @@
     "@memberjunction/aiengine": "2.2.0",
     "@memberjunction/core": "2.2.0",
     "@memberjunction/global": "2.2.0",
-    "@memberjunction/core-entities": "2.1.6",
+    "@memberjunction/core-entities": "2.2.0",
     "dotenv": "^16.4.1",
     "typeorm": "^0.3.20"
   },

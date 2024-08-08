@@ -21,7 +21,7 @@
   "dependencies": {
     "@memberjunction/global": "2.2.0",
     "@memberjunction/core": "2.2.0",
-    "@memberjunction/core-entities": "2.1.6",
+    "@memberjunction/core-entities": "2.2.0",
     "@memberjunction/actions": "2.2.0",
     "axios": "^1.7.2"
   }

@@ -20,7 +20,7 @@
   "license": "ISC",
   "dependencies": {
     "@memberjunction/core": "2.2.0",
-    "@memberjunction/core-entities": "2.1.6",
+    "@memberjunction/core-entities": "2.2.0",
     "@memberjunction/actions": "2.2.0",
     "@memberjunction/scheduled-actions": "2.2.0",
     "@memberjunction/ai": "2.2.0",
