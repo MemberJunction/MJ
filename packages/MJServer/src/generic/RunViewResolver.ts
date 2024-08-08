@@ -1,6 +1,6 @@
 import { Arg, Ctx, Field, InputType, Int, ObjectType, PubSubEngine, Query, Resolver } from 'type-graphql';
-import { AppContext } from '../types';
-import { ResolverBase } from './ResolverBase';
+import { AppContext } from '../types.js';
+import { ResolverBase } from './ResolverBase.js';
 import { LogError, LogStatus } from '@memberjunction/core';
 
 /********************************************************************************
@@ -76,9 +76,9 @@ export class RunViewByIDInput {
   @Field(() => Int, {
     nullable: true,
     description:
-      'if a value > 0 is provided, and IgnoreMaxRows is set to false, this value is used for the max rows to be returned by the view.',  
+      'if a value > 0 is provided, and IgnoreMaxRows is set to false, this value is used for the max rows to be returned by the view.',
   })
-  MaxRows?: number
+  MaxRows?: number;
 
   @Field(() => Boolean, {
     nullable: true,
@@ -99,14 +99,13 @@ export class RunViewByIDInput {
     description:
       'Optional, pass in entity_object, simple, or count_only as options to specify the type of result you want back. Defaults to simple if not provided',
   })
-  ResultType?: string; 
+  ResultType?: string;
 
   @Field(() => Int, {
     nullable: true,
-    description:
-      'If a value > 0 is provided, this value will be used to offset the rows returned.',
+    description: 'If a value > 0 is provided, this value will be used to offset the rows returned.',
   })
-  StartRow?: number
+  StartRow?: number;
 }
 
 @InputType()
@@ -172,9 +171,9 @@ export class RunViewByNameInput {
   @Field(() => Int, {
     nullable: true,
     description:
-      'if a value > 0 is provided, and IgnoreMaxRows is set to false, this value is used for the max rows to be returned by the view.',  
+      'if a value > 0 is provided, and IgnoreMaxRows is set to false, this value is used for the max rows to be returned by the view.',
   })
-  MaxRows?: number
+  MaxRows?: number;
 
   @Field(() => Boolean, {
     nullable: true,
@@ -199,10 +198,9 @@ export class RunViewByNameInput {
 
   @Field(() => Int, {
     nullable: true,
-    description:
-      'If a value > 0 is provided, this value will be used to offset the rows returned.',
+    description: 'If a value > 0 is provided, this value will be used to offset the rows returned.',
   })
-  StartRow?: number
+  StartRow?: number;
 }
 
 @InputType()
@@ -254,9 +252,9 @@ export class RunDynamicViewInput {
   @Field(() => Int, {
     nullable: true,
     description:
-      'if a value > 0 is provided, and IgnoreMaxRows is set to false, this value is used for the max rows to be returned by the view.',  
+      'if a value > 0 is provided, and IgnoreMaxRows is set to false, this value is used for the max rows to be returned by the view.',
   })
-  MaxRows?: number
+  MaxRows?: number;
 
   @Field(() => Boolean, {
     nullable: true,
@@ -281,10 +279,9 @@ export class RunDynamicViewInput {
 
   @Field(() => Int, {
     nullable: true,
-    description:
-      'If a value > 0 is provided, this value will be used to offset the rows returned.',
+    description: 'If a value > 0 is provided, this value will be used to offset the rows returned.',
   })
-  StartRow?: number
+  StartRow?: number;
 }
 
 @InputType()
@@ -350,9 +347,9 @@ export class RunViewGenericInput {
   @Field(() => Int, {
     nullable: true,
     description:
-      'if a value > 0 is provided, and IgnoreMaxRows is set to false, this value is used for the max rows to be returned by the view.',  
+      'if a value > 0 is provided, and IgnoreMaxRows is set to false, this value is used for the max rows to be returned by the view.',
   })
-  MaxRows?: number
+  MaxRows?: number;
 
   @Field(() => Boolean, {
     nullable: true,
@@ -377,10 +374,9 @@ export class RunViewGenericInput {
 
   @Field(() => Int, {
     nullable: true,
-    description:
-      'If a value > 0 is provided, this value will be used to offset the rows returned.',
+    description: 'If a value > 0 is provided, this value will be used to offset the rows returned.',
   })
-  StartRow?: number
+  StartRow?: number;
 }
 
 @ObjectType()
@@ -545,8 +541,10 @@ export class RunViewResolver extends ResolverBase {
       }
 
       let results: RunViewGenericResult[] = [];
-      for(const [index, data] of rawData.entries()){
-        const entityId = await dataSource.query(`SELECT TOP 1 ID from [${this.MJCoreSchema}].vwEntities WHERE Name='${input[index].EntityName}'`);
+      for (const [index, data] of rawData.entries()) {
+        const entityId = await dataSource.query(
+          `SELECT TOP 1 ID from [${this.MJCoreSchema}].vwEntities WHERE Name='${input[index].EntityName}'`
+        );
         const returnData: any[] = this.processRawData(data.Results, entityId[0].ID);
 
         results.push({
@@ -560,8 +558,7 @@ export class RunViewResolver extends ResolverBase {
       }
 
       return results;
-    } 
-    catch (err) {
+    } catch (err) {
       LogError(err);
       return null;
     }

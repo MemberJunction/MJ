@@ -17,7 +17,7 @@ import {
   Root,
 } from '@memberjunction/server';
 import { createDownloadUrl, createUploadUrl, deleteObject, moveObject } from '@memberjunction/storage';
-import { CreateFileInput, FileResolver as FileResolverBase, File_, UpdateFileInput } from '../generated/generated';
+import { CreateFileInput, FileResolver as FileResolverBase, File_, UpdateFileInput } from '../generated/generated.js';
 import { FieldMapper } from '@memberjunction/graphql-dataprovider';
 
 @InputType()
@@ -73,9 +73,9 @@ export class FileResolver extends FileResolverBase {
     // Save the file record with the updated input
     const mapper = new FieldMapper();
     fileEntity.LoadFromData(mapper.ReverseMapFields({ ...input }));
-    fileEntity.SetMany(updatedInput);
+    fileEntity.SetMany(mapper.ReverseMapFields({ ...updatedInput }));
     await fileEntity.Save();
-    const File = fileEntity.GetAll();
+    const File = mapper.MapFields({ ...fileEntity.GetAll() });
 
     return { File, UploadUrl, NameExists };
   }
@@ -124,7 +124,12 @@ export class FileResolver extends FileResolverBase {
   }
 
   @Mutation(() => File_)
-  async DeleteFile(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+  async DeleteFile(
+    @Arg('ID', () => String) ID: string,
+    @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput,
+    @Ctx() { dataSource, userPayload }: AppContext,
+    @PubSub() pubSub: PubSubEngine
+  ) {
     const md = new Metadata();
     const userInfo = this.GetUserFromPayload(userPayload);
 

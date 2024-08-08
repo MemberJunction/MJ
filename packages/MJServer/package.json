@@ -8,8 +8,12 @@
   "author": "MemberJunction.com",
   "license": "ISC",
   "files": [
-    "/dist"
+    "/dist",
+    "/src"
   ],
+  "exports": {
+    ".": "./dist/index.js"
+  },
   "scripts": {
     "build": "tsc",
     "bundle": "tsc -noEmit && pkgroll --sourcemap --minify",

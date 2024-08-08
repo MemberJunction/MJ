@@ -1,13 +1,13 @@
 import { JwtHeader, SigningKeyCallback } from 'jsonwebtoken';
 import jwksClient from 'jwks-rsa';
-import { auth0Domain, auth0WebClientID, configInfo, tenantID, webClientID } from '../config';
+import { auth0Domain, auth0WebClientID, configInfo, tenantID, webClientID } from '../config.js';
 import { UserCache } from '@memberjunction/sqlserver-dataprovider';
 import { DataSource } from 'typeorm';
 import { Metadata, UserInfo } from '@memberjunction/core';
-import { NewUserBase } from './newUsers';
+import { NewUserBase } from './newUsers.js';
 import { MJGlobal } from '@memberjunction/global';
 
-export * from './tokenExpiredError';
+export { TokenExpiredError } from './tokenExpiredError.js';
 
 const missingAzureConfig = !tenantID || !webClientID;
 const missingAuth0Config = !auth0Domain || !auth0WebClientID;
@@ -78,7 +78,14 @@ export const getSigningKeys = (issuer: string) => (header: JwtHeader, cb: Signin
     .catch((err) => console.error(err));
 };
 
-export const verifyUserRecord = async (email?: string, firstName?: string, lastName?: string, requestDomain?: string, dataSource?: DataSource, attemptCacheUpdateIfNeeded: boolean = true): Promise<UserInfo | undefined> => {
+export const verifyUserRecord = async (
+  email?: string,
+  firstName?: string,
+  lastName?: string,
+  requestDomain?: string,
+  dataSource?: DataSource,
+  attemptCacheUpdateIfNeeded: boolean = true
+): Promise<UserInfo | undefined> => {
   if (!email) return undefined;
 
   let user = UserCache.Instance.Users.find((u) => {
@@ -87,24 +94,29 @@ export const verifyUserRecord = async (email?: string, firstName?: string, lastN
       // DB requires non-null but this is just an extra check and we could in theory have a blank string in the DB
       console.error(`SYSTEM METADATA ISSUE: User ${u.ID} has no email address`);
       return false;
-    }
-    else
-      return u.Email.toLowerCase().trim() === email.toLowerCase().trim()
+    } else return u.Email.toLowerCase().trim() === email.toLowerCase().trim();
   });
 
   if (!user) {
-    if (configInfo.userHandling.autoCreateNewUsers && firstName && lastName && (requestDomain || configInfo.userHandling.newUserLimitedToAuthorizedDomains === false)) {
+    if (
+      configInfo.userHandling.autoCreateNewUsers &&
+      firstName &&
+      lastName &&
+      (requestDomain || configInfo.userHandling.newUserLimitedToAuthorizedDomains === false)
+    ) {
       // check to see if the domain that we have a request coming in from matches one of the domains in the autoCreateNewUsersDomains setting
-      let passesDomainCheck: boolean =  configInfo.userHandling.newUserLimitedToAuthorizedDomains === false /*in this first condition, we are set up to NOT care about domain */
+      let passesDomainCheck: boolean =
+        configInfo.userHandling.newUserLimitedToAuthorizedDomains ===
+        false; /*in this first condition, we are set up to NOT care about domain */
       if (!passesDomainCheck && requestDomain) {
-          /*in this second condition, we check the domain against authorized domains*/
-          passesDomainCheck = configInfo.userHandling.newUserAuthorizedDomains.some((pattern) => {
-                                    // Convert wildcard domain patterns to regular expressions
-                                    const regex = new RegExp('^' + pattern.toLowerCase().trim().replace(/\./g, '\\.').replace(/\*/g, '.*') + '$');
-                                    return regex.test(requestDomain?.toLowerCase().trim());
-                                  });
+        /*in this second condition, we check the domain against authorized domains*/
+        passesDomainCheck = configInfo.userHandling.newUserAuthorizedDomains.some((pattern) => {
+          // Convert wildcard domain patterns to regular expressions
+          const regex = new RegExp('^' + pattern.toLowerCase().trim().replace(/\./g, '\\.').replace(/\*/g, '.*') + '$');
+          return regex.test(requestDomain?.toLowerCase().trim());
+        });
       }
-      
+
       if (passesDomainCheck) {
         // we have a domain from the request that matches one of the domains provided by the configuration, so we will create a new user
         console.warn(`User ${email} not found in cache. Attempting to create a new user...`);
@@ -113,37 +125,45 @@ export const verifyUserRecord = async (email?: string, firstName?: string, lastN
         if (newUser) {
           // new user worked! we already have the stuff we need for the cache, so no need to go to the DB now, just create a new UserInfo object and use the return value from the createNewUser method
           // to init it, including passing in the role list for the user.
-          const initData: any  = newUser.GetAll();
-          initData.UserRoles = configInfo.userHandling.newUserRoles.map((role) => { return { UserID: initData.ID, RoleName: role } });
+          const initData: any = newUser.GetAll();
+          initData.UserRoles = configInfo.userHandling.newUserRoles.map((role) => {
+            return { UserID: initData.ID, RoleName: role };
+          });
           user = new UserInfo(Metadata.Provider, initData);
           UserCache.Instance.Users.push(user);
           console.warn(`   >>> New user ${email} created successfully!`);
         }
-      }
-      else {
-        console.warn(`User ${email} not found in cache. Request domain '${requestDomain}' does not match any of the domains in the newUserAuthorizedDomains setting. To ignore domain, make sure you set the newUserLimitedToAuthorizedDomains setting to false. In this case we are NOT creating a new user.`);
+      } else {
+        console.warn(
+          `User ${email} not found in cache. Request domain '${requestDomain}' does not match any of the domains in the newUserAuthorizedDomains setting. To ignore domain, make sure you set the newUserLimitedToAuthorizedDomains setting to false. In this case we are NOT creating a new user.`
+        );
       }
     }
-    if(!user && configInfo.userHandling.updateCacheWhenNotFound && dataSource && attemptCacheUpdateIfNeeded) {
+    if (!user && configInfo.userHandling.updateCacheWhenNotFound && dataSource && attemptCacheUpdateIfNeeded) {
       // if we get here that means in the above, if we were attempting to create a new user, it did not work, or it wasn't attempted and we have a config that asks us to auto update the cache
       console.warn(`User ${email} not found in cache. Updating cache in attempt to find the user...`);
-  
+
       const startTime: number = Date.now();
       await UserCache.Instance.Refresh(dataSource);
       const endTime: number = Date.now();
       const elapsed: number = endTime - startTime;
-  
+
       // if elapsed time is less than the delay setting, wait for the additional time to achieve the full delay
       // the below also makes sure we never go more than a 30 second total delay
-      const delay = configInfo.userHandling.updateCacheWhenNotFoundDelay ? (configInfo.userHandling.updateCacheWhenNotFoundDelay < 30000 ? configInfo.userHandling.updateCacheWhenNotFoundDelay : 30000) : 0;
-      if (elapsed < delay)
-        await new Promise(resolve => setTimeout(resolve, delay - elapsed));
-  
+      const delay = configInfo.userHandling.updateCacheWhenNotFoundDelay
+        ? configInfo.userHandling.updateCacheWhenNotFoundDelay < 30000
+          ? configInfo.userHandling.updateCacheWhenNotFoundDelay
+          : 30000
+        : 0;
+      if (elapsed < delay) await new Promise((resolve) => setTimeout(resolve, delay - elapsed));
+
       const finalTime: number = Date.now();
       const finalElapsed: number = finalTime - startTime;
-  
-      console.log(`   UserCache updated in ${elapsed}ms, total elapsed time of ${finalElapsed}ms including delay of ${delay}ms (if needed). Attempting to find the user again via recursive call to verifyUserRecord()`);
-      return verifyUserRecord(email, firstName, lastName, requestDomain, dataSource, false) // try one more time but do not update cache next time if not found
+
+      console.log(
+        `   UserCache updated in ${elapsed}ms, total elapsed time of ${finalElapsed}ms including delay of ${delay}ms (if needed). Attempting to find the user again via recursive call to verifyUserRecord()`
+      );
+      return verifyUserRecord(email, firstName, lastName, requestDomain, dataSource, false); // try one more time but do not update cache next time if not found
     }
   }
 

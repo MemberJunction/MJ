@@ -5,11 +5,11 @@ import 'reflect-metadata';
 import { Subject, firstValueFrom } from 'rxjs';
 import { AuthenticationError, AuthorizationError } from 'type-graphql';
 import { DataSource } from 'typeorm';
-import { getSigningKeys, validationOptions, verifyUserRecord } from './auth';
-import { authCache } from './cache';
-import { userEmailMap } from './config';
-import { UserPayload } from './types';
-import { TokenExpiredError } from './auth';
+import { getSigningKeys, validationOptions, verifyUserRecord } from './auth/index.js';
+import { authCache } from './cache.js';
+import { userEmailMap } from './config.js';
+import { UserPayload } from './types.js';
+import { TokenExpiredError } from './auth/index.js';
 
 const verifyAsync = async (issuer: string, options: jwt.VerifyOptions, token: string): Promise<jwt.JwtPayload> =>
   new Promise((resolve, reject) => {

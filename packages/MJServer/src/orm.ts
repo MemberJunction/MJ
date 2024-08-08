@@ -1,5 +1,5 @@
 import { DataSourceOptions } from 'typeorm';
-import { configInfo, dbDatabase, dbHost, dbPassword, dbPort, dbUsername, dbInstanceName, dbTrustServerCertificate } from './config';
+import { configInfo, dbDatabase, dbHost, dbPassword, dbPort, dbUsername, dbInstanceName, dbTrustServerCertificate } from './config.js';
 
 const orm = (entities: Array<string>): DataSourceOptions => {
   const ormConfig = {
@@ -14,18 +14,18 @@ const orm = (entities: Array<string>): DataSourceOptions => {
     synchronize: false,
     requestTimeout: configInfo.databaseSettings.requestTimeout,
     connectionTimeout: configInfo.databaseSettings.connectionTimeout,
-    options: {}
+    options: {},
   };
   if (dbInstanceName !== null && dbInstanceName !== undefined && dbInstanceName.trim().length > 0) {
     ormConfig.options = {
       ...ormConfig.options,
-      instanceName: dbInstanceName
+      instanceName: dbInstanceName,
     };
   }
   if (dbTrustServerCertificate !== null && dbTrustServerCertificate !== undefined) {
     ormConfig.options = {
       ...ormConfig.options,
-      trustServerCertificate: dbTrustServerCertificate
+      trustServerCertificate: dbTrustServerCertificate,
     };
   }
 

@@ -19,11 +19,11 @@ import { ReplaySubject } from 'rxjs';
 import { BuildSchemaOptions, buildSchemaSync, GraphQLTimestamp } from 'type-graphql';
 import { DataSource } from 'typeorm';
 import { WebSocketServer } from 'ws';
-import buildApolloServer from './apolloServer/index';
-import { configInfo, graphqlPort, graphqlRootPath, mj_core_schema, websiteRunFromPackage } from './config';
-import { contextFunction, getUserPayload } from './context';
-import { publicDirective } from './directives';
-import orm from './orm';
+import buildApolloServer from './apolloServer/index.js';
+import { configInfo, graphqlPort, graphqlRootPath, mj_core_schema, websiteRunFromPackage } from './config.js';
+import { contextFunction, getUserPayload } from './context.js';
+import { publicDirective } from './directives/index.js';
+import orm from './orm.js';
 
 import { LoadActionEntityServer } from '@memberjunction/actions';
 LoadActionEntityServer(); // prevent tree shaking for this dynamic module
@@ -37,30 +37,30 @@ const cacheRefreshInterval = configInfo.databaseSettings.metadataCacheRefreshInt
 
 export { MaxLength } from 'class-validator';
 export * from 'type-graphql';
-export { NewUserBase } from './auth/newUsers';
-export { configInfo } from './config';
-export * from './directives';
-export * from './entitySubclasses/userViewEntity.server';
-export * from './entitySubclasses/entityPermissions.server';
-export * from './entitySubclasses/DuplicateRunEntity.server';
-export * from './types';
-export { TokenExpiredError } from './auth';
+export { NewUserBase } from './auth/newUsers.js';
+export { configInfo } from './config.js';
+export * from './directives/index.js';
+export * from './entitySubclasses/userViewEntity.server.js';
+export * from './entitySubclasses/entityPermissions.server.js';
+export * from './entitySubclasses/DuplicateRunEntity.server.js';
+export * from './types.js';
+export { TokenExpiredError } from './auth/index.js';
 
-export * from './generic/PushStatusResolver';
-export * from './generic/ResolverBase';
-export * from './generic/RunViewResolver';
-export * from './generic/KeyValuePairInput';
-export * from './generic/KeyInputOutputTypes';
-export * from './generic/DeleteOptionsInput';
+export * from './generic/PushStatusResolver.js';
+export * from './generic/ResolverBase.js';
+export * from './generic/RunViewResolver.js';
+export * from './generic/KeyValuePairInput.js';
+export * from './generic/KeyInputOutputTypes.js';
+export * from './generic/DeleteOptionsInput.js';
 
-export * from './resolvers/AskSkipResolver';
-export * from './resolvers/ColorResolver';
-export * from './resolvers/DatasetResolver';
-export * from './resolvers/EntityRecordNameResolver';
-export * from './resolvers/MergeRecordsResolver';
-export * from './resolvers/ReportResolver';
+export * from './resolvers/AskSkipResolver.js';
+export * from './resolvers/ColorResolver.js';
+export * from './resolvers/DatasetResolver.js';
+export * from './resolvers/EntityRecordNameResolver.js';
+export * from './resolvers/MergeRecordsResolver.js';
+export * from './resolvers/ReportResolver.js';
 
-export * from './generated/generated';
+export * from './generated/generated.js';
 
 import { resolve } from 'node:path';
 
@@ -110,7 +110,17 @@ export const serve = async (resolverPaths: Array<string>) => {
   /******TEST HARNESS FOR CHANGE DETECTION */
   /******TEST HARNESS FOR CHANGE DETECTION */
 
-  const dynamicModules = await Promise.all(paths.map((modulePath) => import(isWindows ? `file://${modulePath}` : modulePath)));
+  const dynamicModules = await Promise.all(
+    paths.map((modulePath) => {
+      try {
+        const module = import(isWindows ? `file://${modulePath}` : modulePath);
+        return module;
+      } catch (e) {
+        console.error(`Error loading dynamic module at '${modulePath}'`, e);
+        throw e;
+      }
+    })
+  );
   const resolvers = dynamicModules.flatMap((module) =>
     Object.values(module).filter((value) => typeof value === 'function')
   ) as BuildSchemaOptions['resolvers'];

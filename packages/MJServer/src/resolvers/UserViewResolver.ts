@@ -2,8 +2,8 @@
 import { Metadata } from '@memberjunction/core';
 import { AppContext, Arg, Ctx, Int, Query, Resolver, UserPayload } from '@memberjunction/server';
 import { DataSource } from 'typeorm';
-import { UserView_, UserViewResolverBase } from '../generated/generated';
-import { UserResolver } from './UserResolver';
+import { UserView_, UserViewResolverBase } from '../generated/generated.js';
+import { UserResolver } from './UserResolver.js';
 import { UserViewEntity, UserViewEntityExtended } from '@memberjunction/core-entities';
 
 @Resolver(UserView_)

@@ -456,6 +456,25 @@ export abstract class ProviderBase implements IMetadataProvider {
         }
     }
 
+
+    /**
+     * Returns the timestamp of the local cached version of a given datasetName or null if there is no local cache for the 
+     * specified dataset
+     * @param datasetName the name of the dataset to check
+     * @param itemFilters optional filters to apply to the dataset
+     */
+    public async GetLocalDatasetTimestamp(datasetName: string, itemFilters?: DatasetItemFilterType[]): Promise<Date> {
+        const ls = this.LocalStorageProvider;
+        if (ls) {
+            const key = this.GetDatasetCacheKey(datasetName, itemFilters);
+            const dateKey = key + '_date';
+            const val: string = await ls.getItem(dateKey);
+            if (val) {
+                return new Date(val);
+            }
+        }
+    }
+
     /**
      * This routine checks to see if the local cache version of a given datasetName/itemFilters combination is up to date with the server or not
      * @param datasetName 
@@ -463,46 +482,42 @@ export abstract class ProviderBase implements IMetadataProvider {
      * @returns 
      */
     public async IsDatasetCacheUpToDate(datasetName: string, itemFilters?: DatasetItemFilterType[]): Promise<boolean> {
-        const ls = this.LocalStorageProvider;
-        if (ls) {
-            const key = this.GetDatasetCacheKey(datasetName, itemFilters);
-            const dateKey = key + '_date';
-            const val: string = await ls.getItem(dateKey);
-            if (val) {
-                // we have a local cached timestamp, so compare it to the server timestamp
-                const status = await this.GetDatasetStatusByName(datasetName, itemFilters);
-                if (status) {
-                    const serverTimestamp = status.LatestUpdateDate.getTime();
-                    const localTimestamp = new Date(val);
-                    if (localTimestamp.getTime() >= serverTimestamp) {
-                        // this situation means our local cache timestamp is >= the server timestamp, so we're most likely up to date
-                        // in this situation, the last thing we check is for each entity, if the rowcount is the same as the server, if it is, we're good
-                        // iterate through all of the entities and check the row counts
-                        const localDataset = await this.GetCachedDataset(datasetName, itemFilters);
-                        for (const eu of status.EntityUpdateDates) {
-                            const localEntity = localDataset.Results.find(e => e.EntityID === eu.EntityID);
-                            if (!localEntity || localEntity.Results.length !== eu.RowCount) {
-                                // we either couldn't find the entity in the local cache or the row count is different, so we're out of date
-                                // the RowCount being different picks up on DELETED rows. The UpdatedAt check which is handled above would pick up 
-                                // on any new rows or updated rows. This approach makes sure we detect deleted rows and refresh the cache.
-                                return false;
-                            }
+        const localDate = await this.GetLocalDatasetTimestamp(datasetName, itemFilters);
+        if (localDate) {
+            // we have a local cached timestamp, so compare it to the server timestamp
+            const status = await this.GetDatasetStatusByName(datasetName, itemFilters);
+            if (status) {
+                const serverTimestamp = status.LatestUpdateDate.getTime();
+                if (localDate.getTime() >= serverTimestamp) {
+                    // this situation means our local cache timestamp is >= the server timestamp, so we're most likely up to date
+                    // in this situation, the last thing we check is for each entity, if the rowcount is the same as the server, if it is, we're good
+                    // iterate through all of the entities and check the row counts
+                    const localDataset = await this.GetCachedDataset(datasetName, itemFilters);
+                    for (const eu of status.EntityUpdateDates) {
+                        const localEntity = localDataset.Results.find(e => e.EntityID === eu.EntityID);
+                        if (!localEntity || localEntity.Results.length !== eu.RowCount) {
+                            // we either couldn't find the entity in the local cache or the row count is different, so we're out of date
+                            // the RowCount being different picks up on DELETED rows. The UpdatedAt check which is handled above would pick up 
+                            // on any new rows or updated rows. This approach makes sure we detect deleted rows and refresh the cache.
+                            return false;
                         }
-                        // if we get here that means that the row counts are the same for all entities and we're up to date
-                        return true;
                     }
-                    else {
-                        // our local cache timestamp is < the server timestamp, so we're out of date
-                        return false;                
-                    }
+                    // if we get here that means that the row counts are the same for all entities and we're up to date
+                    return true;
                 }
                 else {
-                    return false;
+                    // our local cache timestamp is < the server timestamp, so we're out of date
+                    return false;                
                 }
             }
             else {
+                // we couldn't get the server status, so we're out of date
                 return false;
             }
+        }
+        else {
+            // we don't have a local cache timestamp, so we're out of date
+            return false;
         }
     }
 

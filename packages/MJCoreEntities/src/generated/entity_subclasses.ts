@@ -40,10 +40,6 @@ export const ActionAuthorizationSchema = z.object({
         * * Field Name: Action
         * * Display Name: Action
         * * SQL Data Type: nvarchar(425)`),
-    Authorization: z.string().describe(`
-        * * Field Name: Authorization
-        * * Display Name: Authorization
-        * * SQL Data Type: nvarchar(100)`),
 });
 
 export type ActionAuthorizationEntityType = z.infer<typeof ActionAuthorizationSchema>;
@@ -875,10 +871,6 @@ export const ApplicationSettingSchema = z.object({
         * * Display Name: __mj _Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Application: z.string().describe(`
-        * * Field Name: Application
-        * * Display Name: Application
-        * * SQL Data Type: nvarchar(100)`),
 });
 
 export type ApplicationSettingEntityType = z.infer<typeof ApplicationSettingSchema>;
@@ -963,10 +955,6 @@ export const AuditLogTypeSchema = z.object({
         * * Field Name: Parent
         * * Display Name: Parent
         * * SQL Data Type: nvarchar(50)`),
-    Authorization: z.string().nullish().describe(`
-        * * Field Name: Authorization
-        * * Display Name: Authorization
-        * * SQL Data Type: nvarchar(100)`),
 });
 
 export type AuditLogTypeEntityType = z.infer<typeof AuditLogTypeSchema>;
@@ -1035,14 +1023,6 @@ export const AuditLogSchema = z.object({
         * * Field Name: User
         * * Display Name: User
         * * SQL Data Type: nvarchar(100)`),
-    AuditLogType: z.string().describe(`
-        * * Field Name: AuditLogType
-        * * Display Name: Audit Log Type
-        * * SQL Data Type: nvarchar(50)`),
-    Authorization: z.string().nullish().describe(`
-        * * Field Name: Authorization
-        * * Display Name: Authorization
-        * * SQL Data Type: nvarchar(100)`),
     Entity: z.string().nullish().describe(`
         * * Field Name: Entity
         * * Display Name: Entity
@@ -1089,14 +1069,6 @@ export const AuthorizationRoleSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Authorization: z.string().describe(`
-        * * Field Name: Authorization
-        * * Display Name: Authorization
-        * * SQL Data Type: nvarchar(100)`),
-    Role: z.string().describe(`
-        * * Field Name: Role
-        * * Display Name: Role
-        * * SQL Data Type: nvarchar(50)`),
 });
 
 export type AuthorizationRoleEntityType = z.infer<typeof AuthorizationRoleSchema>;
@@ -1942,10 +1914,6 @@ export const ConversationSchema = z.object({
         * * Field Name: LinkedEntity
         * * Display Name: Linked Entity
         * * SQL Data Type: nvarchar(255)`),
-    DataContext: z.string().nullish().describe(`
-        * * Field Name: DataContext
-        * * Display Name: Data Context
-        * * SQL Data Type: nvarchar(255)`),
 });
 
 export type ConversationEntityType = z.infer<typeof ConversationSchema>;
@@ -2237,10 +2205,6 @@ export const DatasetItemSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Dataset: z.string().describe(`
-        * * Field Name: Dataset
-        * * Display Name: Dataset
-        * * SQL Data Type: nvarchar(100)`),
     Entity: z.string().describe(`
         * * Field Name: Entity
         * * Display Name: Entity
@@ -3636,18 +3600,6 @@ export const EntityDocumentSchema = z.object({
         * * Field Name: Entity
         * * Display Name: Entity
         * * SQL Data Type: nvarchar(255)`),
-    VectorDatabase: z.string().describe(`
-        * * Field Name: VectorDatabase
-        * * Display Name: Vector Database
-        * * SQL Data Type: nvarchar(100)`),
-    Template: z.string().describe(`
-        * * Field Name: Template
-        * * Display Name: Template
-        * * SQL Data Type: nvarchar(255)`),
-    AIModel: z.string().describe(`
-        * * Field Name: AIModel
-        * * Display Name: AIModel
-        * * SQL Data Type: nvarchar(50)`),
 });
 
 export type EntityDocumentEntityType = z.infer<typeof EntityDocumentSchema>;
@@ -4159,18 +4111,6 @@ export const EntityRecordDocumentSchema = z.object({
         * * Display Name: __mj _Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Entity: z.string().describe(`
-        * * Field Name: Entity
-        * * Display Name: Entity
-        * * SQL Data Type: nvarchar(255)`),
-    EntityDocument: z.string().describe(`
-        * * Field Name: EntityDocument
-        * * Display Name: Entity Document
-        * * SQL Data Type: nvarchar(250)`),
-    VectorIndex: z.string().describe(`
-        * * Field Name: VectorIndex
-        * * Display Name: Vector Index
-        * * SQL Data Type: nvarchar(255)`),
 });
 
 export type EntityRecordDocumentEntityType = z.infer<typeof EntityRecordDocumentSchema>;
@@ -5046,14 +4986,6 @@ export const ListCategorySchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Parent: z.string().nullish().describe(`
-        * * Field Name: Parent
-        * * Display Name: Parent
-        * * SQL Data Type: nvarchar(100)`),
-    User: z.string().describe(`
-        * * Field Name: User
-        * * Display Name: User
-        * * SQL Data Type: nvarchar(100)`),
 });
 
 export type ListCategoryEntityType = z.infer<typeof ListCategorySchema>;
@@ -5152,10 +5084,6 @@ export const ListSchema = z.object({
     User: z.string().describe(`
         * * Field Name: User
         * * Display Name: User
-        * * SQL Data Type: nvarchar(100)`),
-    Category: z.string().nullish().describe(`
-        * * Field Name: Category
-        * * Display Name: Category
         * * SQL Data Type: nvarchar(100)`),
 });
 
@@ -5503,14 +5431,6 @@ export const QueryPermissionSchema = z.object({
         * * Display Name: __mj _Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Query: z.string().describe(`
-        * * Field Name: Query
-        * * Display Name: Query
-        * * SQL Data Type: nvarchar(255)`),
-    Role: z.string().describe(`
-        * * Field Name: Role
-        * * Display Name: Role
-        * * SQL Data Type: nvarchar(50)`),
 });
 
 export type QueryPermissionEntityType = z.infer<typeof QueryPermissionSchema>;
@@ -6209,10 +6129,6 @@ export const RecordMergeLogSchema = z.object({
         * * Field Name: InitiatedByUser
         * * Display Name: Initiated By User
         * * SQL Data Type: nvarchar(100)`),
-    ApprovedByUser: z.string().nullish().describe(`
-        * * Field Name: ApprovedByUser
-        * * Display Name: Approved By User
-        * * SQL Data Type: nvarchar(100)`),
 });
 
 export type RecordMergeLogEntityType = z.infer<typeof RecordMergeLogSchema>;
@@ -6607,14 +6523,6 @@ export const ScheduledActionParamSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    ScheduledAction: z.string().describe(`
-        * * Field Name: ScheduledAction
-        * * Display Name: Scheduled Action
-        * * SQL Data Type: nvarchar(255)`),
-    ActionParam: z.string().describe(`
-        * * Field Name: ActionParam
-        * * Display Name: Action Param
-        * * SQL Data Type: nvarchar(255)`),
 });
 
 export type ScheduledActionParamEntityType = z.infer<typeof ScheduledActionParamSchema>;
@@ -6714,14 +6622,6 @@ export const ScheduledActionSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    CreatedByUser: z.string().describe(`
-        * * Field Name: CreatedByUser
-        * * Display Name: Created By User
-        * * SQL Data Type: nvarchar(100)`),
-    Action: z.string().describe(`
-        * * Field Name: Action
-        * * Display Name: Action
-        * * SQL Data Type: nvarchar(425)`),
 });
 
 export type ScheduledActionEntityType = z.infer<typeof ScheduledActionSchema>;
@@ -7381,6 +7281,10 @@ export const UserNotificationSchema = z.object({
         * * Display Name: Resource Type ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Resource Types (vwResourceTypes.ID)`),
+    ResourceRecordID: z.string().nullish().describe(`
+        * * Field Name: ResourceRecordID
+        * * Display Name: Resource Record ID
+        * * SQL Data Type: uniqueidentifier`),
     ResourceConfiguration: z.string().nullish().describe(`
         * * Field Name: ResourceConfiguration
         * * Display Name: Resource Configuration
@@ -7404,10 +7308,6 @@ export const UserNotificationSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    ResourceRecordID: z.string().nullish().describe(`
-        * * Field Name: ResourceRecordID
-        * * Display Name: Resource Record ID
-        * * SQL Data Type: uniqueidentifier`),
     User: z.string().describe(`
         * * Field Name: User
         * * Display Name: User
@@ -7582,10 +7482,6 @@ export const UserViewCategorySchema = z.object({
         * * Field Name: Parent
         * * Display Name: Parent
         * * SQL Data Type: nvarchar(100)`),
-    Entity: z.string().describe(`
-        * * Field Name: Entity
-        * * Display Name: Entity
-        * * SQL Data Type: nvarchar(255)`),
     User: z.string().describe(`
         * * Field Name: User
         * * Display Name: User
@@ -8429,15 +8325,6 @@ export class ActionAuthorizationEntity extends BaseEntity<ActionAuthorizationEnt
     */
     get Action(): string {  
         return this.Get('Action');
-    }
-
-    /**
-    * * Field Name: Authorization
-    * * Display Name: Authorization
-    * * SQL Data Type: nvarchar(100)
-    */
-    get Authorization(): string {  
-        return this.Get('Authorization');
     }
 }
 
@@ -10583,15 +10470,6 @@ export class ApplicationSettingEntity extends BaseEntity<ApplicationSettingEntit
     get __mj_UpdatedAt(): Date {  
         return this.Get('__mj_UpdatedAt');
     }
-
-    /**
-    * * Field Name: Application
-    * * Display Name: Application
-    * * SQL Data Type: nvarchar(100)
-    */
-    get Application(): string {  
-        return this.Get('Application');
-    }
 }
 
             
@@ -10846,15 +10724,6 @@ export class AuditLogTypeEntity extends BaseEntity<AuditLogTypeEntityType> {
     get Parent(): string | null {  
         return this.Get('Parent');
     }
-
-    /**
-    * * Field Name: Authorization
-    * * Display Name: Authorization
-    * * SQL Data Type: nvarchar(100)
-    */
-    get Authorization(): string | null {  
-        return this.Get('Authorization');
-    }
 }
 
             
@@ -11044,24 +10913,6 @@ export class AuditLogEntity extends BaseEntity<AuditLogEntityType> {
     }
 
     /**
-    * * Field Name: AuditLogType
-    * * Display Name: Audit Log Type
-    * * SQL Data Type: nvarchar(50)
-    */
-    get AuditLogType(): string {  
-        return this.Get('AuditLogType');
-    }
-
-    /**
-    * * Field Name: Authorization
-    * * Display Name: Authorization
-    * * SQL Data Type: nvarchar(100)
-    */
-    get Authorization(): string | null {  
-        return this.Get('Authorization');
-    }
-
-    /**
     * * Field Name: Entity
     * * Display Name: Entity
     * * SQL Data Type: nvarchar(255)
@@ -11196,24 +11047,6 @@ export class AuthorizationRoleEntity extends BaseEntity<AuthorizationRoleEntityT
     */
     get __mj_UpdatedAt(): Date {  
         return this.Get('__mj_UpdatedAt');
-    }
-
-    /**
-    * * Field Name: Authorization
-    * * Display Name: Authorization
-    * * SQL Data Type: nvarchar(100)
-    */
-    get Authorization(): string {  
-        return this.Get('Authorization');
-    }
-
-    /**
-    * * Field Name: Role
-    * * Display Name: Role
-    * * SQL Data Type: nvarchar(50)
-    */
-    get Role(): string {  
-        return this.Get('Role');
     }
 }
 
@@ -13548,15 +13381,6 @@ export class ConversationEntity extends BaseEntity<ConversationEntityType> {
     get LinkedEntity(): string | null {  
         return this.Get('LinkedEntity');
     }
-
-    /**
-    * * Field Name: DataContext
-    * * Display Name: Data Context
-    * * SQL Data Type: nvarchar(255)
-    */
-    get DataContext(): string | null {  
-        return this.Get('DataContext');
-    }
 }
 
             
@@ -14342,15 +14166,6 @@ export class DatasetItemEntity extends BaseEntity<DatasetItemEntityType> {
     */
     get __mj_UpdatedAt(): Date {  
         return this.Get('__mj_UpdatedAt');
-    }
-
-    /**
-    * * Field Name: Dataset
-    * * Display Name: Dataset
-    * * SQL Data Type: nvarchar(100)
-    */
-    get Dataset(): string {  
-        return this.Get('Dataset');
     }
 
     /**
@@ -18035,33 +17850,6 @@ export class EntityDocumentEntity extends BaseEntity<EntityDocumentEntityType> {
     get Entity(): string {  
         return this.Get('Entity');
     }
-
-    /**
-    * * Field Name: VectorDatabase
-    * * Display Name: Vector Database
-    * * SQL Data Type: nvarchar(100)
-    */
-    get VectorDatabase(): string {  
-        return this.Get('VectorDatabase');
-    }
-
-    /**
-    * * Field Name: Template
-    * * Display Name: Template
-    * * SQL Data Type: nvarchar(255)
-    */
-    get Template(): string {  
-        return this.Get('Template');
-    }
-
-    /**
-    * * Field Name: AIModel
-    * * Display Name: AIModel
-    * * SQL Data Type: nvarchar(50)
-    */
-    get AIModel(): string {  
-        return this.Get('AIModel');
-    }
 }
 
             
@@ -19307,33 +19095,6 @@ export class EntityRecordDocumentEntity extends BaseEntity<EntityRecordDocumentE
     */
     get __mj_UpdatedAt(): Date {  
         return this.Get('__mj_UpdatedAt');
-    }
-
-    /**
-    * * Field Name: Entity
-    * * Display Name: Entity
-    * * SQL Data Type: nvarchar(255)
-    */
-    get Entity(): string {  
-        return this.Get('Entity');
-    }
-
-    /**
-    * * Field Name: EntityDocument
-    * * Display Name: Entity Document
-    * * SQL Data Type: nvarchar(250)
-    */
-    get EntityDocument(): string {  
-        return this.Get('EntityDocument');
-    }
-
-    /**
-    * * Field Name: VectorIndex
-    * * Display Name: Vector Index
-    * * SQL Data Type: nvarchar(255)
-    */
-    get VectorIndex(): string {  
-        return this.Get('VectorIndex');
     }
 }
 
@@ -21756,24 +21517,6 @@ export class ListCategoryEntity extends BaseEntity<ListCategoryEntityType> {
     get __mj_UpdatedAt(): Date {  
         return this.Get('__mj_UpdatedAt');
     }
-
-    /**
-    * * Field Name: Parent
-    * * Display Name: Parent
-    * * SQL Data Type: nvarchar(100)
-    */
-    get Parent(): string | null {  
-        return this.Get('Parent');
-    }
-
-    /**
-    * * Field Name: User
-    * * Display Name: User
-    * * SQL Data Type: nvarchar(100)
-    */
-    get User(): string {  
-        return this.Get('User');
-    }
 }
 
             
@@ -22045,15 +21788,6 @@ export class ListEntity extends BaseEntity<ListEntityType> {
     */
     get User(): string {  
         return this.Get('User');
-    }
-
-    /**
-    * * Field Name: Category
-    * * Display Name: Category
-    * * SQL Data Type: nvarchar(100)
-    */
-    get Category(): string | null {  
-        return this.Get('Category');
     }
 }
 
@@ -23088,24 +22822,6 @@ export class QueryPermissionEntity extends BaseEntity<QueryPermissionEntityType>
     */
     get __mj_UpdatedAt(): Date {  
         return this.Get('__mj_UpdatedAt');
-    }
-
-    /**
-    * * Field Name: Query
-    * * Display Name: Query
-    * * SQL Data Type: nvarchar(255)
-    */
-    get Query(): string {  
-        return this.Get('Query');
-    }
-
-    /**
-    * * Field Name: Role
-    * * Display Name: Role
-    * * SQL Data Type: nvarchar(50)
-    */
-    get Role(): string {  
-        return this.Get('Role');
     }
 }
 
@@ -25050,15 +24766,6 @@ export class RecordMergeLogEntity extends BaseEntity<RecordMergeLogEntityType> {
     get InitiatedByUser(): string {  
         return this.Get('InitiatedByUser');
     }
-
-    /**
-    * * Field Name: ApprovedByUser
-    * * Display Name: Approved By User
-    * * SQL Data Type: nvarchar(100)
-    */
-    get ApprovedByUser(): string | null {  
-        return this.Get('ApprovedByUser');
-    }
 }
 
             
@@ -26145,24 +25852,6 @@ export class ScheduledActionParamEntity extends BaseEntity<ScheduledActionParamE
     get __mj_UpdatedAt(): Date {  
         return this.Get('__mj_UpdatedAt');
     }
-
-    /**
-    * * Field Name: ScheduledAction
-    * * Display Name: Scheduled Action
-    * * SQL Data Type: nvarchar(255)
-    */
-    get ScheduledAction(): string {  
-        return this.Get('ScheduledAction');
-    }
-
-    /**
-    * * Field Name: ActionParam
-    * * Display Name: Action Param
-    * * SQL Data Type: nvarchar(255)
-    */
-    get ActionParam(): string {  
-        return this.Get('ActionParam');
-    }
 }
 
             
@@ -26404,24 +26093,6 @@ export class ScheduledActionEntity extends BaseEntity<ScheduledActionEntityType>
     */
     get __mj_UpdatedAt(): Date {  
         return this.Get('__mj_UpdatedAt');
-    }
-
-    /**
-    * * Field Name: CreatedByUser
-    * * Display Name: Created By User
-    * * SQL Data Type: nvarchar(100)
-    */
-    get CreatedByUser(): string {  
-        return this.Get('CreatedByUser');
-    }
-
-    /**
-    * * Field Name: Action
-    * * Display Name: Action
-    * * SQL Data Type: nvarchar(425)
-    */
-    get Action(): string {  
-        return this.Get('Action');
     }
 }
 
@@ -28274,6 +27945,18 @@ export class UserNotificationEntity extends BaseEntity<UserNotificationEntityTyp
     }
 
     /**
+    * * Field Name: ResourceRecordID
+    * * Display Name: Resource Record ID
+    * * SQL Data Type: uniqueidentifier
+    */
+    get ResourceRecordID(): string | null {  
+        return this.Get('ResourceRecordID');
+    }
+    set ResourceRecordID(value: string | null) {
+        this.Set('ResourceRecordID', value);
+    }
+
+    /**
     * * Field Name: ResourceConfiguration
     * * Display Name: Resource Configuration
     * * SQL Data Type: nvarchar(MAX)
@@ -28328,18 +28011,6 @@ export class UserNotificationEntity extends BaseEntity<UserNotificationEntityTyp
     */
     get __mj_UpdatedAt(): Date {  
         return this.Get('__mj_UpdatedAt');
-    }
-
-    /**
-    * * Field Name: ResourceRecordID
-    * * Display Name: Resource Record ID
-    * * SQL Data Type: uniqueidentifier
-    */
-    get ResourceRecordID(): string | null {  
-        return this.Get('ResourceRecordID');
-    }
-    set ResourceRecordID(value: string | null) {
-        this.Set('ResourceRecordID', value);
     }
 
     /**
@@ -28799,15 +28470,6 @@ export class UserViewCategoryEntity extends BaseEntity<UserViewCategoryEntityTyp
     */
     get Parent(): string | null {  
         return this.Get('Parent');
-    }
-
-    /**
-    * * Field Name: Entity
-    * * Display Name: Entity
-    * * SQL Data Type: nvarchar(255)
-    */
-    get Entity(): string {  
-        return this.Get('Entity');
     }
 
     /**

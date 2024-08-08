@@ -2,7 +2,7 @@ import { BaseEntity, LogError, Metadata } from "@memberjunction/core";
 import { RegisterClass } from "@memberjunction/global";
 import { DashboardEntity } from "../generated/entity_subclasses";
 
-@RegisterClass(BaseEntity, 'Dashboards', 2) // 2 priority so this gets used ahead of the generated sub-class
+@RegisterClass(BaseEntity, 'Dashboards') 
 export class DashboardEntityExtended extends DashboardEntity  {
     public NewRecord(): boolean {
         try{

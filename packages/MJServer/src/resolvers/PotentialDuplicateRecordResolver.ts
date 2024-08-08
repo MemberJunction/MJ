@@ -7,13 +7,13 @@ import {
   CompositeKey,
   PotentialDuplicateResult,
 } from '@memberjunction/core';
-import { AppContext } from '../types';
+import { AppContext } from '../types.js';
 import { UserCache } from '@memberjunction/sqlserver-dataprovider';
 
 //load the default vectorDB and embedding model
 import { LoadMistralEmbedding } from '@memberjunction/ai-mistral';
 import { LoadPineconeVectorDB } from '@memberjunction/ai-vectors-pinecone';
-import { CompositeKeyInputType, CompositeKeyOutputType, KeyValuePairOutputType } from '../generic/KeyInputOutputTypes';
+import { CompositeKeyInputType, CompositeKeyOutputType, KeyValuePairOutputType } from '../generic/KeyInputOutputTypes.js';
 LoadMistralEmbedding();
 LoadPineconeVectorDB();
 

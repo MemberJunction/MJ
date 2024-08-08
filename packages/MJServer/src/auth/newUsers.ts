@@ -1,7 +1,7 @@
 import { LogError, Metadata } from "@memberjunction/core";
 import { RegisterClass } from "@memberjunction/global";
 import { UserCache } from "@memberjunction/sqlserver-dataprovider";
-import { configInfo } from "../config";
+import { configInfo } from "../config.js";
 import { UserEntity, UserRoleEntity } from "@memberjunction/core-entities";
 
 @RegisterClass(NewUserBase)
@@ -35,7 +35,7 @@ export class NewUserBase {
                 for (const role of configInfo.userHandling.newUserRoles) {
                     ur.NewRecord();
                     ur.UserID = u.ID;
-                    const roleID = md.Roles.find(r => r.Name === role)?.ID; 
+                    const roleID = md.Roles.find(r => r.Name === role)?.ID;
                     ur.RoleID = roleID;
                     bSuccess = bSuccess && await ur.Save();
                 }
@@ -48,7 +48,7 @@ export class NewUserBase {
                 LogError(`Failed to create new user ${firstName} ${lastName} ${email}`);
                 return undefined;
             }
-            return u;        
+            return u;
         }
         catch (e) {
             LogError(e);

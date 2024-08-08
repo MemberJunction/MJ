@@ -5,13 +5,13 @@ import { PubSubEngine } from 'type-graphql';
 import { GraphQLError } from 'graphql';
 import { DataSource } from 'typeorm';
 
-import { RunViewGenericParams, UserPayload } from '../types';
-import { RunDynamicViewInput, RunViewByIDInput, RunViewByNameInput } from './RunViewResolver';
-import { DeleteOptionsInput } from './DeleteOptionsInput';
+import { RunViewGenericParams, UserPayload } from '../types.js';
+import { RunDynamicViewInput, RunViewByIDInput, RunViewByNameInput } from './RunViewResolver.js';
+import { DeleteOptionsInput } from './DeleteOptionsInput.js';
 import { MJGlobal } from '@memberjunction/global';
-import { PUSH_STATUS_UPDATES_TOPIC } from './PushStatusResolver';
+import { PUSH_STATUS_UPDATES_TOPIC } from './PushStatusResolver.js';
 import { FieldMapper } from '@memberjunction/graphql-dataprovider';
- 
+
 export class ResolverBase {
   protected MapFieldNamesToCodeNames(entityName: string, dataObject: any) {
     // for the given entity name provided, check to see if there are any fields
@@ -335,7 +335,7 @@ export class ResolverBase {
           }
 
           contextUser = contextUser || user;
-  
+
           const entityInfo = md.Entities.find((e) => e.Name === param.viewInfo.Entity);
           if (!entityInfo){
             throw new Error(`Entity ${param.viewInfo.Entity} not found in metadata`);
@@ -348,9 +348,9 @@ export class ResolverBase {
           case 'count_only':
             rt = 'count_only';
             break;
-          // use simple as the default AND for entity_object 
-          // becuase on teh server we don't really pass back 
-          // a true entity_object anyway, just passing back 
+          // use simple as the default AND for entity_object
+          // becuase on teh server we don't really pass back
+          // a true entity_object anyway, just passing back
           // the simple object anyway
           case 'entity_object':
           default:
@@ -390,7 +390,7 @@ export class ResolverBase {
       }
 
       return runViewResults;
-    } 
+    }
     catch (err) {
       console.log(err);
       throw err;
@@ -453,7 +453,7 @@ export class ResolverBase {
       auditLog.UserID = userInfo.ID;
       auditLog.AuditLogTypeID = auditLogType.ID;
 
-      if (authorization) 
+      if (authorization)
         auditLog.AuthorizationID = authorization.ID;
 
       if (status?.trim().toLowerCase() === 'success') auditLog.Status = 'Success';
@@ -554,7 +554,7 @@ export class ResolverBase {
       const entityInfo = entityObject.EntityInfo;
       const clientNewValues = {};
       Object.keys(input).forEach((key) => {
-        if (key !== 'OldValues___') 
+        if (key !== 'OldValues___')
           clientNewValues[key] = input[key];
       }); // grab all the props except for the OldValues property
 
@@ -630,7 +630,7 @@ export class ResolverBase {
       // we need to do a quick transform on the values to make sure they match the TS Type for the given field because item.Value will always be a string
       const field = entityObject.EntityInfo.Fields.find((f) => f.CodeName === item.Key);
       let val = item.Value;
-      if ((val === null || val === undefined) && field.DefaultValue !== null && field.DefaultValue !== undefined && !field.AllowsNull) 
+      if ((val === null || val === undefined) && field.DefaultValue !== null && field.DefaultValue !== undefined && !field.AllowsNull)
         val = field.DefaultValue; // set default value as the field was never set and it does NOT allow nulls
 
       if (field) {

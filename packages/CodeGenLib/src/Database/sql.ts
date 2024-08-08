@@ -219,18 +219,28 @@ public async recompileAllBaseViews(ds: DataSource, excludeSchemas: string[], app
  private static _batchScriptCounter: number = 0;
  public async executeSQLFile(filePath: string): Promise<boolean> {
   try {
+    if (sqlConfig.user === undefined || sqlConfig.password === undefined || sqlConfig.database === undefined) {
+      throw new Error("SQL Server user, password, and database must be provided in the configuration");
+    }
+
     // Construct the sqlcmd command with optional port and instance
     let command = `sqlcmd -S ${sqlConfig.server}`;
     if (sqlConfig.port) {
       command += `,${sqlConfig.port}`;
     }
     if (sqlConfig.options?.instanceName) {
-      command += `\\${sqlConfig.options.instanceName}`;
+      const escapedInstanceName = `"${sqlConfig.options.instanceName.replace(/"/g, '\\"')}"`;
+      command += `\\${escapedInstanceName}`;
     }
+
+    // Escape and wrap user and password in double quotes
+    const escapedUser = `"${sqlConfig.user.replace(/"/g, '\\"')}"`;
+    const escapedPassword = `"${sqlConfig.password.replace(/"/g, '\\"')}"`;
+    const escapedDatabase = `"${sqlConfig.database.replace(/"/g, '\\"')}"`;
 
     const cwd = path.resolve(process.cwd());
     const absoluteFilePath = path.resolve(cwd, filePath);
-    command += ` -U ${sqlConfig.user} -P ${sqlConfig.password} -d ${sqlConfig.database} -i "${absoluteFilePath}"`;
+    command += ` -U ${escapedUser} -P ${escapedPassword} -d ${escapedDatabase} -i "${absoluteFilePath}"`;
 
     // Execute the command
     const { stdout, stderr } = await execAsync(command);
@@ -241,10 +251,16 @@ public async recompileAllBaseViews(ds: DataSource, excludeSchemas: string[], app
     return true;
   }
   catch (e) {
-    logError("Error executing batch SQL file: " + (e as any).message);
+    const message = (e as any).message || e;
+    const errorMessage = sqlConfig.password ? this.maskPassword(message, sqlConfig.password) : message;
+    logError("Error executing batch SQL file: " + errorMessage);
     return false;
   }
  }
+
+ private maskPassword(input: string, password: string, replaceWith: string = 'XXXXX'): string {
+  return input.replace(new RegExp(password, 'g'), replaceWith);
+}
 
  public async executeBatchSQLScript(scriptText: string): Promise<boolean> {
   try {

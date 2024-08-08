@@ -1,9 +1,7 @@
 import { EntityPermissionType } from '@memberjunction/core';
-import { AppContext } from '../types';
+import { AppContext } from '../types.js';
 import { Arg, Ctx, Query, Resolver, InputType, Field } from 'type-graphql';
-import { Entity_, EntityResolverBase } from '../generated/generated';
-
-
+import { Entity_, EntityResolverBase } from '../generated/generated.js';
 
 @Resolver(Entity_)
 export class EntityResolver extends EntityResolverBase {

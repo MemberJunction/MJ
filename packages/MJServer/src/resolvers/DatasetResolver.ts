@@ -1,5 +1,5 @@
 import { Arg, Ctx, Field, InputType, Int, ObjectType, Query, Resolver } from 'type-graphql';
-import { AppContext } from '../types';
+import { AppContext } from '../types.js';
 import { LogError, Metadata } from '@memberjunction/core';
 
 @ObjectType()

@@ -1,8 +1,9 @@
 import { Component, OnInit } from '@angular/core';
 import { Router, ActivatedRoute } from '@angular/router';
-import { BaseEntity, EntityInfo, LogError, LogStatus, Metadata, RunView, RunViewResult } from '@memberjunction/core';
-import { ListDetailEntity, ListEntity, UserViewEntity } from '@memberjunction/core-entities';
+import { BaseEntity, EntityFieldInfo, EntityFieldTSType, EntityInfo, LogError, LogStatus, Metadata, RunView, RunViewResult } from '@memberjunction/core';
+import { ListDetailEntity, ListEntity, UserViewEntity, ViewColumnInfo } from '@memberjunction/core-entities';
 import { SharedService } from '@memberjunction/ng-shared';
+import { PageChangeEvent } from '@progress/kendo-angular-grid';
 import { Subject, debounceTime } from 'rxjs';
 
 @Component({
@@ -12,6 +13,7 @@ import { Subject, debounceTime } from 'rxjs';
 })
 export class SingleListDetailComponent implements OnInit {
     private listRecord: ListEntity | null = null;
+    private listID: string = "";
 
     public showLoader: boolean = false;
     public sourceGridData: BaseEntity[] = [];
@@ -26,6 +28,17 @@ export class SingleListDetailComponent implements OnInit {
     private filter: string = '';
 
     public userViewsToAdd: UserViewEntity[] = [];
+
+    public page: number = 0;
+    public pageSize: number = 50;
+    public gridHeight: number = 750;
+    public sortSettings: any[] = [];
+    public selectedKeys: any[] = [];
+    public selectModeEnabled: boolean = false;
+    public viewColumns: Partial<ViewColumnInfo>[] = [];
+    public visibleColumns: Partial<ViewColumnInfo>[] = [];
+    public totalRowCount: number = 0;
+    public viewExecutionTime: number = 0;
     
     constructor (private router: Router, private route: ActivatedRoute, private sharedService: SharedService)
     {
@@ -44,13 +57,15 @@ export class SingleListDetailComponent implements OnInit {
     }
 
     private async loadList(listID: string): Promise<void> {
+        const startTime: number = new Date().getTime();
         if(listID){
+            this.listID = listID;
             this.showLoader = true;
 
             const md: Metadata = new Metadata();
             const rv: RunView = new RunView();
 
-            const listRunViewResult: RunViewResult = await rv.RunView({
+            const listRunViewResult: RunViewResult = await rv.RunView<ListEntity>({
                 EntityName: 'Lists',
                 ResultType: 'entity_object',
                 ExtraFilter: `ID = '${listID}'`
@@ -61,7 +76,7 @@ export class SingleListDetailComponent implements OnInit {
                 return;
             }
 
-            const listEntity: ListEntity = listRunViewResult.Results[0] as ListEntity;
+            const listEntity: ListEntity = listRunViewResult.Results[0];
             const entity: EntityInfo | null = md.EntityFromEntityID(listEntity.EntityID!);
 
             if(!entity){
@@ -69,13 +84,41 @@ export class SingleListDetailComponent implements OnInit {
                 return;
             }
 
+            for(const field of entity.Fields){
+                if(!field.DefaultInView){
+                    continue;
+                }
+
+                let column: Partial<ViewColumnInfo> = {
+                    ID: field.ID,
+                    Name: field.CodeName,
+                    DisplayName: field.DisplayName,
+                    EntityField: field,
+                    hidden: false,
+                    orderIndex: field.Sequence,
+                    width: field.DefaultColumnWidth || 100
+                };
+
+                this.viewColumns.push(column);
+            }
+
+                                                            /*make sure there is an entity field linked*/
+            this.visibleColumns = this.viewColumns.filter(x => x.hidden === false && x.EntityField).sort((a,b) => {
+                const aOrder = a.orderIndex != null ? a.orderIndex : 9999;
+                const bOrder = b.orderIndex != null ? b.orderIndex : 9999;
+                return aOrder - bOrder;
+            });
+
             this.listName = listEntity.Name;
             this.listRecord = listEntity;
 
-            const runViewResult: RunViewResult = await rv.RunView({
+            const runViewResult: RunViewResult = await rv.RunView<ListDetailEntity>({
                 EntityName: 'List Details',
                 ResultType: 'entity_object',
-                ExtraFilter: `ListID = '${listID}'`
+                ExtraFilter: `ListID = '${listID}'`,
+                MaxRows: this.pageSize,
+                IgnoreMaxRows: false,
+                StartRow: Math.max(0, (this.page - 1) * this.pageSize)
             }, md.CurrentUser);
 
             if(!runViewResult.Success){
@@ -83,7 +126,10 @@ export class SingleListDetailComponent implements OnInit {
                 return;
             }
 
-            const listDetailRecords: ListDetailEntity[] = runViewResult.Results as ListDetailEntity[];
+            this.totalRowCount = runViewResult.TotalRowCount;
+
+            const listDetailRecords: ListDetailEntity[] = runViewResult.Results;
+            LogStatus(`Found ${listDetailRecords.length} records in list ${listID}`);
             if(listDetailRecords.length > 0){
                 const recordIDs: string = listDetailRecords.map(ld => `'${ld.RecordID}'`).join(',');
                 let extraFilter: string = `ID IN (${recordIDs})`;
@@ -98,10 +144,69 @@ export class SingleListDetailComponent implements OnInit {
                     return;
                 }
 
+                LogStatus(`Found ${rvResult.Results.length} records in entity ${entity.Name}`);
                 this.sourceGridData = this.filteredGridData = rvResult.Results;
+                this.viewExecutionTime = (new Date().getTime() - startTime) / 1000; // in seconds
             }
 
             this.showLoader = false;
+        }
+    }
+
+    public pageChange(event: PageChangeEvent): void {
+        this.page = event.skip;
+        this.loadList(this.listID);
+    }
+
+    GetColumnTitle(col: Partial<ViewColumnInfo>): string {
+        if (col.DisplayName){
+            // use view's display name first if it exists
+            return col.DisplayName;
+        }
+        else if (col.EntityField && col.EntityField.DisplayName){
+            // then use entity display name, if that exist
+            return col.EntityField.DisplayName; 
+        }
+        else{
+            // otherwise just use the column name
+            return col.Name || '';
+        }
+    }
+
+    public getEditor(ef: EntityFieldInfo | undefined): "boolean" | "text" | "numeric" | "date" {
+        if (!ef) {
+            return "text";
+        }
+
+        switch (ef.TSType) {  
+          case EntityFieldTSType.Boolean:
+            return "boolean";
+          case EntityFieldTSType.Date:
+            return "date";
+          case EntityFieldTSType.Number:
+            return "numeric";
+          default:
+            return "text";
+        }          
+    }
+
+    GetColumnCellStyle(col: Partial<ViewColumnInfo>): Record<'text-align' | 'vertical-align', string> {
+        if (!col || !col.EntityField) {
+            return {'text-align': 'left', 'vertical-align': 'top'};
+        }
+
+        const fieldType: string = col.EntityField.Type.trim().toLowerCase();
+        switch (fieldType) {
+            case "money":
+            case 'decimal':
+            case 'real':
+            case 'float':
+            case 'int':
+                // right align numbers,
+                return {'text-align': 'right', 'vertical-align': 'top'};
+            default:
+                // left align everything else
+                return {'text-align': 'left', 'vertical-align': 'top'};
         }
     }
 
@@ -187,7 +292,7 @@ export class SingleListDetailComponent implements OnInit {
                 if(count === hashMap.size){
                     this.showAddLoader = false;
                     this.toggleAddDialog(false);
-                    this.loadList(this.listRecord!.ID.toString());
+                    this.loadList(this.listRecord!.ID);
                 }
             });
         }

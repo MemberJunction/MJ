@@ -2,9 +2,9 @@ import { ApolloServer, ApolloServerOptions } from '@apollo/server';
 import { ApolloServerPluginDrainHttpServer } from '@apollo/server/plugin/drainHttpServer';
 import { Disposable } from 'graphql-ws';
 import { Server } from 'http';
-import { enableIntrospection } from '../config';
-import { AppContext } from '../types';
-import { TransactionPlugin } from './TransactionPlugin';
+import { enableIntrospection } from '../config.js';
+import { AppContext } from '../types.js';
+import { TransactionPlugin } from './TransactionPlugin.js';
 
 const buildApolloServer = (
   configOverride: ApolloServerOptions<AppContext>,
