@@ -1,8 +1,21 @@
 # Change Log - @memberjunction/core-entities
 
-This log was last generated on Thu, 01 Aug 2024 17:23:11 GMT and should not be manually modified.
+This log was last generated on Thu, 08 Aug 2024 02:53:16 GMT and should not be manually modified.
 
 <!-- Start content -->
+
+## 2.1.6
+
+Thu, 08 Aug 2024 02:53:16 GMT
+
+### Minor changes
+
+- Applying package updates [skip ci] (97354817+AN-BC@users.noreply.github.com)
+
+### Patches
+
+- Bump @memberjunction/core to v2.2.0
+- Bump @memberjunction/global to v2.2.0
 
 ## 2.1.5
 

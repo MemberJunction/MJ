@@ -1,8 +1,20 @@
 # Change Log - @memberjunction/core
 
-This log was last generated on Thu, 01 Aug 2024 17:23:11 GMT and should not be manually modified.
+This log was last generated on Thu, 08 Aug 2024 02:53:16 GMT and should not be manually modified.
 
 <!-- Start content -->
+
+## 2.2.0
+
+Thu, 08 Aug 2024 02:53:16 GMT
+
+### Minor changes
+
+- Bump @memberjunction/global to v2.2.0
+
+### Patches
+
+- Applying package updates [skip ci] (97354817+AN-BC@users.noreply.github.com)
 
 ## 2.1.5
 

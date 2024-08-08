@@ -1,8 +1,41 @@
 # Change Log - @memberjunction/server
 
-This log was last generated on Thu, 01 Aug 2024 17:23:11 GMT and should not be manually modified.
+This log was last generated on Thu, 08 Aug 2024 02:53:16 GMT and should not be manually modified.
 
 <!-- Start content -->
+
+## 2.2.0
+
+Thu, 08 Aug 2024 02:53:16 GMT
+
+### Minor changes
+
+- Bump @memberjunction/actions to v2.2.0
+- Bump @memberjunction/ai to v2.2.0
+- Bump @memberjunction/ai-mistral to v2.2.0
+- Bump @memberjunction/ai-openai to v2.2.0
+- Bump @memberjunction/ai-vectors-pinecone to v2.2.0
+- Bump @memberjunction/aiengine to v2.2.0
+- Bump @memberjunction/core to v2.2.0
+- Bump @memberjunction/core-actions to v2.2.0
+- Bump @memberjunction/core-entities to v2.1.6
+- Bump @memberjunction/data-context to v2.2.0
+- Bump @memberjunction/data-context-server to v2.2.0
+- Bump @memberjunction/doc-utils to v2.2.0
+- Bump @memberjunction/entity-communications-server to v2.2.0
+- Bump @memberjunction/external-change-detection to v2.2.0
+- Bump @memberjunction/global to v2.2.0
+- Bump @memberjunction/queue to v2.2.0
+- Bump @memberjunction/skip-types to v2.2.0
+- Bump @memberjunction/sqlserver-dataprovider to v2.2.0
+- Bump @memberjunction/graphql-dataprovider to v2.2.0
+- Bump @memberjunction/storage to v2.2.0
+- Bump @memberjunction/templates to v2.2.0
+
+### Patches
+
+- Applying package updates [skip ci] (155523863+JS-BC@users.noreply.github.com)
+- Applying package updates [skip ci] (craig.adam@bluecypress.io)
 
 ## 2.1.5
 

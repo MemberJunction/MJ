@@ -1,8 +1,26 @@
 # Change Log - @memberjunction/core-actions
 
-This log was last generated on Thu, 01 Aug 2024 17:23:11 GMT and should not be manually modified.
+This log was last generated on Thu, 08 Aug 2024 02:53:16 GMT and should not be manually modified.
 
 <!-- Start content -->
+
+## 2.2.0
+
+Thu, 08 Aug 2024 02:53:16 GMT
+
+### Minor changes
+
+- Bump @memberjunction/global to v2.2.0
+- Bump @memberjunction/core to v2.2.0
+- Bump @memberjunction/core-entities to v2.1.6
+- Bump @memberjunction/actions to v2.2.0
+- Bump @memberjunction/communication-engine to v2.2.0
+- Bump @memberjunction/external-change-detection to v2.2.0
+- Bump @memberjunction/ai-vector-sync to v2.2.0
+
+### Patches
+
+- Applying package updates [skip ci] (155523863+JS-BC@users.noreply.github.com)
 
 ## 2.1.5
 

@@ -1,8 +1,26 @@
 # Change Log - @memberjunction/ng-explorer-settings
 
-This log was last generated on Thu, 01 Aug 2024 17:23:11 GMT and should not be manually modified.
+This log was last generated on Thu, 08 Aug 2024 02:53:16 GMT and should not be manually modified.
 
 <!-- Start content -->
+
+## 2.2.0
+
+Thu, 08 Aug 2024 02:53:16 GMT
+
+### Minor changes
+
+- Bump @memberjunction/core-entities to v2.1.6
+- Bump @memberjunction/global to v2.2.0
+- Bump @memberjunction/core to v2.2.0
+- Bump @memberjunction/ng-container-directives to v2.2.0
+- Bump @memberjunction/ng-shared to v2.2.0
+- Bump @memberjunction/ng-entity-permissions to v2.2.0
+- Bump @memberjunction/ng-base-forms to v2.2.0
+- Bump @memberjunction/ng-entity-form-dialog to v2.2.0
+- Bump @memberjunction/ng-user-view-grid to v2.2.0
+- Bump @memberjunction/ng-simple-record-list to v2.2.0
+- Bump @memberjunction/ng-tabstrip to v2.2.0
 
 ## 2.1.5
 

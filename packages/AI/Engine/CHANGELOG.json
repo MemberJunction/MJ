@@ -2,6 +2,39 @@
   "name": "@memberjunction/aiengine",
   "entries": [
     {
+      "date": "Thu, 08 Aug 2024 02:53:16 GMT",
+      "version": "2.2.0",
+      "tag": "@memberjunction/aiengine_v2.2.0",
+      "comments": {
+        "minor": [
+          {
+            "author": "beachball",
+            "package": "@memberjunction/aiengine",
+            "comment": "Bump @memberjunction/core to v2.2.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/aiengine",
+            "comment": "Bump @memberjunction/global to v2.2.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/aiengine",
+            "comment": "Bump @memberjunction/core-entities to v2.1.6",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/aiengine",
+            "comment": "Bump @memberjunction/ai to v2.2.0",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
       "date": "Thu, 01 Aug 2024 17:23:11 GMT",
       "version": "2.1.5",
       "tag": "@memberjunction/aiengine_v2.1.5",

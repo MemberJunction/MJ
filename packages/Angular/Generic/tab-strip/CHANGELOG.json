@@ -2,6 +2,27 @@
   "name": "@memberjunction/ng-tabstrip",
   "entries": [
     {
+      "date": "Thu, 08 Aug 2024 02:53:16 GMT",
+      "version": "2.2.0",
+      "tag": "@memberjunction/ng-tabstrip_v2.2.0",
+      "comments": {
+        "minor": [
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-tabstrip",
+            "comment": "Bump @memberjunction/ng-container-directives to v2.2.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-tabstrip",
+            "comment": "Bump @memberjunction/ng-shared to v2.2.0",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
       "date": "Thu, 01 Aug 2024 17:23:11 GMT",
       "version": "2.1.5",
       "tag": "@memberjunction/ng-tabstrip_v2.1.5",

@@ -2,6 +2,65 @@
   "name": "@memberjunction/codegen-lib",
   "entries": [
     {
+      "date": "Thu, 08 Aug 2024 02:53:16 GMT",
+      "version": "2.2.0",
+      "tag": "@memberjunction/codegen-lib_v2.2.0",
+      "comments": {
+        "patch": [
+          {
+            "author": "97354817+AN-BC@users.noreply.github.com",
+            "package": "@memberjunction/codegen-lib",
+            "commit": "915677d7ec5cf9216c8f8fdd5bbe46856cb23c72",
+            "comment": "Applying package updates [skip ci]"
+          },
+          {
+            "author": "97354817+AN-BC@users.noreply.github.com",
+            "package": "@memberjunction/codegen-lib",
+            "commit": "2f91d2bd4eeb6ae592d146e2477ee05dd64c54a6",
+            "comment": "Applying package updates [skip ci]"
+          }
+        ],
+        "minor": [
+          {
+            "author": "beachball",
+            "package": "@memberjunction/codegen-lib",
+            "comment": "Bump @memberjunction/ai to v2.2.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/codegen-lib",
+            "comment": "Bump @memberjunction/core to v2.2.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/codegen-lib",
+            "comment": "Bump @memberjunction/actions to v2.2.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/codegen-lib",
+            "comment": "Bump @memberjunction/core-entities to v2.1.6",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/codegen-lib",
+            "comment": "Bump @memberjunction/global to v2.2.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/codegen-lib",
+            "comment": "Bump @memberjunction/sqlserver-dataprovider to v2.2.0",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
       "date": "Thu, 01 Aug 2024 17:23:11 GMT",
       "version": "2.1.5",
       "tag": "@memberjunction/codegen-lib_v2.1.5",
