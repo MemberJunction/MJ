@@ -62,13 +62,13 @@ export class AskSkipResultType {
   @Field(() => String)
   Result: string;
 
-  @Field(() => Int)
+  @Field(() => String)
   ConversationId: string;
 
-  @Field(() => Int)
+  @Field(() => String)
   UserMessageConversationDetailId: string;
 
-  @Field(() => Int)
+  @Field(() => String)
   AIMessageConversationDetailId: string;
 }
 
@@ -953,7 +953,10 @@ export class AskSkipResolver {
           }
         } catch (e) {
           LogError(e);
-          executionErrors.push({ dataRequest: dr, errorMessage: e && typeof e === 'object' && 'message' in e && e.message ? e.message : e.toString() });
+          executionErrors.push({
+            dataRequest: dr,
+            errorMessage: e && typeof e === 'object' && 'message' in e && e.message ? e.message : e.toString(),
+          });
         }
       }
 
