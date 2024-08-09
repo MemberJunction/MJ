@@ -186,10 +186,15 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> {
         try {
             if (event.type === 'delete' || event.type === 'save') {
                 const eName = event.baseEntity.EntityInfo.Name.toLowerCase().trim();
-                const matchingAutoRefreshConfig = this.Configs.some(c => c.AutoRefresh && c.EntityName.trim().toLowerCase() === eName);
-                if (matchingAutoRefreshConfig)
+                const matchingAutoRefreshConfig: boolean = this.Configs.some((config: BaseEnginePropertyConfig) => {
+                    return config.AutoRefresh && config.EntityName && config.EntityName.trim().toLowerCase() === eName
+                });
+
+                if (matchingAutoRefreshConfig){
                     return this.DebounceIndividualBaseEntityEvent(event);
+                }
             }
+            
             return true;
         }
         catch (e) {
