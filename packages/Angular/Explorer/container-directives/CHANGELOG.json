@@ -2,6 +2,27 @@
   "name": "@memberjunction/ng-container-directives",
   "entries": [
     {
+      "date": "Fri, 09 Aug 2024 01:29:44 GMT",
+      "version": "2.2.1",
+      "tag": "@memberjunction/ng-container-directives_v2.2.1",
+      "comments": {
+        "patch": [
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-container-directives",
+            "comment": "Bump @memberjunction/core to v2.2.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-container-directives",
+            "comment": "Bump @memberjunction/global to v2.2.1",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
       "date": "Thu, 08 Aug 2024 02:53:16 GMT",
       "version": "2.2.0",
       "tag": "@memberjunction/ng-container-directives_v2.2.0",
