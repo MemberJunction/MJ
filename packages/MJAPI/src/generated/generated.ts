@@ -2,7 +2,7 @@
 * ALL ENTITIES - TypeGraphQL Type Class Definition - AUTO GENERATED FILE
 * Generated Entities and Resolvers for Server
 *
-* GENERATED: 8/8/2024, 7:41:10 PM
+* GENERATED: 8/9/2024, 4:23:30 PM
 *
 *   >>> DO NOT MODIFY THIS FILE!!!!!!!!!!!!
 *   >>> YOUR CHANGES WILL BE OVERWRITTEN
@@ -19,8 +19,374 @@ import { DataSource } from 'typeorm';
 import * as mj_core_schema_server_object_types from '@memberjunction/server'
 
 
-import { QuadDemoEntity, ThreadDetailEntity, ThreadEntity, IndustryEntity, ContactRoleEntity, ContactLevelEntity, AccountEntity, ContactEntity, DealStageEntity, ActivityEntity, DealForecastCategoryEntity, DealEntity, DealTypeEntity, InvoiceEntity, ActivityAttachmentEntity, PaymentTermsTypeEntity, InvoiceStatusTypeEntity, SalesLineItemEntity, SalesTransactionEntity, CustomerAddress__client_financeEntity, Item__client_financeEntity, Customer__client_financeEntity, OrganizationLinkEntity, PersonLinkEntity, Account__client_crmEntity, StringMapEntity, ProductPriceLevelEntity, client_membershipEntity, Contact__client_crmEntity, UoMEntity, SalesOrderEntity, SalesOrderDetailEntity, ProductEntity, CustomerAddressEntity, SalesLineItem__client_membershipEntity, ItemEntity, CustomerEntity, SalesTransaction__client_membershipEntity } from 'mj_generatedentities';
+import { ContentSourceTypeEntity, ContentSourceEntity, QuadDemoEntity, ThreadDetailEntity, ThreadEntity, IndustryEntity, ContactRoleEntity, ContactLevelEntity, AccountEntity, ContactEntity, DealStageEntity, ActivityEntity, DealForecastCategoryEntity, DealEntity, DealTypeEntity, InvoiceEntity, ActivityAttachmentEntity, PaymentTermsTypeEntity, InvoiceStatusTypeEntity, SalesLineItemEntity, SalesTransactionEntity, CustomerAddress__client_financeEntity, Item__client_financeEntity, Customer__client_financeEntity, OrganizationLinkEntity, PersonLinkEntity, Account__client_crmEntity, StringMapEntity, ProductPriceLevelEntity, client_membershipEntity, Contact__client_crmEntity, UoMEntity, SalesOrderEntity, SalesOrderDetailEntity, ProductEntity, CustomerAddressEntity, SalesLineItem__client_membershipEntity, ItemEntity, CustomerEntity, SalesTransaction__client_membershipEntity } from 'mj_generatedentities';
     
+
+//****************************************************************************
+// ENTITY CLASS for Content Source Types
+//****************************************************************************
+@ObjectType()
+export class ContentSourceType_ {
+    @Field(() => Int) 
+    ID: number;
+        
+    @Field() 
+    @MaxLength(100)
+    Name: string;
+        
+    @Field({nullable: true}) 
+    Description?: string;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
+        
+    @Field(() => [ContentSource_])
+    ContentSourcesArray: ContentSource_[]; // Link to ContentSources
+    
+}
+
+//****************************************************************************
+// INPUT TYPE for Content Source Types
+//****************************************************************************
+@InputType()
+export class CreateContentSourceTypeInput {
+    @Field()
+    Name: string;
+
+    @Field({ nullable: true })
+    Description?: string;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for Content Source Types
+//****************************************************************************
+@InputType()
+export class UpdateContentSourceTypeInput {
+    @Field(() => Int)
+    ID: number;
+
+    @Field()
+    Name: string;
+
+    @Field({ nullable: true })
+    Description?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
+//****************************************************************************
+// RESOLVER for Content Source Types
+//****************************************************************************
+@ObjectType()
+export class RunContentSourceTypeViewResult {
+    @Field(() => [ContentSourceType_])
+    Results: ContentSourceType_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(ContentSourceType_)
+export class ContentSourceTypeResolver extends ResolverBase {
+    @Query(() => RunContentSourceTypeViewResult)
+    async RunContentSourceTypeViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunContentSourceTypeViewResult)
+    async RunContentSourceTypeViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunContentSourceTypeViewResult)
+    async RunContentSourceTypeDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        input.EntityName = 'Content Source Types';
+        return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
+    }
+    @Query(() => ContentSourceType_, { nullable: true })
+    async ContentSourceType(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ContentSourceType_ | null> {
+        this.CheckUserReadPermissions('Content Source Types', userPayload);
+        const sSQL = `SELECT * FROM [dray].[vwContentSourceTypes] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Content Source Types', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Content Source Types', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
+    }
+    
+    @FieldResolver(() => [ContentSource_])
+    async ContentSourcesArray(@Root() contentsourcetype_: ContentSourceType_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Content Sources', userPayload);
+        const sSQL = `SELECT * FROM [dray].[vwContentSources] WHERE [TypeID]=${contentsourcetype_.ID} ` + this.getRowLevelSecurityWhereClause('Content Sources', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Content Sources', await dataSource.query(sSQL));
+        return result;
+    }
+        
+    @Mutation(() => ContentSourceType_)
+    async CreateContentSourceType(
+        @Arg('input', () => CreateContentSourceTypeInput) input: CreateContentSourceTypeInput,
+        @Ctx() { dataSource, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.CreateRecord('Content Source Types', input, dataSource, userPayload, pubSub)
+    }
+        
+    @Mutation(() => ContentSourceType_)
+    async UpdateContentSourceType(
+        @Arg('input', () => UpdateContentSourceTypeInput) input: UpdateContentSourceTypeInput,
+        @Ctx() { dataSource, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.UpdateRecord('Content Source Types', input, dataSource, userPayload, pubSub);
+    }
+    
+    @Mutation(() => ContentSourceType_)
+    async DeleteContentSourceType(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Content Source Types', key, options, dataSource, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for Content Sources
+//****************************************************************************
+@ObjectType()
+export class ContentSource_ {
+    @Field(() => Int) 
+    ID: number;
+        
+    @Field(() => Int) 
+    OrganizationID: number;
+        
+    @Field(() => Int) 
+    TypeID: number;
+        
+    @Field() 
+    @MaxLength(100)
+    Name: string;
+        
+    @Field({nullable: true}) 
+    Description?: string;
+        
+    @Field(() => Boolean) 
+    Active: boolean;
+        
+    @Field(() => Boolean) 
+    ForceTraining: boolean;
+        
+    @Field(() => Boolean) 
+    AutomaticTraining: boolean;
+        
+    @Field() 
+    @MaxLength(100)
+    FrequencyUnit: string;
+        
+    @Field(() => Int) 
+    FrequencyCount: number;
+        
+    @Field() 
+    @MaxLength(8)
+    LastTraining: Date;
+        
+    @Field(() => Boolean) 
+    TestTraining: boolean;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
+        
+    @Field() 
+    @MaxLength(100)
+    Type: string;
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for Content Sources
+//****************************************************************************
+@InputType()
+export class CreateContentSourceInput {
+    @Field(() => Int)
+    OrganizationID: number;
+
+    @Field(() => Int)
+    TypeID: number;
+
+    @Field()
+    Name: string;
+
+    @Field({ nullable: true })
+    Description?: string;
+
+    @Field(() => Boolean)
+    Active: boolean;
+
+    @Field(() => Boolean)
+    ForceTraining: boolean;
+
+    @Field(() => Boolean)
+    AutomaticTraining: boolean;
+
+    @Field()
+    FrequencyUnit: string;
+
+    @Field(() => Int)
+    FrequencyCount: number;
+
+    @Field()
+    LastTraining: Date;
+
+    @Field(() => Boolean)
+    TestTraining: boolean;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for Content Sources
+//****************************************************************************
+@InputType()
+export class UpdateContentSourceInput {
+    @Field(() => Int)
+    ID: number;
+
+    @Field(() => Int)
+    OrganizationID: number;
+
+    @Field(() => Int)
+    TypeID: number;
+
+    @Field()
+    Name: string;
+
+    @Field({ nullable: true })
+    Description?: string;
+
+    @Field(() => Boolean)
+    Active: boolean;
+
+    @Field(() => Boolean)
+    ForceTraining: boolean;
+
+    @Field(() => Boolean)
+    AutomaticTraining: boolean;
+
+    @Field()
+    FrequencyUnit: string;
+
+    @Field(() => Int)
+    FrequencyCount: number;
+
+    @Field()
+    LastTraining: Date;
+
+    @Field(() => Boolean)
+    TestTraining: boolean;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
+//****************************************************************************
+// RESOLVER for Content Sources
+//****************************************************************************
+@ObjectType()
+export class RunContentSourceViewResult {
+    @Field(() => [ContentSource_])
+    Results: ContentSource_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(ContentSource_)
+export class ContentSourceResolver extends ResolverBase {
+    @Query(() => RunContentSourceViewResult)
+    async RunContentSourceViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunContentSourceViewResult)
+    async RunContentSourceViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunContentSourceViewResult)
+    async RunContentSourceDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        input.EntityName = 'Content Sources';
+        return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
+    }
+    @Query(() => ContentSource_, { nullable: true })
+    async ContentSource(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ContentSource_ | null> {
+        this.CheckUserReadPermissions('Content Sources', userPayload);
+        const sSQL = `SELECT * FROM [dray].[vwContentSources] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Content Sources', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Content Sources', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
+    }
+    
+    @Mutation(() => ContentSource_)
+    async CreateContentSource(
+        @Arg('input', () => CreateContentSourceInput) input: CreateContentSourceInput,
+        @Ctx() { dataSource, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.CreateRecord('Content Sources', input, dataSource, userPayload, pubSub)
+    }
+        
+    @Mutation(() => ContentSource_)
+    async UpdateContentSource(
+        @Arg('input', () => UpdateContentSourceInput) input: UpdateContentSourceInput,
+        @Ctx() { dataSource, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.UpdateRecord('Content Sources', input, dataSource, userPayload, pubSub);
+    }
+    
+    @Mutation(() => ContentSource_)
+    async DeleteContentSource(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Content Sources', key, options, dataSource, userPayload, pubSub);
+    }
+    
+}
 
 //****************************************************************************
 // ENTITY CLASS for Quad Demos

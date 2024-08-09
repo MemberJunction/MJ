@@ -2,7 +2,7 @@
 * ALL ENTITIES - TypeGraphQL Type Class Definition - AUTO GENERATED FILE
 * Generated Entities and Resolvers for Server
 *
-* GENERATED: 8/8/2024, 7:41:10 PM
+* GENERATED: 8/9/2024, 4:23:30 PM
 *
 *   >>> DO NOT MODIFY THIS FILE!!!!!!!!!!!!
 *   >>> YOUR CHANGES WILL BE OVERWRITTEN
@@ -20,7 +20,7 @@ import { mj_core_schema } from '../config.js';
 
 
 
-import { ScheduledActionEntity, ScheduledActionParamEntity, ExplorerNavigationItemEntity, flyway_schema_historyEntity, CompanyEntity, EmployeeEntity, UserFavoriteEntity, EmployeeCompanyIntegrationEntity, EmployeeRoleEntity, EmployeeSkillEntity, RoleEntity, SkillEntity, IntegrationURLFormatEntity, IntegrationEntity, CompanyIntegrationEntity, EntityFieldEntity, EntityEntity, UserEntity, EntityRelationshipEntity, UserRecordLogEntity, UserViewEntity, CompanyIntegrationRunEntity, CompanyIntegrationRunDetailEntity, ErrorLogEntity, ApplicationEntity, ApplicationEntityEntity, EntityPermissionEntity, UserApplicationEntityEntity, UserApplicationEntity, CompanyIntegrationRunAPILogEntity, ListEntity, ListDetailEntity, UserViewRunEntity, UserViewRunDetailEntity, WorkflowRunEntity, WorkflowEntity, WorkflowEngineEntity, RecordChangeEntity, UserRoleEntity, RowLevelSecurityFilterEntity, AuditLogEntity, AuthorizationEntity, AuthorizationRoleEntity, AuditLogTypeEntity, EntityFieldValueEntity, AIModelEntity, AIActionEntity, AIModelActionEntity, EntityAIActionEntity, AIModelTypeEntity, QueueTypeEntity, QueueEntity, QueueTaskEntity, DashboardEntity, OutputTriggerTypeEntity, OutputFormatTypeEntity, OutputDeliveryTypeEntity, ReportEntity, ReportSnapshotEntity, ResourceTypeEntity, TagEntity, TaggedItemEntity, WorkspaceEntity, WorkspaceItemEntity, DatasetEntity, DatasetItemEntity, ConversationDetailEntity, ConversationEntity, UserNotificationEntity, SchemaInfoEntity, CompanyIntegrationRecordMapEntity, RecordMergeLogEntity, RecordMergeDeletionLogEntity, QueryFieldEntity, QueryCategoryEntity, QueryEntity, QueryPermissionEntity, VectorIndexEntity, EntityDocumentTypeEntity, EntityDocumentRunEntity, VectorDatabaseEntity, EntityRecordDocumentEntity, EntityDocumentEntity, DataContextItemEntity, DataContextEntity, UserViewCategoryEntity, DashboardCategoryEntity, ReportCategoryEntity, FileStorageProviderEntity, FileEntity, FileCategoryEntity, FileEntityRecordLinkEntity, VersionInstallationEntity, DuplicateRunDetailMatchEntity, EntityDocumentSettingEntity, EntitySettingEntity, DuplicateRunEntity, DuplicateRunDetailEntity, ApplicationSettingEntity, ActionCategoryEntity, EntityActionEntity, EntityActionInvocationEntity, ActionAuthorizationEntity, EntityActionInvocationTypeEntity, ActionEntity, EntityActionFilterEntity, ActionFilterEntity, ActionContextTypeEntity, ActionResultCodeEntity, ActionContextEntity, ActionExecutionLogEntity, ActionParamEntity, ActionLibraryEntity, LibraryEntity, ListCategoryEntity, CommunicationProviderEntity, CommunicationRunEntity, CommunicationProviderMessageTypeEntity, CommunicationLogEntity, CommunicationBaseMessageTypeEntity, TemplateEntity, TemplateCategoryEntity, TemplateContentEntity, TemplateParamEntity, TemplateContentTypeEntity, RecommendationEntity, RecommendationProviderEntity, RecommendationRunEntity, RecommendationItemEntity, EntityCommunicationMessageTypeEntity, EntityCommunicationFieldEntity, RecordChangeReplayRunEntity, LibraryItemEntity, EntityRelationshipDisplayComponentEntity, EntityActionParamEntity } from '@memberjunction/core-entities';
+import { ScheduledActionEntity, ScheduledActionParamEntity, ExplorerNavigationItemEntity, flyway_schema_historyEntity, AIPromptEntity, AIResultCacheEntity, AIPromptCategoryEntity, AIPromptTypeEntity, CompanyEntity, EmployeeEntity, UserFavoriteEntity, EmployeeCompanyIntegrationEntity, EmployeeRoleEntity, EmployeeSkillEntity, RoleEntity, SkillEntity, IntegrationURLFormatEntity, IntegrationEntity, CompanyIntegrationEntity, EntityFieldEntity, EntityEntity, UserEntity, EntityRelationshipEntity, UserRecordLogEntity, UserViewEntity, CompanyIntegrationRunEntity, CompanyIntegrationRunDetailEntity, ErrorLogEntity, ApplicationEntity, ApplicationEntityEntity, EntityPermissionEntity, UserApplicationEntityEntity, UserApplicationEntity, CompanyIntegrationRunAPILogEntity, ListEntity, ListDetailEntity, UserViewRunEntity, UserViewRunDetailEntity, WorkflowRunEntity, WorkflowEntity, WorkflowEngineEntity, RecordChangeEntity, UserRoleEntity, RowLevelSecurityFilterEntity, AuditLogEntity, AuthorizationEntity, AuthorizationRoleEntity, AuditLogTypeEntity, EntityFieldValueEntity, AIModelEntity, AIActionEntity, AIModelActionEntity, EntityAIActionEntity, AIModelTypeEntity, QueueTypeEntity, QueueEntity, QueueTaskEntity, DashboardEntity, OutputTriggerTypeEntity, OutputFormatTypeEntity, OutputDeliveryTypeEntity, ReportEntity, ReportSnapshotEntity, ResourceTypeEntity, TagEntity, TaggedItemEntity, WorkspaceEntity, WorkspaceItemEntity, DatasetEntity, DatasetItemEntity, ConversationDetailEntity, ConversationEntity, UserNotificationEntity, SchemaInfoEntity, CompanyIntegrationRecordMapEntity, RecordMergeLogEntity, RecordMergeDeletionLogEntity, QueryFieldEntity, QueryCategoryEntity, QueryEntity, QueryPermissionEntity, VectorIndexEntity, EntityDocumentTypeEntity, EntityDocumentRunEntity, VectorDatabaseEntity, EntityRecordDocumentEntity, EntityDocumentEntity, DataContextItemEntity, DataContextEntity, UserViewCategoryEntity, DashboardCategoryEntity, ReportCategoryEntity, FileStorageProviderEntity, FileEntity, FileCategoryEntity, FileEntityRecordLinkEntity, VersionInstallationEntity, DuplicateRunDetailMatchEntity, EntityDocumentSettingEntity, EntitySettingEntity, DuplicateRunEntity, DuplicateRunDetailEntity, ApplicationSettingEntity, ActionCategoryEntity, EntityActionEntity, EntityActionInvocationEntity, ActionAuthorizationEntity, EntityActionInvocationTypeEntity, ActionEntity, EntityActionFilterEntity, ActionFilterEntity, ActionContextTypeEntity, ActionResultCodeEntity, ActionContextEntity, ActionExecutionLogEntity, ActionParamEntity, ActionLibraryEntity, LibraryEntity, ListCategoryEntity, CommunicationProviderEntity, CommunicationRunEntity, CommunicationProviderMessageTypeEntity, CommunicationLogEntity, CommunicationBaseMessageTypeEntity, TemplateEntity, TemplateCategoryEntity, TemplateContentEntity, TemplateParamEntity, TemplateContentTypeEntity, RecommendationEntity, RecommendationProviderEntity, RecommendationRunEntity, RecommendationItemEntity, EntityCommunicationMessageTypeEntity, EntityCommunicationFieldEntity, RecordChangeReplayRunEntity, LibraryItemEntity, EntityRelationshipDisplayComponentEntity, EntityActionParamEntity } from '@memberjunction/core-entities';
     
 
 //****************************************************************************
@@ -858,6 +858,731 @@ export class flyway_schema_historyResolver extends ResolverBase {
     async Deleteflyway_schema_history(@Arg('installed_rank', () => Int) installed_rank: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'installed_rank', Value: installed_rank}]);
         return this.DeleteRecord('flyway _schema _histories', key, options, dataSource, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for AI Prompts
+//****************************************************************************
+@ObjectType({ description: 'Stores AI prompts, including references to categories, types, and templates.' })
+export class AIPrompt_ {
+    @Field() 
+    @MaxLength(16)
+    ID: string;
+        
+    @Field() 
+    @MaxLength(510)
+    Name: string;
+        
+    @Field({nullable: true}) 
+    Description?: string;
+        
+    @Field({description: 'Reference to the template used for the prompt.'}) 
+    @MaxLength(16)
+    TemplateID: string;
+        
+    @Field({nullable: true, description: 'Reference to the category the prompt belongs to.'}) 
+    @MaxLength(16)
+    CategoryID?: string;
+        
+    @Field({description: 'Reference to the type of the prompt.'}) 
+    @MaxLength(16)
+    TypeID: string;
+        
+    @Field() 
+    @MaxLength(100)
+    Status: string;
+        
+    @Field(() => Boolean, {description: 'Indicates whether the results of the prompt should be cached.'}) 
+    CacheResults: boolean;
+        
+    @Field(() => Float, {description: 'Number of hours the cache is valid for; can be fractional or 0 if the cache never expires.'}) 
+    CacheExpiration: number;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
+        
+    @Field() 
+    @MaxLength(510)
+    Template: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(510)
+    Category?: string;
+        
+    @Field() 
+    @MaxLength(510)
+    Type: string;
+        
+    @Field(() => [AIResultCache_])
+    AIResultCacheArray: AIResultCache_[]; // Link to AIResultCache
+    
+}
+
+//****************************************************************************
+// INPUT TYPE for AI Prompts
+//****************************************************************************
+@InputType()
+export class CreateAIPromptInput {
+    @Field()
+    Name: string;
+
+    @Field({ nullable: true })
+    Description?: string;
+
+    @Field()
+    TemplateID: string;
+
+    @Field({ nullable: true })
+    CategoryID?: string;
+
+    @Field()
+    TypeID: string;
+
+    @Field()
+    Status: string;
+
+    @Field(() => Boolean)
+    CacheResults: boolean;
+
+    @Field(() => Float)
+    CacheExpiration: number;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for AI Prompts
+//****************************************************************************
+@InputType()
+export class UpdateAIPromptInput {
+    @Field()
+    ID: string;
+
+    @Field()
+    Name: string;
+
+    @Field({ nullable: true })
+    Description?: string;
+
+    @Field()
+    TemplateID: string;
+
+    @Field({ nullable: true })
+    CategoryID?: string;
+
+    @Field()
+    TypeID: string;
+
+    @Field()
+    Status: string;
+
+    @Field(() => Boolean)
+    CacheResults: boolean;
+
+    @Field(() => Float)
+    CacheExpiration: number;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
+//****************************************************************************
+// RESOLVER for AI Prompts
+//****************************************************************************
+@ObjectType()
+export class RunAIPromptViewResult {
+    @Field(() => [AIPrompt_])
+    Results: AIPrompt_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(AIPrompt_)
+export class AIPromptResolver extends ResolverBase {
+    @Query(() => RunAIPromptViewResult)
+    async RunAIPromptViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunAIPromptViewResult)
+    async RunAIPromptViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunAIPromptViewResult)
+    async RunAIPromptDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        input.EntityName = 'AI Prompts';
+        return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
+    }
+    @Query(() => AIPrompt_, { nullable: true })
+    async AIPrompt(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<AIPrompt_ | null> {
+        this.CheckUserReadPermissions('AI Prompts', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIPrompts] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('AI Prompts', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('AI Prompts', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
+    }
+    
+    @FieldResolver(() => [AIResultCache_])
+    async AIResultCacheArray(@Root() aiprompt_: AIPrompt_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('AI Result Cache', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIResultCaches] WHERE [AIPromptID]='${aiprompt_.ID}' ` + this.getRowLevelSecurityWhereClause('AI Result Cache', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('AI Result Cache', await dataSource.query(sSQL));
+        return result;
+    }
+        
+    @Mutation(() => AIPrompt_)
+    async CreateAIPrompt(
+        @Arg('input', () => CreateAIPromptInput) input: CreateAIPromptInput,
+        @Ctx() { dataSource, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.CreateRecord('AI Prompts', input, dataSource, userPayload, pubSub)
+    }
+        
+    @Mutation(() => AIPrompt_)
+    async UpdateAIPrompt(
+        @Arg('input', () => UpdateAIPromptInput) input: UpdateAIPromptInput,
+        @Ctx() { dataSource, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.UpdateRecord('AI Prompts', input, dataSource, userPayload, pubSub);
+    }
+    
+    @Mutation(() => AIPrompt_)
+    async DeleteAIPrompt(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('AI Prompts', key, options, dataSource, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for AI Result Cache
+//****************************************************************************
+@ObjectType({ description: 'Stores cached results of AI prompts, including multiple runs for history and tracking purposes.' })
+export class AIResultCache_ {
+    @Field() 
+    @MaxLength(16)
+    ID: string;
+        
+    @Field({description: 'Reference to the AI prompt this result corresponds to.'}) 
+    @MaxLength(16)
+    AIPromptID: string;
+        
+    @Field({description: 'Reference to the AI model that generated this result.'}) 
+    @MaxLength(16)
+    AIModelID: string;
+        
+    @Field({description: 'Timestamp of when this result was generated.'}) 
+    @MaxLength(10)
+    RunAt: Date;
+        
+    @Field({description: 'The prompt text used to generate this result.'}) 
+    PromptText: string;
+        
+    @Field({nullable: true, description: 'The text of the result generated by the AI model.'}) 
+    ResultText?: string;
+        
+    @Field({description: 'The status of this result, indicating whether it is currently active or expired.'}) 
+    @MaxLength(100)
+    Status: string;
+        
+    @Field({nullable: true, description: 'Timestamp of when this result was marked as expired.'}) 
+    @MaxLength(10)
+    ExpiredOn?: Date;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
+        
+    @Field() 
+    @MaxLength(510)
+    AIPrompt: string;
+        
+    @Field() 
+    @MaxLength(100)
+    AIModel: string;
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for AI Result Cache
+//****************************************************************************
+@InputType()
+export class CreateAIResultCacheInput {
+    @Field()
+    AIPromptID: string;
+
+    @Field()
+    AIModelID: string;
+
+    @Field()
+    RunAt: Date;
+
+    @Field()
+    PromptText: string;
+
+    @Field({ nullable: true })
+    ResultText?: string;
+
+    @Field()
+    Status: string;
+
+    @Field({ nullable: true })
+    ExpiredOn?: Date;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for AI Result Cache
+//****************************************************************************
+@InputType()
+export class UpdateAIResultCacheInput {
+    @Field()
+    ID: string;
+
+    @Field()
+    AIPromptID: string;
+
+    @Field()
+    AIModelID: string;
+
+    @Field()
+    RunAt: Date;
+
+    @Field()
+    PromptText: string;
+
+    @Field({ nullable: true })
+    ResultText?: string;
+
+    @Field()
+    Status: string;
+
+    @Field({ nullable: true })
+    ExpiredOn?: Date;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
+//****************************************************************************
+// RESOLVER for AI Result Cache
+//****************************************************************************
+@ObjectType()
+export class RunAIResultCacheViewResult {
+    @Field(() => [AIResultCache_])
+    Results: AIResultCache_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(AIResultCache_)
+export class AIResultCacheResolver extends ResolverBase {
+    @Query(() => RunAIResultCacheViewResult)
+    async RunAIResultCacheViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunAIResultCacheViewResult)
+    async RunAIResultCacheViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunAIResultCacheViewResult)
+    async RunAIResultCacheDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        input.EntityName = 'AI Result Cache';
+        return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
+    }
+    @Query(() => AIResultCache_, { nullable: true })
+    async AIResultCache(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<AIResultCache_ | null> {
+        this.CheckUserReadPermissions('AI Result Cache', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIResultCaches] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('AI Result Cache', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('AI Result Cache', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
+    }
+    
+    @Mutation(() => AIResultCache_)
+    async CreateAIResultCache(
+        @Arg('input', () => CreateAIResultCacheInput) input: CreateAIResultCacheInput,
+        @Ctx() { dataSource, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.CreateRecord('AI Result Cache', input, dataSource, userPayload, pubSub)
+    }
+        
+    @Mutation(() => AIResultCache_)
+    async UpdateAIResultCache(
+        @Arg('input', () => UpdateAIResultCacheInput) input: UpdateAIResultCacheInput,
+        @Ctx() { dataSource, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.UpdateRecord('AI Result Cache', input, dataSource, userPayload, pubSub);
+    }
+    
+    @Mutation(() => AIResultCache_)
+    async DeleteAIResultCache(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('AI Result Cache', key, options, dataSource, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for AI Prompt Categories
+//****************************************************************************
+@ObjectType({ description: 'Categories for organizing AI prompts in a hierarchical structure.' })
+export class AIPromptCategory_ {
+    @Field() 
+    @MaxLength(16)
+    ID: string;
+        
+    @Field() 
+    @MaxLength(510)
+    Name: string;
+        
+    @Field({nullable: true, description: 'Parent category ID for hierarchical organization.'}) 
+    @MaxLength(16)
+    ParentID?: string;
+        
+    @Field({nullable: true}) 
+    Description?: string;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
+        
+    @Field({nullable: true}) 
+    @MaxLength(510)
+    Parent?: string;
+        
+    @Field(() => [AIPrompt_])
+    AIPromptsArray: AIPrompt_[]; // Link to AIPrompts
+    
+    @Field(() => [AIPromptCategory_])
+    AIPromptCategoriesArray: AIPromptCategory_[]; // Link to AIPromptCategories
+    
+}
+
+//****************************************************************************
+// INPUT TYPE for AI Prompt Categories
+//****************************************************************************
+@InputType()
+export class CreateAIPromptCategoryInput {
+    @Field()
+    Name: string;
+
+    @Field({ nullable: true })
+    ParentID?: string;
+
+    @Field({ nullable: true })
+    Description?: string;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for AI Prompt Categories
+//****************************************************************************
+@InputType()
+export class UpdateAIPromptCategoryInput {
+    @Field()
+    ID: string;
+
+    @Field()
+    Name: string;
+
+    @Field({ nullable: true })
+    ParentID?: string;
+
+    @Field({ nullable: true })
+    Description?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
+//****************************************************************************
+// RESOLVER for AI Prompt Categories
+//****************************************************************************
+@ObjectType()
+export class RunAIPromptCategoryViewResult {
+    @Field(() => [AIPromptCategory_])
+    Results: AIPromptCategory_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(AIPromptCategory_)
+export class AIPromptCategoryResolver extends ResolverBase {
+    @Query(() => RunAIPromptCategoryViewResult)
+    async RunAIPromptCategoryViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunAIPromptCategoryViewResult)
+    async RunAIPromptCategoryViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunAIPromptCategoryViewResult)
+    async RunAIPromptCategoryDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        input.EntityName = 'AI Prompt Categories';
+        return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
+    }
+    @Query(() => AIPromptCategory_, { nullable: true })
+    async AIPromptCategory(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<AIPromptCategory_ | null> {
+        this.CheckUserReadPermissions('AI Prompt Categories', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIPromptCategories] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('AI Prompt Categories', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('AI Prompt Categories', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
+    }
+    
+    @FieldResolver(() => [AIPrompt_])
+    async AIPromptsArray(@Root() aipromptcategory_: AIPromptCategory_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('AI Prompts', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIPrompts] WHERE [CategoryID]='${aipromptcategory_.ID}' ` + this.getRowLevelSecurityWhereClause('AI Prompts', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('AI Prompts', await dataSource.query(sSQL));
+        return result;
+    }
+        
+    @FieldResolver(() => [AIPromptCategory_])
+    async AIPromptCategoriesArray(@Root() aipromptcategory_: AIPromptCategory_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('AI Prompt Categories', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIPromptCategories] WHERE [ParentID]='${aipromptcategory_.ID}' ` + this.getRowLevelSecurityWhereClause('AI Prompt Categories', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('AI Prompt Categories', await dataSource.query(sSQL));
+        return result;
+    }
+        
+    @Mutation(() => AIPromptCategory_)
+    async CreateAIPromptCategory(
+        @Arg('input', () => CreateAIPromptCategoryInput) input: CreateAIPromptCategoryInput,
+        @Ctx() { dataSource, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.CreateRecord('AI Prompt Categories', input, dataSource, userPayload, pubSub)
+    }
+        
+    @Mutation(() => AIPromptCategory_)
+    async UpdateAIPromptCategory(
+        @Arg('input', () => UpdateAIPromptCategoryInput) input: UpdateAIPromptCategoryInput,
+        @Ctx() { dataSource, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.UpdateRecord('AI Prompt Categories', input, dataSource, userPayload, pubSub);
+    }
+    
+    @Mutation(() => AIPromptCategory_)
+    async DeleteAIPromptCategory(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('AI Prompt Categories', key, options, dataSource, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for AI Prompt Types
+//****************************************************************************
+@ObjectType({ description: 'Types of AI prompts such as Chat, Text-to-Image, Text-to-Video, etc.' })
+export class AIPromptType_ {
+    @Field() 
+    @MaxLength(16)
+    ID: string;
+        
+    @Field() 
+    @MaxLength(510)
+    Name: string;
+        
+    @Field({nullable: true}) 
+    Description?: string;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
+        
+    @Field(() => [AIPrompt_])
+    AIPromptsArray: AIPrompt_[]; // Link to AIPrompts
+    
+}
+
+//****************************************************************************
+// INPUT TYPE for AI Prompt Types
+//****************************************************************************
+@InputType()
+export class CreateAIPromptTypeInput {
+    @Field()
+    Name: string;
+
+    @Field({ nullable: true })
+    Description?: string;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for AI Prompt Types
+//****************************************************************************
+@InputType()
+export class UpdateAIPromptTypeInput {
+    @Field()
+    ID: string;
+
+    @Field()
+    Name: string;
+
+    @Field({ nullable: true })
+    Description?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
+//****************************************************************************
+// RESOLVER for AI Prompt Types
+//****************************************************************************
+@ObjectType()
+export class RunAIPromptTypeViewResult {
+    @Field(() => [AIPromptType_])
+    Results: AIPromptType_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(AIPromptType_)
+export class AIPromptTypeResolver extends ResolverBase {
+    @Query(() => RunAIPromptTypeViewResult)
+    async RunAIPromptTypeViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunAIPromptTypeViewResult)
+    async RunAIPromptTypeViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunAIPromptTypeViewResult)
+    async RunAIPromptTypeDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        input.EntityName = 'AI Prompt Types';
+        return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
+    }
+    @Query(() => AIPromptType_, { nullable: true })
+    async AIPromptType(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<AIPromptType_ | null> {
+        this.CheckUserReadPermissions('AI Prompt Types', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIPromptTypes] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('AI Prompt Types', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('AI Prompt Types', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
+    }
+    
+    @FieldResolver(() => [AIPrompt_])
+    async AIPromptsArray(@Root() aiprompttype_: AIPromptType_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('AI Prompts', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIPrompts] WHERE [TypeID]='${aiprompttype_.ID}' ` + this.getRowLevelSecurityWhereClause('AI Prompts', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('AI Prompts', await dataSource.query(sSQL));
+        return result;
+    }
+        
+    @Mutation(() => AIPromptType_)
+    async CreateAIPromptType(
+        @Arg('input', () => CreateAIPromptTypeInput) input: CreateAIPromptTypeInput,
+        @Ctx() { dataSource, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.CreateRecord('AI Prompt Types', input, dataSource, userPayload, pubSub)
+    }
+        
+    @Mutation(() => AIPromptType_)
+    async UpdateAIPromptType(
+        @Arg('input', () => UpdateAIPromptTypeInput) input: UpdateAIPromptTypeInput,
+        @Ctx() { dataSource, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.UpdateRecord('AI Prompt Types', input, dataSource, userPayload, pubSub);
+    }
+    
+    @Mutation(() => AIPromptType_)
+    async DeleteAIPromptType(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('AI Prompt Types', key, options, dataSource, userPayload, pubSub);
     }
     
 }
@@ -9576,6 +10301,9 @@ export class AIModel_ {
     @Field(() => [EntityAIAction_])
     EntityAIActionsArray: EntityAIAction_[]; // Link to EntityAIActions
     
+    @Field(() => [AIResultCache_])
+    AIResultCacheArray: AIResultCache_[]; // Link to AIResultCache
+    
 }
 
 //****************************************************************************
@@ -9760,6 +10488,14 @@ export class AIModelResolver extends ResolverBase {
         this.CheckUserReadPermissions('Entity AI Actions', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityAIActions] WHERE [AIModelID]='${aimodel_.ID}' ` + this.getRowLevelSecurityWhereClause('Entity AI Actions', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Entity AI Actions', await dataSource.query(sSQL));
+        return result;
+    }
+        
+    @FieldResolver(() => [AIResultCache_])
+    async AIResultCacheArray(@Root() aimodel_: AIModel_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('AI Result Cache', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIResultCaches] WHERE [AIModelID]='${aimodel_.ID}' ` + this.getRowLevelSecurityWhereClause('AI Result Cache', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('AI Result Cache', await dataSource.query(sSQL));
         return result;
     }
         
@@ -22960,6 +23696,9 @@ export class Template_ {
     @Field(() => [TemplateParam_])
     TemplateParamsArray: TemplateParam_[]; // Link to TemplateParams
     
+    @Field(() => [AIPrompt_])
+    AIPromptsArray: AIPrompt_[]; // Link to AIPrompts
+    
     @Field(() => [EntityDocument_])
     EntityDocumentsArray: EntityDocument_[]; // Link to EntityDocuments
     
@@ -23097,6 +23836,14 @@ export class TemplateResolver extends ResolverBase {
         this.CheckUserReadPermissions('Template Params', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwTemplateParams] WHERE [TemplateID]='${template_.ID}' ` + this.getRowLevelSecurityWhereClause('Template Params', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Template Params', await dataSource.query(sSQL));
+        return result;
+    }
+        
+    @FieldResolver(() => [AIPrompt_])
+    async AIPromptsArray(@Root() template_: Template_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('AI Prompts', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIPrompts] WHERE [TemplateID]='${template_.ID}' ` + this.getRowLevelSecurityWhereClause('AI Prompts', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('AI Prompts', await dataSource.query(sSQL));
         return result;
     }
         

@@ -3959,6 +3959,114 @@ export const Contact__client_crmSchema = z.object({
 export type Contact__client_crmEntityType = z.infer<typeof Contact__client_crmSchema>;
        
 /**
+ * zod schema definition for the entity Content Source Types
+ */
+export const ContentSourceTypeSchema = z.object({
+    ID: z.number().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: int`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(50)`),
+    Description: z.string().nullish().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+});
+
+export type ContentSourceTypeEntityType = z.infer<typeof ContentSourceTypeSchema>;
+       
+/**
+ * zod schema definition for the entity Content Sources
+ */
+export const ContentSourceSchema = z.object({
+    ID: z.number().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: int`),
+    OrganizationID: z.number().describe(`
+        * * Field Name: OrganizationID
+        * * Display Name: Organization ID
+        * * SQL Data Type: int`),
+    TypeID: z.number().describe(`
+        * * Field Name: TypeID
+        * * Display Name: Type ID
+        * * SQL Data Type: int
+        * * Related Entity/Foreign Key: Content Source Types (vwContentSourceTypes.ID)`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(50)`),
+    Description: z.string().nullish().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)`),
+    Active: z.boolean().describe(`
+        * * Field Name: Active
+        * * Display Name: Active
+        * * SQL Data Type: bit
+        * * Default Value: 1`),
+    ForceTraining: z.boolean().describe(`
+        * * Field Name: ForceTraining
+        * * Display Name: Force Training
+        * * SQL Data Type: bit
+        * * Default Value: 0`),
+    AutomaticTraining: z.boolean().describe(`
+        * * Field Name: AutomaticTraining
+        * * Display Name: Automatic Training
+        * * SQL Data Type: bit
+        * * Default Value: 0`),
+    FrequencyUnit: z.string().describe(`
+        * * Field Name: FrequencyUnit
+        * * Display Name: Frequency Unit
+        * * SQL Data Type: nvarchar(50)
+        * * Default Value: DAY`),
+    FrequencyCount: z.number().describe(`
+        * * Field Name: FrequencyCount
+        * * Display Name: Frequency Count
+        * * SQL Data Type: int
+        * * Default Value: 0`),
+    LastTraining: z.date().describe(`
+        * * Field Name: LastTraining
+        * * Display Name: Last Training
+        * * SQL Data Type: datetime
+        * * Default Value: 1/1/1900`),
+    TestTraining: z.boolean().describe(`
+        * * Field Name: TestTraining
+        * * Display Name: Test Training
+        * * SQL Data Type: bit
+        * * Default Value: 0`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Type: z.string().describe(`
+        * * Field Name: Type
+        * * Display Name: Type
+        * * SQL Data Type: nvarchar(50)`),
+});
+
+export type ContentSourceEntityType = z.infer<typeof ContentSourceSchema>;
+       
+/**
  * zod schema definition for the entity Customer Address
  */
 export const CustomerAddressSchema = z.object({
@@ -29495,6 +29603,299 @@ export class Contact__client_crmEntity extends BaseEntity<Contact__client_crmEnt
     }
     set acep_optoutregyr123(value: boolean | null) {
         this.Set('acep_optoutregyr123', value);
+    }
+}
+
+            
+/**
+ * Content Source Types - strongly typed entity sub-class
+ * * Schema: dray
+ * * Base Table: ContentSourceType
+ * * Base View: vwContentSourceTypes
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'Content Source Types')
+export class ContentSourceTypeEntity extends BaseEntity<ContentSourceTypeEntityType> {
+    /**
+    * Loads the Content Source Types record from the database
+    * @param ID: number - primary key value to load the Content Source Types record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof ContentSourceTypeEntity
+    * @method
+    * @override
+    */      
+    public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: int
+    */
+    get ID(): number {  
+        return this.Get('ID');
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(50)
+    */
+    get Name(): string {  
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    */
+    get Description(): string | null {  
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {  
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {  
+        return this.Get('__mj_UpdatedAt');
+    }
+}
+
+            
+/**
+ * Content Sources - strongly typed entity sub-class
+ * * Schema: dray
+ * * Base Table: ContentSource
+ * * Base View: vwContentSources
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'Content Sources')
+export class ContentSourceEntity extends BaseEntity<ContentSourceEntityType> {
+    /**
+    * Loads the Content Sources record from the database
+    * @param ID: number - primary key value to load the Content Sources record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof ContentSourceEntity
+    * @method
+    * @override
+    */      
+    public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: int
+    */
+    get ID(): number {  
+        return this.Get('ID');
+    }
+
+    /**
+    * * Field Name: OrganizationID
+    * * Display Name: Organization ID
+    * * SQL Data Type: int
+    */
+    get OrganizationID(): number {  
+        return this.Get('OrganizationID');
+    }
+    set OrganizationID(value: number) {
+        this.Set('OrganizationID', value);
+    }
+
+    /**
+    * * Field Name: TypeID
+    * * Display Name: Type ID
+    * * SQL Data Type: int
+    * * Related Entity/Foreign Key: Content Source Types (vwContentSourceTypes.ID)
+    */
+    get TypeID(): number {  
+        return this.Get('TypeID');
+    }
+    set TypeID(value: number) {
+        this.Set('TypeID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(50)
+    */
+    get Name(): string {  
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    */
+    get Description(): string | null {  
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: Active
+    * * Display Name: Active
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    */
+    get Active(): boolean {  
+        return this.Get('Active');
+    }
+    set Active(value: boolean) {
+        this.Set('Active', value);
+    }
+
+    /**
+    * * Field Name: ForceTraining
+    * * Display Name: Force Training
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    */
+    get ForceTraining(): boolean {  
+        return this.Get('ForceTraining');
+    }
+    set ForceTraining(value: boolean) {
+        this.Set('ForceTraining', value);
+    }
+
+    /**
+    * * Field Name: AutomaticTraining
+    * * Display Name: Automatic Training
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    */
+    get AutomaticTraining(): boolean {  
+        return this.Get('AutomaticTraining');
+    }
+    set AutomaticTraining(value: boolean) {
+        this.Set('AutomaticTraining', value);
+    }
+
+    /**
+    * * Field Name: FrequencyUnit
+    * * Display Name: Frequency Unit
+    * * SQL Data Type: nvarchar(50)
+    * * Default Value: DAY
+    */
+    get FrequencyUnit(): string {  
+        return this.Get('FrequencyUnit');
+    }
+    set FrequencyUnit(value: string) {
+        this.Set('FrequencyUnit', value);
+    }
+
+    /**
+    * * Field Name: FrequencyCount
+    * * Display Name: Frequency Count
+    * * SQL Data Type: int
+    * * Default Value: 0
+    */
+    get FrequencyCount(): number {  
+        return this.Get('FrequencyCount');
+    }
+    set FrequencyCount(value: number) {
+        this.Set('FrequencyCount', value);
+    }
+
+    /**
+    * * Field Name: LastTraining
+    * * Display Name: Last Training
+    * * SQL Data Type: datetime
+    * * Default Value: 1/1/1900
+    */
+    get LastTraining(): Date {  
+        return this.Get('LastTraining');
+    }
+    set LastTraining(value: Date) {
+        this.Set('LastTraining', value);
+    }
+
+    /**
+    * * Field Name: TestTraining
+    * * Display Name: Test Training
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    */
+    get TestTraining(): boolean {  
+        return this.Get('TestTraining');
+    }
+    set TestTraining(value: boolean) {
+        this.Set('TestTraining', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {  
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {  
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Type
+    * * Display Name: Type
+    * * SQL Data Type: nvarchar(50)
+    */
+    get Type(): string {  
+        return this.Get('Type');
     }
 }
 
