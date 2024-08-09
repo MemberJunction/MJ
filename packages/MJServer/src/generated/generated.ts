@@ -2,7 +2,7 @@
 * ALL ENTITIES - TypeGraphQL Type Class Definition - AUTO GENERATED FILE
 * Generated Entities and Resolvers for Server
 *
-* GENERATED: 8/5/2024, 4:38:01 PM
+* GENERATED: 8/8/2024, 7:41:10 PM
 *
 *   >>> DO NOT MODIFY THIS FILE!!!!!!!!!!!!
 *   >>> YOUR CHANGES WILL BE OVERWRITTEN
@@ -88,6 +88,14 @@ export class ScheduledAction_ {
     @Field() 
     @MaxLength(10)
     _mj__UpdatedAt: Date;
+        
+    @Field() 
+    @MaxLength(200)
+    CreatedByUser: string;
+        
+    @Field() 
+    @MaxLength(850)
+    Action: string;
         
     @Field(() => [ScheduledActionParam_])
     ScheduledActionParamsArray: ScheduledActionParam_[]; // Link to ScheduledActionParams
@@ -311,6 +319,14 @@ export class ScheduledActionParam_ {
     @Field() 
     @MaxLength(10)
     _mj__UpdatedAt: Date;
+        
+    @Field() 
+    @MaxLength(510)
+    ScheduledAction: string;
+        
+    @Field() 
+    @MaxLength(510)
+    ActionParam: string;
         
 }
 
@@ -7192,6 +7208,10 @@ export class List_ {
     @MaxLength(200)
     User: string;
         
+    @Field({nullable: true}) 
+    @MaxLength(200)
+    Category?: string;
+        
     @Field(() => [ListDetail_])
     ListDetailsArray: ListDetail_[]; // Link to ListDetails
     
@@ -7383,6 +7403,13 @@ export class ListDetail_ {
     @MaxLength(10)
     _mj__UpdatedAt: Date;
         
+    @Field({description: 'Tracks the status of each individual list detail row to enable processing of various types and the use of the status column for filtering list detail rows within a list that are in a particular state.'}) 
+    @MaxLength(60)
+    Status: string;
+        
+    @Field({nullable: true, description: 'Optional column that allows for tracking any additional data for each ListDetail row'}) 
+    AdditionalData?: string;
+        
     @Field() 
     @MaxLength(200)
     List: string;
@@ -7402,6 +7429,12 @@ export class CreateListDetailInput {
 
     @Field(() => Int)
     Sequence: number;
+
+    @Field()
+    Status: string;
+
+    @Field({ nullable: true })
+    AdditionalData?: string;
 }
     
 
@@ -7421,6 +7454,12 @@ export class UpdateListDetailInput {
 
     @Field(() => Int)
     Sequence: number;
+
+    @Field()
+    Status: string;
+
+    @Field({ nullable: true })
+    AdditionalData?: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -8781,6 +8820,14 @@ export class AuditLog_ {
     @MaxLength(200)
     User: string;
         
+    @Field() 
+    @MaxLength(100)
+    AuditLogType: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(200)
+    Authorization?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(510)
     Entity?: string;
@@ -9111,6 +9158,14 @@ export class AuthorizationRole_ {
     @MaxLength(10)
     _mj__UpdatedAt: Date;
         
+    @Field() 
+    @MaxLength(200)
+    Authorization: string;
+        
+    @Field() 
+    @MaxLength(100)
+    Role: string;
+        
 }
 //****************************************************************************
 // RESOLVER for Authorization Roles
@@ -9209,6 +9264,10 @@ export class AuditLogType_ {
     @Field({nullable: true}) 
     @MaxLength(100)
     Parent?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(200)
+    Authorization?: string;
         
     @Field(() => [AuditLogType_])
     AuditLogTypesArray: AuditLogType_[]; // Link to AuditLogTypes
@@ -9466,7 +9525,7 @@ export class AIModel_ {
     @MaxLength(16)
     AIModelTypeID: string;
         
-    @Field(() => Int, {nullable: true, description: 'A simplified power rank of each model for a given AI Model Type. For example, if we have GPT 3, GPT 3.5, and GPT 4, we would have a PowerRank of 1 for GPT3, 2 for GPT 3.5, and 3 for GPT 4. This can be used within model families like OpenAI or across all models. For example if you had Llama 2 in the mix which is similar to GPT 3.5 it would also have a PowerRank of 2. This can be used at runtime to pick the most/least powerful or compare model relative power.'}) 
+    @Field(() => Int, {nullable: true, description: 'Optional column that ranks the power of the AI model. Default is 0 and should be non-negative.'}) 
     PowerRank?: number;
         
     @Field(() => Boolean) 
@@ -9491,6 +9550,12 @@ export class AIModel_ {
     @Field() 
     @MaxLength(10)
     _mj__UpdatedAt: Date;
+        
+    @Field(() => Int, {nullable: true, description: 'Optional column that ranks the speed of the AI model. Default is 0 and should be non-negative.'}) 
+    SpeedRank?: number;
+        
+    @Field(() => Int, {nullable: true, description: 'Optional column that ranks the cost of the AI model. Default is 0 and should be non-negative.'}) 
+    CostRank?: number;
         
     @Field() 
     @MaxLength(100)
@@ -9544,6 +9609,12 @@ export class CreateAIModelInput {
 
     @Field({ nullable: true })
     APIName?: string;
+
+    @Field(() => Int, { nullable: true })
+    SpeedRank?: number;
+
+    @Field(() => Int, { nullable: true })
+    CostRank?: number;
 }
     
 
@@ -9581,6 +9652,12 @@ export class UpdateAIModelInput {
 
     @Field({ nullable: true })
     APIName?: string;
+
+    @Field(() => Int, { nullable: true })
+    SpeedRank?: number;
+
+    @Field(() => Int, { nullable: true })
+    CostRank?: number;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -12773,6 +12850,10 @@ export class DatasetItem_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
+    @MaxLength(200)
+    Dataset: string;
+        
+    @Field() 
     @MaxLength(510)
     Entity: string;
         
@@ -13078,6 +13159,10 @@ export class Conversation_ {
     @MaxLength(510)
     LinkedEntity?: string;
         
+    @Field({nullable: true}) 
+    @MaxLength(510)
+    DataContext?: string;
+        
     @Field(() => [ConversationDetail_])
     ConversationDetailsArray: ConversationDetail_[]; // Link to ConversationDetails
     
@@ -13278,10 +13363,6 @@ export class UserNotification_ {
     ResourceTypeID?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(16)
-    ResourceRecordID?: string;
-        
-    @Field({nullable: true}) 
     ResourceConfiguration?: string;
         
     @Field(() => Boolean) 
@@ -13298,6 +13379,10 @@ export class UserNotification_ {
     @Field() 
     @MaxLength(10)
     _mj__UpdatedAt: Date;
+        
+    @Field({nullable: true}) 
+    @MaxLength(16)
+    ResourceRecordID?: string;
         
     @Field() 
     @MaxLength(200)
@@ -13327,9 +13412,6 @@ export class CreateUserNotificationInput {
     ResourceTypeID?: string;
 
     @Field({ nullable: true })
-    ResourceRecordID?: string;
-
-    @Field({ nullable: true })
     ResourceConfiguration?: string;
 
     @Field(() => Boolean)
@@ -13337,6 +13419,9 @@ export class CreateUserNotificationInput {
 
     @Field({ nullable: true })
     ReadAt?: Date;
+
+    @Field({ nullable: true })
+    ResourceRecordID?: string;
 }
     
 
@@ -13361,9 +13446,6 @@ export class UpdateUserNotificationInput {
     ResourceTypeID?: string;
 
     @Field({ nullable: true })
-    ResourceRecordID?: string;
-
-    @Field({ nullable: true })
     ResourceConfiguration?: string;
 
     @Field(() => Boolean)
@@ -13371,6 +13453,9 @@ export class UpdateUserNotificationInput {
 
     @Field({ nullable: true })
     ReadAt?: Date;
+
+    @Field({ nullable: true })
+    ResourceRecordID?: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -13817,6 +13902,10 @@ export class RecordMergeLog_ {
     @Field() 
     @MaxLength(200)
     InitiatedByUser: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(200)
+    ApprovedByUser?: string;
         
     @Field(() => [RecordMergeDeletionLog_])
     RecordMergeDeletionLogsArray: RecordMergeDeletionLog_[]; // Link to RecordMergeDeletionLogs
@@ -14833,6 +14922,14 @@ export class QueryPermission_ {
     @MaxLength(10)
     _mj__UpdatedAt: Date;
         
+    @Field() 
+    @MaxLength(510)
+    Query: string;
+        
+    @Field() 
+    @MaxLength(100)
+    Role: string;
+        
 }
 
 //****************************************************************************
@@ -15618,6 +15715,18 @@ export class EntityRecordDocument_ {
     @MaxLength(10)
     _mj__UpdatedAt: Date;
         
+    @Field() 
+    @MaxLength(510)
+    Entity: string;
+        
+    @Field() 
+    @MaxLength(500)
+    EntityDocument: string;
+        
+    @Field() 
+    @MaxLength(510)
+    VectorIndex: string;
+        
 }
 
 //****************************************************************************
@@ -15817,6 +15926,18 @@ export class EntityDocument_ {
     @Field() 
     @MaxLength(510)
     Entity: string;
+        
+    @Field() 
+    @MaxLength(200)
+    VectorDatabase: string;
+        
+    @Field() 
+    @MaxLength(510)
+    Template: string;
+        
+    @Field() 
+    @MaxLength(100)
+    AIModel: string;
         
     @Field(() => [EntityDocumentSetting_])
     EntityDocumentSettingsArray: EntityDocumentSetting_[]; // Link to EntityDocumentSettings
@@ -16449,6 +16570,10 @@ export class UserViewCategory_ {
     @Field({nullable: true}) 
     @MaxLength(200)
     Parent?: string;
+        
+    @Field() 
+    @MaxLength(510)
+    Entity: string;
         
     @Field() 
     @MaxLength(200)
@@ -18832,6 +18957,10 @@ export class ApplicationSetting_ {
     @MaxLength(10)
     _mj__UpdatedAt: Date;
         
+    @Field() 
+    @MaxLength(200)
+    Application: string;
+        
 }
 
 //****************************************************************************
@@ -19504,6 +19633,10 @@ export class ActionAuthorization_ {
     @Field() 
     @MaxLength(850)
     Action: string;
+        
+    @Field() 
+    @MaxLength(200)
+    Authorization: string;
         
 }
 
@@ -21689,6 +21822,14 @@ export class ListCategory_ {
     @Field() 
     @MaxLength(10)
     _mj__UpdatedAt: Date;
+        
+    @Field({nullable: true}) 
+    @MaxLength(200)
+    Parent?: string;
+        
+    @Field() 
+    @MaxLength(200)
+    User: string;
         
     @Field(() => [ListCategory_])
     ListCategoriesArray: ListCategory_[]; // Link to ListCategories
