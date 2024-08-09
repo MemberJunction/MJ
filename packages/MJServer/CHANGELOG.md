@@ -1,8 +1,38 @@
 # Change Log - @memberjunction/server
 
-This log was last generated on Thu, 08 Aug 2024 02:53:16 GMT and should not be manually modified.
+This log was last generated on Fri, 09 Aug 2024 01:29:44 GMT and should not be manually modified.
 
 <!-- Start content -->
+
+## 2.2.1
+
+Fri, 09 Aug 2024 01:29:44 GMT
+
+### Patches
+
+- Applying package updates [skip ci] (craig.adam@bluecypress.io)
+- Applying package updates [skip ci] (craig.adam@bluecypress.io)
+- Bump @memberjunction/actions to v2.2.1
+- Bump @memberjunction/ai to v2.2.1
+- Bump @memberjunction/ai-mistral to v2.2.1
+- Bump @memberjunction/ai-openai to v2.2.1
+- Bump @memberjunction/ai-vectors-pinecone to v2.2.1
+- Bump @memberjunction/aiengine to v2.2.1
+- Bump @memberjunction/core to v2.2.1
+- Bump @memberjunction/core-actions to v2.2.1
+- Bump @memberjunction/core-entities to v2.2.1
+- Bump @memberjunction/data-context to v2.2.1
+- Bump @memberjunction/data-context-server to v2.2.1
+- Bump @memberjunction/doc-utils to v2.2.1
+- Bump @memberjunction/entity-communications-server to v2.2.1
+- Bump @memberjunction/external-change-detection to v2.2.1
+- Bump @memberjunction/global to v2.2.1
+- Bump @memberjunction/queue to v2.2.1
+- Bump @memberjunction/skip-types to v2.2.1
+- Bump @memberjunction/sqlserver-dataprovider to v2.2.1
+- Bump @memberjunction/graphql-dataprovider to v2.2.1
+- Bump @memberjunction/storage to v2.2.1
+- Bump @memberjunction/templates to v2.2.1
 
 ## 2.2.0
 

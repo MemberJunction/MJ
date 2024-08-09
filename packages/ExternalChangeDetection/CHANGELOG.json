@@ -2,6 +2,39 @@
   "name": "@memberjunction/external-change-detection",
   "entries": [
     {
+      "date": "Fri, 09 Aug 2024 01:29:44 GMT",
+      "version": "2.2.1",
+      "tag": "@memberjunction/external-change-detection_v2.2.1",
+      "comments": {
+        "patch": [
+          {
+            "author": "beachball",
+            "package": "@memberjunction/external-change-detection",
+            "comment": "Bump @memberjunction/core to v2.2.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/external-change-detection",
+            "comment": "Bump @memberjunction/core-entities to v2.2.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/external-change-detection",
+            "comment": "Bump @memberjunction/global to v2.2.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/external-change-detection",
+            "comment": "Bump @memberjunction/sqlserver-dataprovider to v2.2.1",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
       "date": "Thu, 08 Aug 2024 02:53:16 GMT",
       "version": "2.2.0",
       "tag": "@memberjunction/external-change-detection_v2.2.0",
