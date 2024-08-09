@@ -529,8 +529,13 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
             // AND so that we can do a full text search on all the words
             let u = userSearchString;
             const uUpper = u.toUpperCase();
-            if (uUpper.includes('AND') || uUpper.includes('OR') || uUpper.includes('NOT')) {
-                // do nothing, leave it alone, this structure is here to make the code easier to read
+            if (uUpper.includes(' AND ') || uUpper.includes(' OR ') || uUpper.includes(' NOT ')) {
+                //replace all spaces with %, but add spaces inbetween the original and, or and not keywords
+                u = uUpper.replace(/ /g, "%").replace(/%AND%/g, " AND ").replace(/%OR%/g, " OR ").replace(/%NOT%/g, " NOT ");
+            }
+            else if (uUpper.includes('AND') || uUpper.includes('OR') || uUpper.includes('NOT')) {
+                //leave the string alone, except replacing spaces with %
+                u = u.replace(/ /g, "%");
             }
             else if (u.includes(' ')) {
                 if ( u.startsWith('"') && u.endsWith('"') ) {
