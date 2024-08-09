@@ -245,8 +245,12 @@ public async recompileAllBaseViews(ds: DataSource, excludeSchemas: string[], app
     // Execute the command
     const { stdout, stderr } = await execAsync(command);
 
-    if (stderr) {
+    if (stderr && stderr.trim().length > 0) {
       throw new Error(stderr);
+    }
+    else if (stdout && stdout.trim().length > 0) {
+      // we shouldn't have any output from this command if there are no errors, so consider this an error
+      throw new Error(stdout);
     }
     return true;
   }
