@@ -72,7 +72,8 @@ export class SkipSingleMessageComponent implements AfterViewInit {
     private _cachedMessage: string | null = null;
     public get Message(): string {
       if (this._cachedMessage === null) {
-        if (this.ConversationDetailRecord.ID.length > 0 && this.ConversationDetailRecord.Role.trim().toLowerCase() === 'ai') {
+        if (this.ConversationDetailRecord.ID && this.ConversationDetailRecord.ID.length > 0 && 
+            this.ConversationDetailRecord.Role && this.ConversationDetailRecord.Role.trim().toLowerCase() === 'ai') {
           const resultObject = <SkipAPIResponse>JSON.parse(this.ConversationDetailRecord.Message);
     
           if (resultObject.success) {
