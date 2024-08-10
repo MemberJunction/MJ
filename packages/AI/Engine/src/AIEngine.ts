@@ -1,10 +1,11 @@
-import { BaseLLM, BaseModel, BaseResult, ChatParams, GetAIAPIKey } from "@memberjunction/ai";
+import { BaseLLM, BaseModel, BaseParams, BaseResult, ChatParams, GetAIAPIKey } from "@memberjunction/ai";
 import { SummarizeResult } from "@memberjunction/ai";
 import { ClassifyResult } from "@memberjunction/ai";
 import { ChatResult } from "@memberjunction/ai";
-import { BaseEngine, BaseEntity, Metadata, UserInfo } from "@memberjunction/core";
-import { MJGlobal } from "@memberjunction/global";
-import { AIActionEntity, AIModelActionEntity, AIModelEntityExtended, EntityAIActionEntity, EntityDocumentEntity, EntityDocumentTypeEntity, VectorDatabaseEntity } from "@memberjunction/core-entities";
+import { BaseEngine, BaseEntity, LogError, Metadata, RunView, UserInfo } from "@memberjunction/core";
+import { MJGlobal, RegisterClass } from "@memberjunction/global";
+import { AIActionEntity, AIModelActionEntity, AIModelEntity, AIModelEntityExtended, AIPromptCategoryEntity, AIPromptEntity, AIPromptTypeEntity, AIResultCacheEntity, EntityAIActionEntity, EntityDocumentEntity, EntityDocumentTypeEntity, VectorDatabaseEntity } from "@memberjunction/core-entities";
+import { AIPromptCategoryEntityExtended } from "./AIPromptCategoryExtended";
 
 
 export class AIActionParams {
@@ -20,6 +21,7 @@ export class EntityAIActionParams extends AIActionParams {
     entityRecord: BaseEntity
 }
 
+
 // this class handles execution of AI Actions
 export class AIEngine extends BaseEngine<AIEngine> {
     private _models: AIModelEntityExtended[] = [];
@@ -27,12 +29,27 @@ export class AIEngine extends BaseEngine<AIEngine> {
     private _actions: AIActionEntity[] = [];
     private _entityActions: EntityAIActionEntity[] = [];
     private _modelActions: AIModelActionEntity[] = [];
+    private _prompts: AIPromptEntity[] = [];
+    private _promptTypes: AIPromptTypeEntity[] = [];
+    private _promptCategories: AIPromptCategoryEntityExtended[] = [];
 
     public async Config(forceRefresh?: boolean, contextUser?: UserInfo) {
         const params = [
             {
                 PropertyName: '_models',
                 EntityName: 'AI Models'
+            },
+            {
+                PropertyName: '_prompts',
+                EntityName: 'AI Prompts'
+            },
+            {
+                PropertyName: '_promptTypes',
+                EntityName: 'AI Prompt Types'
+            },
+            {
+                PropertyName: '_promptCategories',
+                EntityName: 'AI Prompt Categories'
             },
             {
                 PropertyName: '_vectorDatabases',
@@ -54,8 +71,17 @@ export class AIEngine extends BaseEngine<AIEngine> {
         return await this.Load(params, forceRefresh, contextUser);
     }
 
+    protected override async AdditionalLoading(contextUser?: UserInfo): Promise<void> {
+        // handle associating prompts with prompt categories
+        this.PromptCategories.forEach(c => {
+            this.Prompts.filter(p => p.CategoryID === c.ID).forEach(p => {
+                c.Prompts.push(p);
+            });
+        });
+    }
+
     /**
-     * Returns the highest power model for a given vendor and model type. Loads the metadata if not already loaded.
+     * Convenience method to returns the highest power model for a given vendor and model type. Loads the metadata if not already loaded.
      * @param vendorName 
      * @param modelType 
      * @param contextUser required on the server side
@@ -70,9 +96,32 @@ export class AIEngine extends BaseEngine<AIEngine> {
         return models[0];
     }
 
+    public get Prompts(): AIPromptEntity[] {
+        AIEngine.checkMetadataLoaded();
+        return AIEngine.Instance._prompts;
+    }
+
+    public get PromptTypes(): AIPromptTypeEntity[] {
+        AIEngine.checkMetadataLoaded();
+        return AIEngine.Instance._promptTypes;
+    }
+
+    public get PromptCategories(): AIPromptCategoryEntityExtended[] {
+        AIEngine.checkMetadataLoaded();
+        return AIEngine.Instance._promptCategories;
+    }
+
     public get Models(): AIModelEntityExtended[] {
         AIEngine.checkMetadataLoaded();
         return AIEngine.Instance._models;
+    }
+
+    /**
+     * Convenience method to return only the Language Models. Loads the metadata if not already loaded.
+     */
+    public get LanguageModels(): AIModelEntityExtended[] {  
+        AIEngine.checkMetadataLoaded();
+        return AIEngine.Instance._models.filter(m => m.AIModelType.trim().toLowerCase() === 'llm');
     }
 
     public get VectorDatabases(): VectorDatabaseEntity[] {
@@ -313,5 +362,48 @@ export class AIEngine extends BaseEngine<AIEngine> {
         catch (e) {
             throw new Error(`Error loading driver '${driverModuleName}' / '${driverClassName}' : ${e.message}`);
         }
+    }
+
+
+    /**
+     * This method will check the result cache for the given params and return the result if it exists, otherwise it will return null if the request is not cached.
+     * @param prompt - the fully populated prompt to check the cache for
+     */
+    public async CheckResultCache(prompt: string): Promise<AIResultCacheEntity | null> {
+        try {
+            const rv = new RunView();
+            const escapedPrompt = prompt.replace(/'/g, "''");
+            const result = await rv.RunView({
+                EntityName: 'AI Result Cache',
+                ExtraFilter: `PromptText = '${escapedPrompt}' AND Status='Active'`,
+                OrderBy: 'RunAt DESC',
+                MaxRows: 1, // get only the latest one
+                ResultType: 'entity_object'
+            }, this.ContextUser);
+            if (result && result.Success && result.Results && result.Results.length > 0) {
+                return result.Results[0];
+            }
+            else
+                return null;
+        }
+        catch (err) {
+            LogError(err);
+            return null;
+        }
+    }
+
+    /**
+     * Utility method that will cache the result of a prompt in the AI Result Cache entity
+     */
+    public async CacheResult(model: AIModelEntity, prompt: AIPromptEntity, promptText: string, resultText: string): Promise<boolean> {
+        const md = new Metadata();
+        const cacheItem = await md.GetEntityObject<AIResultCacheEntity>('AI Result Cache', this.ContextUser);
+        cacheItem.AIModelID = model.ID;
+        cacheItem.AIPromptID = prompt.ID;
+        cacheItem.PromptText = promptText;
+        cacheItem.ResultText = resultText;
+        cacheItem.Status = 'Active';    
+        cacheItem.RunAt = new Date();
+        return await cacheItem.Save();
     }
 }
