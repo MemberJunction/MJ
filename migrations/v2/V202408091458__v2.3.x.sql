@@ -182,8 +182,56 @@ EXEC sp_addextendedproperty
     @level1type = N'TABLE',  @level1name = 'AIResultCache',
     @level2type = N'COLUMN', @level2name = 'ExpiredOn';
 
--- CRAIG - this needs to be done after a codegen run...
-UPDATE __mj.Entity SET Name='AI Prompt Types' WHERE Name ='AIPrompt Types'
-UPDATE __mj.Entity SET Name='AI Prompt Categories' WHERE Name ='AIPrompt Categories'
-UPDATE __mj.Entity SET Name='AI Result Cache' WHERE Name ='AIResult Caches'
-UPDATE __mj.Entity SET Name='AI Prompts' WHERE Name ='AIPrompts'
+
+
+/**********************************************
+  MANUALLY CREATE Entity Records because we want custom Names for them, the CodeGen tool generates slightly different Entity Names than the below. CodeGen will pick up from here and automatically create fields and so on from these "stub" records
+*******************/
+INSERT INTO __mj.Entity (
+    ID, ParentID, Name, NameSuffix, Description, AutoUpdateDescription, 
+    BaseTable, BaseView, BaseViewGenerated, SchemaName, VirtualEntity, 
+    TrackRecordChanges, AuditRecordAccess, AuditViewRuns, IncludeInAPI, 
+    AllowAllRowsAPI, AllowUpdateAPI, AllowCreateAPI, AllowDeleteAPI, 
+    CustomResolverAPI, AllowUserSearchAPI, FullTextSearchEnabled, 
+    FullTextCatalog, FullTextCatalogGenerated, FullTextIndex, 
+    FullTextIndexGenerated, FullTextSearchFunction, 
+    FullTextSearchFunctionGenerated, UserViewMaxRows, spCreate, spUpdate, 
+    spDelete, spCreateGenerated, spUpdateGenerated, spDeleteGenerated, 
+    CascadeDeletes, DeleteType, AllowRecordMerge, spMatch, 
+    RelationshipDefaultDisplayType, UserFormGenerated, 
+    EntityObjectSubclassName, EntityObjectSubclassImport, 
+    PreferredCommunicationField, Icon, __mj_CreatedAt, __mj_UpdatedAt
+)
+VALUES 
+(
+    '7DAD0238-8B56-EF11-991A-6045BDEBA539', NULL, 'AI Prompt Categories', NULL, 
+    'Categories for organizing AI prompts in a hierarchical structure.', 1, 
+    'AIPromptCategory', 'vwAIPromptCategories', 1, '__mj', 0, 1, 0, 0, 1, 0, 1, 1, 
+    1, 0, 0, 0, NULL, 1, NULL, 1, NULL, 1, 1000, NULL, NULL, NULL, 1, 1, 1, 0, 
+    'Hard', 0, NULL, 'Search', 1, NULL, NULL, NULL, NULL, 
+    '2024-08-09 20:09:12.1100000 +00:00', '2024-08-09 21:19:35.2700000 +00:00'
+),
+(
+    'F1A70B3E-8B56-EF11-991A-6045BDEBA539', NULL, 'AI Prompt Types', NULL, 
+    'Types of AI prompts such as Chat, Text-to-Image, Text-to-Video, etc.', 1, 
+    'AIPromptType', 'vwAIPromptTypes', 1, '__mj', 0, 1, 0, 0, 1, 0, 1, 1, 
+    1, 0, 0, 0, NULL, 1, NULL, 1, NULL, 1, 1000, NULL, NULL, NULL, 1, 1, 1, 0, 
+    'Hard', 0, NULL, 'Search', 1, NULL, NULL, NULL, NULL, 
+    '2024-08-09 20:09:12.9300000 +00:00', '2024-08-09 21:19:35.2700000 +00:00'
+),
+(
+    '73AD0238-8B56-EF11-991A-6045BDEBA539', NULL, 'AI Prompts', NULL, 
+    'Stores AI prompts, including references to categories, types, and templates.', 1, 
+    'AIPrompt', 'vwAIPrompts', 1, '__mj', 0, 1, 0, 0, 1, 0, 1, 1, 
+    1, 0, 0, 0, NULL, 1, NULL, 1, NULL, 1, 1000, NULL, NULL, NULL, 1, 1, 1, 0, 
+    'Hard', 0, NULL, 'Search', 1, NULL, NULL, NULL, NULL, 
+    '2024-08-09 20:09:02.1933333 +00:00', '2024-08-09 21:19:35.2700000 +00:00'
+),
+(
+    '78AD0238-8B56-EF11-991A-6045BDEBA539', NULL, 'AI Result Cache', NULL, 
+    'Stores cached results of AI prompts, including multiple runs for history and tracking purposes.', 1, 
+    'AIResultCache', 'vwAIResultCaches', 1, '__mj', 0, 1, 0, 0, 1, 0, 1, 1, 
+    1, 0, 0, 0, NULL, 1, NULL, 1, NULL, 1, 1000, NULL, NULL, NULL, 1, 1, 1, 0, 
+    'Hard', 0, NULL, 'Search', 1, NULL, NULL, NULL, NULL, 
+    '2024-08-09 20:09:11.3200000 +00:00', '2024-08-09 21:19:35.2700000 +00:00'
+);
