@@ -2,7 +2,7 @@
 * ALL ENTITIES - TypeGraphQL Type Class Definition - AUTO GENERATED FILE
 * Generated Entities and Resolvers for Server
 *
-* GENERATED: 8/9/2024, 4:23:30 PM
+* GENERATED: 8/10/2024, 12:20:53 PM
 *
 *   >>> DO NOT MODIFY THIS FILE!!!!!!!!!!!!
 *   >>> YOUR CHANGES WILL BE OVERWRITTEN
@@ -10282,6 +10282,9 @@ export class AIModel_ {
     @Field(() => Int, {nullable: true, description: 'Optional column that ranks the cost of the AI model. Default is 0 and should be non-negative.'}) 
     CostRank?: number;
         
+    @Field({nullable: true, description: 'This column stores unstructured text notes that provide insights into what the model is particularly good at and areas where it may not perform as well. These notes can be used by a human or an AI to determine if the model is a good fit for various purposes.'}) 
+    ModelSelectionInsights?: string;
+        
     @Field() 
     @MaxLength(100)
     AIModelType: string;
@@ -10343,6 +10346,9 @@ export class CreateAIModelInput {
 
     @Field(() => Int, { nullable: true })
     CostRank?: number;
+
+    @Field({ nullable: true })
+    ModelSelectionInsights?: string;
 }
     
 
@@ -10386,6 +10392,9 @@ export class UpdateAIModelInput {
 
     @Field(() => Int, { nullable: true })
     CostRank?: number;
+
+    @Field({ nullable: true })
+    ModelSelectionInsights?: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];

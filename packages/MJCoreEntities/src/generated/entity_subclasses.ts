@@ -781,6 +781,11 @@ export const AIModelSchema = z.object({
         * * SQL Data Type: int
         * * Default Value: 0
     * * Description: Optional column that ranks the cost of the AI model. Default is 0 and should be non-negative.`),
+    ModelSelectionInsights: z.string().nullish().describe(`
+        * * Field Name: ModelSelectionInsights
+        * * Display Name: Model Selection Insights
+        * * SQL Data Type: nvarchar(MAX)
+    * * Description: This column stores unstructured text notes that provide insights into what the model is particularly good at and areas where it may not perform as well. These notes can be used by a human or an AI to determine if the model is a good fit for various purposes.`),
     AIModelType: z.string().describe(`
         * * Field Name: AIModelType
         * * Display Name: AIModel Type
@@ -10587,6 +10592,19 @@ export class AIModelEntity extends BaseEntity<AIModelEntityType> {
     }
     set CostRank(value: number | null) {
         this.Set('CostRank', value);
+    }
+
+    /**
+    * * Field Name: ModelSelectionInsights
+    * * Display Name: Model Selection Insights
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: This column stores unstructured text notes that provide insights into what the model is particularly good at and areas where it may not perform as well. These notes can be used by a human or an AI to determine if the model is a good fit for various purposes.
+    */
+    get ModelSelectionInsights(): string | null {  
+        return this.Get('ModelSelectionInsights');
+    }
+    set ModelSelectionInsights(value: string | null) {
+        this.Set('ModelSelectionInsights', value);
     }
 
     /**
