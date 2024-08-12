@@ -5,11 +5,9 @@ import pdfParse from 'pdf-parse'
 import * as officeparser from 'officeparser'
 import * as fs from 'fs'
 import { ProcessRunParams, JsonObject } from './processRun.types'
-import { ContentItemProcessParams } from '@memberjunction/content-autotagging-core'
+import { ContentItemProcessParams } from '../../../Core/dist/'
 import { OpenAI } from 'openai/index.mjs';
-import moment from 'moment';
-import { format } from 'date-fns'
-import 'moment-timezone'
+import { toZonedTime } from 'date-fns-tz'
 import axios from 'axios'
 import * as cheerio from 'cheerio'
 import crypto from 'crypto'
@@ -354,7 +352,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
      */
     public async convertLastRunDateToTimezone(lastRunDate: Date): Promise<Date> {
         const userTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone
-        const date = new Date(moment.utc(format(lastRunDate, 'yyyy-MM-dd HH:mm:ss')).tz(userTimeZone).format('YYYY-MM-DD HH:mm:ss.SSSZ'))
+        const date = toZonedTime(lastRunDate, userTimeZone)
         return date
     }
 

@@ -1,18 +1,19 @@
 import { UserInfo, Metadata, RunView } from '@memberjunction/core';
+import { RegisterClass } from '@memberjunction/global';
 import { AutotagBase } from "../../../Core/dist";
 import { AutotagBaseEngine } from "../../../Engine/dist";
 import OpenAI from 'openai';
-//import { ContentSourceEntity, ContentItemEntity } from 'mj_generatedentities';
+import { ContentSourceEntity, ContentItemEntity } from 'mj_generatedentities';
 import { setupSQLServerClient, SQLServerDataProvider, SQLServerProviderConfigData } from '@memberjunction/sqlserver-dataprovider';
 import { DataSource } from 'typeorm';
 import { dbHost, dbUsername, dbPassword, dbDatabase, dbPort } from '../config';
-import { ContentSourceParams } from '@memberjunction/content-autotagging-engine';
+import { ContentSourceParams } from '../../../Engine/dist';
 import { RSSItem } from './RSS.types';
 import axios from 'axios'
 import crypto from 'crypto'
 import Parser from 'rss-parser'
 
-
+@RegisterClass(AutotagBase, 'AutotagRSSFeed')
 export class AutotagRSSFeed extends AutotagBase {
     private contextUser!: UserInfo;
     protected contentSourceTypeID: number;

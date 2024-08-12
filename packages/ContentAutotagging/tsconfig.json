@@ -5,7 +5,7 @@
       "declaration": true,
       "declarationMap": true,
       "outDir": "dist",
-      "rootDir": "src",
+      "rootDir": ".",
       "sourceMap": true,
       "experimentalDecorators": true,
       "resolveJsonModule": true,
@@ -20,22 +20,8 @@
       "emitDecoratorMetadata": true,
       "skipLibCheck": true, 
       "composite": true,
-      "baseUrl": ".",
-      "paths": {
-        "@content-autotagging/core": ["./Core"],
-        "@content-autotagging/engine": ["./Engine"],
-        "@content-autotagging/localfilesystem": ["./LocalFileSystem"], 
-        "@content-autotagging/rssfeed": ["./RSSFeed"], 
-        "@content-autotagging/websites": ["./Websites"]
-      }
+      "baseUrl": "."
     },
     "exclude": ["node_modules"],
-    "include": ["./src/**/*.ts"], 
-    "references": [
-        { "path": "./Core" }, 
-        { "path": "./Engine" }, 
-        { "path": "./LocalFileSystem" }, 
-        { "path": "./RSSFeed" }, 
-        { "path": "./Websites" }
-    ]
+    "include": ["./src/**/*.ts", "./*/src/**/*.ts"]
   }

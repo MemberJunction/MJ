@@ -1,15 +1,17 @@
-import { AutotagBase } from '@memberjunction/content-autotagging-core';
-import { AutotagBaseEngine, ContentSourceParams } from '@memberjunction/content-autotagging-engine';
+import { AutotagBase } from '../../../Core/dist';
+import { AutotagBaseEngine, ContentSourceParams } from '../../../Engine/dist';
+import { RegisterClass } from '@memberjunction/global';
 import { UserInfo, Metadata, RunView } from '@memberjunction/core';
 import { SQLServerProviderConfigData, setupSQLServerClient, SQLServerDataProvider } from '@memberjunction/sqlserver-dataprovider';
 import { DataSource } from 'typeorm';
 import { dbHost, dbUsername, dbPassword, dbDatabase, dbPort } from '../config';
-//import { ContentSourceEntity, ContentItemEntity } from 'mj_generatedentities';
+import { ContentSourceEntity, ContentItemEntity } from 'mj_generatedentities';
 import { OpenAI } from 'openai';
 import * as cheerio from 'cheerio';
 import axios from 'axios';
 import { URL } from 'url';
 
+@RegisterClass(AutotagBase, 'AutotagWebsite')
 export class AutotagWebsite extends AutotagBase {
     private contextUser: UserInfo;
     private engine: AutotagBaseEngine = AutotagBaseEngine.Instance;
@@ -169,7 +171,7 @@ export class AutotagWebsite extends AutotagBase {
         return data;
     }
 
-    public getTextWithLineBreaks(element: cheerio.Element, $: cheerio.CheerioAPI): string {
+    public getTextWithLineBreaks(element: any, $: cheerio.CheerioAPI): string {
         let text = '';
         const children = $(element).contents();
 
@@ -201,7 +203,7 @@ export class AutotagWebsite extends AutotagBase {
             console.error(`Error processing ${url}:`, error);
             return '';
         }
-        }
+    }
 
     /**
      * Given a root URL that corresponds to a content source, retrieve all the links in accordance to the crawl settings. 

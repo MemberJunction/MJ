@@ -1,15 +1,15 @@
 import { RegisterClass } from "@memberjunction/global";
 import { DataSource } from 'typeorm';
 import fs from 'fs';
-import { AutotagBase } from "@memberjunction/content-autotagging-core";
+import { AutotagBase } from "../../../Core/dist";
 import { AutotagBaseEngine } from "../../../Engine/dist/index";
 import { UserInfo, Metadata, RunView } from "@memberjunction/core";
 import { SQLServerProviderConfigData, setupSQLServerClient, SQLServerDataProvider } from '@memberjunction/sqlserver-dataprovider';
 import { dbHost, dbUsername, dbPassword, dbDatabase, dbPort } from '../config';
-//import { ContentSourceEntity, ContentItemEntity } from "mj_generatedentities";
+import { ContentSourceEntity, ContentItemEntity } from "mj_generatedentities";
 import { OpenAI } from "openai";
 import path from 'path';
-import { ContentSourceParams } from "@memberjunction/content-autotagging-engine";
+import { ContentSourceParams } from "../../../Engine/dist";
 
 @RegisterClass(AutotagBase, 'AutotagLocalFileSystem')
 export class AutotagLocalFileSystem extends AutotagBase {
