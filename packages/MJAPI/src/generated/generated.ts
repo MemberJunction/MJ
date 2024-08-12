@@ -2,7 +2,7 @@
 * ALL ENTITIES - TypeGraphQL Type Class Definition - AUTO GENERATED FILE
 * Generated Entities and Resolvers for Server
 *
-* GENERATED: 8/10/2024, 12:20:53 PM
+* GENERATED: 8/12/2024, 11:01:42 AM
 *
 *   >>> DO NOT MODIFY THIS FILE!!!!!!!!!!!!
 *   >>> YOUR CHANGES WILL BE OVERWRITTEN
@@ -19,374 +19,8 @@ import { DataSource } from 'typeorm';
 import * as mj_core_schema_server_object_types from '@memberjunction/server'
 
 
-import { ContentSourceTypeEntity, ContentSourceEntity, QuadDemoEntity, ThreadDetailEntity, ThreadEntity, IndustryEntity, ContactRoleEntity, ContactLevelEntity, AccountEntity, ContactEntity, DealStageEntity, ActivityEntity, DealForecastCategoryEntity, DealEntity, DealTypeEntity, InvoiceEntity, ActivityAttachmentEntity, PaymentTermsTypeEntity, InvoiceStatusTypeEntity, SalesLineItemEntity, SalesTransactionEntity, CustomerAddress__client_financeEntity, Item__client_financeEntity, Customer__client_financeEntity, OrganizationLinkEntity, PersonLinkEntity, Account__client_crmEntity, StringMapEntity, ProductPriceLevelEntity, client_membershipEntity, Contact__client_crmEntity, UoMEntity, SalesOrderEntity, SalesOrderDetailEntity, ProductEntity, CustomerAddressEntity, SalesLineItem__client_membershipEntity, ItemEntity, CustomerEntity, SalesTransaction__client_membershipEntity } from 'mj_generatedentities';
+import { QuadDemoEntity, ThreadDetailEntity, ThreadEntity, IndustryEntity, ContactRoleEntity, ContactLevelEntity, AccountEntity, ContactEntity, DealStageEntity, ActivityEntity, DealForecastCategoryEntity, DealEntity, DealTypeEntity, InvoiceEntity, ActivityAttachmentEntity, PaymentTermsTypeEntity, InvoiceStatusTypeEntity, SalesLineItemEntity, SalesTransactionEntity, CustomerAddress__client_financeEntity, Item__client_financeEntity, Customer__client_financeEntity, OrganizationLinkEntity, PersonLinkEntity, Account__client_crmEntity, StringMapEntity, ProductPriceLevelEntity, client_membershipEntity, Contact__client_crmEntity, UoMEntity, SalesOrderEntity, SalesOrderDetailEntity, ProductEntity, CustomerAddressEntity, SalesLineItem__client_membershipEntity, ItemEntity, CustomerEntity, SalesTransaction__client_membershipEntity } from 'mj_generatedentities';
     
-
-//****************************************************************************
-// ENTITY CLASS for Content Source Types
-//****************************************************************************
-@ObjectType()
-export class ContentSourceType_ {
-    @Field(() => Int) 
-    ID: number;
-        
-    @Field() 
-    @MaxLength(100)
-    Name: string;
-        
-    @Field({nullable: true}) 
-    Description?: string;
-        
-    @Field() 
-    @MaxLength(10)
-    _mj__CreatedAt: Date;
-        
-    @Field() 
-    @MaxLength(10)
-    _mj__UpdatedAt: Date;
-        
-    @Field(() => [ContentSource_])
-    ContentSourcesArray: ContentSource_[]; // Link to ContentSources
-    
-}
-
-//****************************************************************************
-// INPUT TYPE for Content Source Types
-//****************************************************************************
-@InputType()
-export class CreateContentSourceTypeInput {
-    @Field()
-    Name: string;
-
-    @Field({ nullable: true })
-    Description?: string;
-}
-    
-
-//****************************************************************************
-// INPUT TYPE for Content Source Types
-//****************************************************************************
-@InputType()
-export class UpdateContentSourceTypeInput {
-    @Field(() => Int)
-    ID: number;
-
-    @Field()
-    Name: string;
-
-    @Field({ nullable: true })
-    Description?: string;
-
-    @Field(() => [KeyValuePairInput], { nullable: true })
-    OldValues___?: KeyValuePairInput[];
-}
-    
-//****************************************************************************
-// RESOLVER for Content Source Types
-//****************************************************************************
-@ObjectType()
-export class RunContentSourceTypeViewResult {
-    @Field(() => [ContentSourceType_])
-    Results: ContentSourceType_[];
-
-    @Field(() => String, {nullable: true})
-    UserViewRunID?: string;
-
-    @Field(() => Int, {nullable: true})
-    RowCount: number;
-
-    @Field(() => Int, {nullable: true})
-    TotalRowCount: number;
-
-    @Field(() => Int, {nullable: true})
-    ExecutionTime: number;
-
-    @Field({nullable: true})
-    ErrorMessage?: string;
-
-    @Field(() => Boolean, {nullable: false})
-    Success: boolean;
-}
-
-@Resolver(ContentSourceType_)
-export class ContentSourceTypeResolver extends ResolverBase {
-    @Query(() => RunContentSourceTypeViewResult)
-    async RunContentSourceTypeViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
-    }
-
-    @Query(() => RunContentSourceTypeViewResult)
-    async RunContentSourceTypeViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
-    }
-
-    @Query(() => RunContentSourceTypeViewResult)
-    async RunContentSourceTypeDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        input.EntityName = 'Content Source Types';
-        return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
-    }
-    @Query(() => ContentSourceType_, { nullable: true })
-    async ContentSourceType(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ContentSourceType_ | null> {
-        this.CheckUserReadPermissions('Content Source Types', userPayload);
-        const sSQL = `SELECT * FROM [dray].[vwContentSourceTypes] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Content Source Types', userPayload, EntityPermissionType.Read, 'AND');
-        const result = this.MapFieldNamesToCodeNames('Content Source Types', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
-        return result;
-    }
-    
-    @FieldResolver(() => [ContentSource_])
-    async ContentSourcesArray(@Root() contentsourcetype_: ContentSourceType_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('Content Sources', userPayload);
-        const sSQL = `SELECT * FROM [dray].[vwContentSources] WHERE [TypeID]=${contentsourcetype_.ID} ` + this.getRowLevelSecurityWhereClause('Content Sources', userPayload, EntityPermissionType.Read, 'AND');
-        const result = this.ArrayMapFieldNamesToCodeNames('Content Sources', await dataSource.query(sSQL));
-        return result;
-    }
-        
-    @Mutation(() => ContentSourceType_)
-    async CreateContentSourceType(
-        @Arg('input', () => CreateContentSourceTypeInput) input: CreateContentSourceTypeInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
-        @PubSub() pubSub: PubSubEngine
-    ) {
-        return this.CreateRecord('Content Source Types', input, dataSource, userPayload, pubSub)
-    }
-        
-    @Mutation(() => ContentSourceType_)
-    async UpdateContentSourceType(
-        @Arg('input', () => UpdateContentSourceTypeInput) input: UpdateContentSourceTypeInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
-        @PubSub() pubSub: PubSubEngine
-    ) {
-        return this.UpdateRecord('Content Source Types', input, dataSource, userPayload, pubSub);
-    }
-    
-    @Mutation(() => ContentSourceType_)
-    async DeleteContentSourceType(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
-        return this.DeleteRecord('Content Source Types', key, options, dataSource, userPayload, pubSub);
-    }
-    
-}
-
-//****************************************************************************
-// ENTITY CLASS for Content Sources
-//****************************************************************************
-@ObjectType()
-export class ContentSource_ {
-    @Field(() => Int) 
-    ID: number;
-        
-    @Field(() => Int) 
-    OrganizationID: number;
-        
-    @Field(() => Int) 
-    TypeID: number;
-        
-    @Field() 
-    @MaxLength(100)
-    Name: string;
-        
-    @Field({nullable: true}) 
-    Description?: string;
-        
-    @Field(() => Boolean) 
-    Active: boolean;
-        
-    @Field(() => Boolean) 
-    ForceTraining: boolean;
-        
-    @Field(() => Boolean) 
-    AutomaticTraining: boolean;
-        
-    @Field() 
-    @MaxLength(100)
-    FrequencyUnit: string;
-        
-    @Field(() => Int) 
-    FrequencyCount: number;
-        
-    @Field() 
-    @MaxLength(8)
-    LastTraining: Date;
-        
-    @Field(() => Boolean) 
-    TestTraining: boolean;
-        
-    @Field() 
-    @MaxLength(10)
-    _mj__CreatedAt: Date;
-        
-    @Field() 
-    @MaxLength(10)
-    _mj__UpdatedAt: Date;
-        
-    @Field() 
-    @MaxLength(100)
-    Type: string;
-        
-}
-
-//****************************************************************************
-// INPUT TYPE for Content Sources
-//****************************************************************************
-@InputType()
-export class CreateContentSourceInput {
-    @Field(() => Int)
-    OrganizationID: number;
-
-    @Field(() => Int)
-    TypeID: number;
-
-    @Field()
-    Name: string;
-
-    @Field({ nullable: true })
-    Description?: string;
-
-    @Field(() => Boolean)
-    Active: boolean;
-
-    @Field(() => Boolean)
-    ForceTraining: boolean;
-
-    @Field(() => Boolean)
-    AutomaticTraining: boolean;
-
-    @Field()
-    FrequencyUnit: string;
-
-    @Field(() => Int)
-    FrequencyCount: number;
-
-    @Field()
-    LastTraining: Date;
-
-    @Field(() => Boolean)
-    TestTraining: boolean;
-}
-    
-
-//****************************************************************************
-// INPUT TYPE for Content Sources
-//****************************************************************************
-@InputType()
-export class UpdateContentSourceInput {
-    @Field(() => Int)
-    ID: number;
-
-    @Field(() => Int)
-    OrganizationID: number;
-
-    @Field(() => Int)
-    TypeID: number;
-
-    @Field()
-    Name: string;
-
-    @Field({ nullable: true })
-    Description?: string;
-
-    @Field(() => Boolean)
-    Active: boolean;
-
-    @Field(() => Boolean)
-    ForceTraining: boolean;
-
-    @Field(() => Boolean)
-    AutomaticTraining: boolean;
-
-    @Field()
-    FrequencyUnit: string;
-
-    @Field(() => Int)
-    FrequencyCount: number;
-
-    @Field()
-    LastTraining: Date;
-
-    @Field(() => Boolean)
-    TestTraining: boolean;
-
-    @Field(() => [KeyValuePairInput], { nullable: true })
-    OldValues___?: KeyValuePairInput[];
-}
-    
-//****************************************************************************
-// RESOLVER for Content Sources
-//****************************************************************************
-@ObjectType()
-export class RunContentSourceViewResult {
-    @Field(() => [ContentSource_])
-    Results: ContentSource_[];
-
-    @Field(() => String, {nullable: true})
-    UserViewRunID?: string;
-
-    @Field(() => Int, {nullable: true})
-    RowCount: number;
-
-    @Field(() => Int, {nullable: true})
-    TotalRowCount: number;
-
-    @Field(() => Int, {nullable: true})
-    ExecutionTime: number;
-
-    @Field({nullable: true})
-    ErrorMessage?: string;
-
-    @Field(() => Boolean, {nullable: false})
-    Success: boolean;
-}
-
-@Resolver(ContentSource_)
-export class ContentSourceResolver extends ResolverBase {
-    @Query(() => RunContentSourceViewResult)
-    async RunContentSourceViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
-    }
-
-    @Query(() => RunContentSourceViewResult)
-    async RunContentSourceViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
-    }
-
-    @Query(() => RunContentSourceViewResult)
-    async RunContentSourceDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        input.EntityName = 'Content Sources';
-        return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
-    }
-    @Query(() => ContentSource_, { nullable: true })
-    async ContentSource(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ContentSource_ | null> {
-        this.CheckUserReadPermissions('Content Sources', userPayload);
-        const sSQL = `SELECT * FROM [dray].[vwContentSources] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Content Sources', userPayload, EntityPermissionType.Read, 'AND');
-        const result = this.MapFieldNamesToCodeNames('Content Sources', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
-        return result;
-    }
-    
-    @Mutation(() => ContentSource_)
-    async CreateContentSource(
-        @Arg('input', () => CreateContentSourceInput) input: CreateContentSourceInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
-        @PubSub() pubSub: PubSubEngine
-    ) {
-        return this.CreateRecord('Content Sources', input, dataSource, userPayload, pubSub)
-    }
-        
-    @Mutation(() => ContentSource_)
-    async UpdateContentSource(
-        @Arg('input', () => UpdateContentSourceInput) input: UpdateContentSourceInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
-        @PubSub() pubSub: PubSubEngine
-    ) {
-        return this.UpdateRecord('Content Sources', input, dataSource, userPayload, pubSub);
-    }
-    
-    @Mutation(() => ContentSource_)
-    async DeleteContentSource(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
-        return this.DeleteRecord('Content Sources', key, options, dataSource, userPayload, pubSub);
-    }
-    
-}
 
 //****************************************************************************
 // ENTITY CLASS for Quad Demos
@@ -798,7 +432,7 @@ export class ThreadResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [ThreadDetail_])
-    async ThreadDetailsArray(@Root() thread_: Thread_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async ThreadID_ThreadDetailsArray(@Root() thread_: Thread_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Thread Details', userPayload);
         const sSQL = `SELECT * FROM [dbo].[vwThreadDetails] WHERE [ThreadID]=${thread_.ID} ` + this.getRowLevelSecurityWhereClause('Thread Details', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Thread Details', await dataSource.query(sSQL));
@@ -947,7 +581,7 @@ export class IndustryResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [Account_])
-    async AccountsArray(@Root() industry_: Industry_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async IndustryID_AccountsArray(@Root() industry_: Industry_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Accounts', userPayload);
         const sSQL = `SELECT * FROM [crm].[vwAccounts] WHERE [IndustryID]=${industry_.ID} ` + this.getRowLevelSecurityWhereClause('Accounts', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Accounts', await dataSource.query(sSQL));
@@ -1095,7 +729,7 @@ export class ContactRoleResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [Contact_])
-    async ContactsArray(@Root() contactrole_: ContactRole_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RoleID_ContactsArray(@Root() contactrole_: ContactRole_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Contacts', userPayload);
         const sSQL = `SELECT * FROM [crm].[vwContacts] WHERE [RoleID]=${contactrole_.ID} ` + this.getRowLevelSecurityWhereClause('Contacts', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Contacts', await dataSource.query(sSQL));
@@ -1261,7 +895,7 @@ export class ContactLevelResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [Contact_])
-    async ContactsArray(@Root() contactlevel_: ContactLevel_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async LevelID_ContactsArray(@Root() contactlevel_: ContactLevel_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Contacts', userPayload);
         const sSQL = `SELECT * FROM [crm].[vwContacts] WHERE [LevelID]=${contactlevel_.ID} ` + this.getRowLevelSecurityWhereClause('Contacts', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Contacts', await dataSource.query(sSQL));
@@ -1701,7 +1335,7 @@ export class AccountResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [Contact_])
-    async ContactsArray(@Root() account_: Account_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async AccountID_ContactsArray(@Root() account_: Account_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Contacts', userPayload);
         const sSQL = `SELECT * FROM [crm].[vwContacts] WHERE [AccountID]=${account_.ID} ` + this.getRowLevelSecurityWhereClause('Contacts', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Contacts', await dataSource.query(sSQL));
@@ -1709,7 +1343,7 @@ export class AccountResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [Deal_])
-    async DealsArray(@Root() account_: Account_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async AccountID_DealsArray(@Root() account_: Account_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Deals', userPayload);
         const sSQL = `SELECT * FROM [crm].[vwDeals] WHERE [AccountID]=${account_.ID} ` + this.getRowLevelSecurityWhereClause('Deals', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Deals', await dataSource.query(sSQL));
@@ -1717,7 +1351,7 @@ export class AccountResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [Activity_])
-    async ActivitiesArray(@Root() account_: Account_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async AccountID_ActivitiesArray(@Root() account_: Account_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Activities', userPayload);
         const sSQL = `SELECT * FROM [crm].[vwActivities] WHERE [AccountID]=${account_.ID} ` + this.getRowLevelSecurityWhereClause('Activities', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Activities', await dataSource.query(sSQL));
@@ -1725,7 +1359,7 @@ export class AccountResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [Invoice_])
-    async InvoicesArray(@Root() account_: Account_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async AccountID_InvoicesArray(@Root() account_: Account_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Invoices', userPayload);
         const sSQL = `SELECT * FROM [crm].[vwInvoices] WHERE [AccountID]=${account_.ID} ` + this.getRowLevelSecurityWhereClause('Invoices', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Invoices', await dataSource.query(sSQL));
@@ -2136,7 +1770,7 @@ export class ContactResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [Deal_])
-    async DealsArray(@Root() contact_: Contact_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async ContactID_DealsArray(@Root() contact_: Contact_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Deals', userPayload);
         const sSQL = `SELECT * FROM [crm].[vwDeals] WHERE [ContactID]=${contact_.ID} ` + this.getRowLevelSecurityWhereClause('Deals', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Deals', await dataSource.query(sSQL));
@@ -2144,7 +1778,7 @@ export class ContactResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [Invoice_])
-    async InvoicesArray(@Root() contact_: Contact_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async ContactID_InvoicesArray(@Root() contact_: Contact_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Invoices', userPayload);
         const sSQL = `SELECT * FROM [crm].[vwInvoices] WHERE [ContactID]=${contact_.ID} ` + this.getRowLevelSecurityWhereClause('Invoices', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Invoices', await dataSource.query(sSQL));
@@ -2152,7 +1786,7 @@ export class ContactResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [Activity_])
-    async ActivitiesArray(@Root() contact_: Contact_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async ContactID_ActivitiesArray(@Root() contact_: Contact_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Activities', userPayload);
         const sSQL = `SELECT * FROM [crm].[vwActivities] WHERE [ContactID]=${contact_.ID} ` + this.getRowLevelSecurityWhereClause('Activities', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Activities', await dataSource.query(sSQL));
@@ -2292,7 +1926,7 @@ export class DealStageResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [Deal_])
-    async DealsArray(@Root() dealstage_: DealStage_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DealStageID_DealsArray(@Root() dealstage_: DealStage_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Deals', userPayload);
         const sSQL = `SELECT * FROM [crm].[vwDeals] WHERE [DealStageID]=${dealstage_.ID} ` + this.getRowLevelSecurityWhereClause('Deals', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Deals', await dataSource.query(sSQL));
@@ -2723,7 +2357,7 @@ export class DealForecastCategoryResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [Deal_])
-    async DealsArray(@Root() dealforecastcategory_: DealForecastCategory_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DealForecastCategoryID_DealsArray(@Root() dealforecastcategory_: DealForecastCategory_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Deals', userPayload);
         const sSQL = `SELECT * FROM [crm].[vwDeals] WHERE [DealForecastCategoryID]=${dealforecastcategory_.ID} ` + this.getRowLevelSecurityWhereClause('Deals', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Deals', await dataSource.query(sSQL));
@@ -3098,7 +2732,7 @@ export class DealResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [Activity_])
-    async ActivitiesArray(@Root() deal_: Deal_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DealID_ActivitiesArray(@Root() deal_: Deal_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Activities', userPayload);
         const sSQL = `SELECT * FROM [crm].[vwActivities] WHERE [DealID]=${deal_.ID} ` + this.getRowLevelSecurityWhereClause('Activities', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Activities', await dataSource.query(sSQL));
@@ -3248,7 +2882,7 @@ export class DealTypeResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [Deal_])
-    async DealsArray(@Root() dealtype_: DealType_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DealTypeID_DealsArray(@Root() dealtype_: DealType_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Deals', userPayload);
         const sSQL = `SELECT * FROM [crm].[vwDeals] WHERE [DealTypeID]=${dealtype_.ID} ` + this.getRowLevelSecurityWhereClause('Deals', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Deals', await dataSource.query(sSQL));
@@ -3631,7 +3265,7 @@ export class ActivityAttachmentResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [Activity_])
-    async ActivitiesArray(@Root() activityattachment_: ActivityAttachment_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async AttachmentID_ActivitiesArray(@Root() activityattachment_: ActivityAttachment_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Activities', userPayload);
         const sSQL = `SELECT * FROM [crm].[vwActivities] WHERE [AttachmentID]=${activityattachment_.ID} ` + this.getRowLevelSecurityWhereClause('Activities', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Activities', await dataSource.query(sSQL));
@@ -3820,7 +3454,7 @@ export class PaymentTermsTypeResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [Invoice_])
-    async InvoicesArray(@Root() paymenttermstype_: PaymentTermsType_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async PaymentTermsID_InvoicesArray(@Root() paymenttermstype_: PaymentTermsType_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Invoices', userPayload);
         const sSQL = `SELECT * FROM [crm].[vwInvoices] WHERE [PaymentTermsID]=${paymenttermstype_.ID} ` + this.getRowLevelSecurityWhereClause('Invoices', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Invoices', await dataSource.query(sSQL));
@@ -3960,7 +3594,7 @@ export class InvoiceStatusTypeResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [Invoice_])
-    async InvoicesArray(@Root() invoicestatustype_: InvoiceStatusType_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async StatusID_InvoicesArray(@Root() invoicestatustype_: InvoiceStatusType_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Invoices', userPayload);
         const sSQL = `SELECT * FROM [crm].[vwInvoices] WHERE [StatusID]=${invoicestatustype_.ID} ` + this.getRowLevelSecurityWhereClause('Invoices', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Invoices', await dataSource.query(sSQL));
@@ -13106,7 +12740,7 @@ export class SalesTransactionResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [SalesLineItem_])
-    async SalesLineItemsArray(@Root() salestransaction_: SalesTransaction_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async SalesTransactionID_SalesLineItemsArray(@Root() salestransaction_: SalesTransaction_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Sales Line Items', userPayload);
         const sSQL = `SELECT * FROM [client_finance].[vwSalesLineItems] WHERE [SalesTransactionID]=${salestransaction_.ID} ` + this.getRowLevelSecurityWhereClause('Sales Line Items', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Sales Line Items', await dataSource.query(sSQL));
@@ -17272,7 +16906,7 @@ export class Customer__client_financeResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [OrganizationLink_])
-    async OrganizationLinksArray(@Root() customer__client_finance_: Customer__client_finance_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MainGreatPlainsCustomerID_OrganizationLinksArray(@Root() customer__client_finance_: Customer__client_finance_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Organization Links', userPayload);
         const sSQL = `SELECT * FROM [common].[vwOrganizationLinks] WHERE [MainGreatPlainsCustomerID]='${customer__client_finance_.Customer_Number}' ` + this.getRowLevelSecurityWhereClause('Organization Links', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Organization Links', await dataSource.query(sSQL));
@@ -17280,7 +16914,7 @@ export class Customer__client_financeResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [PersonLink_])
-    async PersonLinksArray(@Root() customer__client_finance_: Customer__client_finance_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MainGreatPlainsCustomerID_PersonLinksArray(@Root() customer__client_finance_: Customer__client_finance_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Person Links', userPayload);
         const sSQL = `SELECT * FROM [common].[vwPersonLinks] WHERE [MainGreatPlainsCustomerID]='${customer__client_finance_.Customer_Number}' ` + this.getRowLevelSecurityWhereClause('Person Links', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Person Links', await dataSource.query(sSQL));
@@ -17288,7 +16922,7 @@ export class Customer__client_financeResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [CustomerAddress__client_finance_])
-    async CustomerAddress__client_financeArray(@Root() customer__client_finance_: Customer__client_finance_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async CustomerNumber_CustomerAddress__client_financeArray(@Root() customer__client_finance_: Customer__client_finance_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Customer Address__client_finance', userPayload);
         const sSQL = `SELECT * FROM [client_finance].[vwCustomerAddress__client_finance] WHERE [Customer Number]='${customer__client_finance_.Customer_Number}' ` + this.getRowLevelSecurityWhereClause('Customer Address__client_finance', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Customer Address__client_finance', await dataSource.query(sSQL));
@@ -17458,7 +17092,7 @@ export class OrganizationLinkResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [PersonLink_])
-    async PersonLinksArray(@Root() organizationlink_: OrganizationLink_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async CRMAccountID_PersonLinksArray(@Root() organizationlink_: OrganizationLink_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Person Links', userPayload);
         const sSQL = `SELECT * FROM [common].[vwPersonLinks] WHERE [CRMAccountID]='${organizationlink_.CRMAccountID}' ` + this.getRowLevelSecurityWhereClause('Person Links', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Person Links', await dataSource.query(sSQL));
@@ -17661,7 +17295,7 @@ export class PersonLinkResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [CustomerAddress_])
-    async CustomerAddressArray(@Root() personlink_: PersonLink_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async [CustomerNumber]_CustomerAddressArray(@Root() personlink_: PersonLink_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Customer Address', userPayload);
         const sSQL = `SELECT * FROM [client_membership].[vwCustomerAddress] WHERE [[Customer Number]]='${personlink_.MembershipGreatPlainsCustomerID}' ` + this.getRowLevelSecurityWhereClause('Customer Address', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Customer Address', await dataSource.query(sSQL));
@@ -17669,7 +17303,7 @@ export class PersonLinkResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [CustomerAddress__client_finance_])
-    async CustomerAddress__client_financeArray(@Root() personlink_: PersonLink_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async [CustomerNumber]_CustomerAddress__client_financeArray(@Root() personlink_: PersonLink_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Customer Address__client_finance', userPayload);
         const sSQL = `SELECT * FROM [client_finance].[vwCustomerAddress__client_finance] WHERE [[Customer Number]]='${personlink_.MainGreatPlainsCustomerID}' ` + this.getRowLevelSecurityWhereClause('Customer Address__client_finance', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Customer Address__client_finance', await dataSource.query(sSQL));
@@ -17677,7 +17311,7 @@ export class PersonLinkResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [OrganizationLink_])
-    async OrganizationLinksArray(@Root() personlink_: PersonLink_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async CRMAccountID_OrganizationLinksArray(@Root() personlink_: PersonLink_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Organization Links', userPayload);
         const sSQL = `SELECT * FROM [common].[vwOrganizationLinks] WHERE [CRMAccountID]='${personlink_.CRMAccountID}' ` + this.getRowLevelSecurityWhereClause('Organization Links', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Organization Links', await dataSource.query(sSQL));
@@ -20675,7 +20309,7 @@ export class Account__client_crmResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [Product_])
-    async ProductsArray(@Root() account__client_crm_: Account__client_crm_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async acep_PublisherId_ProductsArray(@Root() account__client_crm_: Account__client_crm_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Products', userPayload);
         const sSQL = `SELECT * FROM [client_crm].[vwProducts] WHERE [acep_PublisherId]='${account__client_crm_.AccountId}' ` + this.getRowLevelSecurityWhereClause('Products', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Products', await dataSource.query(sSQL));
@@ -20683,7 +20317,7 @@ export class Account__client_crmResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [Account__client_crm_])
-    async Accounts__client_crmArray(@Root() account__client_crm_: Account__client_crm_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async ParentAccountId_Accounts__client_crmArray(@Root() account__client_crm_: Account__client_crm_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Accounts__client_crm', userPayload);
         const sSQL = `SELECT * FROM [client_crm].[vwAccounts__client_crm] WHERE [ParentAccountId]='${account__client_crm_.AccountId}' ` + this.getRowLevelSecurityWhereClause('Accounts__client_crm', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Accounts__client_crm', await dataSource.query(sSQL));
@@ -20691,7 +20325,7 @@ export class Account__client_crmResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [Contact__client_crm_])
-    async Contacts__client_crmArray(@Root() account__client_crm_: Account__client_crm_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async msa_managingpartnerid_Contacts__client_crmArray(@Root() account__client_crm_: Account__client_crm_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Contacts__client_crm', userPayload);
         const sSQL = `SELECT * FROM [client_crm].[vwContacts__client_crm] WHERE [msa_managingpartnerid]='${account__client_crm_.AccountId}' ` + this.getRowLevelSecurityWhereClause('Contacts__client_crm', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Contacts__client_crm', await dataSource.query(sSQL));
@@ -20699,7 +20333,7 @@ export class Account__client_crmResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [PersonLink_])
-    async PersonLinksArray(@Root() account__client_crm_: Account__client_crm_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async CRMAccountID_PersonLinksArray(@Root() account__client_crm_: Account__client_crm_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Person Links', userPayload);
         const sSQL = `SELECT * FROM [common].[vwPersonLinks] WHERE [CRMAccountID]='${account__client_crm_.AccountId}' ` + this.getRowLevelSecurityWhereClause('Person Links', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Person Links', await dataSource.query(sSQL));
@@ -20707,7 +20341,7 @@ export class Account__client_crmResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [OrganizationLink_])
-    async OrganizationLinksArray(@Root() account__client_crm_: Account__client_crm_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async CRMAccountID_OrganizationLinksArray(@Root() account__client_crm_: Account__client_crm_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Organization Links', userPayload);
         const sSQL = `SELECT * FROM [common].[vwOrganizationLinks] WHERE [CRMAccountID]='${account__client_crm_.AccountId}' ` + this.getRowLevelSecurityWhereClause('Organization Links', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Organization Links', await dataSource.query(sSQL));
@@ -22184,7 +21818,7 @@ export class client_membershipResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [Contact__client_crm_])
-    async Contacts__client_crmArray(@Root() client_membership_: client_membership_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async Acep_ACEPMembershipId_Contacts__client_crmArray(@Root() client_membership_: client_membership_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Contacts__client_crm', userPayload);
         const sSQL = `SELECT * FROM [client_crm].[vwContacts__client_crm] WHERE [Acep_ACEPMembershipId]='${client_membership_.Acep_membershipId}' ` + this.getRowLevelSecurityWhereClause('Contacts__client_crm', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Contacts__client_crm', await dataSource.query(sSQL));
@@ -22192,7 +21826,7 @@ export class client_membershipResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [SalesOrder_])
-    async SalesOrdersArray(@Root() client_membership_: client_membership_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async Acep_ACEPMembershipId_SalesOrdersArray(@Root() client_membership_: client_membership_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Sales Orders', userPayload);
         const sSQL = `SELECT * FROM [client_crm].[vwSalesOrders] WHERE [Acep_ACEPMembershipId]='${client_membership_.Acep_membershipId}' ` + this.getRowLevelSecurityWhereClause('Sales Orders', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Sales Orders', await dataSource.query(sSQL));
@@ -26994,7 +26628,7 @@ export class Contact__client_crmResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [PersonLink_])
-    async PersonLinksArray(@Root() contact__client_crm_: Contact__client_crm_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async CRMContactID_PersonLinksArray(@Root() contact__client_crm_: Contact__client_crm_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Person Links', userPayload);
         const sSQL = `SELECT * FROM [common].[vwPersonLinks] WHERE [CRMContactID]='${contact__client_crm_.ContactId}' ` + this.getRowLevelSecurityWhereClause('Person Links', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Person Links', await dataSource.query(sSQL));
@@ -27002,7 +26636,7 @@ export class Contact__client_crmResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [client_membership_])
-    async client_membershipsArray(@Root() contact__client_crm_: Contact__client_crm_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async acep_contactid_client_membershipsArray(@Root() contact__client_crm_: Contact__client_crm_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('client _memberships', userPayload);
         const sSQL = `SELECT * FROM [client_crm].[vwclient_memberships] WHERE [acep_contactid]='${contact__client_crm_.ContactId}' ` + this.getRowLevelSecurityWhereClause('client _memberships', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('client _memberships', await dataSource.query(sSQL));
@@ -27010,7 +26644,7 @@ export class Contact__client_crmResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [Account__client_crm_])
-    async Accounts__client_crmArray(@Root() contact__client_crm_: Contact__client_crm_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async PrimaryContactId_Accounts__client_crmArray(@Root() contact__client_crm_: Contact__client_crm_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Accounts__client_crm', userPayload);
         const sSQL = `SELECT * FROM [client_crm].[vwAccounts__client_crm] WHERE [PrimaryContactId]='${contact__client_crm_.ContactId}' ` + this.getRowLevelSecurityWhereClause('Accounts__client_crm', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Accounts__client_crm', await dataSource.query(sSQL));
@@ -27018,7 +26652,7 @@ export class Contact__client_crmResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [SalesOrder_])
-    async SalesOrdersArray(@Root() contact__client_crm_: Contact__client_crm_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async acep_OrderContact_SalesOrdersArray(@Root() contact__client_crm_: Contact__client_crm_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Sales Orders', userPayload);
         const sSQL = `SELECT * FROM [client_crm].[vwSalesOrders] WHERE [acep_OrderContact]='${contact__client_crm_.ContactId}' ` + this.getRowLevelSecurityWhereClause('Sales Orders', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Sales Orders', await dataSource.query(sSQL));
@@ -27026,7 +26660,7 @@ export class Contact__client_crmResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [Contact__client_crm_])
-    async Contacts__client_crmArray(@Root() contact__client_crm_: Contact__client_crm_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MasterId_Contacts__client_crmArray(@Root() contact__client_crm_: Contact__client_crm_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Contacts__client_crm', userPayload);
         const sSQL = `SELECT * FROM [client_crm].[vwContacts__client_crm] WHERE [MasterId]='${contact__client_crm_.ContactId}' ` + this.getRowLevelSecurityWhereClause('Contacts__client_crm', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Contacts__client_crm', await dataSource.query(sSQL));
@@ -27445,7 +27079,7 @@ export class UoMResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [SalesOrderDetail_])
-    async SalesOrderDetailsArray(@Root() uom_: UoM_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async UoMId_SalesOrderDetailsArray(@Root() uom_: UoM_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Sales Order Details', userPayload);
         const sSQL = `SELECT * FROM [client_crm].[vwSalesOrderDetails] WHERE [UoMId]='${uom_.UoMId}' ` + this.getRowLevelSecurityWhereClause('Sales Order Details', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Sales Order Details', await dataSource.query(sSQL));
@@ -27453,7 +27087,7 @@ export class UoMResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [UoM_])
-    async UoMsArray(@Root() uom_: UoM_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async BaseUoM_UoMsArray(@Root() uom_: UoM_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Uo Ms', userPayload);
         const sSQL = `SELECT * FROM [client_crm].[vwUoMs] WHERE [BaseUoM]='${uom_.UoMId}' ` + this.getRowLevelSecurityWhereClause('Uo Ms', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Uo Ms', await dataSource.query(sSQL));
@@ -27461,7 +27095,7 @@ export class UoMResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [Product_])
-    async ProductsArray(@Root() uom_: UoM_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DefaultUoMId_ProductsArray(@Root() uom_: UoM_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Products', userPayload);
         const sSQL = `SELECT * FROM [client_crm].[vwProducts] WHERE [DefaultUoMId]='${uom_.UoMId}' ` + this.getRowLevelSecurityWhereClause('Products', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Products', await dataSource.query(sSQL));
@@ -27469,7 +27103,7 @@ export class UoMResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [ProductPriceLevel_])
-    async ProductPriceLevelsArray(@Root() uom_: UoM_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async UoMId_ProductPriceLevelsArray(@Root() uom_: UoM_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Product Price Levels', userPayload);
         const sSQL = `SELECT * FROM [client_crm].[vwProductPriceLevels] WHERE [UoMId]='${uom_.UoMId}' ` + this.getRowLevelSecurityWhereClause('Product Price Levels', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Product Price Levels', await dataSource.query(sSQL));
@@ -29617,7 +29251,7 @@ export class SalesOrderResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [SalesOrder_])
-    async SalesOrdersArray(@Root() salesorder_: SalesOrder_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async acep_orgorderforrefundid_SalesOrdersArray(@Root() salesorder_: SalesOrder_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Sales Orders', userPayload);
         const sSQL = `SELECT * FROM [client_crm].[vwSalesOrders] WHERE [acep_orgorderforrefundid]='${salesorder_.SalesOrderId}' ` + this.getRowLevelSecurityWhereClause('Sales Orders', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Sales Orders', await dataSource.query(sSQL));
@@ -29625,7 +29259,7 @@ export class SalesOrderResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [SalesOrderDetail_])
-    async SalesOrderDetailsArray(@Root() salesorder_: SalesOrder_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async SalesOrderId_SalesOrderDetailsArray(@Root() salesorder_: SalesOrder_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Sales Order Details', userPayload);
         const sSQL = `SELECT * FROM [client_crm].[vwSalesOrderDetails] WHERE [SalesOrderId]='${salesorder_.SalesOrderId}' ` + this.getRowLevelSecurityWhereClause('Sales Order Details', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Sales Order Details', await dataSource.query(sSQL));
@@ -29633,7 +29267,7 @@ export class SalesOrderResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [client_membership_])
-    async client_membershipsArray(@Root() salesorder_: SalesOrder_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async Acep_CurrentCRMOrderId_client_membershipsArray(@Root() salesorder_: SalesOrder_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('client _memberships', userPayload);
         const sSQL = `SELECT * FROM [client_crm].[vwclient_memberships] WHERE [Acep_CurrentCRMOrderId]='${salesorder_.SalesOrderId}' ` + this.getRowLevelSecurityWhereClause('client _memberships', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('client _memberships', await dataSource.query(sSQL));
@@ -30598,7 +30232,7 @@ export class SalesOrderDetailResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [SalesOrderDetail_])
-    async SalesOrderDetailsArray(@Root() salesorderdetail_: SalesOrderDetail_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async ParentBundleId_SalesOrderDetailsArray(@Root() salesorderdetail_: SalesOrderDetail_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Sales Order Details', userPayload);
         const sSQL = `SELECT * FROM [client_crm].[vwSalesOrderDetails] WHERE [ParentBundleId]='${salesorderdetail_.SalesOrderDetailId}' ` + this.getRowLevelSecurityWhereClause('Sales Order Details', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Sales Order Details', await dataSource.query(sSQL));
@@ -32332,7 +31966,7 @@ export class ProductResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [Product_])
-    async ProductsArray(@Root() product_: Product_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async ParentProductId_ProductsArray(@Root() product_: Product_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Products', userPayload);
         const sSQL = `SELECT * FROM [client_crm].[vwProducts] WHERE [ParentProductId]='${product_.ProductId}' ` + this.getRowLevelSecurityWhereClause('Products', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Products', await dataSource.query(sSQL));
@@ -32340,7 +31974,7 @@ export class ProductResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [ProductPriceLevel_])
-    async ProductPriceLevelsArray(@Root() product_: Product_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async ProductId_ProductPriceLevelsArray(@Root() product_: Product_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Product Price Levels', userPayload);
         const sSQL = `SELECT * FROM [client_crm].[vwProductPriceLevels] WHERE [ProductId]='${product_.ProductId}' ` + this.getRowLevelSecurityWhereClause('Product Price Levels', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Product Price Levels', await dataSource.query(sSQL));
@@ -32348,7 +31982,7 @@ export class ProductResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [SalesOrderDetail_])
-    async SalesOrderDetailsArray(@Root() product_: Product_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async ProductId_SalesOrderDetailsArray(@Root() product_: Product_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Sales Order Details', userPayload);
         const sSQL = `SELECT * FROM [client_crm].[vwSalesOrderDetails] WHERE [ProductId]='${product_.ProductId}' ` + this.getRowLevelSecurityWhereClause('Sales Order Details', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Sales Order Details', await dataSource.query(sSQL));
@@ -40208,7 +39842,7 @@ export class ItemResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [SalesLineItem__client_membership_])
-    async SalesLineItems__client_membershipArray(@Root() item_: Item_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async ItemNumber_SalesLineItems__client_membershipArray(@Root() item_: Item_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Sales Line Items__client_membership', userPayload);
         const sSQL = `SELECT * FROM [client_membership].[vwSalesLineItems__client_membership] WHERE [Item Number]='${item_.Item_Number}' ` + this.getRowLevelSecurityWhereClause('Sales Line Items__client_membership', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Sales Line Items__client_membership', await dataSource.query(sSQL));
@@ -42058,7 +41692,7 @@ export class CustomerResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [OrganizationLink_])
-    async OrganizationLinksArray(@Root() customer_: Customer_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MembershipGreatPlainsCustomerID_OrganizationLinksArray(@Root() customer_: Customer_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Organization Links', userPayload);
         const sSQL = `SELECT * FROM [common].[vwOrganizationLinks] WHERE [MembershipGreatPlainsCustomerID]='${customer_.Customer_Number}' ` + this.getRowLevelSecurityWhereClause('Organization Links', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Organization Links', await dataSource.query(sSQL));
@@ -42066,7 +41700,7 @@ export class CustomerResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [CustomerAddress_])
-    async CustomerAddressArray(@Root() customer_: Customer_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async CustomerNumber_CustomerAddressArray(@Root() customer_: Customer_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Customer Address', userPayload);
         const sSQL = `SELECT * FROM [client_membership].[vwCustomerAddress] WHERE [Customer Number]='${customer_.Customer_Number}' ` + this.getRowLevelSecurityWhereClause('Customer Address', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Customer Address', await dataSource.query(sSQL));
@@ -42074,7 +41708,7 @@ export class CustomerResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [PersonLink_])
-    async PersonLinksArray(@Root() customer_: Customer_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MembershipGreatPlainsCustomerID_PersonLinksArray(@Root() customer_: Customer_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Person Links', userPayload);
         const sSQL = `SELECT * FROM [common].[vwPersonLinks] WHERE [MembershipGreatPlainsCustomerID]='${customer_.Customer_Number}' ` + this.getRowLevelSecurityWhereClause('Person Links', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Person Links', await dataSource.query(sSQL));
@@ -42082,7 +41716,7 @@ export class CustomerResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [SalesLineItem__client_membership_])
-    async SalesLineItems__client_membershipArray(@Root() customer_: Customer_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async CustomerNumber_SalesLineItems__client_membershipArray(@Root() customer_: Customer_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Sales Line Items__client_membership', userPayload);
         const sSQL = `SELECT * FROM [client_membership].[vwSalesLineItems__client_membership] WHERE [Customer Number]='${customer_.Customer_Number}' ` + this.getRowLevelSecurityWhereClause('Sales Line Items__client_membership', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Sales Line Items__client_membership', await dataSource.query(sSQL));
@@ -45698,7 +45332,7 @@ export class SalesTransaction__client_membershipResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [SalesLineItem__client_membership_])
-    async SalesLineItems__client_membershipArray(@Root() salestransaction__client_membership_: SalesTransaction__client_membership_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async SalesTransactionID_SalesLineItems__client_membershipArray(@Root() salestransaction__client_membership_: SalesTransaction__client_membership_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Sales Line Items__client_membership', userPayload);
         const sSQL = `SELECT * FROM [client_membership].[vwSalesLineItems__client_membership] WHERE [SalesTransactionID]=${salestransaction__client_membership_.ID} ` + this.getRowLevelSecurityWhereClause('Sales Line Items__client_membership', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Sales Line Items__client_membership', await dataSource.query(sSQL));

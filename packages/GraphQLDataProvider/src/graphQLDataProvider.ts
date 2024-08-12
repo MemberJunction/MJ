@@ -317,7 +317,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                     let qName: string = ''
                     let paramType: string = ''
                     const innerParam: any = {}
-                    let entity: string | null = null; 
+                    let entity: string | null = null;
                     let viewEntity: UserViewEntityExtended | null = null;
                     if (param.ViewEntity) {
                         viewEntity = param.ViewEntity as UserViewEntityExtended;
@@ -903,10 +903,10 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 const re = this.Entities.find(e => e.ID === r.RelatedEntityID);
                 let uniqueCodeName: string = '';
                 if (r.Type.toLowerCase().trim() === 'many to many') {
-                    uniqueCodeName = `${r.RelatedEntityCodeName}_${r.JoinEntityJoinField.replace(/ /g, '')}`;
+                    uniqueCodeName = `${r.JoinEntityJoinField.replace(/\s/g, '')}_${r.RelatedEntityCodeName}`;
                 }
                 else {
-                    uniqueCodeName = `${r.RelatedEntityCodeName}_${r.RelatedEntityJoinField.replace(/ /g, '')}`;
+                    uniqueCodeName = `${r.RelatedEntityJoinField.replace(/\s/g, '')}_${r.RelatedEntityCodeName}`;
                 }
                 rel += `
                 ${uniqueCodeName} {
@@ -1493,7 +1493,7 @@ class BrowserIndexedDBStorageProvider extends BrowserStorageProviderBase {
 
 export class GraphQLTransactionGroup extends TransactionGroupBase {
     protected async HandleSubmit(items: TransactionItem[]): Promise<TransactionResult[]> {
-        // iterate through each instruction and build up the combined query string 
+        // iterate through each instruction and build up the combined query string
         // and the combined variables object
         let combinedQuery = '';
         let mutationParams = '';

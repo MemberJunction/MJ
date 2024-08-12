@@ -35,8 +35,6 @@ import { ContactLevelFormComponent, LoadContactLevelFormComponent } from "./Enti
 import { ContactRoleFormComponent, LoadContactRoleFormComponent } from "./Entities/ContactRole/contactrole.form.component";
 import { ContactFormComponent, LoadContactFormComponent } from "./Entities/Contact/contact.form.component";
 import { Contact__client_crmFormComponent, LoadContact__client_crmFormComponent } from "./Entities/Contact__client_crm/contact__client_crm.form.component";
-import { ContentSourceTypeFormComponent, LoadContentSourceTypeFormComponent } from "./Entities/ContentSourceType/contentsourcetype.form.component";
-import { ContentSourceFormComponent, LoadContentSourceFormComponent } from "./Entities/ContentSource/contentsource.form.component";
 import { CustomerAddressFormComponent, LoadCustomerAddressFormComponent } from "./Entities/CustomerAddress/customeraddress.form.component";
 import { CustomerAddress__client_financeFormComponent, LoadCustomerAddress__client_financeFormComponent } from "./Entities/CustomerAddress__client_finance/customeraddress__client_finance.form.component";
 import { CustomerFormComponent, LoadCustomerFormComponent } from "./Entities/Customer/customer.form.component";
@@ -75,8 +73,6 @@ import { ContactLevelDetailsComponent, LoadContactLevelDetailsComponent } from "
 import { ContactRoleDetailsComponent, LoadContactRoleDetailsComponent } from "./Entities/ContactRole/sections/details.component"
 import { ContactDetailsComponent, LoadContactDetailsComponent } from "./Entities/Contact/sections/details.component"
 import { Contact__client_crmDetailsComponent, LoadContact__client_crmDetailsComponent } from "./Entities/Contact__client_crm/sections/details.component"
-import { ContentSourceTypeDetailsComponent, LoadContentSourceTypeDetailsComponent } from "./Entities/ContentSourceType/sections/details.component"
-import { ContentSourceDetailsComponent, LoadContentSourceDetailsComponent } from "./Entities/ContentSource/sections/details.component"
 import { CustomerAddressDetailsComponent, LoadCustomerAddressDetailsComponent } from "./Entities/CustomerAddress/sections/details.component"
 import { CustomerAddress__client_financeDetailsComponent, LoadCustomerAddress__client_financeDetailsComponent } from "./Entities/CustomerAddress__client_finance/sections/details.component"
 import { CustomerDetailsComponent, LoadCustomerDetailsComponent } from "./Entities/Customer/sections/details.component"
@@ -119,8 +115,6 @@ declarations: [
     ContactRoleFormComponent,
     ContactFormComponent,
     Contact__client_crmFormComponent,
-    ContentSourceTypeFormComponent,
-    ContentSourceFormComponent,
     CustomerAddressFormComponent,
     CustomerAddress__client_financeFormComponent,
     CustomerFormComponent,
@@ -129,7 +123,9 @@ declarations: [
     DealStageFormComponent,
     DealTypeFormComponent,
     DealFormComponent,
-    IndustryFormComponent],
+    IndustryFormComponent,
+    InvoiceStatusTypeFormComponent,
+    InvoiceFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -157,8 +153,6 @@ export class GeneratedForms_SubModule_0 { }
 
 @NgModule({
 declarations: [
-    InvoiceStatusTypeFormComponent,
-    InvoiceFormComponent,
     ItemFormComponent,
     Item__client_financeFormComponent,
     OrganizationLinkFormComponent,
@@ -176,7 +170,9 @@ declarations: [
     StringMapFormComponent,
     ThreadDetailFormComponent,
     ThreadFormComponent,
-    UoMFormComponent],
+    UoMFormComponent,
+    AccountDetailsComponent,
+    Account__client_crmDetailsComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -203,8 +199,6 @@ export class GeneratedForms_SubModule_1 { }
 
 @NgModule({
 declarations: [
-    AccountDetailsComponent,
-    Account__client_crmDetailsComponent,
     ActivityDetailsComponent,
     ActivityAttachmentDetailsComponent,
     client_membershipDetailsComponent,
@@ -212,8 +206,6 @@ declarations: [
     ContactRoleDetailsComponent,
     ContactDetailsComponent,
     Contact__client_crmDetailsComponent,
-    ContentSourceTypeDetailsComponent,
-    ContentSourceDetailsComponent,
     CustomerAddressDetailsComponent,
     CustomerAddress__client_financeDetailsComponent,
     CustomerDetailsComponent,
@@ -222,7 +214,11 @@ declarations: [
     DealStageDetailsComponent,
     DealTypeDetailsComponent,
     DealDetailsComponent,
-    IndustryDetailsComponent],
+    IndustryDetailsComponent,
+    InvoiceStatusTypeDetailsComponent,
+    InvoiceDetailsComponent,
+    ItemDetailsComponent,
+    Item__client_financeDetailsComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -248,10 +244,6 @@ export class GeneratedForms_SubModule_2 { }
 
 @NgModule({
 declarations: [
-    InvoiceStatusTypeDetailsComponent,
-    InvoiceDetailsComponent,
-    ItemDetailsComponent,
-    Item__client_financeDetailsComponent,
     OrganizationLinkDetailsComponent,
     PaymentTermsTypeDetailsComponent,
     PersonLinkDetailsComponent,
@@ -318,8 +310,6 @@ export function LoadGeneratedForms() {
     LoadContactRoleFormComponent();
     LoadContactFormComponent();
     LoadContact__client_crmFormComponent();
-    LoadContentSourceTypeFormComponent();
-    LoadContentSourceFormComponent();
     LoadCustomerAddressFormComponent();
     LoadCustomerAddress__client_financeFormComponent();
     LoadCustomerFormComponent();
@@ -358,8 +348,6 @@ export function LoadGeneratedForms() {
     LoadContactRoleDetailsComponent();
     LoadContactDetailsComponent();
     LoadContact__client_crmDetailsComponent();
-    LoadContentSourceTypeDetailsComponent();
-    LoadContentSourceDetailsComponent();
     LoadCustomerAddressDetailsComponent();
     LoadCustomerAddress__client_financeDetailsComponent();
     LoadCustomerDetailsComponent();

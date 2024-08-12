@@ -11,7 +11,7 @@
     "build": "tsc",
     "watch": "tsc -w",
     "clean": "rimraf output",
-    "start": "ts-node-dev src/index.ts",
+    "start": "ts-node src/index.ts",
     "start:npx": "npx ts-node src/index.ts",
     "lint:eslint": "eslint \"**/*.{ts,js,}\" --max-warnings=0",
     "lint:tsc": "tsc --noemit",
@@ -22,6 +22,7 @@
   "dependencies": {
     "@memberjunction/codegen-lib": "2.2.1",
     "dotenv": "^16.4.1",
+    "ts-node": "^10.9.2",
     "ts-node-dev": "^2.0.0",
     "typescript": "^5.4.5"
   },

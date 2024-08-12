@@ -90,21 +90,6 @@
                             [BottomMargin]="GridBottomMargin">
                         </mj-user-view-grid>                    
                     </mj-tab-body>
-
-                    <mj-tab Name="AIResult Caches" 
-                        [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: '7C69A67C-8B56-EF11-991A-6045BDEBA539'}">
-                        AIResult Caches
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('AI Result Cache')"  
-                            [NewRecordValues]="NewRecordValues('AI Result Cache')"
-                            [AllowLoad]="IsCurrentTab('AIResult Caches')"  
-                            [EditMode]="GridEditMode()"  
-                            [BottomMargin]="GridBottomMargin">
-                        </mj-user-view-grid>                    
-                    </mj-tab-body>
                 </mj-tabstrip>
     </form>
 </div>

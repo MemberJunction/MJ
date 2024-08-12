@@ -105,13 +105,6 @@ import { AIModelEntity } from '@memberjunction/core-entities';
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="ModelSelectionInsights"
-            Type="textarea"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
             FieldName="AIModelType"
             Type="textbox"
             [EditMode]="EditMode"
