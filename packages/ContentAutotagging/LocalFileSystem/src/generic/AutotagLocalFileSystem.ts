@@ -10,19 +10,22 @@ import { ContentSourceEntity, ContentItemEntity } from "mj_generatedentities";
 import { OpenAI } from "openai";
 import path from 'path';
 import { ContentSourceParams } from "../../../Engine/dist";
+import { apiKey } from "../config";
 
 @RegisterClass(AutotagBase, 'AutotagLocalFileSystem')
 export class AutotagLocalFileSystem extends AutotagBase {
-    private contextUser: UserInfo | null;
+    private contextUser: UserInfo;
     private engine: AutotagBaseEngine = AutotagBaseEngine.Instance;
+    private apiKey: string;
     protected contentSourceTypeID: number
     static _openAI: OpenAI;
 
-    constructor(apiKey: string) {
+    constructor() {
         super();
         this.contextUser = null;
+        this.apiKey = apiKey;
         if(!AutotagLocalFileSystem._openAI){
-            AutotagLocalFileSystem._openAI = new OpenAI({apiKey: apiKey});
+            AutotagLocalFileSystem._openAI = new OpenAI({apiKey: this.apiKey});
         }
     }
 
@@ -185,12 +188,12 @@ export class AutotagLocalFileSystem extends AutotagBase {
         await provider.Config(config)
         await setupSQLServerClient(config)
     
-        const md = new Metadata()
+        const SYSTEM_USER_ID = "EDAFCCEC-6A37-EF11-86D4-000D3A4E707E";
         const contextUser = new UserInfo(provider, {
-            ID:"97BD3450-8E94-4067-8F56-4BEBAE2AE966", 
+            ID:SYSTEM_USER_ID, 
             Name: "Nico Ortiz de Zarate",
             Email: email,
-            UserRoles: [{UserID: "97BD3450-8E94-4067-8F56-4BEBAE2AE966", RoleID: "DFAFCCEC-6A37-EF11-86D4-000D3A4E707E"}]
+            UserRoles: [{UserID: SYSTEM_USER_ID, RoleName: 'Integration' ,RoleID: "DFAFCCEC-6A37-EF11-86D4-000D3A4E707E"}]
         })
         this.contextUser = contextUser
     }

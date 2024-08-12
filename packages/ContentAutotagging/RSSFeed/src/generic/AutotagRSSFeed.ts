@@ -12,18 +12,21 @@ import { RSSItem } from './RSS.types';
 import axios from 'axios'
 import crypto from 'crypto'
 import Parser from 'rss-parser'
+import { apiKey } from '../config';
 
 @RegisterClass(AutotagBase, 'AutotagRSSFeed')
 export class AutotagRSSFeed extends AutotagBase {
     private contextUser!: UserInfo;
+    private apiKey: string;
     protected contentSourceTypeID: number;
     private engine: AutotagBaseEngine = AutotagBaseEngine.Instance;
     static _openAI: OpenAI;
 
-    constructor(apiKey: string) {
+    constructor() {
         super();
+        this.apiKey = apiKey;
         if(!AutotagRSSFeed._openAI) {
-            AutotagRSSFeed._openAI = new OpenAI({apiKey: apiKey});
+            AutotagRSSFeed._openAI = new OpenAI({apiKey: this.apiKey});
         }
     }
 
@@ -216,12 +219,12 @@ export class AutotagRSSFeed extends AutotagBase {
         await provider.Config(config)
         await setupSQLServerClient(config)
     
-        const md = new Metadata()
+        const SYSTEM_USER_ID = "EDAFCCEC-6A37-EF11-86D4-000D3A4E707E";
         const contextUser = new UserInfo(provider, {
-            ID:"97BD3450-8E94-4067-8F56-4BEBAE2AE966", 
+            ID:SYSTEM_USER_ID, 
             Name: "Nico Ortiz de Zarate",
             Email: email,
-            UserRoles: [{UserID: "97BD3450-8E94-4067-8F56-4BEBAE2AE966", RoleID: "DFAFCCEC-6A37-EF11-86D4-000D3A4E707E"}]
+            UserRoles: [{UserID: SYSTEM_USER_ID, RoleName: 'Integration' ,RoleID: "DFAFCCEC-6A37-EF11-86D4-000D3A4E707E"}]
         })
         this.contextUser = contextUser
     }

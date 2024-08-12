@@ -10,11 +10,13 @@ import { OpenAI } from 'openai';
 import * as cheerio from 'cheerio';
 import axios from 'axios';
 import { URL } from 'url';
+import { apiKey } from '../config';
 
 @RegisterClass(AutotagBase, 'AutotagWebsite')
 export class AutotagWebsite extends AutotagBase {
     private contextUser: UserInfo;
     private engine: AutotagBaseEngine = AutotagBaseEngine.Instance;
+    private apiKey: string;
     protected contentSourceTypeID: number
     protected CrawlOtherSitesInTopLevelDomain: boolean; // Gotta go back and set these up dynamically next
     protected CrawlSitesInLowerLevelDomain: boolean;
@@ -22,15 +24,16 @@ export class AutotagWebsite extends AutotagBase {
     protected visitedURLs: Set<string>;
     static _openAI: OpenAI
 
-    constructor(apiKey: string) {
+    constructor() {
         super();
         this.contextUser = null;
+        this.apiKey = apiKey;
         this.CrawlOtherSitesInTopLevelDomain = false;
         this.CrawlSitesInLowerLevelDomain = false;
         this.MaxDepth = 0;
         this.visitedURLs = new Set<string>();
         if(!AutotagWebsite._openAI) {
-            AutotagWebsite._openAI = new OpenAI({apiKey: apiKey});
+            AutotagWebsite._openAI = new OpenAI({apiKey: this.apiKey});
         }
     }
 
@@ -409,12 +412,12 @@ export class AutotagWebsite extends AutotagBase {
         await provider.Config(config)
         await setupSQLServerClient(config)
     
-        const md = new Metadata()
+        const SYSTEM_USER_ID = "EDAFCCEC-6A37-EF11-86D4-000D3A4E707E";
         const contextUser = new UserInfo(provider, {
-            ID:"97BD3450-8E94-4067-8F56-4BEBAE2AE966", 
+            ID:SYSTEM_USER_ID, 
             Name: "Nico Ortiz de Zarate",
             Email: email,
-            UserRoles: [{UserID: "97BD3450-8E94-4067-8F56-4BEBAE2AE966", RoleID: "DFAFCCEC-6A37-EF11-86D4-000D3A4E707E"}]
+            UserRoles: [{UserID: SYSTEM_USER_ID, RoleName: 'Integration' ,RoleID: "DFAFCCEC-6A37-EF11-86D4-000D3A4E707E"}]
         })
         this.contextUser = contextUser
     }
