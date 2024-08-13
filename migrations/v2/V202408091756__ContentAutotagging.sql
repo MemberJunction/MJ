@@ -3,15 +3,15 @@ Content Autotagging Schema and Tables
 ****************************************************************************************/
 
 
-/****** Object:  Schema [Content_Autotagging]    Script Date: 8/9/2024 5:55:22 PM ******/
-CREATE SCHEMA [Content_Autotagging]
+/****** Object:  Schema [  Content_Autotagging]    Script Date: 8/9/2024 5:55:22 PM ******/
+CREATE SCHEMA [  Content_Autotagging]
 GO
-/****** Object:  Table [Content_Autotagging].[ContentFileType]    Script Date: 8/9/2024 5:55:22 PM ******/
+/****** Object:  Table [  Content_Autotagging].[ContentFileType]    Script Date: 8/9/2024 5:55:22 PM ******/
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [Content_Autotagging].[ContentFileType](
+CREATE TABLE [  Content_Autotagging].[ContentFileType](
 	[ID] [int] IDENTITY(1,1) NOT NULL,
 	[Name] [nvarchar](255) NOT NULL,
 	[FileExtension] [nvarchar](255) NULL,
@@ -25,12 +25,12 @@ CREATE TABLE [Content_Autotagging].[ContentFileType](
 )WITH (STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
 ) ON [PRIMARY]
 GO
-/****** Object:  Table [Content_Autotagging].[ContentItem]    Script Date: 8/9/2024 5:55:22 PM ******/
+/****** Object:  Table [  Content_Autotagging].[ContentItem]    Script Date: 8/9/2024 5:55:22 PM ******/
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [Content_Autotagging].[ContentItem](
+CREATE TABLE [  Content_Autotagging].[ContentItem](
 	[ID] [int] IDENTITY(1,1) NOT NULL,
 	[ContentSourceID] [int] NOT NULL,
 	[Name] [nvarchar](250) NULL,
@@ -51,12 +51,12 @@ CREATE TABLE [Content_Autotagging].[ContentItem](
 )WITH (STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
 ) ON [PRIMARY] TEXTIMAGE_ON [PRIMARY]
 GO
-/****** Object:  Table [Content_Autotagging].[ContentItemAttribute]    Script Date: 8/9/2024 5:55:22 PM ******/
+/****** Object:  Table [  Content_Autotagging].[ContentItemAttribute]    Script Date: 8/9/2024 5:55:22 PM ******/
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [Content_Autotagging].[ContentItemAttribute](
+CREATE TABLE [  Content_Autotagging].[ContentItemAttribute](
 	[ID] [int] IDENTITY(1,1) NOT NULL,
 	[ContentItemID] [int] NOT NULL,
 	[Name] [nvarchar](100) NOT NULL,
@@ -69,12 +69,12 @@ CREATE TABLE [Content_Autotagging].[ContentItemAttribute](
 )WITH (STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
 ) ON [PRIMARY] TEXTIMAGE_ON [PRIMARY]
 GO
-/****** Object:  Table [Content_Autotagging].[ContentItemTag]    Script Date: 8/9/2024 5:55:22 PM ******/
+/****** Object:  Table [  Content_Autotagging].[ContentItemTag]    Script Date: 8/9/2024 5:55:22 PM ******/
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [Content_Autotagging].[ContentItemTag](
+CREATE TABLE [  Content_Autotagging].[ContentItemTag](
 	[ID] [int] IDENTITY(1,1) NOT NULL,
 	[ItemID] [int] NOT NULL,
 	[Tag] [nvarchar](200) NOT NULL,
@@ -88,12 +88,12 @@ CREATE TABLE [Content_Autotagging].[ContentItemTag](
 )WITH (STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
 ) ON [PRIMARY]
 GO
-/****** Object:  Table [Content_Autotagging].[ContentProcessRun]    Script Date: 8/9/2024 5:55:22 PM ******/
+/****** Object:  Table [  Content_Autotagging].[ContentProcessRun]    Script Date: 8/9/2024 5:55:22 PM ******/
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [Content_Autotagging].[ContentProcessRun](
+CREATE TABLE [  Content_Autotagging].[ContentProcessRun](
 	[ID] [int] IDENTITY(1,1) NOT NULL,
 	[SourceID] [int] NOT NULL,
 	[StartTime] [datetime] NULL,
@@ -108,12 +108,12 @@ CREATE TABLE [Content_Autotagging].[ContentProcessRun](
 )WITH (STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
 ) ON [PRIMARY]
 GO
-/****** Object:  Table [Content_Autotagging].[ContentSource]    Script Date: 8/9/2024 5:55:22 PM ******/
+/****** Object:  Table [  Content_Autotagging].[ContentSource]    Script Date: 8/9/2024 5:55:22 PM ******/
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [Content_Autotagging].[ContentSource](
+CREATE TABLE [  Content_Autotagging].[ContentSource](
 	[ID] [int] IDENTITY(1,1) NOT NULL,
 	[Name] [nvarchar](255) NULL,
 	[ContentTypeID] [int] NOT NULL,
@@ -128,12 +128,12 @@ CREATE TABLE [Content_Autotagging].[ContentSource](
 )WITH (STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
 ) ON [PRIMARY]
 GO
-/****** Object:  Table [Content_Autotagging].[ContentSourceParam]    Script Date: 8/9/2024 5:55:22 PM ******/
+/****** Object:  Table [  Content_Autotagging].[ContentSourceParam]    Script Date: 8/9/2024 5:55:22 PM ******/
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [Content_Autotagging].[ContentSourceParam](
+CREATE TABLE [  Content_Autotagging].[ContentSourceParam](
 	[ID] [int] IDENTITY(1,1) NOT NULL,
 	[ContentSourceID] [int] NOT NULL,
 	[ContentSourceTypeParamID] [int] NOT NULL,
@@ -146,12 +146,12 @@ CREATE TABLE [Content_Autotagging].[ContentSourceParam](
 )WITH (STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
 ) ON [PRIMARY] TEXTIMAGE_ON [PRIMARY]
 GO
-/****** Object:  Table [Content_Autotagging].[ContentSourceType]    Script Date: 8/9/2024 5:55:22 PM ******/
+/****** Object:  Table [  Content_Autotagging].[ContentSourceType]    Script Date: 8/9/2024 5:55:22 PM ******/
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [Content_Autotagging].[ContentSourceType](
+CREATE TABLE [  Content_Autotagging].[ContentSourceType](
 	[ID] [int] IDENTITY(1,1) NOT NULL,
 	[Name] [nvarchar](255) NOT NULL,
 	[Description] [nvarchar](1000) NULL,
@@ -163,12 +163,12 @@ CREATE TABLE [Content_Autotagging].[ContentSourceType](
 )WITH (STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
 ) ON [PRIMARY]
 GO
-/****** Object:  Table [Content_Autotagging].[ContentSourceTypeParam]    Script Date: 8/9/2024 5:55:22 PM ******/
+/****** Object:  Table [  Content_Autotagging].[ContentSourceTypeParam]    Script Date: 8/9/2024 5:55:22 PM ******/
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [Content_Autotagging].[ContentSourceTypeParam](
+CREATE TABLE [  Content_Autotagging].[ContentSourceTypeParam](
 	[ID] [int] IDENTITY(1,1) NOT NULL,
 	[Name] [nvarchar](100) NOT NULL,
 	[Description] [nvarchar](max) NULL,
@@ -183,12 +183,12 @@ CREATE TABLE [Content_Autotagging].[ContentSourceTypeParam](
 )WITH (STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
 ) ON [PRIMARY] TEXTIMAGE_ON [PRIMARY]
 GO
-/****** Object:  Table [Content_Autotagging].[ContentType]    Script Date: 8/9/2024 5:55:22 PM ******/
+/****** Object:  Table [  Content_Autotagging].[ContentType]    Script Date: 8/9/2024 5:55:22 PM ******/
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [Content_Autotagging].[ContentType](
+CREATE TABLE [  Content_Autotagging].[ContentType](
 	[ID] [int] IDENTITY(1,1) NOT NULL,
 	[Name] [nvarchar](255) NOT NULL,
 	[Description] [nvarchar](max) NULL,
@@ -203,12 +203,12 @@ CREATE TABLE [Content_Autotagging].[ContentType](
 )WITH (STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
 ) ON [PRIMARY] TEXTIMAGE_ON [PRIMARY]
 GO
-/****** Object:  Table [Content_Autotagging].[ContentTypeAttribute]    Script Date: 8/9/2024 5:55:22 PM ******/
+/****** Object:  Table [  Content_Autotagging].[ContentTypeAttribute]    Script Date: 8/9/2024 5:55:22 PM ******/
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [Content_Autotagging].[ContentTypeAttribute](
+CREATE TABLE [  Content_Autotagging].[ContentTypeAttribute](
 	[ID] [int] IDENTITY(1,1) NOT NULL,
 	[ContentTypeID] [int] NOT NULL,
 	[Name] [nvarchar](100) NOT NULL,
@@ -222,144 +222,112 @@ CREATE TABLE [Content_Autotagging].[ContentTypeAttribute](
 )WITH (STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
 ) ON [PRIMARY] TEXTIMAGE_ON [PRIMARY]
 GO
-ALTER TABLE [__mj].[AIModel] ADD  CONSTRAINT [DF__AIModel__ID___34ACA0FA]  DEFAULT (newsequentialid()) FOR [ID]
+ALTER TABLE [  Content_Autotagging].[ContentFileType] ADD  CONSTRAINT [DF__ContentFi____mj___799DF262]  DEFAULT (getutcdate()) FOR [__mj_CreatedAt]
 GO
-ALTER TABLE [__mj].[AIModel] ADD  CONSTRAINT [DF_AIModel_PowerRank]  DEFAULT ((0)) FOR [PowerRank]
+ALTER TABLE [  Content_Autotagging].[ContentFileType] ADD  CONSTRAINT [DF__ContentFi____mj___7A92169B]  DEFAULT (getutcdate()) FOR [__mj_UpdatedAt]
 GO
-ALTER TABLE [__mj].[AIModel] ADD  CONSTRAINT [DF_AIModel_IsActive]  DEFAULT ((1)) FOR [IsActive]
+ALTER TABLE [  Content_Autotagging].[ContentItem] ADD  CONSTRAINT [DF__ContentIt____mj___7B863AD4]  DEFAULT (getutcdate()) FOR [__mj_CreatedAt]
 GO
-ALTER TABLE [__mj].[AIModel] ADD  CONSTRAINT [DF__AIModel____mj_Cr__0EA098EB]  DEFAULT (getutcdate()) FOR [__mj_CreatedAt]
+ALTER TABLE [  Content_Autotagging].[ContentItem] ADD  CONSTRAINT [DF__ContentIt____mj___7C7A5F0D]  DEFAULT (getutcdate()) FOR [__mj_UpdatedAt]
 GO
-ALTER TABLE [__mj].[AIModel] ADD  CONSTRAINT [DF__AIModel____mj_Up__0F94BD24]  DEFAULT (getutcdate()) FOR [__mj_UpdatedAt]
+ALTER TABLE [  Content_Autotagging].[ContentItemAttribute] ADD  CONSTRAINT [DF__ContentIt____mj___7D6E8346]  DEFAULT (getutcdate()) FOR [__mj_CreatedAt]
 GO
-ALTER TABLE [__mj].[AIModel] ADD  DEFAULT ((0)) FOR [SpeedRank]
+ALTER TABLE [  Content_Autotagging].[ContentItemAttribute] ADD  CONSTRAINT [DF__ContentIt____mj___7E62A77F]  DEFAULT (getutcdate()) FOR [__mj_UpdatedAt]
 GO
-ALTER TABLE [__mj].[AIModel] ADD  DEFAULT ((0)) FOR [CostRank]
+ALTER TABLE [  Content_Autotagging].[ContentItemTag] ADD  CONSTRAINT [DF__ContentIt____mj___11757BF3]  DEFAULT (getutcdate()) FOR [__mj_CreatedAt]
 GO
-ALTER TABLE [Content_Autotagging].[ContentFileType] ADD  CONSTRAINT [DF__ContentFi____mj___799DF262]  DEFAULT (getutcdate()) FOR [__mj_CreatedAt]
+ALTER TABLE [  Content_Autotagging].[ContentItemTag] ADD  CONSTRAINT [DF__ContentIt____mj___1269A02C]  DEFAULT (getutcdate()) FOR [__mj_UpdatedAt]
 GO
-ALTER TABLE [Content_Autotagging].[ContentFileType] ADD  CONSTRAINT [DF__ContentFi____mj___7A92169B]  DEFAULT (getutcdate()) FOR [__mj_UpdatedAt]
+ALTER TABLE [  Content_Autotagging].[ContentProcessRun] ADD  CONSTRAINT [DF__ContentPr____mj___7F56CBB8]  DEFAULT (getutcdate()) FOR [__mj_CreatedAt]
 GO
-ALTER TABLE [Content_Autotagging].[ContentItem] ADD  CONSTRAINT [DF__ContentIt____mj___7B863AD4]  DEFAULT (getutcdate()) FOR [__mj_CreatedAt]
+ALTER TABLE [  Content_Autotagging].[ContentProcessRun] ADD  CONSTRAINT [DF__ContentPr____mj___004AEFF1]  DEFAULT (getutcdate()) FOR [__mj_UpdatedAt]
 GO
-ALTER TABLE [Content_Autotagging].[ContentItem] ADD  CONSTRAINT [DF__ContentIt____mj___7C7A5F0D]  DEFAULT (getutcdate()) FOR [__mj_UpdatedAt]
+ALTER TABLE [  Content_Autotagging].[ContentSource] ADD  CONSTRAINT [DF__ContentSo____mj___013F142A]  DEFAULT (getutcdate()) FOR [__mj_CreatedAt]
 GO
-ALTER TABLE [Content_Autotagging].[ContentItemAttribute] ADD  CONSTRAINT [DF__ContentIt____mj___7D6E8346]  DEFAULT (getutcdate()) FOR [__mj_CreatedAt]
+ALTER TABLE [  Content_Autotagging].[ContentSource] ADD  CONSTRAINT [DF__ContentSo____mj___02333863]  DEFAULT (getutcdate()) FOR [__mj_UpdatedAt]
 GO
-ALTER TABLE [Content_Autotagging].[ContentItemAttribute] ADD  CONSTRAINT [DF__ContentIt____mj___7E62A77F]  DEFAULT (getutcdate()) FOR [__mj_UpdatedAt]
+ALTER TABLE [  Content_Autotagging].[ContentSourceParam] ADD  CONSTRAINT [DF__ContentSo____mj___03275C9C]  DEFAULT (getutcdate()) FOR [__mj_CreatedAt]
 GO
-ALTER TABLE [Content_Autotagging].[ContentItemTag] ADD  CONSTRAINT [DF__ContentIt____mj___11757BF3]  DEFAULT (getutcdate()) FOR [__mj_CreatedAt]
+ALTER TABLE [  Content_Autotagging].[ContentSourceParam] ADD  CONSTRAINT [DF__ContentSo____mj___041B80D5]  DEFAULT (getutcdate()) FOR [__mj_UpdatedAt]
 GO
-ALTER TABLE [Content_Autotagging].[ContentItemTag] ADD  CONSTRAINT [DF__ContentIt____mj___1269A02C]  DEFAULT (getutcdate()) FOR [__mj_UpdatedAt]
+ALTER TABLE [  Content_Autotagging].[ContentSourceType] ADD  CONSTRAINT [DF__ContentSo____mj___0AC87E64]  DEFAULT (getutcdate()) FOR [__mj_CreatedAt]
 GO
-ALTER TABLE [Content_Autotagging].[ContentProcessRun] ADD  CONSTRAINT [DF__ContentPr____mj___7F56CBB8]  DEFAULT (getutcdate()) FOR [__mj_CreatedAt]
+ALTER TABLE [  Content_Autotagging].[ContentSourceType] ADD  CONSTRAINT [DF__ContentSo____mj___0BBCA29D]  DEFAULT (getutcdate()) FOR [__mj_UpdatedAt]
 GO
-ALTER TABLE [Content_Autotagging].[ContentProcessRun] ADD  CONSTRAINT [DF__ContentPr____mj___004AEFF1]  DEFAULT (getutcdate()) FOR [__mj_UpdatedAt]
+ALTER TABLE [  Content_Autotagging].[ContentSourceTypeParam] ADD  CONSTRAINT [DF__ContentSo____mj___050FA50E]  DEFAULT (getutcdate()) FOR [__mj_CreatedAt]
 GO
-ALTER TABLE [Content_Autotagging].[ContentSource] ADD  CONSTRAINT [DF__ContentSo____mj___013F142A]  DEFAULT (getutcdate()) FOR [__mj_CreatedAt]
+ALTER TABLE [  Content_Autotagging].[ContentSourceTypeParam] ADD  CONSTRAINT [DF__ContentSo____mj___0603C947]  DEFAULT (getutcdate()) FOR [__mj_UpdatedAt]
 GO
-ALTER TABLE [Content_Autotagging].[ContentSource] ADD  CONSTRAINT [DF__ContentSo____mj___02333863]  DEFAULT (getutcdate()) FOR [__mj_UpdatedAt]
+ALTER TABLE [  Content_Autotagging].[ContentType] ADD  CONSTRAINT [DF__ContentTy____mj___06F7ED80]  DEFAULT (getutcdate()) FOR [__mj_CreatedAt]
 GO
-ALTER TABLE [Content_Autotagging].[ContentSourceParam] ADD  CONSTRAINT [DF__ContentSo____mj___03275C9C]  DEFAULT (getutcdate()) FOR [__mj_CreatedAt]
+ALTER TABLE [  Content_Autotagging].[ContentType] ADD  CONSTRAINT [DF__ContentTy____mj___07EC11B9]  DEFAULT (getutcdate()) FOR [__mj_UpdatedAt]
 GO
-ALTER TABLE [Content_Autotagging].[ContentSourceParam] ADD  CONSTRAINT [DF__ContentSo____mj___041B80D5]  DEFAULT (getutcdate()) FOR [__mj_UpdatedAt]
+ALTER TABLE [  Content_Autotagging].[ContentTypeAttribute] ADD  CONSTRAINT [DF__ContentTy____mj___08E035F2]  DEFAULT (getutcdate()) FOR [__mj_CreatedAt]
 GO
-ALTER TABLE [Content_Autotagging].[ContentSourceType] ADD  CONSTRAINT [DF__ContentSo____mj___0AC87E64]  DEFAULT (getutcdate()) FOR [__mj_CreatedAt]
-GO
-ALTER TABLE [Content_Autotagging].[ContentSourceType] ADD  CONSTRAINT [DF__ContentSo____mj___0BBCA29D]  DEFAULT (getutcdate()) FOR [__mj_UpdatedAt]
-GO
-ALTER TABLE [Content_Autotagging].[ContentSourceTypeParam] ADD  CONSTRAINT [DF__ContentSo____mj___050FA50E]  DEFAULT (getutcdate()) FOR [__mj_CreatedAt]
-GO
-ALTER TABLE [Content_Autotagging].[ContentSourceTypeParam] ADD  CONSTRAINT [DF__ContentSo____mj___0603C947]  DEFAULT (getutcdate()) FOR [__mj_UpdatedAt]
-GO
-ALTER TABLE [Content_Autotagging].[ContentType] ADD  CONSTRAINT [DF__ContentTy____mj___06F7ED80]  DEFAULT (getutcdate()) FOR [__mj_CreatedAt]
-GO
-ALTER TABLE [Content_Autotagging].[ContentType] ADD  CONSTRAINT [DF__ContentTy____mj___07EC11B9]  DEFAULT (getutcdate()) FOR [__mj_UpdatedAt]
-GO
-ALTER TABLE [Content_Autotagging].[ContentTypeAttribute] ADD  CONSTRAINT [DF__ContentTy____mj___08E035F2]  DEFAULT (getutcdate()) FOR [__mj_CreatedAt]
-GO
-ALTER TABLE [Content_Autotagging].[ContentTypeAttribute] ADD  CONSTRAINT [DF__ContentTy____mj___09D45A2B]  DEFAULT (getutcdate()) FOR [__mj_UpdatedAt]
+ALTER TABLE [  Content_Autotagging].[ContentTypeAttribute] ADD  CONSTRAINT [DF__ContentTy____mj___09D45A2B]  DEFAULT (getutcdate()) FOR [__mj_UpdatedAt]
 GO
 ALTER TABLE [__mj].[AIModel]  WITH CHECK ADD  CONSTRAINT [FK_AIModel_AIModelType] FOREIGN KEY([AIModelTypeID])
 REFERENCES [__mj].[AIModelType] ([ID])
 GO
 ALTER TABLE [__mj].[AIModel] CHECK CONSTRAINT [FK_AIModel_AIModelType]
 GO
-ALTER TABLE [Content_Autotagging].[ContentItem]  WITH CHECK ADD  CONSTRAINT [FK_ContentItem_ContentFileTypeID] FOREIGN KEY([ContentFileTypeID])
-REFERENCES [Content_Autotagging].[ContentFileType] ([ID])
+ALTER TABLE [  Content_Autotagging].[ContentItem]  WITH CHECK ADD  CONSTRAINT [FK_ContentItem_ContentFileTypeID] FOREIGN KEY([ContentFileTypeID])
+REFERENCES [  Content_Autotagging].[ContentFileType] ([ID])
 GO
-ALTER TABLE [Content_Autotagging].[ContentItem] CHECK CONSTRAINT [FK_ContentItem_ContentFileTypeID]
+ALTER TABLE [  Content_Autotagging].[ContentItem] CHECK CONSTRAINT [FK_ContentItem_ContentFileTypeID]
 GO
-ALTER TABLE [Content_Autotagging].[ContentItem]  WITH CHECK ADD  CONSTRAINT [FK_ContentItem_ContentSourceID] FOREIGN KEY([ContentSourceID])
-REFERENCES [Content_Autotagging].[ContentSource] ([ID])
+ALTER TABLE [  Content_Autotagging].[ContentItem]  WITH CHECK ADD  CONSTRAINT [FK_ContentItem_ContentSourceID] FOREIGN KEY([ContentSourceID])
+REFERENCES [  Content_Autotagging].[ContentSource] ([ID])
 GO
-ALTER TABLE [Content_Autotagging].[ContentItem] CHECK CONSTRAINT [FK_ContentItem_ContentSourceID]
+ALTER TABLE [  Content_Autotagging].[ContentItem] CHECK CONSTRAINT [FK_ContentItem_ContentSourceID]
 GO
-ALTER TABLE [Content_Autotagging].[ContentItem]  WITH CHECK ADD  CONSTRAINT [FK_ContentItem_ContentSourceTypeID] FOREIGN KEY([ContentSourceTypeID])
-REFERENCES [Content_Autotagging].[ContentSourceType] ([ID])
+ALTER TABLE [  Content_Autotagging].[ContentItem]  WITH CHECK ADD  CONSTRAINT [FK_ContentItem_ContentSourceTypeID] FOREIGN KEY([ContentSourceTypeID])
+REFERENCES [  Content_Autotagging].[ContentSourceType] ([ID])
 GO
-ALTER TABLE [Content_Autotagging].[ContentItem] CHECK CONSTRAINT [FK_ContentItem_ContentSourceTypeID]
+ALTER TABLE [  Content_Autotagging].[ContentItem] CHECK CONSTRAINT [FK_ContentItem_ContentSourceTypeID]
 GO
-ALTER TABLE [Content_Autotagging].[ContentItem]  WITH CHECK ADD  CONSTRAINT [FK_ContentItem_ContentTypeID] FOREIGN KEY([ContentTypeID])
-REFERENCES [Content_Autotagging].[ContentType] ([ID])
+ALTER TABLE [  Content_Autotagging].[ContentItem]  WITH CHECK ADD  CONSTRAINT [FK_ContentItem_ContentTypeID] FOREIGN KEY([ContentTypeID])
+REFERENCES [  Content_Autotagging].[ContentType] ([ID])
 GO
-ALTER TABLE [Content_Autotagging].[ContentItem] CHECK CONSTRAINT [FK_ContentItem_ContentTypeID]
+ALTER TABLE [  Content_Autotagging].[ContentItem] CHECK CONSTRAINT [FK_ContentItem_ContentTypeID]
 GO
-ALTER TABLE [Content_Autotagging].[ContentItemAttribute]  WITH CHECK ADD  CONSTRAINT [FK_ContentItemAttribute_ContentItemID] FOREIGN KEY([ContentItemID])
-REFERENCES [Content_Autotagging].[ContentItem] ([ID])
+ALTER TABLE [  Content_Autotagging].[ContentItemAttribute]  WITH CHECK ADD  CONSTRAINT [FK_ContentItemAttribute_ContentItemID] FOREIGN KEY([ContentItemID])
+REFERENCES [  Content_Autotagging].[ContentItem] ([ID])
 GO
-ALTER TABLE [Content_Autotagging].[ContentItemAttribute] CHECK CONSTRAINT [FK_ContentItemAttribute_ContentItemID]
+ALTER TABLE [  Content_Autotagging].[ContentItemAttribute] CHECK CONSTRAINT [FK_ContentItemAttribute_ContentItemID]
 GO
-ALTER TABLE [Content_Autotagging].[ContentItemTag]  WITH CHECK ADD  CONSTRAINT [FK_ContentItemTag_ContentItemID] FOREIGN KEY([ItemID])
-REFERENCES [Content_Autotagging].[ContentItem] ([ID])
+ALTER TABLE [  Content_Autotagging].[ContentItemTag]  WITH CHECK ADD  CONSTRAINT [FK_ContentItemTag_ContentItemID] FOREIGN KEY([ItemID])
+REFERENCES [  Content_Autotagging].[ContentItem] ([ID])
 GO
-ALTER TABLE [Content_Autotagging].[ContentItemTag] CHECK CONSTRAINT [FK_ContentItemTag_ContentItemID]
+ALTER TABLE [  Content_Autotagging].[ContentItemTag] CHECK CONSTRAINT [FK_ContentItemTag_ContentItemID]
 GO
-ALTER TABLE [Content_Autotagging].[ContentProcessRun]  WITH CHECK ADD  CONSTRAINT [FK_ContentProcessRun_ContentSourceID] FOREIGN KEY([SourceID])
-REFERENCES [Content_Autotagging].[ContentSource] ([ID])
+ALTER TABLE [  Content_Autotagging].[ContentProcessRun]  WITH CHECK ADD  CONSTRAINT [FK_ContentProcessRun_ContentSourceID] FOREIGN KEY([SourceID])
+REFERENCES [  Content_Autotagging].[ContentSource] ([ID])
 GO
-ALTER TABLE [Content_Autotagging].[ContentProcessRun] CHECK CONSTRAINT [FK_ContentProcessRun_ContentSourceID]
+ALTER TABLE [  Content_Autotagging].[ContentProcessRun] CHECK CONSTRAINT [FK_ContentProcessRun_ContentSourceID]
 GO
-ALTER TABLE [Content_Autotagging].[ContentSource]  WITH CHECK ADD  CONSTRAINT [FK_ContentSource_ContentFileTypeID] FOREIGN KEY([ContentFileTypeID])
-REFERENCES [Content_Autotagging].[ContentFileType] ([ID])
+ALTER TABLE [  Content_Autotagging].[ContentSource]  WITH CHECK ADD  CONSTRAINT [FK_ContentSource_ContentFileTypeID] FOREIGN KEY([ContentFileTypeID])
+REFERENCES [  Content_Autotagging].[ContentFileType] ([ID])
 GO
-ALTER TABLE [Content_Autotagging].[ContentSource] CHECK CONSTRAINT [FK_ContentSource_ContentFileTypeID]
+ALTER TABLE [  Content_Autotagging].[ContentSource] CHECK CONSTRAINT [FK_ContentSource_ContentFileTypeID]
 GO
-ALTER TABLE [Content_Autotagging].[ContentSource]  WITH CHECK ADD  CONSTRAINT [FK_ContentSource_ContentSourceTypeID] FOREIGN KEY([ContentSourceTypeID])
-REFERENCES [Content_Autotagging].[ContentSourceType] ([ID])
+ALTER TABLE [  Content_Autotagging].[ContentSource]  WITH CHECK ADD  CONSTRAINT [FK_ContentSource_ContentSourceTypeID] FOREIGN KEY([ContentSourceTypeID])
+REFERENCES [  Content_Autotagging].[ContentSourceType] ([ID])
 GO
-ALTER TABLE [Content_Autotagging].[ContentSource] CHECK CONSTRAINT [FK_ContentSource_ContentSourceTypeID]
+ALTER TABLE [  Content_Autotagging].[ContentSource] CHECK CONSTRAINT [FK_ContentSource_ContentSourceTypeID]
 GO
-ALTER TABLE [Content_Autotagging].[ContentSource]  WITH CHECK ADD  CONSTRAINT [FK_ContentSource_ContentTypeID] FOREIGN KEY([ContentTypeID])
-REFERENCES [Content_Autotagging].[ContentType] ([ID])
+ALTER TABLE [  Content_Autotagging].[ContentSource]  WITH CHECK ADD  CONSTRAINT [FK_ContentSource_ContentTypeID] FOREIGN KEY([ContentTypeID])
+REFERENCES [  Content_Autotagging].[ContentType] ([ID])
 GO
-ALTER TABLE [Content_Autotagging].[ContentSource] CHECK CONSTRAINT [FK_ContentSource_ContentTypeID]
+ALTER TABLE [  Content_Autotagging].[ContentSource] CHECK CONSTRAINT [FK_ContentSource_ContentTypeID]
 GO
-ALTER TABLE [Content_Autotagging].[ContentSourceParam]  WITH CHECK ADD  CONSTRAINT [FK_ContentSourceParam_ContentSourceID] FOREIGN KEY([ContentSourceID])
-REFERENCES [Content_Autotagging].[ContentSource] ([ID])
+ALTER TABLE [  Content_Autotagging].[ContentSourceParam]  WITH CHECK ADD  CONSTRAINT [FK_ContentSourceParam_ContentSourceID] FOREIGN KEY([ContentSourceID])
+REFERENCES [  Content_Autotagging].[ContentSource] ([ID])
 GO
-ALTER TABLE [Content_Autotagging].[ContentSourceParam] CHECK CONSTRAINT [FK_ContentSourceParam_ContentSourceID]
+ALTER TABLE [  Content_Autotagging].[ContentSourceParam] CHECK CONSTRAINT [FK_ContentSourceParam_ContentSourceID]
 GO
-ALTER TABLE [Content_Autotagging].[ContentType]  WITH CHECK ADD  CONSTRAINT [FK_AIModel_mj_AIModel] FOREIGN KEY([AIModelID])
+ALTER TABLE [  Content_Autotagging].[ContentType]  WITH CHECK ADD  CONSTRAINT [FK_AIModel_mj_AIModel] FOREIGN KEY([AIModelID])
 REFERENCES [__mj].[AIModel] ([ID])
-GO
-ALTER TABLE [Content_Autotagging].[ContentType] CHECK CONSTRAINT [FK_AIModel_mj_AIModel]
-GO
-ALTER TABLE [__mj].[AIModel]  WITH CHECK ADD CHECK  (([CostRank]>=(0)))
-GO
-ALTER TABLE [__mj].[AIModel]  WITH CHECK ADD CHECK  (([SpeedRank]>=(0)))
-GO
-ALTER TABLE [__mj].[AIModel]  WITH CHECK ADD  CONSTRAINT [CK_AITable_PowerRank] CHECK  (([PowerRank]>=(0)))
-GO
-ALTER TABLE [__mj].[AIModel] CHECK CONSTRAINT [CK_AITable_PowerRank]
-GO
-EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'Optional column that ranks the power of the AI model. Default is 0 and should be non-negative.' , @level0type=N'SCHEMA',@level0name=N'__mj', @level1type=N'TABLE',@level1name=N'AIModel', @level2type=N'COLUMN',@level2name=N'PowerRank'
-GO
-EXEC sys.sp_addextendedproperty @name=N'ms_description', @value=N'The name of the model to use with API calls which might differ from the Name, if APIName is not provided, Name will be used for API calls' , @level0type=N'SCHEMA',@level0name=N'__mj', @level1type=N'TABLE',@level1name=N'AIModel', @level2type=N'COLUMN',@level2name=N'APIName'
-GO
-EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'Optional column that ranks the speed of the AI model. Default is 0 and should be non-negative.' , @level0type=N'SCHEMA',@level0name=N'__mj', @level1type=N'TABLE',@level1name=N'AIModel', @level2type=N'COLUMN',@level2name=N'SpeedRank'
-GO
-EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'Optional column that ranks the cost of the AI model. Default is 0 and should be non-negative.' , @level0type=N'SCHEMA',@level0name=N'__mj', @level1type=N'TABLE',@level1name=N'AIModel', @level2type=N'COLUMN',@level2name=N'CostRank'
 GO
 
 /****************************************************************************************

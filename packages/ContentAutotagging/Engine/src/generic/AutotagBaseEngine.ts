@@ -5,7 +5,7 @@ import pdfParse from 'pdf-parse'
 import * as officeparser from 'officeparser'
 import * as fs from 'fs'
 import { ProcessRunParams, JsonObject } from './processRun.types'
-import { ContentItemProcessParams } from '../../../Core/dist/'
+import { ContentItemProcessParams } from '../../../Core/src/'
 import { OpenAI } from 'openai/index.mjs';
 import { toZonedTime } from 'date-fns-tz'
 import axios from 'axios'

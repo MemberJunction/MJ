@@ -1,31 +1,31 @@
 import { UserInfo, Metadata, RunView } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
-import { AutotagBase } from "../../../Core/dist";
-import { AutotagBaseEngine } from "../../../Engine/dist";
+import { AutotagBase } from "../../../Core/src";
+import { AutotagBaseEngine } from "../../../Engine/src";
 import OpenAI from 'openai';
 import { ContentSourceEntity, ContentItemEntity } from 'mj_generatedentities';
-import { setupSQLServerClient, SQLServerDataProvider, SQLServerProviderConfigData } from '@memberjunction/sqlserver-dataprovider';
-import { DataSource } from 'typeorm';
-import { dbHost, dbUsername, dbPassword, dbDatabase, dbPort } from '../config';
-import { ContentSourceParams } from '../../../Engine/dist';
+import { ContentSourceParams } from '../../../Engine/src';
 import { RSSItem } from './RSS.types';
 import axios from 'axios'
 import crypto from 'crypto'
 import Parser from 'rss-parser'
-import { apiKey } from '../config';
+import dotenv from 'dotenv';
+dotenv.config()
 
 @RegisterClass(AutotagBase, 'AutotagRSSFeed')
 export class AutotagRSSFeed extends AutotagBase {
-    private contextUser!: UserInfo;
+    private contextUser: UserInfo;
+    private engine: AutotagBaseEngine;
     private apiKey: string;
-    protected contentSourceTypeID: number;
-    private engine: AutotagBaseEngine = AutotagBaseEngine.Instance;
+    protected contentSourceTypeID: number
     static _openAI: OpenAI;
 
     constructor() {
         super();
-        this.apiKey = apiKey;
-        if(!AutotagRSSFeed._openAI) {
+        this.contextUser = null;
+        this.apiKey = process.env['OPENAI_API_KEY'] || '';
+        this.engine = AutotagBaseEngine.Instance;
+        if(!AutotagRSSFeed._openAI){
             AutotagRSSFeed._openAI = new OpenAI({apiKey: this.apiKey});
         }
     }
@@ -39,8 +39,9 @@ export class AutotagRSSFeed extends AutotagBase {
      * It initializes the connection, retrieves the content sources corresponding to the content source type, sets the content items that we want to process, 
      * extracts and processes the text, and sets the results in the database.
      */
-    public async Autotag() {
-        await this.initializeConntectionAndGetContextUser();
+    public async Autotag(contextUser: UserInfo): Promise<void> {
+        this.contextUser = contextUser;
+        await AutotagBaseEngine.Instance.Config(false, this.contextUser);
         this.contentSourceTypeID = await this.engine.setSubclassContentSourceType('RSS Feed', this.contextUser);
         const contentSources = await this.engine.getAllContentSources(this.contextUser, this.contentSourceTypeID);
         const contentItemsToProcess = await this.SetContentItemsToProcess(contentSources);
@@ -193,39 +194,5 @@ export class AutotagRSSFeed extends AutotagBase {
     public async getChecksumFromRSSItem(RSSContentItem: RSSItem, contextUser: UserInfo): Promise<string> {
         const hash = crypto.createHash('sha256').update(JSON.stringify(RSSContentItem)).digest('hex')
         return hash
-    }
-
-    public async initializeConntectionAndGetContextUser(): Promise<void>{
-        //await AppDataSource.initialize();
-        const dataSource = new DataSource({
-            type: 'mssql',
-            logging: false,
-            host: dbHost,
-            port: dbPort,
-            username: dbUsername,
-            password: dbPassword,
-            database: dbDatabase,
-            synchronize: false,
-            requestTimeout: 120000, // long timeout for code gen, some queries are long at times...
-            options: {
-              trustServerCertificate: true,
-            },
-          });
-        await dataSource.initialize();
-    
-        const email = "nico.ortiz@bluecypress.io"
-        const config = new SQLServerProviderConfigData(dataSource, email, '__mj', 15000, ['Content_Autotagging'])
-        const provider = new SQLServerDataProvider()
-        await provider.Config(config)
-        await setupSQLServerClient(config)
-    
-        const SYSTEM_USER_ID = "EDAFCCEC-6A37-EF11-86D4-000D3A4E707E";
-        const contextUser = new UserInfo(provider, {
-            ID:SYSTEM_USER_ID, 
-            Name: "Nico Ortiz de Zarate",
-            Email: email,
-            UserRoles: [{UserID: SYSTEM_USER_ID, RoleName: 'Integration' ,RoleID: "DFAFCCEC-6A37-EF11-86D4-000D3A4E707E"}]
-        })
-        this.contextUser = contextUser
     }
 }

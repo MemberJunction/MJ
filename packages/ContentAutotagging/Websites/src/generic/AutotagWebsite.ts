@@ -1,24 +1,22 @@
-import { AutotagBase } from '../../../Core/dist';
-import { AutotagBaseEngine, ContentSourceParams } from '../../../Engine/dist';
+import { AutotagBase } from '../../../Core/src';
+import { AutotagBaseEngine, ContentSourceParams } from '../../../Engine/src';
 import { RegisterClass } from '@memberjunction/global';
 import { UserInfo, Metadata, RunView } from '@memberjunction/core';
-import { SQLServerProviderConfigData, setupSQLServerClient, SQLServerDataProvider } from '@memberjunction/sqlserver-dataprovider';
-import { DataSource } from 'typeorm';
-import { dbHost, dbUsername, dbPassword, dbDatabase, dbPort } from '../config';
 import { ContentSourceEntity, ContentItemEntity } from 'mj_generatedentities';
 import { OpenAI } from 'openai';
 import * as cheerio from 'cheerio';
 import axios from 'axios';
 import { URL } from 'url';
-import { apiKey } from '../config';
+import dotenv from 'dotenv';
+dotenv.config()
 
 @RegisterClass(AutotagBase, 'AutotagWebsite')
 export class AutotagWebsite extends AutotagBase {
     private contextUser: UserInfo;
-    private engine: AutotagBaseEngine = AutotagBaseEngine.Instance;
+    private engine: AutotagBaseEngine;
     private apiKey: string;
     protected contentSourceTypeID: number
-    protected CrawlOtherSitesInTopLevelDomain: boolean; // Gotta go back and set these up dynamically next
+    protected CrawlOtherSitesInTopLevelDomain: boolean;
     protected CrawlSitesInLowerLevelDomain: boolean;
     protected MaxDepth: number;
     protected visitedURLs: Set<string>;
@@ -27,7 +25,8 @@ export class AutotagWebsite extends AutotagBase {
     constructor() {
         super();
         this.contextUser = null;
-        this.apiKey = apiKey;
+        this.apiKey = process.env['OPENAI_API_KEY'] || '';
+        this.engine = AutotagBaseEngine.Instance;
         this.CrawlOtherSitesInTopLevelDomain = false;
         this.CrawlSitesInLowerLevelDomain = false;
         this.MaxDepth = 0;
@@ -46,8 +45,9 @@ export class AutotagWebsite extends AutotagBase {
      * It initializes the connection, retrieves the content sources corresponding to the content source type, sets the content items that we want to process, 
      * extracts and processes the text, and sets the results in the database.
      */
-    public async Autotag(): Promise<void> {
-        await this.initializeConntectionAndGetContextUser();
+    public async Autotag(contextUser: UserInfo): Promise<void> {
+        this.contextUser = contextUser;
+        await AutotagBaseEngine.Instance.Config(false, this.contextUser);
         this.contentSourceTypeID = await this.engine.setSubclassContentSourceType('Website', this.contextUser);
         const contentSources: ContentSourceEntity[] = await this.engine.getAllContentSources(this.contextUser, this.contentSourceTypeID);
         const contentItemsToProcess: ContentItemEntity[] = await this.SetContentItemsToProcess(contentSources);
@@ -386,39 +386,5 @@ export class AutotagWebsite extends AutotagBase {
 
     protected async delay(ms: number) {
         return new Promise( resolve => setTimeout(resolve, ms) );
-    }
-
-    public async initializeConntectionAndGetContextUser(): Promise<void>{
-        //await AppDataSource.initialize();
-        const dataSource = new DataSource({
-            type: 'mssql',
-            logging: false,
-            host: dbHost,
-            port: dbPort,
-            username: dbUsername,
-            password: dbPassword,
-            database: dbDatabase,
-            synchronize: false,
-            requestTimeout: 120000, // long timeout for code gen, some queries are long at times...
-            options: {
-              trustServerCertificate: true,
-            },
-          });
-        await dataSource.initialize();
-    
-        const email = "nico.ortiz@bluecypress.io"
-        const config = new SQLServerProviderConfigData(dataSource, email, '__mj', 15000, ['Content_Autotagging'])
-        const provider = new SQLServerDataProvider()
-        await provider.Config(config)
-        await setupSQLServerClient(config)
-    
-        const SYSTEM_USER_ID = "EDAFCCEC-6A37-EF11-86D4-000D3A4E707E";
-        const contextUser = new UserInfo(provider, {
-            ID:SYSTEM_USER_ID, 
-            Name: "Nico Ortiz de Zarate",
-            Email: email,
-            UserRoles: [{UserID: SYSTEM_USER_ID, RoleName: 'Integration' ,RoleID: "DFAFCCEC-6A37-EF11-86D4-000D3A4E707E"}]
-        })
-        this.contextUser = contextUser
     }
 }

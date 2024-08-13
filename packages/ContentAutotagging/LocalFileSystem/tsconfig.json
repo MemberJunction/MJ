@@ -6,7 +6,6 @@
         "declaration": true,
         "declarationMap": true,
         "outDir": "./dist",
-        "rootDir": "./src",
         "sourceMap": true,
         "experimentalDecorators": true,
         "resolveJsonModule": true,
@@ -22,7 +21,7 @@
         "skipLibCheck": true, 
         "composite": true
     },
-    "include": ["./src/**/*.ts"],
+    "include": ["./src/**/*.ts", "../Engine/src/**/*.ts", "../Core/src/**/*.ts"],
     "exclude": ["node_modules"], 
     "references": [
         { "path": "../Core" }, 

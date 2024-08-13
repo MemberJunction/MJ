@@ -1,29 +1,27 @@
 import { RegisterClass } from "@memberjunction/global";
-import { DataSource } from 'typeorm';
 import fs from 'fs';
-import { AutotagBase } from "../../../Core/dist";
-import { AutotagBaseEngine } from "../../../Engine/dist/index";
+import { AutotagBase } from "../../../Core/src";
+import { AutotagBaseEngine } from "../../../Engine/src/index";
 import { UserInfo, Metadata, RunView } from "@memberjunction/core";
-import { SQLServerProviderConfigData, setupSQLServerClient, SQLServerDataProvider } from '@memberjunction/sqlserver-dataprovider';
-import { dbHost, dbUsername, dbPassword, dbDatabase, dbPort } from '../config';
 import { ContentSourceEntity, ContentItemEntity } from "mj_generatedentities";
 import { OpenAI } from "openai";
 import path from 'path';
-import { ContentSourceParams } from "../../../Engine/dist";
-import { apiKey } from "../config";
+import { ContentSourceParams } from "../../../Engine/src";
+import dotenv from 'dotenv';
+dotenv.config()
 
 @RegisterClass(AutotagBase, 'AutotagLocalFileSystem')
 export class AutotagLocalFileSystem extends AutotagBase {
     private contextUser: UserInfo;
-    private engine: AutotagBaseEngine = AutotagBaseEngine.Instance;
+    private engine: AutotagBaseEngine;
     private apiKey: string;
     protected contentSourceTypeID: number
     static _openAI: OpenAI;
 
     constructor() {
         super();
-        this.contextUser = null;
-        this.apiKey = apiKey;
+        this.apiKey = process.env['OPENAI_API_KEY'] || '';
+        this.engine = AutotagBaseEngine.Instance;
         if(!AutotagLocalFileSystem._openAI){
             AutotagLocalFileSystem._openAI = new OpenAI({apiKey: this.apiKey});
         }
@@ -38,8 +36,9 @@ export class AutotagLocalFileSystem extends AutotagBase {
      * It initializes the connection, retrieves the content sources corresponding to the content source type, sets the content items that we want to process, 
      * extracts and processes the text, and sets the results in the database.
      */
-    public async Autotag(){
-        await this.initializeConntectionAndGetContextUser()
+    public async Autotag(contextUser: UserInfo): Promise<void> {
+        this.contextUser = contextUser;
+        await AutotagBaseEngine.Instance.Config(false, this.contextUser);
         this.contentSourceTypeID = await this.engine.setSubclassContentSourceType('Local Filesystem', this.contextUser);
         const contentSources: ContentSourceEntity[] = await this.engine.getAllContentSources(this.contextUser, this.contentSourceTypeID) || [];
         const contentItemsToProcess: ContentItemEntity[] = await this.SetContentItemsToProcess(contentSources)
@@ -162,39 +161,5 @@ export class AutotagLocalFileSystem extends AutotagBase {
             }
         }
         return contentItems;
-    }
-
-    public async initializeConntectionAndGetContextUser(): Promise<void>{
-        //await AppDataSource.initialize();
-        const dataSource = new DataSource({
-            type: 'mssql',
-            logging: false,
-            host: dbHost,
-            port: dbPort,
-            username: dbUsername,
-            password: dbPassword,
-            database: dbDatabase,
-            synchronize: false,
-            requestTimeout: 120000, // long timeout for code gen, some queries are long at times...
-            options: {
-              trustServerCertificate: true,
-            },
-          });
-        await dataSource.initialize();
-    
-        const email = "nico.ortiz@bluecypress.io"
-        const config = new SQLServerProviderConfigData(dataSource, email, '__mj', 15000, ['Content_Autotagging'])
-        const provider = new SQLServerDataProvider()
-        await provider.Config(config)
-        await setupSQLServerClient(config)
-    
-        const SYSTEM_USER_ID = "EDAFCCEC-6A37-EF11-86D4-000D3A4E707E";
-        const contextUser = new UserInfo(provider, {
-            ID:SYSTEM_USER_ID, 
-            Name: "Nico Ortiz de Zarate",
-            Email: email,
-            UserRoles: [{UserID: SYSTEM_USER_ID, RoleName: 'Integration' ,RoleID: "DFAFCCEC-6A37-EF11-86D4-000D3A4E707E"}]
-        })
-        this.contextUser = contextUser
     }
 }
