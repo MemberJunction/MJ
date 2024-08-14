@@ -23,7 +23,7 @@ export class AutotagRSSFeed extends AutotagBase {
     constructor() {
         super();
         this.contextUser = null;
-        this.apiKey = process.env['OPENAI_API_KEY'] || '';
+        this.apiKey = process.env['AI_VENDOR_API_KEY__OpenAILLM'] || '';
         this.engine = AutotagBaseEngine.Instance;
         if(!AutotagRSSFeed._openAI){
             AutotagRSSFeed._openAI = new OpenAI({apiKey: this.apiKey});

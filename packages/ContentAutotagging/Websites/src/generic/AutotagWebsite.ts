@@ -25,7 +25,7 @@ export class AutotagWebsite extends AutotagBase {
     constructor() {
         super();
         this.contextUser = null;
-        this.apiKey = process.env['OPENAI_API_KEY'] || '';
+        this.apiKey = process.env['AI_VENDOR_API_KEY__OpenAILLM'] || '';
         this.engine = AutotagBaseEngine.Instance;
         this.CrawlOtherSitesInTopLevelDomain = false;
         this.CrawlSitesInLowerLevelDomain = false;
@@ -121,22 +121,34 @@ export class AutotagWebsite extends AutotagBase {
 
         const addedContentItems: ContentItemEntity[] = [];
         for (const contentItemLink of contentItemLinks) {
+            const newHash = await this.engine.getChecksumFromURL(contentItemLink);
 
             const rv = new RunView();
-            const results = await rv.RunView({
-                EntityName: 'Content Items',
-                ExtraFilter: `ContentSourceID = ${contentSourceParams.contentSourceID} AND URL = '${contentItemLink}'`,
-                ResultType: 'entity_object',
-            }, this.contextUser)
+            const results = await rv.RunViews([
+                {
+                    EntityName: 'Content Items',
+                    ExtraFilter: `Checksum = '${newHash}'`,
+                    ResultType: 'entity_object'
+                }, 
+                {
+                    EntityName: 'Content Items',
+                    ExtraFilter: `ContentSourceID = ${contentSourceParams.contentSourceID} AND URL = '${contentItemLink}'`,
+                    ResultType: 'entity_object'
+                }
+            ], this.contextUser)
 
-            if (results.Success && results.Results.length) {
-                // This content item already exists, check the last hash to see if different
-                const lastStoredHash = results.Results[0].Get('Checksum');
-                const newHash = await this.engine.getChecksumFromURL(contentItemLink, this.contextUser);
+            if (results[0].Success && results[0].Results.length) {
+                // We found the checksum so this content item has not changed since we last accessed it, do nothing
+                continue;
+            }
+
+            else if (results[1].Success && results[1].Results.length) {
+                // This content item likely already exists, update the hash and last updated date 
+                const lastStoredHash = results[1].Results[0].Get('Checksum');
 
                 if (lastStoredHash !== newHash) {
                     // This content item has changed since we last access it, update the hash and last updated date
-                    const contentItem = <ContentItemEntity> results.Results[0];
+                    const contentItem = <ContentItemEntity> results[1].Results[0];
                     contentItem.Set('Checksum', newHash);
                     contentItem.Set('Text', await this.parseWebPage(contentItemLink));
                     contentItem.Set('UpdatedAt', new Date());
@@ -156,7 +168,7 @@ export class AutotagWebsite extends AutotagBase {
                 contentItem.Set('ContentTypeID', contentSourceParams.ContentTypeID);
                 contentItem.Set('ContentFileTypeID', contentSourceParams.ContentFileTypeID);
                 contentItem.Set('ContentSourceTypeID', contentSourceParams.ContentSourceTypeID);
-                contentItem.Set('Checksum', await this.engine.getChecksumFromURL(contentItemLink, this.contextUser));
+                contentItem.Set('Checksum', await this.engine.getChecksumFromURL(contentItemLink));
                 contentItem.Set('URL', contentItemLink);
                 contentItem.Set('Text', await this.parseWebPage(contentItemLink));
                 contentItem.Set('CreatedAt', new Date());

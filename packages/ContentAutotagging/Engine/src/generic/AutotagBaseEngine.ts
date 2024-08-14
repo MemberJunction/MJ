@@ -108,21 +108,23 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
     public async promptAndRetrieveResultsFromLLM(params: ContentItemProcessParams, openai: OpenAI, contextUser: UserInfo) { 
         const text = params.text
         const model = await this.getModelNameFromID(params.modelID, contextUser)
+        const contentType = await this.getContentTypeName(params.contentTypeID, contextUser)
         const contentSourceType = await this.getContentSourceTypeName(params.contentSourceTypeID, contextUser)
-        const contentFileType = await this.getContentFileTypeName(params.contentFileTypeID, contextUser)
         const additionalContentTypePrompts = await this.getAdditionalContentTypePrompt(params.contentTypeID, contextUser)
         const minTags = params.minTags
         const maxTags = params.maxTags
         const startTime = new Date()
 
         const prompt = `
-        You are provided the text of a ${contentSourceType} extracted from a ${contentFileType} file. Please extract the title of the provided text and between ${minTags} and ${maxTags} topical key words that are most relevant to the text.
+        You are provided with text that should be a ${contentType}, that has been extracted from a ${contentSourceType}. The text MUST be of the type ${contentType} for the subsequent processing. If the provided text does not actually appear to be of the type ${contentType}, please disregard everything in the instructions after this and return this exact JSON response: { isValidContent: false (as a boolean) }. 
+        Assuming the type of the text is in fact form a ${contentType}, please extract the title of the provided text and between ${minTags} and ${maxTags} topical key words that are most relevant to the text.
         Please provide the keywords in a list format.
         Make sure the response is just the json file with the format below, please don't include a greeting in the response, only output the json file:
 
         {
             title: (title here),
-            keywords: (list keywords here)
+            keywords: (list keywords here), 
+            isValidContent: true (as a boolean)
         }
 
         ${additionalContentTypePrompts}
@@ -154,9 +156,22 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
     }
 
     public async saveLLMResults(LLMResults: JsonObject, contextUser: UserInfo) {
-        await this.saveResultsToContentItemAttribute(LLMResults, contextUser)
-        await this.saveContentItemTags(LLMResults.contentItemID, LLMResults, contextUser)
-        console.log(`Results for content item ${LLMResults.contentItemID} saved successfully`)
+        if (LLMResults.isValidContent === true) {   
+            // Only save results if the content is of the type that we expected. 
+            await this.saveResultsToContentItemAttribute(LLMResults, contextUser)
+            await this.saveContentItemTags(LLMResults.contentItemID, LLMResults, contextUser)
+            console.log(`Results for content item ${LLMResults.contentItemID} saved successfully`)
+        }
+        else {
+            await this.deleteInvalidContentItem(LLMResults.contentItemID, contextUser)
+        }
+    }
+
+    public async deleteInvalidContentItem(contentItemID: number, contextUser: UserInfo) {
+        const md = new Metadata()
+        const contentItem: ContentItemEntity = await md.GetEntityObject<ContentItemEntity>('Content Items', contextUser)
+        await contentItem.Load(contentItemID)
+        await contentItem.Delete()
     }
 
     /**
@@ -560,14 +575,14 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         console.log('Will implement updating later')
     }
 
-    public async getChecksumFromURL(url: string, contextUser: UserInfo): Promise<string> {
+    public async getChecksumFromURL(url: string): Promise<string> {
         const response = await axios.get(url)
         const content = response.data
         const hash = crypto.createHash('sha256').update(content).digest('hex')
         return hash
     }
 
-    public async getChecksumFromText(text: string, contextUser: UserInfo): Promise<string> {
+    public async getChecksumFromText(text: string): Promise<string> {
         const hash = crypto.createHash('sha256').update(text).digest('hex')
         return hash
     }

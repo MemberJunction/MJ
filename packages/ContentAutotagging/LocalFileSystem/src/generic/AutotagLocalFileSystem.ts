@@ -20,7 +20,7 @@ export class AutotagLocalFileSystem extends AutotagBase {
 
     constructor() {
         super();
-        this.apiKey = process.env['OPENAI_API_KEY'] || '';
+        this.apiKey = process.env['AI_VENDOR_API_KEY__OpenAILLM'] || '';
         this.engine = AutotagBaseEngine.Instance;
         if(!AutotagLocalFileSystem._openAI){
             AutotagLocalFileSystem._openAI = new OpenAI({apiKey: this.apiKey});
@@ -55,43 +55,47 @@ export class AutotagLocalFileSystem extends AutotagBase {
         const contentItemsToProcess: ContentItemEntity[] = []
 
         for (const contentSource of contentSources) {
+            // First check that the directory exists
+            if (fs.existsSync(contentSource.Get('URL'))) {
+                // If content source parameters were provided, set them. Otherwise, use the default values.
+                const contentSourceParamsMap = await this.engine.getContentSourceParams(contentSource, this.contextUser);
+                if (contentSourceParamsMap) {
+                    // Override defaults with content source specific params
+                    contentSourceParamsMap.forEach((value, key) => {
+                        if (key in this) {
+                            (this as any)[key] = value;
+                        }
+                    })
+                }
 
-            // If content source parameters were provided, set them. Otherwise, use the default values.
-            const contentSourceParamsMap = await this.engine.getContentSourceParams(contentSource, this.contextUser);
-            if (contentSourceParamsMap) {
-                // Override defaults with content source specific params
-                contentSourceParamsMap.forEach((value, key) => {
-                    if (key in this) {
-                        (this as any)[key] = value;
-                    }
-                })
-            }
-
-            const contentSourceParams: ContentSourceParams = {
-                contentSourceID: contentSource.Get('ID'),
-                name: contentSource.Get('Name'),
-                ContentTypeID: contentSource.Get('ContentTypeID'),
-                ContentSourceTypeID: contentSource.Get('ContentSourceTypeID'),
-                ContentFileTypeID: contentSource.Get('ContentFileTypeID'),
-                URL: contentSource.Get('URL')
-            }
-            
-            const lastRunDate = await this.engine.getContentSourceLastRunDate(contentSourceParams.contentSourceID, this.contextUser)
-
-            // Traverse through all the files in the directory
-            if (lastRunDate) {
-              const contentItems = await this.SetNewAndModifiedContentItems(contentSourceParams, lastRunDate, this.contextUser);
-                if (contentItems && contentItems.length > 0) {
-                    contentItemsToProcess.push(...contentItems);
+                const contentSourceParams: ContentSourceParams = {
+                    contentSourceID: contentSource.Get('ID'),
+                    name: contentSource.Get('Name'),
+                    ContentTypeID: contentSource.Get('ContentTypeID'),
+                    ContentSourceTypeID: contentSource.Get('ContentSourceTypeID'),
+                    ContentFileTypeID: contentSource.Get('ContentFileTypeID'),
+                    URL: contentSource.Get('URL')
                 }
                 
+                const lastRunDate = await this.engine.getContentSourceLastRunDate(contentSourceParams.contentSourceID, this.contextUser)
+
+                // Traverse through all the files in the directory
+                if (lastRunDate) {
+                const contentItems = await this.SetNewAndModifiedContentItems(contentSourceParams, lastRunDate, this.contextUser);
+                    if (contentItems && contentItems.length > 0) {
+                        contentItemsToProcess.push(...contentItems);
+                    }
+                    
+                    else {
+                        // No content items found to process
+                        console.log(`No content items found to process for content source: ${contentSource.Get('Name')}`);
+                    }
+                } 
                 else {
-                    // No content items found to process
-                    console.log(`No content items found to process for content source: ${contentSource.Get('Name')}`);
+                throw new Error('Invalid last run date');
                 }
-            } 
-            else {
-              throw new Error('Invalid last run date');
+            } else {
+                console.log(`Invalid Content Source ${contentSource.Get('Name')}`);
             }
         }
 
@@ -131,6 +135,7 @@ export class AutotagLocalFileSystem extends AutotagBase {
                 if (changedDate > lastRunDate) {
                     // The file has been added, create a new record for this file
                     const md = new Metadata();
+                    const text = await this.engine.parseFileFromPath(filePath);
                     const contentItem = <ContentItemEntity> await md.GetEntityObject('Content Items', this.contextUser);
                     contentItem.NewRecord();
                     contentItem.Set('ContentSourceID', contentSourceParams.contentSourceID);
@@ -139,9 +144,9 @@ export class AutotagLocalFileSystem extends AutotagBase {
                     contentItem.Set('ContentTypeID', contentSourceParams.ContentTypeID);
                     contentItem.Set('ContentFileTypeID', contentSourceParams.ContentFileTypeID);
                     contentItem.Set('ContentSourceTypeID', contentSourceParams.ContentSourceTypeID);
-                    contentItem.Set('Checksum', null);
+                    contentItem.Set('Checksum', await this.engine.getChecksumFromText(text));
                     contentItem.Set('URL', contentSourceParams.URL);
-                    contentItem.Set('Text', await this.engine.parseFileFromPath(filePath));
+                    contentItem.Set('Text', text);
                     contentItem.Set('CreatedAt', new Date());
                     contentItem.Set('UpdatedAt', new Date());
 
