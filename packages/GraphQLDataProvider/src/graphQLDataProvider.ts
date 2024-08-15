@@ -746,8 +746,9 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 vars.input[f.CodeName] = val;
             }
 
-            // now add an OldValues prop to the vars IF the type === 'update'
-            if (type.trim().toLowerCase() === 'update') {
+            // now add an OldValues prop to the vars IF the type === 'update' and the options.SkipOldValuesCheck === false
+            if (type.trim().toLowerCase() === 'update' && 
+                options.SkipOldValuesCheck === false) {
                 const ov = [];
                 entity.Fields.forEach(f => {
                     let val = null;
