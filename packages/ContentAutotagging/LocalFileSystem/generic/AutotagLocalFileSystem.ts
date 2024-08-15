@@ -1,12 +1,11 @@
 import { RegisterClass } from "@memberjunction/global";
 import fs from 'fs';
-import { AutotagBase } from "../../../Core/src";
-import { AutotagBaseEngine } from "../../../Engine/src/index";
+import { AutotagBase } from "../../Core";
+import { AutotagBaseEngine, ContentSourceParams } from "../../Engine";
 import { UserInfo, Metadata, RunView } from "@memberjunction/core";
-import { ContentSourceEntity, ContentItemEntity } from "mj_generatedentities";
+import { ContentSourceEntity, ContentItemEntity } from "@memberjunction/core-entities";
 import { OpenAI } from "openai";
 import path from 'path';
-import { ContentSourceParams } from "../../../Engine/src";
 import dotenv from 'dotenv';
 dotenv.config()
 

@@ -1,11 +1,10 @@
 import { BaseEngine, Metadata, RunView, UserInfo } from '@memberjunction/core'
-import { ContentSourceEntity, ContentItemEntity, ContentItemTagEntity, ContentFileTypeEntity, ContentProcessRunEntity, ContentTypeEntity, ContentItemAttributeEntity, ContentSourceTypeEntity } from 'mj_generatedentities'
+import { ContentSourceEntity, ContentItemEntity, ContentItemTagEntity, ContentFileTypeEntity, ContentProcessRunEntity, ContentTypeEntity, ContentItemAttributeEntity, ContentSourceTypeEntity } from '@memberjunction/core-entities'
 import { ContentSourceParams, ContentSourceTypeParams } from './content.types'
 import pdfParse from 'pdf-parse'
 import * as officeparser from 'officeparser'
 import * as fs from 'fs'
-import { ProcessRunParams, JsonObject } from './processRun.types'
-import { ContentItemProcessParams } from '../../../Core/src/'
+import { ProcessRunParams, JsonObject, ContentItemProcessParams } from './process.types'
 import { OpenAI } from 'openai/index.mjs';
 import { toZonedTime } from 'date-fns-tz'
 import axios from 'axios'

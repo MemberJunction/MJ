@@ -1,8 +1,8 @@
-import { AutotagBase } from '../../../Core/src';
-import { AutotagBaseEngine, ContentSourceParams } from '../../../Engine/src';
+import { AutotagBase } from '../../Core';
+import { AutotagBaseEngine, ContentSourceParams } from '../../Engine';
 import { RegisterClass } from '@memberjunction/global';
 import { UserInfo, Metadata, RunView } from '@memberjunction/core';
-import { ContentSourceEntity, ContentItemEntity } from 'mj_generatedentities';
+import { ContentSourceEntity, ContentItemEntity } from '@memberjunction/core-entities';
 import { OpenAI } from 'openai';
 import * as cheerio from 'cheerio';
 import axios from 'axios';
@@ -24,7 +24,6 @@ export class AutotagWebsite extends AutotagBase {
 
     constructor() {
         super();
-        this.contextUser = null;
         this.apiKey = process.env['AI_VENDOR_API_KEY__OpenAILLM'] || '';
         this.engine = AutotagBaseEngine.Instance;
         this.CrawlOtherSitesInTopLevelDomain = false;

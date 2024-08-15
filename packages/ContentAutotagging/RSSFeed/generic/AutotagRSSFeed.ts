@@ -1,10 +1,9 @@
 import { UserInfo, Metadata, RunView } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
-import { AutotagBase } from "../../../Core/src";
-import { AutotagBaseEngine } from "../../../Engine/src";
+import { AutotagBase } from "../../Core";
+import { AutotagBaseEngine, ContentSourceParams } from "../../Engine";
 import OpenAI from 'openai';
-import { ContentSourceEntity, ContentItemEntity } from 'mj_generatedentities';
-import { ContentSourceParams } from '../../../Engine/src';
+import { ContentSourceEntity, ContentItemEntity } from '@memberjunction/core-entities';
 import { RSSItem } from './RSS.types';
 import axios from 'axios'
 import crypto from 'crypto'
@@ -22,7 +21,6 @@ export class AutotagRSSFeed extends AutotagBase {
 
     constructor() {
         super();
-        this.contextUser = null;
         this.apiKey = process.env['AI_VENDOR_API_KEY__OpenAILLM'] || '';
         this.engine = AutotagBaseEngine.Instance;
         if(!AutotagRSSFeed._openAI){

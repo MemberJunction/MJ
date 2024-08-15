@@ -1,22 +1,15 @@
 /****************************************************************************************
-Content Autotagging Schema and Tables
+Content Autotagging Tables
 ****************************************************************************************/
-
-
-/****** Object:  Schema [  Content_Autotagging]    Script Date: 8/9/2024 5:55:22 PM ******/
-CREATE SCHEMA [  Content_Autotagging]
-GO
-/****** Object:  Table [  Content_Autotagging].[ContentFileType]    Script Date: 8/9/2024 5:55:22 PM ******/
+/****** Object:  Table [${flyway:defaultSchema}].[ContentFileType]    Script Date: 8/9/2024 5:55:22 PM ******/
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [  Content_Autotagging].[ContentFileType](
-	[ID] [int] IDENTITY(1,1) NOT NULL,
+CREATE TABLE [${flyway:defaultSchema}].[ContentFileType](
+	[ID] [uniqueidentifier] NOT NULL DEFAULT (newsequentialid()),
 	[Name] [nvarchar](255) NOT NULL,
 	[FileExtension] [nvarchar](255) NULL,
-	[CreatedAt] [datetimeoffset](7) NOT NULL,
-	[UpdateAt] [datetimeoffset](7) NOT NULL,
 	[__mj_CreatedAt] [datetimeoffset](7) NOT NULL,
 	[__mj_UpdatedAt] [datetimeoffset](7) NOT NULL,
  CONSTRAINT [PK_ContentFileType] PRIMARY KEY CLUSTERED 
@@ -25,134 +18,130 @@ CREATE TABLE [  Content_Autotagging].[ContentFileType](
 )WITH (STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
 ) ON [PRIMARY]
 GO
-/****** Object:  Table [  Content_Autotagging].[ContentItem]    Script Date: 8/9/2024 5:55:22 PM ******/
+/****** Object:  Table [${flyway:defaultSchema}].[ContentItem]    Script Date: 8/9/2024 5:55:22 PM ******/
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [  Content_Autotagging].[ContentItem](
-	[ID] [int] IDENTITY(1,1) NOT NULL,
-	[ContentSourceID] [int] NOT NULL,
+CREATE TABLE [${flyway:defaultSchema}].[ContentItem](
+	[ID] [uniqueidentifier] NOT NULL DEFAULT (newsequentialid()),
+	[ContentSourceID] [uniqueidentifier] NOT NULL,
 	[Name] [nvarchar](250) NULL,
 	[Description] [nvarchar](max) NULL,
-	[ContentTypeID] [int] NOT NULL,
-	[ContentSourceTypeID] [int] NOT NULL,
-	[ContentFileTypeID] [int] NOT NULL,
+	[ContentTypeID] [uniqueidentifier] NOT NULL,
+	[ContentSourceTypeID] [uniqueidentifier] NOT NULL,
+	[ContentFileTypeID] [uniqueidentifier] NOT NULL,
 	[Checksum] [nvarchar](100) NULL,
 	[URL] [nvarchar](2000) NOT NULL,
 	[Text] [nvarchar](max) NULL,
-	[CreatedAt] [datetimeoffset](7) NOT NULL,
-	[UpdatedAt] [datetimeoffset](7) NOT NULL,
 	[__mj_CreatedAt] [datetimeoffset](7) NOT NULL,
 	[__mj_UpdatedAt] [datetimeoffset](7) NOT NULL,
- CONSTRAINT [PK_ContentItem_1] PRIMARY KEY CLUSTERED 
+ CONSTRAINT [PK_ContentItem] PRIMARY KEY CLUSTERED 
 (
 	[ID] ASC
 )WITH (STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
 ) ON [PRIMARY] TEXTIMAGE_ON [PRIMARY]
 GO
-/****** Object:  Table [  Content_Autotagging].[ContentItemAttribute]    Script Date: 8/9/2024 5:55:22 PM ******/
+/****** Object:  Table [${flyway:defaultSchema}].[ContentItemAttribute]    Script Date: 8/9/2024 5:55:22 PM ******/
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [  Content_Autotagging].[ContentItemAttribute](
-	[ID] [int] IDENTITY(1,1) NOT NULL,
-	[ContentItemID] [int] NOT NULL,
+CREATE TABLE [${flyway:defaultSchema}].[ContentItemAttribute](
+	[ID] [uniqueidentifier] NOT NULL DEFAULT (newsequentialid()),
+	[ContentItemID] [uniqueidentifier] NOT NULL,
 	[Name] [nvarchar](100) NOT NULL,
 	[Value] [nvarchar](max) NOT NULL,
 	[__mj_CreatedAt] [datetimeoffset](7) NOT NULL,
 	[__mj_UpdatedAt] [datetimeoffset](7) NOT NULL,
- CONSTRAINT [PK_ContentItemAttribute_1] PRIMARY KEY CLUSTERED 
+ CONSTRAINT [PK_ContentItemAttribute] PRIMARY KEY CLUSTERED 
 (
 	[ID] ASC
 )WITH (STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
 ) ON [PRIMARY] TEXTIMAGE_ON [PRIMARY]
 GO
-/****** Object:  Table [  Content_Autotagging].[ContentItemTag]    Script Date: 8/9/2024 5:55:22 PM ******/
+/****** Object:  Table [${flyway:defaultSchema}].[ContentItemTag]    Script Date: 8/9/2024 5:55:22 PM ******/
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [  Content_Autotagging].[ContentItemTag](
-	[ID] [int] IDENTITY(1,1) NOT NULL,
-	[ItemID] [int] NOT NULL,
+CREATE TABLE [${flyway:defaultSchema}].[ContentItemTag](
+	[ID] [uniqueidentifier] NOT NULL DEFAULT (newsequentialid()),
+	[ItemID] [uniqueidentifier] NOT NULL,
 	[Tag] [nvarchar](200) NOT NULL,
-	[CreatedAt] [datetimeoffset](7) NOT NULL,
-	[UpdatedAt] [datetimeoffset](7) NOT NULL,
 	[__mj_CreatedAt] [datetimeoffset](7) NOT NULL,
 	[__mj_UpdatedAt] [datetimeoffset](7) NOT NULL,
- CONSTRAINT [PK_ContentItemTag_1] PRIMARY KEY CLUSTERED 
+ CONSTRAINT [PK_ContentItemTag] PRIMARY KEY CLUSTERED 
 (
 	[ID] ASC
 )WITH (STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
 ) ON [PRIMARY]
 GO
-/****** Object:  Table [  Content_Autotagging].[ContentProcessRun]    Script Date: 8/9/2024 5:55:22 PM ******/
+/****** Object:  Table [${flyway:defaultSchema}].[ContentProcessRun]    Script Date: 8/9/2024 5:55:22 PM ******/
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [  Content_Autotagging].[ContentProcessRun](
-	[ID] [int] IDENTITY(1,1) NOT NULL,
-	[SourceID] [int] NOT NULL,
+CREATE TABLE [${flyway:defaultSchema}].[ContentProcessRun](
+	[ID] [uniqueidentifier] NOT NULL DEFAULT (newsequentialid()),
+	[SourceID] [uniqueidentifier] NOT NULL,
 	[StartTime] [datetime] NULL,
 	[EndTime] [datetime] NULL,
 	[Status] [nvarchar](100) NULL,
 	[ProcessedItems] [int] NULL,
 	[__mj_CreatedAt] [datetimeoffset](7) NOT NULL,
 	[__mj_UpdatedAt] [datetimeoffset](7) NOT NULL,
- CONSTRAINT [PK_ContentProcessRun_1] PRIMARY KEY CLUSTERED 
+ CONSTRAINT [PK_ContentProcessRun] PRIMARY KEY CLUSTERED 
 (
 	[ID] ASC
 )WITH (STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
 ) ON [PRIMARY]
 GO
-/****** Object:  Table [  Content_Autotagging].[ContentSource]    Script Date: 8/9/2024 5:55:22 PM ******/
+/****** Object:  Table [${flyway:defaultSchema}].[ContentSource]    Script Date: 8/9/2024 5:55:22 PM ******/
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [  Content_Autotagging].[ContentSource](
-	[ID] [int] IDENTITY(1,1) NOT NULL,
+CREATE TABLE [${flyway:defaultSchema}].[ContentSource](
+	[ID] [uniqueidentifier] NOT NULL DEFAULT (newsequentialid()),
 	[Name] [nvarchar](255) NULL,
-	[ContentTypeID] [int] NOT NULL,
-	[ContentSourceTypeID] [int] NOT NULL,
-	[ContentFileTypeID] [int] NOT NULL,
+	[ContentTypeID] [uniqueidentifier] NOT NULL,
+	[ContentSourceTypeID] [uniqueidentifier] NOT NULL,
+	[ContentFileTypeID] [uniqueidentifier] NOT NULL,
 	[URL] [nvarchar](2000) NOT NULL,
 	[__mj_CreatedAt] [datetimeoffset](7) NOT NULL,
 	[__mj_UpdatedAt] [datetimeoffset](7) NOT NULL,
- CONSTRAINT [PK_ContentSource_1] PRIMARY KEY CLUSTERED 
+ CONSTRAINT [PK_ContentSource] PRIMARY KEY CLUSTERED 
 (
 	[ID] ASC
 )WITH (STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
 ) ON [PRIMARY]
 GO
-/****** Object:  Table [  Content_Autotagging].[ContentSourceParam]    Script Date: 8/9/2024 5:55:22 PM ******/
+/****** Object:  Table [${flyway:defaultSchema}].[ContentSourceParam]    Script Date: 8/9/2024 5:55:22 PM ******/
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [  Content_Autotagging].[ContentSourceParam](
-	[ID] [int] IDENTITY(1,1) NOT NULL,
-	[ContentSourceID] [int] NOT NULL,
-	[ContentSourceTypeParamID] [int] NOT NULL,
+CREATE TABLE [${flyway:defaultSchema}].[ContentSourceParam](
+	[ID] [uniqueidentifier] NOT NULL DEFAULT (newsequentialid()),
+	[ContentSourceID] [uniqueidentifier] NOT NULL,
+	[ContentSourceTypeParamID] [uniqueidentifier] NOT NULL,
 	[Value] [nvarchar](max) NOT NULL,
 	[__mj_CreatedAt] [datetimeoffset](7) NOT NULL,
 	[__mj_UpdatedAt] [datetimeoffset](7) NOT NULL,
- CONSTRAINT [PK_ContentSourceParam_1] PRIMARY KEY CLUSTERED 
+ CONSTRAINT [PK_ContentSourceParam] PRIMARY KEY CLUSTERED 
 (
 	[ID] ASC
 )WITH (STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
 ) ON [PRIMARY] TEXTIMAGE_ON [PRIMARY]
 GO
-/****** Object:  Table [  Content_Autotagging].[ContentSourceType]    Script Date: 8/9/2024 5:55:22 PM ******/
+/****** Object:  Table [${flyway:defaultSchema}].[ContentSourceType]    Script Date: 8/9/2024 5:55:22 PM ******/
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [  Content_Autotagging].[ContentSourceType](
-	[ID] [int] IDENTITY(1,1) NOT NULL,
+CREATE TABLE [${flyway:defaultSchema}].[ContentSourceType](
+	[ID] [uniqueidentifier] NOT NULL DEFAULT (newsequentialid()),
 	[Name] [nvarchar](255) NOT NULL,
 	[Description] [nvarchar](1000) NULL,
 	[__mj_CreatedAt] [datetimeoffset](7) NOT NULL,
@@ -163,13 +152,13 @@ CREATE TABLE [  Content_Autotagging].[ContentSourceType](
 )WITH (STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
 ) ON [PRIMARY]
 GO
-/****** Object:  Table [  Content_Autotagging].[ContentSourceTypeParam]    Script Date: 8/9/2024 5:55:22 PM ******/
+/****** Object:  Table [${flyway:defaultSchema}].[ContentSourceTypeParam]    Script Date: 8/9/2024 5:55:22 PM ******/
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [  Content_Autotagging].[ContentSourceTypeParam](
-	[ID] [int] IDENTITY(1,1) NOT NULL,
+CREATE TABLE [${flyway:defaultSchema}].[ContentSourceTypeParam](
+	[ID] [uniqueidentifier] NOT NULL DEFAULT (newsequentialid()),
 	[Name] [nvarchar](100) NOT NULL,
 	[Description] [nvarchar](max) NULL,
 	[Type] [nvarchar](50) NULL,
@@ -177,19 +166,19 @@ CREATE TABLE [  Content_Autotagging].[ContentSourceTypeParam](
 	[IsRequired] [bit] NOT NULL,
 	[__mj_CreatedAt] [datetimeoffset](7) NOT NULL,
 	[__mj_UpdatedAt] [datetimeoffset](7) NOT NULL,
- CONSTRAINT [PK_ContentSourceTypeParam_1] PRIMARY KEY CLUSTERED 
+ CONSTRAINT [PK_ContentSourceTypeParam] PRIMARY KEY CLUSTERED 
 (
 	[ID] ASC
 )WITH (STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
 ) ON [PRIMARY] TEXTIMAGE_ON [PRIMARY]
 GO
-/****** Object:  Table [  Content_Autotagging].[ContentType]    Script Date: 8/9/2024 5:55:22 PM ******/
+/****** Object:  Table [${flyway:defaultSchema}].[ContentType]    Script Date: 8/9/2024 5:55:22 PM ******/
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [  Content_Autotagging].[ContentType](
-	[ID] [int] IDENTITY(1,1) NOT NULL,
+CREATE TABLE [${flyway:defaultSchema}].[ContentType](
+	[ID] [uniqueidentifier] NOT NULL DEFAULT (newsequentialid()),
 	[Name] [nvarchar](255) NOT NULL,
 	[Description] [nvarchar](max) NULL,
 	[AIModelID] [uniqueidentifier] NOT NULL,
@@ -197,143 +186,143 @@ CREATE TABLE [  Content_Autotagging].[ContentType](
 	[MaxTags] [int] NOT NULL,
 	[__mj_CreatedAt] [datetimeoffset](7) NOT NULL,
 	[__mj_UpdatedAt] [datetimeoffset](7) NOT NULL,
- CONSTRAINT [PK_ContentType_1] PRIMARY KEY CLUSTERED 
+ CONSTRAINT [PK_ContentType] PRIMARY KEY CLUSTERED 
 (
 	[ID] ASC
 )WITH (STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
 ) ON [PRIMARY] TEXTIMAGE_ON [PRIMARY]
 GO
-/****** Object:  Table [  Content_Autotagging].[ContentTypeAttribute]    Script Date: 8/9/2024 5:55:22 PM ******/
+/****** Object:  Table [${flyway:defaultSchema}].[ContentTypeAttribute]    Script Date: 8/9/2024 5:55:22 PM ******/
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [  Content_Autotagging].[ContentTypeAttribute](
-	[ID] [int] IDENTITY(1,1) NOT NULL,
-	[ContentTypeID] [int] NOT NULL,
+CREATE TABLE [${flyway:defaultSchema}].[ContentTypeAttribute](
+	[ID] [uniqueidentifier] NOT NULL DEFAULT (newsequentialid()),
+	[ContentTypeID] [uniqueidentifier] NOT NULL,
 	[Name] [nvarchar](100) NOT NULL,
 	[Prompt] [nvarchar](max) NOT NULL,
 	[Description] [nvarchar](max) NULL,
 	[__mj_CreatedAt] [datetimeoffset](7) NOT NULL,
 	[__mj_UpdatedAt] [datetimeoffset](7) NOT NULL,
- CONSTRAINT [PK_ContentTypeAttribute_1] PRIMARY KEY CLUSTERED 
+ CONSTRAINT [PK_ContentTypeAttribute] PRIMARY KEY CLUSTERED 
 (
 	[ID] ASC
 )WITH (STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
 ) ON [PRIMARY] TEXTIMAGE_ON [PRIMARY]
 GO
-ALTER TABLE [  Content_Autotagging].[ContentFileType] ADD  CONSTRAINT [DF__ContentFi____mj___799DF262]  DEFAULT (getutcdate()) FOR [__mj_CreatedAt]
+ALTER TABLE [${flyway:defaultSchema}].[ContentFileType] ADD  CONSTRAINT [DF__ContentFi____mj___799DF262]  DEFAULT (getutcdate()) FOR [__mj_CreatedAt]
 GO
-ALTER TABLE [  Content_Autotagging].[ContentFileType] ADD  CONSTRAINT [DF__ContentFi____mj___7A92169B]  DEFAULT (getutcdate()) FOR [__mj_UpdatedAt]
+ALTER TABLE [${flyway:defaultSchema}].[ContentFileType] ADD  CONSTRAINT [DF__ContentFi____mj___7A92169B]  DEFAULT (getutcdate()) FOR [__mj_UpdatedAt]
 GO
-ALTER TABLE [  Content_Autotagging].[ContentItem] ADD  CONSTRAINT [DF__ContentIt____mj___7B863AD4]  DEFAULT (getutcdate()) FOR [__mj_CreatedAt]
+ALTER TABLE [${flyway:defaultSchema}].[ContentItem] ADD  CONSTRAINT [DF__ContentIt____mj___7B863AD4]  DEFAULT (getutcdate()) FOR [__mj_CreatedAt]
 GO
-ALTER TABLE [  Content_Autotagging].[ContentItem] ADD  CONSTRAINT [DF__ContentIt____mj___7C7A5F0D]  DEFAULT (getutcdate()) FOR [__mj_UpdatedAt]
+ALTER TABLE [${flyway:defaultSchema}].[ContentItem] ADD  CONSTRAINT [DF__ContentIt____mj___7C7A5F0D]  DEFAULT (getutcdate()) FOR [__mj_UpdatedAt]
 GO
-ALTER TABLE [  Content_Autotagging].[ContentItemAttribute] ADD  CONSTRAINT [DF__ContentIt____mj___7D6E8346]  DEFAULT (getutcdate()) FOR [__mj_CreatedAt]
+ALTER TABLE [${flyway:defaultSchema}].[ContentItemAttribute] ADD  CONSTRAINT [DF__ContentIt____mj___7D6E8346]  DEFAULT (getutcdate()) FOR [__mj_CreatedAt]
 GO
-ALTER TABLE [  Content_Autotagging].[ContentItemAttribute] ADD  CONSTRAINT [DF__ContentIt____mj___7E62A77F]  DEFAULT (getutcdate()) FOR [__mj_UpdatedAt]
+ALTER TABLE [${flyway:defaultSchema}].[ContentItemAttribute] ADD  CONSTRAINT [DF__ContentIt____mj___7E62A77F]  DEFAULT (getutcdate()) FOR [__mj_UpdatedAt]
 GO
-ALTER TABLE [  Content_Autotagging].[ContentItemTag] ADD  CONSTRAINT [DF__ContentIt____mj___11757BF3]  DEFAULT (getutcdate()) FOR [__mj_CreatedAt]
+ALTER TABLE [${flyway:defaultSchema}].[ContentItemTag] ADD  CONSTRAINT [DF__ContentIt____mj___11757BF3]  DEFAULT (getutcdate()) FOR [__mj_CreatedAt]
 GO
-ALTER TABLE [  Content_Autotagging].[ContentItemTag] ADD  CONSTRAINT [DF__ContentIt____mj___1269A02C]  DEFAULT (getutcdate()) FOR [__mj_UpdatedAt]
+ALTER TABLE [${flyway:defaultSchema}].[ContentItemTag] ADD  CONSTRAINT [DF__ContentIt____mj___1269A02C]  DEFAULT (getutcdate()) FOR [__mj_UpdatedAt]
 GO
-ALTER TABLE [  Content_Autotagging].[ContentProcessRun] ADD  CONSTRAINT [DF__ContentPr____mj___7F56CBB8]  DEFAULT (getutcdate()) FOR [__mj_CreatedAt]
+ALTER TABLE [${flyway:defaultSchema}].[ContentProcessRun] ADD  CONSTRAINT [DF__ContentPr____mj___7F56CBB8]  DEFAULT (getutcdate()) FOR [__mj_CreatedAt]
 GO
-ALTER TABLE [  Content_Autotagging].[ContentProcessRun] ADD  CONSTRAINT [DF__ContentPr____mj___004AEFF1]  DEFAULT (getutcdate()) FOR [__mj_UpdatedAt]
+ALTER TABLE [${flyway:defaultSchema}].[ContentProcessRun] ADD  CONSTRAINT [DF__ContentPr____mj___004AEFF1]  DEFAULT (getutcdate()) FOR [__mj_UpdatedAt]
 GO
-ALTER TABLE [  Content_Autotagging].[ContentSource] ADD  CONSTRAINT [DF__ContentSo____mj___013F142A]  DEFAULT (getutcdate()) FOR [__mj_CreatedAt]
+ALTER TABLE [${flyway:defaultSchema}].[ContentSource] ADD  CONSTRAINT [DF__ContentSo____mj___013F142A]  DEFAULT (getutcdate()) FOR [__mj_CreatedAt]
 GO
-ALTER TABLE [  Content_Autotagging].[ContentSource] ADD  CONSTRAINT [DF__ContentSo____mj___02333863]  DEFAULT (getutcdate()) FOR [__mj_UpdatedAt]
+ALTER TABLE [${flyway:defaultSchema}].[ContentSource] ADD  CONSTRAINT [DF__ContentSo____mj___02333863]  DEFAULT (getutcdate()) FOR [__mj_UpdatedAt]
 GO
-ALTER TABLE [  Content_Autotagging].[ContentSourceParam] ADD  CONSTRAINT [DF__ContentSo____mj___03275C9C]  DEFAULT (getutcdate()) FOR [__mj_CreatedAt]
+ALTER TABLE [${flyway:defaultSchema}].[ContentSourceParam] ADD  CONSTRAINT [DF__ContentSo____mj___03275C9C]  DEFAULT (getutcdate()) FOR [__mj_CreatedAt]
 GO
-ALTER TABLE [  Content_Autotagging].[ContentSourceParam] ADD  CONSTRAINT [DF__ContentSo____mj___041B80D5]  DEFAULT (getutcdate()) FOR [__mj_UpdatedAt]
+ALTER TABLE [${flyway:defaultSchema}].[ContentSourceParam] ADD  CONSTRAINT [DF__ContentSo____mj___041B80D5]  DEFAULT (getutcdate()) FOR [__mj_UpdatedAt]
 GO
-ALTER TABLE [  Content_Autotagging].[ContentSourceType] ADD  CONSTRAINT [DF__ContentSo____mj___0AC87E64]  DEFAULT (getutcdate()) FOR [__mj_CreatedAt]
+ALTER TABLE [${flyway:defaultSchema}].[ContentSourceType] ADD  CONSTRAINT [DF__ContentSo____mj___0AC87E64]  DEFAULT (getutcdate()) FOR [__mj_CreatedAt]
 GO
-ALTER TABLE [  Content_Autotagging].[ContentSourceType] ADD  CONSTRAINT [DF__ContentSo____mj___0BBCA29D]  DEFAULT (getutcdate()) FOR [__mj_UpdatedAt]
+ALTER TABLE [${flyway:defaultSchema}].[ContentSourceType] ADD  CONSTRAINT [DF__ContentSo____mj___0BBCA29D]  DEFAULT (getutcdate()) FOR [__mj_UpdatedAt]
 GO
-ALTER TABLE [  Content_Autotagging].[ContentSourceTypeParam] ADD  CONSTRAINT [DF__ContentSo____mj___050FA50E]  DEFAULT (getutcdate()) FOR [__mj_CreatedAt]
+ALTER TABLE [${flyway:defaultSchema}].[ContentSourceTypeParam] ADD  CONSTRAINT [DF__ContentSo____mj___050FA50E]  DEFAULT (getutcdate()) FOR [__mj_CreatedAt]
 GO
-ALTER TABLE [  Content_Autotagging].[ContentSourceTypeParam] ADD  CONSTRAINT [DF__ContentSo____mj___0603C947]  DEFAULT (getutcdate()) FOR [__mj_UpdatedAt]
+ALTER TABLE [${flyway:defaultSchema}].[ContentSourceTypeParam] ADD  CONSTRAINT [DF__ContentSo____mj___0603C947]  DEFAULT (getutcdate()) FOR [__mj_UpdatedAt]
 GO
-ALTER TABLE [  Content_Autotagging].[ContentType] ADD  CONSTRAINT [DF__ContentTy____mj___06F7ED80]  DEFAULT (getutcdate()) FOR [__mj_CreatedAt]
+ALTER TABLE [${flyway:defaultSchema}].[ContentType] ADD  CONSTRAINT [DF__ContentTy____mj___06F7ED80]  DEFAULT (getutcdate()) FOR [__mj_CreatedAt]
 GO
-ALTER TABLE [  Content_Autotagging].[ContentType] ADD  CONSTRAINT [DF__ContentTy____mj___07EC11B9]  DEFAULT (getutcdate()) FOR [__mj_UpdatedAt]
+ALTER TABLE [${flyway:defaultSchema}].[ContentType] ADD  CONSTRAINT [DF__ContentTy____mj___07EC11B9]  DEFAULT (getutcdate()) FOR [__mj_UpdatedAt]
 GO
-ALTER TABLE [  Content_Autotagging].[ContentTypeAttribute] ADD  CONSTRAINT [DF__ContentTy____mj___08E035F2]  DEFAULT (getutcdate()) FOR [__mj_CreatedAt]
+ALTER TABLE [${flyway:defaultSchema}].[ContentTypeAttribute] ADD  CONSTRAINT [DF__ContentTy____mj___08E035F2]  DEFAULT (getutcdate()) FOR [__mj_CreatedAt]
 GO
-ALTER TABLE [  Content_Autotagging].[ContentTypeAttribute] ADD  CONSTRAINT [DF__ContentTy____mj___09D45A2B]  DEFAULT (getutcdate()) FOR [__mj_UpdatedAt]
+ALTER TABLE [${flyway:defaultSchema}].[ContentTypeAttribute] ADD  CONSTRAINT [DF__ContentTy____mj___09D45A2B]  DEFAULT (getutcdate()) FOR [__mj_UpdatedAt]
 GO
-ALTER TABLE [__mj].[AIModel]  WITH CHECK ADD  CONSTRAINT [FK_AIModel_AIModelType] FOREIGN KEY([AIModelTypeID])
-REFERENCES [__mj].[AIModelType] ([ID])
+ALTER TABLE [${flyway:defaultSchema}].[AIModel]  WITH CHECK ADD  CONSTRAINT [FK_AIModel_AIModelType] FOREIGN KEY([AIModelTypeID])
+REFERENCES [${flyway:defaultSchema}].[AIModelType] ([ID])
 GO
-ALTER TABLE [__mj].[AIModel] CHECK CONSTRAINT [FK_AIModel_AIModelType]
+ALTER TABLE [${flyway:defaultSchema}].[AIModel] CHECK CONSTRAINT [FK_AIModel_AIModelType]
 GO
-ALTER TABLE [  Content_Autotagging].[ContentItem]  WITH CHECK ADD  CONSTRAINT [FK_ContentItem_ContentFileTypeID] FOREIGN KEY([ContentFileTypeID])
-REFERENCES [  Content_Autotagging].[ContentFileType] ([ID])
+ALTER TABLE [${flyway:defaultSchema}].[ContentItem]  WITH CHECK ADD  CONSTRAINT [FK_ContentItem_ContentFileTypeID] FOREIGN KEY([ContentFileTypeID])
+REFERENCES [${flyway:defaultSchema}].[ContentFileType] ([ID])
 GO
-ALTER TABLE [  Content_Autotagging].[ContentItem] CHECK CONSTRAINT [FK_ContentItem_ContentFileTypeID]
+ALTER TABLE [${flyway:defaultSchema}].[ContentItem] CHECK CONSTRAINT [FK_ContentItem_ContentFileTypeID]
 GO
-ALTER TABLE [  Content_Autotagging].[ContentItem]  WITH CHECK ADD  CONSTRAINT [FK_ContentItem_ContentSourceID] FOREIGN KEY([ContentSourceID])
-REFERENCES [  Content_Autotagging].[ContentSource] ([ID])
+ALTER TABLE [${flyway:defaultSchema}].[ContentItem]  WITH CHECK ADD  CONSTRAINT [FK_ContentItem_ContentSourceID] FOREIGN KEY([ContentSourceID])
+REFERENCES [${flyway:defaultSchema}].[ContentSource] ([ID])
 GO
-ALTER TABLE [  Content_Autotagging].[ContentItem] CHECK CONSTRAINT [FK_ContentItem_ContentSourceID]
+ALTER TABLE [${flyway:defaultSchema}].[ContentItem] CHECK CONSTRAINT [FK_ContentItem_ContentSourceID]
 GO
-ALTER TABLE [  Content_Autotagging].[ContentItem]  WITH CHECK ADD  CONSTRAINT [FK_ContentItem_ContentSourceTypeID] FOREIGN KEY([ContentSourceTypeID])
-REFERENCES [  Content_Autotagging].[ContentSourceType] ([ID])
+ALTER TABLE [${flyway:defaultSchema}].[ContentItem]  WITH CHECK ADD  CONSTRAINT [FK_ContentItem_ContentSourceTypeID] FOREIGN KEY([ContentSourceTypeID])
+REFERENCES [${flyway:defaultSchema}].[ContentSourceType] ([ID])
 GO
-ALTER TABLE [  Content_Autotagging].[ContentItem] CHECK CONSTRAINT [FK_ContentItem_ContentSourceTypeID]
+ALTER TABLE [${flyway:defaultSchema}].[ContentItem] CHECK CONSTRAINT [FK_ContentItem_ContentSourceTypeID]
 GO
-ALTER TABLE [  Content_Autotagging].[ContentItem]  WITH CHECK ADD  CONSTRAINT [FK_ContentItem_ContentTypeID] FOREIGN KEY([ContentTypeID])
-REFERENCES [  Content_Autotagging].[ContentType] ([ID])
+ALTER TABLE [${flyway:defaultSchema}].[ContentItem]  WITH CHECK ADD  CONSTRAINT [FK_ContentItem_ContentTypeID] FOREIGN KEY([ContentTypeID])
+REFERENCES [${flyway:defaultSchema}].[ContentType] ([ID])
 GO
-ALTER TABLE [  Content_Autotagging].[ContentItem] CHECK CONSTRAINT [FK_ContentItem_ContentTypeID]
+ALTER TABLE [${flyway:defaultSchema}].[ContentItem] CHECK CONSTRAINT [FK_ContentItem_ContentTypeID]
 GO
-ALTER TABLE [  Content_Autotagging].[ContentItemAttribute]  WITH CHECK ADD  CONSTRAINT [FK_ContentItemAttribute_ContentItemID] FOREIGN KEY([ContentItemID])
-REFERENCES [  Content_Autotagging].[ContentItem] ([ID])
+ALTER TABLE [${flyway:defaultSchema}].[ContentItemAttribute]  WITH CHECK ADD  CONSTRAINT [FK_ContentItemAttribute_ContentItemID] FOREIGN KEY([ContentItemID])
+REFERENCES [${flyway:defaultSchema}].[ContentItem] ([ID])
 GO
-ALTER TABLE [  Content_Autotagging].[ContentItemAttribute] CHECK CONSTRAINT [FK_ContentItemAttribute_ContentItemID]
+ALTER TABLE [${flyway:defaultSchema}].[ContentItemAttribute] CHECK CONSTRAINT [FK_ContentItemAttribute_ContentItemID]
 GO
-ALTER TABLE [  Content_Autotagging].[ContentItemTag]  WITH CHECK ADD  CONSTRAINT [FK_ContentItemTag_ContentItemID] FOREIGN KEY([ItemID])
-REFERENCES [  Content_Autotagging].[ContentItem] ([ID])
+ALTER TABLE [${flyway:defaultSchema}].[ContentItemTag]  WITH CHECK ADD  CONSTRAINT [FK_ContentItemTag_ContentItemID] FOREIGN KEY([ItemID])
+REFERENCES [${flyway:defaultSchema}].[ContentItem] ([ID])
 GO
-ALTER TABLE [  Content_Autotagging].[ContentItemTag] CHECK CONSTRAINT [FK_ContentItemTag_ContentItemID]
+ALTER TABLE [${flyway:defaultSchema}].[ContentItemTag] CHECK CONSTRAINT [FK_ContentItemTag_ContentItemID]
 GO
-ALTER TABLE [  Content_Autotagging].[ContentProcessRun]  WITH CHECK ADD  CONSTRAINT [FK_ContentProcessRun_ContentSourceID] FOREIGN KEY([SourceID])
-REFERENCES [  Content_Autotagging].[ContentSource] ([ID])
+ALTER TABLE [${flyway:defaultSchema}].[ContentProcessRun]  WITH CHECK ADD  CONSTRAINT [FK_ContentProcessRun_ContentSourceID] FOREIGN KEY([SourceID])
+REFERENCES [${flyway:defaultSchema}].[ContentSource] ([ID])
 GO
-ALTER TABLE [  Content_Autotagging].[ContentProcessRun] CHECK CONSTRAINT [FK_ContentProcessRun_ContentSourceID]
+ALTER TABLE [${flyway:defaultSchema}].[ContentProcessRun] CHECK CONSTRAINT [FK_ContentProcessRun_ContentSourceID]
 GO
-ALTER TABLE [  Content_Autotagging].[ContentSource]  WITH CHECK ADD  CONSTRAINT [FK_ContentSource_ContentFileTypeID] FOREIGN KEY([ContentFileTypeID])
-REFERENCES [  Content_Autotagging].[ContentFileType] ([ID])
+ALTER TABLE [${flyway:defaultSchema}].[ContentSource]  WITH CHECK ADD  CONSTRAINT [FK_ContentSource_ContentFileTypeID] FOREIGN KEY([ContentFileTypeID])
+REFERENCES [${flyway:defaultSchema}].[ContentFileType] ([ID])
 GO
-ALTER TABLE [  Content_Autotagging].[ContentSource] CHECK CONSTRAINT [FK_ContentSource_ContentFileTypeID]
+ALTER TABLE [${flyway:defaultSchema}].[ContentSource] CHECK CONSTRAINT [FK_ContentSource_ContentFileTypeID]
 GO
-ALTER TABLE [  Content_Autotagging].[ContentSource]  WITH CHECK ADD  CONSTRAINT [FK_ContentSource_ContentSourceTypeID] FOREIGN KEY([ContentSourceTypeID])
-REFERENCES [  Content_Autotagging].[ContentSourceType] ([ID])
+ALTER TABLE [${flyway:defaultSchema}].[ContentSource]  WITH CHECK ADD  CONSTRAINT [FK_ContentSource_ContentSourceTypeID] FOREIGN KEY([ContentSourceTypeID])
+REFERENCES [${flyway:defaultSchema}].[ContentSourceType] ([ID])
 GO
-ALTER TABLE [  Content_Autotagging].[ContentSource] CHECK CONSTRAINT [FK_ContentSource_ContentSourceTypeID]
+ALTER TABLE [${flyway:defaultSchema}].[ContentSource] CHECK CONSTRAINT [FK_ContentSource_ContentSourceTypeID]
 GO
-ALTER TABLE [  Content_Autotagging].[ContentSource]  WITH CHECK ADD  CONSTRAINT [FK_ContentSource_ContentTypeID] FOREIGN KEY([ContentTypeID])
-REFERENCES [  Content_Autotagging].[ContentType] ([ID])
+ALTER TABLE [${flyway:defaultSchema}].[ContentSource]  WITH CHECK ADD  CONSTRAINT [FK_ContentSource_ContentTypeID] FOREIGN KEY([ContentTypeID])
+REFERENCES [${flyway:defaultSchema}].[ContentType] ([ID])
 GO
-ALTER TABLE [  Content_Autotagging].[ContentSource] CHECK CONSTRAINT [FK_ContentSource_ContentTypeID]
+ALTER TABLE [${flyway:defaultSchema}].[ContentSource] CHECK CONSTRAINT [FK_ContentSource_ContentTypeID]
 GO
-ALTER TABLE [  Content_Autotagging].[ContentSourceParam]  WITH CHECK ADD  CONSTRAINT [FK_ContentSourceParam_ContentSourceID] FOREIGN KEY([ContentSourceID])
-REFERENCES [  Content_Autotagging].[ContentSource] ([ID])
+ALTER TABLE [${flyway:defaultSchema}].[ContentSourceParam]  WITH CHECK ADD  CONSTRAINT [FK_ContentSourceParam_ContentSourceID] FOREIGN KEY([ContentSourceID])
+REFERENCES [${flyway:defaultSchema}].[ContentSource] ([ID])
 GO
-ALTER TABLE [  Content_Autotagging].[ContentSourceParam] CHECK CONSTRAINT [FK_ContentSourceParam_ContentSourceID]
+ALTER TABLE [${flyway:defaultSchema}].[ContentSourceParam] CHECK CONSTRAINT [FK_ContentSourceParam_ContentSourceID]
 GO
-ALTER TABLE [  Content_Autotagging].[ContentType]  WITH CHECK ADD  CONSTRAINT [FK_AIModel_mj_AIModel] FOREIGN KEY([AIModelID])
-REFERENCES [__mj].[AIModel] ([ID])
+ALTER TABLE [${flyway:defaultSchema}].[ContentType]  WITH CHECK ADD  CONSTRAINT [FK_AIModel_mj_AIModel] FOREIGN KEY([AIModelID])
+REFERENCES [${flyway:defaultSchema}].[AIModel] ([ID])
 GO
 
 /****************************************************************************************
 AI Models Table Additions
 ****************************************************************************************/
-INSERT INTO [__mj].[AIModel]
+INSERT INTO [${flyway:defaultSchema}].[AIModel]
            ([ID]
            ,[Name]
            ,[Description]
@@ -364,7 +353,7 @@ INSERT INTO [__mj].[AIModel]
            ,NULL
            ,NULL)
 
-INSERT INTO [__mj].[AIModel]
+INSERT INTO [${flyway:defaultSchema}].[AIModel]
            ([ID]
            ,[Name]
            ,[Description]
@@ -395,7 +384,7 @@ INSERT INTO [__mj].[AIModel]
            ,NULL
            ,NULL)
 
-INSERT INTO [__mj].[AIModel]
+INSERT INTO [${flyway:defaultSchema}].[AIModel]
            ([ID]
            ,[Name]
            ,[Description]
@@ -426,7 +415,7 @@ INSERT INTO [__mj].[AIModel]
            ,NULL
            ,NULL)
 
-INSERT INTO [__mj].[AIModel]
+INSERT INTO [${flyway:defaultSchema}].[AIModel]
            ([ID]
            ,[Name]
            ,[Description]
@@ -457,7 +446,7 @@ INSERT INTO [__mj].[AIModel]
            ,NULL
            ,NULL)
 
-INSERT INTO [__mj].[AIModel]
+INSERT INTO [${flyway:defaultSchema}].[AIModel]
            ([ID]
            ,[Name]
            ,[Description]
