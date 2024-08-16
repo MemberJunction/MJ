@@ -904,10 +904,10 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 const re = this.Entities.find(e => e.ID === r.RelatedEntityID);
                 let uniqueCodeName: string = '';
                 if (r.Type.toLowerCase().trim() === 'many to many') {
-                    uniqueCodeName = `${r.RelatedEntityCodeName}_${r.JoinEntityJoinField.replace(/ /g, '')}`;
+                    uniqueCodeName = `${r.RelatedEntityCodeName}_${r.JoinEntityJoinField.replace(/\s/g, '')}`;
                 }
                 else {
-                    uniqueCodeName = `${r.RelatedEntityCodeName}_${r.RelatedEntityJoinField.replace(/ /g, '')}`;
+                    uniqueCodeName = `${r.RelatedEntityCodeName}_${r.RelatedEntityJoinField.replace(/\s/g, '')}`;
                 }
                 rel += `
                 ${uniqueCodeName} {
