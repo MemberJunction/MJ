@@ -2,6 +2,45 @@
   "name": "@memberjunction/communication-sendgrid",
   "entries": [
     {
+      "date": "Fri, 16 Aug 2024 03:57:15 GMT",
+      "version": "2.3.1",
+      "tag": "@memberjunction/communication-sendgrid_v2.3.1",
+      "comments": {
+        "patch": [
+          {
+            "author": "craig.adam@bluecypress.io",
+            "package": "@memberjunction/communication-sendgrid",
+            "commit": "0fd6288275103e880942b87b3488446d18e769da",
+            "comment": "Applying package updates [skip ci]"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/communication-sendgrid",
+            "comment": "Bump @memberjunction/global to v2.3.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/communication-sendgrid",
+            "comment": "Bump @memberjunction/core to v2.3.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/communication-sendgrid",
+            "comment": "Bump @memberjunction/core-entities to v2.3.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/communication-sendgrid",
+            "comment": "Bump @memberjunction/communication-types to v2.3.1",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
       "date": "Fri, 16 Aug 2024 03:10:41 GMT",
       "version": "2.3.0",
       "tag": "@memberjunction/communication-sendgrid_v2.3.0",

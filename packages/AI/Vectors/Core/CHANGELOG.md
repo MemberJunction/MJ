@@ -1,8 +1,22 @@
 # Change Log - @memberjunction/ai-vectors
 
-This log was last generated on Fri, 16 Aug 2024 03:10:41 GMT and should not be manually modified.
+This log was last generated on Fri, 16 Aug 2024 03:57:15 GMT and should not be manually modified.
 
 <!-- Start content -->
+
+## 2.3.1
+
+Fri, 16 Aug 2024 03:57:15 GMT
+
+### Patches
+
+- Applying package updates [skip ci] (craig.adam@bluecypress.io)
+- Bump @memberjunction/core to v2.3.1
+- Bump @memberjunction/global to v2.3.1
+- Bump @memberjunction/core-entities to v2.3.1
+- Bump @memberjunction/aiengine to v2.3.1
+- Bump @memberjunction/ai to v2.3.1
+- Bump @memberjunction/ai-vectordb to v2.3.1
 
 ## 2.3.0
 

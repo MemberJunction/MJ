@@ -2,6 +2,81 @@
   "name": "@memberjunction/ng-ask-skip",
   "entries": [
     {
+      "date": "Fri, 16 Aug 2024 03:57:15 GMT",
+      "version": "2.3.1",
+      "tag": "@memberjunction/ng-ask-skip_v2.3.1",
+      "comments": {
+        "patch": [
+          {
+            "author": "craig.adam@bluecypress.io",
+            "package": "@memberjunction/ng-ask-skip",
+            "commit": "0fd6288275103e880942b87b3488446d18e769da",
+            "comment": "Applying package updates [skip ci]"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-ask-skip",
+            "comment": "Bump @memberjunction/core to v2.3.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-ask-skip",
+            "comment": "Bump @memberjunction/global to v2.3.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-ask-skip",
+            "comment": "Bump @memberjunction/graphql-dataprovider to v2.3.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-ask-skip",
+            "comment": "Bump @memberjunction/skip-types to v2.3.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-ask-skip",
+            "comment": "Bump @memberjunction/ng-container-directives to v2.3.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-ask-skip",
+            "comment": "Bump @memberjunction/ng-chat to v2.3.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-ask-skip",
+            "comment": "Bump @memberjunction/ng-shared to v2.3.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-ask-skip",
+            "comment": "Bump @memberjunction/ng-data-context to v2.3.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-ask-skip",
+            "comment": "Bump @memberjunction/ng-user-view-grid to v2.3.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-ask-skip",
+            "comment": "Bump @memberjunction/ng-tabstrip to v2.3.1",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
       "date": "Fri, 16 Aug 2024 03:10:41 GMT",
       "version": "2.3.0",
       "tag": "@memberjunction/ng-ask-skip_v2.3.0",

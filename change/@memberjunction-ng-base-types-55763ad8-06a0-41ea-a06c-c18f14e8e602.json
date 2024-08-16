@@ -1,7 +1,0 @@
-{
-  "type": "patch",
-  "comment": "Applying package updates [skip ci]",
-  "packageName": "@memberjunction/ng-base-types",
-  "email": "craig.adam@bluecypress.io",
-  "dependentChangeType": "patch"
-}
