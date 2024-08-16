@@ -503,7 +503,7 @@ export class ${classPrefix}${entity.BaseTableCodeName}Input {`;
 
   protected generateOneToManyFieldResolver(entity: EntityInfo, r: EntityRelationshipInfo, isInternal: boolean): string {
     const md = new Metadata();
-    const re = md.Entities.find((e) => e.Name.toLowerCase() == r.RelatedEntity.toLowerCase())!;
+    const re = md.EntityByName(r.RelatedEntity);
     const instanceName = entity.BaseTableCodeName.toLowerCase() + this.GraphQLTypeSuffix;
 
     let filterFieldName: string = '';
@@ -532,9 +532,13 @@ export class ${classPrefix}${entity.BaseTableCodeName}Input {`;
     const quotes = filterField.NeedsQuotes ? "'" : '';
     const serverPackagePrefix = re.SchemaName === mjCoreSchema && !isInternal ? 'mj_core_schema_server_object_types.' : '';
     const serverClassName = serverPackagePrefix + r.RelatedEntityBaseTableCodeName + this.GraphQLTypeSuffix;
+
+    // create a code name that is the combination of the relatedentitycode name plus the relatedentityjoinfield that has spaces stripped
+    const uniqueCodeName = `${r.RelatedEntityCodeName}_${r.RelatedEntityJoinField.replace(/ /g, '')}`;
+
     return `
     @FieldResolver(() => [${serverClassName}])
-    async ${r.RelatedEntityCodeName}Array(@Root() ${instanceName}: ${entity.BaseTableCodeName + this.GraphQLTypeSuffix}, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async ${uniqueCodeName}Array(@Root() ${instanceName}: ${entity.BaseTableCodeName + this.GraphQLTypeSuffix}, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('${r.RelatedEntity}', userPayload);
         const sSQL = \`SELECT * FROM [${this.schemaName(re)}].[${r.RelatedEntityBaseView}]\ WHERE [${r.RelatedEntityJoinField}]=${quotes}\${${instanceName}.${filterFieldName}}${quotes} \` + this.getRowLevelSecurityWhereClause('${r.RelatedEntity}', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('${r.RelatedEntity}', await dataSource.query(sSQL));
@@ -574,9 +578,12 @@ export class ${classPrefix}${entity.BaseTableCodeName}Input {`;
     const serverPackagePrefix = re.SchemaName === mjCoreSchema ? 'mj_core_schema_server_object_types.' : '';
     const serverClassName = serverPackagePrefix + r.RelatedEntityBaseTableCodeName + this.GraphQLTypeSuffix;
 
+    // create a code name that is the combination of the relatedentitycode name plus the relatedentityjoinfield that has spaces stripped
+    const uniqueCodeName = `${r.RelatedEntityCodeName}_${r.JoinEntityJoinField.replace(/ /g, '')}`;
+
     return `
     @FieldResolver(() => [${serverClassName}])
-    async ${r.RelatedEntityCodeName}Array(@Root() ${instanceName}: ${entity.BaseTableCodeName + this.GraphQLTypeSuffix}, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async ${uniqueCodeName}Array(@Root() ${instanceName}: ${entity.BaseTableCodeName + this.GraphQLTypeSuffix}, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('${r.RelatedEntity}', userPayload);
         const sSQL = \`SELECT * FROM [${this.schemaName(re)}].[${r.RelatedEntityBaseView}]\ WHERE [${re.FirstPrimaryKey.Name}] IN (SELECT [${r.JoinEntityInverseJoinField}] FROM [${this.schemaName(re)}].[${r.JoinView}] WHERE [${r.JoinEntityJoinField}]=${quotes}\${${instanceName}.${filterFieldName}}${quotes}) \` + this.getRowLevelSecurityWhereClause('${r.RelatedEntity}', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('${r.RelatedEntity}', await dataSource.query(sSQL));

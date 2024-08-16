@@ -746,8 +746,9 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 vars.input[f.CodeName] = val;
             }
 
-            // now add an OldValues prop to the vars IF the type === 'update'
-            if (type.trim().toLowerCase() === 'update') {
+            // now add an OldValues prop to the vars IF the type === 'update' and the options.SkipOldValuesCheck === false
+            if (type.trim().toLowerCase() === 'update' && 
+                options.SkipOldValuesCheck === false) {
                 const ov = [];
                 entity.Fields.forEach(f => {
                     let val = null;
@@ -901,8 +902,15 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             if (EntityRelationshipsToLoad.indexOf(entityInfo.RelatedEntities[i].RelatedEntity) >= 0) {
                 const r = entityInfo.RelatedEntities[i];
                 const re = this.Entities.find(e => e.ID === r.RelatedEntityID);
+                let uniqueCodeName: string = '';
+                if (r.Type.toLowerCase().trim() === 'many to many') {
+                    uniqueCodeName = `${r.RelatedEntityCodeName}_${r.JoinEntityJoinField.replace(/\s/g, '')}`;
+                }
+                else {
+                    uniqueCodeName = `${r.RelatedEntityCodeName}_${r.RelatedEntityJoinField.replace(/\s/g, '')}`;
+                }
                 rel += `
-                ${re.CodeName} {
+                ${uniqueCodeName} {
                     ${re.Fields.map(f => f.CodeName).join("\n                    ")}
                 }
                 `;
