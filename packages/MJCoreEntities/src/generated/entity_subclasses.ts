@@ -781,6 +781,12 @@ export const AIModelSchema = z.object({
         * * SQL Data Type: int
         * * Default Value: 0
     * * Description: Optional column that ranks the cost of the AI model. Default is 0 and should be non-negative.`),
+    ModelSelectionInsights: z.string().nullish().describe(`
+        * * Field Name: ModelSelectionInsights
+        * * Display Name: Model Selection Insights
+        * * SQL Data Type: nvarchar(MAX)
+        * * Default Value: null
+    * * Description: This column stores unstructured text notes that provide insights into what the model is particularly good at and areas where it may not perform as well. These notes can be used by a human or an AI to determine if the model is a good fit for various purposes.`),
     AIModelType: z.string().describe(`
         * * Field Name: AIModelType
         * * Display Name: AIModel Type
@@ -788,6 +794,232 @@ export const AIModelSchema = z.object({
 });
 
 export type AIModelEntityType = z.infer<typeof AIModelSchema>;
+       
+/**
+ * zod schema definition for the entity AI Prompt Categories
+ */
+export const AIPromptCategorySchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(255)`),
+    ParentID: z.string().nullish().describe(`
+        * * Field Name: ParentID
+        * * Display Name: Parent ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: AI Prompt Categories (vwAIPromptCategories.ID)
+    * * Description: Parent category ID for hierarchical organization.`),
+    Description: z.string().nullish().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Parent: z.string().nullish().describe(`
+        * * Field Name: Parent
+        * * Display Name: Parent
+        * * SQL Data Type: nvarchar(255)`),
+});
+
+export type AIPromptCategoryEntityType = z.infer<typeof AIPromptCategorySchema>;
+       
+/**
+ * zod schema definition for the entity AI Prompt Types
+ */
+export const AIPromptTypeSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(255)`),
+    Description: z.string().nullish().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+});
+
+export type AIPromptTypeEntityType = z.infer<typeof AIPromptTypeSchema>;
+       
+/**
+ * zod schema definition for the entity AI Prompts
+ */
+export const AIPromptSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(255)`),
+    Description: z.string().nullish().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)`),
+    TemplateID: z.string().describe(`
+        * * Field Name: TemplateID
+        * * Display Name: Template ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Templates (vwTemplates.ID)
+    * * Description: Reference to the template used for the prompt.`),
+    CategoryID: z.string().nullish().describe(`
+        * * Field Name: CategoryID
+        * * Display Name: Category ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: AI Prompt Categories (vwAIPromptCategories.ID)
+    * * Description: Reference to the category the prompt belongs to.`),
+    TypeID: z.string().describe(`
+        * * Field Name: TypeID
+        * * Display Name: Type ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: AI Prompt Types (vwAIPromptTypes.ID)
+    * * Description: Reference to the type of the prompt.`),
+    Status: z.union([z.literal('Pending'), z.literal('Active'), z.literal('Disabled')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(50)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Pending
+    *   * Active
+    *   * Disabled`),
+    CacheResults: z.boolean().describe(`
+        * * Field Name: CacheResults
+        * * Display Name: Cache Results
+        * * SQL Data Type: bit
+        * * Default Value: 0
+    * * Description: Indicates whether the results of the prompt should be cached.`),
+    CacheExpiration: z.number().describe(`
+        * * Field Name: CacheExpiration
+        * * Display Name: Cache Expiration
+        * * SQL Data Type: decimal(10, 2)
+        * * Default Value: 0
+    * * Description: Number of hours the cache is valid for; can be fractional or 0 if the cache never expires.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Template: z.string().describe(`
+        * * Field Name: Template
+        * * Display Name: Template
+        * * SQL Data Type: nvarchar(255)`),
+    Category: z.string().nullish().describe(`
+        * * Field Name: Category
+        * * Display Name: Category
+        * * SQL Data Type: nvarchar(255)`),
+    Type: z.string().describe(`
+        * * Field Name: Type
+        * * Display Name: Type
+        * * SQL Data Type: nvarchar(255)`),
+});
+
+export type AIPromptEntityType = z.infer<typeof AIPromptSchema>;
+       
+/**
+ * zod schema definition for the entity AI Result Cache
+ */
+export const AIResultCacheSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    AIPromptID: z.string().describe(`
+        * * Field Name: AIPromptID
+        * * Display Name: AIPrompt ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: AI Prompts (vwAIPrompts.ID)
+    * * Description: Reference to the AI prompt this result corresponds to.`),
+    AIModelID: z.string().describe(`
+        * * Field Name: AIModelID
+        * * Display Name: AIModel ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: AI Models (vwAIModels.ID)
+    * * Description: Reference to the AI model that generated this result.`),
+    RunAt: z.date().describe(`
+        * * Field Name: RunAt
+        * * Display Name: Run At
+        * * SQL Data Type: datetimeoffset
+    * * Description: Timestamp of when this result was generated.`),
+    PromptText: z.string().describe(`
+        * * Field Name: PromptText
+        * * Display Name: Prompt Text
+        * * SQL Data Type: nvarchar(MAX)
+    * * Description: The prompt text used to generate this result.`),
+    ResultText: z.string().nullish().describe(`
+        * * Field Name: ResultText
+        * * Display Name: Result Text
+        * * SQL Data Type: nvarchar(MAX)
+    * * Description: The text of the result generated by the AI model.`),
+    Status: z.union([z.literal('Active'), z.literal('Expired')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(50)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Expired
+    * * Description: The status of this result, indicating whether it is currently active or expired.`),
+    ExpiredOn: z.date().nullish().describe(`
+        * * Field Name: ExpiredOn
+        * * Display Name: Expired On
+        * * SQL Data Type: datetimeoffset
+    * * Description: Timestamp of when this result was marked as expired.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    AIPrompt: z.string().describe(`
+        * * Field Name: AIPrompt
+        * * Display Name: AIPrompt
+        * * SQL Data Type: nvarchar(255)`),
+    AIModel: z.string().describe(`
+        * * Field Name: AIModel
+        * * Display Name: AIModel
+        * * SQL Data Type: nvarchar(50)`),
+});
+
+export type AIResultCacheEntityType = z.infer<typeof AIResultCacheSchema>;
        
 /**
  * zod schema definition for the entity Application Entities
@@ -1725,7 +1957,8 @@ export const CompanyIntegrationRunSchema = z.object({
     RunByUser: z.string().describe(`
         * * Field Name: RunByUser
         * * Display Name: Run By User
-        * * SQL Data Type: nvarchar(100)`),
+        * * SQL Data Type: nvarchar(100)
+        * * Default Value: null`),
 });
 
 export type CompanyIntegrationRunEntityType = z.infer<typeof CompanyIntegrationRunSchema>;
@@ -10364,12 +10597,598 @@ export class AIModelEntity extends BaseEntity<AIModelEntityType> {
     }
 
     /**
+    * * Field Name: ModelSelectionInsights
+    * * Display Name: Model Selection Insights
+    * * SQL Data Type: nvarchar(MAX)
+    * * Default Value: null
+    * * Description: This column stores unstructured text notes that provide insights into what the model is particularly good at and areas where it may not perform as well. These notes can be used by a human or an AI to determine if the model is a good fit for various purposes.
+    */
+    get ModelSelectionInsights(): string | null {  
+        return this.Get('ModelSelectionInsights');
+    }
+    set ModelSelectionInsights(value: string | null) {
+        this.Set('ModelSelectionInsights', value);
+    }
+
+    /**
     * * Field Name: AIModelType
     * * Display Name: AIModel Type
     * * SQL Data Type: nvarchar(50)
     */
     get AIModelType(): string {  
         return this.Get('AIModelType');
+    }
+}
+
+            
+/**
+ * AI Prompt Categories - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: AIPromptCategory
+ * * Base View: vwAIPromptCategories
+ * * @description Categories for organizing AI prompts in a hierarchical structure.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'AI Prompt Categories')
+export class AIPromptCategoryEntity extends BaseEntity<AIPromptCategoryEntityType> {
+    /**
+    * Loads the AI Prompt Categories record from the database
+    * @param ID: string - primary key value to load the AI Prompt Categories record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof AIPromptCategoryEntity
+    * @method
+    * @override
+    */      
+    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {  
+        return this.Get('ID');
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Name(): string {  
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: ParentID
+    * * Display Name: Parent ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: AI Prompt Categories (vwAIPromptCategories.ID)
+    * * Description: Parent category ID for hierarchical organization.
+    */
+    get ParentID(): string | null {  
+        return this.Get('ParentID');
+    }
+    set ParentID(value: string | null) {
+        this.Set('ParentID', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    */
+    get Description(): string | null {  
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {  
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {  
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Parent
+    * * Display Name: Parent
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Parent(): string | null {  
+        return this.Get('Parent');
+    }
+}
+
+            
+/**
+ * AI Prompt Types - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: AIPromptType
+ * * Base View: vwAIPromptTypes
+ * * @description Types of AI prompts such as Chat, Text-to-Image, Text-to-Video, etc.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'AI Prompt Types')
+export class AIPromptTypeEntity extends BaseEntity<AIPromptTypeEntityType> {
+    /**
+    * Loads the AI Prompt Types record from the database
+    * @param ID: string - primary key value to load the AI Prompt Types record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof AIPromptTypeEntity
+    * @method
+    * @override
+    */      
+    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {  
+        return this.Get('ID');
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Name(): string {  
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    */
+    get Description(): string | null {  
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {  
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {  
+        return this.Get('__mj_UpdatedAt');
+    }
+}
+
+            
+/**
+ * AI Prompts - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: AIPrompt
+ * * Base View: vwAIPrompts
+ * * @description Stores AI prompts, including references to categories, types, and templates.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'AI Prompts')
+export class AIPromptEntity extends BaseEntity<AIPromptEntityType> {
+    /**
+    * Loads the AI Prompts record from the database
+    * @param ID: string - primary key value to load the AI Prompts record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof AIPromptEntity
+    * @method
+    * @override
+    */      
+    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {  
+        return this.Get('ID');
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Name(): string {  
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    */
+    get Description(): string | null {  
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: TemplateID
+    * * Display Name: Template ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: Templates (vwTemplates.ID)
+    * * Description: Reference to the template used for the prompt.
+    */
+    get TemplateID(): string {  
+        return this.Get('TemplateID');
+    }
+    set TemplateID(value: string) {
+        this.Set('TemplateID', value);
+    }
+
+    /**
+    * * Field Name: CategoryID
+    * * Display Name: Category ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: AI Prompt Categories (vwAIPromptCategories.ID)
+    * * Description: Reference to the category the prompt belongs to.
+    */
+    get CategoryID(): string | null {  
+        return this.Get('CategoryID');
+    }
+    set CategoryID(value: string | null) {
+        this.Set('CategoryID', value);
+    }
+
+    /**
+    * * Field Name: TypeID
+    * * Display Name: Type ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: AI Prompt Types (vwAIPromptTypes.ID)
+    * * Description: Reference to the type of the prompt.
+    */
+    get TypeID(): string {  
+        return this.Get('TypeID');
+    }
+    set TypeID(value: string) {
+        this.Set('TypeID', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(50)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Pending
+    *   * Active
+    *   * Disabled
+    */
+    get Status(): 'Pending' | 'Active' | 'Disabled' {  
+        return this.Get('Status');
+    }
+    set Status(value: 'Pending' | 'Active' | 'Disabled') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: CacheResults
+    * * Display Name: Cache Results
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Indicates whether the results of the prompt should be cached.
+    */
+    get CacheResults(): boolean {  
+        return this.Get('CacheResults');
+    }
+    set CacheResults(value: boolean) {
+        this.Set('CacheResults', value);
+    }
+
+    /**
+    * * Field Name: CacheExpiration
+    * * Display Name: Cache Expiration
+    * * SQL Data Type: decimal(10, 2)
+    * * Default Value: 0
+    * * Description: Number of hours the cache is valid for; can be fractional or 0 if the cache never expires.
+    */
+    get CacheExpiration(): number {  
+        return this.Get('CacheExpiration');
+    }
+    set CacheExpiration(value: number) {
+        this.Set('CacheExpiration', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {  
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {  
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Template
+    * * Display Name: Template
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Template(): string {  
+        return this.Get('Template');
+    }
+
+    /**
+    * * Field Name: Category
+    * * Display Name: Category
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Category(): string | null {  
+        return this.Get('Category');
+    }
+
+    /**
+    * * Field Name: Type
+    * * Display Name: Type
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Type(): string {  
+        return this.Get('Type');
+    }
+}
+
+            
+/**
+ * AI Result Cache - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: AIResultCache
+ * * Base View: vwAIResultCaches
+ * * @description Stores cached results of AI prompts, including multiple runs for history and tracking purposes.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'AI Result Cache')
+export class AIResultCacheEntity extends BaseEntity<AIResultCacheEntityType> {
+    /**
+    * Loads the AI Result Cache record from the database
+    * @param ID: string - primary key value to load the AI Result Cache record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof AIResultCacheEntity
+    * @method
+    * @override
+    */      
+    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {  
+        return this.Get('ID');
+    }
+
+    /**
+    * * Field Name: AIPromptID
+    * * Display Name: AIPrompt ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: AI Prompts (vwAIPrompts.ID)
+    * * Description: Reference to the AI prompt this result corresponds to.
+    */
+    get AIPromptID(): string {  
+        return this.Get('AIPromptID');
+    }
+    set AIPromptID(value: string) {
+        this.Set('AIPromptID', value);
+    }
+
+    /**
+    * * Field Name: AIModelID
+    * * Display Name: AIModel ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: AI Models (vwAIModels.ID)
+    * * Description: Reference to the AI model that generated this result.
+    */
+    get AIModelID(): string {  
+        return this.Get('AIModelID');
+    }
+    set AIModelID(value: string) {
+        this.Set('AIModelID', value);
+    }
+
+    /**
+    * * Field Name: RunAt
+    * * Display Name: Run At
+    * * SQL Data Type: datetimeoffset
+    * * Description: Timestamp of when this result was generated.
+    */
+    get RunAt(): Date {  
+        return this.Get('RunAt');
+    }
+    set RunAt(value: Date) {
+        this.Set('RunAt', value);
+    }
+
+    /**
+    * * Field Name: PromptText
+    * * Display Name: Prompt Text
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: The prompt text used to generate this result.
+    */
+    get PromptText(): string {  
+        return this.Get('PromptText');
+    }
+    set PromptText(value: string) {
+        this.Set('PromptText', value);
+    }
+
+    /**
+    * * Field Name: ResultText
+    * * Display Name: Result Text
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: The text of the result generated by the AI model.
+    */
+    get ResultText(): string | null {  
+        return this.Get('ResultText');
+    }
+    set ResultText(value: string | null) {
+        this.Set('ResultText', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(50)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Expired
+    * * Description: The status of this result, indicating whether it is currently active or expired.
+    */
+    get Status(): 'Active' | 'Expired' {  
+        return this.Get('Status');
+    }
+    set Status(value: 'Active' | 'Expired') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: ExpiredOn
+    * * Display Name: Expired On
+    * * SQL Data Type: datetimeoffset
+    * * Description: Timestamp of when this result was marked as expired.
+    */
+    get ExpiredOn(): Date | null {  
+        return this.Get('ExpiredOn');
+    }
+    set ExpiredOn(value: Date | null) {
+        this.Set('ExpiredOn', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {  
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {  
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: AIPrompt
+    * * Display Name: AIPrompt
+    * * SQL Data Type: nvarchar(255)
+    */
+    get AIPrompt(): string {  
+        return this.Get('AIPrompt');
+    }
+
+    /**
+    * * Field Name: AIModel
+    * * Display Name: AIModel
+    * * SQL Data Type: nvarchar(50)
+    */
+    get AIModel(): string {  
+        return this.Get('AIModel');
     }
 }
 
@@ -12984,6 +13803,7 @@ export class CompanyIntegrationRunEntity extends BaseEntity<CompanyIntegrationRu
     * * Field Name: RunByUser
     * * Display Name: Run By User
     * * SQL Data Type: nvarchar(100)
+    * * Default Value: null
     */
     get RunByUser(): string {  
         return this.Get('RunByUser');

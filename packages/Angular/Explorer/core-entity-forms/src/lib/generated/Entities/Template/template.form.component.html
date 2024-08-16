@@ -46,6 +46,21 @@
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
+                    <mj-tab Name="AI Prompts" 
+                        [Visible]="record.IsSaved" 
+                        [Props]="{EntityRelationshipID: '64D6B0B0-BF59-EF11-991A-000D3A9D8BF3'}">
+                        AI Prompts
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('AI Prompts')"  
+                            [NewRecordValues]="NewRecordValues('AI Prompts')"
+                            [AllowLoad]="IsCurrentTab('AI Prompts')"  
+                            [EditMode]="GridEditMode()"  
+                            [BottomMargin]="GridBottomMargin">
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
                     <mj-tab Name="Entity Documents" 
                         [Visible]="record.IsSaved" 
                         [Props]="{EntityRelationshipID: '334567F3-3E3B-EF11-86D4-0022481D1B23'}">
