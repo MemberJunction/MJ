@@ -20,7 +20,7 @@
   },
   "dependencies": {
     "@memberjunction/global": "2.3.0",
-    "@memberjunction/core": "2.2.2",
+    "@memberjunction/core": "2.3.0",
     "@memberjunction/core-entities": "2.3.0",
     "@memberjunction/communication-types": "2.3.0",
     "@sendgrid/mail": "^8.1.3"

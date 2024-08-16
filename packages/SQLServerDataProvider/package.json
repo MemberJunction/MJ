@@ -23,7 +23,7 @@
     "@memberjunction/ai": "2.3.0",
     "@memberjunction/ai-vector-dupe": "2.3.0",
     "@memberjunction/aiengine": "2.3.0",
-    "@memberjunction/core": "2.2.2",
+    "@memberjunction/core": "2.3.0",
     "@memberjunction/core-entities": "2.3.0",
     "@memberjunction/global": "2.3.0",
     "@memberjunction/queue": "2.3.0",

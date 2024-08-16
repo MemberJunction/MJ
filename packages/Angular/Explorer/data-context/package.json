@@ -27,7 +27,7 @@
     "@progress/kendo-angular-indicators": "16.2.0"
   },
   "dependencies": {
-    "@memberjunction/core": "2.2.2",
+    "@memberjunction/core": "2.3.0",
     "@memberjunction/global": "2.3.0",
     "@memberjunction/ng-compare-records": "2.3.0",
     "tslib": "^2.3.0"

@@ -20,7 +20,7 @@
   },
   "dependencies": {
     "@memberjunction/global": "2.3.0",
-    "@memberjunction/core": "2.2.2",
+    "@memberjunction/core": "2.3.0",
     "@memberjunction/core-entities": "2.3.0",
     "@memberjunction/entity-communications-base": "2.3.0",
     "@memberjunction/graphql-dataprovider": "2.3.0"

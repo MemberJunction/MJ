@@ -18,7 +18,7 @@
     "typescript": "^5.4.5"
   },
   "dependencies": {
-    "@memberjunction/core": "2.2.2",
+    "@memberjunction/core": "2.3.0",
     "@memberjunction/templates-base-types": "2.3.0",
     "@memberjunction/ai": "2.3.0",
     "@memberjunction/aiengine": "2.3.0",
