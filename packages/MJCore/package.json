@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/core",
-  "version": "2.2.2",
+  "version": "2.3.0",
   "description": "MemberJunction: Core Library including Metadata, Application, Entity Retrieval and Manipulation, and Utilities",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

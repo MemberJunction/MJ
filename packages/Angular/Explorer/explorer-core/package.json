@@ -27,7 +27,7 @@
   },
   "dependencies": {
     "@memberjunction/global": "2.3.0",
-    "@memberjunction/core": "2.2.2",
+    "@memberjunction/core": "2.3.0",
     "@memberjunction/ng-compare-records": "2.3.0",
     "@memberjunction/ng-file-storage": "2.3.0",
     "@memberjunction/ng-record-changes": "2.3.0",

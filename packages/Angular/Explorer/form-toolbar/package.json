@@ -26,7 +26,7 @@
   },
   "dependencies": {
     "@memberjunction/global": "2.3.0",
-    "@memberjunction/core": "2.2.2",
+    "@memberjunction/core": "2.3.0",
     "@memberjunction/ng-shared": "2.3.0",
     "@memberjunction/ng-base-forms": "2.3.0",
     "@memberjunction/ng-ask-skip": "2.3.0",
