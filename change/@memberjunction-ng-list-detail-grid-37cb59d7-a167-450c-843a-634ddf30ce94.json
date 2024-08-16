@@ -1,0 +1,7 @@
+{
+  "type": "patch",
+  "comment": "Applying package updates [skip ci]",
+  "packageName": "@memberjunction/ng-list-detail-grid",
+  "email": "craig.adam@bluecypress.io",
+  "dependentChangeType": "patch"
+}
