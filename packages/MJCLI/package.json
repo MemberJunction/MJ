@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/cli",
-  "version": "2.2.1",
+  "version": "2.3.1",
   "description": "MemberJunction command line tools",
   "keywords": [
     "oclif"
@@ -35,7 +35,8 @@
     "bin": "mj",
     "commands": "./dist/commands",
     "hooks": {
-      "init": "./dist/hooks/init"
+      "init": "./dist/hooks/init",
+      "prerun": "./dist/hooks/prerun"
     },
     "dirname": "mj",
     "plugins": [

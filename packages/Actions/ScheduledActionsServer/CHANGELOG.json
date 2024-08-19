@@ -2,6 +2,138 @@
   "name": "@memberjunction/scheduled-actions-server",
   "entries": [
     {
+      "date": "Fri, 16 Aug 2024 03:57:15 GMT",
+      "version": "2.3.1",
+      "tag": "@memberjunction/scheduled-actions-server_v2.3.1",
+      "comments": {
+        "patch": [
+          {
+            "author": "craig.adam@bluecypress.io",
+            "package": "@memberjunction/scheduled-actions-server",
+            "commit": "0fd6288275103e880942b87b3488446d18e769da",
+            "comment": "Applying package updates [skip ci]"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/scheduled-actions-server",
+            "comment": "Bump @memberjunction/core to v2.3.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/scheduled-actions-server",
+            "comment": "Bump @memberjunction/core-entities to v2.3.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/scheduled-actions-server",
+            "comment": "Bump @memberjunction/actions to v2.3.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/scheduled-actions-server",
+            "comment": "Bump @memberjunction/scheduled-actions to v2.3.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/scheduled-actions-server",
+            "comment": "Bump @memberjunction/ai to v2.3.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/scheduled-actions-server",
+            "comment": "Bump @memberjunction/ai-vector-sync to v2.3.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/scheduled-actions-server",
+            "comment": "Bump @memberjunction/ai-vectors-pinecone to v2.3.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/scheduled-actions-server",
+            "comment": "Bump @memberjunction/ai-mistral to v2.3.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/scheduled-actions-server",
+            "comment": "Bump @memberjunction/ai-openai to v2.3.1",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
+      "date": "Fri, 16 Aug 2024 03:10:41 GMT",
+      "version": "2.3.0",
+      "tag": "@memberjunction/scheduled-actions-server_v2.3.0",
+      "comments": {
+        "minor": [
+          {
+            "author": "beachball",
+            "package": "@memberjunction/scheduled-actions-server",
+            "comment": "Bump @memberjunction/core to v2.2.2",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/scheduled-actions-server",
+            "comment": "Bump @memberjunction/core-entities to v2.3.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/scheduled-actions-server",
+            "comment": "Bump @memberjunction/actions to v2.3.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/scheduled-actions-server",
+            "comment": "Bump @memberjunction/scheduled-actions to v2.3.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/scheduled-actions-server",
+            "comment": "Bump @memberjunction/ai to v2.3.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/scheduled-actions-server",
+            "comment": "Bump @memberjunction/ai-vector-sync to v2.3.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/scheduled-actions-server",
+            "comment": "Bump @memberjunction/ai-vectors-pinecone to v2.3.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/scheduled-actions-server",
+            "comment": "Bump @memberjunction/ai-mistral to v2.3.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/scheduled-actions-server",
+            "comment": "Bump @memberjunction/ai-openai to v2.3.0",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
       "date": "Fri, 09 Aug 2024 01:29:44 GMT",
       "version": "2.2.1",
       "tag": "@memberjunction/scheduled-actions-server_v2.2.1",

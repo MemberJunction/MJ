@@ -785,6 +785,7 @@ export const AIModelSchema = z.object({
         * * Field Name: ModelSelectionInsights
         * * Display Name: Model Selection Insights
         * * SQL Data Type: nvarchar(MAX)
+        * * Default Value: null
     * * Description: This column stores unstructured text notes that provide insights into what the model is particularly good at and areas where it may not perform as well. These notes can be used by a human or an AI to determine if the model is a good fit for various purposes.`),
     AIModelType: z.string().describe(`
         * * Field Name: AIModelType
@@ -1956,7 +1957,8 @@ export const CompanyIntegrationRunSchema = z.object({
     RunByUser: z.string().describe(`
         * * Field Name: RunByUser
         * * Display Name: Run By User
-        * * SQL Data Type: nvarchar(100)`),
+        * * SQL Data Type: nvarchar(100)
+        * * Default Value: null`),
 });
 
 export type CompanyIntegrationRunEntityType = z.infer<typeof CompanyIntegrationRunSchema>;
@@ -10598,6 +10600,7 @@ export class AIModelEntity extends BaseEntity<AIModelEntityType> {
     * * Field Name: ModelSelectionInsights
     * * Display Name: Model Selection Insights
     * * SQL Data Type: nvarchar(MAX)
+    * * Default Value: null
     * * Description: This column stores unstructured text notes that provide insights into what the model is particularly good at and areas where it may not perform as well. These notes can be used by a human or an AI to determine if the model is a good fit for various purposes.
     */
     get ModelSelectionInsights(): string | null {  
@@ -13800,6 +13803,7 @@ export class CompanyIntegrationRunEntity extends BaseEntity<CompanyIntegrationRu
     * * Field Name: RunByUser
     * * Display Name: Run By User
     * * SQL Data Type: nvarchar(100)
+    * * Default Value: null
     */
     get RunByUser(): string {  
         return this.Get('RunByUser');

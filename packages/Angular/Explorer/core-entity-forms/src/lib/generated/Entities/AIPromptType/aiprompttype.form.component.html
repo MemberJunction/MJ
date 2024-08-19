@@ -16,16 +16,16 @@
                         </mj-form-section>
                     </mj-tab-body>
                     
-                    <mj-tab Name="AIPrompts" 
+                    <mj-tab Name="AI Prompts" 
                         [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: '7B69A67C-8B56-EF11-991A-6045BDEBA539'}">
-                        AIPrompts
+                        [Props]="{EntityRelationshipID: '62D6B0B0-BF59-EF11-991A-000D3A9D8BF3'}">
+                        AI Prompts
                     </mj-tab>
                     <mj-tab-body>
                         <mj-user-view-grid 
                             [Params]="BuildRelationshipViewParamsByEntityName('AI Prompts')"  
                             [NewRecordValues]="NewRecordValues('AI Prompts')"
-                            [AllowLoad]="IsCurrentTab('AIPrompts')"  
+                            [AllowLoad]="IsCurrentTab('AI Prompts')"  
                             [EditMode]="GridEditMode()"  
                             [BottomMargin]="GridBottomMargin">
                         </mj-user-view-grid>                    

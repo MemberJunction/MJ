@@ -1,8 +1,29 @@
 # Change Log - @memberjunction/doc-utils
 
-This log was last generated on Fri, 09 Aug 2024 01:29:44 GMT and should not be manually modified.
+This log was last generated on Fri, 16 Aug 2024 03:57:15 GMT and should not be manually modified.
 
 <!-- Start content -->
+
+## 2.3.1
+
+Fri, 16 Aug 2024 03:57:15 GMT
+
+### Patches
+
+- Applying package updates [skip ci] (craig.adam@bluecypress.io)
+- Bump @memberjunction/core to v2.3.1
+- Bump @memberjunction/core-entities to v2.3.1
+- Bump @memberjunction/global to v2.3.1
+
+## 2.3.0
+
+Fri, 16 Aug 2024 03:10:41 GMT
+
+### Minor changes
+
+- Bump @memberjunction/core to v2.2.2
+- Bump @memberjunction/core-entities to v2.3.0
+- Bump @memberjunction/global to v2.3.0
 
 ## 2.2.1
 

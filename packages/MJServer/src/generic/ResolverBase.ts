@@ -559,9 +559,7 @@ export class ResolverBase {
       }); // grab all the props except for the OldValues property
 
       if (entityInfo.TrackRecordChanges || !input.OldValues___) {
-        // the entity tracks record changes, so we need to load the old values from the DB to make sure they are not inconsistent
-        // with the old values from the input.OldValues property. If they are different, but on different fields, we allow it
-        // but if they are different on fields that the current UpdateRecord call is trying to update, we throw an error.
+        // We get here because EITHER the entity tracks record changes OR the client did not provide OldValues, so we need to load the old values from the DB
         const cKey = new CompositeKey(
           entityInfo.PrimaryKeys.map((pk) => {
             return {
@@ -572,13 +570,14 @@ export class ResolverBase {
         );
 
         if (await entityObject.InnerLoad(cKey)) {
-          // load worked, now, if we HAVE OldValues, we need to check them against the values in the DB we just loaded.
-          if (!input.OldValues___) {
-            // no OldValues, so we can just set the new values from input
-            entityObject.SetMany(input);
-          } else {
+          // load worked, now, only IF we have OldValues, we need to check them against the values in the DB we just loaded.
+          if (input.OldValues___) {
             // we DO have OldValues, so we need to do a more in depth analysis
             this.TestAndSetClientOldValuesToDBValues(input, clientNewValues, entityObject);
+          } 
+          else {
+            // no OldValues, so we can just set the new values from input
+            entityObject.SetMany(input);
           }
         } else {
           // save failed, return null
@@ -586,8 +585,9 @@ export class ResolverBase {
             extensions: { code: 'LOAD_ENTITY_ERROR', entityName },
           });
         }
-      } else {
-        // not tracking changes and we DO have OldValues, so we can load from them
+      } 
+      else {
+        // we get here if we are NOT tracking changes and we DO have OldValues, so we can load from them
         const oldValues = {};
         // for each item in the oldValues array, add it to the oldValues object
         input.OldValues___?.forEach((item) => (oldValues[item.Key] = item.Value));
