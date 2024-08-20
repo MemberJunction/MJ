@@ -6,7 +6,7 @@ import { UserInfo } from "./securityInfo";
 import { RunView, RunViewParams } from "../views/runView";
 import { LogError, LogStatus } from "./logging";
 import { Metadata } from "./metadata";
-import { DatasetItemFilterType, ProviderType, RunViewResult } from "./interfaces";
+import { DatasetItemFilterType, DatasetResultType, ProviderType, RunViewResult } from "./interfaces";
 import { BaseInfo } from "./baseInfo"; 
 import { BaseEntity, BaseEntityEvent } from "./baseEntity";
 /**
@@ -379,13 +379,22 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> {
      */
     protected async LoadSingleDatasetConfig(config: BaseEnginePropertyConfig, contextUser: UserInfo): Promise<void> {
         const md = new Metadata();
-        const result = await md.GetAndCacheDatasetByName(config.DatasetName, config.DatasetItemFilters)
+        const result: DatasetResultType = await md.GetAndCacheDatasetByName(config.DatasetName, config.DatasetItemFilters)
         if (result.Success) {
             if (config.AddToObject !== false) {
                 if (config.DatasetResultHandling === 'single_property') {
                     const singleObject = {};
                     for (const item of result.Results) {
-                        singleObject[item.Code] = item.Results;
+                        //convert the results to entity objects before 
+                        //adding them to the singleObject
+                        const entities: BaseEntity[] = [];
+                        for(const entityData of item.Results) {
+                            const entity: BaseEntity = await md.GetEntityObject(item.EntityName, contextUser);
+                            entity.SetMany(entityData);
+                            entities.push(entity);
+                        }
+
+                        singleObject[item.Code] = entities;
                     }
                     (this as any)[config.PropertyName] = singleObject;
                 }
