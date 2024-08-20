@@ -1,10 +1,10 @@
 export class ContentItemParams {
-    contentSourceID: number;
+    contentSourceID: string;
     name: string;
     description?: string;
-    ContentTypeID: number;
-    ContentSourceTypeID: number;
-    ContentFileTypeID: number;
+    ContentTypeID: string;
+    ContentSourceTypeID: string;
+    ContentFileTypeID: string;
     URL: string;
     AIModelID?: string;
     minTags?: number;
@@ -12,12 +12,12 @@ export class ContentItemParams {
 }
 
 export class ContentSourceParams {
-    contentSourceID: number;
+    contentSourceID: string;
     name?: string;
     description?: string;
-    ContentTypeID: number;
-    ContentSourceTypeID: number;
-    ContentFileTypeID: number;
+    ContentTypeID: string;
+    ContentSourceTypeID: string;
+    ContentFileTypeID: string;
     URL: string;
     AIModelID?: string;
     minTags?: number;
@@ -25,8 +25,8 @@ export class ContentSourceParams {
 }
 
 export class ContentSourceTypeParams {
-    contentSourceID: number;
-    contentSourceTypeID: number;
+    contentSourceID: string;
+    contentSourceTypeID: string;
     name: string;
     value: string;
     type: string;

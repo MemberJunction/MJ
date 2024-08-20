@@ -1,5 +1,5 @@
 export class ProcessRunParams {
-    sourceID: number;
+    sourceID: string;
     startTime: Date;
     endTime: Date;
     numItemsProcessed: number;
@@ -10,10 +10,10 @@ export class ContentItemProcessParams {
     modelID: string;
     minTags: number;
     maxTags: number;
-    contentItemID: number;
-    contentTypeID: number;
-    contentFileTypeID: number;
-    contentSourceTypeID: number;
+    contentItemID: string;
+    contentTypeID: string;
+    contentFileTypeID: string;
+    contentSourceTypeID: string;
 }
 
 export class ContentItemProcessResults {
@@ -24,7 +24,7 @@ export class ContentItemProcessResults {
     content_text: string;
     processStartTime: Date;
     processEndTime: Date;
-    contentItemID: number;
+    contentItemID: string;
 }
 
 export interface JsonObject {

@@ -15,7 +15,7 @@ export class AutotagWebsite extends AutotagBase {
     private contextUser: UserInfo;
     private engine: AutotagBaseEngine;
     private apiKey: string;
-    protected contentSourceTypeID: number
+    protected contentSourceTypeID: string
     protected CrawlOtherSitesInTopLevelDomain: boolean;
     protected CrawlSitesInLowerLevelDomain: boolean;
     protected MaxDepth: number;

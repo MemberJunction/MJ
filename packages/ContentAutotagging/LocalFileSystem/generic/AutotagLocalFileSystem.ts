@@ -14,7 +14,7 @@ export class AutotagLocalFileSystem extends AutotagBase {
     private contextUser: UserInfo;
     private engine: AutotagBaseEngine;
     private apiKey: string;
-    protected contentSourceTypeID: number
+    protected contentSourceTypeID: string
     static _openAI: OpenAI;
 
     constructor() {

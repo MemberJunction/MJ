@@ -166,7 +166,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         }
     }
 
-    public async deleteInvalidContentItem(contentItemID: number, contextUser: UserInfo) {
+    public async deleteInvalidContentItem(contentItemID: string, contextUser: UserInfo) {
         const md = new Metadata()
         const contentItem: ContentItemEntity = await md.GetEntityObject<ContentItemEntity>('Content Items', contextUser)
         await contentItem.Load(contentItemID)
@@ -181,7 +181,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
      * @param contextUser: The user context to save the tags
      * @returns
      */
-    public async saveContentItemTags(contentItemID: number, LLMResults: JsonObject, contextUser: UserInfo) {
+    public async saveContentItemTags(contentItemID: string, LLMResults: JsonObject, contextUser: UserInfo) {
         const md = new Metadata()
         for (const keyword of LLMResults.keywords) {
 
@@ -219,7 +219,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
                 const rv = new RunView()
                 const results = await rv.RunView<ContentItemEntity>({
                     EntityName: 'Content Items',
-                    ExtraFilter: `ID=${ID}`,
+                    ExtraFilter: `ID='${ID}'`,
                     ResultType: 'entity_object'
                 }, contextUser)
 
@@ -235,13 +235,13 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
     * @param contextUser: The user context to retrieve the content source data
     * @returns A list of content sources
     */
-    public async getAllContentSources(contextUser: UserInfo, contentSourceTypeID: number): Promise<ContentSourceEntity[]|undefined> {
+    public async getAllContentSources(contextUser: UserInfo, contentSourceTypeID: string): Promise<ContentSourceEntity[]|undefined> {
         const rv = new RunView();
         
         const contentSourceResult = await rv.RunView<ContentSourceEntity>({
             EntityName: 'Content Sources',
             ResultType: 'entity_object', 
-            ExtraFilter: `ContentSourceTypeID=${contentSourceTypeID}`
+            ExtraFilter: `ContentSourceTypeID='${contentSourceTypeID}'`
         }, contextUser);
         try {
         if (contentSourceResult.Success && contentSourceResult.Results.length) {
@@ -258,7 +258,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
             }
     }
 
-    public async setSubclassContentSourceType(subclass: string, contextUser: UserInfo): Promise<number>{
+    public async setSubclassContentSourceType(subclass: string, contextUser: UserInfo): Promise<string>{
         const rv = new RunView()
         const results = await rv.RunView<ContentSourceTypeEntity>({
             EntityName: 'Content Source Types',
@@ -274,13 +274,13 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
     }
 
     public async getContentSourceParams(contentSource: ContentSourceEntity, contextUser: UserInfo): Promise<any> {
-        const contentSourceID: number = contentSource.Get('ID')
+        const contentSourceID: string = contentSource.Get('ID')
         const contentSourceParams = new Map<string, any>()
 
         const rv = new RunView()
         const results = await rv.RunView<ContentSourceEntity>({
             EntityName: 'Content Source Params', 
-            ExtraFilter: `ContentSourceID=${contentSourceID}`,
+            ExtraFilter: `ContentSourceID='${contentSourceID}'`,
             ResultType: 'entity_object'
         }, contextUser)
 
@@ -303,11 +303,11 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         }
     }
 
-    public async getDefaultContentSourceTypeParams(contentSourceTypeID: number, contextUser: UserInfo): Promise<ContentSourceTypeParams> {
+    public async getDefaultContentSourceTypeParams(contentSourceTypeID: string, contextUser: UserInfo): Promise<ContentSourceTypeParams> {
         const rv = new RunView()
         const results = await rv.RunView<ContentSourceEntity>({
             EntityName: 'Content Source Type Params', 
-            ExtraFilter: `ID=${contentSourceTypeID}`,
+            ExtraFilter: `ID='${contentSourceTypeID}'`,
             ResultType: 'entity_object'
         }, contextUser)
 
@@ -376,11 +376,11 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
      * @param contextUser: The user context to retrieve the last run date 
      * @returns 
      */
-    public async getContentSourceLastRunDate(contentSourceID: number, contextUser: UserInfo): Promise<Date|void> {
+    public async getContentSourceLastRunDate(contentSourceID: string, contextUser: UserInfo): Promise<Date|void> {
         const rv = new RunView()
         const results = await rv.RunView({
             EntityName: 'Content Process Runs', 
-            ExtraFilter: `SourceID=${contentSourceID}`,
+            ExtraFilter: `SourceID='${contentSourceID}'`,
             ResultType: 'entity_object', 
             OrderBy: 'EndTime DESC'
         }, contextUser)
@@ -401,11 +401,11 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         }
     }
 
-    public async getContentItemHash(contentItemID: number, contextUser: UserInfo): Promise<string|void> {
+    public async getContentItemHash(contentItemID: string, contextUser: UserInfo): Promise<string|void> {
         const rv = new RunView()
         const results = await rv.RunView({
             EntityName: 'Content Items', 
-            ExtraFilter: `ID=${contentItemID}`,
+            ExtraFilter: `ID='${contentItemID}'`,
             ResultType: 'entity_object'
         }, contextUser)
 
@@ -420,11 +420,11 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         }
     }
 
-    public async getContentItemParams(contentTypeID: number, contextUser: UserInfo): Promise<{ modelID: string; minTags: number; maxTags: number; }> {
+    public async getContentItemParams(contentTypeID: string, contextUser: UserInfo): Promise<{ modelID: string; minTags: number; maxTags: number; }> {
         const rv = new RunView();
         const results = await rv.RunView({
             EntityName: 'Content Types',
-            ExtraFilter: `ID = ${contentTypeID}`,
+            ExtraFilter: `ID='${contentTypeID}'`,
             ResultType: 'entity_object',
         }, contextUser); 
 
@@ -447,13 +447,13 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
      * @param contextUser 
      * @returns 
      */
-    public async getContentSourceTypeName(contentSourceTypeID: number, contextUser: UserInfo): Promise<string|void> {
+    public async getContentSourceTypeName(contentSourceTypeID: string, contextUser: UserInfo): Promise<string|void> {
         const rv = new RunView();
 
         const contentFileTypeResult = await rv.RunView<ContentFileTypeEntity>({
             EntityName: 'Content Source Types',
             ResultType: 'entity_object',
-            ExtraFilter: `ID = ${contentSourceTypeID}`
+            ExtraFilter: `ID='${contentSourceTypeID}'`
         }, contextUser);
         try {
             if (contentFileTypeResult.Success && contentFileTypeResult.Results.length) {
@@ -473,13 +473,13 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
      * @param contextUser 
      * @returns 
      */
-    public async getContentTypeName(contentTypeID: number, contextUser: UserInfo): Promise<string|void> {
+    public async getContentTypeName(contentTypeID: string, contextUser: UserInfo): Promise<string|void> {
         const rv = new RunView();
 
         const contentFileTypeResult = await rv.RunView<ContentFileTypeEntity>({
             EntityName: 'Content Types',
             ResultType: 'entity_object',
-            ExtraFilter: `ID = ${contentTypeID}`
+            ExtraFilter: `ID='${contentTypeID}'`
         }, contextUser);
         try {
             if (contentFileTypeResult.Success && contentFileTypeResult.Results.length) {
@@ -499,13 +499,13 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
      * @param contextUser 
      * @returns
      */
-    public async getContentFileTypeName(contentFileTypeID: number, contextUser: UserInfo): Promise<string|void> {
+    public async getContentFileTypeName(contentFileTypeID: string, contextUser: UserInfo): Promise<string|void> {
         const rv = new RunView();
 
         const contentFileTypeResult = await rv.RunView<ContentFileTypeEntity>({
             EntityName: 'Content File Types',
             ResultType: 'entity_object',
-            ExtraFilter: `ID = ${contentFileTypeID}`
+            ExtraFilter: `ID='${contentFileTypeID}'`
         }, contextUser);
         try {
             if (contentFileTypeResult.Success && contentFileTypeResult.Results.length) {
@@ -519,11 +519,11 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         }
     }
 
-    public async getAdditionalContentTypePrompt(contentTypeID: number, contextUser: UserInfo): Promise<string> {
+    public async getAdditionalContentTypePrompt(contentTypeID: string, contextUser: UserInfo): Promise<string> {
         const rv = new RunView()
         const results = await rv.RunView<ContentTypeEntity>({
             EntityName: 'Content Type Attributes', 
-            ExtraFilter: `ContentTypeID=${contentTypeID}`,
+            ExtraFilter: `ContentTypeID='${contentTypeID}'`,
             ResultType: 'entity_object'
         }, contextUser)
 
@@ -586,13 +586,13 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         return hash
     }
 
-    public async getContentItemIDFromURL(contentSourceParams: ContentSourceParams, contextUser: UserInfo): Promise<number> {
+    public async getContentItemIDFromURL(contentSourceParams: ContentSourceParams, contextUser: UserInfo): Promise<string> {
         const url = contentSourceParams.URL
         const rv = new RunView()
         try{
             const results = await rv.RunView<ContentItemEntity>({
                 EntityName: 'Content Items',
-                ExtraFilter: `URL='${url}' AND ContentSourceID=${contentSourceParams.contentSourceID}`,
+                ExtraFilter: `URL='${url}' AND ContentSourceID='${contentSourceParams.contentSourceID}'`,
                 ResultType: 'entity_object'
             }, contextUser)
 
@@ -608,13 +608,13 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         }
     }
 
-    public async getAllContentItems(contextUser: UserInfo, contentSourceTypeID: number): Promise<ContentItemEntity[]|void> {
+    public async getAllContentItems(contextUser: UserInfo, contentSourceTypeID: string): Promise<ContentItemEntity[]|void> {
         const rv = new RunView();
 
         const contentItemResult = await rv.RunView<ContentItemEntity>({
             EntityName: 'Content Items',
             ResultType: 'entity_object', 
-            ExtraFilter: `ContentSourceTypeID=${contentSourceTypeID}` 
+            ExtraFilter: `ContentSourceTypeID='${contentSourceTypeID}'` 
         }, contextUser);
         try {
             if (contentItemResult.Success && contentItemResult.Results.length) {
