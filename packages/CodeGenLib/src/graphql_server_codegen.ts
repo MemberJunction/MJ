@@ -534,7 +534,9 @@ export class ${classPrefix}${entity.BaseTableCodeName}Input {`;
     const serverClassName = serverPackagePrefix + r.RelatedEntityBaseTableCodeName + this.GraphQLTypeSuffix;
 
     // create a code name that is the combination of the relatedentitycode name plus the relatedentityjoinfield that has spaces stripped
-    const uniqueCodeName = `${r.RelatedEntityCodeName}_${r.RelatedEntityJoinField.replace(/ /g, '')}`;
+    // and replace all special characters with an underscore
+    const uniqueCodeName = `${r.RelatedEntityCodeName}_${r.RelatedEntityJoinField.replace(/ /g, '')}`.replace(/[^a-zA-Z0-9]/g,'_');
+
 
     return `
     @FieldResolver(() => [${serverClassName}])
@@ -579,7 +581,8 @@ export class ${classPrefix}${entity.BaseTableCodeName}Input {`;
     const serverClassName = serverPackagePrefix + r.RelatedEntityBaseTableCodeName + this.GraphQLTypeSuffix;
 
     // create a code name that is the combination of the relatedentitycode name plus the relatedentityjoinfield that has spaces stripped
-    const uniqueCodeName = `${r.RelatedEntityCodeName}_${r.JoinEntityJoinField.replace(/ /g, '')}`;
+    // and replace all special characters with an underscore
+    const uniqueCodeName = `${r.RelatedEntityCodeName}_${r.JoinEntityJoinField.replace(/ /g, '')}`.replace(/[^a-zA-Z0-9]/g,'_');
 
     return `
     @FieldResolver(() => [${serverClassName}])
