@@ -334,12 +334,8 @@ export class ApplicationViewComponent extends BaseBrowserComponent implements On
     }
 
     public async OnViewPropertiesDialogClose(args: {Saved?: boolean, ViewEntity?: UserViewEntityExtended, Cancel?: boolean, bNewRecord?: boolean}): Promise<void> {
-        
-        if(args && args.bNewRecord){
-            this.viewPropertiesDialog.closePropertiesDialog();
-            return;
-        }
-        
+        //user view properties dialog handles navigating to the newly created views
+        //so we only need to worry about saves to existing views
         if(args && args.Saved && this.currentlySelectedAppEntity){
             args.Cancel = true;
             await this.loadEntityAndFolders(this.currentlySelectedAppEntity);
