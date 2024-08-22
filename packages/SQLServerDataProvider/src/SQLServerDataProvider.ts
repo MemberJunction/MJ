@@ -1373,10 +1373,10 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
                         // we need to check to see if the value we have in the entity object is a function like newid() or newsquentialid()
                         // in those cases we should just skip the parameter entirely because that means there is a default value that should be used 
                         // and that will be handled by the database not by us
-                        // instead of just checking for specific functions like newid(), we can instead check for any string that includes () at the end
+                        // instead of just checking for specific functions like newid(), we can instead check for any string that includes () 
                         // this way we can handle any function that the database might support in the future
-                        if (typeof value === 'string' && value.trim().endsWith('()')) {
-                            continue; // skip this field entirely
+                        if (typeof value === 'string' && value.includes('()')) {
+                            continue; // skip this field entirely by going to the next iteration of the loop
                         }
                     }
 
