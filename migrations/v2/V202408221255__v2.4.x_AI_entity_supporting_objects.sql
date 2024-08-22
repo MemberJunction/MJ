@@ -405,6 +405,12 @@ BEGIN
 END
 GO
 
+GRANT SELECT ON [${flyway:defaultSchema}].[vwAIPrompts] TO [cdp_Integration], [cdp_Developer]
+GRANT SELECT ON [${flyway:defaultSchema}].[vwAIPromptCategories] TO [cdp_Integration], [cdp_Developer]
+GRANT SELECT ON [${flyway:defaultSchema}].[vwAIPromptTypes] TO [cdp_Integration], [cdp_Developer]
+GRANT SELECT ON [${flyway:defaultSchema}].[vwAIResultCaches] TO [cdp_Integration], [cdp_Developer]
+GO
+
 GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateAIPrompt] TO [cdp_Integration], [cdp_Developer]
 GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateAIPromptCategory] TO [cdp_Integration], [cdp_Developer]
 GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateAIPromptType] TO [cdp_Integration], [cdp_Developer]
