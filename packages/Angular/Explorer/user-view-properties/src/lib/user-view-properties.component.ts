@@ -268,8 +268,8 @@ export class UserViewPropertiesDialogComponent extends BaseFormComponent impleme
     }
 
     // stop showing the loader and close the dialog if we saved successfully
-    this.showloader = false;
     this.isDialogOpened = false;
+    this.showloader = false;
 
     let event: any = {
       Saved: true, 
@@ -280,11 +280,15 @@ export class UserViewPropertiesDialogComponent extends BaseFormComponent impleme
 
     this.dialogClosed.emit(event); 
 
-    if(event.Cancel) {
-      return;
+    if(bNewRecord){
+      //navigate to the newly created view
+      //for reasons (currently) unkown, immediately navigating away from the page
+      //prevents this dialog from closing or responding to any events
+      setTimeout(() => {
+        this.router.navigate(['resource', 'view', this.record.FirstPrimaryKey.Value])
+    }, 100);
     }
-
-    if (!bNewRecord) // view already exists so we're not changing the route as it is alreayd on the view, but we fire an event to let people know that it's changed
+    else{
       MJGlobal.Instance.RaiseEvent({
         event: MJEventType.ComponentEvent,
         eventCode: EventCodes.ViewUpdated,
@@ -297,9 +301,6 @@ export class UserViewPropertiesDialogComponent extends BaseFormComponent impleme
                               }),
         component: this
       });
-    else{
-      // we route to the new view using the router
-      this.router.navigate(['resource', 'view', this.record.FirstPrimaryKey.Value])
     }
   }
  

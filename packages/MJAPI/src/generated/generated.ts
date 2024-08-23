@@ -2,7 +2,7 @@
 * ALL ENTITIES - TypeGraphQL Type Class Definition - AUTO GENERATED FILE
 * Generated Entities and Resolvers for Server
 *
-* GENERATED: 8/15/2024, 9:22:25 PM
+* GENERATED: 8/21/2024, 9:21:49 AM
 *
 *   >>> DO NOT MODIFY THIS FILE!!!!!!!!!!!!
 *   >>> YOUR CHANGES WILL BE OVERWRITTEN
@@ -17295,7 +17295,7 @@ export class PersonLinkResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [CustomerAddress_])
-    async CustomerAddress_[CustomerNumber]Array(@Root() personlink_: PersonLink_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async CustomerAddress__CustomerNumber_Array(@Root() personlink_: PersonLink_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Customer Address', userPayload);
         const sSQL = `SELECT * FROM [client_membership].[vwCustomerAddress] WHERE [[Customer Number]]='${personlink_.MembershipGreatPlainsCustomerID}' ` + this.getRowLevelSecurityWhereClause('Customer Address', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Customer Address', await dataSource.query(sSQL));
@@ -17303,7 +17303,7 @@ export class PersonLinkResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [CustomerAddress__client_finance_])
-    async CustomerAddress__client_finance_[CustomerNumber]Array(@Root() personlink_: PersonLink_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async CustomerAddress__client_finance__CustomerNumber_Array(@Root() personlink_: PersonLink_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Customer Address__client_finance', userPayload);
         const sSQL = `SELECT * FROM [client_finance].[vwCustomerAddress__client_finance] WHERE [[Customer Number]]='${personlink_.MainGreatPlainsCustomerID}' ` + this.getRowLevelSecurityWhereClause('Customer Address__client_finance', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Customer Address__client_finance', await dataSource.query(sSQL));
