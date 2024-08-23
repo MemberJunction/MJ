@@ -323,8 +323,7 @@ GO
 AI Models Table Additions
 ****************************************************************************************/
 INSERT INTO [${flyway:defaultSchema}].[AIModel]
-           ([ID]
-           ,[Name]
+           ([Name]
            ,[Description]
            ,[Vendor]
            ,[AIModelTypeID]
@@ -333,13 +332,10 @@ INSERT INTO [${flyway:defaultSchema}].[AIModel]
            ,[DriverClass]
            ,[DriverImportPath]
            ,[APIName]
-           ,[__mj_CreatedAt]
-           ,[__mj_UpdatedAt]
            ,[SpeedRank]
            ,[CostRank])
      VALUES
-           ('16afb4a5-3343-40c7-8982-03f979a15ae0'
-           ,'Llama 3.1 405b'
+           ('Llama 3.1 405b'
            ,'Llama 3.1 405 billion parameters'
            ,'Groq'
            ,'E8A5CCEC-6A37-EF11-86D4-000D3A4E707E'
@@ -348,14 +344,11 @@ INSERT INTO [${flyway:defaultSchema}].[AIModel]
            ,'GroqLLM'
            ,NULL
            ,'llama-3.1-405b-reasoning'
-           ,getdate()	
-           ,getdate()
            ,NULL
            ,NULL)
 
 INSERT INTO [${flyway:defaultSchema}].[AIModel]
-           ([ID]
-           ,[Name]
+           ([Name]
            ,[Description]
            ,[Vendor]
            ,[AIModelTypeID]
@@ -364,13 +357,10 @@ INSERT INTO [${flyway:defaultSchema}].[AIModel]
            ,[DriverClass]
            ,[DriverImportPath]
            ,[APIName]
-           ,[__mj_CreatedAt]
-           ,[__mj_UpdatedAt]
            ,[SpeedRank]
            ,[CostRank])
      VALUES
-           ('f126ed5b-97b3-49e7-bd3b-e796b2099231'
-           ,'Llama 3.1 70b'
+           ('Llama 3.1 70b'
            ,'Llama 3.1 70 billion parameters'
            ,'Groq'
            ,'E8A5CCEC-6A37-EF11-86D4-000D3A4E707E'
@@ -379,14 +369,11 @@ INSERT INTO [${flyway:defaultSchema}].[AIModel]
            ,'GroqLLM'
            ,NULL
            ,'llama-3.1-70b-versatile'
-           ,getdate()	
-           ,getdate()
            ,NULL
            ,NULL)
 
 INSERT INTO [${flyway:defaultSchema}].[AIModel]
-           ([ID]
-           ,[Name]
+           ([Name]
            ,[Description]
            ,[Vendor]
            ,[AIModelTypeID]
@@ -395,13 +382,10 @@ INSERT INTO [${flyway:defaultSchema}].[AIModel]
            ,[DriverClass]
            ,[DriverImportPath]
            ,[APIName]
-           ,[__mj_CreatedAt]
-           ,[__mj_UpdatedAt]
            ,[SpeedRank]
            ,[CostRank])
      VALUES
-           ('1d9493ce-1af6-49f6-b2ea-eabcab491571'
-           ,'Llama 3.1 8b'
+           ('Llama 3.1 8b'
            ,'Llama 3.1 8 billion parameters'
            ,'Groq'
            ,'E8A5CCEC-6A37-EF11-86D4-000D3A4E707E'
@@ -410,14 +394,11 @@ INSERT INTO [${flyway:defaultSchema}].[AIModel]
            ,'GroqLLM'
            ,NULL
            ,'llama-3.1-8b-instant'
-           ,getdate()	
-           ,getdate()
            ,NULL
            ,NULL)
 
 INSERT INTO [${flyway:defaultSchema}].[AIModel]
-           ([ID]
-           ,[Name]
+           ([Name]
            ,[Description]
            ,[Vendor]
            ,[AIModelTypeID]
@@ -426,13 +407,10 @@ INSERT INTO [${flyway:defaultSchema}].[AIModel]
            ,[DriverClass]
            ,[DriverImportPath]
            ,[APIName]
-           ,[__mj_CreatedAt]
-           ,[__mj_UpdatedAt]
            ,[SpeedRank]
            ,[CostRank])
      VALUES
-           ('5d218bcf-b7f6-439e-97fd-dc3a79432562'
-           ,'Claude 3.5 Sonnet'
+           ('Claude 3.5 Sonnet'
            ,'First model of the Claude 3.5 model family'
            ,'Anthropic'
            ,'E8A5CCEC-6A37-EF11-86D4-000D3A4E707E'
@@ -441,14 +419,11 @@ INSERT INTO [${flyway:defaultSchema}].[AIModel]
            ,'AnthropicLLM'
            ,NULL
            ,'claude-3-5-sonnet-20240620'
-           ,getdate()	
-           ,getdate()
            ,NULL
            ,NULL)
 
 INSERT INTO [${flyway:defaultSchema}].[AIModel]
-           ([ID]
-           ,[Name]
+           ([Name]
            ,[Description]
            ,[Vendor]
            ,[AIModelTypeID]
@@ -457,13 +432,10 @@ INSERT INTO [${flyway:defaultSchema}].[AIModel]
            ,[DriverClass]
            ,[DriverImportPath]
            ,[APIName]
-           ,[__mj_CreatedAt]
-           ,[__mj_UpdatedAt]
            ,[SpeedRank]
            ,[CostRank])
      VALUES
-           ('0ae8548e-30a6-4fbc-8f69-6344d0cbaf2d'
-           ,'GPT 4o Mini'
+           ('GPT 4o Mini'
            ,'Affordable and intelligent small model for fast, lightweight tasks. GPT-4o mini is cheaper and more capable than GPT-3.5 Turbo'
            ,'OpenAI'
            ,'E8A5CCEC-6A37-EF11-86D4-000D3A4E707E'
@@ -472,7 +444,5 @@ INSERT INTO [${flyway:defaultSchema}].[AIModel]
            ,'OpenAILLM'
            ,NULL
            ,'gpt-4o-mini'
-           ,getdate()	
-           ,getdate()
            ,NULL
            ,NULL)
