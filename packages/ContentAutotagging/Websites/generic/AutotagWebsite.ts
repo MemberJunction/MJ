@@ -3,7 +3,6 @@ import { AutotagBaseEngine, ContentSourceParams } from '../../Engine';
 import { RegisterClass } from '@memberjunction/global';
 import { UserInfo, Metadata, RunView } from '@memberjunction/core';
 import { ContentSourceEntity, ContentItemEntity } from '@memberjunction/core-entities';
-import { OpenAI } from 'openai';
 import * as cheerio from 'cheerio';
 import axios from 'axios';
 import { URL } from 'url';
@@ -14,25 +13,21 @@ dotenv.config()
 export class AutotagWebsite extends AutotagBase {
     private contextUser: UserInfo;
     private engine: AutotagBaseEngine;
-    private apiKey: string;
     protected contentSourceTypeID: string
     protected CrawlOtherSitesInTopLevelDomain: boolean;
     protected CrawlSitesInLowerLevelDomain: boolean;
     protected MaxDepth: number;
+    protected RootURL: string;
+    protected URLPattern: string;
     protected visitedURLs: Set<string>;
-    static _openAI: OpenAI
 
     constructor() {
         super();
-        this.apiKey = process.env['AI_VENDOR_API_KEY__OpenAILLM'] || '';
         this.engine = AutotagBaseEngine.Instance;
         this.CrawlOtherSitesInTopLevelDomain = false;
         this.CrawlSitesInLowerLevelDomain = false;
         this.MaxDepth = 0;
         this.visitedURLs = new Set<string>();
-        if(!AutotagWebsite._openAI) {
-            AutotagWebsite._openAI = new OpenAI({apiKey: this.apiKey});
-        }
     }
 
     protected getContextUser(): UserInfo {
@@ -50,7 +45,7 @@ export class AutotagWebsite extends AutotagBase {
         this.contentSourceTypeID = await this.engine.setSubclassContentSourceType('Website', this.contextUser);
         const contentSources: ContentSourceEntity[] = await this.engine.getAllContentSources(this.contextUser, this.contentSourceTypeID);
         const contentItemsToProcess: ContentItemEntity[] = await this.SetContentItemsToProcess(contentSources);
-        await this.engine.ExtractTextAndProcessWithLLM(contentItemsToProcess, AutotagWebsite._openAI, this.contextUser);
+        await this.engine.ExtractTextAndProcessWithLLM(contentItemsToProcess, this.contextUser);
     }
 
 
@@ -88,9 +83,14 @@ export class AutotagWebsite extends AutotagBase {
             
                 // All content items associated with the content source
                 const startURL = contentSourceParams.URL;
-                const rootURL = this.getBasePath(startURL);
-                const allContentItemLinks:string[] = await this.getAllLinksFromContentSource(startURL, rootURL);
 
+                // root url should be set to this.RootURL if it exists, otherwise it should be set to the base path of the startURL. 
+                const rootURL = this.RootURL ? this.RootURL : this.getBasePath(startURL);
+
+                // regex should be set to this.URLPattern if it exists, otherwise it should be set to match any URL.
+                const regex = this.URLPattern && new RegExp(this.URLPattern) || new RegExp('.*');
+         
+                const allContentItemLinks:string[] = await this.getAllLinksFromContentSource(startURL, rootURL, regex);
                 const contentItems = await this.SetNewAndModifiedContentItems(allContentItemLinks, contentSourceParams, this.contextUser);
                 if (contentItems && contentItems.length > 0) {
                     contentItemsToProcess.push(...contentItems);
@@ -120,62 +120,68 @@ export class AutotagWebsite extends AutotagBase {
 
         const addedContentItems: ContentItemEntity[] = [];
         for (const contentItemLink of contentItemLinks) {
-            const newHash = await this.engine.getChecksumFromURL(contentItemLink);
+            try {
+                const newHash = await this.engine.getChecksumFromURL(contentItemLink);
 
-            const rv = new RunView();
-            const results = await rv.RunViews([
-                {
-                    EntityName: 'Content Items',
-                    ExtraFilter: `Checksum = '${newHash}'`,
-                    ResultType: 'entity_object'
-                }, 
-                {
-                    EntityName: 'Content Items',
-                    ExtraFilter: `ContentSourceID = ${contentSourceParams.contentSourceID} AND URL = '${contentItemLink}'`,
-                    ResultType: 'entity_object'
+                const rv = new RunView();
+                const results = await rv.RunViews([
+                    {
+                        EntityName: 'Content Items',
+                        ExtraFilter: `Checksum = '${newHash}'`,
+                        ResultType: 'entity_object'
+                    }, 
+                    {
+                        EntityName: 'Content Items',
+                        ExtraFilter: `ContentSourceID = '${contentSourceParams.contentSourceID}' AND URL = '${contentItemLink}'`,
+                        ResultType: 'entity_object'
+                    }
+                ], this.contextUser)
+
+                if (results[0].Success && results[0].Results.length) {
+                    // We found the checksum so this content item has not changed since we last accessed it, do nothing
+                    continue;
                 }
-            ], this.contextUser)
 
-            if (results[0].Success && results[0].Results.length) {
-                // We found the checksum so this content item has not changed since we last accessed it, do nothing
-                continue;
-            }
+                else if (results[1].Success && results[1].Results.length) {
+                    // This content item already exists, update the hash and last updated date 
+                    const lastStoredHash = results[1].Results[0].Get('Checksum');
 
-            else if (results[1].Success && results[1].Results.length) {
-                // This content item likely already exists, update the hash and last updated date 
-                const lastStoredHash = results[1].Results[0].Get('Checksum');
+                    if (lastStoredHash !== newHash) {
+                        // This content item has changed since we last access it, update the hash and last updated date
+                        const md = new Metadata();
+                        const contentItem = <ContentItemEntity> await md.GetEntityObject('Content Items', this.contextUser);
+                        contentItem.Load(results[1].Results[0].Get('ID'));
+                        contentItem.Set('Checksum', newHash);
+                        contentItem.Set('Text', await this.parseWebPage(contentItemLink));
+                        contentItem.Set('UpdatedAt', new Date());
 
-                if (lastStoredHash !== newHash) {
-                    // This content item has changed since we last access it, update the hash and last updated date
-                    const contentItem = <ContentItemEntity> results[1].Results[0];
-                    contentItem.Set('Checksum', newHash);
+                        await contentItem.Save();
+                        addedContentItems.push(contentItem); // Content item was modified, add to list
+                    }
+                }
+                else {
+                    // This content item does not exist, add it
+                    const md = new Metadata();
+                    const contentItem = <ContentItemEntity> await md.GetEntityObject('Content Items', this.contextUser);
+                    contentItem.NewRecord();
+                    contentItem.Set('ContentSourceID', contentSourceParams.contentSourceID);
+                    contentItem.Set('Name', this.getPathName(contentItemLink)); // Will get overwritten by title later if it exists
+                    contentItem.Set('Description', await this.engine.getContentItemDescription(contentSourceParams, this.contextUser));
+                    contentItem.Set('ContentTypeID', contentSourceParams.ContentTypeID);
+                    contentItem.Set('ContentFileTypeID', contentSourceParams.ContentFileTypeID);
+                    contentItem.Set('ContentSourceTypeID', contentSourceParams.ContentSourceTypeID);
+                    contentItem.Set('Checksum', await this.engine.getChecksumFromURL(contentItemLink));
+                    contentItem.Set('URL', contentItemLink);
                     contentItem.Set('Text', await this.parseWebPage(contentItemLink));
+                    contentItem.Set('CreatedAt', new Date());
                     contentItem.Set('UpdatedAt', new Date());
-
+                
                     await contentItem.Save();
-                    addedContentItems.push(contentItem); // Content item was modified, add to list
+                    addedContentItems.push(contentItem); // Content item was added, add to list
                 }
-            }
-            else {
-                // This content item does not exist, add it
-                const md = new Metadata();
-                const contentItem = <ContentItemEntity> await md.GetEntityObject('Content Items', this.contextUser);
-                contentItem.NewRecord();
-                contentItem.Set('ContentSourceID', contentSourceParams.contentSourceID);
-                contentItem.Set('Name', this.getPathName(contentItemLink)); // Will get overwritten by title later if it exists
-                contentItem.Set('Description', await this.engine.getContentItemDescription(contentSourceParams, this.contextUser));
-                contentItem.Set('ContentTypeID', contentSourceParams.ContentTypeID);
-                contentItem.Set('ContentFileTypeID', contentSourceParams.ContentFileTypeID);
-                contentItem.Set('ContentSourceTypeID', contentSourceParams.ContentSourceTypeID);
-                contentItem.Set('Checksum', await this.engine.getChecksumFromURL(contentItemLink));
-                contentItem.Set('URL', contentItemLink);
-                contentItem.Set('Text', await this.parseWebPage(contentItemLink));
-                contentItem.Set('CreatedAt', new Date());
-                contentItem.Set('UpdatedAt', new Date());
-            
-                await contentItem.Save();
-                addedContentItems.push(contentItem); // Content item was added, add to list
-            }
+                }catch (e) {
+                    console.log(e)
+                } 
         }
         return addedContentItems;
     }
@@ -226,10 +232,10 @@ export class AutotagWebsite extends AutotagBase {
      * @param url 
      * @returns
      */
-    protected async getAllLinksFromContentSource(url: string, rootURL: string): Promise<string[]> {
+    protected async getAllLinksFromContentSource(url: string, rootURL: string, regex: RegExp): Promise<string[]> {
         // In the future, we should load the crawl parameters here before proceeding
         try {
-            await this.getLowerLevelLinks(url, rootURL, this.MaxDepth, new Set<string>());
+            await this.getLowerLevelLinks(url, rootURL, this.MaxDepth, new Set<string>(), regex);
             await this.getTopLevelLinks(url, this.getBasePath(url));
             
             return Array.from(this.visitedURLs);
@@ -297,16 +303,6 @@ export class AutotagWebsite extends AutotagBase {
         }
     }
 
-    protected getRootURL(url: string): string {
-        try { 
-            const parsedURL = new URL(url);
-            return `${parsedURL.protocol}//${parsedURL.hostname}`;
-        } catch (e) {
-            console.error(`Invalid URL for same level parsing: ${url}`);
-            throw e;
-        }
-    }
-
     protected getBasePath(url: string): string {
         const parsedURL = new URL(url);
         const pathSegments = parsedURL.pathname.split('/').filter(segment => segment);
@@ -348,7 +344,7 @@ export class AutotagWebsite extends AutotagBase {
      * @param visitedURLs 
      * @returns 
      */
-    protected async getLowerLevelLinks(url: string, rootURL: string, crawlDepth: number, scrapedURLs: Set<string>): Promise<Set<string>> {
+    protected async getLowerLevelLinks(url: string, rootURL: string, crawlDepth: number, scrapedURLs: Set<string>, regex: RegExp): Promise<Set<string>> {
         
         try { 
             console.log(`Scraping ${url}`);
@@ -368,7 +364,7 @@ export class AutotagWebsite extends AutotagBase {
                 const link = $(element).attr('href');
                 if (link) {
                     const newURL = new URL(link, url).href;
-                    if (newURL.startsWith(rootURL) && newURL !== url && !this.visitedURLs.has(newURL)) {
+                    if (newURL.startsWith(rootURL) && newURL !== url && !this.visitedURLs.has(newURL) && regex.test(newURL)) {
                         extractedLinks.add(newURL);
                         this.visitedURLs.add(newURL);
                     }
@@ -384,7 +380,7 @@ export class AutotagWebsite extends AutotagBase {
 
             for (const subLink of extractedLinks) {
                 //console.log(`Adding ${subLink}`);
-                const lowerLevelLinks = await this.getLowerLevelLinks(subLink, rootURL, crawlDepth-1, scrapedURLs);
+                const lowerLevelLinks = await this.getLowerLevelLinks(subLink, rootURL, crawlDepth-1, scrapedURLs, regex);
                 combinedLinks = new Set<string>([...extractedLinks, ...lowerLevelLinks]);
             }
             return combinedLinks;

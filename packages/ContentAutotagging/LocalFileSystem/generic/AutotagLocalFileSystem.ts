@@ -2,7 +2,9 @@ import { RegisterClass } from "@memberjunction/global";
 import fs from 'fs';
 import { AutotagBase } from "../../Core";
 import { AutotagBaseEngine, ContentSourceParams } from "../../Engine";
+import { AIEngine } from "@memberjunction/aiengine";
 import { UserInfo, Metadata, RunView } from "@memberjunction/core";
+import { MJGlobal } from "@memberjunction/global";
 import { ContentSourceEntity, ContentItemEntity } from "@memberjunction/core-entities";
 import { OpenAI } from "openai";
 import path from 'path';
@@ -13,17 +15,12 @@ dotenv.config()
 export class AutotagLocalFileSystem extends AutotagBase {
     private contextUser: UserInfo;
     private engine: AutotagBaseEngine;
-    private apiKey: string;
     protected contentSourceTypeID: string
     static _openAI: OpenAI;
 
     constructor() {
         super();
-        this.apiKey = process.env['AI_VENDOR_API_KEY__OpenAILLM'] || '';
         this.engine = AutotagBaseEngine.Instance;
-        if(!AutotagLocalFileSystem._openAI){
-            AutotagLocalFileSystem._openAI = new OpenAI({apiKey: this.apiKey});
-        }
     }
 
     public getContextUser(): UserInfo | null {
@@ -38,10 +35,10 @@ export class AutotagLocalFileSystem extends AutotagBase {
     public async Autotag(contextUser: UserInfo): Promise<void> {
         this.contextUser = contextUser;
         await AutotagBaseEngine.Instance.Config(false, this.contextUser);
-        this.contentSourceTypeID = await this.engine.setSubclassContentSourceType('Local Filesystem', this.contextUser);
+        this.contentSourceTypeID = await this.engine.setSubclassContentSourceType('Local File System', this.contextUser);
         const contentSources: ContentSourceEntity[] = await this.engine.getAllContentSources(this.contextUser, this.contentSourceTypeID) || [];
         const contentItemsToProcess: ContentItemEntity[] = await this.SetContentItemsToProcess(contentSources)
-        await this.engine.ExtractTextAndProcessWithLLM(contentItemsToProcess, AutotagLocalFileSystem._openAI, this.contextUser);
+        await this.engine.ExtractTextAndProcessWithLLM(contentItemsToProcess, this.contextUser);
     }
 
     /**
@@ -54,8 +51,10 @@ export class AutotagLocalFileSystem extends AutotagBase {
         const contentItemsToProcess: ContentItemEntity[] = []
 
         for (const contentSource of contentSources) {
+
             // First check that the directory exists
             if (fs.existsSync(contentSource.Get('URL'))) {
+
                 // If content source parameters were provided, set them. Otherwise, use the default values.
                 const contentSourceParamsMap = await this.engine.getContentSourceParams(contentSource, this.contextUser);
                 if (contentSourceParamsMap) {
@@ -114,12 +113,6 @@ export class AutotagLocalFileSystem extends AutotagBase {
         let contentSourcePath = contentSourceParams.URL
         const filesAndDirs = fs.readdirSync(contentSourcePath)
 
-        const rv = new RunView()
-        const results = await rv.RunView({
-            EntityName: 'Content Items',
-            ResultType: 'entity_object'
-        }, this.contextUser)
-
         for (const file of filesAndDirs) {
             const filePath = path.join(contentSourcePath, file)
             const stats = fs.statSync(filePath)
@@ -158,7 +151,9 @@ export class AutotagLocalFileSystem extends AutotagBase {
                     const contentItem = <ContentItemEntity> await md.GetEntityObject('Content Items', this.contextUser);
                     const contentItemID = await this.engine.getContentItemIDFromURL(contentSourceParams, this.contextUser);
                     await contentItem.Load(contentItemID);
-                    contentItem.Set('Text', await this.engine.parseFileFromPath(filePath));
+                    const text = await this.engine.parseFileFromPath(filePath);
+                    contentItem.Set('Text', text);
+                    contentItem.Set('Checksum', await this.engine.getChecksumFromText(text));
                     contentItem.Set('UpdatedAt', new Date());
                     contentItem.Save();
                 }

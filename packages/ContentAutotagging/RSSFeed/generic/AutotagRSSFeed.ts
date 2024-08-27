@@ -2,7 +2,6 @@ import { UserInfo, Metadata, RunView } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
 import { AutotagBase } from "../../Core";
 import { AutotagBaseEngine, ContentSourceParams } from "../../Engine";
-import OpenAI from 'openai';
 import { ContentSourceEntity, ContentItemEntity } from '@memberjunction/core-entities';
 import { RSSItem } from './RSS.types';
 import axios from 'axios'
@@ -15,17 +14,11 @@ dotenv.config()
 export class AutotagRSSFeed extends AutotagBase {
     private contextUser: UserInfo;
     private engine: AutotagBaseEngine;
-    private apiKey: string;
     protected contentSourceTypeID: string
-    static _openAI: OpenAI;
 
     constructor() {
         super();
-        this.apiKey = process.env['AI_VENDOR_API_KEY__OpenAILLM'] || '';
         this.engine = AutotagBaseEngine.Instance;
-        if(!AutotagRSSFeed._openAI){
-            AutotagRSSFeed._openAI = new OpenAI({apiKey: this.apiKey});
-        }
     }
 
     protected getContextUser(): UserInfo {
@@ -43,7 +36,7 @@ export class AutotagRSSFeed extends AutotagBase {
         this.contentSourceTypeID = await this.engine.setSubclassContentSourceType('RSS Feed', this.contextUser);
         const contentSources = await this.engine.getAllContentSources(this.contextUser, this.contentSourceTypeID);
         const contentItemsToProcess = await this.SetContentItemsToProcess(contentSources);
-        await this.engine.ExtractTextAndProcessWithLLM(contentItemsToProcess, AutotagRSSFeed._openAI, this.contextUser);
+        await this.engine.ExtractTextAndProcessWithLLM(contentItemsToProcess, this.contextUser);
     }
 
     /**
@@ -75,7 +68,7 @@ export class AutotagRSSFeed extends AutotagBase {
                 ContentSourceTypeID: contentSource.Get('ContentSourceTypeID'),
                 URL: contentSource.Get('URL')
             }
-            const url = contentSources[0].Get('URL');
+            const url = contentSource.Get('URL');
             const allRSSItems: RSSItem[] = await this.parseRSSFeed(url);
             
             const contentItems: ContentItemEntity[] = await this.SetNewAndModifiedContentItems(allRSSItems, contentSourceParams)
@@ -102,13 +95,15 @@ export class AutotagRSSFeed extends AutotagBase {
             }, this.contextUser)
 
             if (results.Success && results.Results.length) {
-                // This content item already exists, check the last hash to see if different
+                // This content item already exists, check the last hash to see if it has been modified
                 const lastStoredHash = results.Results[0].Get('Checksum')
                 const newHash = await this.getChecksumFromRSSItem(RSSContentItem, this.contextUser)
             
                 if (lastStoredHash !== newHash) {
                     // This content item has been modified
-                    const contentItem = <ContentItemEntity> results.Results[0];
+                    const md = new Metadata();
+                    const contentItem = <ContentItemEntity> await md.GetEntityObject('Content Items', this.contextUser);
+                    contentItem.Load(results.Results[0]);
                     contentItem.Set('Checksum', newHash);
                     contentItem.Set('Text', JSON.stringify(RSSContentItem));
                     contentItem.Set('UpdatedAt', new Date());
