@@ -24,9 +24,6 @@ export class AutotagWebsite extends AutotagBase {
     constructor() {
         super();
         this.engine = AutotagBaseEngine.Instance;
-        this.CrawlOtherSitesInTopLevelDomain = false;
-        this.CrawlSitesInLowerLevelDomain = false;
-        this.MaxDepth = 0;
         this.visitedURLs = new Set<string>();
     }
 

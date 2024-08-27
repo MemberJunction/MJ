@@ -296,7 +296,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         const contentSourceResult = await rv.RunView<ContentSourceEntity>({
             EntityName: 'Content Sources',
             ResultType: 'entity_object', 
-            ExtraFilter: `ContentSourceTypeID='${contentSourceTypeID}' AND ID='80DEBC87-D160-EF11-991B-7C1E5215D02C'`
+            ExtraFilter: `ContentSourceTypeID='${contentSourceTypeID}'`
         }, contextUser);
         try {
         if (contentSourceResult.Success && contentSourceResult.Results.length) {
@@ -502,25 +502,6 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         }
     }
 
-    public async getContentItemHash(contentItemID: string, contextUser: UserInfo): Promise<string|void> {
-        const rv = new RunView()
-        const results = await rv.RunView({
-            EntityName: 'Content Items', 
-            ExtraFilter: `ID='${contentItemID}'`,
-            ResultType: 'entity_object'
-        }, contextUser)
-
-        try {
-            if (results.Success && results.Results.length) {
-                return results.Results[0].Get('Checksum')
-            }
-        }
-        catch (e) {
-            console.error(e);
-            throw e;
-        }
-    }
-
     public async getContentItemParams(contentTypeID: string, contextUser: UserInfo): Promise<{ modelID: string; minTags: number; maxTags: number; }> {
         const rv = new RunView();
         const results = await rv.RunView({
@@ -650,31 +631,6 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         return description
     }
 
-    /**
-    * Given a file path, this function sets the content source item in preparation for processing with the LLM.
-    * @param filePath: The path to the file to set as a content source item
-    */
-    public async setSingleContentItem(contentSourceParams: ContentSourceParams, filepath:string, contextUser:UserInfo): Promise<ContentItemEntity> {
-        const md = new Metadata()
-        const contentItem = <ContentItemEntity> await md.GetEntityObject('Content Items', contextUser)
-        contentItem.NewRecord()
-        contentItem.Set('ContentSourceID', contentSourceParams.contentSourceID)
-        contentItem.Set('Description', await this.getContentItemDescription(contentSourceParams, contextUser)) // come back and generalize this, maybe with LLM?
-        contentItem.Set('ContentTypeID', contentSourceParams.ContentTypeID)
-        contentItem.Set('ContentSourceTypeID', contentSourceParams.ContentSourceTypeID)
-        contentItem.Set('ContentFileTypeID', contentSourceParams.ContentFileTypeID)
-        contentItem.Set('URL', filepath)
-        contentItem.Set('CreatedAt', new Date())
-        contentItem.Set('UpdatedAt', new Date())
-        await contentItem.Save()
-     
-        return contentItem
-    }
-
-    public async updateSingleContentItem(contentSourceParams: ContentSourceParams, filepath:string, contextUser: UserInfo): Promise<void> {
-        console.log('Will implement updating later')
-    }
-
     public async getChecksumFromURL(url: string): Promise<string> {
         const response = await axios.get(url)
         const content = response.data
@@ -706,26 +662,6 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         }
         catch (e) {
             throw new Error(`Failed to retrieve content item ID from URL: ${url}`)
-        }
-    }
-
-    public async getAllContentItems(contextUser: UserInfo, contentSourceTypeID: string): Promise<ContentItemEntity[]|void> {
-        const rv = new RunView();
-
-        const contentItemResult = await rv.RunView<ContentItemEntity>({
-            EntityName: 'Content Items',
-            ResultType: 'entity_object', 
-            ExtraFilter: `ContentSourceTypeID='${contentSourceTypeID}'` 
-        }, contextUser);
-        try {
-            if (contentItemResult.Success && contentItemResult.Results.length) {
-                return contentItemResult.Results
-            }
-        }
-
-        catch (e) {
-            console.error(e);
-            throw e;
         }
     }
 
