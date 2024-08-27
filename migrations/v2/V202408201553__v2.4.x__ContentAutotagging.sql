@@ -446,3 +446,7 @@ INSERT INTO [${flyway:defaultSchema}].[AIModel]
            ,'gpt-4o-mini'
            ,NULL
            ,NULL)
+
+  update [${flyway:defaultSchema}].[AIModel]
+  Set APIName='open-mistral-8x7b'
+  where ID='E2A5CCEC-6A37-EF11-86D4-000D3A4E707E'
