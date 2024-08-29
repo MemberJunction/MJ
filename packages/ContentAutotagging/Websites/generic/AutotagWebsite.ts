@@ -7,6 +7,7 @@ import * as cheerio from 'cheerio';
 import axios from 'axios';
 import { URL } from 'url';
 import dotenv from 'dotenv';
+import path from 'path';
 dotenv.config()
 
 @RegisterClass(AutotagBase, 'AutotagWebsite')
@@ -68,27 +69,27 @@ export class AutotagWebsite extends AutotagBase {
             }
             
             const contentSourceParams: ContentSourceParams = {
-                contentSourceID: contentSource.Get('ID'), 
-                name: contentSource.Get('Name'),
-                ContentTypeID: contentSource.Get('ContentTypeID'),
-                ContentFileTypeID: contentSource.Get('ContentFileTypeID'),
-                ContentSourceTypeID: contentSource.Get('ContentSourceTypeID'),
-                URL: contentSource.Get('URL')
+                contentSourceID: contentSource.ID, 
+                name: contentSource.Name,
+                ContentTypeID: contentSource.ContentTypeID,
+                ContentFileTypeID: contentSource.ContentFileTypeID,
+                ContentSourceTypeID: contentSource.ContentSourceTypeID,
+                URL: contentSource.URL
             }
 
             try {
             
                 // All content items associated with the content source
-                const startURL = contentSourceParams.URL;
+                const startURL: string = contentSourceParams.URL;
 
                 // root url should be set to this.RootURL if it exists, otherwise it should be set to the base path of the startURL. 
-                const rootURL = this.RootURL ? this.RootURL : this.getBasePath(startURL);
+                const rootURL: string = this.RootURL ? this.RootURL : this.getBasePath(startURL);
 
                 // regex should be set to this.URLPattern if it exists, otherwise it should be set to match any URL.
-                const regex = this.URLPattern && new RegExp(this.URLPattern) || new RegExp('.*');
+                const regex: RegExp = this.URLPattern && new RegExp(this.URLPattern) || new RegExp('.*');
          
-                const allContentItemLinks:string[] = await this.getAllLinksFromContentSource(startURL, rootURL, regex);
-                const contentItems = await this.SetNewAndModifiedContentItems(allContentItemLinks, contentSourceParams, this.contextUser);
+                const allContentItemLinks: string[] = await this.getAllLinksFromContentSource(startURL, rootURL, regex);
+                const contentItems: ContentItemEntity[] = await this.SetNewAndModifiedContentItems(allContentItemLinks, contentSourceParams, this.contextUser);
                 if (contentItems && contentItems.length > 0) {
                     contentItemsToProcess.push(...contentItems);
                 }
@@ -134,23 +135,26 @@ export class AutotagWebsite extends AutotagBase {
                     }
                 ], this.contextUser)
 
-                if (results[0].Success && results[0].Results.length) {
+                const contentItemWithChecksum: ContentItemEntity = results[0]
+                const contentItemWithURL: ContentItemEntity = results[1]
+
+                if (contentItemWithChecksum.Success && contentItemWithChecksum.Results.length) {
                     // We found the checksum so this content item has not changed since we last accessed it, do nothing
                     continue;
                 }
 
-                else if (results[1].Success && results[1].Results.length) {
-                    // This content item already exists, update the hash and last updated date 
-                    const lastStoredHash = results[1].Results[0].Get('Checksum');
+                else if (contentItemWithURL.Success && contentItemWithURL.Results.length) {
+                    // This content item already exists, update the hash and last updated date
+                    const contentItem: ContentItemEntity = contentItemWithURL.Results[0]; 
+                    const lastStoredHash: string = contentItem.Checksum
 
                     if (lastStoredHash !== newHash) {
                         // This content item has changed since we last access it, update the hash and last updated date
                         const md = new Metadata();
-                        const contentItem = <ContentItemEntity> await md.GetEntityObject('Content Items', this.contextUser);
-                        contentItem.Load(results[1].Results[0].Get('ID'));
-                        contentItem.Set('Checksum', newHash);
-                        contentItem.Set('Text', await this.parseWebPage(contentItemLink));
-                        contentItem.Set('UpdatedAt', new Date());
+                        const contentItem = await md.GetEntityObject<ContentItemEntity>('Content Items', this.contextUser);
+                        contentItem.Load(contentItem.ID);
+                        contentItem.Checksum = newHash
+                        contentItem.Text = await this.parseWebPage(contentItemLink)
 
                         await contentItem.Save();
                         addedContentItems.push(contentItem); // Content item was modified, add to list
@@ -159,19 +163,16 @@ export class AutotagWebsite extends AutotagBase {
                 else {
                     // This content item does not exist, add it
                     const md = new Metadata();
-                    const contentItem = <ContentItemEntity> await md.GetEntityObject('Content Items', this.contextUser);
-                    contentItem.NewRecord();
-                    contentItem.Set('ContentSourceID', contentSourceParams.contentSourceID);
-                    contentItem.Set('Name', this.getPathName(contentItemLink)); // Will get overwritten by title later if it exists
-                    contentItem.Set('Description', await this.engine.getContentItemDescription(contentSourceParams, this.contextUser));
-                    contentItem.Set('ContentTypeID', contentSourceParams.ContentTypeID);
-                    contentItem.Set('ContentFileTypeID', contentSourceParams.ContentFileTypeID);
-                    contentItem.Set('ContentSourceTypeID', contentSourceParams.ContentSourceTypeID);
-                    contentItem.Set('Checksum', await this.engine.getChecksumFromURL(contentItemLink));
-                    contentItem.Set('URL', contentItemLink);
-                    contentItem.Set('Text', await this.parseWebPage(contentItemLink));
-                    contentItem.Set('CreatedAt', new Date());
-                    contentItem.Set('UpdatedAt', new Date());
+                    const contentItem = await md.GetEntityObject<ContentItemEntity>('Content Items', this.contextUser);
+                    contentItem.ContentSourceId = contentSourceParams.contentSourceID
+                    contentItem.Name = this.getPathName(contentItemLink) // Will get overwritten by title later if it exists
+                    contentItem.Description = await this.engine.getContentItemDescription(contentSourceParams, this.contextUser)
+                    contentItem.ContentTypeID = contentSourceParams.ContentTypeID
+                    contentItem.ContentFileTypeID = contentSourceParams.ContentFileTypeID
+                    contentItem.ContentSourceTypeID = contentSourceParams.ContentSourceTypeID
+                    contentItem.Checksum = await this.engine.getChecksumFromURL(contentItemLink)
+                    contentItem.URL = contentItemLink
+                    contentItem.Text = await this.parseWebPage(contentItemLink)
                 
                     await contentItem.Save();
                     addedContentItems.push(contentItem); // Content item was added, add to list
@@ -211,9 +212,9 @@ export class AutotagWebsite extends AutotagBase {
      */
     public async parseWebPage(url: string): Promise<string> {
         try {
-            const pageContent = await this.fetchPageContent(url);
+            const pageContent: string = await this.fetchPageContent(url);
             const $ = cheerio.load(pageContent);
-            const text = this.getTextWithLineBreaks($('body')[0], $);
+            const text: string = this.getTextWithLineBreaks($('body')[0], $);
             return text;
         } 
         catch (error) {
@@ -230,7 +231,7 @@ export class AutotagWebsite extends AutotagBase {
      * @returns
      */
     protected async getAllLinksFromContentSource(url: string, rootURL: string, regex: RegExp): Promise<string[]> {
-        // In the future, we should load the crawl parameters here before proceeding
+    
         try {
             await this.getLowerLevelLinks(url, rootURL, this.MaxDepth, new Set<string>(), regex);
             await this.getTopLevelLinks(url, this.getBasePath(url));
@@ -291,7 +292,7 @@ export class AutotagWebsite extends AutotagBase {
      */
     protected isHighestDomain(url: string): boolean {
         try {
-            const parsedURL = new URL(url);
+            const parsedURL: URL = new URL(url);
             return parsedURL.pathname === '/' || parsedURL.pathname === '';
         }
         catch (e) {
@@ -301,20 +302,22 @@ export class AutotagWebsite extends AutotagBase {
     }
 
     protected getBasePath(url: string): string {
-        const parsedURL = new URL(url);
-        const pathSegments = parsedURL.pathname.split('/').filter(segment => segment);
+        const parsedURL: URL = new URL(url);
+        const pathSegments: string[] = parsedURL.pathname.split('/').filter(segment => segment);
         if (pathSegments.length > 0) {
             pathSegments.pop(); //Remove last segment so that we are in the same level domain
         }
-        return parsedURL.origin + '/' + pathSegments.join('/');
+        const basePath = parsedURL.origin + '/' + pathSegments.join('/');
+        return basePath;
     }
     
     // Creates a URL from input string and returns the path name in the form abc.com/xyz
     protected getPathName(url: string): string {
         try {
-            const parsedURL = new URL(url);
-            const pathSegments = parsedURL.pathname.split('/').filter(segment => segment);
-            return parsedURL.origin + '/' + pathSegments.join('/');
+            const parsedURL: URL = new URL(url);
+            const pathSegments: string[] = parsedURL.pathname.split('/').filter(segment => segment);
+            const path = parsedURL.origin + '/' + pathSegments.join('/');
+            return path
         }
         catch (e) {
             console.error(`Invalid URL for same level parsing: ${url}`);

@@ -53,7 +53,7 @@ export class AutotagLocalFileSystem extends AutotagBase {
         for (const contentSource of contentSources) {
 
             // First check that the directory exists
-            if (fs.existsSync(contentSource.Get('URL'))) {
+            if (fs.existsSync(contentSource.URL)) {
 
                 // If content source parameters were provided, set them. Otherwise, use the default values.
                 const contentSourceParamsMap = await this.engine.getContentSourceParams(contentSource, this.contextUser);
@@ -67,15 +67,15 @@ export class AutotagLocalFileSystem extends AutotagBase {
                 }
 
                 const contentSourceParams: ContentSourceParams = {
-                    contentSourceID: contentSource.Get('ID'),
-                    name: contentSource.Get('Name'),
-                    ContentTypeID: contentSource.Get('ContentTypeID'),
-                    ContentSourceTypeID: contentSource.Get('ContentSourceTypeID'),
-                    ContentFileTypeID: contentSource.Get('ContentFileTypeID'),
-                    URL: contentSource.Get('URL')
+                    contentSourceID: contentSource.ID,
+                    name: contentSource.Name,
+                    ContentTypeID: contentSource.ContentTypeEntity,
+                    ContentSourceTypeID: contentSource.ContentSourceTypeID,
+                    ContentFileTypeID: contentSource.ContentFileTypeID,
+                    URL: contentSource.URL
                 }
                 
-                const lastRunDate = await this.engine.getContentSourceLastRunDate(contentSourceParams.contentSourceID, this.contextUser)
+                const lastRunDate: Date = await this.engine.getContentSourceLastRunDate(contentSourceParams.contentSourceID, this.contextUser)
 
                 // Traverse through all the files in the directory
                 if (lastRunDate) {
@@ -93,7 +93,7 @@ export class AutotagLocalFileSystem extends AutotagBase {
                 throw new Error('Invalid last run date');
                 }
             } else {
-                console.log(`Invalid Content Source ${contentSource.Get('Name')}`);
+                console.log(`Invalid Content Source ${contentSource.Name}`);
             }
         }
 
@@ -128,19 +128,16 @@ export class AutotagLocalFileSystem extends AutotagBase {
                     // The file has been added, create a new record for this file
                     const md = new Metadata();
                     const text = await this.engine.parseFileFromPath(filePath);
-                    const contentItem = <ContentItemEntity> await md.GetEntityObject('Content Items', this.contextUser);
-                    contentItem.NewRecord();
-                    contentItem.Set('ContentSourceID', contentSourceParams.contentSourceID);
-                    contentItem.Set('Name', contentSourceParams.name);
-                    contentItem.Set('Description', await this.engine.getContentItemDescription(contentSourceParams, this.contextUser));
-                    contentItem.Set('ContentTypeID', contentSourceParams.ContentTypeID);
-                    contentItem.Set('ContentFileTypeID', contentSourceParams.ContentFileTypeID);
-                    contentItem.Set('ContentSourceTypeID', contentSourceParams.ContentSourceTypeID);
-                    contentItem.Set('Checksum', await this.engine.getChecksumFromText(text));
-                    contentItem.Set('URL', contentSourceParams.URL);
-                    contentItem.Set('Text', text);
-                    contentItem.Set('CreatedAt', new Date());
-                    contentItem.Set('UpdatedAt', new Date());
+                    const contentItem = await md.GetEntityObject<ContentItemEntity>('Content Items', this.contextUser);
+                    contentItem.ContentSourceID = contentSourceParams.contentSourceID
+                    contentItem.Name = contentSourceParams.name
+                    contentItem.Description = await this.engine.getContentItemDescription(contentSourceParams, this.contextUser)
+                    contentItem.ContentTypeID = contentSourceParams.ContentTypeID
+                    contentItem.ContentFileTypeID = contentSourceParams.ContentFileTypeID
+                    contentItem.ContentSourceTypeID = contentSourceParams.ContentSourceTypeID
+                    contentItem.Checksum = await this.engine.getChecksumFromText(text)
+                    contentItem.URL = contentSourceParams.URL
+                    contentItem.Text = text
 
                     await contentItem.Save();
                     contentItems.push(contentItem); // Content item was added, add to list
@@ -148,13 +145,12 @@ export class AutotagLocalFileSystem extends AutotagBase {
                 else if (modifiedDate > lastRunDate) {
                     // The file's contents has been, update the record for this file 
                     const md = new Metadata();
-                    const contentItem = <ContentItemEntity> await md.GetEntityObject('Content Items', this.contextUser);
-                    const contentItemID = await this.engine.getContentItemIDFromURL(contentSourceParams, this.contextUser);
+                    const contentItem = await md.GetEntityObject<ContentItemEntity>('Content Items', this.contextUser);
+                    const contentItemID: string = await this.engine.getContentItemIDFromURL(contentSourceParams, this.contextUser);
                     await contentItem.Load(contentItemID);
                     const text = await this.engine.parseFileFromPath(filePath);
-                    contentItem.Set('Text', text);
-                    contentItem.Set('Checksum', await this.engine.getChecksumFromText(text));
-                    contentItem.Set('UpdatedAt', new Date());
+                    contentItem.text = text
+                    contentItem.Checksum = await this.engine.getChecksumFromText(text)
                     contentItem.Save();
                 }
             }

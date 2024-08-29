@@ -61,15 +61,15 @@ export class AutotagRSSFeed extends AutotagBase {
             }
         
             const contentSourceParams: ContentSourceParams = {
-                contentSourceID: contentSource.Get('ID'), 
-                name: contentSource.Get('Name'),
-                ContentTypeID: contentSource.Get('ContentTypeID'),
-                ContentFileTypeID: contentSource.Get('ContentFileTypeID'),
-                ContentSourceTypeID: contentSource.Get('ContentSourceTypeID'),
-                URL: contentSource.Get('URL')
+                contentSourceID: contentSource.ID, 
+                name: contentSource.Name,
+                ContentTypeID: contentSource.ContentTypeID,
+                ContentFileTypeID: contentSource.ContentFileTypeID,
+                ContentSourceTypeID: contentSource.ContentSourceTypeID,
+                URL: contentSource.URL
             }
-            const url = contentSource.Get('URL');
-            const allRSSItems: RSSItem[] = await this.parseRSSFeed(url);
+            
+            const allRSSItems: RSSItem[] = await this.parseRSSFeed(contentSourceParams.URL);
             
             const contentItems: ContentItemEntity[] = await this.SetNewAndModifiedContentItems(allRSSItems, contentSourceParams)
             
@@ -95,18 +95,18 @@ export class AutotagRSSFeed extends AutotagBase {
             }, this.contextUser)
 
             if (results.Success && results.Results.length) {
+                const contentItem = <ContentItemEntity> results.Results[0];
                 // This content item already exists, check the last hash to see if it has been modified
-                const lastStoredHash = results.Results[0].Get('Checksum')
-                const newHash = await this.getChecksumFromRSSItem(RSSContentItem, this.contextUser)
+                const lastStoredHash: string = contentItem.Checksum
+                const newHash: string = await this.getChecksumFromRSSItem(RSSContentItem, this.contextUser)
             
                 if (lastStoredHash !== newHash) {
                     // This content item has been modified
                     const md = new Metadata();
-                    const contentItem = <ContentItemEntity> await md.GetEntityObject('Content Items', this.contextUser);
-                    contentItem.Load(results.Results[0]);
-                    contentItem.Set('Checksum', newHash);
-                    contentItem.Set('Text', JSON.stringify(RSSContentItem));
-                    contentItem.Set('UpdatedAt', new Date());
+                    const contentItem = await md.GetEntityObject<ContentItemEntity>('Content Items', this.contextUser);
+                    contentItem.Load(contentItem.ID);
+                    contentItem.Checksum = newHash
+                    contentItem.Text = JSON.stringify(RSSContentItem)
 
                     await contentItem.Save();
                     contentItemsToProcess.push(contentItem); // Content item was modified, add to list
@@ -115,19 +115,16 @@ export class AutotagRSSFeed extends AutotagBase {
             else {
                 // This content item does not exist, add it
                 const md = new Metadata();
-                const contentItem = <ContentItemEntity> await md.GetEntityObject('Content Items', this.contextUser);
-                contentItem.NewRecord();
-                contentItem.Set('ContentSourceID', contentSourceParams.contentSourceID);
-                contentItem.Set('Name', contentSourceParams.name);
-                contentItem.Set('Description', RSSContentItem.description || await this.engine.getContentItemDescription(contentSourceParams, this.contextUser));
-                contentItem.Set('ContentTypeID', contentSourceParams.ContentTypeID);
-                contentItem.Set('ContentFileTypeID', contentSourceParams.ContentFileTypeID);
-                contentItem.Set('ContentSourceTypeID', contentSourceParams.ContentSourceTypeID);
-                contentItem.Set('Checksum', await this.getChecksumFromRSSItem(RSSContentItem, this.contextUser));
-                contentItem.Set('URL', RSSContentItem.link || contentSourceParams.URL);
-                contentItem.Set('Text', JSON.stringify(RSSContentItem));
-                contentItem.Set('CreatedAt', new Date());
-                contentItem.Set('UpdatedAt', new Date());
+                const contentItem = await md.GetEntityObject<ContentItemEntity>('Content Items', this.contextUser);
+                contentItem.ContentSourceID = contentSourceParams.contentSourceID
+                contentItem.Name = contentSourceParams.name
+                contentItem.Description = RSSContentItem.description || await this.engine.getContentItemDescription(contentSourceParams, this.contextUser)
+                contentItem.ContentTypeID = contentSourceParams.ContentTypeID
+                contentItem.ContentFileTypeID = contentSourceParams.ContentFileTypeID
+                contentItem.ContentSourceTypeID = contentSourceParams.ContentSourceTypeID
+                contentItem.Checksum = await this.getChecksumFromRSSItem(RSSContentItem, this.contextUser)
+                contentItem.URL = RSSContentItem.link || contentSourceParams.URL
+                contentItem.Text = JSON.stringify(RSSContentItem)
 
                 await contentItem.Save();
                 contentItemsToProcess.push(contentItem); // Content item was added, add to list

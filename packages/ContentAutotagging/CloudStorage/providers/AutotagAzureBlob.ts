@@ -1,13 +1,12 @@
-import { CloudStorageBase } from "../../generic/CloudStorageBase";
+import { CloudStorageBase } from "../generic/CloudStorageBase";
 import { UserInfo } from "@memberjunction/core";
 import { BlobServiceClient, ContainerClient } from '@azure/storage-blob';
 import dotenv from 'dotenv';
 import { ContentItemEntity } from "@memberjunction/core-entities";
 import { Metadata } from "@memberjunction/core";
 import path from "path";
-import { LoadGeneratedEntities } from "mj_generatedentities";
+import { ContentSourceParams } from "Engine";
 dotenv.config()
-LoadGeneratedEntities()
 
 export class AutotagAzureBlob extends CloudStorageBase {
     private blobServiceClient: BlobServiceClient;
@@ -40,7 +39,7 @@ export class AutotagAzureBlob extends CloudStorageBase {
         }
     }
 
-    public async SetNewAndModifiedContentItems(contentSourceParams: any, lastRunDate: Date, contextUser: UserInfo, prefix=''): Promise<ContentItemEntity[]> {
+    public async SetNewAndModifiedContentItems(contentSourceParams: ContentSourceParams, lastRunDate: Date, contextUser: UserInfo, prefix=''): Promise<ContentItemEntity[]> {
         const contentItemsToProcess: ContentItemEntity[] = []
 
         for await (const blob of this.containerClient.listBlobsFlat()) {
@@ -48,19 +47,17 @@ export class AutotagAzureBlob extends CloudStorageBase {
             if (blob.properties.createdOn && blob.properties.createdOn > lastRunDate) {
                 // The file has been created, add a new record for this file
                 const md = new Metadata()
-                const contentItem = <any> await md.GetEntityObject('Content Items', contextUser)
+                const contentItem = await md.GetEntityObject<ContentItemEntity>('Content Items', contextUser)
                 const text = await this.extractText(blob.name)
-                contentItem.Set('ContentSourceID', contentSourceParams.contentSourceID)
-                contentItem.Set('Name', blob.name)
-                contentItem.Set('Description', await this.engine.getContentItemDescription(contentSourceParams, contextUser))
-                contentItem.Set('URL', filePath)
-                contentItem.Set('ContentTypeID', contentSourceParams.ContentTypeID)
-                contentItem.Set('ContentSourceTypeID', contentSourceParams.ContentSourceTypeID)
-                contentItem.Set('ContentFileTypeID', contentSourceParams.ContentFileTypeID)
-                contentItem.Set('Checksum', await this.engine.getChecksumFromText(text))
-                contentItem.Set('Text', text)
-                contentItem.Set('CreatedAt', new Date())
-                contentItem.Set('UpdatedAt', new Date())
+                contentItem.ContentSourceID = contentSourceParams.contentSourceID
+                contentItem.Name = blob.name
+                contentItem.Description = await this.engine.getContentItemDescription(contentSourceParams, contextUser)
+                contentItem.URL = filePath
+                contentItem.ContentTypeID = contentSourceParams.ContentTypeID
+                contentItem.ContentSourceTypeID =  contentSourceParams.ContentSourceTypeID
+                contentItem.contentFileTypeID = contentSourceParams.ContentFileTypeID
+                contentItem.Checksum = await this.engine.getChecksumFromText(text)
+                contentItem.Text = text
                 
                 await contentItem.Save()
                 contentItemsToProcess.push(contentItem)
@@ -68,13 +65,12 @@ export class AutotagAzureBlob extends CloudStorageBase {
             else if (blob.properties.lastModified && blob.properties.lastModified > lastRunDate) {
                 // The file has been modified, update the record for this file
                 const md = new Metadata()
-                const contentItem = <any> await md.GetEntityObject('Content Items', contextUser)
-                const contentItemID = await this.engine.getContentItemIDFromURL(contentSourceParams.contentSourceID, contextUser)
+                const contentItem = await md.GetEntityObject<ContentItemEntity>('Content Items', contextUser)
+                const contentItemID = await this.engine.getContentItemIDFromURL(contentSourceParams, contextUser)
                 await contentItem.Load(contentItemID)
                 const text = await this.extractText(blob.name)
-                contentItem.Set('Text', text)
-                contentItem.Set('Checksum', await this.engine.getChecksumFromText(text))
-                contentItem.Set('UpdatedAt', new Date())
+                contentItem.Text = text
+                contentItem.Checksum = await this.engine.getChecksumFromText(text)
                 contentItem.Save()
                 contentItemsToProcess.push(contentItem)
             }
@@ -86,8 +82,8 @@ export class AutotagAzureBlob extends CloudStorageBase {
     public async extractText(file: string): Promise<string> {
         const blockBlobClient = this.containerClient.getBlockBlobClient(file)
         const downloadBlockBlobResponse = await blockBlobClient.download()
-        const document = await this.streamToBuffer(downloadBlockBlobResponse.readableStreamBody)
-        const text = await this.engine.parsePDF(document)
+        const document: Buffer = await this.streamToBuffer(downloadBlockBlobResponse.readableStreamBody)
+        const text: string = await this.engine.parsePDF(document)
         return text
     }
 

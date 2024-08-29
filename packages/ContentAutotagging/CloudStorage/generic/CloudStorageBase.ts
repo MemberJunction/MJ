@@ -48,15 +48,15 @@ export abstract class CloudStorageBase extends AutotagBase {
             await this.Authenticate();
 
             const contentSourceParams: ContentSourceParams = {
-                contentSourceID: contentSource.Get('ID'),
-                name: contentSource.Get('Name'),
-                ContentTypeID: contentSource.Get('ContentTypeID'),
-                ContentSourceTypeID: contentSource.Get('ContentSourceTypeID'),
-                ContentFileTypeID: contentSource.Get('ContentFileTypeID'),
-                URL: contentSource.Get('URL')
+                contentSourceID: contentSource.ID,
+                name: contentSource.Name,
+                ContentTypeID: contentSource.ContentTypeID,
+                ContentSourceTypeID: contentSource.ContentSourceTypeID,
+                ContentFileTypeID: contentSource.ContentFileTypeID,
+                URL: contentSource.URL
             }
 
-            const lastRunDate = await this.engine.getContentSourceLastRunDate(contentSourceParams.contentSourceID, this.contextUser);
+            const lastRunDate: Date = await this.engine.getContentSourceLastRunDate(contentSourceParams.contentSourceID, this.contextUser);
 
             if (lastRunDate) {
                 const contentItems = await this.SetNewAndModifiedContentItems(contentSourceParams, lastRunDate, this.contextUser);
