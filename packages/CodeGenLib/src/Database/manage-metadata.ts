@@ -24,7 +24,6 @@ export class ManageMetadataBase {
    public static get newEntityList(): string[] {
       return this._newEntityList;
    }
-   private logFilePath: string = 'MJ/packages/CodeGenLib/src/Database/generated-sql.log';
 
    /**
     * Primary function to manage metadata within the CodeGen system. This function will call a series of sub-functions to manage the metadata.
@@ -270,7 +269,6 @@ export class ManageMetadataBase {
             if (batchSQL.length > 0)
                await ds.query(batchSQL);
                console.log(batchSQL);
-               fs.appendFileSync(this.logFilePath, batchSQL, 'utf8');
          };
 
          // Split entityFields into batches and process each batch
@@ -338,7 +336,6 @@ export class ManageMetadataBase {
          if (proceed && schemaName && name && schemaName.trim().length > 0 && name.trim().length > 0) {
             const sqlDelete = `DROP ${type} IF EXISTS [${schemaName}].[${name}]`;
             await ds.query(sqlDelete);
-            fs.appendFileSync(this.logFilePath, sqlDelete, 'utf8');
 
             // next up, we need to clean up the cache of saved DB objects that may exist for this entity in the appropriate sub-directory.
             const sqlOutputDir = outputDir('SQL', true);
@@ -538,7 +535,6 @@ export class ManageMetadataBase {
             // field doesn't exist, let's create it
             const sql = `ALTER TABLE [${entity.SchemaName}].[${entity.BaseTable}] ADD ${fieldName} DATETIMEOFFSET ${allowNull ? 'NULL' : 'NOT NULL DEFAULT GETUTCDATE()'}`;
             await ds.query(sql);
-            fs.appendFileSync(this.logFilePath, sql, 'utf8');
          }
          else {
             // field does exist, let's first check the data type/nullability
@@ -551,7 +547,6 @@ export class ManageMetadataBase {
    
                const sql = `ALTER TABLE [${entity.SchemaName}].[${entity.BaseTable}] ALTER COLUMN ${fieldName} DATETIMEOFFSET ${allowNull ? 'NULL' : 'NOT NULL'}`;
                await ds.query(sql);
-               fs.appendFileSync(this.logFilePath, sql, 'utf8');
    
                if (!allowNull)
                   await this.createDefaultConstraintForSpecialDateField(ds, entity, fieldName);
@@ -584,7 +579,6 @@ export class ManageMetadataBase {
       try {
          const sqlAddDefaultConstraint = `ALTER TABLE [${entity.SchemaName}].[${entity.BaseTable}] ADD CONSTRAINT DF_${entity.SchemaName}_${CodeNameFromString(entity.BaseTable)}_${fieldName} DEFAULT GETUTCDATE() FOR [${fieldName}]`;
          await ds.query(sqlAddDefaultConstraint);   
-         fs.appendFileSync(this.logFilePath, sqlAddDefaultConstraint, 'utf8');
       }
       catch (e) {
          logError(e as string);
@@ -631,7 +625,6 @@ export class ManageMetadataBase {
          END
          `;
          await ds.query(sqlDropDefaultConstraint);      
-         fs.appendFileSync(this.logFilePath, sqlDropDefaultConstraint, 'utf8');
       }
       catch (e) {
          logError(e as string);
@@ -683,7 +676,6 @@ export class ManageMetadataBase {
                   if (structuredResult?.entityDescription && structuredResult.entityDescription.length > 0) {
                      const ssql = `UPDATE [${mj_core_schema()}].Entity SET Description = '${structuredResult.entityDescription}' WHERE Name = '${e}'`;
                      await ds.query(ssql);
-                     fs.appendFileSync(this.logFilePath, ssql, 'utf8');
                   }
                   else {
                      console.warn('   >>> Advanced Generation Error: LLM returned a blank entity description, skipping entity description for entity ' + e);
@@ -731,7 +723,6 @@ export class ManageMetadataBase {
                if (sDisplayName.length > 0 && sDisplayName.toLowerCase().trim() !== field.Name.toLowerCase().trim()) {
                   const sSQL = `UPDATE [${mj_core_schema()}].EntityField SET ${EntityInfo.UpdatedAtFieldName}=GETUTCDATE(), DisplayName = '${sDisplayName}' WHERE ID = '${field.ID}'`
                   await ds.query(sSQL)
-                  fs.appendFileSync(this.logFilePath, sSQL, 'utf8');
                }
             }
          
@@ -965,7 +956,6 @@ export class ManageMetadataBase {
                   // that would have been created violate rules - such as not having an ID column, etc.
                   const sSQLInsert = this.getPendingEntityFieldINSERTSQL(n);
                   await ds.query(sSQLInsert);
-                  fs.appendFileSync(this.logFilePath, sSQLInsert, 'utf8');
                   // if we get here, we're okay, otherwise we have an exception, which we want as it blows up transaction   
                }
             }
@@ -1057,7 +1047,6 @@ export class ManageMetadataBase {
                   
                   // finally, make sure the ValueListType column within the EntityField table is set to "List" because for check constraints we only allow the values specified in the list.
                   await ds.query(`UPDATE [${mj_core_schema()}].EntityField SET ValueListType='List' WHERE ID='${r.EntityFieldID}'`)
-                  fs.appendFileSync(this.logFilePath, `UPDATE [${mj_core_schema()}].EntityField SET ValueListType='List' WHERE ID='${r.EntityFieldID}'`, 'utf8');
                }
             }
          }
@@ -1085,7 +1074,6 @@ export class ManageMetadataBase {
                   // delete the value from the database
                   const sSQLDelete = `DELETE FROM [${mj_core_schema()}].EntityFieldValue WHERE ID='${ev.ID}'`;
                   await ds.query(sSQLDelete);
-                  fs.appendFileSync(this.logFilePath, sSQLDelete, 'utf8');
                   numRemoved++;
                }
             }
@@ -1100,7 +1088,6 @@ export class ManageMetadataBase {
                                     VALUES 
                                        ('${entityFieldID}', ${1 + possibleValues.indexOf(v)}, '${v}', '${v}')`;
                   await ds.query(sSQLInsert);
-                  fs.appendFileSync(this.logFilePath, sSQLInsert, 'utf8');
                   numAdded++;
                }
             }
@@ -1113,7 +1100,6 @@ export class ManageMetadataBase {
                   // update the sequence to match the order in the possible values list, if it doesn't already match
                   const sSQLUpdate = `UPDATE [${mj_core_schema()}].EntityFieldValue SET Sequence=${1 + possibleValues.indexOf(v)} WHERE ID='${ev.ID}'`;
                   await ds.query(sSQLUpdate);
-                  fs.appendFileSync(this.logFilePath, sSQLUpdate, 'utf8');
                   numUpdated++;
                }
             }
@@ -1308,7 +1294,6 @@ export class ManageMetadataBase {
             const isNewSchema = await this.isSchemaNew(ds, newEntity.SchemaName);
             const sSQLInsert = this.createNewEntityInsertSQL(newEntityName, newEntity, suffix);
             const newEntityResult = await ds.query(sSQLInsert);
-            fs.appendFileSync(this.logFilePath, sSQLInsert, 'utf8');
             const newEntityID = newEntityResult && newEntityResult.length > 0 ? newEntityResult[0].ID : null;
             if (!newEntityID) 
                throw new Error(`Failed to create new entity ${newEntityName} for table ${newEntity.SchemaName}.${newEntity.TableName}`);
@@ -1343,7 +1328,6 @@ export class ManageMetadataBase {
                                                             (ApplicationID, EntityID, Sequence) VALUES 
                                                             ('${app.ID}', '${newEntityID}', (SELECT ISNULL(MAX(Sequence),0)+1 FROM ${mj_core_schema()}.ApplicationEntity WHERE ApplicationID = '${app.ID}'))`;
                   await ds.query(sSQLInsertApplicationEntity);
-                  fs.appendFileSync(this.logFilePath, sSQLInsertApplicationEntity, 'utf8');
                }
                else
                   LogError(`   >>>> ERROR: Unable to find Application ID for application ${appName} to add new entity ${newEntityName} to it`);
@@ -1360,7 +1344,6 @@ export class ManageMetadataBase {
                                                    (EntityID, RoleID, CanRead, CanCreate, CanUpdate, CanDelete) VALUES 
                                                    ('${newEntityID}', '${RoleID}', ${p.CanRead ? 1 : 0}, ${p.CanCreate ? 1 : 0}, ${p.CanUpdate ? 1 : 0}, ${p.CanDelete ? 1 : 0})`;
                      await ds.query(sSQLInsertPermission);
-                     fs.appendFileSync(this.logFilePath, sSQLInsertPermission, 'utf8');
                   }
                   else 
                      LogError(`   >>>> ERROR: Unable to find Role ID for role ${p.RoleName} to add permissions for new entity ${newEntityName}`);
@@ -1389,7 +1372,6 @@ export class ManageMetadataBase {
    protected async createNewApplication(ds: DataSource, appName: string): Promise<number>{
       const sSQL: string = "INSERT INTO [" + mj_core_schema() + "].Application (Name, Description) VALUES ('" + appName + "', 'Generated for Schema'); SELECT @@IDENTITY AS ID";
       const result = await ds.query(sSQL);
-      fs.appendFileSync(this.logFilePath, sSQL, 'utf8');
       return result && result.length > 0 ? result[0].ID : null;
    }
    
