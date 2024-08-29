@@ -145,17 +145,17 @@ export class AutotagWebsite extends AutotagBase {
                 
                 else if (contentItemResultsWithURL.Success && contentItemResultsWithURL.Results.length) {
                     // This content item already exists, update the hash and last updated date
-                    const contentItem: ContentItemEntity = contentItemResultsWithURL.Results[0]; 
-                    const lastStoredHash: string = contentItem.Checksum
-
+                    const contentItemResult: ContentItemEntity = contentItemResultsWithURL.Results[0]; 
+                    const lastStoredHash: string = contentItemResult.Checksum
+            
                     if (lastStoredHash !== newHash) {
                         // This content item has changed since we last access it, update the hash and last updated date
                         const md = new Metadata();
                         const contentItem = await md.GetEntityObject<ContentItemEntity>('Content Items', this.contextUser);
-                        contentItem.Load(contentItem.ID);
+                        contentItem.Load(contentItemResult.ID);
                         contentItem.Checksum = newHash
                         contentItem.Text = await this.parseWebPage(contentItemLink)
-
+            
                         await contentItem.Save();
                         addedContentItems.push(contentItem); // Content item was modified, add to list
                     }

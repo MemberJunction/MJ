@@ -90,21 +90,21 @@ export class AutotagRSSFeed extends AutotagBase {
             const rv = new RunView();
             const results = await rv.RunView({
                 EntityName: 'Content Items', 
-                ExtraFilter: `ContentSourceID = ${contentSourceParams.contentSourceID} AND (URL = '${RSSContentItem.link}' OR Description = '${RSSContentItem.description}')`, // According to the RSS spec, all items must contain either a title or a description.
+                ExtraFilter: `ContentSourceID = '${contentSourceParams.contentSourceID}' AND (URL = '${RSSContentItem.link}' OR Description = '${RSSContentItem.description}')`, // According to the RSS spec, all items must contain either a title or a description.
                 ResultType: 'entity_object',
             }, this.contextUser)
 
             if (results.Success && results.Results.length) {
-                const contentItem = <ContentItemEntity> results.Results[0];
+                const contentItemResult = <ContentItemEntity> results.Results[0];
                 // This content item already exists, check the last hash to see if it has been modified
-                const lastStoredHash: string = contentItem.Checksum
+                const lastStoredHash: string = contentItemResult.Checksum
                 const newHash: string = await this.getChecksumFromRSSItem(RSSContentItem, this.contextUser)
             
                 if (lastStoredHash !== newHash) {
                     // This content item has been modified
                     const md = new Metadata();
                     const contentItem = await md.GetEntityObject<ContentItemEntity>('Content Items', this.contextUser);
-                    contentItem.Load(contentItem.ID);
+                    contentItem.Load(contentItemResult.ID);
                     contentItem.Checksum = newHash
                     contentItem.Text = JSON.stringify(RSSContentItem)
 

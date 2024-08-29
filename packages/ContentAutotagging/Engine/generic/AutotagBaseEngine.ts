@@ -368,7 +368,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         if (results.Success && results.Results.length) {
             const contentSourceParamResults: ContentSourceParamEntity[] = results.Results
             for (const contentSourceParam of contentSourceParamResults) {
-                const params: ContentSourceTypeParams = await this.getDefaultContentSourceTypeParams(contentSource.ContentSourceTypeID, contextUser)
+                const params: ContentSourceTypeParams = await this.getDefaultContentSourceTypeParams(contentSourceParam.ContentSourceTypeParamID, contextUser)
                 params.contentSourceID = contentSource.ID
 
                 if (contentSourceParam.Value) {
@@ -384,11 +384,11 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         }
     }
 
-    public async getDefaultContentSourceTypeParams(contentSourceTypeID: string, contextUser: UserInfo): Promise<ContentSourceTypeParams> {
+    public async getDefaultContentSourceTypeParams(contentSourceTypeParamID: string, contextUser: UserInfo): Promise<ContentSourceTypeParams> {
         const rv = new RunView()
         const results = await rv.RunView<ContentSourceEntity>({
             EntityName: 'Content Source Type Params', 
-            ExtraFilter: `ID='${contentSourceTypeID}'`,
+            ExtraFilter: `ID='${contentSourceTypeParamID}'`,
             ResultType: 'entity_object'
         }, contextUser)
 
@@ -400,7 +400,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
             params.value = this.castValueAsCorrectType(results.Results[0].Get('DefaultValue'), params.type) // Default value in this case, can be null or overridden later
             return params
         }
-        throw new Error(`Content Source Type with ID '${contentSourceTypeID}' not found`)
+        throw new Error(`Content Source Type with ID '${contentSourceTypeParamID}' not found`)
     }
 
     public castValueAsCorrectType(value: string, type: string): any {
