@@ -1,6 +1,6 @@
 import { BaseEngine, Metadata, RunView, UserInfo } from '@memberjunction/core'
 import { RegisterClass } from '@memberjunction/global'
-import { ContentSourceEntity, ContentItemEntity, ContentItemTagEntity, ContentFileTypeEntity, ContentProcessRunEntity, ContentTypeEntity, ContentItemAttributeEntity, ContentSourceTypeEntity, ContentTypeAttributeEntity } from '@memberjunction/core-entities'
+import { ContentSourceEntity, ContentItemEntity, ContentItemTagEntity, ContentFileTypeEntity, ContentProcessRunEntity, ContentTypeEntity, ContentItemAttributeEntity, ContentSourceTypeEntity, ContentTypeAttributeEntity, ContentSourceParamEntity } from '@memberjunction/core-entities'
 import { ContentSourceParams, ContentSourceTypeParams } from './content.types'
 import pdfParse from 'pdf-parse'
 import * as officeparser from 'officeparser'
@@ -359,16 +359,16 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         const contentSourceParams = new Map<string, any>()
 
         const rv = new RunView()
-        const results = await rv.RunView<ContentSourceEntity>({
+        const results = await rv.RunView<ContentSourceParamEntity>({
             EntityName: 'Content Source Params', 
             ExtraFilter: `ContentSourceID='${contentSource.ID}'`,
             ResultType: 'entity_object'
         }, contextUser)
 
         if (results.Success && results.Results.length) {
-            const contentSourceParamResults: ContentSourceTypeEntity[] = results.Results
+            const contentSourceParamResults: ContentSourceParamEntity[] = results.Results
             for (const contentSourceParam of contentSourceParamResults) {
-                const params: ContentSourceTypeParams = await this.getDefaultContentSourceTypeParams(contentSourceParam.ContentSourceTypeID, contextUser)
+                const params: ContentSourceTypeParams = await this.getDefaultContentSourceTypeParams(contentSource.ContentSourceTypeID, contextUser)
                 params.contentSourceID = contentSource.ID
 
                 if (contentSourceParam.Value) {
