@@ -1368,8 +1368,21 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
                     if (f.Type.trim().toLowerCase() === 'datetimeoffset') {
                         value = new Date(value).toISOString();
                     }
+                    else if (!isUpdate && f.Type.trim().toLowerCase() === 'uniqueidentifier') {
+                        // in the case of unique identifiers, for CREATE procs only, 
+                        // we need to check to see if the value we have in the entity object is a function like newid() or newsquentialid()
+                        // in those cases we should just skip the parameter entirely because that means there is a default value that should be used 
+                        // and that will be handled by the database not by us
+                        // instead of just checking for specific functions like newid(), we can instead check for any string that includes () 
+                        // this way we can handle any function that the database might support in the future
+                        if (typeof value === 'string' && value.includes('()')) {
+                            continue; // skip this field entirely by going to the next iteration of the loop
+                        }
+                    }
+
+                    // if we get here, we have a value that we need to include in the SP call
                     sRet += this.generateSingleSPParam(f, value, bFirst);
-                    bFirst = false;
+                    bFirst = false;    
                 }
             }
         }
