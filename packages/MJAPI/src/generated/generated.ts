@@ -2,7 +2,7 @@
 * ALL ENTITIES - TypeGraphQL Type Class Definition - AUTO GENERATED FILE
 * Generated Entities and Resolvers for Server
 *
-* GENERATED: 8/21/2024, 9:21:49 AM
+* GENERATED: 8/29/2024, 12:18:08 PM
 *
 *   >>> DO NOT MODIFY THIS FILE!!!!!!!!!!!!
 *   >>> YOUR CHANGES WILL BE OVERWRITTEN
@@ -350,7 +350,7 @@ export class Thread_ {
     Name: string;
         
     @Field(() => [ThreadDetail_])
-    ThreadDetailsArray: ThreadDetail_[]; // Link to ThreadDetails
+    ThreadDetails_ThreadIDArray: ThreadDetail_[]; // Link to ThreadDetails
     
 }
 
@@ -487,7 +487,7 @@ export class Industry_ {
     Keywords?: string;
         
     @Field(() => [Account_])
-    AccountsArray: Account_[]; // Link to Accounts
+    Accounts_IndustryIDArray: Account_[]; // Link to Accounts
     
 }
 
@@ -635,7 +635,7 @@ export class ContactRole_ {
     UpdatedAt: Date;
         
     @Field(() => [Contact_])
-    ContactsArray: Contact_[]; // Link to Contacts
+    Contacts_RoleIDArray: Contact_[]; // Link to Contacts
     
 }
 
@@ -789,7 +789,7 @@ export class ContactLevel_ {
     UpdatedAt: Date;
         
     @Field(() => [Contact_])
-    ContactsArray: Contact_[]; // Link to Contacts
+    Contacts_LevelIDArray: Contact_[]; // Link to Contacts
     
 }
 
@@ -1064,16 +1064,16 @@ export class Account_ {
     _mj__DeletedAt?: Date;
         
     @Field(() => [Contact_])
-    ContactsArray: Contact_[]; // Link to Contacts
+    Contacts_AccountIDArray: Contact_[]; // Link to Contacts
     
     @Field(() => [Deal_])
-    DealsArray: Deal_[]; // Link to Deals
+    Deals_AccountIDArray: Deal_[]; // Link to Deals
     
     @Field(() => [Activity_])
-    ActivitiesArray: Activity_[]; // Link to Activities
+    Activities_AccountIDArray: Activity_[]; // Link to Activities
     
     @Field(() => [Invoice_])
-    InvoicesArray: Invoice_[]; // Link to Invoices
+    Invoices_AccountIDArray: Invoice_[]; // Link to Invoices
     
 }
 
@@ -1520,13 +1520,13 @@ export class Contact_ {
     Account?: string;
         
     @Field(() => [Deal_])
-    DealsArray: Deal_[]; // Link to Deals
+    Deals_ContactIDArray: Deal_[]; // Link to Deals
     
     @Field(() => [Invoice_])
-    InvoicesArray: Invoice_[]; // Link to Invoices
+    Invoices_ContactIDArray: Invoice_[]; // Link to Invoices
     
     @Field(() => [Activity_])
-    ActivitiesArray: Activity_[]; // Link to Activities
+    Activities_ContactIDArray: Activity_[]; // Link to Activities
     
 }
 
@@ -1838,7 +1838,7 @@ export class DealStage_ {
     UpdatedAt: Date;
         
     @Field(() => [Deal_])
-    DealsArray: Deal_[]; // Link to Deals
+    Deals_DealStageIDArray: Deal_[]; // Link to Deals
     
 }
 
@@ -2263,7 +2263,7 @@ export class DealForecastCategory_ {
     UpdatedAt: Date;
         
     @Field(() => [Deal_])
-    DealsArray: Deal_[]; // Link to Deals
+    Deals_DealForecastCategoryIDArray: Deal_[]; // Link to Deals
     
 }
 
@@ -2506,7 +2506,7 @@ export class Deal_ {
     DealForecastCategory?: string;
         
     @Field(() => [Activity_])
-    ActivitiesArray: Activity_[]; // Link to Activities
+    Activities_DealIDArray: Activity_[]; // Link to Activities
     
 }
 
@@ -2788,7 +2788,7 @@ export class DealType_ {
     DisplayName?: string;
         
     @Field(() => [Deal_])
-    DealsArray: Deal_[]; // Link to Deals
+    Deals_DealTypeIDArray: Deal_[]; // Link to Deals
     
 }
 
@@ -3183,7 +3183,7 @@ export class ActivityAttachment_ {
     UpdatedAt: Date;
         
     @Field(() => [Activity_])
-    ActivitiesArray: Activity_[]; // Link to Activities
+    Activities_AttachmentIDArray: Activity_[]; // Link to Activities
     
 }
 
@@ -3336,7 +3336,7 @@ export class PaymentTermsType_ {
     ExternalSystemRecordID?: string;
         
     @Field(() => [Invoice_])
-    InvoicesArray: Invoice_[]; // Link to Invoices
+    Invoices_PaymentTermsIDArray: Invoice_[]; // Link to Invoices
     
 }
 
@@ -3506,7 +3506,7 @@ export class InvoiceStatusType_ {
     UpdatedAt: Date;
         
     @Field(() => [Invoice_])
-    InvoicesArray: Invoice_[]; // Link to Invoices
+    Invoices_StatusIDArray: Invoice_[]; // Link to Invoices
     
 }
 
@@ -10468,7 +10468,7 @@ export class SalesTransaction_ {
     ID: number;
         
     @Field(() => [SalesLineItem_])
-    SalesLineItemsArray: SalesLineItem_[]; // Link to SalesLineItems
+    SalesLineItems_SalesTransactionIDArray: SalesLineItem_[]; // Link to SalesLineItems
     
 }
 
@@ -15735,13 +15735,13 @@ export class Customer__client_finance_ {
     Writeoff_Account_Number_For_Drillback?: string;
         
     @Field(() => [OrganizationLink_])
-    OrganizationLinksArray: OrganizationLink_[]; // Link to OrganizationLinks
+    OrganizationLinks_MainGreatPlainsCustomerIDArray: OrganizationLink_[]; // Link to OrganizationLinks
     
     @Field(() => [PersonLink_])
-    PersonLinksArray: PersonLink_[]; // Link to PersonLinks
+    PersonLinks_MainGreatPlainsCustomerIDArray: PersonLink_[]; // Link to PersonLinks
     
     @Field(() => [CustomerAddress__client_finance_])
-    CustomerAddress__client_financeArray: CustomerAddress__client_finance_[]; // Link to CustomerAddress__client_finance
+    CustomerAddress__client_finance_CustomerNumberArray: CustomerAddress__client_finance_[]; // Link to CustomerAddress__client_finance
     
 }
 
@@ -16986,7 +16986,7 @@ export class OrganizationLink_ {
     UpdatedAt: Date;
         
     @Field(() => [PersonLink_])
-    PersonLinksArray: PersonLink_[]; // Link to PersonLinks
+    PersonLinks_CRMAccountIDArray: PersonLink_[]; // Link to PersonLinks
     
 }
 
@@ -17164,19 +17164,19 @@ export class PersonLink_ {
     UpdatedAt: Date;
         
     @Field(() => [SalesTransaction_])
-    SalesTransactionsArray: SalesTransaction_[]; // Link to SalesTransactions
+    SalesTransactions_MembershipGreatPlainsCustomerIDArray: SalesTransaction_[]; // Link to SalesTransactions
     
     @Field(() => [CustomerAddress_])
-    CustomerAddressArray: CustomerAddress_[]; // Link to CustomerAddress
+    CustomerAddress__CustomerNumber_Array: CustomerAddress_[]; // Link to CustomerAddress
     
     @Field(() => [CustomerAddress__client_finance_])
-    CustomerAddress__client_financeArray: CustomerAddress__client_finance_[]; // Link to CustomerAddress__client_finance
+    CustomerAddress__client_finance__CustomerNumber_Array: CustomerAddress__client_finance_[]; // Link to CustomerAddress__client_finance
     
     @Field(() => [SalesTransaction__client_membership_])
-    SalesTransactions__client_membershipArray: SalesTransaction__client_membership_[]; // Link to SalesTransactions__client_membership
+    SalesTransactions__client_membership_MainGreatPlainsCustomerIDArray: SalesTransaction__client_membership_[]; // Link to SalesTransactions__client_membership
     
     @Field(() => [OrganizationLink_])
-    OrganizationLinksArray: OrganizationLink_[]; // Link to OrganizationLinks
+    OrganizationLinks_CRMAccountIDArray: OrganizationLink_[]; // Link to OrganizationLinks
     // Relationship to Demo Keys is not included in the API because it is not marked as IncludeInAPI
 
 }
@@ -18439,19 +18439,19 @@ export class Account__client_crm_ {
     acep_pdinterviewlink?: string;
         
     @Field(() => [Product_])
-    ProductsArray: Product_[]; // Link to Products
+    Products_acep_PublisherIdArray: Product_[]; // Link to Products
     
     @Field(() => [Account__client_crm_])
-    Accounts__client_crmArray: Account__client_crm_[]; // Link to Accounts__client_crm
+    Accounts__client_crm_ParentAccountIdArray: Account__client_crm_[]; // Link to Accounts__client_crm
     
     @Field(() => [Contact__client_crm_])
-    Contacts__client_crmArray: Contact__client_crm_[]; // Link to Contacts__client_crm
+    Contacts__client_crm_msa_managingpartneridArray: Contact__client_crm_[]; // Link to Contacts__client_crm
     
     @Field(() => [PersonLink_])
-    PersonLinksArray: PersonLink_[]; // Link to PersonLinks
+    PersonLinks_CRMAccountIDArray: PersonLink_[]; // Link to PersonLinks
     
     @Field(() => [OrganizationLink_])
-    OrganizationLinksArray: OrganizationLink_[]; // Link to OrganizationLinks
+    OrganizationLinks_CRMAccountIDArray: OrganizationLink_[]; // Link to OrganizationLinks
     
 }
 
@@ -21337,10 +21337,10 @@ export class client_membership_ {
     acep_futurelastreneweddate?: Date;
         
     @Field(() => [Contact__client_crm_])
-    Contacts__client_crmArray: Contact__client_crm_[]; // Link to Contacts__client_crm
+    Contacts__client_crm_Acep_ACEPMembershipIdArray: Contact__client_crm_[]; // Link to Contacts__client_crm
     
     @Field(() => [SalesOrder_])
-    SalesOrdersArray: SalesOrder_[]; // Link to SalesOrders
+    SalesOrders_Acep_ACEPMembershipIdArray: SalesOrder_[]; // Link to SalesOrders
     
 }
 
@@ -23618,19 +23618,19 @@ export class Contact__client_crm_ {
     acep_optoutregyr123?: boolean;
         
     @Field(() => [PersonLink_])
-    PersonLinksArray: PersonLink_[]; // Link to PersonLinks
+    PersonLinks_CRMContactIDArray: PersonLink_[]; // Link to PersonLinks
     
     @Field(() => [client_membership_])
-    client_membershipsArray: client_membership_[]; // Link to client_memberships
+    client_memberships_acep_contactidArray: client_membership_[]; // Link to client_memberships
     
     @Field(() => [Account__client_crm_])
-    Accounts__client_crmArray: Account__client_crm_[]; // Link to Accounts__client_crm
+    Accounts__client_crm_PrimaryContactIdArray: Account__client_crm_[]; // Link to Accounts__client_crm
     
     @Field(() => [SalesOrder_])
-    SalesOrdersArray: SalesOrder_[]; // Link to SalesOrders
+    SalesOrders_acep_OrderContactArray: SalesOrder_[]; // Link to SalesOrders
     
     @Field(() => [Contact__client_crm_])
-    Contacts__client_crmArray: Contact__client_crm_[]; // Link to Contacts__client_crm
+    Contacts__client_crm_MasterIdArray: Contact__client_crm_[]; // Link to Contacts__client_crm
     
 }
 
@@ -26814,16 +26814,16 @@ export class UoM_ {
     ModifiedByExternalParty?: string;
         
     @Field(() => [SalesOrderDetail_])
-    SalesOrderDetailsArray: SalesOrderDetail_[]; // Link to SalesOrderDetails
+    SalesOrderDetails_UoMIdArray: SalesOrderDetail_[]; // Link to SalesOrderDetails
     
     @Field(() => [UoM_])
-    UoMsArray: UoM_[]; // Link to UoMs
+    UoMs_BaseUoMArray: UoM_[]; // Link to UoMs
     
     @Field(() => [Product_])
-    ProductsArray: Product_[]; // Link to Products
+    Products_DefaultUoMIdArray: Product_[]; // Link to Products
     
     @Field(() => [ProductPriceLevel_])
-    ProductPriceLevelsArray: ProductPriceLevel_[]; // Link to ProductPriceLevels
+    ProductPriceLevels_UoMIdArray: ProductPriceLevel_[]; // Link to ProductPriceLevels
     
 }
 
@@ -27915,13 +27915,13 @@ export class SalesOrder_ {
     acep_statementbatch?: string;
         
     @Field(() => [SalesOrder_])
-    SalesOrdersArray: SalesOrder_[]; // Link to SalesOrders
+    SalesOrders_acep_orgorderforrefundidArray: SalesOrder_[]; // Link to SalesOrders
     
     @Field(() => [SalesOrderDetail_])
-    SalesOrderDetailsArray: SalesOrderDetail_[]; // Link to SalesOrderDetails
+    SalesOrderDetails_SalesOrderIdArray: SalesOrderDetail_[]; // Link to SalesOrderDetails
     
     @Field(() => [client_membership_])
-    client_membershipsArray: client_membership_[]; // Link to client_memberships
+    client_memberships_Acep_CurrentCRMOrderIdArray: client_membership_[]; // Link to client_memberships
     
 }
 
@@ -29622,7 +29622,7 @@ export class SalesOrderDetail_ {
     acep_primaryemployer?: string;
         
     @Field(() => [SalesOrderDetail_])
-    SalesOrderDetailsArray: SalesOrderDetail_[]; // Link to SalesOrderDetails
+    SalesOrderDetails_ParentBundleIdArray: SalesOrderDetail_[]; // Link to SalesOrderDetails
     
 }
 
@@ -30870,13 +30870,13 @@ export class Product_ {
     acep_issuecme?: boolean;
         
     @Field(() => [Product_])
-    ProductsArray: Product_[]; // Link to Products
+    Products_ParentProductIdArray: Product_[]; // Link to Products
     
     @Field(() => [ProductPriceLevel_])
-    ProductPriceLevelsArray: ProductPriceLevel_[]; // Link to ProductPriceLevels
+    ProductPriceLevels_ProductIdArray: ProductPriceLevel_[]; // Link to ProductPriceLevels
     
     @Field(() => [SalesOrderDetail_])
-    SalesOrderDetailsArray: SalesOrderDetail_[]; // Link to SalesOrderDetails
+    SalesOrderDetails_ProductIdArray: SalesOrderDetail_[]; // Link to SalesOrderDetails
     
 }
 
@@ -39157,7 +39157,7 @@ export class Item_ {
     Qty_Shortage_Tolerance_Percentage?: number;
         
     @Field(() => [SalesLineItem__client_membership_])
-    SalesLineItems__client_membershipArray: SalesLineItem__client_membership_[]; // Link to SalesLineItems__client_membership
+    SalesLineItems__client_membership_ItemNumberArray: SalesLineItem__client_membership_[]; // Link to SalesLineItems__client_membership
     
 }
 
@@ -40518,16 +40518,16 @@ export class Customer_ {
     Writeoff_Account_Number_For_Drillback?: string;
         
     @Field(() => [OrganizationLink_])
-    OrganizationLinksArray: OrganizationLink_[]; // Link to OrganizationLinks
+    OrganizationLinks_MembershipGreatPlainsCustomerIDArray: OrganizationLink_[]; // Link to OrganizationLinks
     
     @Field(() => [CustomerAddress_])
-    CustomerAddressArray: CustomerAddress_[]; // Link to CustomerAddress
+    CustomerAddress_CustomerNumberArray: CustomerAddress_[]; // Link to CustomerAddress
     
     @Field(() => [PersonLink_])
-    PersonLinksArray: PersonLink_[]; // Link to PersonLinks
+    PersonLinks_MembershipGreatPlainsCustomerIDArray: PersonLink_[]; // Link to PersonLinks
     
     @Field(() => [SalesLineItem__client_membership_])
-    SalesLineItems__client_membershipArray: SalesLineItem__client_membership_[]; // Link to SalesLineItems__client_membership
+    SalesLineItems__client_membership_CustomerNumberArray: SalesLineItem__client_membership_[]; // Link to SalesLineItems__client_membership
     
 }
 
@@ -43060,7 +43060,7 @@ export class SalesTransaction__client_membership_ {
     ID: number;
         
     @Field(() => [SalesLineItem__client_membership_])
-    SalesLineItems__client_membershipArray: SalesLineItem__client_membership_[]; // Link to SalesLineItems__client_membership
+    SalesLineItems__client_membership_SalesTransactionIDArray: SalesLineItem__client_membership_[]; // Link to SalesLineItems__client_membership
     
 }
 

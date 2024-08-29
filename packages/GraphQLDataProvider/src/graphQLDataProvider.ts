@@ -131,8 +131,8 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         if (d) {
             // convert the user and the user roles _mj__*** fields back to __mj_***
             const u = this.ConvertBackToMJFields(d.CurrentUser);
-            const roles = u.UserRolesArray.map(r => this.ConvertBackToMJFields(r));
-            u.UserRolesArray = roles;
+            const roles = u.UserRoles_UserIDArray.map(r => this.ConvertBackToMJFields(r));
+            u.UserRoles_UserIDArray = roles;
             return new UserInfo(this, {...u, UserRoles: roles}) // need to pass in the UserRoles as a separate property that is what is expected here
         }
     }
@@ -317,7 +317,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                     let qName: string = ''
                     let paramType: string = ''
                     const innerParam: any = {}
-                    let entity: string | null = null; 
+                    let entity: string | null = null;
                     let viewEntity: UserViewEntityExtended | null = null;
                     if (param.ViewEntity) {
                         viewEntity = param.ViewEntity as UserViewEntityExtended;
@@ -747,7 +747,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             }
 
             // now add an OldValues prop to the vars IF the type === 'update' and the options.SkipOldValuesCheck === false
-            if (type.trim().toLowerCase() === 'update' && 
+            if (type.trim().toLowerCase() === 'update' &&
                 options.SkipOldValuesCheck === false) {
                 const ov = [];
                 entity.Fields.forEach(f => {
@@ -1283,7 +1283,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
 
     private _innerCurrentUserQueryString = `CurrentUser {
         ${this.userInfoString()}
-        UserRolesArray {
+        UserRoles_UserIDArray {
             ${this.userRoleInfoString()}
         }
     }
@@ -1494,7 +1494,7 @@ class BrowserIndexedDBStorageProvider extends BrowserStorageProviderBase {
 
 export class GraphQLTransactionGroup extends TransactionGroupBase {
     protected async HandleSubmit(items: TransactionItem[]): Promise<TransactionResult[]> {
-        // iterate through each instruction and build up the combined query string 
+        // iterate through each instruction and build up the combined query string
         // and the combined variables object
         let combinedQuery = '';
         let mutationParams = '';
