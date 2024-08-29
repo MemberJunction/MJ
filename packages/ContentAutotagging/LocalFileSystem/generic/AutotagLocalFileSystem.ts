@@ -69,7 +69,7 @@ export class AutotagLocalFileSystem extends AutotagBase {
                 const contentSourceParams: ContentSourceParams = {
                     contentSourceID: contentSource.ID,
                     name: contentSource.Name,
-                    ContentTypeID: contentSource.ContentTypeEntity,
+                    ContentTypeID: contentSource.ContentTypeID,
                     ContentSourceTypeID: contentSource.ContentSourceTypeID,
                     ContentFileTypeID: contentSource.ContentFileTypeID,
                     URL: contentSource.URL
@@ -149,7 +149,7 @@ export class AutotagLocalFileSystem extends AutotagBase {
                     const contentItemID: string = await this.engine.getContentItemIDFromURL(contentSourceParams, this.contextUser);
                     await contentItem.Load(contentItemID);
                     const text = await this.engine.parseFileFromPath(filePath);
-                    contentItem.text = text
+                    contentItem.Text = text
                     contentItem.Checksum = await this.engine.getChecksumFromText(text)
                     contentItem.Save();
                 }

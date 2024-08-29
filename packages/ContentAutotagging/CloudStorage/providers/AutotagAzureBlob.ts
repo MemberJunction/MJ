@@ -55,7 +55,7 @@ export class AutotagAzureBlob extends CloudStorageBase {
                 contentItem.URL = filePath
                 contentItem.ContentTypeID = contentSourceParams.ContentTypeID
                 contentItem.ContentSourceTypeID =  contentSourceParams.ContentSourceTypeID
-                contentItem.contentFileTypeID = contentSourceParams.ContentFileTypeID
+                contentItem.ContentFileTypeID = contentSourceParams.ContentFileTypeID
                 contentItem.Checksum = await this.engine.getChecksumFromText(text)
                 contentItem.Text = text
                 

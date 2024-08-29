@@ -122,7 +122,7 @@ export class AutotagWebsite extends AutotagBase {
                 const newHash = await this.engine.getChecksumFromURL(contentItemLink);
 
                 const rv = new RunView();
-                const results = await rv.RunViews([
+                const results = await rv.RunViews<ContentItemEntity>([
                     {
                         EntityName: 'Content Items',
                         ExtraFilter: `Checksum = '${newHash}'`,
@@ -134,18 +134,18 @@ export class AutotagWebsite extends AutotagBase {
                         ResultType: 'entity_object'
                     }
                 ], this.contextUser)
-
-                const contentItemWithChecksum: ContentItemEntity = results[0]
-                const contentItemWithURL: ContentItemEntity = results[1]
-
-                if (contentItemWithChecksum.Success && contentItemWithChecksum.Results.length) {
+                
+                const contentItemResultsWithChecksum = results[0]
+                const contentItemResultsWithURL = results[1]
+                
+                if (contentItemResultsWithChecksum.Success && contentItemResultsWithChecksum.Results.length) {
                     // We found the checksum so this content item has not changed since we last accessed it, do nothing
                     continue;
                 }
-
-                else if (contentItemWithURL.Success && contentItemWithURL.Results.length) {
+                
+                else if (contentItemResultsWithURL.Success && contentItemResultsWithURL.Results.length) {
                     // This content item already exists, update the hash and last updated date
-                    const contentItem: ContentItemEntity = contentItemWithURL.Results[0]; 
+                    const contentItem: ContentItemEntity = contentItemResultsWithURL.Results[0]; 
                     const lastStoredHash: string = contentItem.Checksum
 
                     if (lastStoredHash !== newHash) {
@@ -164,7 +164,7 @@ export class AutotagWebsite extends AutotagBase {
                     // This content item does not exist, add it
                     const md = new Metadata();
                     const contentItem = await md.GetEntityObject<ContentItemEntity>('Content Items', this.contextUser);
-                    contentItem.ContentSourceId = contentSourceParams.contentSourceID
+                    contentItem.ContentSourceID = contentSourceParams.contentSourceID
                     contentItem.Name = this.getPathName(contentItemLink) // Will get overwritten by title later if it exists
                     contentItem.Description = await this.engine.getContentItemDescription(contentSourceParams, this.contextUser)
                     contentItem.ContentTypeID = contentSourceParams.ContentTypeID

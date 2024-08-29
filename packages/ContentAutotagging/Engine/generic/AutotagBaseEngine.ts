@@ -1,6 +1,6 @@
 import { BaseEngine, Metadata, RunView, UserInfo } from '@memberjunction/core'
 import { RegisterClass } from '@memberjunction/global'
-import { ContentSourceEntity, ContentItemEntity, ContentItemTagEntity, ContentFileTypeEntity, ContentProcessRunEntity, ContentTypeEntity, ContentItemAttributeEntity, ContentSourceTypeEntity, ContentTypeAttributeEntity } from '../../../MJCoreEntities/'
+import { ContentSourceEntity, ContentItemEntity, ContentItemTagEntity, ContentFileTypeEntity, ContentProcessRunEntity, ContentTypeEntity, ContentItemAttributeEntity, ContentSourceTypeEntity, ContentTypeAttributeEntity } from '@memberjunction/core-entities'
 import { ContentSourceParams, ContentSourceTypeParams } from './content.types'
 import pdfParse from 'pdf-parse'
 import * as officeparser from 'officeparser'
@@ -428,7 +428,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
      * @param contextUser 
      * @returns 
      */
-    public async getModelAPINameFromID(modelID: string, contextUser: UserInfo): Promise<string|void> {
+    public async getModelAPINameFromID(modelID: string, contextUser: UserInfo): Promise<string> {
         try { 
             const rv = new RunView()
             const results = await rv.RunView<AIModelEntity>({
@@ -441,8 +441,12 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
                 const model: AIModelEntity = results.Results[0]
                 return model.APIName
             }
+            else {
+                throw new Error(`Model with ID ${modelID} not found`)
+            }
         } catch (e) {
-            throw new Error(`Model with ID ${modelID} not found`)
+            console.error(e);
+            throw e;
         }
     }
 
@@ -522,8 +526,8 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
             const contentType: ContentTypeEntity = results.Results[0];
             return {
                 modelID: contentType.AIModelID,
-                minTags: contentType.minTags,
-                maxTags: contentType.maxTags
+                minTags: contentType.MinTags,
+                maxTags: contentType.MaxTags
             }
         }
         else {
