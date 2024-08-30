@@ -1,8 +1,33 @@
 # Change Log - @memberjunction/ng-explorer-core
 
-This log was last generated on Fri, 16 Aug 2024 03:57:15 GMT and should not be manually modified.
+This log was last generated on Fri, 30 Aug 2024 18:25:54 GMT and should not be manually modified.
 
 <!-- Start content -->
+
+## 2.3.2
+
+Fri, 30 Aug 2024 18:25:54 GMT
+
+### Patches
+
+- Applying package updates [skip ci] (155523863+JS-BC@users.noreply.github.com)
+- Bump @memberjunction/global to v2.3.2
+- Bump @memberjunction/core to v2.3.2
+- Bump @memberjunction/ng-compare-records to v2.3.2
+- Bump @memberjunction/ng-file-storage to v2.3.2
+- Bump @memberjunction/ng-record-changes to v2.3.2
+- Bump @memberjunction/ng-container-directives to v2.3.2
+- Bump @memberjunction/ng-user-view-grid to v2.3.2
+- Bump @memberjunction/ng-query-grid to v2.3.2
+- Bump @memberjunction/ng-user-view-properties to v2.3.2
+- Bump @memberjunction/ng-shared to v2.3.2
+- Bump @memberjunction/ng-tabstrip to v2.3.2
+- Bump @memberjunction/ng-ask-skip to v2.3.2
+- Bump @memberjunction/ng-auth-services to v2.3.2
+- Bump @memberjunction/ng-explorer-settings to v2.3.2
+- Bump @memberjunction/ng-base-forms to v2.3.2
+- Bump @memberjunction/ng-entity-form-dialog to v2.3.2
+- Bump @memberjunction/ng-record-selector to v2.3.2
 
 ## 2.3.1
 

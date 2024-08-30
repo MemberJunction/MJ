@@ -1,8 +1,19 @@
 # Change Log - @memberjunction/ng-record-changes
 
-This log was last generated on Fri, 16 Aug 2024 03:57:15 GMT and should not be manually modified.
+This log was last generated on Fri, 30 Aug 2024 18:25:54 GMT and should not be manually modified.
 
 <!-- Start content -->
+
+## 2.3.2
+
+Fri, 30 Aug 2024 18:25:54 GMT
+
+### Patches
+
+- Bump @memberjunction/core to v2.3.2
+- Bump @memberjunction/global to v2.3.2
+- Bump @memberjunction/ng-compare-records to v2.3.2
+- Bump @memberjunction/ng-container-directives to v2.3.2
 
 ## 2.3.1
 
