@@ -129,6 +129,7 @@ export class AutotagLocalFileSystem extends AutotagBase {
                     const md = new Metadata();
                     const text = await this.engine.parseFileFromPath(filePath);
                     const contentItem = await md.GetEntityObject<ContentItemEntity>('Content Items', this.contextUser);
+                    contentItem.NewRecord();
                     contentItem.ContentSourceID = contentSourceParams.contentSourceID
                     contentItem.Name = contentSourceParams.name
                     contentItem.Description = await this.engine.getContentItemDescription(contentSourceParams, this.contextUser)
@@ -151,7 +152,7 @@ export class AutotagLocalFileSystem extends AutotagBase {
                     const text = await this.engine.parseFileFromPath(filePath);
                     contentItem.Text = text
                     contentItem.Checksum = await this.engine.getChecksumFromText(text)
-                    contentItem.Save();
+                    await contentItem.Save();
                 }
             }
         }

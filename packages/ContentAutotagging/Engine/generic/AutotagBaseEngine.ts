@@ -94,7 +94,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
                 processingParams.maxTags = maxTags;
                 processingParams.contentItemID = contentItem.ID;
 
-                this.ProcessContentItemText(processingParams, contextUser);
+                await this.ProcessContentItemText(processingParams, contextUser);
 
             }
 
@@ -249,6 +249,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         for (const keyword of LLMResults.keywords) {
 
             const contentItemTags = await md.GetEntityObject<ContentItemTagEntity>('Content Item Tags', contextUser)
+            contentItemTags.NewRecord()
             
             contentItemTags.ItemID = contentItemID
             contentItemTags.Tag = keyword
@@ -259,17 +260,6 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
     public async saveResultsToContentItemAttribute(LLMResults: JsonObject, contextUser: UserInfo) {
         const md = new Metadata()
         for (const key in LLMResults) {
-            if (key !== 'keywords' && key !== 'processStartTime' && key !== 'processEndTime' && key !== 'contentItemID' && key !== 'isValidContent') {
-                const contentItemAttributes = await md.GetEntityObject<ContentItemAttributeEntity>('Content Item Attributes', contextUser)
-                
-                //Value should be a string, if its a null or undefined value, set it to an empty string
-                const value = LLMResults[key] || ''
-
-                contentItemAttributes.ContentItemID = LLMResults.contentItemID
-                contentItemAttributes.Name = key
-                contentItemAttributes.Value = value
-                await contentItemAttributes.Save()
-            }
             // Overwrite name of content item with title if it exists
             if (key === 'title') {
                 const ID = LLMResults.contentItemID
@@ -277,6 +267,18 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
                 await contentItem.Load(ID)
                 contentItem.Name = LLMResults.title
                 await contentItem.Save()
+            }
+            if (key !== 'keywords' && key !== 'processStartTime' && key !== 'processEndTime' && key !== 'contentItemID' && key !== 'isValidContent') {
+                const contentItemAttribute = await md.GetEntityObject<ContentItemAttributeEntity>('Content Item Attributes', contextUser)
+                contentItemAttribute.NewRecord()
+                
+                //Value should be a string, if its a null or undefined value, set it to an empty string
+                const value = LLMResults[key] || ''
+
+                contentItemAttribute.ContentItemID = LLMResults.contentItemID
+                contentItemAttribute.Name = key
+                contentItemAttribute.Value = value
+                await contentItemAttribute.Save()
             }
         }
     }
@@ -497,7 +499,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         try{
             if (results.Success && results.Results.length) {
             const contentProcessRun: ContentProcessRunEntity = results.Results[0]
-            const lastRunDate = contentProcessRun.EndTime
+            const lastRunDate = contentProcessRun.Get('__mj_CreatedAt')
             return this.convertLastRunDateToTimezone(lastRunDate)
             }
             else if (results.Success && !results.Results.length) {
@@ -622,7 +624,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
             if (results.Success && results.Results.length) {
                 let prompt = ''
                 for (const contentTypeAttribute of results.Results) {
-                    prompt += `${contentTypeAttribute.Prompt}\n`
+                    prompt += `${contentTypeAttribute.Prompt}. The data must be included in the above described JSON file in this key-value format:     { "${contentTypeAttribute.Name}": (value of ${contentTypeAttribute.Name} here)}\n`
                 }
 
                 return prompt
@@ -689,6 +691,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
     public async saveProcessRun(processRunParams: ProcessRunParams, contextUser: UserInfo){
         const md = new Metadata()
         const processRun = await md.GetEntityObject<ContentProcessRunEntity>('Content Process Runs', contextUser)
+        processRun.NewRecord()
         processRun.SourceID = processRunParams.sourceID
         processRun.StartTime = processRunParams.startTime
         processRun.EndTime = processRunParams.endTime

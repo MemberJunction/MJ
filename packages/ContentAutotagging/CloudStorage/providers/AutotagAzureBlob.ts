@@ -14,9 +14,9 @@ export class AutotagAzureBlob extends CloudStorageBase {
     private connectionString: string;
     private containerName: string;
 
-    constructor(conntectionString: string, containerName: string) { 
+    constructor(connectionString: string, containerName: string) { 
         super();
-        this.connectionString = conntectionString
+        this.connectionString = connectionString
         this.containerName = containerName
     }
     

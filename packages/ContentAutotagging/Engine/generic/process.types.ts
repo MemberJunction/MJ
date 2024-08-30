@@ -36,7 +36,7 @@ export const ModelTokenLimits: Record<string, number> = {
     "gpt-3.5-turbo": 16385,
     "gpt-4-turbo-preview": 128000,
     "gpt-4o": 128000,
-    "gpt-4o-mini": 1000,
+    "gpt-4o-mini": 128000,
     // Anthropic
     "claude-3-haiku-20240307": 200000,
     "claude-3-sonnet-20240229": 200000,

@@ -76,57 +76,57 @@ UPDATE [${flyway:defaultSchema}].[AIModel] SET APIName='open-mistral-8x7b' WHERE
 Generated SQL From CodeGen for New Entities
 ****************************************************************************************/
 
-INSERT INTO [${flyway:defaultSchema}].Entity (ID, Name, Description, NameSuffix, BaseTable, BaseView, SchemaName, IncludeInAPI, AllowUserSearchAPI, TrackRecordChanges, AuditRecordAccess, AuditViewRuns, AllowAllRowsAPI, AllowCreateAPI, AllowUpdateAPI, AllowDeleteAPI, UserViewMaxRows) VALUES ('9684A900-0E66-EF11-A752-C0A5E8ACCB22', 'Content Process Runs', NULL, NULL,'ContentProcessRun', 'vwContentProcessRuns', '${flyway:defaultSchema}',1, 0, 1, 0, 0, 0, 1, 1, 1, 1000)
+INSERT INTO [${flyway:defaultSchema}].Entity (ID, Name, Description, NameSuffix, BaseTable, BaseView, SchemaName, IncludeInAPI, AllowUserSearchAPI, TrackRecordChanges, AuditRecordAccess, AuditViewRuns, AllowAllRowsAPI, AllowCreateAPI, AllowUpdateAPI, AllowDeleteAPI, UserViewMaxRows) VALUES ('9684A900-0E66-EF11-A752-C0A5E8ACCB22', 'Content Process Runs', NULL, NULL,'ContentProcessRun', 'vwContentProcessRuns', '${flyway:defaultSchema}',1, 0, 0, 0, 0, 0, 1, 1, 1, 1000)
 INSERT INTO [${flyway:defaultSchema}].ApplicationEntity (ApplicationID, EntityID, Sequence) VALUES ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', '9684A900-0E66-EF11-A752-C0A5E8ACCB22', (SELECT ISNULL(MAX(Sequence),0)+1 FROM [${flyway:defaultSchema}].ApplicationEntity WHERE ApplicationID = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'))
 INSERT INTO [${flyway:defaultSchema}].EntityPermission (EntityID, RoleID, CanRead, CanCreate, CanUpdate, CanDelete) VALUES ('9684A900-0E66-EF11-A752-C0A5E8ACCB22', 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 0, 0, 0)
 INSERT INTO [${flyway:defaultSchema}].EntityPermission (EntityID, RoleID, CanRead, CanCreate, CanUpdate, CanDelete) VALUES ('9684A900-0E66-EF11-A752-C0A5E8ACCB22', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 0)
 INSERT INTO [${flyway:defaultSchema}].EntityPermission (EntityID, RoleID, CanRead, CanCreate, CanUpdate, CanDelete) VALUES ('9684A900-0E66-EF11-A752-C0A5E8ACCB22', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1)    
-INSERT INTO [${flyway:defaultSchema}].Entity ( ID, Name, Description, NameSuffix, BaseTable, BaseView, SchemaName, IncludeInAPI, AllowUserSearchAPI , TrackRecordChanges , AuditRecordAccess , AuditViewRuns , AllowAllRowsAPI , AllowCreateAPI , AllowUpdateAPI , AllowDeleteAPI , UserViewMaxRows ) VALUES ( 'B420FF22-0E66-EF11-A752-C0A5E8ACCB22', 'Content Sources', NULL, NULL, 'ContentSource', 'vwContentSources', '${flyway:defaultSchema}', 1, 0 , 1 , 0 , 0 , 0 , 1 , 1 , 1 , 1000 )
+INSERT INTO [${flyway:defaultSchema}].Entity ( ID, Name, Description, NameSuffix, BaseTable, BaseView, SchemaName, IncludeInAPI, AllowUserSearchAPI , TrackRecordChanges , AuditRecordAccess , AuditViewRuns , AllowAllRowsAPI , AllowCreateAPI , AllowUpdateAPI , AllowDeleteAPI , UserViewMaxRows ) VALUES ( 'B420FF22-0E66-EF11-A752-C0A5E8ACCB22', 'Content Sources', NULL, NULL, 'ContentSource', 'vwContentSources', '${flyway:defaultSchema}', 1, 0 , 0 , 0 , 0 , 0 , 1 , 1 , 1 , 1000 )
 INSERT INTO [${flyway:defaultSchema}].ApplicationEntity (ApplicationID, EntityID, Sequence) VALUES ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', 'B420FF22-0E66-EF11-A752-C0A5E8ACCB22', (SELECT ISNULL(MAX(Sequence),0)+1 FROM [${flyway:defaultSchema}].ApplicationEntity WHERE ApplicationID = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E')) 
 INSERT INTO [${flyway:defaultSchema}].EntityPermission (EntityID, RoleID, CanRead, CanCreate, CanUpdate, CanDelete) VALUES ('B420FF22-0E66-EF11-A752-C0A5E8ACCB22', 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 0, 0, 0) 
 INSERT INTO [${flyway:defaultSchema}].EntityPermission (EntityID, RoleID, CanRead, CanCreate, CanUpdate, CanDelete) VALUES ('B420FF22-0E66-EF11-A752-C0A5E8ACCB22', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 0) 
 INSERT INTO [${flyway:defaultSchema}].EntityPermission (EntityID, RoleID, CanRead, CanCreate, CanUpdate, CanDelete) VALUES ('B420FF22-0E66-EF11-A752-C0A5E8ACCB22', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1) 
-INSERT INTO [${flyway:defaultSchema}].Entity (ID, Name, Description, NameSuffix, BaseTable, BaseView, SchemaName, IncludeInAPI, AllowUserSearchAPI , TrackRecordChanges , AuditRecordAccess , AuditViewRuns , AllowAllRowsAPI , AllowCreateAPI , AllowUpdateAPI , AllowDeleteAPI , UserViewMaxRows ) VALUES ('B12E4A4A-0E66-EF11-A752-C0A5E8ACCB22', 'Content Source Params', NULL, NULL, 'ContentSourceParam', 'vwContentSourceParams', '${flyway:defaultSchema}', 1, 0 , 1 , 0 , 0 , 0 , 1 , 1 , 1 , 1000 ) 
+INSERT INTO [${flyway:defaultSchema}].Entity (ID, Name, Description, NameSuffix, BaseTable, BaseView, SchemaName, IncludeInAPI, AllowUserSearchAPI , TrackRecordChanges , AuditRecordAccess , AuditViewRuns , AllowAllRowsAPI , AllowCreateAPI , AllowUpdateAPI , AllowDeleteAPI , UserViewMaxRows ) VALUES ('B12E4A4A-0E66-EF11-A752-C0A5E8ACCB22', 'Content Source Params', NULL, NULL, 'ContentSourceParam', 'vwContentSourceParams', '${flyway:defaultSchema}', 1, 0 , 0 , 0 , 0 , 0 , 1 , 1 , 1 , 1000 ) 
 INSERT INTO [${flyway:defaultSchema}].ApplicationEntity (ApplicationID, EntityID, Sequence) VALUES ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', 'B12E4A4A-0E66-EF11-A752-C0A5E8ACCB22', (SELECT ISNULL(MAX(Sequence),0)+1 FROM [${flyway:defaultSchema}].ApplicationEntity WHERE ApplicationID = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'))
 INSERT INTO [${flyway:defaultSchema}].EntityPermission (EntityID, RoleID, CanRead, CanCreate, CanUpdate, CanDelete) VALUES ('B12E4A4A-0E66-EF11-A752-C0A5E8ACCB22', 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 0, 0, 0)
 INSERT INTO [${flyway:defaultSchema}].EntityPermission (EntityID, RoleID, CanRead, CanCreate, CanUpdate, CanDelete) VALUES ('B12E4A4A-0E66-EF11-A752-C0A5E8ACCB22', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 0)
 INSERT INTO [${flyway:defaultSchema}].EntityPermission (EntityID, RoleID, CanRead, CanCreate, CanUpdate, CanDelete) VALUES ('B12E4A4A-0E66-EF11-A752-C0A5E8ACCB22', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1) 
-INSERT INTO [${flyway:defaultSchema}].Entity (ID, Name, Description, NameSuffix, BaseTable, BaseView, SchemaName, IncludeInAPI, AllowUserSearchAPI , TrackRecordChanges , AuditRecordAccess , AuditViewRuns , AllowAllRowsAPI , AllowCreateAPI , AllowUpdateAPI , AllowDeleteAPI , UserViewMaxRows ) VALUES ('B62E4A4A-0E66-EF11-A752-C0A5E8ACCB22', 'Content Source Types', NULL, NULL, 'ContentSourceType', 'vwContentSourceTypes', '${flyway:defaultSchema}', 1, 0 , 1 , 0 , 0 , 0 , 1 , 1 , 1 , 1000 ) 
+INSERT INTO [${flyway:defaultSchema}].Entity (ID, Name, Description, NameSuffix, BaseTable, BaseView, SchemaName, IncludeInAPI, AllowUserSearchAPI , TrackRecordChanges , AuditRecordAccess , AuditViewRuns , AllowAllRowsAPI , AllowCreateAPI , AllowUpdateAPI , AllowDeleteAPI , UserViewMaxRows ) VALUES ('B62E4A4A-0E66-EF11-A752-C0A5E8ACCB22', 'Content Source Types', NULL, NULL, 'ContentSourceType', 'vwContentSourceTypes', '${flyway:defaultSchema}', 1, 0 , 0 , 0 , 0 , 0 , 1 , 1 , 1 , 1000 ) 
 INSERT INTO [${flyway:defaultSchema}].ApplicationEntity (ApplicationID, EntityID, Sequence) VALUES ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', 'B62E4A4A-0E66-EF11-A752-C0A5E8ACCB22', (SELECT ISNULL(MAX(Sequence),0)+1 FROM [${flyway:defaultSchema}].ApplicationEntity WHERE ApplicationID = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'))
 INSERT INTO [${flyway:defaultSchema}].EntityPermission (EntityID, RoleID, CanRead, CanCreate, CanUpdate, CanDelete) VALUES ('B62E4A4A-0E66-EF11-A752-C0A5E8ACCB22', 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 0, 0, 0)
 INSERT INTO [${flyway:defaultSchema}].EntityPermission (EntityID, RoleID, CanRead, CanCreate, CanUpdate, CanDelete) VALUES ('B62E4A4A-0E66-EF11-A752-C0A5E8ACCB22', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 0)
 INSERT INTO [${flyway:defaultSchema}].EntityPermission (EntityID, RoleID, CanRead, CanCreate, CanUpdate, CanDelete) VALUES ('B62E4A4A-0E66-EF11-A752-C0A5E8ACCB22', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1)
-INSERT INTO [${flyway:defaultSchema}].Entity (ID, Name, Description, NameSuffix, BaseTable, BaseView, SchemaName, IncludeInAPI, AllowUserSearchAPI , TrackRecordChanges , AuditRecordAccess , AuditViewRuns , AllowAllRowsAPI , AllowCreateAPI , AllowUpdateAPI , AllowDeleteAPI , UserViewMaxRows ) VALUES ('BB2E4A4A-0E66-EF11-A752-C0A5E8ACCB22', 'Content Source Type Params', NULL, NULL, 'ContentSourceTypeParam', 'vwContentSourceTypeParams', '${flyway:defaultSchema}', 1, 0 , 1 , 0 , 0 , 0 , 1 , 1 , 1 , 1000 ) 
+INSERT INTO [${flyway:defaultSchema}].Entity (ID, Name, Description, NameSuffix, BaseTable, BaseView, SchemaName, IncludeInAPI, AllowUserSearchAPI , TrackRecordChanges , AuditRecordAccess , AuditViewRuns , AllowAllRowsAPI , AllowCreateAPI , AllowUpdateAPI , AllowDeleteAPI , UserViewMaxRows ) VALUES ('BB2E4A4A-0E66-EF11-A752-C0A5E8ACCB22', 'Content Source Type Params', NULL, NULL, 'ContentSourceTypeParam', 'vwContentSourceTypeParams', '${flyway:defaultSchema}', 1, 0 , 0 , 0 , 0 , 0 , 1 , 1 , 1 , 1000 ) 
 INSERT INTO [${flyway:defaultSchema}].ApplicationEntity (ApplicationID, EntityID, Sequence) VALUES ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', 'BB2E4A4A-0E66-EF11-A752-C0A5E8ACCB22', (SELECT ISNULL(MAX(Sequence),0)+1 FROM [${flyway:defaultSchema}].ApplicationEntity WHERE ApplicationID = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'))
 INSERT INTO [${flyway:defaultSchema}].EntityPermission (EntityID, RoleID, CanRead, CanCreate, CanUpdate, CanDelete) VALUES ('BB2E4A4A-0E66-EF11-A752-C0A5E8ACCB22', 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 0, 0, 0)
 INSERT INTO [${flyway:defaultSchema}].EntityPermission (EntityID, RoleID, CanRead, CanCreate, CanUpdate, CanDelete) VALUES ('BB2E4A4A-0E66-EF11-A752-C0A5E8ACCB22', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 0)
 INSERT INTO [${flyway:defaultSchema}].EntityPermission (EntityID, RoleID, CanRead, CanCreate, CanUpdate, CanDelete) VALUES ('BB2E4A4A-0E66-EF11-A752-C0A5E8ACCB22', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1)
-INSERT INTO [${flyway:defaultSchema}].Entity (ID, Name, Description, NameSuffix, BaseTable, BaseView, SchemaName, IncludeInAPI, AllowUserSearchAPI , TrackRecordChanges , AuditRecordAccess , AuditViewRuns , AllowAllRowsAPI , AllowCreateAPI , AllowUpdateAPI , AllowDeleteAPI , UserViewMaxRows ) VALUES ('A793AD50-0E66-EF11-A752-C0A5E8ACCB22', 'Content Types', NULL, NULL, 'ContentType', 'vwContentTypes', '${flyway:defaultSchema}', 1, 0 , 1 , 0 , 0 , 0 , 1 , 1 , 1 , 1000 ) 
+INSERT INTO [${flyway:defaultSchema}].Entity (ID, Name, Description, NameSuffix, BaseTable, BaseView, SchemaName, IncludeInAPI, AllowUserSearchAPI , TrackRecordChanges , AuditRecordAccess , AuditViewRuns , AllowAllRowsAPI , AllowCreateAPI , AllowUpdateAPI , AllowDeleteAPI , UserViewMaxRows ) VALUES ('A793AD50-0E66-EF11-A752-C0A5E8ACCB22', 'Content Types', NULL, NULL, 'ContentType', 'vwContentTypes', '${flyway:defaultSchema}', 1, 0 , 0 , 0 , 0 , 0 , 1 , 1 , 1 , 1000 ) 
 INSERT INTO [${flyway:defaultSchema}].ApplicationEntity (ApplicationID, EntityID, Sequence) VALUES ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', 'A793AD50-0E66-EF11-A752-C0A5E8ACCB22', (SELECT ISNULL(MAX(Sequence),0)+1 FROM [${flyway:defaultSchema}].ApplicationEntity WHERE ApplicationID = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'))
 INSERT INTO [${flyway:defaultSchema}].EntityPermission (EntityID, RoleID, CanRead, CanCreate, CanUpdate, CanDelete) VALUES ('A793AD50-0E66-EF11-A752-C0A5E8ACCB22', 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 0, 0, 0)
 INSERT INTO [${flyway:defaultSchema}].EntityPermission (EntityID, RoleID, CanRead, CanCreate, CanUpdate, CanDelete) VALUES ('A793AD50-0E66-EF11-A752-C0A5E8ACCB22', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 0)
 INSERT INTO [${flyway:defaultSchema}].EntityPermission (EntityID, RoleID, CanRead, CanCreate, CanUpdate, CanDelete) VALUES ('A793AD50-0E66-EF11-A752-C0A5E8ACCB22', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1)
-INSERT INTO [${flyway:defaultSchema}].Entity (ID, Name, Description, NameSuffix, BaseTable, BaseView, SchemaName, IncludeInAPI, AllowUserSearchAPI , TrackRecordChanges , AuditRecordAccess , AuditViewRuns , AllowAllRowsAPI , AllowCreateAPI , AllowUpdateAPI , AllowDeleteAPI , UserViewMaxRows ) VALUES ('AC93AD50-0E66-EF11-A752-C0A5E8ACCB22', 'Content Type Attributes', NULL, NULL, 'ContentTypeAttribute', 'vwContentTypeAttributes', '${flyway:defaultSchema}', 1, 0 , 1 , 0 , 0 , 0 , 1 , 1 , 1 , 1000 ) 
+INSERT INTO [${flyway:defaultSchema}].Entity (ID, Name, Description, NameSuffix, BaseTable, BaseView, SchemaName, IncludeInAPI, AllowUserSearchAPI , TrackRecordChanges , AuditRecordAccess , AuditViewRuns , AllowAllRowsAPI , AllowCreateAPI , AllowUpdateAPI , AllowDeleteAPI , UserViewMaxRows ) VALUES ('AC93AD50-0E66-EF11-A752-C0A5E8ACCB22', 'Content Type Attributes', NULL, NULL, 'ContentTypeAttribute', 'vwContentTypeAttributes', '${flyway:defaultSchema}', 1, 0 , 0 , 0 , 0 , 0 , 1 , 1 , 1 , 1000 ) 
 INSERT INTO [${flyway:defaultSchema}].ApplicationEntity (ApplicationID, EntityID, Sequence) VALUES ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', 'AC93AD50-0E66-EF11-A752-C0A5E8ACCB22', (SELECT ISNULL(MAX(Sequence),0)+1 FROM [${flyway:defaultSchema}].ApplicationEntity WHERE ApplicationID = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'))
 INSERT INTO [${flyway:defaultSchema}].EntityPermission (EntityID, RoleID, CanRead, CanCreate, CanUpdate, CanDelete) VALUES ('AC93AD50-0E66-EF11-A752-C0A5E8ACCB22', 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 0, 0, 0)
 INSERT INTO [${flyway:defaultSchema}].EntityPermission (EntityID, RoleID, CanRead, CanCreate, CanUpdate, CanDelete) VALUES ('AC93AD50-0E66-EF11-A752-C0A5E8ACCB22', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 0)
 INSERT INTO [${flyway:defaultSchema}].EntityPermission (EntityID, RoleID, CanRead, CanCreate, CanUpdate, CanDelete) VALUES ('AC93AD50-0E66-EF11-A752-C0A5E8ACCB22', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1)
-INSERT INTO [${flyway:defaultSchema}].Entity (ID, Name, Description, NameSuffix, BaseTable, BaseView, SchemaName, IncludeInAPI, AllowUserSearchAPI , TrackRecordChanges , AuditRecordAccess , AuditViewRuns , AllowAllRowsAPI , AllowCreateAPI , AllowUpdateAPI , AllowDeleteAPI , UserViewMaxRows ) VALUES ('B193AD50-0E66-EF11-A752-C0A5E8ACCB22', 'Content File Types', NULL, NULL, 'ContentFileType', 'vwContentFileTypes', '${flyway:defaultSchema}', 1, 0 , 1 , 0 , 0 , 0 , 1 , 1 , 1 , 1000 ) 
+INSERT INTO [${flyway:defaultSchema}].Entity (ID, Name, Description, NameSuffix, BaseTable, BaseView, SchemaName, IncludeInAPI, AllowUserSearchAPI , TrackRecordChanges , AuditRecordAccess , AuditViewRuns , AllowAllRowsAPI , AllowCreateAPI , AllowUpdateAPI , AllowDeleteAPI , UserViewMaxRows ) VALUES ('B193AD50-0E66-EF11-A752-C0A5E8ACCB22', 'Content File Types', NULL, NULL, 'ContentFileType', 'vwContentFileTypes', '${flyway:defaultSchema}', 1, 0 , 0 , 0 , 0 , 0 , 1 , 1 , 1 , 1000 ) 
 INSERT INTO [${flyway:defaultSchema}].ApplicationEntity (ApplicationID, EntityID, Sequence) VALUES ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', 'B193AD50-0E66-EF11-A752-C0A5E8ACCB22', (SELECT ISNULL(MAX(Sequence),0)+1 FROM [${flyway:defaultSchema}].ApplicationEntity WHERE ApplicationID = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'))
 INSERT INTO [${flyway:defaultSchema}].EntityPermission (EntityID, RoleID, CanRead, CanCreate, CanUpdate, CanDelete) VALUES ('B193AD50-0E66-EF11-A752-C0A5E8ACCB22', 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 0, 0, 0)
 INSERT INTO [${flyway:defaultSchema}].EntityPermission (EntityID, RoleID, CanRead, CanCreate, CanUpdate, CanDelete) VALUES ('B193AD50-0E66-EF11-A752-C0A5E8ACCB22', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 0)
 INSERT INTO [${flyway:defaultSchema}].EntityPermission (EntityID, RoleID, CanRead, CanCreate, CanUpdate, CanDelete) VALUES ('B193AD50-0E66-EF11-A752-C0A5E8ACCB22', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1)
-INSERT INTO [${flyway:defaultSchema}].Entity (ID, Name, Description, NameSuffix, BaseTable, BaseView, SchemaName, IncludeInAPI, AllowUserSearchAPI , TrackRecordChanges , AuditRecordAccess , AuditViewRuns , AllowAllRowsAPI , AllowCreateAPI , AllowUpdateAPI , AllowDeleteAPI , UserViewMaxRows ) VALUES ('B693AD50-0E66-EF11-A752-C0A5E8ACCB22', 'Content Items', NULL, NULL, 'ContentItem', 'vwContentItems', '${flyway:defaultSchema}', 1, 0 , 1 , 0 , 0 , 0 , 1 , 1 , 1 , 1000 ) 
+INSERT INTO [${flyway:defaultSchema}].Entity (ID, Name, Description, NameSuffix, BaseTable, BaseView, SchemaName, IncludeInAPI, AllowUserSearchAPI , TrackRecordChanges , AuditRecordAccess , AuditViewRuns , AllowAllRowsAPI , AllowCreateAPI , AllowUpdateAPI , AllowDeleteAPI , UserViewMaxRows ) VALUES ('B693AD50-0E66-EF11-A752-C0A5E8ACCB22', 'Content Items', NULL, NULL, 'ContentItem', 'vwContentItems', '${flyway:defaultSchema}', 1, 0 , 0 , 0 , 0 , 0 , 1 , 1 , 1 , 1000 ) 
 INSERT INTO [${flyway:defaultSchema}].ApplicationEntity (ApplicationID, EntityID, Sequence) VALUES ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', 'B693AD50-0E66-EF11-A752-C0A5E8ACCB22', (SELECT ISNULL(MAX(Sequence),0)+1 FROM [${flyway:defaultSchema}].ApplicationEntity WHERE ApplicationID = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'))
 INSERT INTO [${flyway:defaultSchema}].EntityPermission (EntityID, RoleID, CanRead, CanCreate, CanUpdate, CanDelete) VALUES ('B693AD50-0E66-EF11-A752-C0A5E8ACCB22', 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 0, 0, 0)
 INSERT INTO [${flyway:defaultSchema}].EntityPermission (EntityID, RoleID, CanRead, CanCreate, CanUpdate, CanDelete) VALUES ('B693AD50-0E66-EF11-A752-C0A5E8ACCB22', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 0)
 INSERT INTO [${flyway:defaultSchema}].EntityPermission (EntityID, RoleID, CanRead, CanCreate, CanUpdate, CanDelete) VALUES ('B693AD50-0E66-EF11-A752-C0A5E8ACCB22', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1)
-INSERT INTO [${flyway:defaultSchema}].Entity (ID, Name, Description, NameSuffix, BaseTable, BaseView, SchemaName, IncludeInAPI, AllowUserSearchAPI , TrackRecordChanges , AuditRecordAccess , AuditViewRuns , AllowAllRowsAPI , AllowCreateAPI , AllowUpdateAPI , AllowDeleteAPI , UserViewMaxRows ) VALUES ('F13EC656-0E66-EF11-A752-C0A5E8ACCB22', 'Content Item Attributes', NULL, NULL, 'ContentItemAttribute', 'vwContentItemAttributes', '${flyway:defaultSchema}', 1, 0 , 1 , 0 , 0 , 0 , 1 , 1 , 1 , 1000 ) 
+INSERT INTO [${flyway:defaultSchema}].Entity (ID, Name, Description, NameSuffix, BaseTable, BaseView, SchemaName, IncludeInAPI, AllowUserSearchAPI , TrackRecordChanges , AuditRecordAccess , AuditViewRuns , AllowAllRowsAPI , AllowCreateAPI , AllowUpdateAPI , AllowDeleteAPI , UserViewMaxRows ) VALUES ('F13EC656-0E66-EF11-A752-C0A5E8ACCB22', 'Content Item Attributes', NULL, NULL, 'ContentItemAttribute', 'vwContentItemAttributes', '${flyway:defaultSchema}', 1, 0 , 0 , 0 , 0 , 0 , 1 , 1 , 1 , 1000 ) 
 INSERT INTO [${flyway:defaultSchema}].ApplicationEntity (ApplicationID, EntityID, Sequence) VALUES ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', 'F13EC656-0E66-EF11-A752-C0A5E8ACCB22', (SELECT ISNULL(MAX(Sequence),0)+1 FROM [${flyway:defaultSchema}].ApplicationEntity WHERE ApplicationID = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'))
 INSERT INTO [${flyway:defaultSchema}].EntityPermission (EntityID, RoleID, CanRead, CanCreate, CanUpdate, CanDelete) VALUES ('F13EC656-0E66-EF11-A752-C0A5E8ACCB22', 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 0, 0, 0)
 INSERT INTO [${flyway:defaultSchema}].EntityPermission (EntityID, RoleID, CanRead, CanCreate, CanUpdate, CanDelete) VALUES ('F13EC656-0E66-EF11-A752-C0A5E8ACCB22', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 0)
 INSERT INTO [${flyway:defaultSchema}].EntityPermission (EntityID, RoleID, CanRead, CanCreate, CanUpdate, CanDelete) VALUES ('F13EC656-0E66-EF11-A752-C0A5E8ACCB22', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1)
-INSERT INTO [${flyway:defaultSchema}].Entity (ID, Name, Description, NameSuffix, BaseTable, BaseView, SchemaName, IncludeInAPI, AllowUserSearchAPI , TrackRecordChanges , AuditRecordAccess , AuditViewRuns , AllowAllRowsAPI , AllowCreateAPI , AllowUpdateAPI , AllowDeleteAPI , UserViewMaxRows ) VALUES ('F63EC656-0E66-EF11-A752-C0A5E8ACCB22', 'Content Item Tags', NULL, NULL, 'ContentItemTag', 'vwContentItemTags', '${flyway:defaultSchema}', 1, 0 , 1 , 0 , 0 , 0 , 1 , 1 , 1 , 1000 ) 
+INSERT INTO [${flyway:defaultSchema}].Entity (ID, Name, Description, NameSuffix, BaseTable, BaseView, SchemaName, IncludeInAPI, AllowUserSearchAPI , TrackRecordChanges , AuditRecordAccess , AuditViewRuns , AllowAllRowsAPI , AllowCreateAPI , AllowUpdateAPI , AllowDeleteAPI , UserViewMaxRows ) VALUES ('F63EC656-0E66-EF11-A752-C0A5E8ACCB22', 'Content Item Tags', NULL, NULL, 'ContentItemTag', 'vwContentItemTags', '${flyway:defaultSchema}', 1, 0 , 0 , 0 , 0 , 0 , 1 , 1 , 1 , 1000 ) 
 INSERT INTO [${flyway:defaultSchema}].ApplicationEntity (ApplicationID, EntityID, Sequence) VALUES ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', 'F63EC656-0E66-EF11-A752-C0A5E8ACCB22', (SELECT ISNULL(MAX(Sequence),0)+1 FROM [${flyway:defaultSchema}].ApplicationEntity WHERE ApplicationID = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'))
 INSERT INTO [${flyway:defaultSchema}].EntityPermission (EntityID, RoleID, CanRead, CanCreate, CanUpdate, CanDelete) VALUES ('F63EC656-0E66-EF11-A752-C0A5E8ACCB22', 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 0, 0, 0)
 INSERT INTO [${flyway:defaultSchema}].EntityPermission (EntityID, RoleID, CanRead, CanCreate, CanUpdate, CanDelete) VALUES ('F63EC656-0E66-EF11-A752-C0A5E8ACCB22', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 0)
@@ -142,55 +142,55 @@ INSERT INTO [${flyway:defaultSchema}].EntityField ( EntityID, Sequence, Name, Di
 INSERT INTO [${flyway:defaultSchema}].EntityField ( EntityID, Sequence, Name, DisplayName, Description, Type, Length, Precision, Scale, AllowsNull, DefaultValue, AutoIncrement, AllowUpdateAPI, IsVirtual, RelatedEntityID, RelatedEntityFieldName, IsNameField, IncludeInUserSearchAPI, IncludeRelatedEntityNameFieldInBaseView, DefaultInView, IsPrimaryKey, IsUnique, RelatedEntityDisplayType ) VALUES ( '9684A900-0E66-EF11-A752-C0A5E8ACCB22', 4, 'EndTime', 'End Time', NULL, 'datetime', 8, 23, 3, 1, 'null', 0, 1, 0, NULL, NULL, 0, 0, 0, 1, 0, 0, 'Search' ) 
 INSERT INTO [${flyway:defaultSchema}].EntityField ( EntityID, Sequence, Name, DisplayName, Description, Type, Length, Precision, Scale, AllowsNull, DefaultValue, AutoIncrement, AllowUpdateAPI, IsVirtual, RelatedEntityID, RelatedEntityFieldName, IsNameField, IncludeInUserSearchAPI, IncludeRelatedEntityNameFieldInBaseView, DefaultInView, IsPrimaryKey, IsUnique, RelatedEntityDisplayType ) VALUES ( '9684A900-0E66-EF11-A752-C0A5E8ACCB22', 5, 'Status', 'Status', NULL, 'nvarchar', 200, 0, 0, 1, 'null', 0, 1, 0, NULL, NULL, 0, 0, 0, 1, 0, 0, 'Search' ) 
 INSERT INTO [${flyway:defaultSchema}].EntityField ( EntityID, Sequence, Name, DisplayName, Description, Type, Length, Precision, Scale, AllowsNull, DefaultValue, AutoIncrement, AllowUpdateAPI, IsVirtual, RelatedEntityID, RelatedEntityFieldName, IsNameField, IncludeInUserSearchAPI, IncludeRelatedEntityNameFieldInBaseView, DefaultInView, IsPrimaryKey, IsUnique, RelatedEntityDisplayType ) VALUES ( '9684A900-0E66-EF11-A752-C0A5E8ACCB22', 6, 'ProcessedItems', 'Processed Items', NULL, 'int', 4, 10, 0, 1, 'null', 0, 1, 0, NULL, NULL, 0, 0, 0, 0, 0, 0, 'Search' ) 
-INSERT INTO [${flyway:defaultSchema}].EntityField ( EntityID, Sequence, Name, DisplayName, Description, Type, Length, Precision, Scale, AllowsNull, DefaultValue, AutoIncrement, AllowUpdateAPI, IsVirtual, RelatedEntityID, RelatedEntityFieldName, IsNameField, IncludeInUserSearchAPI, IncludeRelatedEntityNameFieldInBaseView, DefaultInView, IsPrimaryKey, IsUnique, RelatedEntityDisplayType ) VALUES ( '9684A900-0E66-EF11-A752-C0A5E8ACCB22', 7, '[${flyway:defaultSchema}]_CreatedAt', 'Created At', NULL, 'datetimeoffset', 10, 34, 7, 0, 'getutcdate()', 0, 0, 0, NULL, NULL, 0, 0, 0, 0, 0, 0, 'Search' ) 
-INSERT INTO [${flyway:defaultSchema}].EntityField ( EntityID, Sequence, Name, DisplayName, Description, Type, Length, Precision, Scale, AllowsNull, DefaultValue, AutoIncrement, AllowUpdateAPI, IsVirtual, RelatedEntityID, RelatedEntityFieldName, IsNameField, IncludeInUserSearchAPI, IncludeRelatedEntityNameFieldInBaseView, DefaultInView, IsPrimaryKey, IsUnique, RelatedEntityDisplayType ) VALUES ( '9684A900-0E66-EF11-A752-C0A5E8ACCB22', 8, '[${flyway:defaultSchema}]_UpdatedAt', 'Updated At', NULL, 'datetimeoffset', 10, 34, 7, 0, 'getutcdate()', 0, 0, 0, NULL, NULL, 0, 0, 0, 0, 0, 0, 'Search' ) 
+INSERT INTO [${flyway:defaultSchema}].EntityField ( EntityID, Sequence, Name, DisplayName, Description, Type, Length, Precision, Scale, AllowsNull, DefaultValue, AutoIncrement, AllowUpdateAPI, IsVirtual, RelatedEntityID, RelatedEntityFieldName, IsNameField, IncludeInUserSearchAPI, IncludeRelatedEntityNameFieldInBaseView, DefaultInView, IsPrimaryKey, IsUnique, RelatedEntityDisplayType ) VALUES ( '9684A900-0E66-EF11-A752-C0A5E8ACCB22', 7, '${flyway:defaultSchema}_CreatedAt', 'Created At', NULL, 'datetimeoffset', 10, 34, 7, 0, 'getutcdate()', 0, 0, 0, NULL, NULL, 0, 0, 0, 0, 0, 0, 'Search' ) 
+INSERT INTO [${flyway:defaultSchema}].EntityField ( EntityID, Sequence, Name, DisplayName, Description, Type, Length, Precision, Scale, AllowsNull, DefaultValue, AutoIncrement, AllowUpdateAPI, IsVirtual, RelatedEntityID, RelatedEntityFieldName, IsNameField, IncludeInUserSearchAPI, IncludeRelatedEntityNameFieldInBaseView, DefaultInView, IsPrimaryKey, IsUnique, RelatedEntityDisplayType ) VALUES ( '9684A900-0E66-EF11-A752-C0A5E8ACCB22', 8, '${flyway:defaultSchema}_UpdatedAt', 'Updated At', NULL, 'datetimeoffset', 10, 34, 7, 0, 'getutcdate()', 0, 0, 0, NULL, NULL, 0, 0, 0, 0, 0, 0, 'Search' ) 
 INSERT INTO [${flyway:defaultSchema}].EntityField ( EntityID, Sequence, Name, DisplayName, Description, Type, Length, Precision, Scale, AllowsNull, DefaultValue, AutoIncrement, AllowUpdateAPI, IsVirtual, RelatedEntityID, RelatedEntityFieldName, IsNameField, IncludeInUserSearchAPI, IncludeRelatedEntityNameFieldInBaseView, DefaultInView, IsPrimaryKey, IsUnique, RelatedEntityDisplayType ) VALUES ( 'B420FF22-0E66-EF11-A752-C0A5E8ACCB22', 1, 'ID', 'ID', NULL, 'uniqueidentifier', 16, 0, 0, 0, 'newsequentialid()', 0, 0, 0, NULL, NULL, 0, 1, 0, 1, 1, 1, 'Search' ) 
 INSERT INTO [${flyway:defaultSchema}].EntityField ( EntityID, Sequence, Name, DisplayName, Description, Type, Length, Precision, Scale, AllowsNull, DefaultValue, AutoIncrement, AllowUpdateAPI, IsVirtual, RelatedEntityID, RelatedEntityFieldName, IsNameField, IncludeInUserSearchAPI, IncludeRelatedEntityNameFieldInBaseView, DefaultInView, IsPrimaryKey, IsUnique, RelatedEntityDisplayType ) VALUES ( 'B420FF22-0E66-EF11-A752-C0A5E8ACCB22', 2, 'Name', 'Name', NULL, 'nvarchar', 510, 0, 0, 1, 'null', 0, 1, 0, NULL, NULL, 1, 1, 0, 1, 0, 0, 'Search' ) 
 INSERT INTO [${flyway:defaultSchema}].EntityField ( EntityID, Sequence, Name, DisplayName, Description, Type, Length, Precision, Scale, AllowsNull, DefaultValue, AutoIncrement, AllowUpdateAPI, IsVirtual, RelatedEntityID, RelatedEntityFieldName, IsNameField, IncludeInUserSearchAPI, IncludeRelatedEntityNameFieldInBaseView, DefaultInView, IsPrimaryKey, IsUnique, RelatedEntityDisplayType ) VALUES ( 'B420FF22-0E66-EF11-A752-C0A5E8ACCB22', 3, 'ContentTypeID', 'Content Type ID', NULL, 'uniqueidentifier', 16, 0, 0, 0, 'null', 0, 1, 0, 'A793AD50-0E66-EF11-A752-C0A5E8ACCB22', 'ID', 0, 0, 1, 1, 0, 0, 'Search' ) 
 INSERT INTO [${flyway:defaultSchema}].EntityField ( EntityID, Sequence, Name, DisplayName, Description, Type, Length, Precision, Scale, AllowsNull, DefaultValue, AutoIncrement, AllowUpdateAPI, IsVirtual, RelatedEntityID, RelatedEntityFieldName, IsNameField, IncludeInUserSearchAPI, IncludeRelatedEntityNameFieldInBaseView, DefaultInView, IsPrimaryKey, IsUnique, RelatedEntityDisplayType ) VALUES ( 'B420FF22-0E66-EF11-A752-C0A5E8ACCB22', 4, 'ContentSourceTypeID', 'Content Source Type ID', NULL, 'uniqueidentifier', 16, 0, 0, 0, 'null', 0, 1, 0, 'B62E4A4A-0E66-EF11-A752-C0A5E8ACCB22', 'ID', 0, 0, 1, 1, 0, 0, 'Search' ) 
 INSERT INTO [${flyway:defaultSchema}].EntityField ( EntityID, Sequence, Name, DisplayName, Description, Type, Length, Precision, Scale, AllowsNull, DefaultValue, AutoIncrement, AllowUpdateAPI, IsVirtual, RelatedEntityID, RelatedEntityFieldName, IsNameField, IncludeInUserSearchAPI, IncludeRelatedEntityNameFieldInBaseView, DefaultInView, IsPrimaryKey, IsUnique, RelatedEntityDisplayType ) VALUES ( 'B420FF22-0E66-EF11-A752-C0A5E8ACCB22', 5, 'ContentFileTypeID', 'Content File Type ID', NULL, 'uniqueidentifier', 16, 0, 0, 0, 'null', 0, 1, 0, 'B193AD50-0E66-EF11-A752-C0A5E8ACCB22', 'ID', 0, 0, 1, 1, 0, 0, 'Search' ) 
 INSERT INTO [${flyway:defaultSchema}].EntityField ( EntityID, Sequence, Name, DisplayName, Description, Type, Length, Precision, Scale, AllowsNull, DefaultValue, AutoIncrement, AllowUpdateAPI, IsVirtual, RelatedEntityID, RelatedEntityFieldName, IsNameField, IncludeInUserSearchAPI, IncludeRelatedEntityNameFieldInBaseView, DefaultInView, IsPrimaryKey, IsUnique, RelatedEntityDisplayType ) VALUES ( 'B420FF22-0E66-EF11-A752-C0A5E8ACCB22', 6, 'URL', 'URL', NULL, 'nvarchar', 4000, 0, 0, 0, 'null', 0, 1, 0, NULL, NULL, 0, 0, 0, 0, 0, 0, 'Search' ) 
-INSERT INTO [${flyway:defaultSchema}].EntityField ( EntityID, Sequence, Name, DisplayName, Description, Type, Length, Precision, Scale, AllowsNull, DefaultValue, AutoIncrement, AllowUpdateAPI, IsVirtual, RelatedEntityID, RelatedEntityFieldName, IsNameField, IncludeInUserSearchAPI, IncludeRelatedEntityNameFieldInBaseView, DefaultInView, IsPrimaryKey, IsUnique, RelatedEntityDisplayType ) VALUES ( 'B420FF22-0E66-EF11-A752-C0A5E8ACCB22', 7, '[${flyway:defaultSchema}]_CreatedAt', 'Created At', NULL, 'datetimeoffset', 10, 34, 7, 0, 'getutcdate()', 0, 0, 0, NULL, NULL, 0, 0, 0, 0, 0, 0, 'Search' ) 
-INSERT INTO [${flyway:defaultSchema}].EntityField ( EntityID, Sequence, Name, DisplayName, Description, Type, Length, Precision, Scale, AllowsNull, DefaultValue, AutoIncrement, AllowUpdateAPI, IsVirtual, RelatedEntityID, RelatedEntityFieldName, IsNameField, IncludeInUserSearchAPI, IncludeRelatedEntityNameFieldInBaseView, DefaultInView, IsPrimaryKey, IsUnique, RelatedEntityDisplayType ) VALUES ( 'B420FF22-0E66-EF11-A752-C0A5E8ACCB22', 8, '[${flyway:defaultSchema}]_UpdatedAt', 'Updated At', NULL, 'datetimeoffset', 10, 34, 7, 0, 'getutcdate()', 0, 0, 0, NULL, NULL, 0, 0, 0, 0, 0, 0, 'Search' ) 
+INSERT INTO [${flyway:defaultSchema}].EntityField ( EntityID, Sequence, Name, DisplayName, Description, Type, Length, Precision, Scale, AllowsNull, DefaultValue, AutoIncrement, AllowUpdateAPI, IsVirtual, RelatedEntityID, RelatedEntityFieldName, IsNameField, IncludeInUserSearchAPI, IncludeRelatedEntityNameFieldInBaseView, DefaultInView, IsPrimaryKey, IsUnique, RelatedEntityDisplayType ) VALUES ( 'B420FF22-0E66-EF11-A752-C0A5E8ACCB22', 7, '${flyway:defaultSchema}_CreatedAt', 'Created At', NULL, 'datetimeoffset', 10, 34, 7, 0, 'getutcdate()', 0, 0, 0, NULL, NULL, 0, 0, 0, 0, 0, 0, 'Search' ) 
+INSERT INTO [${flyway:defaultSchema}].EntityField ( EntityID, Sequence, Name, DisplayName, Description, Type, Length, Precision, Scale, AllowsNull, DefaultValue, AutoIncrement, AllowUpdateAPI, IsVirtual, RelatedEntityID, RelatedEntityFieldName, IsNameField, IncludeInUserSearchAPI, IncludeRelatedEntityNameFieldInBaseView, DefaultInView, IsPrimaryKey, IsUnique, RelatedEntityDisplayType ) VALUES ( 'B420FF22-0E66-EF11-A752-C0A5E8ACCB22', 8, '${flyway:defaultSchema}_UpdatedAt', 'Updated At', NULL, 'datetimeoffset', 10, 34, 7, 0, 'getutcdate()', 0, 0, 0, NULL, NULL, 0, 0, 0, 0, 0, 0, 'Search' ) 
 INSERT INTO [${flyway:defaultSchema}].EntityField ( EntityID, Sequence, Name, DisplayName, Description, Type, Length, Precision, Scale, AllowsNull, DefaultValue, AutoIncrement, AllowUpdateAPI, IsVirtual, RelatedEntityID, RelatedEntityFieldName, IsNameField, IncludeInUserSearchAPI, IncludeRelatedEntityNameFieldInBaseView, DefaultInView, IsPrimaryKey, IsUnique, RelatedEntityDisplayType ) VALUES ( 'B12E4A4A-0E66-EF11-A752-C0A5E8ACCB22', 1, 'ID', 'ID', NULL, 'uniqueidentifier', 16, 0, 0, 0, 'newsequentialid()', 0, 0, 0, NULL, NULL, 0, 1, 0, 1, 1, 1, 'Search' ) 
 INSERT INTO [${flyway:defaultSchema}].EntityField ( EntityID, Sequence, Name, DisplayName, Description, Type, Length, Precision, Scale, AllowsNull, DefaultValue, AutoIncrement, AllowUpdateAPI, IsVirtual, RelatedEntityID, RelatedEntityFieldName, IsNameField, IncludeInUserSearchAPI, IncludeRelatedEntityNameFieldInBaseView, DefaultInView, IsPrimaryKey, IsUnique, RelatedEntityDisplayType ) VALUES ( 'B12E4A4A-0E66-EF11-A752-C0A5E8ACCB22', 2, 'ContentSourceID', 'Content Source ID', NULL, 'uniqueidentifier', 16, 0, 0, 0, 'null', 0, 1, 0, 'B420FF22-0E66-EF11-A752-C0A5E8ACCB22', 'ID', 0, 0, 1, 1, 0, 0, 'Search' ) 
 INSERT INTO [${flyway:defaultSchema}].EntityField ( EntityID, Sequence, Name, DisplayName, Description, Type, Length, Precision, Scale, AllowsNull, DefaultValue, AutoIncrement, AllowUpdateAPI, IsVirtual, RelatedEntityID, RelatedEntityFieldName, IsNameField, IncludeInUserSearchAPI, IncludeRelatedEntityNameFieldInBaseView, DefaultInView, IsPrimaryKey, IsUnique, RelatedEntityDisplayType ) VALUES ( 'B12E4A4A-0E66-EF11-A752-C0A5E8ACCB22', 3, 'ContentSourceTypeParamID', 'Content Source Type Param ID', NULL, 'uniqueidentifier', 16, 0, 0, 0, 'null', 0, 1, 0, NULL, NULL, 0, 0, 0, 1, 0, 0, 'Search' ) 
 INSERT INTO [${flyway:defaultSchema}].EntityField ( EntityID, Sequence, Name, DisplayName, Description, Type, Length, Precision, Scale, AllowsNull, DefaultValue, AutoIncrement, AllowUpdateAPI, IsVirtual, RelatedEntityID, RelatedEntityFieldName, IsNameField, IncludeInUserSearchAPI, IncludeRelatedEntityNameFieldInBaseView, DefaultInView, IsPrimaryKey, IsUnique, RelatedEntityDisplayType ) VALUES ( 'B12E4A4A-0E66-EF11-A752-C0A5E8ACCB22', 4, 'Value', 'Value', NULL, 'nvarchar', -1, 0, 0, 0, 'null', 0, 1, 0, NULL, NULL, 0, 0, 0, 1, 0, 0, 'Search' ) 
-INSERT INTO [${flyway:defaultSchema}].EntityField ( EntityID, Sequence, Name, DisplayName, Description, Type, Length, Precision, Scale, AllowsNull, DefaultValue, AutoIncrement, AllowUpdateAPI, IsVirtual, RelatedEntityID, RelatedEntityFieldName, IsNameField, IncludeInUserSearchAPI, IncludeRelatedEntityNameFieldInBaseView, DefaultInView, IsPrimaryKey, IsUnique, RelatedEntityDisplayType ) VALUES ( 'B12E4A4A-0E66-EF11-A752-C0A5E8ACCB22', 5, '[${flyway:defaultSchema}]_CreatedAt', 'Created At', NULL, 'datetimeoffset', 10, 34, 7, 0, 'getutcdate()', 0, 0, 0, NULL, NULL, 0, 0, 0, 1, 0, 0, 'Search' ) 
-INSERT INTO [${flyway:defaultSchema}].EntityField ( EntityID, Sequence, Name, DisplayName, Description, Type, Length, Precision, Scale, AllowsNull, DefaultValue, AutoIncrement, AllowUpdateAPI, IsVirtual, RelatedEntityID, RelatedEntityFieldName, IsNameField, IncludeInUserSearchAPI, IncludeRelatedEntityNameFieldInBaseView, DefaultInView, IsPrimaryKey, IsUnique, RelatedEntityDisplayType ) VALUES ( 'B12E4A4A-0E66-EF11-A752-C0A5E8ACCB22', 6, '[${flyway:defaultSchema}]_UpdatedAt', 'Updated At', NULL, 'datetimeoffset', 10, 34, 7, 0, 'getutcdate()', 0, 0, 0, NULL, NULL, 0, 0, 0, 0, 0, 0, 'Search' ) 
+INSERT INTO [${flyway:defaultSchema}].EntityField ( EntityID, Sequence, Name, DisplayName, Description, Type, Length, Precision, Scale, AllowsNull, DefaultValue, AutoIncrement, AllowUpdateAPI, IsVirtual, RelatedEntityID, RelatedEntityFieldName, IsNameField, IncludeInUserSearchAPI, IncludeRelatedEntityNameFieldInBaseView, DefaultInView, IsPrimaryKey, IsUnique, RelatedEntityDisplayType ) VALUES ( 'B12E4A4A-0E66-EF11-A752-C0A5E8ACCB22', 5, '${flyway:defaultSchema}_CreatedAt', 'Created At', NULL, 'datetimeoffset', 10, 34, 7, 0, 'getutcdate()', 0, 0, 0, NULL, NULL, 0, 0, 0, 1, 0, 0, 'Search' ) 
+INSERT INTO [${flyway:defaultSchema}].EntityField ( EntityID, Sequence, Name, DisplayName, Description, Type, Length, Precision, Scale, AllowsNull, DefaultValue, AutoIncrement, AllowUpdateAPI, IsVirtual, RelatedEntityID, RelatedEntityFieldName, IsNameField, IncludeInUserSearchAPI, IncludeRelatedEntityNameFieldInBaseView, DefaultInView, IsPrimaryKey, IsUnique, RelatedEntityDisplayType ) VALUES ( 'B12E4A4A-0E66-EF11-A752-C0A5E8ACCB22', 6, '${flyway:defaultSchema}_UpdatedAt', 'Updated At', NULL, 'datetimeoffset', 10, 34, 7, 0, 'getutcdate()', 0, 0, 0, NULL, NULL, 0, 0, 0, 0, 0, 0, 'Search' ) 
 INSERT INTO [${flyway:defaultSchema}].EntityField ( EntityID, Sequence, Name, DisplayName, Description, Type, Length, Precision, Scale, AllowsNull, DefaultValue, AutoIncrement, AllowUpdateAPI, IsVirtual, RelatedEntityID, RelatedEntityFieldName, IsNameField, IncludeInUserSearchAPI, IncludeRelatedEntityNameFieldInBaseView, DefaultInView, IsPrimaryKey, IsUnique, RelatedEntityDisplayType ) VALUES ( 'B62E4A4A-0E66-EF11-A752-C0A5E8ACCB22', 1, 'ID', 'ID', NULL, 'uniqueidentifier', 16, 0, 0, 0, 'newsequentialid()', 0, 0, 0, NULL, NULL, 0, 1, 0, 1, 1, 1, 'Search' ) 
 INSERT INTO [${flyway:defaultSchema}].EntityField ( EntityID, Sequence, Name, DisplayName, Description, Type, Length, Precision, Scale, AllowsNull, DefaultValue, AutoIncrement, AllowUpdateAPI, IsVirtual, RelatedEntityID, RelatedEntityFieldName, IsNameField, IncludeInUserSearchAPI, IncludeRelatedEntityNameFieldInBaseView, DefaultInView, IsPrimaryKey, IsUnique, RelatedEntityDisplayType ) VALUES ( 'B62E4A4A-0E66-EF11-A752-C0A5E8ACCB22', 2, 'Name', 'Name', NULL, 'nvarchar', 510, 0, 0, 0, 'null', 0, 1, 0, NULL, NULL, 1, 1, 0, 1, 0, 0, 'Search' ) 
 INSERT INTO [${flyway:defaultSchema}].EntityField ( EntityID, Sequence, Name, DisplayName, Description, Type, Length, Precision, Scale, AllowsNull, DefaultValue, AutoIncrement, AllowUpdateAPI, IsVirtual, RelatedEntityID, RelatedEntityFieldName, IsNameField, IncludeInUserSearchAPI, IncludeRelatedEntityNameFieldInBaseView, DefaultInView, IsPrimaryKey, IsUnique, RelatedEntityDisplayType ) VALUES ( 'B62E4A4A-0E66-EF11-A752-C0A5E8ACCB22', 3, 'Description', 'Description', NULL, 'nvarchar', 2000, 0, 0, 1, 'null', 0, 1, 0, NULL, NULL, 0, 0, 0, 1, 0, 0, 'Search' ) 
-INSERT INTO [${flyway:defaultSchema}].EntityField ( EntityID, Sequence, Name, DisplayName, Description, Type, Length, Precision, Scale, AllowsNull, DefaultValue, AutoIncrement, AllowUpdateAPI, IsVirtual, RelatedEntityID, RelatedEntityFieldName, IsNameField, IncludeInUserSearchAPI, IncludeRelatedEntityNameFieldInBaseView, DefaultInView, IsPrimaryKey, IsUnique, RelatedEntityDisplayType ) VALUES ( 'B62E4A4A-0E66-EF11-A752-C0A5E8ACCB22', 4, '[${flyway:defaultSchema}]_CreatedAt', 'Created At', NULL, 'datetimeoffset', 10, 34, 7, 0, 'getutcdate()', 0, 0, 0, NULL, NULL, 0, 0, 0, 1, 0, 0, 'Search' ) 
-INSERT INTO [${flyway:defaultSchema}].EntityField ( EntityID, Sequence, Name, DisplayName, Description, Type, Length, Precision, Scale, AllowsNull, DefaultValue, AutoIncrement, AllowUpdateAPI, IsVirtual, RelatedEntityID, RelatedEntityFieldName, IsNameField, IncludeInUserSearchAPI, IncludeRelatedEntityNameFieldInBaseView, DefaultInView, IsPrimaryKey, IsUnique, RelatedEntityDisplayType ) VALUES ( 'B62E4A4A-0E66-EF11-A752-C0A5E8ACCB22', 5, '[${flyway:defaultSchema}]_UpdatedAt', 'Updated At', NULL, 'datetimeoffset', 10, 34, 7, 0, 'getutcdate()', 0, 0, 0, NULL, NULL, 0, 0, 0, 1, 0, 0, 'Search' ) 
+INSERT INTO [${flyway:defaultSchema}].EntityField ( EntityID, Sequence, Name, DisplayName, Description, Type, Length, Precision, Scale, AllowsNull, DefaultValue, AutoIncrement, AllowUpdateAPI, IsVirtual, RelatedEntityID, RelatedEntityFieldName, IsNameField, IncludeInUserSearchAPI, IncludeRelatedEntityNameFieldInBaseView, DefaultInView, IsPrimaryKey, IsUnique, RelatedEntityDisplayType ) VALUES ( 'B62E4A4A-0E66-EF11-A752-C0A5E8ACCB22', 4, '${flyway:defaultSchema}_CreatedAt', 'Created At', NULL, 'datetimeoffset', 10, 34, 7, 0, 'getutcdate()', 0, 0, 0, NULL, NULL, 0, 0, 0, 1, 0, 0, 'Search' ) 
+INSERT INTO [${flyway:defaultSchema}].EntityField ( EntityID, Sequence, Name, DisplayName, Description, Type, Length, Precision, Scale, AllowsNull, DefaultValue, AutoIncrement, AllowUpdateAPI, IsVirtual, RelatedEntityID, RelatedEntityFieldName, IsNameField, IncludeInUserSearchAPI, IncludeRelatedEntityNameFieldInBaseView, DefaultInView, IsPrimaryKey, IsUnique, RelatedEntityDisplayType ) VALUES ( 'B62E4A4A-0E66-EF11-A752-C0A5E8ACCB22', 5, '${flyway:defaultSchema}_UpdatedAt', 'Updated At', NULL, 'datetimeoffset', 10, 34, 7, 0, 'getutcdate()', 0, 0, 0, NULL, NULL, 0, 0, 0, 1, 0, 0, 'Search' ) 
 INSERT INTO [${flyway:defaultSchema}].EntityField ( EntityID, Sequence, Name, DisplayName, Description, Type, Length, Precision, Scale, AllowsNull, DefaultValue, AutoIncrement, AllowUpdateAPI, IsVirtual, RelatedEntityID, RelatedEntityFieldName, IsNameField, IncludeInUserSearchAPI, IncludeRelatedEntityNameFieldInBaseView, DefaultInView, IsPrimaryKey, IsUnique, RelatedEntityDisplayType ) VALUES ( 'BB2E4A4A-0E66-EF11-A752-C0A5E8ACCB22', 1, 'ID', 'ID', NULL, 'uniqueidentifier', 16, 0, 0, 0, 'newsequentialid()', 0, 0, 0, NULL, NULL, 0, 1, 0, 1, 1, 1, 'Search' ) 
 INSERT INTO [${flyway:defaultSchema}].EntityField ( EntityID, Sequence, Name, DisplayName, Description, Type, Length, Precision, Scale, AllowsNull, DefaultValue, AutoIncrement, AllowUpdateAPI, IsVirtual, RelatedEntityID, RelatedEntityFieldName, IsNameField, IncludeInUserSearchAPI, IncludeRelatedEntityNameFieldInBaseView, DefaultInView, IsPrimaryKey, IsUnique, RelatedEntityDisplayType ) VALUES ( 'BB2E4A4A-0E66-EF11-A752-C0A5E8ACCB22', 2, 'Name', 'Name', NULL, 'nvarchar', 200, 0, 0, 0, 'null', 0, 1, 0, NULL, NULL, 1, 1, 0, 1, 0, 0, 'Search' ) 
 INSERT INTO [${flyway:defaultSchema}].EntityField ( EntityID, Sequence, Name, DisplayName, Description, Type, Length, Precision, Scale, AllowsNull, DefaultValue, AutoIncrement, AllowUpdateAPI, IsVirtual, RelatedEntityID, RelatedEntityFieldName, IsNameField, IncludeInUserSearchAPI, IncludeRelatedEntityNameFieldInBaseView, DefaultInView, IsPrimaryKey, IsUnique, RelatedEntityDisplayType ) VALUES ( 'BB2E4A4A-0E66-EF11-A752-C0A5E8ACCB22', 3, 'Description', 'Description', NULL, 'nvarchar', -1, 0, 0, 1, 'null', 0, 1, 0, NULL, NULL, 0, 0, 0, 1, 0, 0, 'Search' ) 
 INSERT INTO [${flyway:defaultSchema}].EntityField ( EntityID, Sequence, Name, DisplayName, Description, Type, Length, Precision, Scale, AllowsNull, DefaultValue, AutoIncrement, AllowUpdateAPI, IsVirtual, RelatedEntityID, RelatedEntityFieldName, IsNameField, IncludeInUserSearchAPI, IncludeRelatedEntityNameFieldInBaseView, DefaultInView, IsPrimaryKey, IsUnique, RelatedEntityDisplayType ) VALUES ( 'BB2E4A4A-0E66-EF11-A752-C0A5E8ACCB22', 4, 'Type', 'Type', NULL, 'nvarchar', 100, 0, 0, 1, 'null', 0, 1, 0, NULL, NULL, 0, 0, 0, 1, 0, 0, 'Search' ) 
 INSERT INTO [${flyway:defaultSchema}].EntityField ( EntityID, Sequence, Name, DisplayName, Description, Type, Length, Precision, Scale, AllowsNull, DefaultValue, AutoIncrement, AllowUpdateAPI, IsVirtual, RelatedEntityID, RelatedEntityFieldName, IsNameField, IncludeInUserSearchAPI, IncludeRelatedEntityNameFieldInBaseView, DefaultInView, IsPrimaryKey, IsUnique, RelatedEntityDisplayType ) VALUES ( 'BB2E4A4A-0E66-EF11-A752-C0A5E8ACCB22', 5, 'DefaultValue', 'Default Value', NULL, 'nvarchar', -1, 0, 0, 1, 'null', 0, 1, 0, NULL, NULL, 0, 0, 0, 1, 0, 0, 'Search' ) 
 INSERT INTO [${flyway:defaultSchema}].EntityField ( EntityID, Sequence, Name, DisplayName, Description, Type, Length, Precision, Scale, AllowsNull, DefaultValue, AutoIncrement, AllowUpdateAPI, IsVirtual, RelatedEntityID, RelatedEntityFieldName, IsNameField, IncludeInUserSearchAPI, IncludeRelatedEntityNameFieldInBaseView, DefaultInView, IsPrimaryKey, IsUnique, RelatedEntityDisplayType ) VALUES ( 'BB2E4A4A-0E66-EF11-A752-C0A5E8ACCB22', 6, 'IsRequired', 'Is Required', NULL, 'bit', 1, 1, 0, 0, 'null', 0, 1, 0, NULL, NULL, 0, 0, 0, 0, 0, 0, 'Search' ) 
-INSERT INTO [${flyway:defaultSchema}].EntityField ( EntityID, Sequence, Name, DisplayName, Description, Type, Length, Precision, Scale, AllowsNull, DefaultValue, AutoIncrement, AllowUpdateAPI, IsVirtual, RelatedEntityID, RelatedEntityFieldName, IsNameField, IncludeInUserSearchAPI, IncludeRelatedEntityNameFieldInBaseView, DefaultInView, IsPrimaryKey, IsUnique, RelatedEntityDisplayType ) VALUES ( 'BB2E4A4A-0E66-EF11-A752-C0A5E8ACCB22', 7, '[${flyway:defaultSchema}]_CreatedAt', 'Created At', NULL, 'datetimeoffset', 10, 34, 7, 0, 'getutcdate()', 0, 0, 0, NULL, NULL, 0, 0, 0, 0, 0, 0, 'Search' ) 
-INSERT INTO [${flyway:defaultSchema}].EntityField ( EntityID, Sequence, Name, DisplayName, Description, Type, Length, Precision, Scale, AllowsNull, DefaultValue, AutoIncrement, AllowUpdateAPI, IsVirtual, RelatedEntityID, RelatedEntityFieldName, IsNameField, IncludeInUserSearchAPI, IncludeRelatedEntityNameFieldInBaseView, DefaultInView, IsPrimaryKey, IsUnique, RelatedEntityDisplayType ) VALUES ( 'BB2E4A4A-0E66-EF11-A752-C0A5E8ACCB22', 8, '[${flyway:defaultSchema}]_UpdatedAt', 'Updated At', NULL, 'datetimeoffset', 10, 34, 7, 0, 'getutcdate()', 0, 0, 0, NULL, NULL, 0, 0, 0, 0, 0, 0, 'Search' ) 
+INSERT INTO [${flyway:defaultSchema}].EntityField ( EntityID, Sequence, Name, DisplayName, Description, Type, Length, Precision, Scale, AllowsNull, DefaultValue, AutoIncrement, AllowUpdateAPI, IsVirtual, RelatedEntityID, RelatedEntityFieldName, IsNameField, IncludeInUserSearchAPI, IncludeRelatedEntityNameFieldInBaseView, DefaultInView, IsPrimaryKey, IsUnique, RelatedEntityDisplayType ) VALUES ( 'BB2E4A4A-0E66-EF11-A752-C0A5E8ACCB22', 7, '${flyway:defaultSchema}_CreatedAt', 'Created At', NULL, 'datetimeoffset', 10, 34, 7, 0, 'getutcdate()', 0, 0, 0, NULL, NULL, 0, 0, 0, 0, 0, 0, 'Search' ) 
+INSERT INTO [${flyway:defaultSchema}].EntityField ( EntityID, Sequence, Name, DisplayName, Description, Type, Length, Precision, Scale, AllowsNull, DefaultValue, AutoIncrement, AllowUpdateAPI, IsVirtual, RelatedEntityID, RelatedEntityFieldName, IsNameField, IncludeInUserSearchAPI, IncludeRelatedEntityNameFieldInBaseView, DefaultInView, IsPrimaryKey, IsUnique, RelatedEntityDisplayType ) VALUES ( 'BB2E4A4A-0E66-EF11-A752-C0A5E8ACCB22', 8, '${flyway:defaultSchema}_UpdatedAt', 'Updated At', NULL, 'datetimeoffset', 10, 34, 7, 0, 'getutcdate()', 0, 0, 0, NULL, NULL, 0, 0, 0, 0, 0, 0, 'Search' ) 
 INSERT INTO [${flyway:defaultSchema}].EntityField ( EntityID, Sequence, Name, DisplayName, Description, Type, Length, Precision, Scale, AllowsNull, DefaultValue, AutoIncrement, AllowUpdateAPI, IsVirtual, RelatedEntityID, RelatedEntityFieldName, IsNameField, IncludeInUserSearchAPI, IncludeRelatedEntityNameFieldInBaseView, DefaultInView, IsPrimaryKey, IsUnique, RelatedEntityDisplayType ) VALUES ( 'A793AD50-0E66-EF11-A752-C0A5E8ACCB22', 1, 'ID', 'ID', NULL, 'uniqueidentifier', 16, 0, 0, 0, 'newsequentialid()', 0, 0, 0, NULL, NULL, 0, 1, 0, 1, 1, 1, 'Search' ) 
 INSERT INTO [${flyway:defaultSchema}].EntityField ( EntityID, Sequence, Name, DisplayName, Description, Type, Length, Precision, Scale, AllowsNull, DefaultValue, AutoIncrement, AllowUpdateAPI, IsVirtual, RelatedEntityID, RelatedEntityFieldName, IsNameField, IncludeInUserSearchAPI, IncludeRelatedEntityNameFieldInBaseView, DefaultInView, IsPrimaryKey, IsUnique, RelatedEntityDisplayType ) VALUES ( 'A793AD50-0E66-EF11-A752-C0A5E8ACCB22', 2, 'Name', 'Name', NULL, 'nvarchar', 510, 0, 0, 0, 'null', 0, 1, 0, NULL, NULL, 1, 1, 0, 1, 0, 0, 'Search' ) 
 INSERT INTO [${flyway:defaultSchema}].EntityField ( EntityID, Sequence, Name, DisplayName, Description, Type, Length, Precision, Scale, AllowsNull, DefaultValue, AutoIncrement, AllowUpdateAPI, IsVirtual, RelatedEntityID, RelatedEntityFieldName, IsNameField, IncludeInUserSearchAPI, IncludeRelatedEntityNameFieldInBaseView, DefaultInView, IsPrimaryKey, IsUnique, RelatedEntityDisplayType ) VALUES ( 'A793AD50-0E66-EF11-A752-C0A5E8ACCB22', 3, 'Description', 'Description', NULL, 'nvarchar', -1, 0, 0, 1, 'null', 0, 1, 0, NULL, NULL, 0, 0, 0, 1, 0, 0, 'Search' ) 
 INSERT INTO [${flyway:defaultSchema}].EntityField ( EntityID, Sequence, Name, DisplayName, Description, Type, Length, Precision, Scale, AllowsNull, DefaultValue, AutoIncrement, AllowUpdateAPI, IsVirtual, RelatedEntityID, RelatedEntityFieldName, IsNameField, IncludeInUserSearchAPI, IncludeRelatedEntityNameFieldInBaseView, DefaultInView, IsPrimaryKey, IsUnique, RelatedEntityDisplayType ) VALUES ( 'A793AD50-0E66-EF11-A752-C0A5E8ACCB22', 4, 'AIModelID', 'AIModel ID', NULL, 'uniqueidentifier', 16, 0, 0, 0, 'null', 0, 1, 0, 'FD238F34-2837-EF11-86D4-6045BDEE16E6', 'ID', 0, 0, 1, 1, 0, 0, 'Search' ) 
 INSERT INTO [${flyway:defaultSchema}].EntityField ( EntityID, Sequence, Name, DisplayName, Description, Type, Length, Precision, Scale, AllowsNull, DefaultValue, AutoIncrement, AllowUpdateAPI, IsVirtual, RelatedEntityID, RelatedEntityFieldName, IsNameField, IncludeInUserSearchAPI, IncludeRelatedEntityNameFieldInBaseView, DefaultInView, IsPrimaryKey, IsUnique, RelatedEntityDisplayType ) VALUES ( 'A793AD50-0E66-EF11-A752-C0A5E8ACCB22', 5, 'MinTags', 'Min Tags', NULL, 'int', 4, 10, 0, 0, 'null', 0, 1, 0, NULL, NULL, 0, 0, 0, 1, 0, 0, 'Search' ) 
 INSERT INTO [${flyway:defaultSchema}].EntityField ( EntityID, Sequence, Name, DisplayName, Description, Type, Length, Precision, Scale, AllowsNull, DefaultValue, AutoIncrement, AllowUpdateAPI, IsVirtual, RelatedEntityID, RelatedEntityFieldName, IsNameField, IncludeInUserSearchAPI, IncludeRelatedEntityNameFieldInBaseView, DefaultInView, IsPrimaryKey, IsUnique, RelatedEntityDisplayType ) VALUES ( 'A793AD50-0E66-EF11-A752-C0A5E8ACCB22', 6, 'MaxTags', 'Max Tags', NULL, 'int', 4, 10, 0, 0, 'null', 0, 1, 0, NULL, NULL, 0, 0, 0, 0, 0, 0, 'Search' ) 
-INSERT INTO [${flyway:defaultSchema}].EntityField ( EntityID, Sequence, Name, DisplayName, Description, Type, Length, Precision, Scale, AllowsNull, DefaultValue, AutoIncrement, AllowUpdateAPI, IsVirtual, RelatedEntityID, RelatedEntityFieldName, IsNameField, IncludeInUserSearchAPI, IncludeRelatedEntityNameFieldInBaseView, DefaultInView, IsPrimaryKey, IsUnique, RelatedEntityDisplayType ) VALUES ( 'A793AD50-0E66-EF11-A752-C0A5E8ACCB22', 7, '[${flyway:defaultSchema}]_CreatedAt', 'Created At', NULL, 'datetimeoffset', 10, 34, 7, 0, 'getutcdate()', 0, 0, 0, NULL, NULL, 0, 0, 0, 0, 0, 0, 'Search' ) 
-INSERT INTO [${flyway:defaultSchema}].EntityField ( EntityID, Sequence, Name, DisplayName, Description, Type, Length, Precision, Scale, AllowsNull, DefaultValue, AutoIncrement, AllowUpdateAPI, IsVirtual, RelatedEntityID, RelatedEntityFieldName, IsNameField, IncludeInUserSearchAPI, IncludeRelatedEntityNameFieldInBaseView, DefaultInView, IsPrimaryKey, IsUnique, RelatedEntityDisplayType ) VALUES ( 'A793AD50-0E66-EF11-A752-C0A5E8ACCB22', 8, '[${flyway:defaultSchema}]_UpdatedAt', 'Updated At', NULL, 'datetimeoffset', 10, 34, 7, 0, 'getutcdate()', 0, 0, 0, NULL, NULL, 0, 0, 0, 0, 0, 0, 'Search' ) 
+INSERT INTO [${flyway:defaultSchema}].EntityField ( EntityID, Sequence, Name, DisplayName, Description, Type, Length, Precision, Scale, AllowsNull, DefaultValue, AutoIncrement, AllowUpdateAPI, IsVirtual, RelatedEntityID, RelatedEntityFieldName, IsNameField, IncludeInUserSearchAPI, IncludeRelatedEntityNameFieldInBaseView, DefaultInView, IsPrimaryKey, IsUnique, RelatedEntityDisplayType ) VALUES ( 'A793AD50-0E66-EF11-A752-C0A5E8ACCB22', 7, '${flyway:defaultSchema}_CreatedAt', 'Created At', NULL, 'datetimeoffset', 10, 34, 7, 0, 'getutcdate()', 0, 0, 0, NULL, NULL, 0, 0, 0, 0, 0, 0, 'Search' ) 
+INSERT INTO [${flyway:defaultSchema}].EntityField ( EntityID, Sequence, Name, DisplayName, Description, Type, Length, Precision, Scale, AllowsNull, DefaultValue, AutoIncrement, AllowUpdateAPI, IsVirtual, RelatedEntityID, RelatedEntityFieldName, IsNameField, IncludeInUserSearchAPI, IncludeRelatedEntityNameFieldInBaseView, DefaultInView, IsPrimaryKey, IsUnique, RelatedEntityDisplayType ) VALUES ( 'A793AD50-0E66-EF11-A752-C0A5E8ACCB22', 8, '${flyway:defaultSchema}_UpdatedAt', 'Updated At', NULL, 'datetimeoffset', 10, 34, 7, 0, 'getutcdate()', 0, 0, 0, NULL, NULL, 0, 0, 0, 0, 0, 0, 'Search' ) 
 INSERT INTO [${flyway:defaultSchema}].EntityField ( EntityID, Sequence, Name, DisplayName, Description, Type, Length, Precision, Scale, AllowsNull, DefaultValue, AutoIncrement, AllowUpdateAPI, IsVirtual, RelatedEntityID, RelatedEntityFieldName, IsNameField, IncludeInUserSearchAPI, IncludeRelatedEntityNameFieldInBaseView, DefaultInView, IsPrimaryKey, IsUnique, RelatedEntityDisplayType ) VALUES ( 'AC93AD50-0E66-EF11-A752-C0A5E8ACCB22', 1, 'ID', 'ID', NULL, 'uniqueidentifier', 16, 0, 0, 0, 'newsequentialid()', 0, 0, 0, NULL, NULL, 0, 1, 0, 1, 1, 1, 'Search' ) 
 INSERT INTO [${flyway:defaultSchema}].EntityField ( EntityID, Sequence, Name, DisplayName, Description, Type, Length, Precision, Scale, AllowsNull, DefaultValue, AutoIncrement, AllowUpdateAPI, IsVirtual, RelatedEntityID, RelatedEntityFieldName, IsNameField, IncludeInUserSearchAPI, IncludeRelatedEntityNameFieldInBaseView, DefaultInView, IsPrimaryKey, IsUnique, RelatedEntityDisplayType ) VALUES ( 'AC93AD50-0E66-EF11-A752-C0A5E8ACCB22', 2, 'ContentTypeID', 'Content Type ID', NULL, 'uniqueidentifier', 16, 0, 0, 0, 'null', 0, 1, 0, NULL, NULL, 0, 0, 0, 1, 0, 0, 'Search' ) 
 INSERT INTO [${flyway:defaultSchema}].EntityField ( EntityID, Sequence, Name, DisplayName, Description, Type, Length, Precision, Scale, AllowsNull, DefaultValue, AutoIncrement, AllowUpdateAPI, IsVirtual, RelatedEntityID, RelatedEntityFieldName, IsNameField, IncludeInUserSearchAPI, IncludeRelatedEntityNameFieldInBaseView, DefaultInView, IsPrimaryKey, IsUnique, RelatedEntityDisplayType ) VALUES ( 'AC93AD50-0E66-EF11-A752-C0A5E8ACCB22', 3, 'Name', 'Name', NULL, 'nvarchar', 200, 0, 0, 0, 'null', 0, 1, 0, NULL, NULL, 1, 1, 0, 1, 0, 0, 'Search' ) 
 INSERT INTO [${flyway:defaultSchema}].EntityField ( EntityID, Sequence, Name, DisplayName, Description, Type, Length, Precision, Scale, AllowsNull, DefaultValue, AutoIncrement, AllowUpdateAPI, IsVirtual, RelatedEntityID, RelatedEntityFieldName, IsNameField, IncludeInUserSearchAPI, IncludeRelatedEntityNameFieldInBaseView, DefaultInView, IsPrimaryKey, IsUnique, RelatedEntityDisplayType ) VALUES ( 'AC93AD50-0E66-EF11-A752-C0A5E8ACCB22', 4, 'Prompt', 'Prompt', NULL, 'nvarchar', -1, 0, 0, 0, 'null', 0, 1, 0, NULL, NULL, 0, 0, 0, 1, 0, 0, 'Search' ) 
 INSERT INTO [${flyway:defaultSchema}].EntityField ( EntityID, Sequence, Name, DisplayName, Description, Type, Length, Precision, Scale, AllowsNull, DefaultValue, AutoIncrement, AllowUpdateAPI, IsVirtual, RelatedEntityID, RelatedEntityFieldName, IsNameField, IncludeInUserSearchAPI, IncludeRelatedEntityNameFieldInBaseView, DefaultInView, IsPrimaryKey, IsUnique, RelatedEntityDisplayType ) VALUES ( 'AC93AD50-0E66-EF11-A752-C0A5E8ACCB22', 5, 'Description', 'Description', NULL, 'nvarchar', -1, 0, 0, 1, 'null', 0, 1, 0, NULL, NULL, 0, 0, 0, 1, 0, 0, 'Search' ) 
-INSERT INTO [${flyway:defaultSchema}].EntityField ( EntityID, Sequence, Name, DisplayName, Description, Type, Length, Precision, Scale, AllowsNull, DefaultValue, AutoIncrement, AllowUpdateAPI, IsVirtual, RelatedEntityID, RelatedEntityFieldName, IsNameField, IncludeInUserSearchAPI, IncludeRelatedEntityNameFieldInBaseView, DefaultInView, IsPrimaryKey, IsUnique, RelatedEntityDisplayType ) VALUES ( 'AC93AD50-0E66-EF11-A752-C0A5E8ACCB22', 6, '[${flyway:defaultSchema}]_CreatedAt', 'Created At', NULL, 'datetimeoffset', 10, 34, 7, 0, 'getutcdate()', 0, 0, 0, NULL, NULL, 0, 0, 0, 0, 0, 0, 'Search' ) 
-INSERT INTO [${flyway:defaultSchema}].EntityField ( EntityID, Sequence, Name, DisplayName, Description, Type, Length, Precision, Scale, AllowsNull, DefaultValue, AutoIncrement, AllowUpdateAPI, IsVirtual, RelatedEntityID, RelatedEntityFieldName, IsNameField, IncludeInUserSearchAPI, IncludeRelatedEntityNameFieldInBaseView, DefaultInView, IsPrimaryKey, IsUnique, RelatedEntityDisplayType ) VALUES ( 'AC93AD50-0E66-EF11-A752-C0A5E8ACCB22', 7, '[${flyway:defaultSchema}]_UpdatedAt', 'Updated At', NULL, 'datetimeoffset', 10, 34, 7, 0, 'getutcdate()', 0, 0, 0, NULL, NULL, 0, 0, 0, 0, 0, 0, 'Search' ) 
+INSERT INTO [${flyway:defaultSchema}].EntityField ( EntityID, Sequence, Name, DisplayName, Description, Type, Length, Precision, Scale, AllowsNull, DefaultValue, AutoIncrement, AllowUpdateAPI, IsVirtual, RelatedEntityID, RelatedEntityFieldName, IsNameField, IncludeInUserSearchAPI, IncludeRelatedEntityNameFieldInBaseView, DefaultInView, IsPrimaryKey, IsUnique, RelatedEntityDisplayType ) VALUES ( 'AC93AD50-0E66-EF11-A752-C0A5E8ACCB22', 6, '${flyway:defaultSchema}_CreatedAt', 'Created At', NULL, 'datetimeoffset', 10, 34, 7, 0, 'getutcdate()', 0, 0, 0, NULL, NULL, 0, 0, 0, 0, 0, 0, 'Search' ) 
+INSERT INTO [${flyway:defaultSchema}].EntityField ( EntityID, Sequence, Name, DisplayName, Description, Type, Length, Precision, Scale, AllowsNull, DefaultValue, AutoIncrement, AllowUpdateAPI, IsVirtual, RelatedEntityID, RelatedEntityFieldName, IsNameField, IncludeInUserSearchAPI, IncludeRelatedEntityNameFieldInBaseView, DefaultInView, IsPrimaryKey, IsUnique, RelatedEntityDisplayType ) VALUES ( 'AC93AD50-0E66-EF11-A752-C0A5E8ACCB22', 7, '${flyway:defaultSchema}_UpdatedAt', 'Updated At', NULL, 'datetimeoffset', 10, 34, 7, 0, 'getutcdate()', 0, 0, 0, NULL, NULL, 0, 0, 0, 0, 0, 0, 'Search' ) 
 INSERT INTO [${flyway:defaultSchema}].EntityField ( EntityID, Sequence, Name, DisplayName, Description, Type, Length, Precision, Scale, AllowsNull, DefaultValue, AutoIncrement, AllowUpdateAPI, IsVirtual, RelatedEntityID, RelatedEntityFieldName, IsNameField, IncludeInUserSearchAPI, IncludeRelatedEntityNameFieldInBaseView, DefaultInView, IsPrimaryKey, IsUnique, RelatedEntityDisplayType ) VALUES ( 'B193AD50-0E66-EF11-A752-C0A5E8ACCB22', 1, 'ID', 'ID', NULL, 'uniqueidentifier', 16, 0, 0, 0, 'newsequentialid()', 0, 0, 0, NULL, NULL, 0, 1, 0, 1, 1, 1, 'Search' ) 
 INSERT INTO [${flyway:defaultSchema}].EntityField ( EntityID, Sequence, Name, DisplayName, Description, Type, Length, Precision, Scale, AllowsNull, DefaultValue, AutoIncrement, AllowUpdateAPI, IsVirtual, RelatedEntityID, RelatedEntityFieldName, IsNameField, IncludeInUserSearchAPI, IncludeRelatedEntityNameFieldInBaseView, DefaultInView, IsPrimaryKey, IsUnique, RelatedEntityDisplayType ) VALUES ( 'B193AD50-0E66-EF11-A752-C0A5E8ACCB22', 2, 'Name', 'Name', NULL, 'nvarchar', 510, 0, 0, 0, 'null', 0, 1, 0, NULL, NULL, 1, 1, 0, 1, 0, 0, 'Search' ) 
 INSERT INTO [${flyway:defaultSchema}].EntityField ( EntityID, Sequence, Name, DisplayName, Description, Type, Length, Precision, Scale, AllowsNull, DefaultValue, AutoIncrement, AllowUpdateAPI, IsVirtual, RelatedEntityID, RelatedEntityFieldName, IsNameField, IncludeInUserSearchAPI, IncludeRelatedEntityNameFieldInBaseView, DefaultInView, IsPrimaryKey, IsUnique, RelatedEntityDisplayType ) VALUES ( 'B193AD50-0E66-EF11-A752-C0A5E8ACCB22', 3, 'FileExtension', 'File Extension', NULL, 'nvarchar', 510, 0, 0, 1, 'null', 0, 1, 0, NULL, NULL, 0, 0, 0, 1, 0, 0, 'Search' ) 
-INSERT INTO [${flyway:defaultSchema}].EntityField ( EntityID, Sequence, Name, DisplayName, Description, Type, Length, Precision, Scale, AllowsNull, DefaultValue, AutoIncrement, AllowUpdateAPI, IsVirtual, RelatedEntityID, RelatedEntityFieldName, IsNameField, IncludeInUserSearchAPI, IncludeRelatedEntityNameFieldInBaseView, DefaultInView, IsPrimaryKey, IsUnique, RelatedEntityDisplayType ) VALUES ( 'B193AD50-0E66-EF11-A752-C0A5E8ACCB22', 4, '[${flyway:defaultSchema}]_CreatedAt', 'Created At', NULL, 'datetimeoffset', 10, 34, 7, 0, 'getutcdate()', 0, 0, 0, NULL, NULL, 0, 0, 0, 1, 0, 0, 'Search' ) 
-INSERT INTO [${flyway:defaultSchema}].EntityField ( EntityID, Sequence, Name, DisplayName, Description, Type, Length, Precision, Scale, AllowsNull, DefaultValue, AutoIncrement, AllowUpdateAPI, IsVirtual, RelatedEntityID, RelatedEntityFieldName, IsNameField, IncludeInUserSearchAPI, IncludeRelatedEntityNameFieldInBaseView, DefaultInView, IsPrimaryKey, IsUnique, RelatedEntityDisplayType ) VALUES ( 'B193AD50-0E66-EF11-A752-C0A5E8ACCB22', 5, '[${flyway:defaultSchema}]_UpdatedAt', 'Updated At', NULL, 'datetimeoffset', 10, 34, 7, 0, 'getutcdate()', 0, 0, 0, NULL, NULL, 0, 0, 0, 1, 0, 0, 'Search' ) 
+INSERT INTO [${flyway:defaultSchema}].EntityField ( EntityID, Sequence, Name, DisplayName, Description, Type, Length, Precision, Scale, AllowsNull, DefaultValue, AutoIncrement, AllowUpdateAPI, IsVirtual, RelatedEntityID, RelatedEntityFieldName, IsNameField, IncludeInUserSearchAPI, IncludeRelatedEntityNameFieldInBaseView, DefaultInView, IsPrimaryKey, IsUnique, RelatedEntityDisplayType ) VALUES ( 'B193AD50-0E66-EF11-A752-C0A5E8ACCB22', 4, '${flyway:defaultSchema}_CreatedAt', 'Created At', NULL, 'datetimeoffset', 10, 34, 7, 0, 'getutcdate()', 0, 0, 0, NULL, NULL, 0, 0, 0, 1, 0, 0, 'Search' ) 
+INSERT INTO [${flyway:defaultSchema}].EntityField ( EntityID, Sequence, Name, DisplayName, Description, Type, Length, Precision, Scale, AllowsNull, DefaultValue, AutoIncrement, AllowUpdateAPI, IsVirtual, RelatedEntityID, RelatedEntityFieldName, IsNameField, IncludeInUserSearchAPI, IncludeRelatedEntityNameFieldInBaseView, DefaultInView, IsPrimaryKey, IsUnique, RelatedEntityDisplayType ) VALUES ( 'B193AD50-0E66-EF11-A752-C0A5E8ACCB22', 5, '${flyway:defaultSchema}_UpdatedAt', 'Updated At', NULL, 'datetimeoffset', 10, 34, 7, 0, 'getutcdate()', 0, 0, 0, NULL, NULL, 0, 0, 0, 1, 0, 0, 'Search' ) 
 INSERT INTO [${flyway:defaultSchema}].EntityField ( EntityID, Sequence, Name, DisplayName, Description, Type, Length, Precision, Scale, AllowsNull, DefaultValue, AutoIncrement, AllowUpdateAPI, IsVirtual, RelatedEntityID, RelatedEntityFieldName, IsNameField, IncludeInUserSearchAPI, IncludeRelatedEntityNameFieldInBaseView, DefaultInView, IsPrimaryKey, IsUnique, RelatedEntityDisplayType ) VALUES ( 'B693AD50-0E66-EF11-A752-C0A5E8ACCB22', 1, 'ID', 'ID', NULL, 'uniqueidentifier', 16, 0, 0, 0, 'newsequentialid()', 0, 0, 0, NULL, NULL, 0, 1, 0, 1, 1, 1, 'Search' ) 
 INSERT INTO [${flyway:defaultSchema}].EntityField ( EntityID, Sequence, Name, DisplayName, Description, Type, Length, Precision, Scale, AllowsNull, DefaultValue, AutoIncrement, AllowUpdateAPI, IsVirtual, RelatedEntityID, RelatedEntityFieldName, IsNameField, IncludeInUserSearchAPI, IncludeRelatedEntityNameFieldInBaseView, DefaultInView, IsPrimaryKey, IsUnique, RelatedEntityDisplayType ) VALUES ( 'B693AD50-0E66-EF11-A752-C0A5E8ACCB22', 2, 'ContentSourceID', 'Content Source ID', NULL, 'uniqueidentifier', 16, 0, 0, 0, 'null', 0, 1, 0, 'B420FF22-0E66-EF11-A752-C0A5E8ACCB22', 'ID', 0, 0, 1, 1, 0, 0, 'Search' ) 
 INSERT INTO [${flyway:defaultSchema}].EntityField ( EntityID, Sequence, Name, DisplayName, Description, Type, Length, Precision, Scale, AllowsNull, DefaultValue, AutoIncrement, AllowUpdateAPI, IsVirtual, RelatedEntityID, RelatedEntityFieldName, IsNameField, IncludeInUserSearchAPI, IncludeRelatedEntityNameFieldInBaseView, DefaultInView, IsPrimaryKey, IsUnique, RelatedEntityDisplayType ) VALUES ( 'B693AD50-0E66-EF11-A752-C0A5E8ACCB22', 3, 'Name', 'Name', NULL, 'nvarchar', 500, 0, 0, 1, 'null', 0, 1, 0, NULL, NULL, 1, 1, 0, 1, 0, 0, 'Search' ) 
@@ -201,19 +201,19 @@ INSERT INTO [${flyway:defaultSchema}].EntityField ( EntityID, Sequence, Name, Di
 INSERT INTO [${flyway:defaultSchema}].EntityField ( EntityID, Sequence, Name, DisplayName, Description, Type, Length, Precision, Scale, AllowsNull, DefaultValue, AutoIncrement, AllowUpdateAPI, IsVirtual, RelatedEntityID, RelatedEntityFieldName, IsNameField, IncludeInUserSearchAPI, IncludeRelatedEntityNameFieldInBaseView, DefaultInView, IsPrimaryKey, IsUnique, RelatedEntityDisplayType ) VALUES ( 'B693AD50-0E66-EF11-A752-C0A5E8ACCB22', 8, 'Checksum', 'Checksum', NULL, 'nvarchar', 200, 0, 0, 1, 'null', 0, 1, 0, NULL, NULL, 0, 0, 0, 0, 0, 0, 'Search' ) 
 INSERT INTO [${flyway:defaultSchema}].EntityField ( EntityID, Sequence, Name, DisplayName, Description, Type, Length, Precision, Scale, AllowsNull, DefaultValue, AutoIncrement, AllowUpdateAPI, IsVirtual, RelatedEntityID, RelatedEntityFieldName, IsNameField, IncludeInUserSearchAPI, IncludeRelatedEntityNameFieldInBaseView, DefaultInView, IsPrimaryKey, IsUnique, RelatedEntityDisplayType ) VALUES ( 'B693AD50-0E66-EF11-A752-C0A5E8ACCB22', 9, 'URL', 'URL', NULL, 'nvarchar', 4000, 0, 0, 0, 'null', 0, 1, 0, NULL, NULL, 0, 0, 0, 0, 0, 0, 'Search' ) 
 INSERT INTO [${flyway:defaultSchema}].EntityField ( EntityID, Sequence, Name, DisplayName, Description, Type, Length, Precision, Scale, AllowsNull, DefaultValue, AutoIncrement, AllowUpdateAPI, IsVirtual, RelatedEntityID, RelatedEntityFieldName, IsNameField, IncludeInUserSearchAPI, IncludeRelatedEntityNameFieldInBaseView, DefaultInView, IsPrimaryKey, IsUnique, RelatedEntityDisplayType ) VALUES ( 'B693AD50-0E66-EF11-A752-C0A5E8ACCB22', 10, 'Text', 'Text', NULL, 'nvarchar', -1, 0, 0, 1, 'null', 0, 1, 0, NULL, NULL, 0, 0, 0, 0, 0, 0, 'Search' ) 
-INSERT INTO [${flyway:defaultSchema}].EntityField ( EntityID, Sequence, Name, DisplayName, Description, Type, Length, Precision, Scale, AllowsNull, DefaultValue, AutoIncrement, AllowUpdateAPI, IsVirtual, RelatedEntityID, RelatedEntityFieldName, IsNameField, IncludeInUserSearchAPI, IncludeRelatedEntityNameFieldInBaseView, DefaultInView, IsPrimaryKey, IsUnique, RelatedEntityDisplayType ) VALUES ( 'B693AD50-0E66-EF11-A752-C0A5E8ACCB22', 11, '[${flyway:defaultSchema}]_CreatedAt', 'Created At', NULL, 'datetimeoffset', 10, 34, 7, 0, 'getutcdate()', 0, 0, 0, NULL, NULL, 0, 0, 0, 0, 0, 0, 'Search' ) 
-INSERT INTO [${flyway:defaultSchema}].EntityField ( EntityID, Sequence, Name, DisplayName, Description, Type, Length, Precision, Scale, AllowsNull, DefaultValue, AutoIncrement, AllowUpdateAPI, IsVirtual, RelatedEntityID, RelatedEntityFieldName, IsNameField, IncludeInUserSearchAPI, IncludeRelatedEntityNameFieldInBaseView, DefaultInView, IsPrimaryKey, IsUnique, RelatedEntityDisplayType ) VALUES ( 'B693AD50-0E66-EF11-A752-C0A5E8ACCB22', 12, '[${flyway:defaultSchema}]_UpdatedAt', 'Updated At', NULL, 'datetimeoffset', 10, 34, 7, 0, 'getutcdate()', 0, 0, 0, NULL, NULL, 0, 0, 0, 0, 0, 0, 'Search' ) 
+INSERT INTO [${flyway:defaultSchema}].EntityField ( EntityID, Sequence, Name, DisplayName, Description, Type, Length, Precision, Scale, AllowsNull, DefaultValue, AutoIncrement, AllowUpdateAPI, IsVirtual, RelatedEntityID, RelatedEntityFieldName, IsNameField, IncludeInUserSearchAPI, IncludeRelatedEntityNameFieldInBaseView, DefaultInView, IsPrimaryKey, IsUnique, RelatedEntityDisplayType ) VALUES ( 'B693AD50-0E66-EF11-A752-C0A5E8ACCB22', 11, '${flyway:defaultSchema}_CreatedAt', 'Created At', NULL, 'datetimeoffset', 10, 34, 7, 0, 'getutcdate()', 0, 0, 0, NULL, NULL, 0, 0, 0, 0, 0, 0, 'Search' ) 
+INSERT INTO [${flyway:defaultSchema}].EntityField ( EntityID, Sequence, Name, DisplayName, Description, Type, Length, Precision, Scale, AllowsNull, DefaultValue, AutoIncrement, AllowUpdateAPI, IsVirtual, RelatedEntityID, RelatedEntityFieldName, IsNameField, IncludeInUserSearchAPI, IncludeRelatedEntityNameFieldInBaseView, DefaultInView, IsPrimaryKey, IsUnique, RelatedEntityDisplayType ) VALUES ( 'B693AD50-0E66-EF11-A752-C0A5E8ACCB22', 12, '${flyway:defaultSchema}_UpdatedAt', 'Updated At', NULL, 'datetimeoffset', 10, 34, 7, 0, 'getutcdate()', 0, 0, 0, NULL, NULL, 0, 0, 0, 0, 0, 0, 'Search' ) 
 INSERT INTO [${flyway:defaultSchema}].EntityField ( EntityID, Sequence, Name, DisplayName, Description, Type, Length, Precision, Scale, AllowsNull, DefaultValue, AutoIncrement, AllowUpdateAPI, IsVirtual, RelatedEntityID, RelatedEntityFieldName, IsNameField, IncludeInUserSearchAPI, IncludeRelatedEntityNameFieldInBaseView, DefaultInView, IsPrimaryKey, IsUnique, RelatedEntityDisplayType ) VALUES ( 'F13EC656-0E66-EF11-A752-C0A5E8ACCB22', 1, 'ID', 'ID', NULL, 'uniqueidentifier', 16, 0, 0, 0, 'newsequentialid()', 0, 0, 0, NULL, NULL, 0, 1, 0, 1, 1, 1, 'Search' ) 
 INSERT INTO [${flyway:defaultSchema}].EntityField ( EntityID, Sequence, Name, DisplayName, Description, Type, Length, Precision, Scale, AllowsNull, DefaultValue, AutoIncrement, AllowUpdateAPI, IsVirtual, RelatedEntityID, RelatedEntityFieldName, IsNameField, IncludeInUserSearchAPI, IncludeRelatedEntityNameFieldInBaseView, DefaultInView, IsPrimaryKey, IsUnique, RelatedEntityDisplayType ) VALUES ( 'F13EC656-0E66-EF11-A752-C0A5E8ACCB22', 2, 'ContentItemID', 'Content Item ID', NULL, 'uniqueidentifier', 16, 0, 0, 0, 'null', 0, 1, 0, 'B693AD50-0E66-EF11-A752-C0A5E8ACCB22', 'ID', 0, 0, 1, 1, 0, 0, 'Search' ) 
 INSERT INTO [${flyway:defaultSchema}].EntityField ( EntityID, Sequence, Name, DisplayName, Description, Type, Length, Precision, Scale, AllowsNull, DefaultValue, AutoIncrement, AllowUpdateAPI, IsVirtual, RelatedEntityID, RelatedEntityFieldName, IsNameField, IncludeInUserSearchAPI, IncludeRelatedEntityNameFieldInBaseView, DefaultInView, IsPrimaryKey, IsUnique, RelatedEntityDisplayType ) VALUES ( 'F13EC656-0E66-EF11-A752-C0A5E8ACCB22', 3, 'Name', 'Name', NULL, 'nvarchar', 200, 0, 0, 0, 'null', 0, 1, 0, NULL, NULL, 1, 1, 0, 1, 0, 0, 'Search' ) 
 INSERT INTO [${flyway:defaultSchema}].EntityField ( EntityID, Sequence, Name, DisplayName, Description, Type, Length, Precision, Scale, AllowsNull, DefaultValue, AutoIncrement, AllowUpdateAPI, IsVirtual, RelatedEntityID, RelatedEntityFieldName, IsNameField, IncludeInUserSearchAPI, IncludeRelatedEntityNameFieldInBaseView, DefaultInView, IsPrimaryKey, IsUnique, RelatedEntityDisplayType ) VALUES ( 'F13EC656-0E66-EF11-A752-C0A5E8ACCB22', 4, 'Value', 'Value', NULL, 'nvarchar', -1, 0, 0, 0, 'null', 0, 1, 0, NULL, NULL, 0, 0, 0, 1, 0, 0, 'Search' ) 
-INSERT INTO [${flyway:defaultSchema}].EntityField ( EntityID, Sequence, Name, DisplayName, Description, Type, Length, Precision, Scale, AllowsNull, DefaultValue, AutoIncrement, AllowUpdateAPI, IsVirtual, RelatedEntityID, RelatedEntityFieldName, IsNameField, IncludeInUserSearchAPI, IncludeRelatedEntityNameFieldInBaseView, DefaultInView, IsPrimaryKey, IsUnique, RelatedEntityDisplayType ) VALUES ( 'F13EC656-0E66-EF11-A752-C0A5E8ACCB22', 5, '[${flyway:defaultSchema}]_CreatedAt', 'Created At', NULL, 'datetimeoffset', 10, 34, 7, 0, 'getutcdate()', 0, 0, 0, NULL, NULL, 0, 0, 0, 1, 0, 0, 'Search' ) 
-INSERT INTO [${flyway:defaultSchema}].EntityField ( EntityID, Sequence, Name, DisplayName, Description, Type, Length, Precision, Scale, AllowsNull, DefaultValue, AutoIncrement, AllowUpdateAPI, IsVirtual, RelatedEntityID, RelatedEntityFieldName, IsNameField, IncludeInUserSearchAPI, IncludeRelatedEntityNameFieldInBaseView, DefaultInView, IsPrimaryKey, IsUnique, RelatedEntityDisplayType ) VALUES ( 'F13EC656-0E66-EF11-A752-C0A5E8ACCB22', 6, '[${flyway:defaultSchema}]_UpdatedAt', 'Updated At', NULL, 'datetimeoffset', 10, 34, 7, 0, 'getutcdate()', 0, 0, 0, NULL, NULL, 0, 0, 0, 0, 0, 0, 'Search' ) 
+INSERT INTO [${flyway:defaultSchema}].EntityField ( EntityID, Sequence, Name, DisplayName, Description, Type, Length, Precision, Scale, AllowsNull, DefaultValue, AutoIncrement, AllowUpdateAPI, IsVirtual, RelatedEntityID, RelatedEntityFieldName, IsNameField, IncludeInUserSearchAPI, IncludeRelatedEntityNameFieldInBaseView, DefaultInView, IsPrimaryKey, IsUnique, RelatedEntityDisplayType ) VALUES ( 'F13EC656-0E66-EF11-A752-C0A5E8ACCB22', 5, '${flyway:defaultSchema}_CreatedAt', 'Created At', NULL, 'datetimeoffset', 10, 34, 7, 0, 'getutcdate()', 0, 0, 0, NULL, NULL, 0, 0, 0, 1, 0, 0, 'Search' ) 
+INSERT INTO [${flyway:defaultSchema}].EntityField ( EntityID, Sequence, Name, DisplayName, Description, Type, Length, Precision, Scale, AllowsNull, DefaultValue, AutoIncrement, AllowUpdateAPI, IsVirtual, RelatedEntityID, RelatedEntityFieldName, IsNameField, IncludeInUserSearchAPI, IncludeRelatedEntityNameFieldInBaseView, DefaultInView, IsPrimaryKey, IsUnique, RelatedEntityDisplayType ) VALUES ( 'F13EC656-0E66-EF11-A752-C0A5E8ACCB22', 6, '${flyway:defaultSchema}_UpdatedAt', 'Updated At', NULL, 'datetimeoffset', 10, 34, 7, 0, 'getutcdate()', 0, 0, 0, NULL, NULL, 0, 0, 0, 0, 0, 0, 'Search' ) 
 INSERT INTO [${flyway:defaultSchema}].EntityField ( EntityID, Sequence, Name, DisplayName, Description, Type, Length, Precision, Scale, AllowsNull, DefaultValue, AutoIncrement, AllowUpdateAPI, IsVirtual, RelatedEntityID, RelatedEntityFieldName, IsNameField, IncludeInUserSearchAPI, IncludeRelatedEntityNameFieldInBaseView, DefaultInView, IsPrimaryKey, IsUnique, RelatedEntityDisplayType ) VALUES ( 'F63EC656-0E66-EF11-A752-C0A5E8ACCB22', 1, 'ID', 'ID', NULL, 'uniqueidentifier', 16, 0, 0, 0, 'newsequentialid()', 0, 0, 0, NULL, NULL, 0, 1, 0, 1, 1, 1, 'Search' ) 
 INSERT INTO [${flyway:defaultSchema}].EntityField ( EntityID, Sequence, Name, DisplayName, Description, Type, Length, Precision, Scale, AllowsNull, DefaultValue, AutoIncrement, AllowUpdateAPI, IsVirtual, RelatedEntityID, RelatedEntityFieldName, IsNameField, IncludeInUserSearchAPI, IncludeRelatedEntityNameFieldInBaseView, DefaultInView, IsPrimaryKey, IsUnique, RelatedEntityDisplayType ) VALUES ( 'F63EC656-0E66-EF11-A752-C0A5E8ACCB22', 2, 'ItemID', 'Item ID', NULL, 'uniqueidentifier', 16, 0, 0, 0, 'null', 0, 1, 0, 'B693AD50-0E66-EF11-A752-C0A5E8ACCB22', 'ID', 0, 0, 1, 1, 0, 0, 'Search' ) 
 INSERT INTO [${flyway:defaultSchema}].EntityField ( EntityID, Sequence, Name, DisplayName, Description, Type, Length, Precision, Scale, AllowsNull, DefaultValue, AutoIncrement, AllowUpdateAPI, IsVirtual, RelatedEntityID, RelatedEntityFieldName, IsNameField, IncludeInUserSearchAPI, IncludeRelatedEntityNameFieldInBaseView, DefaultInView, IsPrimaryKey, IsUnique, RelatedEntityDisplayType ) VALUES ( 'F63EC656-0E66-EF11-A752-C0A5E8ACCB22', 3, 'Tag', 'Tag', NULL, 'nvarchar', 400, 0, 0, 0, 'null', 0, 1, 0, NULL, NULL, 0, 0, 0, 1, 0, 0, 'Search' ) 
-INSERT INTO [${flyway:defaultSchema}].EntityField ( EntityID, Sequence, Name, DisplayName, Description, Type, Length, Precision, Scale, AllowsNull, DefaultValue, AutoIncrement, AllowUpdateAPI, IsVirtual, RelatedEntityID, RelatedEntityFieldName, IsNameField, IncludeInUserSearchAPI, IncludeRelatedEntityNameFieldInBaseView, DefaultInView, IsPrimaryKey, IsUnique, RelatedEntityDisplayType ) VALUES ( 'F63EC656-0E66-EF11-A752-C0A5E8ACCB22', 4, '[${flyway:defaultSchema}]_CreatedAt', 'Created At', NULL, 'datetimeoffset', 10, 34, 7, 0, 'getutcdate()', 0, 0, 0, NULL, NULL, 0, 0, 0, 1, 0, 0, 'Search' ) 
-INSERT INTO [${flyway:defaultSchema}].EntityField ( EntityID, Sequence, Name, DisplayName, Description, Type, Length, Precision, Scale, AllowsNull, DefaultValue, AutoIncrement, AllowUpdateAPI, IsVirtual, RelatedEntityID, RelatedEntityFieldName, IsNameField, IncludeInUserSearchAPI, IncludeRelatedEntityNameFieldInBaseView, DefaultInView, IsPrimaryKey, IsUnique, RelatedEntityDisplayType ) VALUES ( 'F63EC656-0E66-EF11-A752-C0A5E8ACCB22', 5, '[${flyway:defaultSchema}]_UpdatedAt', 'Updated At', NULL, 'datetimeoffset', 10, 34, 7, 0, 'getutcdate()', 0, 0, 0, NULL, NULL, 0, 0, 0, 1, 0, 0, 'Search' )
+INSERT INTO [${flyway:defaultSchema}].EntityField ( EntityID, Sequence, Name, DisplayName, Description, Type, Length, Precision, Scale, AllowsNull, DefaultValue, AutoIncrement, AllowUpdateAPI, IsVirtual, RelatedEntityID, RelatedEntityFieldName, IsNameField, IncludeInUserSearchAPI, IncludeRelatedEntityNameFieldInBaseView, DefaultInView, IsPrimaryKey, IsUnique, RelatedEntityDisplayType ) VALUES ( 'F63EC656-0E66-EF11-A752-C0A5E8ACCB22', 4, '${flyway:defaultSchema}_CreatedAt', 'Created At', NULL, 'datetimeoffset', 10, 34, 7, 0, 'getutcdate()', 0, 0, 0, NULL, NULL, 0, 0, 0, 1, 0, 0, 'Search' ) 
+INSERT INTO [${flyway:defaultSchema}].EntityField ( EntityID, Sequence, Name, DisplayName, Description, Type, Length, Precision, Scale, AllowsNull, DefaultValue, AutoIncrement, AllowUpdateAPI, IsVirtual, RelatedEntityID, RelatedEntityFieldName, IsNameField, IncludeInUserSearchAPI, IncludeRelatedEntityNameFieldInBaseView, DefaultInView, IsPrimaryKey, IsUnique, RelatedEntityDisplayType ) VALUES ( 'F63EC656-0E66-EF11-A752-C0A5E8ACCB22', 5, '${flyway:defaultSchema}_UpdatedAt', 'Updated At', NULL, 'datetimeoffset', 10, 34, 7, 0, 'getutcdate()', 0, 0, 0, NULL, NULL, 0, 0, 0, 1, 0, 0, 'Search' )
 
 
 UPDATE [${flyway:defaultSchema}].EntityField SET ValueListType='List' WHERE ID='42DE5E8E-A83B-EF11-86D4-0022481D1B23'
@@ -318,18 +318,18 @@ EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap @Ent
 EXEC [${flyway:defaultSchema}].spDeleteUnneededEntityFields @ExcludedSchemaNames='sys,staging'
 EXEC [${flyway:defaultSchema}].spUpdateExistingEntityFieldsFromSchema @ExcludedSchemaNames='sys,staging' 
 
-INSERT INTO [${flyway:defaultSchema}].EntityField ( EntityID, Sequence, Name, DisplayName, Description, Type, Length, Precision, Scale, AllowsNull, DefaultValue, AutoIncrement, AllowUpdateAPI, IsVirtual, RelatedEntityID, RelatedEntityFieldName, IsNameField, IncludeInUserSearchAPI, IncludeRelatedEntityNameFieldInBaseView, DefaultInView, IsPrimaryKey, IsUnique, RelatedEntityDisplayType ) VALUES ( '9684A900-0E66-EF11-A752-C0A5E8ACCB22', 9, 'Source', 'Source', NULL, 'nvarchar', 510, 0, 0, 1, 'null', 0, 0, 1, NULL, NULL, 0, 0, 0, 0, 0, 0, 'Search' ) 
-INSERT INTO [${flyway:defaultSchema}].EntityField ( EntityID, Sequence, Name, DisplayName, Description, Type, Length, Precision, Scale, AllowsNull, DefaultValue, AutoIncrement, AllowUpdateAPI, IsVirtual, RelatedEntityID, RelatedEntityFieldName, IsNameField, IncludeInUserSearchAPI, IncludeRelatedEntityNameFieldInBaseView, DefaultInView, IsPrimaryKey, IsUnique, RelatedEntityDisplayType ) VALUES ( 'B420FF22-0E66-EF11-A752-C0A5E8ACCB22', 9, 'ContentType', 'Content Type', NULL, 'nvarchar', 510, 0, 0, 0, 'null', 0, 0, 1, NULL, NULL, 0, 0, 0, 0, 0, 0, 'Search' ) 
-INSERT INTO [${flyway:defaultSchema}].EntityField ( EntityID, Sequence, Name, DisplayName, Description, Type, Length, Precision, Scale, AllowsNull, DefaultValue, AutoIncrement, AllowUpdateAPI, IsVirtual, RelatedEntityID, RelatedEntityFieldName, IsNameField, IncludeInUserSearchAPI, IncludeRelatedEntityNameFieldInBaseView, DefaultInView, IsPrimaryKey, IsUnique, RelatedEntityDisplayType ) VALUES ( 'B420FF22-0E66-EF11-A752-C0A5E8ACCB22', 10, 'ContentSourceType', 'Content Source Type', NULL, 'nvarchar', 510, 0, 0, 0, 'null', 0, 0, 1, NULL, NULL, 0, 0, 0, 0, 0, 0, 'Search' ) 
-INSERT INTO [${flyway:defaultSchema}].EntityField ( EntityID, Sequence, Name, DisplayName, Description, Type, Length, Precision, Scale, AllowsNull, DefaultValue, AutoIncrement, AllowUpdateAPI, IsVirtual, RelatedEntityID, RelatedEntityFieldName, IsNameField, IncludeInUserSearchAPI, IncludeRelatedEntityNameFieldInBaseView, DefaultInView, IsPrimaryKey, IsUnique, RelatedEntityDisplayType ) VALUES ( 'B420FF22-0E66-EF11-A752-C0A5E8ACCB22', 11, 'ContentFileType', 'Content File Type', NULL, 'nvarchar', 510, 0, 0, 0, 'null', 0, 0, 1, NULL, NULL, 0, 0, 0, 0, 0, 0, 'Search' ) 
-INSERT INTO [${flyway:defaultSchema}].EntityField ( EntityID, Sequence, Name, DisplayName, Description, Type, Length, Precision, Scale, AllowsNull, DefaultValue, AutoIncrement, AllowUpdateAPI, IsVirtual, RelatedEntityID, RelatedEntityFieldName, IsNameField, IncludeInUserSearchAPI, IncludeRelatedEntityNameFieldInBaseView, DefaultInView, IsPrimaryKey, IsUnique, RelatedEntityDisplayType ) VALUES ( 'B12E4A4A-0E66-EF11-A752-C0A5E8ACCB22', 7, 'ContentSource', 'Content Source', NULL, 'nvarchar', 510, 0, 0, 1, 'null', 0, 0, 1, NULL, NULL, 0, 0, 0, 0, 0, 0, 'Search' ) 
-INSERT INTO [${flyway:defaultSchema}].EntityField ( EntityID, Sequence, Name, DisplayName, Description, Type, Length, Precision, Scale, AllowsNull, DefaultValue, AutoIncrement, AllowUpdateAPI, IsVirtual, RelatedEntityID, RelatedEntityFieldName, IsNameField, IncludeInUserSearchAPI, IncludeRelatedEntityNameFieldInBaseView, DefaultInView, IsPrimaryKey, IsUnique, RelatedEntityDisplayType ) VALUES ( 'A793AD50-0E66-EF11-A752-C0A5E8ACCB22', 9, 'AIModel', 'AIModel', NULL, 'nvarchar', 100, 0, 0, 0, 'null', 0, 0, 1, NULL, NULL, 0, 0, 0, 0, 0, 0, 'Search' ) 
-INSERT INTO [${flyway:defaultSchema}].EntityField ( EntityID, Sequence, Name, DisplayName, Description, Type, Length, Precision, Scale, AllowsNull, DefaultValue, AutoIncrement, AllowUpdateAPI, IsVirtual, RelatedEntityID, RelatedEntityFieldName, IsNameField, IncludeInUserSearchAPI, IncludeRelatedEntityNameFieldInBaseView, DefaultInView, IsPrimaryKey, IsUnique, RelatedEntityDisplayType ) VALUES ( 'B693AD50-0E66-EF11-A752-C0A5E8ACCB22', 13, 'ContentSource', 'Content Source', NULL, 'nvarchar', 510, 0, 0, 1, 'null', 0, 0, 1, NULL, NULL, 0, 0, 0, 0, 0, 0, 'Search' ) 
-INSERT INTO [${flyway:defaultSchema}].EntityField ( EntityID, Sequence, Name, DisplayName, Description, Type, Length, Precision, Scale, AllowsNull, DefaultValue, AutoIncrement, AllowUpdateAPI, IsVirtual, RelatedEntityID, RelatedEntityFieldName, IsNameField, IncludeInUserSearchAPI, IncludeRelatedEntityNameFieldInBaseView, DefaultInView, IsPrimaryKey, IsUnique, RelatedEntityDisplayType ) VALUES ( 'B693AD50-0E66-EF11-A752-C0A5E8ACCB22', 14, 'ContentType', 'Content Type', NULL, 'nvarchar', 510, 0, 0, 0, 'null', 0, 0, 1, NULL, NULL, 0, 0, 0, 0, 0, 0, 'Search' ) 
-INSERT INTO [${flyway:defaultSchema}].EntityField ( EntityID, Sequence, Name, DisplayName, Description, Type, Length, Precision, Scale, AllowsNull, DefaultValue, AutoIncrement, AllowUpdateAPI, IsVirtual, RelatedEntityID, RelatedEntityFieldName, IsNameField, IncludeInUserSearchAPI, IncludeRelatedEntityNameFieldInBaseView, DefaultInView, IsPrimaryKey, IsUnique, RelatedEntityDisplayType ) VALUES ( 'B693AD50-0E66-EF11-A752-C0A5E8ACCB22', 15, 'ContentSourceType', 'Content Source Type', NULL, 'nvarchar', 510, 0, 0, 0, 'null', 0, 0, 1, NULL, NULL, 0, 0, 0, 0, 0, 0, 'Search' ) 
-INSERT INTO [${flyway:defaultSchema}].EntityField ( EntityID, Sequence, Name, DisplayName, Description, Type, Length, Precision, Scale, AllowsNull, DefaultValue, AutoIncrement, AllowUpdateAPI, IsVirtual, RelatedEntityID, RelatedEntityFieldName, IsNameField, IncludeInUserSearchAPI, IncludeRelatedEntityNameFieldInBaseView, DefaultInView, IsPrimaryKey, IsUnique, RelatedEntityDisplayType ) VALUES ( 'B693AD50-0E66-EF11-A752-C0A5E8ACCB22', 16, 'ContentFileType', 'Content File Type', NULL, 'nvarchar', 510, 0, 0, 0, 'null', 0, 0, 1, NULL, NULL, 0, 0, 0, 0, 0, 0, 'Search' ) 
-INSERT INTO [${flyway:defaultSchema}].EntityField ( EntityID, Sequence, Name, DisplayName, Description, Type, Length, Precision, Scale, AllowsNull, DefaultValue, AutoIncrement, AllowUpdateAPI, IsVirtual, RelatedEntityID, RelatedEntityFieldName, IsNameField, IncludeInUserSearchAPI, IncludeRelatedEntityNameFieldInBaseView, DefaultInView, IsPrimaryKey, IsUnique, RelatedEntityDisplayType ) VALUES ( 'F13EC656-0E66-EF11-A752-C0A5E8ACCB22', 7, 'ContentItem', 'Content Item', NULL, 'nvarchar', 500, 0, 0, 1, 'null', 0, 0, 1, NULL, NULL, 0, 0, 0, 0, 0, 0, 'Search' ) 
-INSERT INTO [${flyway:defaultSchema}].EntityField ( EntityID, Sequence, Name, DisplayName, Description, Type, Length, Precision, Scale, AllowsNull, DefaultValue, AutoIncrement, AllowUpdateAPI, IsVirtual, RelatedEntityID, RelatedEntityFieldName, IsNameField, IncludeInUserSearchAPI, IncludeRelatedEntityNameFieldInBaseView, DefaultInView, IsPrimaryKey, IsUnique, RelatedEntityDisplayType ) VALUES ( 'F63EC656-0E66-EF11-A752-C0A5E8ACCB22', 6, 'Item', 'Item', NULL, 'nvarchar', 500, 0, 0, 1, 'null', 0, 0, 1, NULL, NULL, 0, 0, 0, 0, 0, 0, 'Search' )
+--INSERT INTO [${flyway:defaultSchema}].EntityField ( EntityID, Sequence, Name, DisplayName, Description, Type, Length, Precision, Scale, AllowsNull, DefaultValue, AutoIncrement, AllowUpdateAPI, IsVirtual, RelatedEntityID, RelatedEntityFieldName, IsNameField, IncludeInUserSearchAPI, IncludeRelatedEntityNameFieldInBaseView, DefaultInView, IsPrimaryKey, IsUnique, RelatedEntityDisplayType ) VALUES ( '9684A900-0E66-EF11-A752-C0A5E8ACCB22', 9, 'Source', 'Source', NULL, 'nvarchar', 510, 0, 0, 1, 'null', 0, 0, 1, NULL, NULL, 0, 0, 0, 0, 0, 0, 'Search' ) 
+--INSERT INTO [${flyway:defaultSchema}].EntityField ( EntityID, Sequence, Name, DisplayName, Description, Type, Length, Precision, Scale, AllowsNull, DefaultValue, AutoIncrement, AllowUpdateAPI, IsVirtual, RelatedEntityID, RelatedEntityFieldName, IsNameField, IncludeInUserSearchAPI, IncludeRelatedEntityNameFieldInBaseView, DefaultInView, IsPrimaryKey, IsUnique, RelatedEntityDisplayType ) VALUES ( 'B420FF22-0E66-EF11-A752-C0A5E8ACCB22', 9, 'ContentType', 'Content Type', NULL, 'nvarchar', 510, 0, 0, 0, 'null', 0, 0, 1, NULL, NULL, 0, 0, 0, 0, 0, 0, 'Search' ) 
+--INSERT INTO [${flyway:defaultSchema}].EntityField ( EntityID, Sequence, Name, DisplayName, Description, Type, Length, Precision, Scale, AllowsNull, DefaultValue, AutoIncrement, AllowUpdateAPI, IsVirtual, RelatedEntityID, RelatedEntityFieldName, IsNameField, IncludeInUserSearchAPI, IncludeRelatedEntityNameFieldInBaseView, DefaultInView, IsPrimaryKey, IsUnique, RelatedEntityDisplayType ) VALUES ( 'B420FF22-0E66-EF11-A752-C0A5E8ACCB22', 10, 'ContentSourceType', 'Content Source Type', NULL, 'nvarchar', 510, 0, 0, 0, 'null', 0, 0, 1, NULL, NULL, 0, 0, 0, 0, 0, 0, 'Search' ) 
+--INSERT INTO [${flyway:defaultSchema}].EntityField ( EntityID, Sequence, Name, DisplayName, Description, Type, Length, Precision, Scale, AllowsNull, DefaultValue, AutoIncrement, AllowUpdateAPI, IsVirtual, RelatedEntityID, RelatedEntityFieldName, IsNameField, IncludeInUserSearchAPI, IncludeRelatedEntityNameFieldInBaseView, DefaultInView, IsPrimaryKey, IsUnique, RelatedEntityDisplayType ) VALUES ( 'B420FF22-0E66-EF11-A752-C0A5E8ACCB22', 11, 'ContentFileType', 'Content File Type', NULL, 'nvarchar', 510, 0, 0, 0, 'null', 0, 0, 1, NULL, NULL, 0, 0, 0, 0, 0, 0, 'Search' ) 
+-- INSERT INTO [${flyway:defaultSchema}].EntityField ( EntityID, Sequence, Name, DisplayName, Description, Type, Length, Precision, Scale, AllowsNull, DefaultValue, AutoIncrement, AllowUpdateAPI, IsVirtual, RelatedEntityID, RelatedEntityFieldName, IsNameField, IncludeInUserSearchAPI, IncludeRelatedEntityNameFieldInBaseView, DefaultInView, IsPrimaryKey, IsUnique, RelatedEntityDisplayType ) VALUES ( 'B12E4A4A-0E66-EF11-A752-C0A5E8ACCB22', 7, 'ContentSource', 'Content Source', NULL, 'nvarchar', 510, 0, 0, 1, 'null', 0, 0, 1, NULL, NULL, 0, 0, 0, 0, 0, 0, 'Search' ) 
+-- INSERT INTO [${flyway:defaultSchema}].EntityField ( EntityID, Sequence, Name, DisplayName, Description, Type, Length, Precision, Scale, AllowsNull, DefaultValue, AutoIncrement, AllowUpdateAPI, IsVirtual, RelatedEntityID, RelatedEntityFieldName, IsNameField, IncludeInUserSearchAPI, IncludeRelatedEntityNameFieldInBaseView, DefaultInView, IsPrimaryKey, IsUnique, RelatedEntityDisplayType ) VALUES ( 'A793AD50-0E66-EF11-A752-C0A5E8ACCB22', 9, 'AIModel', 'AIModel', NULL, 'nvarchar', 100, 0, 0, 0, 'null', 0, 0, 1, NULL, NULL, 0, 0, 0, 0, 0, 0, 'Search' ) 
+--INSERT INTO [${flyway:defaultSchema}].EntityField ( EntityID, Sequence, Name, DisplayName, Description, Type, Length, Precision, Scale, AllowsNull, DefaultValue, AutoIncrement, AllowUpdateAPI, IsVirtual, RelatedEntityID, RelatedEntityFieldName, IsNameField, IncludeInUserSearchAPI, IncludeRelatedEntityNameFieldInBaseView, DefaultInView, IsPrimaryKey, IsUnique, RelatedEntityDisplayType ) VALUES ( 'B693AD50-0E66-EF11-A752-C0A5E8ACCB22', 13, 'ContentSource', 'Content Source', NULL, 'nvarchar', 510, 0, 0, 1, 'null', 0, 0, 1, NULL, NULL, 0, 0, 0, 0, 0, 0, 'Search' ) 
+--INSERT INTO [${flyway:defaultSchema}].EntityField ( EntityID, Sequence, Name, DisplayName, Description, Type, Length, Precision, Scale, AllowsNull, DefaultValue, AutoIncrement, AllowUpdateAPI, IsVirtual, RelatedEntityID, RelatedEntityFieldName, IsNameField, IncludeInUserSearchAPI, IncludeRelatedEntityNameFieldInBaseView, DefaultInView, IsPrimaryKey, IsUnique, RelatedEntityDisplayType ) VALUES ( 'B693AD50-0E66-EF11-A752-C0A5E8ACCB22', 14, 'ContentType', 'Content Type', NULL, 'nvarchar', 510, 0, 0, 0, 'null', 0, 0, 1, NULL, NULL, 0, 0, 0, 0, 0, 0, 'Search' ) 
+--INSERT INTO [${flyway:defaultSchema}].EntityField ( EntityID, Sequence, Name, DisplayName, Description, Type, Length, Precision, Scale, AllowsNull, DefaultValue, AutoIncrement, AllowUpdateAPI, IsVirtual, RelatedEntityID, RelatedEntityFieldName, IsNameField, IncludeInUserSearchAPI, IncludeRelatedEntityNameFieldInBaseView, DefaultInView, IsPrimaryKey, IsUnique, RelatedEntityDisplayType ) VALUES ( 'B693AD50-0E66-EF11-A752-C0A5E8ACCB22', 15, 'ContentSourceType', 'Content Source Type', NULL, 'nvarchar', 510, 0, 0, 0, 'null', 0, 0, 1, NULL, NULL, 0, 0, 0, 0, 0, 0, 'Search' ) 
+--INSERT INTO [${flyway:defaultSchema}].EntityField ( EntityID, Sequence, Name, DisplayName, Description, Type, Length, Precision, Scale, AllowsNull, DefaultValue, AutoIncrement, AllowUpdateAPI, IsVirtual, RelatedEntityID, RelatedEntityFieldName, IsNameField, IncludeInUserSearchAPI, IncludeRelatedEntityNameFieldInBaseView, DefaultInView, IsPrimaryKey, IsUnique, RelatedEntityDisplayType ) VALUES ( 'B693AD50-0E66-EF11-A752-C0A5E8ACCB22', 16, 'ContentFileType', 'Content File Type', NULL, 'nvarchar', 510, 0, 0, 0, 'null', 0, 0, 1, NULL, NULL, 0, 0, 0, 0, 0, 0, 'Search' ) 
+--INSERT INTO [${flyway:defaultSchema}].EntityField ( EntityID, Sequence, Name, DisplayName, Description, Type, Length, Precision, Scale, AllowsNull, DefaultValue, AutoIncrement, AllowUpdateAPI, IsVirtual, RelatedEntityID, RelatedEntityFieldName, IsNameField, IncludeInUserSearchAPI, IncludeRelatedEntityNameFieldInBaseView, DefaultInView, IsPrimaryKey, IsUnique, RelatedEntityDisplayType ) VALUES ( 'F13EC656-0E66-EF11-A752-C0A5E8ACCB22', 7, 'ContentItem', 'Content Item', NULL, 'nvarchar', 500, 0, 0, 1, 'null', 0, 0, 1, NULL, NULL, 0, 0, 0, 0, 0, 0, 'Search' ) 
+--INSERT INTO [${flyway:defaultSchema}].EntityField ( EntityID, Sequence, Name, DisplayName, Description, Type, Length, Precision, Scale, AllowsNull, DefaultValue, AutoIncrement, AllowUpdateAPI, IsVirtual, RelatedEntityID, RelatedEntityFieldName, IsNameField, IncludeInUserSearchAPI, IncludeRelatedEntityNameFieldInBaseView, DefaultInView, IsPrimaryKey, IsUnique, RelatedEntityDisplayType ) VALUES ( 'F63EC656-0E66-EF11-A752-C0A5E8ACCB22', 6, 'Item', 'Item', NULL, 'nvarchar', 500, 0, 0, 1, 'null', 0, 0, 1, NULL, NULL, 0, 0, 0, 0, 0, 0, 'Search' )
 
 INSERT INTO [${flyway:defaultSchema}].ContentFileType ( Name, FileExtension ) VALUES ( 'PDF', '.pdf' )
 INSERT INTO [${flyway:defaultSchema}].ContentFileType ( Name, FileExtension ) VALUES ( 'DOCX', '.docx' )
@@ -339,10 +339,1492 @@ INSERT INTO [${flyway:defaultSchema}].ContentFileType ( Name, FileExtension ) VA
 INSERT INTO [${flyway:defaultSchema}].ContentSourceType ( Name, Description ) VALUES ( 'Local File System', NULL )
 INSERT INTO [${flyway:defaultSchema}].ContentSourceType ( Name, Description ) VALUES ( 'Website', NULL )
 INSERT INTO [${flyway:defaultSchema}].ContentSourceType ( Name, Description ) VALUES ( 'RSS Feed', NULL )
-INSERT INTO [${flyway:defaultSchema}].ContentSourceType ( Name, Description ) VALUES ( 'Azure Blob Storage', NULL )
+INSERT INTO [${flyway:defaultSchema}].ContentSourceType ( Name, Description ) VALUES ( 'Cloud Storage', NULL )
 
 INSERT INTO [${flyway:defaultSchema}].ContentSourceTypeParam (Name, Description, Type, DefaultValue, IsRequired ) VALUES ('CrawlOtherSitesInTopLevelDomain', 'Dictates whether we crawl links from a website at the same domain level as the link provided.', 'Boolean', 'false', 1)
 INSERT INTO [${flyway:defaultSchema}].ContentSourceTypeParam (Name, Description, Type, DefaultValue, IsRequired ) VALUES ('CrawlSitesInLowerLevelDomain', 'Dictates whether we crawl sites that are in lower level domains from the starting URL.', 'Boolean', 'false', 1)
 INSERT INTO [${flyway:defaultSchema}].ContentSourceTypeParam (Name, Description, Type, DefaultValue, IsRequired ) VALUES ('MaxDepth', 'Specifies the maximum depth that we crawl the site.', 'Number', '0', 1)
 INSERT INTO [${flyway:defaultSchema}].ContentSourceTypeParam (Name, Description, Type, DefaultValue, IsRequired ) VALUES ('RootURL', 'Optional parameter to specify what form any scraped links must start with, and defaults to the homepage of the website.', 'String', Null, 0)
 INSERT INTO [${flyway:defaultSchema}].ContentSourceTypeParam (Name, Description, Type, DefaultValue, IsRequired ) VALUES ('URLPattern', 'Optional parameter for the Webcrawler that defines a regular expression pattern that the URL must match when extracting links on a page. The default is a regular expression that allows for any link.', 'RegExp', '^.*$', 0)
+
+DROP PROCEDURE IF EXISTS [__mj].[spCreateContentFileType]
+GO
+
+CREATE PROCEDURE [__mj].[spCreateContentFileType]
+    @Name nvarchar(255),
+    @FileExtension nvarchar(255)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
+    INSERT INTO 
+    [__mj].[ContentFileType]
+        (
+            [Name],
+            [FileExtension],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+        )
+    OUTPUT INSERTED.[ID] INTO @InsertedRow
+    VALUES
+        (
+            @Name,
+            @FileExtension, 
+            GETUTCDATE(),
+            GETUTCDATE()
+        )
+    -- return the new record from the base view, which might have some calculated fields
+    SELECT * FROM [__mj].[vwContentFileTypes] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
+END
+GO
+GRANT EXECUTE ON [__mj].[spCreateContentFileType] TO [cdp_Developer], [cdp_Integration]
+    
+DROP PROCEDURE IF EXISTS [__mj].[spCreateContentItem]
+GO
+
+CREATE PROCEDURE [__mj].[spCreateContentItem]
+    @ContentSourceID uniqueidentifier,
+    @Name nvarchar(250),
+    @Description nvarchar(MAX),
+    @ContentTypeID uniqueidentifier,
+    @ContentSourceTypeID uniqueidentifier,
+    @ContentFileTypeID uniqueidentifier,
+    @Checksum nvarchar(100),
+    @URL nvarchar(2000),
+    @Text nvarchar(MAX)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
+    INSERT INTO 
+    [__mj].[ContentItem]
+        (
+            [ContentSourceID],
+            [Name],
+            [Description],
+            [ContentTypeID],
+            [ContentSourceTypeID],
+            [ContentFileTypeID],
+            [Checksum],
+            [URL],
+            [Text],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+        )
+    OUTPUT INSERTED.[ID] INTO @InsertedRow
+    VALUES
+        (
+            @ContentSourceID,
+            @Name,
+            @Description,
+            @ContentTypeID,
+            @ContentSourceTypeID,
+            @ContentFileTypeID,
+            @Checksum,
+            @URL,
+            @Text, 
+            GETUTCDATE(),
+            GETUTCDATE()
+        )
+    -- return the new record from the base view, which might have some calculated fields
+    SELECT * FROM [__mj].[vwContentItems] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
+END
+GO
+GRANT EXECUTE ON [__mj].[spCreateContentItem] TO [cdp_Developer], [cdp_Integration]
+    
+DROP PROCEDURE IF EXISTS [__mj].[spCreateContentItemAttribute]
+GO
+
+CREATE PROCEDURE [__mj].[spCreateContentItemAttribute]
+    @ContentItemID uniqueidentifier,
+    @Name nvarchar(100),
+    @Value nvarchar(MAX)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
+    INSERT INTO 
+    [__mj].[ContentItemAttribute]
+        (
+            [ContentItemID],
+            [Name],
+            [Value],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+        )
+    OUTPUT INSERTED.[ID] INTO @InsertedRow
+    VALUES
+        (
+            @ContentItemID,
+            @Name,
+            @Value, 
+            GETUTCDATE(),
+            GETUTCDATE()
+        )
+    -- return the new record from the base view, which might have some calculated fields
+    SELECT * FROM [__mj].[vwContentItemAttributes] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
+END
+GO
+GRANT EXECUTE ON [__mj].[spCreateContentItemAttribute] TO [cdp_Developer], [cdp_Integration]
+    
+
+DROP PROCEDURE IF EXISTS [__mj].[spCreateContentItemTag]
+GO
+
+CREATE PROCEDURE [__mj].[spCreateContentItemTag]
+    @ItemID uniqueidentifier,
+    @Tag nvarchar(200)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
+    INSERT INTO 
+    [__mj].[ContentItemTag]
+        (
+            [ItemID],
+            [Tag],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+        )
+    OUTPUT INSERTED.[ID] INTO @InsertedRow
+    VALUES
+        (
+            @ItemID,
+            @Tag,
+            GETUTCDATE(),
+            GETUTCDATE()
+        )
+    -- return the new record from the base view, which might have some calculated fields
+    SELECT * FROM [__mj].[vwContentItemTags] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
+END
+GO
+GRANT EXECUTE ON [__mj].[spCreateContentItemTag] TO [cdp_Developer], [cdp_Integration]
+    
+DROP PROCEDURE IF EXISTS [__mj].[spCreateContentProcessRun]
+GO
+
+CREATE PROCEDURE [__mj].[spCreateContentProcessRun]
+    @SourceID uniqueidentifier,
+    @StartTime datetime,
+    @EndTime datetime,
+    @Status nvarchar(100),
+    @ProcessedItems int
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
+    INSERT INTO 
+    [__mj].[ContentProcessRun]
+        (
+            [SourceID],
+            [StartTime],
+            [EndTime],
+            [Status],
+            [ProcessedItems],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+        )
+    OUTPUT INSERTED.[ID] INTO @InsertedRow
+    VALUES
+        (
+            @SourceID,
+            @StartTime,
+            @EndTime,
+            @Status,
+            @ProcessedItems, 
+            GETUTCDATE(),
+            GETUTCDATE()
+        )
+    -- return the new record from the base view, which might have some calculated fields
+    SELECT * FROM [__mj].[vwContentProcessRuns] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
+END
+GO
+GRANT EXECUTE ON [__mj].[spCreateContentProcessRun] TO [cdp_Developer], [cdp_Integration]
+    
+DROP PROCEDURE IF EXISTS [__mj].[spCreateContentSource]
+GO
+
+CREATE PROCEDURE [__mj].[spCreateContentSource]
+    @Name nvarchar(255),
+    @ContentTypeID uniqueidentifier,
+    @ContentSourceTypeID uniqueidentifier,
+    @ContentFileTypeID uniqueidentifier,
+    @URL nvarchar(2000)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
+    INSERT INTO 
+    [__mj].[ContentSource]
+        (
+            [Name],
+            [ContentTypeID],
+            [ContentSourceTypeID],
+            [ContentFileTypeID],
+            [URL],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+        )
+    OUTPUT INSERTED.[ID] INTO @InsertedRow
+    VALUES
+        (
+            @Name,
+            @ContentTypeID,
+            @ContentSourceTypeID,
+            @ContentFileTypeID,
+            @URL,
+            GETUTCDATE(),
+            GETUTCDATE()
+        )
+    -- return the new record from the base view, which might have some calculated fields
+    SELECT * FROM [__mj].[vwContentSources] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
+END
+GO
+GRANT EXECUTE ON [__mj].[spCreateContentSource] TO [cdp_Developer], [cdp_Integration]
+    
+DROP PROCEDURE IF EXISTS [__mj].[spCreateContentSourceParam]
+GO
+
+CREATE PROCEDURE [__mj].[spCreateContentSourceParam]
+    @ContentSourceID uniqueidentifier,
+    @ContentSourceTypeParamID uniqueidentifier,
+    @Value nvarchar(MAX)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
+    INSERT INTO 
+    [__mj].[ContentSourceParam]
+        (
+            [ContentSourceID],
+            [ContentSourceTypeParamID],
+            [Value],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+        )
+    OUTPUT INSERTED.[ID] INTO @InsertedRow
+    VALUES
+        (
+            @ContentSourceID,
+            @ContentSourceTypeParamID,
+            @Value,
+            GETUTCDATE(),
+            GETUTCDATE()
+        )
+    -- return the new record from the base view, which might have some calculated fields
+    SELECT * FROM [__mj].[vwContentSourceParams] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
+END
+GO
+GRANT EXECUTE ON [__mj].[spCreateContentSourceParam] TO [cdp_Developer], [cdp_Integration]
+    
+DROP PROCEDURE IF EXISTS [__mj].[spCreateContentSourceType]
+GO
+
+CREATE PROCEDURE [__mj].[spCreateContentSourceType]
+    @Name nvarchar(255),
+    @Description nvarchar(1000)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
+    INSERT INTO 
+    [__mj].[ContentSourceType]
+        (
+            [Name],
+            [Description],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+        )
+    OUTPUT INSERTED.[ID] INTO @InsertedRow
+    VALUES
+        (
+            @Name,
+            @Description, 
+            GETUTCDATE(),
+            GETUTCDATE()
+        )
+    -- return the new record from the base view, which might have some calculated fields
+    SELECT * FROM [__mj].[vwContentSourceTypes] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
+END
+GO
+GRANT EXECUTE ON [__mj].[spCreateContentSourceType] TO [cdp_Developer], [cdp_Integration]
+    
+DROP PROCEDURE IF EXISTS [__mj].[spCreateContentSourceTypeParam]
+GO
+
+CREATE PROCEDURE [__mj].[spCreateContentSourceTypeParam]
+    @Name nvarchar(100),
+    @Description nvarchar(MAX),
+    @Type nvarchar(50),
+    @DefaultValue nvarchar(MAX),
+    @IsRequired bit
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
+    INSERT INTO 
+    [__mj].[ContentSourceTypeParam]
+        (
+            [Name],
+            [Description],
+            [Type],
+            [DefaultValue],
+            [IsRequired],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+        )
+    OUTPUT INSERTED.[ID] INTO @InsertedRow
+    VALUES
+        (
+            @Name,
+            @Description,
+            @Type,
+            @DefaultValue,
+            @IsRequired,
+            GETUTCDATE(),
+            GETUTCDATE()
+        )
+    -- return the new record from the base view, which might have some calculated fields
+    SELECT * FROM [__mj].[vwContentSourceTypeParams] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
+END
+GO
+GRANT EXECUTE ON [__mj].[spCreateContentSourceTypeParam] TO [cdp_Developer], [cdp_Integration]
+    
+DROP PROCEDURE IF EXISTS [__mj].[spCreateContentType]
+GO
+
+CREATE PROCEDURE [__mj].[spCreateContentType]
+    @Name nvarchar(255),
+    @Description nvarchar(MAX),
+    @AIModelID uniqueidentifier,
+    @MinTags int,
+    @MaxTags int
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
+    INSERT INTO 
+    [__mj].[ContentType]
+        (
+            [Name],
+            [Description],
+            [AIModelID],
+            [MinTags],
+            [MaxTags],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+        )
+    OUTPUT INSERTED.[ID] INTO @InsertedRow
+    VALUES
+        (
+            @Name,
+            @Description,
+            @AIModelID,
+            @MinTags,
+            @MaxTags,
+            GETUTCDATE(),
+            GETUTCDATE()
+        )
+    -- return the new record from the base view, which might have some calculated fields
+    SELECT * FROM [__mj].[vwContentTypes] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
+END
+GO
+GRANT EXECUTE ON [__mj].[spCreateContentType] TO [cdp_Developer], [cdp_Integration]
+    
+
+DROP PROCEDURE IF EXISTS [__mj].[spCreateContentTypeAttribute]
+GO
+
+CREATE PROCEDURE [__mj].[spCreateContentTypeAttribute]
+    @ContentTypeID uniqueidentifier,
+    @Name nvarchar(100),
+    @Prompt nvarchar(MAX),
+    @Description nvarchar(MAX)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
+    INSERT INTO 
+    [__mj].[ContentTypeAttribute]
+        (
+            [ContentTypeID],
+            [Name],
+            [Prompt],
+            [Description],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+        )
+    OUTPUT INSERTED.[ID] INTO @InsertedRow
+    VALUES
+        (
+            @ContentTypeID,
+            @Name,
+            @Prompt,
+            @Description,
+            GETUTCDATE(),
+            GETUTCDATE()
+        )
+    -- return the new record from the base view, which might have some calculated fields
+    SELECT * FROM [__mj].[vwContentTypeAttributes] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
+END
+GO
+GRANT EXECUTE ON [__mj].[spCreateContentTypeAttribute] TO [cdp_Developer], [cdp_Integration]
+
+
+DROP PROCEDURE IF EXISTS [__mj].[spDeleteContentFileType]
+GO
+
+CREATE PROCEDURE [__mj].[spDeleteContentFileType]
+    @ID uniqueidentifier
+AS  
+BEGIN
+    SET NOCOUNT ON;
+
+    DELETE FROM 
+        [__mj].[ContentFileType]
+    WHERE 
+        [ID] = @ID
+
+
+    SELECT @ID AS [ID] -- Return the primary key to indicate we successfully deleted the record
+END
+GO
+GRANT EXECUTE ON [__mj].[spDeleteContentFileType] TO [cdp_Integration]
+    
+DROP PROCEDURE IF EXISTS [__mj].[spDeleteContentItem]
+GO
+
+CREATE PROCEDURE [__mj].[spDeleteContentItem]
+    @ID uniqueidentifier
+AS  
+BEGIN
+    SET NOCOUNT ON;
+
+    DELETE FROM 
+        [__mj].[ContentItem]
+    WHERE 
+        [ID] = @ID
+
+
+    SELECT @ID AS [ID] -- Return the primary key to indicate we successfully deleted the record
+END
+GO
+GRANT EXECUTE ON [__mj].[spDeleteContentItem] TO [cdp_Integration]
+    
+DROP PROCEDURE IF EXISTS [__mj].[spDeleteContentItemAttribute]
+GO
+
+CREATE PROCEDURE [__mj].[spDeleteContentItemAttribute]
+    @ID uniqueidentifier
+AS  
+BEGIN
+    SET NOCOUNT ON;
+
+    DELETE FROM 
+        [__mj].[ContentItemAttribute]
+    WHERE 
+        [ID] = @ID
+
+
+    SELECT @ID AS [ID] -- Return the primary key to indicate we successfully deleted the record
+END
+GO
+GRANT EXECUTE ON [__mj].[spDeleteContentItemAttribute] TO [cdp_Integration]
+    
+DROP PROCEDURE IF EXISTS [__mj].[spDeleteContentItemTag]
+GO
+
+CREATE PROCEDURE [__mj].[spDeleteContentItemTag]
+    @ID uniqueidentifier
+AS  
+BEGIN
+    SET NOCOUNT ON;
+
+    DELETE FROM 
+        [__mj].[ContentItemTag]
+    WHERE 
+        [ID] = @ID
+
+
+    SELECT @ID AS [ID] -- Return the primary key to indicate we successfully deleted the record
+END
+GO
+GRANT EXECUTE ON [__mj].[spDeleteContentItemTag] TO [cdp_Integration]
+    
+DROP PROCEDURE IF EXISTS [__mj].[spDeleteContentProcessRun]
+GO
+
+CREATE PROCEDURE [__mj].[spDeleteContentProcessRun]
+    @ID uniqueidentifier
+AS  
+BEGIN
+    SET NOCOUNT ON;
+
+    DELETE FROM 
+        [__mj].[ContentProcessRun]
+    WHERE 
+        [ID] = @ID
+
+
+    SELECT @ID AS [ID] -- Return the primary key to indicate we successfully deleted the record
+END
+GO
+GRANT EXECUTE ON [__mj].[spDeleteContentProcessRun] TO [cdp_Integration]
+    
+DROP PROCEDURE IF EXISTS [__mj].[spDeleteContentSource]
+GO
+
+CREATE PROCEDURE [__mj].[spDeleteContentSource]
+    @ID uniqueidentifier
+AS  
+BEGIN
+    SET NOCOUNT ON;
+
+    DELETE FROM 
+        [__mj].[ContentSource]
+    WHERE 
+        [ID] = @ID
+
+
+    SELECT @ID AS [ID] -- Return the primary key to indicate we successfully deleted the record
+END
+GO
+GRANT EXECUTE ON [__mj].[spDeleteContentSource] TO [cdp_Integration]
+    
+DROP PROCEDURE IF EXISTS [__mj].[spDeleteContentSourceParam]
+GO
+
+CREATE PROCEDURE [__mj].[spDeleteContentSourceParam]
+    @ID uniqueidentifier
+AS  
+BEGIN
+    SET NOCOUNT ON;
+
+    DELETE FROM 
+        [__mj].[ContentSourceParam]
+    WHERE 
+        [ID] = @ID
+
+
+    SELECT @ID AS [ID] -- Return the primary key to indicate we successfully deleted the record
+END
+GO
+GRANT EXECUTE ON [__mj].[spDeleteContentSourceParam] TO [cdp_Integration]
+    
+DROP PROCEDURE IF EXISTS [__mj].[spDeleteContentSourceType]
+GO
+
+CREATE PROCEDURE [__mj].[spDeleteContentSourceType]
+    @ID uniqueidentifier
+AS  
+BEGIN
+    SET NOCOUNT ON;
+
+    DELETE FROM 
+        [__mj].[ContentSourceType]
+    WHERE 
+        [ID] = @ID
+
+
+    SELECT @ID AS [ID] -- Return the primary key to indicate we successfully deleted the record
+END
+GO
+GRANT EXECUTE ON [__mj].[spDeleteContentSourceType] TO [cdp_Integration]
+    
+DROP PROCEDURE IF EXISTS [__mj].[spDeleteContentSourceTypeParam]
+GO
+
+CREATE PROCEDURE [__mj].[spDeleteContentSourceTypeParam]
+    @ID uniqueidentifier
+AS  
+BEGIN
+    SET NOCOUNT ON;
+
+    DELETE FROM 
+        [__mj].[ContentSourceTypeParam]
+    WHERE 
+        [ID] = @ID
+
+
+    SELECT @ID AS [ID] -- Return the primary key to indicate we successfully deleted the record
+END
+GO
+GRANT EXECUTE ON [__mj].[spDeleteContentSourceTypeParam] TO [cdp_Integration]
+    
+DROP PROCEDURE IF EXISTS [__mj].[spDeleteContentType]
+GO
+
+CREATE PROCEDURE [__mj].[spDeleteContentType]
+    @ID uniqueidentifier
+AS  
+BEGIN
+    SET NOCOUNT ON;
+
+    DELETE FROM 
+        [__mj].[ContentType]
+    WHERE 
+        [ID] = @ID
+
+
+    SELECT @ID AS [ID] -- Return the primary key to indicate we successfully deleted the record
+END
+GO
+GRANT EXECUTE ON [__mj].[spDeleteContentType] TO [cdp_Integration]
+    
+DROP PROCEDURE IF EXISTS [__mj].[spDeleteContentTypeAttribute]
+GO
+
+CREATE PROCEDURE [__mj].[spDeleteContentTypeAttribute]
+    @ID uniqueidentifier
+AS  
+BEGIN
+    SET NOCOUNT ON;
+
+    DELETE FROM 
+        [__mj].[ContentTypeAttribute]
+    WHERE 
+        [ID] = @ID
+
+
+    SELECT @ID AS [ID] -- Return the primary key to indicate we successfully deleted the record
+END
+GO
+GRANT EXECUTE ON [__mj].[spDeleteContentTypeAttribute] TO [cdp_Integration]
+
+DROP PROCEDURE IF EXISTS [__mj].[spUpdateContentFileType]
+GO
+
+CREATE PROCEDURE [__mj].[spUpdateContentFileType]
+    @ID uniqueidentifier,
+    @Name nvarchar(255),
+    @FileExtension nvarchar(255)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[ContentFileType]
+    SET 
+        [Name] = @Name,
+        [FileExtension] = @FileExtension
+    WHERE
+        [ID] = @ID
+
+    -- return the updated record so the caller can see the updated values and any calculated fields
+    SELECT 
+                                        * 
+                                    FROM 
+                                        [__mj].[vwContentFileTypes] 
+                                    WHERE
+                                        [ID] = @ID
+                                    
+END
+GO
+
+GRANT EXECUTE ON [__mj].[spUpdateContentFileType] TO [cdp_Developer], [cdp_Integration]
+GO
+
+------------------------------------------------------------
+----- TRIGGER FOR __mj_UpdatedAt field for the ContentFileType table
+------------------------------------------------------------
+DROP TRIGGER IF EXISTS [__mj].trgUpdateContentFileType
+GO
+CREATE TRIGGER [__mj].trgUpdateContentFileType
+ON [__mj].[ContentFileType]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[ContentFileType]
+    SET 
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM 
+        [__mj].[ContentFileType] AS _organicTable
+    INNER JOIN 
+        INSERTED AS I ON 
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+
+------------------------------------------------------------
+----- UPDATE PROCEDURE FOR ContentItem  
+------------------------------------------------------------
+DROP PROCEDURE IF EXISTS [__mj].[spUpdateContentItem]
+GO
+
+CREATE PROCEDURE [__mj].[spUpdateContentItem]
+    @ID uniqueidentifier,
+    @ContentSourceID uniqueidentifier,
+    @Name nvarchar(250),
+    @Description nvarchar(MAX),
+    @ContentTypeID uniqueidentifier,
+    @ContentSourceTypeID uniqueidentifier,
+    @ContentFileTypeID uniqueidentifier,
+    @Checksum nvarchar(100),
+    @URL nvarchar(2000),
+    @Text nvarchar(MAX)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[ContentItem]
+    SET 
+        [ContentSourceID] = @ContentSourceID,
+        [Name] = @Name,
+        [Description] = @Description,
+        [ContentTypeID] = @ContentTypeID,
+        [ContentSourceTypeID] = @ContentSourceTypeID,
+        [ContentFileTypeID] = @ContentFileTypeID,
+        [Checksum] = @Checksum,
+        [URL] = @URL,
+        [Text] = @Text
+    WHERE
+        [ID] = @ID
+
+    -- return the updated record so the caller can see the updated values and any calculated fields
+    SELECT 
+                                        * 
+                                    FROM 
+                                        [__mj].[vwContentItems] 
+                                    WHERE
+                                        [ID] = @ID
+                                    
+END
+GO
+
+GRANT EXECUTE ON [__mj].[spUpdateContentItem] TO [cdp_Developer], [cdp_Integration]
+GO
+
+------------------------------------------------------------
+----- TRIGGER FOR __mj_UpdatedAt field for the ContentItem table
+------------------------------------------------------------
+DROP TRIGGER IF EXISTS [__mj].trgUpdateContentItem
+GO
+CREATE TRIGGER [__mj].trgUpdateContentItem
+ON [__mj].[ContentItem]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[ContentItem]
+    SET 
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM 
+        [__mj].[ContentItem] AS _organicTable
+    INNER JOIN 
+        INSERTED AS I ON 
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+
+------------------------------------------------------------
+----- UPDATE PROCEDURE FOR ContentItemAttribute  
+------------------------------------------------------------
+DROP PROCEDURE IF EXISTS [__mj].[spUpdateContentItemAttribute]
+GO
+
+CREATE PROCEDURE [__mj].[spUpdateContentItemAttribute]
+    @ID uniqueidentifier,
+    @ContentItemID uniqueidentifier,
+    @Name nvarchar(100),
+    @Value nvarchar(MAX)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[ContentItemAttribute]
+    SET 
+        [ContentItemID] = @ContentItemID,
+        [Name] = @Name,
+        [Value] = @Value
+    WHERE
+        [ID] = @ID
+
+    -- return the updated record so the caller can see the updated values and any calculated fields
+    SELECT 
+                                        * 
+                                    FROM 
+                                        [__mj].[vwContentItemAttributes] 
+                                    WHERE
+                                        [ID] = @ID
+                                    
+END
+GO
+
+GRANT EXECUTE ON [__mj].[spUpdateContentItemAttribute] TO [cdp_Developer], [cdp_Integration]
+GO
+
+------------------------------------------------------------
+----- TRIGGER FOR __mj_UpdatedAt field for the ContentItemAttribute table
+------------------------------------------------------------
+DROP TRIGGER IF EXISTS [__mj].trgUpdateContentItemAttribute
+GO
+CREATE TRIGGER [__mj].trgUpdateContentItemAttribute
+ON [__mj].[ContentItemAttribute]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[ContentItemAttribute]
+    SET 
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM 
+        [__mj].[ContentItemAttribute] AS _organicTable
+    INNER JOIN 
+        INSERTED AS I ON 
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+        
+------------------------------------------------------------
+----- UPDATE PROCEDURE FOR ContentItemTag  
+------------------------------------------------------------
+DROP PROCEDURE IF EXISTS [__mj].[spUpdateContentItemTag]
+GO
+
+CREATE PROCEDURE [__mj].[spUpdateContentItemTag]
+    @ID uniqueidentifier,
+    @ItemID uniqueidentifier,
+    @Tag nvarchar(200)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[ContentItemTag]
+    SET 
+        [ItemID] = @ItemID,
+        [Tag] = @Tag
+    WHERE
+        [ID] = @ID
+
+    -- return the updated record so the caller can see the updated values and any calculated fields
+    SELECT 
+                                        * 
+                                    FROM 
+                                        [__mj].[vwContentItemTags] 
+                                    WHERE
+                                        [ID] = @ID
+                                    
+END
+GO
+
+GRANT EXECUTE ON [__mj].[spUpdateContentItemTag] TO [cdp_Developer], [cdp_Integration]
+GO
+
+------------------------------------------------------------
+----- TRIGGER FOR __mj_UpdatedAt field for the ContentItemTag table
+------------------------------------------------------------
+DROP TRIGGER IF EXISTS [__mj].trgUpdateContentItemTag
+GO
+CREATE TRIGGER [__mj].trgUpdateContentItemTag
+ON [__mj].[ContentItemTag]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[ContentItemTag]
+    SET 
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM 
+        [__mj].[ContentItemTag] AS _organicTable
+    INNER JOIN 
+        INSERTED AS I ON 
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+        
+------------------------------------------------------------
+----- UPDATE PROCEDURE FOR ContentProcessRun  
+------------------------------------------------------------
+DROP PROCEDURE IF EXISTS [__mj].[spUpdateContentProcessRun]
+GO
+
+CREATE PROCEDURE [__mj].[spUpdateContentProcessRun]
+    @ID uniqueidentifier,
+    @SourceID uniqueidentifier,
+    @StartTime datetime,
+    @EndTime datetime,
+    @Status nvarchar(100),
+    @ProcessedItems int
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[ContentProcessRun]
+    SET 
+        [SourceID] = @SourceID,
+        [StartTime] = @StartTime,
+        [EndTime] = @EndTime,
+        [Status] = @Status,
+        [ProcessedItems] = @ProcessedItems
+    WHERE
+        [ID] = @ID
+
+    -- return the updated record so the caller can see the updated values and any calculated fields
+    SELECT 
+                                        * 
+                                    FROM 
+                                        [__mj].[vwContentProcessRuns] 
+                                    WHERE
+                                        [ID] = @ID
+                                    
+END
+GO
+
+GRANT EXECUTE ON [__mj].[spUpdateContentProcessRun] TO [cdp_Developer], [cdp_Integration]
+GO
+
+------------------------------------------------------------
+----- TRIGGER FOR __mj_UpdatedAt field for the ContentProcessRun table
+------------------------------------------------------------
+DROP TRIGGER IF EXISTS [__mj].trgUpdateContentProcessRun
+GO
+CREATE TRIGGER [__mj].trgUpdateContentProcessRun
+ON [__mj].[ContentProcessRun]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[ContentProcessRun]
+    SET 
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM 
+        [__mj].[ContentProcessRun] AS _organicTable
+    INNER JOIN 
+        INSERTED AS I ON 
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+        
+------------------------------------------------------------
+----- UPDATE PROCEDURE FOR ContentSource  
+------------------------------------------------------------
+DROP PROCEDURE IF EXISTS [__mj].[spUpdateContentSource]
+GO
+
+CREATE PROCEDURE [__mj].[spUpdateContentSource]
+    @ID uniqueidentifier,
+    @Name nvarchar(255),
+    @ContentTypeID uniqueidentifier,
+    @ContentSourceTypeID uniqueidentifier,
+    @ContentFileTypeID uniqueidentifier,
+    @URL nvarchar(2000)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[ContentSource]
+    SET 
+        [Name] = @Name,
+        [ContentTypeID] = @ContentTypeID,
+        [ContentSourceTypeID] = @ContentSourceTypeID,
+        [ContentFileTypeID] = @ContentFileTypeID,
+        [URL] = @URL
+    WHERE
+        [ID] = @ID
+
+    -- return the updated record so the caller can see the updated values and any calculated fields
+    SELECT 
+                                        * 
+                                    FROM 
+                                        [__mj].[vwContentSources] 
+                                    WHERE
+                                        [ID] = @ID
+                                    
+END
+GO
+
+GRANT EXECUTE ON [__mj].[spUpdateContentSource] TO [cdp_Developer], [cdp_Integration]
+GO
+
+------------------------------------------------------------
+----- TRIGGER FOR __mj_UpdatedAt field for the ContentSource table
+------------------------------------------------------------
+DROP TRIGGER IF EXISTS [__mj].trgUpdateContentSource
+GO
+CREATE TRIGGER [__mj].trgUpdateContentSource
+ON [__mj].[ContentSource]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[ContentSource]
+    SET 
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM 
+        [__mj].[ContentSource] AS _organicTable
+    INNER JOIN 
+        INSERTED AS I ON 
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+
+------------------------------------------------------------
+----- UPDATE PROCEDURE FOR ContentSourceParam  
+------------------------------------------------------------
+DROP PROCEDURE IF EXISTS [__mj].[spUpdateContentSourceParam]
+GO
+
+CREATE PROCEDURE [__mj].[spUpdateContentSourceParam]
+    @ID uniqueidentifier,
+    @ContentSourceID uniqueidentifier,
+    @ContentSourceTypeParamID uniqueidentifier,
+    @Value nvarchar(MAX)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[ContentSourceParam]
+    SET 
+        [ContentSourceID] = @ContentSourceID,
+        [ContentSourceTypeParamID] = @ContentSourceTypeParamID,
+        [Value] = @Value
+    WHERE
+        [ID] = @ID
+
+    -- return the updated record so the caller can see the updated values and any calculated fields
+    SELECT 
+                                        * 
+                                    FROM 
+                                        [__mj].[vwContentSourceParams] 
+                                    WHERE
+                                        [ID] = @ID
+                                    
+END
+GO
+
+GRANT EXECUTE ON [__mj].[spUpdateContentSourceParam] TO [cdp_Developer], [cdp_Integration]
+GO
+
+------------------------------------------------------------
+----- TRIGGER FOR __mj_UpdatedAt field for the ContentSourceParam table
+------------------------------------------------------------
+DROP TRIGGER IF EXISTS [__mj].trgUpdateContentSourceParam
+GO
+CREATE TRIGGER [__mj].trgUpdateContentSourceParam
+ON [__mj].[ContentSourceParam]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[ContentSourceParam]
+    SET 
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM 
+        [__mj].[ContentSourceParam] AS _organicTable
+    INNER JOIN 
+        INSERTED AS I ON 
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+        
+------------------------------------------------------------
+----- UPDATE PROCEDURE FOR ContentSourceType  
+------------------------------------------------------------
+DROP PROCEDURE IF EXISTS [__mj].[spUpdateContentSourceType]
+GO
+
+CREATE PROCEDURE [__mj].[spUpdateContentSourceType]
+    @ID uniqueidentifier,
+    @Name nvarchar(255),
+    @Description nvarchar(1000)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[ContentSourceType]
+    SET 
+        [Name] = @Name,
+        [Description] = @Description
+    WHERE
+        [ID] = @ID
+
+    -- return the updated record so the caller can see the updated values and any calculated fields
+    SELECT 
+                                        * 
+                                    FROM 
+                                        [__mj].[vwContentSourceTypes] 
+                                    WHERE
+                                        [ID] = @ID
+                                    
+END
+GO
+
+GRANT EXECUTE ON [__mj].[spUpdateContentSourceType] TO [cdp_Developer], [cdp_Integration]
+GO
+
+------------------------------------------------------------
+----- TRIGGER FOR __mj_UpdatedAt field for the ContentSourceType table
+------------------------------------------------------------
+DROP TRIGGER IF EXISTS [__mj].trgUpdateContentSourceType
+GO
+CREATE TRIGGER [__mj].trgUpdateContentSourceType
+ON [__mj].[ContentSourceType]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[ContentSourceType]
+    SET 
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM 
+        [__mj].[ContentSourceType] AS _organicTable
+    INNER JOIN 
+        INSERTED AS I ON 
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+        
+------------------------------------------------------------
+----- UPDATE PROCEDURE FOR ContentSourceTypeParam  
+------------------------------------------------------------
+DROP PROCEDURE IF EXISTS [__mj].[spUpdateContentSourceTypeParam]
+GO
+
+CREATE PROCEDURE [__mj].[spUpdateContentSourceTypeParam]
+    @ID uniqueidentifier,
+    @Name nvarchar(100),
+    @Description nvarchar(MAX),
+    @Type nvarchar(50),
+    @DefaultValue nvarchar(MAX),
+    @IsRequired bit
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[ContentSourceTypeParam]
+    SET 
+        [Name] = @Name,
+        [Description] = @Description,
+        [Type] = @Type,
+        [DefaultValue] = @DefaultValue,
+        [IsRequired] = @IsRequired
+    WHERE
+        [ID] = @ID
+
+    -- return the updated record so the caller can see the updated values and any calculated fields
+    SELECT 
+                                        * 
+                                    FROM 
+                                        [__mj].[vwContentSourceTypeParams] 
+                                    WHERE
+                                        [ID] = @ID
+                                    
+END
+GO
+
+GRANT EXECUTE ON [__mj].[spUpdateContentSourceTypeParam] TO [cdp_Developer], [cdp_Integration]
+GO
+
+------------------------------------------------------------
+----- TRIGGER FOR __mj_UpdatedAt field for the ContentSourceTypeParam table
+------------------------------------------------------------
+DROP TRIGGER IF EXISTS [__mj].trgUpdateContentSourceTypeParam
+GO
+CREATE TRIGGER [__mj].trgUpdateContentSourceTypeParam
+ON [__mj].[ContentSourceTypeParam]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[ContentSourceTypeParam]
+    SET 
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM 
+        [__mj].[ContentSourceTypeParam] AS _organicTable
+    INNER JOIN 
+        INSERTED AS I ON 
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+
+------------------------------------------------------------
+----- UPDATE PROCEDURE FOR ContentType  
+------------------------------------------------------------
+DROP PROCEDURE IF EXISTS [__mj].[spUpdateContentType]
+GO
+
+CREATE PROCEDURE [__mj].[spUpdateContentType]
+    @ID uniqueidentifier,
+    @Name nvarchar(255),
+    @Description nvarchar(MAX),
+    @AIModelID uniqueidentifier,
+    @MinTags int,
+    @MaxTags int
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[ContentType]
+    SET 
+        [Name] = @Name,
+        [Description] = @Description,
+        [AIModelID] = @AIModelID,
+        [MinTags] = @MinTags,
+        [MaxTags] = @MaxTags
+    WHERE
+        [ID] = @ID
+
+    -- return the updated record so the caller can see the updated values and any calculated fields
+    SELECT 
+                                        * 
+                                    FROM 
+                                        [__mj].[vwContentTypes] 
+                                    WHERE
+                                        [ID] = @ID
+                                    
+END
+GO
+
+GRANT EXECUTE ON [__mj].[spUpdateContentType] TO [cdp_Developer], [cdp_Integration]
+GO
+
+------------------------------------------------------------
+----- TRIGGER FOR __mj_UpdatedAt field for the ContentType table
+------------------------------------------------------------
+DROP TRIGGER IF EXISTS [__mj].trgUpdateContentType
+GO
+CREATE TRIGGER [__mj].trgUpdateContentType
+ON [__mj].[ContentType]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[ContentType]
+    SET 
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM 
+        [__mj].[ContentType] AS _organicTable
+    INNER JOIN 
+        INSERTED AS I ON 
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+        
+------------------------------------------------------------
+----- UPDATE PROCEDURE FOR ContentTypeAttribute  
+------------------------------------------------------------
+DROP PROCEDURE IF EXISTS [__mj].[spUpdateContentTypeAttribute]
+GO
+
+CREATE PROCEDURE [__mj].[spUpdateContentTypeAttribute]
+    @ID uniqueidentifier,
+    @ContentTypeID uniqueidentifier,
+    @Name nvarchar(100),
+    @Prompt nvarchar(MAX),
+    @Description nvarchar(MAX)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[ContentTypeAttribute]
+    SET 
+        [ContentTypeID] = @ContentTypeID,
+        [Name] = @Name,
+        [Prompt] = @Prompt,
+        [Description] = @Description
+    WHERE
+        [ID] = @ID
+
+    -- return the updated record so the caller can see the updated values and any calculated fields
+    SELECT 
+                                        * 
+                                    FROM 
+                                        [__mj].[vwContentTypeAttributes] 
+                                    WHERE
+                                        [ID] = @ID
+                                    
+END
+GO
+
+GRANT EXECUTE ON [__mj].[spUpdateContentTypeAttribute] TO [cdp_Developer], [cdp_Integration]
+GO
+
+------------------------------------------------------------
+----- TRIGGER FOR __mj_UpdatedAt field for the ContentTypeAttribute table
+------------------------------------------------------------
+DROP TRIGGER IF EXISTS [__mj].trgUpdateContentTypeAttribute
+GO
+CREATE TRIGGER [__mj].trgUpdateContentTypeAttribute
+ON [__mj].[ContentTypeAttribute]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [__mj].[ContentTypeAttribute]
+    SET 
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM 
+        [__mj].[ContentTypeAttribute] AS _organicTable
+    INNER JOIN 
+        INSERTED AS I ON 
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+
+DROP VIEW IF EXISTS [__mj].[vwContentFileTypes]
+GO
+
+CREATE VIEW [__mj].[vwContentFileTypes]
+AS
+SELECT 
+    c.*
+FROM
+    [__mj].[ContentFileType] AS c
+GO
+GRANT SELECT ON [__mj].[vwContentFileTypes] TO [cdp_UI], [cdp_Developer], [cdp_Integration]
+
+DROP VIEW IF EXISTS [__mj].[vwContentItemAttributes]
+GO
+
+CREATE VIEW [__mj].[vwContentItemAttributes]
+AS
+SELECT 
+    c.*,
+    ContentItem_ContentItemID.[Name] AS [ContentItem]
+FROM
+    [__mj].[ContentItemAttribute] AS c
+INNER JOIN
+    [__mj].[ContentItem] AS ContentItem_ContentItemID
+  ON
+    [c].[ContentItemID] = ContentItem_ContentItemID.[ID]
+GO
+GRANT SELECT ON [__mj].[vwContentItemAttributes] TO [cdp_UI], [cdp_Developer], [cdp_Integration]
+
+DROP VIEW IF EXISTS [__mj].[vwContentItems]
+GO
+
+CREATE VIEW [__mj].[vwContentItems]
+AS
+SELECT 
+    c.*
+FROM
+    [__mj].[ContentItem] AS c
+GO
+GRANT SELECT ON [__mj].[vwContentItems] TO [cdp_UI], [cdp_Developer], [cdp_Integration]
+    
+DROP VIEW IF EXISTS [__mj].[vwContentItemTags]
+GO
+
+CREATE VIEW [__mj].[vwContentItemTags]
+AS
+SELECT 
+    c.*,
+    ContentItem_ItemID.[Name] AS [Item]
+FROM
+    [__mj].[ContentItemTag] AS c
+INNER JOIN
+    [__mj].[ContentItem] AS ContentItem_ItemID
+  ON
+    [c].[ItemID] = ContentItem_ItemID.[ID]
+GO
+GRANT SELECT ON [__mj].[vwContentItemTags] TO [cdp_UI], [cdp_Developer], [cdp_Integration]
+    
+DROP VIEW IF EXISTS [__mj].[vwContentProcessRuns]
+GO
+
+CREATE VIEW [__mj].[vwContentProcessRuns]
+AS
+SELECT 
+    c.*,
+    ContentSource_SourceID.[Name] AS [Source]
+FROM
+    [__mj].[ContentProcessRun] AS c
+INNER JOIN
+    [__mj].[ContentSource] AS ContentSource_SourceID
+  ON
+    [c].[SourceID] = ContentSource_SourceID.[ID]
+GO
+GRANT SELECT ON [__mj].[vwContentProcessRuns] TO [cdp_UI], [cdp_Developer], [cdp_Integration]
+    
+DROP VIEW IF EXISTS [__mj].[vwContentSourceParams]
+GO
+
+CREATE VIEW [__mj].[vwContentSourceParams]
+AS
+SELECT 
+    c.*,
+    ContentSource_ContentSourceID.[Name] AS [ContentSource]
+FROM
+    [__mj].[ContentSourceParam] AS c
+INNER JOIN
+    [__mj].[ContentSource] AS ContentSource_ContentSourceID
+  ON
+    [c].[ContentSourceID] = ContentSource_ContentSourceID.[ID]
+GO
+GRANT SELECT ON [__mj].[vwContentSourceParams] TO [cdp_UI], [cdp_Developer], [cdp_Integration]
+    
+DROP VIEW IF EXISTS [__mj].[vwContentSources]
+GO
+
+CREATE VIEW [__mj].[vwContentSources]
+AS
+SELECT 
+    c.*
+FROM
+    [__mj].[ContentSource] AS c
+GO
+GRANT SELECT ON [__mj].[vwContentSources] TO [cdp_UI], [cdp_Developer], [cdp_Integration]
+    
+DROP VIEW IF EXISTS [__mj].[vwContentSourceTypeParams]
+GO
+
+CREATE VIEW [__mj].[vwContentSourceTypeParams]
+AS
+SELECT 
+    c.*
+FROM
+    [__mj].[ContentSourceTypeParam] AS c
+GO
+GRANT SELECT ON [__mj].[vwContentSourceTypeParams] TO [cdp_UI], [cdp_Developer], [cdp_Integration]
+    
+DROP VIEW IF EXISTS [__mj].[vwContentSourceTypes]
+GO
+
+CREATE VIEW [__mj].[vwContentSourceTypes]
+AS
+SELECT 
+    c.*
+FROM
+    [__mj].[ContentSourceType] AS c
+GO
+GRANT SELECT ON [__mj].[vwContentSourceTypes] TO [cdp_UI], [cdp_Developer], [cdp_Integration]
+    
+DROP VIEW IF EXISTS [__mj].[vwContentTypeAttributes]
+GO
+
+CREATE VIEW [__mj].[vwContentTypeAttributes]
+AS
+SELECT 
+    c.*
+FROM
+    [__mj].[ContentTypeAttribute] AS c
+GO
+GRANT SELECT ON [__mj].[vwContentTypeAttributes] TO [cdp_UI], [cdp_Developer], [cdp_Integration]
+    
+DROP VIEW IF EXISTS [__mj].[vwContentTypes]
+GO
+
+CREATE VIEW [__mj].[vwContentTypes]
+AS
+SELECT 
+    c.*,
+    AIModel_AIModelID.[Name] AS [AIModel]
+FROM
+    [__mj].[ContentType] AS c
+INNER JOIN
+    [__mj].[AIModel] AS AIModel_AIModelID
+  ON
+    [c].[AIModelID] = AIModel_AIModelID.[ID]
+GO
+GRANT SELECT ON [__mj].[vwContentTypes] TO [cdp_UI], [cdp_Developer], [cdp_Integration]
