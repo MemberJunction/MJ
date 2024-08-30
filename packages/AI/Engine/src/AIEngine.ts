@@ -73,11 +73,15 @@ export class AIEngine extends BaseEngine<AIEngine> {
 
     protected override async AdditionalLoading(contextUser?: UserInfo): Promise<void> {
         // handle associating prompts with prompt categories
-        this.PromptCategories.forEach(c => {
-            this.Prompts.filter(p => p.CategoryID === c.ID).forEach(p => {
-                c.Prompts.push(p);
+        //here we're using the underlying data (i.e _promptCategories and _prompts)
+        //rather than the getter methods because the engine's Loaded property is still false
+        for(const PromptCategory of this._promptCategories){
+            this._prompts.filter((prompt: AIPromptEntity) => {
+                return prompt.CategoryID === PromptCategory.ID;
+            }).forEach((prompt: AIPromptEntity) => {
+                PromptCategory.Prompts.push(prompt);
             });
-        });
+        }
     }
 
     /**
