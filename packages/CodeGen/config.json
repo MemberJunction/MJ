@@ -106,7 +106,7 @@
         ]
     },
     "advancedGeneration" : {
-        "enableAdvancedGeneration": true, 
+        "enableAdvancedGeneration": true,
         "AIVendor": "openai",
         "AIModel": "gpt-4-1106-preview",
         "features": [
@@ -115,11 +115,11 @@
                 "description": "Use AI to generate better entity names when creating new entities",
                 "enabled": false
             },
-            { 
+            {
                 "name": "DefaultInViewFields",
                 "description": "Use AI to determine which fields in an entity should be shown, by default, in a newly created User View for the entity. This is only used when creating new entities and when new fields are detected.",
                 "enabled": false
-            },            
+            },
             {
                 "name": "EntityDescriptions",
                 "description": "Use AI to generate descriptions for entities, only used when creating new entities",
@@ -140,7 +140,7 @@
                 "description": "Use AI to decide which entity relationships should have visible tabs and the best order to display those tabs. All relationships will be generated based on the Database Schema, but the EntityRelationship.DisplayInForm. The idea is that the AI will pick which of these tabs should be visible by default. In some cases an entity will have a large # of relationships and it isn't necessarily a good idea to display all of them. This feature only applies when an entity is created or new Entity Relationships are detected. This tool will not change existing EntityRelationship records.",
                 "enabled": false
             }
-        ] 
+        ]
     },
     "output": [
         {
