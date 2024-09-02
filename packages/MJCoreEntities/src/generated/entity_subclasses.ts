@@ -43,8 +43,7 @@ export const ActionAuthorizationSchema = z.object({
     Authorization: z.string().describe(`
         * * Field Name: Authorization
         * * Display Name: Authorization
-        * * SQL Data Type: nvarchar(100)
-        * * Default Value: null`),
+        * * SQL Data Type: nvarchar(100)`),
 });
 
 export type ActionAuthorizationEntityType = z.infer<typeof ActionAuthorizationSchema>;
@@ -786,7 +785,6 @@ export const AIModelSchema = z.object({
         * * Field Name: ModelSelectionInsights
         * * Display Name: Model Selection Insights
         * * SQL Data Type: nvarchar(MAX)
-        * * Default Value: null
     * * Description: This column stores unstructured text notes that provide insights into what the model is particularly good at and areas where it may not perform as well. These notes can be used by a human or an AI to determine if the model is a good fit for various purposes.`),
     AIModelType: z.string().describe(`
         * * Field Name: AIModelType
@@ -832,8 +830,7 @@ export const AIPromptCategorySchema = z.object({
     Parent: z.string().nullish().describe(`
         * * Field Name: Parent
         * * Display Name: Parent
-        * * SQL Data Type: nvarchar(255)
-        * * Default Value: null`),
+        * * SQL Data Type: nvarchar(255)`),
 });
 
 export type AIPromptCategoryEntityType = z.infer<typeof AIPromptCategorySchema>;
@@ -938,18 +935,15 @@ export const AIPromptSchema = z.object({
     Template: z.string().describe(`
         * * Field Name: Template
         * * Display Name: Template
-        * * SQL Data Type: nvarchar(255)
-        * * Default Value: null`),
+        * * SQL Data Type: nvarchar(255)`),
     Category: z.string().nullish().describe(`
         * * Field Name: Category
         * * Display Name: Category
-        * * SQL Data Type: nvarchar(255)
-        * * Default Value: null`),
+        * * SQL Data Type: nvarchar(255)`),
     Type: z.string().describe(`
         * * Field Name: Type
         * * Display Name: Type
-        * * SQL Data Type: nvarchar(255)
-        * * Default Value: null`),
+        * * SQL Data Type: nvarchar(255)`),
 });
 
 export type AIPromptEntityType = z.infer<typeof AIPromptSchema>;
@@ -1017,13 +1011,11 @@ export const AIResultCacheSchema = z.object({
     AIPrompt: z.string().describe(`
         * * Field Name: AIPrompt
         * * Display Name: AIPrompt
-        * * SQL Data Type: nvarchar(255)
-        * * Default Value: null`),
+        * * SQL Data Type: nvarchar(255)`),
     AIModel: z.string().describe(`
         * * Field Name: AIModel
         * * Display Name: AIModel
-        * * SQL Data Type: nvarchar(50)
-        * * Default Value: null`),
+        * * SQL Data Type: nvarchar(50)`),
 });
 
 export type AIResultCacheEntityType = z.infer<typeof AIResultCacheSchema>;
@@ -1130,8 +1122,7 @@ export const ApplicationSettingSchema = z.object({
     Application: z.string().describe(`
         * * Field Name: Application
         * * Display Name: Application
-        * * SQL Data Type: nvarchar(100)
-        * * Default Value: null`),
+        * * SQL Data Type: nvarchar(100)`),
 });
 
 export type ApplicationSettingEntityType = z.infer<typeof ApplicationSettingSchema>;
@@ -1219,8 +1210,7 @@ export const AuditLogTypeSchema = z.object({
     Authorization: z.string().nullish().describe(`
         * * Field Name: Authorization
         * * Display Name: Authorization
-        * * SQL Data Type: nvarchar(100)
-        * * Default Value: null`),
+        * * SQL Data Type: nvarchar(100)`),
 });
 
 export type AuditLogTypeEntityType = z.infer<typeof AuditLogTypeSchema>;
@@ -1292,13 +1282,11 @@ export const AuditLogSchema = z.object({
     AuditLogType: z.string().describe(`
         * * Field Name: AuditLogType
         * * Display Name: Audit Log Type
-        * * SQL Data Type: nvarchar(50)
-        * * Default Value: null`),
+        * * SQL Data Type: nvarchar(50)`),
     Authorization: z.string().nullish().describe(`
         * * Field Name: Authorization
         * * Display Name: Authorization
-        * * SQL Data Type: nvarchar(100)
-        * * Default Value: null`),
+        * * SQL Data Type: nvarchar(100)`),
     Entity: z.string().nullish().describe(`
         * * Field Name: Entity
         * * Display Name: Entity
@@ -1348,13 +1336,11 @@ export const AuthorizationRoleSchema = z.object({
     Authorization: z.string().describe(`
         * * Field Name: Authorization
         * * Display Name: Authorization
-        * * SQL Data Type: nvarchar(100)
-        * * Default Value: null`),
+        * * SQL Data Type: nvarchar(100)`),
     Role: z.string().describe(`
         * * Field Name: Role
         * * Display Name: Role
-        * * SQL Data Type: nvarchar(50)
-        * * Default Value: null`),
+        * * SQL Data Type: nvarchar(50)`),
 });
 
 export type AuthorizationRoleEntityType = z.infer<typeof AuthorizationRoleSchema>;
@@ -1970,8 +1956,7 @@ export const CompanyIntegrationRunSchema = z.object({
     RunByUser: z.string().describe(`
         * * Field Name: RunByUser
         * * Display Name: Run By User
-        * * SQL Data Type: nvarchar(100)
-        * * Default Value: null`),
+        * * SQL Data Type: nvarchar(100)`),
 });
 
 export type CompanyIntegrationRunEntityType = z.infer<typeof CompanyIntegrationRunSchema>;
@@ -2204,8 +2189,7 @@ export const ConversationSchema = z.object({
     DataContext: z.string().nullish().describe(`
         * * Field Name: DataContext
         * * Display Name: Data Context
-        * * SQL Data Type: nvarchar(255)
-        * * Default Value: null`),
+        * * SQL Data Type: nvarchar(255)`),
 });
 
 export type ConversationEntityType = z.infer<typeof ConversationSchema>;
@@ -2500,8 +2484,7 @@ export const DatasetItemSchema = z.object({
     Dataset: z.string().describe(`
         * * Field Name: Dataset
         * * Display Name: Dataset
-        * * SQL Data Type: nvarchar(100)
-        * * Default Value: null`),
+        * * SQL Data Type: nvarchar(100)`),
     Entity: z.string().describe(`
         * * Field Name: Entity
         * * Display Name: Entity
@@ -3900,18 +3883,15 @@ export const EntityDocumentSchema = z.object({
     VectorDatabase: z.string().describe(`
         * * Field Name: VectorDatabase
         * * Display Name: Vector Database
-        * * SQL Data Type: nvarchar(100)
-        * * Default Value: null`),
+        * * SQL Data Type: nvarchar(100)`),
     Template: z.string().describe(`
         * * Field Name: Template
         * * Display Name: Template
-        * * SQL Data Type: nvarchar(255)
-        * * Default Value: null`),
+        * * SQL Data Type: nvarchar(255)`),
     AIModel: z.string().describe(`
         * * Field Name: AIModel
         * * Display Name: AIModel
-        * * SQL Data Type: nvarchar(50)
-        * * Default Value: null`),
+        * * SQL Data Type: nvarchar(50)`),
 });
 
 export type EntityDocumentEntityType = z.infer<typeof EntityDocumentSchema>;
@@ -4426,18 +4406,15 @@ export const EntityRecordDocumentSchema = z.object({
     Entity: z.string().describe(`
         * * Field Name: Entity
         * * Display Name: Entity
-        * * SQL Data Type: nvarchar(255)
-        * * Default Value: null`),
+        * * SQL Data Type: nvarchar(255)`),
     EntityDocument: z.string().describe(`
         * * Field Name: EntityDocument
         * * Display Name: Entity Document
-        * * SQL Data Type: nvarchar(250)
-        * * Default Value: null`),
+        * * SQL Data Type: nvarchar(250)`),
     VectorIndex: z.string().describe(`
         * * Field Name: VectorIndex
         * * Display Name: Vector Index
-        * * SQL Data Type: nvarchar(255)
-        * * Default Value: null`),
+        * * SQL Data Type: nvarchar(255)`),
 });
 
 export type EntityRecordDocumentEntityType = z.infer<typeof EntityRecordDocumentSchema>;
@@ -5316,13 +5293,11 @@ export const ListCategorySchema = z.object({
     Parent: z.string().nullish().describe(`
         * * Field Name: Parent
         * * Display Name: Parent
-        * * SQL Data Type: nvarchar(100)
-        * * Default Value: null`),
+        * * SQL Data Type: nvarchar(100)`),
     User: z.string().describe(`
         * * Field Name: User
         * * Display Name: User
-        * * SQL Data Type: nvarchar(100)
-        * * Default Value: null`),
+        * * SQL Data Type: nvarchar(100)`),
 });
 
 export type ListCategoryEntityType = z.infer<typeof ListCategorySchema>;
@@ -5377,7 +5352,6 @@ export const ListDetailSchema = z.object({
         * * Field Name: AdditionalData
         * * Display Name: Additional Data
         * * SQL Data Type: nvarchar(MAX)
-        * * Default Value: null
     * * Description: Optional column that allows for tracking any additional data for each ListDetail row`),
     List: z.string().describe(`
         * * Field Name: List
@@ -5446,8 +5420,7 @@ export const ListSchema = z.object({
     Category: z.string().nullish().describe(`
         * * Field Name: Category
         * * Display Name: Category
-        * * SQL Data Type: nvarchar(100)
-        * * Default Value: null`),
+        * * SQL Data Type: nvarchar(100)`),
 });
 
 export type ListEntityType = z.infer<typeof ListSchema>;
@@ -5797,13 +5770,11 @@ export const QueryPermissionSchema = z.object({
     Query: z.string().describe(`
         * * Field Name: Query
         * * Display Name: Query
-        * * SQL Data Type: nvarchar(255)
-        * * Default Value: null`),
+        * * SQL Data Type: nvarchar(255)`),
     Role: z.string().describe(`
         * * Field Name: Role
         * * Display Name: Role
-        * * SQL Data Type: nvarchar(50)
-        * * Default Value: null`),
+        * * SQL Data Type: nvarchar(50)`),
 });
 
 export type QueryPermissionEntityType = z.infer<typeof QueryPermissionSchema>;
@@ -6505,8 +6476,7 @@ export const RecordMergeLogSchema = z.object({
     ApprovedByUser: z.string().nullish().describe(`
         * * Field Name: ApprovedByUser
         * * Display Name: Approved By User
-        * * SQL Data Type: nvarchar(100)
-        * * Default Value: null`),
+        * * SQL Data Type: nvarchar(100)`),
 });
 
 export type RecordMergeLogEntityType = z.infer<typeof RecordMergeLogSchema>;
@@ -6904,13 +6874,11 @@ export const ScheduledActionParamSchema = z.object({
     ScheduledAction: z.string().describe(`
         * * Field Name: ScheduledAction
         * * Display Name: Scheduled Action
-        * * SQL Data Type: nvarchar(255)
-        * * Default Value: null`),
+        * * SQL Data Type: nvarchar(255)`),
     ActionParam: z.string().describe(`
         * * Field Name: ActionParam
         * * Display Name: Action Param
-        * * SQL Data Type: nvarchar(255)
-        * * Default Value: null`),
+        * * SQL Data Type: nvarchar(255)`),
 });
 
 export type ScheduledActionParamEntityType = z.infer<typeof ScheduledActionParamSchema>;
@@ -7013,13 +6981,11 @@ export const ScheduledActionSchema = z.object({
     CreatedByUser: z.string().describe(`
         * * Field Name: CreatedByUser
         * * Display Name: Created By User
-        * * SQL Data Type: nvarchar(100)
-        * * Default Value: null`),
+        * * SQL Data Type: nvarchar(100)`),
     Action: z.string().describe(`
         * * Field Name: Action
         * * Display Name: Action
-        * * SQL Data Type: nvarchar(425)
-        * * Default Value: null`),
+        * * SQL Data Type: nvarchar(425)`),
 });
 
 export type ScheduledActionEntityType = z.infer<typeof ScheduledActionSchema>;
@@ -7883,8 +7849,7 @@ export const UserViewCategorySchema = z.object({
     Entity: z.string().describe(`
         * * Field Name: Entity
         * * Display Name: Entity
-        * * SQL Data Type: nvarchar(255)
-        * * Default Value: null`),
+        * * SQL Data Type: nvarchar(255)`),
     User: z.string().describe(`
         * * Field Name: User
         * * Display Name: User
@@ -8734,7 +8699,6 @@ export class ActionAuthorizationEntity extends BaseEntity<ActionAuthorizationEnt
     * * Field Name: Authorization
     * * Display Name: Authorization
     * * SQL Data Type: nvarchar(100)
-    * * Default Value: null
     */
     get Authorization(): string {  
         return this.Get('Authorization');
@@ -10634,7 +10598,6 @@ export class AIModelEntity extends BaseEntity<AIModelEntityType> {
     * * Field Name: ModelSelectionInsights
     * * Display Name: Model Selection Insights
     * * SQL Data Type: nvarchar(MAX)
-    * * Default Value: null
     * * Description: This column stores unstructured text notes that provide insights into what the model is particularly good at and areas where it may not perform as well. These notes can be used by a human or an AI to determine if the model is a good fit for various purposes.
     */
     get ModelSelectionInsights(): string | null {  
@@ -10757,7 +10720,6 @@ export class AIPromptCategoryEntity extends BaseEntity<AIPromptCategoryEntityTyp
     * * Field Name: Parent
     * * Display Name: Parent
     * * SQL Data Type: nvarchar(255)
-    * * Default Value: null
     */
     get Parent(): string | null {  
         return this.Get('Parent');
@@ -11026,7 +10988,6 @@ export class AIPromptEntity extends BaseEntity<AIPromptEntityType> {
     * * Field Name: Template
     * * Display Name: Template
     * * SQL Data Type: nvarchar(255)
-    * * Default Value: null
     */
     get Template(): string {  
         return this.Get('Template');
@@ -11036,7 +10997,6 @@ export class AIPromptEntity extends BaseEntity<AIPromptEntityType> {
     * * Field Name: Category
     * * Display Name: Category
     * * SQL Data Type: nvarchar(255)
-    * * Default Value: null
     */
     get Category(): string | null {  
         return this.Get('Category');
@@ -11046,7 +11006,6 @@ export class AIPromptEntity extends BaseEntity<AIPromptEntityType> {
     * * Field Name: Type
     * * Display Name: Type
     * * SQL Data Type: nvarchar(255)
-    * * Default Value: null
     */
     get Type(): string {  
         return this.Get('Type');
@@ -11215,7 +11174,6 @@ export class AIResultCacheEntity extends BaseEntity<AIResultCacheEntityType> {
     * * Field Name: AIPrompt
     * * Display Name: AIPrompt
     * * SQL Data Type: nvarchar(255)
-    * * Default Value: null
     */
     get AIPrompt(): string {  
         return this.Get('AIPrompt');
@@ -11225,7 +11183,6 @@ export class AIResultCacheEntity extends BaseEntity<AIResultCacheEntityType> {
     * * Field Name: AIModel
     * * Display Name: AIModel
     * * SQL Data Type: nvarchar(50)
-    * * Default Value: null
     */
     get AIModel(): string {  
         return this.Get('AIModel');
@@ -11509,7 +11466,6 @@ export class ApplicationSettingEntity extends BaseEntity<ApplicationSettingEntit
     * * Field Name: Application
     * * Display Name: Application
     * * SQL Data Type: nvarchar(100)
-    * * Default Value: null
     */
     get Application(): string {  
         return this.Get('Application');
@@ -11773,7 +11729,6 @@ export class AuditLogTypeEntity extends BaseEntity<AuditLogTypeEntityType> {
     * * Field Name: Authorization
     * * Display Name: Authorization
     * * SQL Data Type: nvarchar(100)
-    * * Default Value: null
     */
     get Authorization(): string | null {  
         return this.Get('Authorization');
@@ -11970,7 +11925,6 @@ export class AuditLogEntity extends BaseEntity<AuditLogEntityType> {
     * * Field Name: AuditLogType
     * * Display Name: Audit Log Type
     * * SQL Data Type: nvarchar(50)
-    * * Default Value: null
     */
     get AuditLogType(): string {  
         return this.Get('AuditLogType');
@@ -11980,7 +11934,6 @@ export class AuditLogEntity extends BaseEntity<AuditLogEntityType> {
     * * Field Name: Authorization
     * * Display Name: Authorization
     * * SQL Data Type: nvarchar(100)
-    * * Default Value: null
     */
     get Authorization(): string | null {  
         return this.Get('Authorization');
@@ -12127,7 +12080,6 @@ export class AuthorizationRoleEntity extends BaseEntity<AuthorizationRoleEntityT
     * * Field Name: Authorization
     * * Display Name: Authorization
     * * SQL Data Type: nvarchar(100)
-    * * Default Value: null
     */
     get Authorization(): string {  
         return this.Get('Authorization');
@@ -12137,7 +12089,6 @@ export class AuthorizationRoleEntity extends BaseEntity<AuthorizationRoleEntityT
     * * Field Name: Role
     * * Display Name: Role
     * * SQL Data Type: nvarchar(50)
-    * * Default Value: null
     */
     get Role(): string {  
         return this.Get('Role');
@@ -13849,7 +13800,6 @@ export class CompanyIntegrationRunEntity extends BaseEntity<CompanyIntegrationRu
     * * Field Name: RunByUser
     * * Display Name: Run By User
     * * SQL Data Type: nvarchar(100)
-    * * Default Value: null
     */
     get RunByUser(): string {  
         return this.Get('RunByUser');
@@ -14481,7 +14431,6 @@ export class ConversationEntity extends BaseEntity<ConversationEntityType> {
     * * Field Name: DataContext
     * * Display Name: Data Context
     * * SQL Data Type: nvarchar(255)
-    * * Default Value: null
     */
     get DataContext(): string | null {  
         return this.Get('DataContext');
@@ -15277,7 +15226,6 @@ export class DatasetItemEntity extends BaseEntity<DatasetItemEntityType> {
     * * Field Name: Dataset
     * * Display Name: Dataset
     * * SQL Data Type: nvarchar(100)
-    * * Default Value: null
     */
     get Dataset(): string {  
         return this.Get('Dataset');
@@ -18970,7 +18918,6 @@ export class EntityDocumentEntity extends BaseEntity<EntityDocumentEntityType> {
     * * Field Name: VectorDatabase
     * * Display Name: Vector Database
     * * SQL Data Type: nvarchar(100)
-    * * Default Value: null
     */
     get VectorDatabase(): string {  
         return this.Get('VectorDatabase');
@@ -18980,7 +18927,6 @@ export class EntityDocumentEntity extends BaseEntity<EntityDocumentEntityType> {
     * * Field Name: Template
     * * Display Name: Template
     * * SQL Data Type: nvarchar(255)
-    * * Default Value: null
     */
     get Template(): string {  
         return this.Get('Template');
@@ -18990,7 +18936,6 @@ export class EntityDocumentEntity extends BaseEntity<EntityDocumentEntityType> {
     * * Field Name: AIModel
     * * Display Name: AIModel
     * * SQL Data Type: nvarchar(50)
-    * * Default Value: null
     */
     get AIModel(): string {  
         return this.Get('AIModel');
@@ -20246,7 +20191,6 @@ export class EntityRecordDocumentEntity extends BaseEntity<EntityRecordDocumentE
     * * Field Name: Entity
     * * Display Name: Entity
     * * SQL Data Type: nvarchar(255)
-    * * Default Value: null
     */
     get Entity(): string {  
         return this.Get('Entity');
@@ -20256,7 +20200,6 @@ export class EntityRecordDocumentEntity extends BaseEntity<EntityRecordDocumentE
     * * Field Name: EntityDocument
     * * Display Name: Entity Document
     * * SQL Data Type: nvarchar(250)
-    * * Default Value: null
     */
     get EntityDocument(): string {  
         return this.Get('EntityDocument');
@@ -20266,7 +20209,6 @@ export class EntityRecordDocumentEntity extends BaseEntity<EntityRecordDocumentE
     * * Field Name: VectorIndex
     * * Display Name: Vector Index
     * * SQL Data Type: nvarchar(255)
-    * * Default Value: null
     */
     get VectorIndex(): string {  
         return this.Get('VectorIndex');
@@ -22697,7 +22639,6 @@ export class ListCategoryEntity extends BaseEntity<ListCategoryEntityType> {
     * * Field Name: Parent
     * * Display Name: Parent
     * * SQL Data Type: nvarchar(100)
-    * * Default Value: null
     */
     get Parent(): string | null {  
         return this.Get('Parent');
@@ -22707,7 +22648,6 @@ export class ListCategoryEntity extends BaseEntity<ListCategoryEntityType> {
     * * Field Name: User
     * * Display Name: User
     * * SQL Data Type: nvarchar(100)
-    * * Default Value: null
     */
     get User(): string {  
         return this.Get('User');
@@ -22838,7 +22778,6 @@ export class ListDetailEntity extends BaseEntity<ListDetailEntityType> {
     * * Field Name: AdditionalData
     * * Display Name: Additional Data
     * * SQL Data Type: nvarchar(MAX)
-    * * Default Value: null
     * * Description: Optional column that allows for tracking any additional data for each ListDetail row
     */
     get AdditionalData(): string | null {  
@@ -23026,7 +22965,6 @@ export class ListEntity extends BaseEntity<ListEntityType> {
     * * Field Name: Category
     * * Display Name: Category
     * * SQL Data Type: nvarchar(100)
-    * * Default Value: null
     */
     get Category(): string | null {  
         return this.Get('Category');
@@ -24070,7 +24008,6 @@ export class QueryPermissionEntity extends BaseEntity<QueryPermissionEntityType>
     * * Field Name: Query
     * * Display Name: Query
     * * SQL Data Type: nvarchar(255)
-    * * Default Value: null
     */
     get Query(): string {  
         return this.Get('Query');
@@ -24080,7 +24017,6 @@ export class QueryPermissionEntity extends BaseEntity<QueryPermissionEntityType>
     * * Field Name: Role
     * * Display Name: Role
     * * SQL Data Type: nvarchar(50)
-    * * Default Value: null
     */
     get Role(): string {  
         return this.Get('Role');
@@ -26033,7 +25969,6 @@ export class RecordMergeLogEntity extends BaseEntity<RecordMergeLogEntityType> {
     * * Field Name: ApprovedByUser
     * * Display Name: Approved By User
     * * SQL Data Type: nvarchar(100)
-    * * Default Value: null
     */
     get ApprovedByUser(): string | null {  
         return this.Get('ApprovedByUser');
@@ -27129,7 +27064,6 @@ export class ScheduledActionParamEntity extends BaseEntity<ScheduledActionParamE
     * * Field Name: ScheduledAction
     * * Display Name: Scheduled Action
     * * SQL Data Type: nvarchar(255)
-    * * Default Value: null
     */
     get ScheduledAction(): string {  
         return this.Get('ScheduledAction');
@@ -27139,7 +27073,6 @@ export class ScheduledActionParamEntity extends BaseEntity<ScheduledActionParamE
     * * Field Name: ActionParam
     * * Display Name: Action Param
     * * SQL Data Type: nvarchar(255)
-    * * Default Value: null
     */
     get ActionParam(): string {  
         return this.Get('ActionParam');
@@ -27391,7 +27324,6 @@ export class ScheduledActionEntity extends BaseEntity<ScheduledActionEntityType>
     * * Field Name: CreatedByUser
     * * Display Name: Created By User
     * * SQL Data Type: nvarchar(100)
-    * * Default Value: null
     */
     get CreatedByUser(): string {  
         return this.Get('CreatedByUser');
@@ -27401,7 +27333,6 @@ export class ScheduledActionEntity extends BaseEntity<ScheduledActionEntityType>
     * * Field Name: Action
     * * Display Name: Action
     * * SQL Data Type: nvarchar(425)
-    * * Default Value: null
     */
     get Action(): string {  
         return this.Get('Action');
@@ -29788,7 +29719,6 @@ export class UserViewCategoryEntity extends BaseEntity<UserViewCategoryEntityTyp
     * * Field Name: Entity
     * * Display Name: Entity
     * * SQL Data Type: nvarchar(255)
-    * * Default Value: null
     */
     get Entity(): string {  
         return this.Get('Entity');
