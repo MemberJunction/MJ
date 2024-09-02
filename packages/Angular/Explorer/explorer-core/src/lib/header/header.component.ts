@@ -112,6 +112,8 @@ export class HeaderComponent implements OnInit {
     private async loadSearchableEntities() {
         const md = new Metadata();
         this.searchableEntities = md.Entities.filter((e) => e.AllowUserSearchAPI).sort((a, b) => a.Name.localeCompare(b.Name));
+        if (this.searchableEntities.length > 0)
+            this.selectedEntity = this.searchableEntities[0];
     }
 
     private isMicrosoft(claims: any): boolean {
