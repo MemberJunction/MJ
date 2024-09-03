@@ -6,7 +6,6 @@ import { AIModelEntity, EntityDocumentEntity, EntityDocumentTypeEntity, EntityRe
   TemplateContentTypeEntity, TemplateEntity, TemplateParamEntity, VectorDatabaseEntity, VectorIndexEntity } from '@memberjunction/core-entities';
 import { MJGlobal } from '@memberjunction/global';
 import { pipeline } from 'node:stream/promises';
-import { RECORD_DUPLICATES_TYPE_ID } from '../constants';
 import { EmbeddingData, TemplateParamData, VectorEmeddingData, VectorizeEntityParams, VectorizeEntityResponse } from '../generic/vectorSync.types';
 import { BatchWorker } from './BatchWorker';
 import { EntityDocumentCache } from './EntityDocumentCache';
