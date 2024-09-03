@@ -6,7 +6,6 @@ import { AIModelEntity, EntityDocumentEntity, EntityDocumentTypeEntity, EntityRe
   TemplateContentTypeEntity, TemplateEntity, TemplateParamEntity, VectorDatabaseEntity, VectorIndexEntity } from '@memberjunction/core-entities';
 import { MJGlobal } from '@memberjunction/global';
 import { pipeline } from 'node:stream/promises';
-import { RECORD_DUPLICATES_TYPE_ID } from '../constants';
 import { EmbeddingData, TemplateParamData, VectorEmeddingData, VectorizeEntityParams, VectorizeEntityResponse } from '../generic/vectorSync.types';
 import { BatchWorker } from './BatchWorker';
 import { EntityDocumentCache } from './EntityDocumentCache';
@@ -261,11 +260,27 @@ export class EntityVectorSyncer extends VectorBase {
       return `${ef.Name}: \$\{${ef.Name}\}`;
     }).join(' ');
 
+    const rv: RunView = new RunView();
+    const rvResult: RunViewResult<EntityDocumentTypeEntity> = await rv.RunView<EntityDocumentTypeEntity>({
+      EntityName: 'Entity Document Types',
+      ExtraFilter: `Name = 'Record Duplicate'`,
+    }, super.CurrentUser);
+
+    if (!rvResult.Success) {
+      throw new Error(`Unable to fetch Entity Document Type: ${rvResult.ErrorMessage}`);
+    }
+
+    if(rvResult.Results.length === 0){
+      throw new Error('Record Duplicate Entity Document Type not found');
+    }
+
+    const entityDocumentType: EntityDocumentTypeEntity = rvResult.Results[0];
+
     const entityDocument: EntityDocumentEntity = await md.GetEntityObject<EntityDocumentEntity>('Entity Documents');
     entityDocument.NewRecord();
     entityDocument.Name = `Default duplicate record Entity Document for the ${entity.Name} entity using vector database ${VectorDatabase.Name} and AI Model ${AIModel.Name}`;
     entityDocument.EntityID = EntityID;
-    entityDocument.TypeID = RECORD_DUPLICATES_TYPE_ID;
+    entityDocument.TypeID = entityDocumentType.ID;
     entityDocument.Status = 'Active';
     entityDocument.TemplateID = EDTemplate;
     entityDocument.VectorDatabaseID = VectorDatabase.ID;
