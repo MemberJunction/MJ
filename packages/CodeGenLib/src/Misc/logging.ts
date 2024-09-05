@@ -99,6 +99,6 @@ export function logStatus(message: string, ...args: any[]) {
 /**
  * Wrapper for the LoggerBase.logMessage method
  */
-export function logMessage(message: string, severity: SeverityType, isError: boolean, ...args: any[]): void {
+export function logMessage(message: string, severity: SeverityType, isError = false, ...args: any[]): void {
    return _logger.logMessage(message, severity, isError, ...args);
 }

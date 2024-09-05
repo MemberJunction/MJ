@@ -85,3 +85,61 @@ VALUES
 ('6174433e-f36b-1410-883e-00d02208dc50', 'f573433e-f36b-1410-883e-00d02208dc50', 3, 'Disabled', 'Disabled'),
 ('6374433e-f36b-1410-883e-00d02208dc50', '0074433e-f36b-1410-883e-00d02208dc50', 1, 'Active', 'Active'),
 ('6574433e-f36b-1410-883e-00d02208dc50', '0074433e-f36b-1410-883e-00d02208dc50', 2, 'Expired', 'Expired');
+
+-- Add missing EntityPermission records for the AI Prompt, AI Result Cache, AI Prompt Categories, and AI Prompt Types entities
+INSERT INTO [__mj].[EntityPermission]
+(ID, EntityID, RoleID, CanCreate, CanRead, CanUpdate, CanDelete)
+VALUES
+('518523e8-295f-4690-b10f-990bc1609d9e', '73ad0238-8b56-ef11-991a-6045bdeba539', 'e0afccec-6a37-ef11-86d4-000d3a4e707e', 0, 1, 0, 0),
+('ef0c21a3-7d98-451a-a45b-caf347d05680', '73ad0238-8b56-ef11-991a-6045bdeba539', 'deafccec-6a37-ef11-86d4-000d3a4e707e', 0, 1, 0, 0),
+('8d5052ed-c4a9-47d4-a2c7-8176a93e95fa', '73ad0238-8b56-ef11-991a-6045bdeba539', 'dfafccec-6a37-ef11-86d4-000d3a4e707e', 0, 1, 0, 0),
+('e7e19937-4715-4e9b-8c54-ed0683099bea', '78ad0238-8b56-ef11-991a-6045bdeba539', 'e0afccec-6a37-ef11-86d4-000d3a4e707e', 0, 1, 0, 0),
+('80d1196e-cbdf-4e8d-b768-427645bfd4ec', '78ad0238-8b56-ef11-991a-6045bdeba539', 'deafccec-6a37-ef11-86d4-000d3a4e707e', 0, 1, 0, 0),
+('af196767-b093-41c9-82fb-67936c93f6e9', '78ad0238-8b56-ef11-991a-6045bdeba539', 'dfafccec-6a37-ef11-86d4-000d3a4e707e', 0, 1, 0, 0),
+('55966fe0-b055-4fca-be76-101ae9e91f50', '7dad0238-8b56-ef11-991a-6045bdeba539', 'e0afccec-6a37-ef11-86d4-000d3a4e707e', 0, 1, 0, 0),
+('39817757-25a5-480d-a838-ccd679b8e6b7', '7dad0238-8b56-ef11-991a-6045bdeba539', 'deafccec-6a37-ef11-86d4-000d3a4e707e', 0, 1, 0, 0),
+('bb5077a5-9995-4783-9deb-d2cd8eaab2e9', '7dad0238-8b56-ef11-991a-6045bdeba539', 'dfafccec-6a37-ef11-86d4-000d3a4e707e', 0, 1, 0, 0),
+('eb432695-cc7a-4282-ae69-98b69b75dc20', 'f1a70b3e-8b56-ef11-991a-6045bdeba539', 'e0afccec-6a37-ef11-86d4-000d3a4e707e', 0, 1, 0, 0),
+('0536ae61-2eac-4acf-8af8-2a3e1062c349', 'f1a70b3e-8b56-ef11-991a-6045bdeba539', 'deafccec-6a37-ef11-86d4-000d3a4e707e', 0, 1, 0, 0),
+('e2570602-7a7a-4a04-b394-5dd870c38a4e', 'f1a70b3e-8b56-ef11-991a-6045bdeba539', 'dfafccec-6a37-ef11-86d4-000d3a4e707e', 0, 1, 0, 0);
+
+GO
+-- Add missing view for AI Prompt
+CREATE VIEW [__mj].[vwAIPrompts] AS
+SELECT
+    a.*,
+    Template_TemplateID.[Name] AS [Template],
+    AIPromptCategory_CategoryID.[Name] AS [Category],
+    AIPromptType_TypeID.[Name] AS [Type]
+FROM [__mj].[AIPrompt] AS a
+INNER JOIN [__mj].[Template] AS Template_TemplateID ON [a].[TemplateID] = Template_TemplateID.[ID]
+LEFT OUTER JOIN [__mj].[AIPromptCategory] AS AIPromptCategory_CategoryID ON [a].[CategoryID] = AIPromptCategory_CategoryID.[ID]
+INNER JOIN [__mj].[AIPromptType] AS AIPromptType_TypeID ON [a].[TypeID] = AIPromptType_TypeID.[ID];
+GO
+
+-- Add missing view for AI Result Cache
+CREATE VIEW [__mj].[vwAIResultCaches] AS
+SELECT
+    a.*,
+    AIPrompt_AIPromptID.[Name] AS [AIPrompt],
+    AIModel_AIModelID.[Name] AS [AIModel]
+FROM [__mj].[AIResultCache] AS a
+INNER JOIN [__mj].[AIPrompt] AS AIPrompt_AIPromptID ON [a].[AIPromptID] = AIPrompt_AIPromptID.[ID]
+INNER JOIN [__mj].[AIModel] AS AIModel_AIModelID ON [a].[AIModelID] = AIModel_AIModelID.[ID];
+GO
+
+-- Add missing view for AI Prompt Categories
+CREATE VIEW [__mj].[vwAIPromptCategories] AS
+SELECT
+    a.*,
+    AIPromptCategory_ParentID.[Name] AS [Parent]
+FROM [__mj].[AIPromptCategory] AS a
+LEFT OUTER JOIN [__mj].[AIPromptCategory] AS AIPromptCategory_ParentID ON [a].[ParentID] = AIPromptCategory_ParentID.[ID];
+GO
+
+
+-- Add missing view for AI Prompt Types
+CREATE VIEW [__mj].[vwAIPromptTypes] AS
+SELECT  a.*
+FROM [__mj].[AIPromptType] AS a;
+GO
