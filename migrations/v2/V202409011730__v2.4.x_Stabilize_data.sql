@@ -1,16 +1,16 @@
 -- Ensure this core entity field type is correct, following the column type change in a previous migration
-UPDATE ${flyway:defaultSchema}.EntityField SET [Type] = 'uniqueidentifier' WHERE ID='594f17f0-6f36-ef11-86d4-6045bdee16e6'
+UPDATE [${flyway:defaultSchema}].EntityField SET [Type] = 'uniqueidentifier' WHERE ID='594f17f0-6f36-ef11-86d4-6045bdee16e6'
 
 -- Delete the relationships for core entities whose IDs are created by CodeGen
-DELETE FROM ${flyway:defaultSchema}.EntityRelationship
+DELETE FROM [${flyway:defaultSchema}].EntityRelationship
 WHERE (EntityID = '73ad0238-8b56-ef11-991a-6045bdeba539' AND RelatedEntityID = '78ad0238-8b56-ef11-991a-6045bdeba539')
    OR (EntityID = '7dad0238-8b56-ef11-991a-6045bdeba539' AND RelatedEntityID = '73ad0238-8b56-ef11-991a-6045bdeba539')
    OR (EntityID = 'f1a70b3e-8b56-ef11-991a-6045bdeba539' AND RelatedEntityID = '73ad0238-8b56-ef11-991a-6045bdeba539');
 
 -- Delete existing EntityFieldValue rows for the relevant EntityFields
-DELETE FROM __mj.EntityFieldValue
+DELETE FROM [${flyway:defaultSchema}].EntityFieldValue
 WHERE EntityFieldID IN (
-    SELECT ID FROM __mj.EntityField
+    SELECT ID FROM [${flyway:defaultSchema}].EntityField
     WHERE EntityID IN (
         '73ad0238-8b56-ef11-991a-6045bdeba539',  -- AI Prompts
         '78ad0238-8b56-ef11-991a-6045bdeba539',  -- AI Result Cache
@@ -20,7 +20,7 @@ WHERE EntityFieldID IN (
 );
 
 -- Delete existing EntityField rows for the relevant entities
-DELETE FROM __mj.EntityField
+DELETE FROM [${flyway:defaultSchema}].EntityField
 WHERE EntityID IN (
     '73ad0238-8b56-ef11-991a-6045bdeba539',  -- AI Prompts
     '78ad0238-8b56-ef11-991a-6045bdeba539',  -- AI Result Cache
@@ -29,14 +29,14 @@ WHERE EntityID IN (
 );
 
 -- Insert the stable relationship records for those core entities
-INSERT INTO ${flyway:defaultSchema}.EntityRelationship (ID, EntityID, Sequence, RelatedEntityID, BundleInAPI, IncludeInParentAllQuery, Type, EntityKeyField, RelatedEntityJoinField, JoinView, JoinEntityJoinField, JoinEntityInverseJoinField, DisplayInForm, DisplayLocation, DisplayName, DisplayIconType, DisplayIcon, DisplayUserViewID, DisplayComponentID, DisplayComponentConfiguration)
+INSERT INTO [${flyway:defaultSchema}].EntityRelationship (ID, EntityID, Sequence, RelatedEntityID, BundleInAPI, IncludeInParentAllQuery, Type, EntityKeyField, RelatedEntityJoinField, JoinView, JoinEntityJoinField, JoinEntityInverseJoinField, DisplayInForm, DisplayLocation, DisplayName, DisplayIconType, DisplayIcon, DisplayUserViewID, DisplayComponentID, DisplayComponentConfiguration)
 VALUES
 ('6874433e-f36b-1410-883e-00d02208dc50', '73ad0238-8b56-ef11-991a-6045bdeba539', 1, '78ad0238-8b56-ef11-991a-6045bdeba539', 1, 0, 'One To Many', NULL, 'AIPromptID', NULL, NULL, NULL, 1, 'After Field Tabs', 'AI Result Cache', 'Related Entity Icon', NULL, NULL, NULL, NULL),
 ('6b74433e-f36b-1410-883e-00d02208dc50', '7dad0238-8b56-ef11-991a-6045bdeba539', 1, '73ad0238-8b56-ef11-991a-6045bdeba539', 1, 0, 'One To Many', NULL, 'CategoryID', NULL, NULL, NULL, 1, 'After Field Tabs', 'AI Prompts', 'Related Entity Icon', NULL, NULL, NULL, NULL),
 ('7174433e-f36b-1410-883e-00d02208dc50', 'f1a70b3e-8b56-ef11-991a-6045bdeba539', 2, '73ad0238-8b56-ef11-991a-6045bdeba539', 1, 0, 'One To Many', NULL, 'TypeID', NULL, NULL, NULL, 1, 'After Field Tabs', 'AI Prompts', 'Related Entity Icon', NULL, NULL, NULL, NULL);
 
 -- Insert into EntityField for the core entities
-INSERT INTO ${flyway:defaultSchema}.EntityField (ID, EntityID, Sequence, Name, DisplayName, Description, AutoUpdateDescription, IsPrimaryKey, IsUnique, Category, Type, Length, Precision, Scale, AllowsNull, DefaultValue, AutoIncrement, ValueListType, ExtendedType, CodeType, DefaultInView, ViewCellTemplate, DefaultColumnWidth, AllowUpdateAPI, AllowUpdateInView, IncludeInUserSearchAPI, FullTextSearchEnabled, UserSearchParamFormatAPI, IncludeInGeneratedForm, GeneratedFormSection, IsVirtual, IsNameField, RelatedEntityID, RelatedEntityFieldName, IncludeRelatedEntityNameFieldInBaseView, RelatedEntityNameFieldMap, RelatedEntityDisplayType, EntityIDFieldName)
+INSERT INTO [${flyway:defaultSchema}].EntityField (ID, EntityID, Sequence, Name, DisplayName, Description, AutoUpdateDescription, IsPrimaryKey, IsUnique, Category, Type, Length, Precision, Scale, AllowsNull, DefaultValue, AutoIncrement, ValueListType, ExtendedType, CodeType, DefaultInView, ViewCellTemplate, DefaultColumnWidth, AllowUpdateAPI, AllowUpdateInView, IncludeInUserSearchAPI, FullTextSearchEnabled, UserSearchParamFormatAPI, IncludeInGeneratedForm, GeneratedFormSection, IsVirtual, IsNameField, RelatedEntityID, RelatedEntityFieldName, IncludeRelatedEntityNameFieldInBaseView, RelatedEntityNameFieldMap, RelatedEntityDisplayType, EntityIDFieldName)
 VALUES
 ('f873433e-f36b-1410-883e-00d02208dc50', '73ad0238-8b56-ef11-991a-6045bdeba539', 10, '__mj_CreatedAt', 'Created At', NULL, 1, 0, 0, NULL, 'datetimeoffset', 10, 34, 7, 0, '(getutcdate())', 0, 'None', NULL, NULL, 0, NULL, 100, 0, 1, 0, 0, NULL, 1, 'Details', 0, 0, NULL, NULL, 0, NULL, 'Search', NULL),
 ('f973433e-f36b-1410-883e-00d02208dc50', '73ad0238-8b56-ef11-991a-6045bdeba539', 11, '__mj_UpdatedAt', 'Updated At', NULL, 1, 0, 0, NULL, 'datetimeoffset', 10, 34, 7, 0, '(getutcdate())', 0, 'None', NULL, NULL, 0, NULL, 100, 0, 1, 0, 0, NULL, 1, 'Details', 0, 0, NULL, NULL, 0, NULL, 'Search', NULL),
@@ -78,7 +78,7 @@ VALUES
 ('3d74433e-f36b-1410-883e-00d02208dc50', 'f1a70b3e-8b56-ef11-991a-6045bdeba539', 2, 'Name', 'Name', NULL, 1, 0, 0, NULL, 'nvarchar', 510, 0, 0, 0, NULL, 0, 'None', NULL, NULL, 1, NULL, 150, 1, 1, 1, 0, NULL, 1, 'Details', 0, 1, NULL, NULL, 0, NULL, 'Search', NULL);
 
 -- Insert into EntityFieldValue for core entity fields
-INSERT INTO ${flyway:defaultSchema}.EntityFieldValue (ID, EntityFieldID, Sequence, Value, Code)
+INSERT INTO [${flyway:defaultSchema}].EntityFieldValue (ID, EntityFieldID, Sequence, Value, Code)
 VALUES
 ('5d74433e-f36b-1410-883e-00d02208dc50', 'f573433e-f36b-1410-883e-00d02208dc50', 1, 'Pending', 'Pending'),
 ('5f74433e-f36b-1410-883e-00d02208dc50', 'f573433e-f36b-1410-883e-00d02208dc50', 2, 'Active', 'Active'),
@@ -87,7 +87,7 @@ VALUES
 ('6574433e-f36b-1410-883e-00d02208dc50', '0074433e-f36b-1410-883e-00d02208dc50', 2, 'Expired', 'Expired');
 
 -- Add missing EntityPermission records for the AI Prompt, AI Result Cache, AI Prompt Categories, and AI Prompt Types entities
-INSERT INTO [__mj].[EntityPermission]
+INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
 (ID, EntityID, RoleID, CanCreate, CanRead, CanUpdate, CanDelete)
 VALUES
 ('518523e8-295f-4690-b10f-990bc1609d9e', '73ad0238-8b56-ef11-991a-6045bdeba539', 'e0afccec-6a37-ef11-86d4-000d3a4e707e', 0, 1, 0, 0),
@@ -105,41 +105,41 @@ VALUES
 
 GO
 -- Add missing view for AI Prompt
-CREATE VIEW [__mj].[vwAIPrompts] AS
+CREATE VIEW [${flyway:defaultSchema}].[vwAIPrompts] AS
 SELECT
     a.*,
     Template_TemplateID.[Name] AS [Template],
     AIPromptCategory_CategoryID.[Name] AS [Category],
     AIPromptType_TypeID.[Name] AS [Type]
-FROM [__mj].[AIPrompt] AS a
-INNER JOIN [__mj].[Template] AS Template_TemplateID ON [a].[TemplateID] = Template_TemplateID.[ID]
-LEFT OUTER JOIN [__mj].[AIPromptCategory] AS AIPromptCategory_CategoryID ON [a].[CategoryID] = AIPromptCategory_CategoryID.[ID]
-INNER JOIN [__mj].[AIPromptType] AS AIPromptType_TypeID ON [a].[TypeID] = AIPromptType_TypeID.[ID];
+FROM [${flyway:defaultSchema}].[AIPrompt] AS a
+INNER JOIN [${flyway:defaultSchema}].[Template] AS Template_TemplateID ON [a].[TemplateID] = Template_TemplateID.[ID]
+LEFT OUTER JOIN [${flyway:defaultSchema}].[AIPromptCategory] AS AIPromptCategory_CategoryID ON [a].[CategoryID] = AIPromptCategory_CategoryID.[ID]
+INNER JOIN [${flyway:defaultSchema}].[AIPromptType] AS AIPromptType_TypeID ON [a].[TypeID] = AIPromptType_TypeID.[ID];
 GO
 
 -- Add missing view for AI Result Cache
-CREATE VIEW [__mj].[vwAIResultCaches] AS
+CREATE VIEW [${flyway:defaultSchema}].[vwAIResultCaches] AS
 SELECT
     a.*,
     AIPrompt_AIPromptID.[Name] AS [AIPrompt],
     AIModel_AIModelID.[Name] AS [AIModel]
-FROM [__mj].[AIResultCache] AS a
-INNER JOIN [__mj].[AIPrompt] AS AIPrompt_AIPromptID ON [a].[AIPromptID] = AIPrompt_AIPromptID.[ID]
-INNER JOIN [__mj].[AIModel] AS AIModel_AIModelID ON [a].[AIModelID] = AIModel_AIModelID.[ID];
+FROM [${flyway:defaultSchema}].[AIResultCache] AS a
+INNER JOIN [${flyway:defaultSchema}].[AIPrompt] AS AIPrompt_AIPromptID ON [a].[AIPromptID] = AIPrompt_AIPromptID.[ID]
+INNER JOIN [${flyway:defaultSchema}].[AIModel] AS AIModel_AIModelID ON [a].[AIModelID] = AIModel_AIModelID.[ID];
 GO
 
 -- Add missing view for AI Prompt Categories
-CREATE VIEW [__mj].[vwAIPromptCategories] AS
+CREATE VIEW [${flyway:defaultSchema}].[vwAIPromptCategories] AS
 SELECT
     a.*,
     AIPromptCategory_ParentID.[Name] AS [Parent]
-FROM [__mj].[AIPromptCategory] AS a
-LEFT OUTER JOIN [__mj].[AIPromptCategory] AS AIPromptCategory_ParentID ON [a].[ParentID] = AIPromptCategory_ParentID.[ID];
+FROM [${flyway:defaultSchema}].[AIPromptCategory] AS a
+LEFT OUTER JOIN [${flyway:defaultSchema}].[AIPromptCategory] AS AIPromptCategory_ParentID ON [a].[ParentID] = AIPromptCategory_ParentID.[ID];
 GO
 
 
 -- Add missing view for AI Prompt Types
-CREATE VIEW [__mj].[vwAIPromptTypes] AS
+CREATE VIEW [${flyway:defaultSchema}].[vwAIPromptTypes] AS
 SELECT  a.*
-FROM [__mj].[AIPromptType] AS a;
+FROM [${flyway:defaultSchema}].[AIPromptType] AS a;
 GO
