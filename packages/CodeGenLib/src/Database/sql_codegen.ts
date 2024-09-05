@@ -88,7 +88,16 @@ export class SQLCodeGenBase {
                 logError('Error managing entity fields');
                 return false;
             }
+            // no logStatus/timer for this because manageEntityFields() has its own internal logging for this including the total, so it is redundant to log it here
 
+            // STEP 4- Apply permissions, executing all .permissions files
+            const step4StartTime: Date = new Date();
+            if (! await this.applyPermissions(ds, directory, baselineEntities)) {
+                logError('Error applying permissions');
+                return false;
+            }
+            logStatus(`   Time to Apply Permissions: ${(new Date().getTime() - step4StartTime.getTime())/1000} seconds`);
+            
             // STEP 5 - execute any custom SQL scripts that should run afterwards
             const step5StartTime: Date = new Date();
             if (! await this.runCustomSQLScripts(ds, 'after-sql'))

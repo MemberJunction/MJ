@@ -163,26 +163,6 @@ export function initializeConfig(workingDirectory: string): ConfigInfo {
     return configInfo;
 }
 
-export function saveConfigFileFromMemory(): boolean {
-    try {
-        if (!configInfo || !currentWorkingDirectory) {
-            console.error("ConfigInfo or currentWorkingDirectory not set, cannot save config file");
-            return false;
-        }
-        else {
-            const configFileName = configFile ? configFile : 'config.json';
-            const configPath = path.join(currentWorkingDirectory, configFileName);
-            const configData = JSON.stringify(configInfo, null, 4);
-            fs.writeFileSync(configPath, configData);
-            return true;    
-        }
-    } catch (err) {
-        console.error(err);
-        return false;
-    }
-
-}
-
 export function outputDir(type: string, useLocalDirectoryIfMissing: boolean): string | null {
     const outputInfo = configInfo.output.find(o => o.type.trim().toUpperCase() === type.trim().toUpperCase());
     if (outputInfo) {
