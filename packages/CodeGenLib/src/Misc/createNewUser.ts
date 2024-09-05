@@ -1,5 +1,5 @@
 import { Metadata, UserInfo } from "@memberjunction/core";
-import { NewUserSetup, saveConfigFileFromMemory } from "../Config/config";
+import { NewUserSetup } from "../Config/config";
 import { UserEntity, UserRoleEntity } from "@memberjunction/core-entities";
 import { UserCache } from "@memberjunction/sqlserver-dataprovider";
 import { logError, logStatus } from "./logging";
@@ -24,7 +24,9 @@ export class CreateNewUserBase {
             }
     
             if (newUserSetup) {
-                if (newUserSetup.IsComplete === false || newUserSetup.IsComplete === undefined || newUserSetup.IsComplete === null) {
+                // check for existing user by email
+                const existingNewUser = UserCache.Users.find(u => u.Email === newUserSetup.Email);
+                if (!existingNewUser) {
                     if (newUserSetup.Email && newUserSetup.Email.length > 0) {
                         logStatus("Attempting to create new user: " + newUserSetup.Email);
                         const md = new Metadata();
@@ -40,7 +42,11 @@ export class CreateNewUserBase {
                             // save was successful, so we can create the User Roles
                             for (let i = 0; i < newUserSetup.Roles.length; i++) {
                                 const roleName = newUserSetup.Roles[i];
-                                const roleID = md.Roles.find(r => r.Name === roleName)?.ID!;
+                                const roleID = md.Roles.find(r => r.Name === roleName)?.ID;
+                                if (!roleID) {
+                                    logError("   Role not found: " + roleName + ", skipping");
+                                    continue;
+                                }
                                 const userRole = <UserRoleEntity>await md.GetEntityObject('User Roles', currentUser);
                                 userRole.NewRecord();
                                 userRole.UserID = user.ID;
@@ -53,9 +59,7 @@ export class CreateNewUserBase {
                                 }
                             }
     
-                            logStatus("Finished creating new user: " + newUserSetup.Email + ", saving config file");
-                            newUserSetup.IsComplete = true; 
-                            saveConfigFileFromMemory();
+                            logStatus("Finished creating new user: " + newUserSetup.Email);
                             return {
                                 Success: true,
                                 Message: "Successfully created new user: " + newUserSetup.Email,
