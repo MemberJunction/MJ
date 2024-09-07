@@ -2,6 +2,33 @@
   "name": "@memberjunction/storage",
   "entries": [
     {
+      "date": "Sat, 07 Sep 2024 17:28:16 GMT",
+      "version": "2.3.3",
+      "tag": "@memberjunction/storage_v2.3.3",
+      "comments": {
+        "patch": [
+          {
+            "author": "beachball",
+            "package": "@memberjunction/storage",
+            "comment": "Bump @memberjunction/core to v2.3.3",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/storage",
+            "comment": "Bump @memberjunction/core-entities to v2.3.3",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/storage",
+            "comment": "Bump @memberjunction/global to v2.3.3",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
       "date": "Fri, 30 Aug 2024 18:25:54 GMT",
       "version": "2.3.2",
       "tag": "@memberjunction/storage_v2.3.2",

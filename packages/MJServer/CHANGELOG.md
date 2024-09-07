@@ -1,8 +1,36 @@
 # Change Log - @memberjunction/server
 
-This log was last generated on Fri, 30 Aug 2024 18:25:54 GMT and should not be manually modified.
+This log was last generated on Sat, 07 Sep 2024 17:28:16 GMT and should not be manually modified.
 
 <!-- Start content -->
+
+## 2.3.3
+
+Sat, 07 Sep 2024 17:28:16 GMT
+
+### Patches
+
+- Bump @memberjunction/actions to v2.3.3
+- Bump @memberjunction/ai to v2.3.3
+- Bump @memberjunction/ai-mistral to v2.3.3
+- Bump @memberjunction/ai-openai to v2.3.3
+- Bump @memberjunction/ai-vectors-pinecone to v2.3.3
+- Bump @memberjunction/aiengine to v2.3.3
+- Bump @memberjunction/core to v2.3.3
+- Bump @memberjunction/core-actions to v2.3.3
+- Bump @memberjunction/core-entities to v2.3.3
+- Bump @memberjunction/data-context to v2.3.3
+- Bump @memberjunction/data-context-server to v2.3.3
+- Bump @memberjunction/doc-utils to v2.3.3
+- Bump @memberjunction/entity-communications-server to v2.3.3
+- Bump @memberjunction/external-change-detection to v2.3.3
+- Bump @memberjunction/global to v2.3.3
+- Bump @memberjunction/queue to v2.3.3
+- Bump @memberjunction/skip-types to v2.3.3
+- Bump @memberjunction/sqlserver-dataprovider to v2.3.3
+- Bump @memberjunction/graphql-dataprovider to v2.3.3
+- Bump @memberjunction/storage to v2.3.3
+- Bump @memberjunction/templates to v2.3.3
 
 ## 2.3.2
 

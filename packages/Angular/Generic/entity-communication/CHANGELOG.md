@@ -1,8 +1,23 @@
 # Change Log - @memberjunction/ng-entity-communications
 
-This log was last generated on Fri, 30 Aug 2024 18:25:54 GMT and should not be manually modified.
+This log was last generated on Sat, 07 Sep 2024 17:28:16 GMT and should not be manually modified.
 
 <!-- Start content -->
+
+## 2.3.3
+
+Sat, 07 Sep 2024 17:28:16 GMT
+
+### Patches
+
+- Bump @memberjunction/core-entities to v2.3.3
+- Bump @memberjunction/global to v2.3.3
+- Bump @memberjunction/core to v2.3.3
+- Bump @memberjunction/communication-types to v2.3.3
+- Bump @memberjunction/entity-communications-base to v2.3.3
+- Bump @memberjunction/entity-communications-client to v2.3.3
+- Bump @memberjunction/ng-container-directives to v2.3.3
+- Bump @memberjunction/ng-shared to v2.3.3
 
 ## 2.3.2
 
