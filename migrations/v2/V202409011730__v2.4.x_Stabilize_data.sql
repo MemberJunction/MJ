@@ -143,3 +143,7 @@ CREATE VIEW [${flyway:defaultSchema}].[vwAIPromptTypes] AS
 SELECT  a.*
 FROM [${flyway:defaultSchema}].[AIPromptType] AS a;
 GO
+
+-- Add db user to roles
+ALTER ROLE [cdp_Developer] ADD MEMBER [MJ_Connect]
+ALTER ROLE [cdp_Integration] ADD MEMBER [MJ_Connect]
